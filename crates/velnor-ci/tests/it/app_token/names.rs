@@ -84,3 +84,18 @@ fn dot_segments_and_path_like_repository_names_make_no_request() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn a_repository_named_with_a_leading_hyphen_is_read_as_a_value_in_the_equals_form() -> TestResult {
+    let key = Key::pkcs1("app-token-hyphen-repository")?;
+    let api = serve((200, r#"{"id":4242}"#), (201, &minted_answer()))?;
+    let output = key.path("github-output");
+    let run = mint(&key.pem, &api, &output, &["-private"]);
+    assert!(run.status.success(), "{run:?}");
+    let requests = api.requests.lock().map_err(|e| e.to_string())?;
+    assert_eq!(
+        requests[0].line,
+        "GET /repos/acme/-private/installation HTTP/1.1"
+    );
+    Ok(())
+}

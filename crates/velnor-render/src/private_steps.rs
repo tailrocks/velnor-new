@@ -167,7 +167,7 @@ pub(crate) fn app_token(
     if mint == TokenMint::Helper {
         let names: Vec<String> = repositories
             .iter()
-            .map(|name| format!("--repository {}", shell_word(name)))
+            .map(|name| format!("--repository={}", shell_word(name)))
             .collect();
         return RenderedStep {
             env: vec![
@@ -179,7 +179,7 @@ pub(crate) fn app_token(
                 ),
             ],
             run: Some(format!(
-                "velnor-ci app-token --owner {} {}",
+                "velnor-ci app-token --owner={} {}",
                 shell_word(owner),
                 names.join(" ")
             )),

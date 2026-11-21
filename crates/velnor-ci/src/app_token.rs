@@ -99,7 +99,6 @@ struct Minted {
 
 const ATTEMPTS: usize = 3;
 const BACKOFF: [Duration; ATTEMPTS - 1] = [Duration::from_secs(1), Duration::from_secs(3)];
-const TOKEN_LIMIT: usize = 4096;
 
 fn plain(name: &str) -> bool {
     !name.is_empty()
@@ -166,13 +165,12 @@ pub fn mint(
         .map_err(|_| CiError::new("the installation token answer holds no token"))?;
     let token = Zeroizing::new(minted.token);
     if token.is_empty()
-        || token.len() > TOKEN_LIMIT
         || !token
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
     {
         return Err(CiError::new(format!(
-            "the installation token answer holds a token that is not plain letters, digits, _, . and - of at most {TOKEN_LIMIT} bytes"
+            "the installation token answer holds a token that is not plain letters, digits, _, . and -"
         )));
     }
     Ok(token)

@@ -143,13 +143,13 @@ fn mint_as(client_id: &str, key: &str, api: &Api, output: &Path, repositories: &
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_clear()
-        .args(["app-token", "--owner", "acme"])
+        .args(["app-token", "--owner=acme"])
         .env("VELNOR_APP_CLIENT_ID", client_id)
         .env("VELNOR_APP_PRIVATE_KEY", key)
         .env("VELNOR_API_URL", &api.url)
         .env("GITHUB_OUTPUT", output);
     for repository in repositories {
-        command.args(["--repository", repository]);
+        command.arg(format!("--repository={repository}"));
     }
     command
         .output()

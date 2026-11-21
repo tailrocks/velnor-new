@@ -136,3 +136,31 @@ fn a_release_build_at_helper_0_1_112_mints_with_the_helper_before_the_tools_inst
     assert!(action, "helper 0.1.111 no longer renders the action");
     Ok(())
 }
+
+#[test]
+fn a_hyphen_leading_repository_is_rendered_in_the_equals_form_that_the_cli_parses() -> TestResult {
+    let section = SECTION.replace("'acme/other-lib'", "'acme/-private'");
+    let repo = private_repo(&["Cargo.toml"], &section, "0.1.112")?;
+    let text = workflow(&repo)?;
+    let mut mints = 0;
+    for job in jobs(&text)? {
+        for step in job["steps"].as_array().ok_or("a job without steps")? {
+            let run = step["run"].as_str().unwrap_or_default();
+            if !mints_with_the_helper(run) {
+                continue;
+            }
+            let words: Vec<&str> = run.split_whitespace().collect();
+            assert!(
+                words.contains(&"--repository=-private") && words.contains(&"--owner=acme"),
+                "{run}"
+            );
+            assert!(
+                !words.contains(&"--repository") && !words.contains(&"--owner"),
+                "{run}"
+            );
+            mints += 1;
+        }
+    }
+    assert!(mints > 0, "no job mints a token");
+    Ok(())
+}

@@ -135,16 +135,13 @@ fn a_client_error_fails_at_once_without_a_retry_or_a_pause() {
 }
 
 #[test]
-fn a_token_over_the_length_cap_is_refused_and_one_at_the_cap_is_taken() {
+fn an_opaque_token_of_any_length_is_taken_because_a_refused_one_could_not_be_revoked() {
     let answer = |len: usize| {
         Ok(serde_json::json!({ "token": format!("ghs_{}", "a".repeat(len - 4)) }).to_string())
     };
-    let app = Scripted::new(
-        vec![Ok(FOUND.to_owned()), Ok(FOUND.to_owned())],
-        vec![answer(4096), answer(4097)],
-    );
-    let (minted, _) = run(&app);
-    assert_eq!(minted.map(|token| token.len()), Ok(4096));
-    let (minted, _) = run(&app);
-    assert!(minted.is_err());
+    for len in [4096, 4097, 65_536] {
+        let app = Scripted::new(vec![Ok(FOUND.to_owned())], vec![answer(len)]);
+        let (minted, _) = run(&app);
+        assert_eq!(minted.map(|token| token.len()), Ok(len));
+    }
 }
