@@ -25,8 +25,6 @@ async fn retirement_against_a_stalled_docker_returns_at_the_turn_deadline() -> T
         FAILED.container_id("runner")
     ));
 
-    // Completing at all proves the deadline cut the stalled DELETE: the fixture never answers it.
-    // A wall-clock bound on top would measure host load, not the deadline.
     let started = Instant::now();
     let outcome = tokio::time::timeout(
         Duration::from_secs(60),
