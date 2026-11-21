@@ -39,6 +39,7 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         caches,
         node_tools,
         not_generated,
+        unsuppressed,
         ..
     } = kind
     else {
@@ -60,7 +61,7 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
             serde_json::Value::String(cache_id(key, false))
         };
         let mut plan = serde_json::json!({"family":key.family(),"root":root,"restore_step":restore_step,"save_step":save_step});
-        if let (false, Some(reason)) = (tools, not_generated) {
+        if let (false, false, Some(reason)) = (tools, unsuppressed.contains(key), not_generated) {
             plan["not_generated"] = serde_json::Value::String(reason.to_owned());
         }
         plan
