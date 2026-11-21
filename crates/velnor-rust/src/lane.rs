@@ -117,6 +117,7 @@ impl Lane {
                 name: format!("Skip test lane ({})", features.label()),
                 run: "echo 'skipped: no selected packages'".to_owned(),
                 before_build: false,
+                offline_after_private_fetch: false,
             })
         }
     }

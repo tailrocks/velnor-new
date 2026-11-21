@@ -88,14 +88,14 @@ hooks {
   }
   ["pre-push"] {
     steps {
-      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history --diff-merges=first-parent HEAD\"" }
+      ["betterleaks-history"] { check = "betterleaks git . --redact -c .betterleaks.toml --log-opts=\"--full-history --diff-merges=first-parent HEAD\"" }
       ["kingfisher-worktree"] { check = "bash scripts/secret-scan-worktree.sh" }
     }
   }
   ["security-audit"] {
     steps {
       ["kingfisher-history"] { check = "kingfisher scan . --git-history full --confidence low --no-validate --redact --no-update-check --skip-regex '^m-[0-9a-f]{16}$' --exclude '**/.git/**' --baseline-file .kingfisher-baseline.yml" }
-      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml" }
+      ["betterleaks-history"] { check = "betterleaks git . --redact -c .betterleaks.toml" }
       ["gitleaks-history"] { check = "gitleaks git . --redact --no-banner --config .gitleaks.toml" }
     }
   }
