@@ -95,12 +95,10 @@ fn receipt(repo: &Repo) -> PathBuf {
 #[test]
 fn a_deep_tree_with_pending_siblings_audits_once_the_open_file_limit_is_raised() {
     let hard = hard_open_file_limit();
-    if hard < RAISE_NEEDS_HARD_LIMIT {
-        eprintln!(
-            "skipped: the hard open-file limit {hard} is below {RAISE_NEEDS_HARD_LIMIT}, so the soft limit cannot be raised past {SOFT_LIMIT_WITHOUT_RAISE}"
-        );
-        return;
-    }
+    assert!(
+        hard >= RAISE_NEEDS_HARD_LIMIT,
+        "the hard open-file limit {hard} is below {RAISE_NEEDS_HARD_LIMIT}, so the soft limit cannot be raised past {SOFT_LIMIT_WITHOUT_RAISE} and the raise path would not run"
+    );
     let repo = deep_repository();
     let audited = audit_under(&repo, &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"));
     assert!(audited.status.success(), "{audited:?}");
