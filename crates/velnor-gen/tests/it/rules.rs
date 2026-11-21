@@ -98,6 +98,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             reports_ignored: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             steps: kinds
                 .into_iter()
@@ -109,6 +110,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     when: When::Success,
                     skip_after_merge_group: None,
                     skip_when_cold: false,
+                    private_repo: false,
                     hosted_only: false,
                     pr: PrRun::Always,
                     gate: None,

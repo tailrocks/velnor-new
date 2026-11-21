@@ -80,6 +80,7 @@ impl Lane {
             packages: Vec::new(),
             unselected: false,
             group: None,
+            also: Vec::new(),
         }
     }
 
@@ -161,6 +162,7 @@ impl Lane {
             when: When::NotCancelled,
             skip_after_merge_group: None,
             skip_when_cold: false,
+            private_repo: false,
             pr: PrRun::Always,
             hosted_only: false,
         }
@@ -225,6 +227,7 @@ pub(crate) fn plan_job(
 ) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    steps.extend(crate::base_cache::public_sources_step(facts));
     steps.extend(crate::plan_tools::tools_anchor_read(facts));
     Job {
         plan_outputs: outputs,

@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_model::{DenyCheck, DenyLane, PolicyTable, PolicyTools, RepoPath, RepoView};
+use velnor_model::{DenyCheck, DenyChecks, DenyLane, PolicyTable, PolicyTools, RepoPath, RepoView};
 use velnor_rust::{DENY_OFF_NOTE, detect, policy_runs};
 
 use super::events::DENY_MISE;
@@ -133,8 +133,43 @@ fn a_changed_deny_toml_selects_no_policy_run_while_the_lane_is_off() -> TestResu
         deny: false,
         machete: false,
         deny_off: true,
+        checks: DenyChecks::ALL,
     };
     let changed = BTreeSet::from([RepoPath::new("deny.toml")?]);
     assert!(!policy_runs(off, &changed, false, true).deny);
+    Ok(())
+}
+
+#[test]
+fn a_deny_toml_alone_selects_no_cargo_machete_run() -> TestResult {
+    let changed = BTreeSet::from([RepoPath::new("deny.toml")?]);
+    let off = PolicyTools {
+        deny: false,
+        machete: true,
+        deny_off: true,
+        checks: DenyChecks::ALL,
+    };
+    assert!(!policy_runs(off, &changed, false, true).machete);
+    let on = PolicyTools {
+        deny: true,
+        machete: true,
+        deny_off: false,
+        checks: DenyChecks::ALL,
+    };
+    assert!(!policy_runs(on, &changed, false, true).machete);
+    Ok(())
+}
+
+#[test]
+fn a_license_file_starts_no_policy_run_when_licenses_are_not_checked() -> TestResult {
+    let changed = BTreeSet::from([RepoPath::new("LICENSE")?]);
+    let facts = detect(&repo(
+        b"[policy]\ndeny_checks = [\"advisories\"]\n",
+        true,
+        "0.1.111",
+    )?)?;
+    assert!(!policy_runs(facts.policy, &changed, false, true).deny);
+    let all = detect(&repo(b"", true, "0.1.111")?)?;
+    assert!(policy_runs(all.policy, &changed, false, true).deny);
     Ok(())
 }

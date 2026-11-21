@@ -24,6 +24,8 @@ pub struct Cache {
     pub usable: bool,
     pub usable_same_lock: bool,
     pub save: SaveOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_generated: Option<String>,
     /// A miss on a key that the cache inventory already listed, on a ref this job may read, when
     /// the job started. `None` when the inventory was not consulted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -291,7 +293,7 @@ impl LaneMetrics {
         let mut text = vec!["| Cache | Requested key | Matched key | Hit | Archive bytes | Save |\n|---|---|---|---|---|---|\n".to_owned()];
         for cache in &self.caches {
             text.push(format!(
-                "| {} | `{}` | `{}` | {:?} | {} | {:?} |\n",
+                "| {} | `{}` | `{}` | {:?} | {} | {} |\n",
                 cache.family,
                 cache.requested_key,
                 cache.matched_key.as_deref().unwrap_or("none"),
@@ -299,7 +301,10 @@ impl LaneMetrics {
                 cache
                     .bytes
                     .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string()),
-                cache.save
+                match &cache.not_generated {
+                    Some(reason) => format!("not generated ({reason})"),
+                    None => format!("{:?}", cache.save),
+                }
             ));
         }
         let events: Vec<&Compilation> = self

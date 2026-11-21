@@ -253,6 +253,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             reports_ignored: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             steps: vec![Step {
                 kind: StepKind::CacheSave(key.clone()),
@@ -262,6 +263,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 when: When::Success,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
+                private_repo: false,
                 hosted_only: false,
                 pr: PrRun::Always,
                 gate: None,
