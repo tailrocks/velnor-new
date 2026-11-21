@@ -62,6 +62,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
+    crate::shared_runs::mark(job, &mut steps);
     crate::mise_digest::pin_to_runner_platform(RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
