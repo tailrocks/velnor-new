@@ -8,7 +8,7 @@ use super::super::latest::{Hooks, newest_with};
 use super::*;
 use crate::io::restore_record::Record;
 
-fn arena(name: &str) -> PathBuf {
+pub(super) fn arena(name: &str) -> PathBuf {
     let base = fs::canonicalize(std::env::temp_dir())
         .unwrap_or_else(|e| unreachable!("{e}"))
         .join(format!("velnor-decision-{name}-{}", std::process::id()));
@@ -17,7 +17,7 @@ fn arena(name: &str) -> PathBuf {
     base
 }
 
-fn at_epoch(path: &Path) {
+pub(super) fn at_epoch(path: &Path) {
     fs::File::open(path)
         .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
         .unwrap_or_else(|e| unreachable!("{e}"));

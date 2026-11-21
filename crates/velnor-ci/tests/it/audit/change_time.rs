@@ -10,17 +10,17 @@ use super::inventory::build_stamping;
 use super::{audit, own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
 
-const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
-const INPUT: &str = "ties/stamped.txt";
+pub(super) const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
+pub(super) const INPUT: &str = "ties/stamped.txt";
 const SIBLING: &str = "ties/sibling.txt";
 
-const OLD: u64 = 1_000_000_000;
+pub(super) const OLD: u64 = 1_000_000_000;
 
 fn shifted(time: SystemTime, seconds: u64) -> SystemTime {
     time - Duration::from_secs(seconds)
 }
 
-fn at(seconds: u64) -> SystemTime {
+pub(super) fn at(seconds: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(seconds)
 }
 
@@ -36,7 +36,7 @@ fn declaring(path: &str, stamp: &[&str]) -> Repo {
     repo
 }
 
-fn built_repository() -> (Repo, SystemTime) {
+pub(super) fn built_repository() -> (Repo, SystemTime) {
     let repo = declaring("../../ties/stamped.txt", &[]);
     let built = repo.mtime(OUTPUT);
     (repo, built)
@@ -66,13 +66,13 @@ fn chmod_until_changed_after(repo: &Repo, built: SystemTime) {
     assert_eq!(repo.mtime(INPUT), at(OLD));
 }
 
-fn assert_stale(repo: &Repo) {
+pub(super) fn assert_stale(repo: &Repo) {
     let refused = audit(repo, &["--write"]);
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
-fn assert_fresh(repo: &Repo, lock: &str) {
+pub(super) fn assert_fresh(repo: &Repo, lock: &str) {
     let written = audit(repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
@@ -138,7 +138,7 @@ fn restore(repo: &Repo) {
     assert!(restored.status.success(), "{restored:?}");
 }
 
-fn saved(repo: &Repo) {
+pub(super) fn saved(repo: &Repo) {
     repo.git(&["add", "--all"]);
     repo.commit();
     let saved = super::velnor_ci()
@@ -149,7 +149,7 @@ fn saved(repo: &Repo) {
     assert!(saved.status.success(), "{saved:?}");
 }
 
-fn restore_inputs(repo: &Repo, operation: &[&OsStr]) {
+pub(super) fn restore_inputs(repo: &Repo, operation: &[&OsStr]) {
     let restored = super::velnor_ci()
         .current_dir(repo.root())
         .env("GITHUB_JOB", "job")
@@ -159,7 +159,7 @@ fn restore_inputs(repo: &Repo, operation: &[&OsStr]) {
     assert!(restored.status.success(), "{restored:?}");
 }
 
-const INPUTS_RESTORE: [&str; 4] = ["inputs", "restore", "--target-dir", "rust/target"];
+pub(super) const INPUTS_RESTORE: [&str; 4] = ["inputs", "restore", "--target-dir", "rust/target"];
 
 fn restored_input() -> (Repo, SystemTime) {
     let (repo, built) = built_repository();
@@ -297,7 +297,7 @@ fn a_directory_touched_after_the_build_without_a_restore_is_stale() {
     assert_stale(&repo);
 }
 
-fn settled_after(repo: &Repo, path: &str) {
+pub(super) fn settled_after(repo: &Repo, path: &str) {
     let ctime = |path: &str| {
         let metadata =
             fs::symlink_metadata(repo.root().join(path)).unwrap_or_else(|e| unreachable!("{e}"));

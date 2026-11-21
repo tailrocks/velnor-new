@@ -6,7 +6,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
-use super::handle::{self, Climb, Observed, Origin};
+use super::handle::{self, Climb, Observed, Origin, Stamp};
 use super::{Entries, Kind, Scan};
 use crate::io::restore_record::Record;
 
@@ -67,13 +67,20 @@ pub(super) fn newest_with(
         if scan.identities.get(directory) != Some(&stamp) {
             return Ok(None);
         }
-        if scan
-            .entries
-            .get(directory)
-            .is_some_and(|walked| walked.len() == children.len())
-        {
-            newest = newest.max(stamp.latest(record, directory));
-        }
+        let walked = scan.entries.get(directory);
+        let excluded: Vec<Stamp> = walked
+            .into_iter()
+            .flatten()
+            .filter(|(name, _)| !children.contains_key(*name))
+            .filter_map(|(name, _)| handle::entry_stamp(&listing, name.as_os_str()))
+            .collect();
+        newest = newest.max(
+            if walked.is_some_and(|walked| walked.len() == children.len()) {
+                stamp.latest(record)
+            } else {
+                stamp.changed_unless_explained(record, &excluded)
+            },
+        );
     }
     Ok(Some(newest))
 }

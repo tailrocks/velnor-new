@@ -89,13 +89,13 @@ impl Freshness {
         }
         let record = Rc::clone(&self.record);
         if link.file_type().is_symlink()
-            && changed_since(&link, built, false, || vouched(&record, path, &link))
+            && changed_since(&link, built, false, || vouched(&record, &link))
         {
             return Ok(true);
         }
         if !metadata.is_dir() {
             return Ok(changed_since(&metadata, built, true, || {
-                fs::canonicalize(path).is_ok_and(|target| vouched(&record, &target, &metadata))
+                vouched(&record, &metadata)
             }));
         }
         let root = fs::canonicalize(path)?;
@@ -221,8 +221,11 @@ fn change_time(metadata: &fs::Metadata) -> Option<SystemTime> {
     Some(SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos))
 }
 
-fn vouched(record: &Record, path: &Path, metadata: &fs::Metadata) -> bool {
-    record.vouches_entry(path, (metadata.ctime(), metadata.ctime_nsec()))
+fn vouched(record: &Record, metadata: &fs::Metadata) -> bool {
+    record.vouches(
+        (metadata.dev(), metadata.ino()),
+        (metadata.ctime(), metadata.ctime_nsec()),
+    )
 }
 
 fn same_inode(first: &fs::Metadata, second: &fs::Metadata) -> bool {

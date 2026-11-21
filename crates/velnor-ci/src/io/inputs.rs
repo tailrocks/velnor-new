@@ -191,11 +191,10 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    super::restore_record::clear(root)?;
     let mut restored = super::restore_record::Restored::default();
-    let report = restore_inputs_scoped(root, target, None, &mut BTreeMap::new(), &mut restored)?;
+    let outcome = restore_inputs_scoped(root, target, None, &mut BTreeMap::new(), &mut restored);
     super::restore_record::record(root, &restored)?;
-    Ok(report)
+    outcome
 }
 
 pub(super) fn restore_inputs_scoped(
@@ -205,6 +204,7 @@ pub(super) fn restore_inputs_scoped(
     scans: &mut BTreeMap<PathBuf, Option<RestoredUnits>>,
     restored: &mut super::restore_record::Restored,
 ) -> Result<String, CiError> {
+    restored.scopes.push(root.to_path_buf());
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
     remove_restored(&root.join(target).join(witness_file(&prefix)))?;

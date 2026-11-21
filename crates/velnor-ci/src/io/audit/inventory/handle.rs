@@ -8,16 +8,19 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use nix::dir::Dir;
 use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
+mod changes;
+
 use super::Kind;
 use super::resolve::{self, Reach};
 use super::walk::{changed, unresolved_link};
 use crate::io::restore_record::Record;
+use changes::{file_changed, link_changed, same_link};
 
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
@@ -42,20 +45,6 @@ impl Stamp {
 
     pub(super) fn is(&self, (device, inode): Identity) -> bool {
         self.device == i128::from(device) && self.inode == i128::from(inode)
-    }
-
-    pub(super) fn latest(&self, record: &Record, path: &Path) -> SystemTime {
-        let time = |(seconds, nanos): (i128, i128)| {
-            instant(
-                i64::try_from(seconds).unwrap_or(0),
-                i64::try_from(nanos).unwrap_or(0),
-            )
-        };
-        let vouched = match (i64::try_from(self.changed.0), i64::try_from(self.changed.1)) {
-            (Ok(seconds), Ok(nanos)) => record.vouches(path, (seconds, nanos)),
-            _ => false,
-        };
-        counted(time(self.modified), vouched).max(counted(time(self.changed), vouched))
     }
 }
 
@@ -134,6 +123,12 @@ pub(super) fn open(origin: &Origin, path: &Path, climb: &Climb<'_>) -> io::Resul
         }
     };
     Dir::from_fd(fd).map_err(failure)
+}
+
+pub(super) fn entry_stamp(directory: impl AsFd, name: &OsStr) -> Option<Stamp> {
+    fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW)
+        .ok()
+        .map(|stat| Stamp::of(&stat))
 }
 
 pub(super) fn child_stamp(parent: &Opened, name: &OsStr) -> Option<Stamp> {
@@ -301,45 +296,6 @@ pub(super) fn observe(
     )
 }
 
-fn instant(seconds: i64, nanos: i64) -> SystemTime {
-    let nanos = Duration::from_nanos(u64::try_from(nanos).unwrap_or(0));
-    match u64::try_from(seconds) {
-        Ok(seconds) => SystemTime::UNIX_EPOCH + Duration::from_secs(seconds) + nanos,
-        Err(_) => SystemTime::UNIX_EPOCH - Duration::from_secs(seconds.unsigned_abs()) + nanos,
-    }
-}
-
-fn counted(time: SystemTime, vouched: bool) -> SystemTime {
-    if vouched {
-        SystemTime::UNIX_EPOCH
-    } else {
-        time
-    }
-}
-
-fn vouched(stat: &FileStat, path: &Path, record: &Record) -> bool {
-    record.vouches(path, (stat.st_ctime, stat.st_ctime_nsec))
-}
-
-fn file_changed(stat: &FileStat, path: &Path, record: &Record) -> SystemTime {
-    instant(stat.st_mtime, stat.st_mtime_nsec).max(counted(
-        instant(stat.st_ctime, stat.st_ctime_nsec),
-        vouched(stat, path, record),
-    ))
-}
-
-fn link_changed(stat: &FileStat, path: &Path, record: &Record) -> SystemTime {
-    let vouched = vouched(stat, path, record);
-    counted(instant(stat.st_mtime, stat.st_mtime_nsec), vouched)
-        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), vouched))
-}
-
-fn same_link(first: &FileStat, second: &FileStat) -> bool {
-    (first.st_dev, first.st_ino, first.st_mode) == (second.st_dev, second.st_ino, second.st_mode)
-        && (first.st_ctime, first.st_ctime_nsec) == (second.st_ctime, second.st_ctime_nsec)
-        && (first.st_mtime, first.st_mtime_nsec) == (second.st_mtime, second.st_mtime_nsec)
-}
-
 fn format_of(stat: &FileStat) -> SFlag {
     SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT
 }
@@ -368,7 +324,7 @@ fn classify(
             Kind::Other
         };
         let changed =
-            (with_changed && format != SFlag::S_IFDIR).then(|| file_changed(&stat, path, record));
+            (with_changed && format != SFlag::S_IFDIR).then(|| file_changed(&stat, record));
         return Ok(Some(Observed {
             kind,
             changed,
@@ -396,10 +352,9 @@ fn classify(
         return Ok(None);
     }
     let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
-    let observed_path = followed.as_ref().map_or(path, |followed| &followed.path);
     let changed = (with_changed && format_of(observed) != SFlag::S_IFDIR)
-        .then(|| file_changed(observed, observed_path, record));
-    let link = with_changed.then(|| link_changed(&stat, path, record));
+        .then(|| file_changed(observed, record));
+    let link = with_changed.then(|| link_changed(&stat, record));
     let resolved = followed.map(|followed| followed.path);
     Ok(Some(Observed {
         kind: Kind::Link { target, resolved },
