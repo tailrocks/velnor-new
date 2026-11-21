@@ -120,6 +120,20 @@ fn files_a_build_script_generated_are_not_dep_info() {
 }
 
 #[test]
+fn files_a_build_script_generated_in_the_old_layout_do_not_make_the_target_unknown() {
+    let root = std::env::temp_dir().join(format!("velnor-units-old-{}", std::process::id()));
+    let unit = root.join("debug/build/dep-5c64b2dee9af80ce");
+    fs::create_dir_all(unit.join("out")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(unit.join("out/generated.d"), "not dep-info").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(unit.join("output"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let found = unit_files_within(&root, 100);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let found = found.unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(matches!(found[0].0, UnitFile::BuildOutput { .. }));
+}
+
+#[test]
 fn the_old_layout_is_still_read() {
     assert_eq!(
         parsed("debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep"),

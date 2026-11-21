@@ -204,7 +204,10 @@ fn generated(file: &Path) -> bool {
     let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
         return false;
     };
-    out.parent().is_some_and(|unit| unit.join("run").is_dir())
+    let Some(unit) = out.parent() else {
+        return false;
+    };
+    unit.join("run").is_dir() || unit.parent().is_some_and(|build| build.ends_with("build"))
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {

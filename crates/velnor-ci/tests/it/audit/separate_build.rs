@@ -231,6 +231,23 @@ fn a_relative_build_directory_resolves_parent_components_through_a_symlink_as_ca
 }
 
 #[test]
+fn a_build_directory_spelled_through_a_symlink_and_a_parent_component_is_audited_to_success() {
+    let repo = built_in(APART, &[]);
+    fs::create_dir_all(repo.root().join("rust/inner")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../inner", repo.root().join("rust/app/link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    stamp(&repo, APART);
+    let written = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "link/../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
 fn obsolete_units_in_the_target_directory_do_not_count_once_a_build_directory_is_set() {
     let repo = built_in(APART, &[]);
     stamp(&repo, APART);
