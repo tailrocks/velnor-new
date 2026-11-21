@@ -19,6 +19,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const VERSION: &str = "0.1.111";
 const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
+const CI_ARCHIVE_X64: &str = "b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502";
+const CI_BINARY_X64: &str = "9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f";
 const GEN_ARCHIVE_X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const GEN_BINARY_X64: &str = "24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df";
 const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543";
@@ -142,6 +144,26 @@ fn detect_names_a_malformed_generator_table_at_the_lock() -> TestResult {
     assert_eq!(
         lock_refusal(&text)?,
         "[velnor-gen] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_ARCHIVE_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_binary_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_BINARY_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
     );
     Ok(())
 }
