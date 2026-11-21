@@ -9,9 +9,9 @@ use std::path::{Component, Path, PathBuf};
 
 use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
-use nix::libc;
 use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
+use super::handle::{self, Stamp};
 use super::walk::{DESCRIPTOR_BUDGET, UNTRACKED_LISTING};
 
 const MAX_LINKS: usize = 40;
@@ -70,11 +70,9 @@ impl Default for Reach<'_> {
     }
 }
 
-type Inode = (libc::dev_t, libc::ino_t);
-
 struct Trail {
     parents: VecDeque<OwnedFd>,
-    lineage: Vec<Inode>,
+    lineage: Vec<Stamp>,
     bound: usize,
 }
 
@@ -88,8 +86,7 @@ impl Trail {
     }
 
     fn push(&mut self, parent: OwnedFd) -> io::Result<()> {
-        let stat = fstat(&parent).map_err(failure)?;
-        self.lineage.push((stat.st_dev, stat.st_ino));
+        self.lineage.push(handle::stamp(&parent)?);
         while self.parents.len() >= self.bound {
             if self.parents.pop_front().is_none() {
                 return Ok(());
@@ -99,7 +96,7 @@ impl Trail {
         Ok(())
     }
 
-    fn pop(&mut self) -> Option<(Option<OwnedFd>, Inode)> {
+    fn pop(&mut self) -> Option<(Option<OwnedFd>, Stamp)> {
         let inode = self.lineage.pop()?;
         Some((self.parents.pop_back(), inode))
     }
@@ -165,8 +162,7 @@ pub(super) fn resolve(
                     Some((Some(parent), _)) => parent,
                     Some((None, inode)) => {
                         let parent = open_directory(current.as_fd(), Path::new(".."), false)?;
-                        let stat = fstat(&parent).map_err(failure)?;
-                        if (stat.st_dev, stat.st_ino) != inode {
+                        if handle::stamp(&parent)? != inode {
                             return Err(failure(Errno::ESTALE));
                         }
                         parent
@@ -313,6 +309,43 @@ mod tests {
             errno,
             Some(Errno::ESTALE as i32),
             "the resolver followed a moved ancestor"
+        );
+    }
+
+    #[test]
+    fn an_ancestor_with_the_same_inode_but_a_changed_stamp_is_refused() {
+        let base = base("restamped");
+        let start = base.join("start");
+        fs::create_dir_all(start.join("a/b/c/d/e")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(start.join("marker"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        let held = open_path(&start, false).unwrap_or_else(|e| unreachable!("{e}"));
+        let opened = std::cell::Cell::new(0);
+        let restamped = || {
+            opened.set(opened.get() + 1);
+            if opened.get() == 6 {
+                fs::File::open(start.join("a"))
+                    .and_then(|dir| {
+                        dir.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))
+                    })
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+        };
+        let reach = Reach {
+            bound: 2,
+            opened: &restamped,
+        };
+        let resolved = resolve(
+            held.as_fd(),
+            &start,
+            Path::new("a/b/c/d/e/../../../../../marker"),
+            reach,
+        );
+        fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+        let errno = resolved.err().and_then(|error| error.raw_os_error());
+        assert_eq!(
+            errno,
+            Some(Errno::ESTALE as i32),
+            "the resolver followed an ancestor whose stamp changed"
         );
     }
 }
