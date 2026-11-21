@@ -26,6 +26,7 @@ def repository(files):
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     subprocess.run(["git", "init", "-q", str(root)], check=True, env=env)
     for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_text(text)
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, env=env)
     return tmp, root
@@ -101,30 +102,60 @@ class ConsistencyTests(unittest.TestCase):
 
 
 class OwnerFieldTests(unittest.TestCase):
-    def test_unaliased_owner_in_iac_owner_fails(self):
-        tmp, root = repository(
-            {
-                "readiness.json": '{"repositories": [{"number": 1, "iac_owner": "acme-labs/widget-infra"}]}\n',
-            }
-        )
+    def found(self, files):
+        tmp, root = repository(files)
         with tmp:
-            found = check.unscrubbed_owners(root)
-            self.assertEqual(len(found), 1)
-            self.assertEqual(found[0][0], "readiness.json")
+            return check.unscrubbed_owners(root)
 
-    def test_aliased_and_project_owners_in_iac_owner_pass(self):
-        tmp, root = repository(
+    def test_unaliased_owner_in_iac_owner_fails(self):
+        found = self.found(
+            {"docs/reviews/readiness.json": '{"repositories": [{"number": 1, "iac_owner": "acme-labs/widget-infra"}]}\n'}
+        )
+        self.assertEqual(found, [("docs/reviews/readiness.json", 1, "iac_owner")])
+
+    def test_every_owner_account_login_and_org_field_is_checked(self):
+        for key in ["owner", "account", "login", "org", "organization", "iac_owner", "github_account", "pr_login"]:
+            with self.subTest(key=key):
+                found = self.found({"docs/proposed/x.json": f'{{"number": 7, "{key}": "acme-labs"}}\n'})
+                self.assertEqual(found, [("docs/proposed/x.json", 7, key)])
+
+    def test_nested_and_listed_fields_are_checked(self):
+        found = self.found(
+            {"docs/reviews/x.json": '{"a": [{"b": {"number": 3, "account": "acme-labs"}}, {"b": {"login": "acme-two"}}]}\n'}
+        )
+        self.assertEqual(sorted(key for _path, _number, key in found), ["account", "login"])
+
+    def test_aliased_and_project_owners_pass(self):
+        found = self.found(
             {
-                "readiness.json": (
+                "docs/reviews/readiness.json": (
                     '{"repositories": ['
                     '{"number": 1, "iac_owner": "tailrocks/github-terraform"}, '
                     '{"number": 2, "iac_owner": "example-org/example-repo-5"}, '
+                    '{"number": 4, "account": "example-account-1"}, '
                     '{"number": 3, "iac_owner": "example-org-b/github-terraform"}]}\n'
                 ),
             }
         )
-        with tmp:
-            self.assertEqual(check.unscrubbed_owners(root), [])
+        self.assertEqual(found, [])
+
+    def test_role_descriptions_and_task_ids_are_not_accounts(self):
+        found = self.found(
+            {
+                "docs/proposed/x.json": (
+                    '{"owner": "Generator (pinned release); consumers own inputs", '
+                    '"owner_task": "T58", "ownership_contract": "x own y", "enforced_by_owner": false}\n'
+                ),
+            }
+        )
+        self.assertEqual(found, [])
+
+    def test_json_outside_the_evidence_directories_is_not_checked(self):
+        self.assertEqual(self.found({"docs/implemented/api.json": '{"login": "acme-labs"}\n'}), [])
+
+    def test_csv_columns_named_like_owner_fields_are_checked(self):
+        found = self.found({"docs/reviews/rows.csv": "number,owner,note\n5,acme-labs,x\n6,example-org,y\n"})
+        self.assertEqual(found, [("docs/reviews/rows.csv", None, "owner")])
 
 
 if __name__ == "__main__":

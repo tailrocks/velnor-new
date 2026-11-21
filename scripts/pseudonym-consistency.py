@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
+import csv
+import io
 import json
 import re
 import subprocess
@@ -13,7 +15,10 @@ SHA = re.compile(rb"\b[0-9a-f]{40}\b")
 NODE_ID = re.compile(rb"\bR_kgD[A-Za-z0-9_-]+")
 NUMBER = re.compile(rb'^(?:\|\s*|\s*\{?\s*"number":\s*)?([0-9]+)\s*[,|]|"number":\s*([0-9]+)')
 MAX_REPORTED = 50
-OWNER_ALIAS = re.compile(r"example-org(-[a-z0-9]+)*")
+ALIAS = re.compile(r"example-(?:org|account)(?:-[a-z0-9]+)*")
+OWNER_FIELD = re.compile(r"(?:^|_)(?:owner|account|login|org|organization)$")
+ACCOUNT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?")
+EVIDENCE_DIRS = ("docs/proposed", "docs/reviews")
 PROJECT_OWNERS = {"tailrocks"}
 
 
@@ -51,33 +56,47 @@ def disagreements(root):
     return sorted(labelled.items())
 
 
-def iac_owners(node, number=None):
+def owner_values(node, number=None):
     if isinstance(node, dict):
         number = node.get("number", number)
-        if isinstance(node.get("iac_owner"), str):
-            yield number, node["iac_owner"]
-        for value in node.values():
-            yield from iac_owners(value, number)
+        for key, value in node.items():
+            if isinstance(value, str) and OWNER_FIELD.search(key) and ACCOUNT.fullmatch(value):
+                yield number, key, value
+            yield from owner_values(value, number)
     elif isinstance(node, list):
         for value in node:
-            yield from iac_owners(value, number)
+            yield from owner_values(value, number)
+
+
+def csv_owner_values(text):
+    rows = csv.DictReader(io.StringIO(text))
+    fields = [name for name in rows.fieldnames or [] if OWNER_FIELD.search(name)]
+    for row in rows:
+        for name in fields:
+            if ACCOUNT.fullmatch(row.get(name) or ""):
+                yield None, name, row[name]
+
+
+def evidence_values(root, path):
+    try:
+        text = (root / path).read_text()
+        return list(owner_values(json.loads(text)) if path.endswith(".json") else csv_owner_values(text))
+    except (OSError, ValueError):
+        return []
 
 
 def unscrubbed_owners(root):
-    listed = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", "*.json"], capture_output=True).stdout
+    listed = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z", "--", *(f"{base}/*.{kind}" for base in EVIDENCE_DIRS for kind in ("json", "csv"))],
+        capture_output=True,
+    ).stdout
     found = []
     for raw in listed.split(b"\0"):
-        if not raw:
-            continue
         path = raw.decode()
-        try:
-            data = json.loads((root / path).read_text())
-        except (OSError, ValueError):
-            continue
-        for number, owner in iac_owners(data):
-            org = owner.split("/", 1)[0]
-            if org not in PROJECT_OWNERS and not OWNER_ALIAS.fullmatch(org):
-                found.append((path, number, "iac_owner"))
+        for number, key, value in evidence_values(root, path) if path else []:
+            org = value.split("/", 1)[0]
+            if org not in PROJECT_OWNERS and not ALIAS.fullmatch(org):
+                found.append((path, number, key))
     return found
 
 
@@ -91,7 +110,7 @@ def main():
         return 1
     owners = unscrubbed_owners(root)
     if owners:
-        print(f"{len(owners)} owner value(s) in iac_owner are not example-org pseudonyms or the project org; replace the owner with an example-org alias:")
+        print(f"{len(owners)} owner, account, login or org value(s) in evidence files are not example-org or example-account pseudonyms or the project org; replace each with an alias:")
         for path, number, field in owners[:MAX_REPORTED]:
             print(f"  {path} row {number} field {field}")
         return 1

@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 import hashlib
+import json
 import multiprocessing
 import os
 import re
@@ -49,7 +50,7 @@ def load_hashes(path=HASH_FILE):
 
 
 SHARED = {}
-PARALLEL_FROM = 20_000
+PARALLEL_FROM = 200_000
 
 
 def search(task):
@@ -57,13 +58,13 @@ def search(task):
     digests = SHARED["digests"]
     sha256 = hashlib.sha256
     salt = SALT
-    substrings = {
-        word[start : start + length]
-        for word in SHARED["words"][low:high]
-        if len(word) >= length
-        for start in range(len(word) - length + 1)
-    }
-    return {candidate for candidate in substrings if sha256(salt + candidate).digest() in digests}
+    found = set()
+    for word in SHARED["words"][low:high]:
+        for start in range(len(word) - length + 1):
+            candidate = word[start : start + length]
+            if sha256(salt + candidate).digest() in digests:
+                found.add(candidate)
+    return found
 
 
 class Matcher:
@@ -99,7 +100,7 @@ class Matcher:
         workers = min(os.cpu_count() or 1, 8)
         step = -(-len(words) // workers) or 1
         tasks = [(length, low, low + step) for length in self.lengths for low in range(0, len(words), step)]
-        if workers == 1 or len(words) < PARALLEL_FROM or "fork" not in multiprocessing.get_all_start_methods():
+        if workers == 1 or sum(map(len, words)) < PARALLEL_FROM or "fork" not in multiprocessing.get_all_start_methods():
             return set().union(*map(search, tasks))
         context = multiprocessing.get_context("fork")
         children = []
@@ -166,10 +167,10 @@ def blobs(root, objects):
     return texts
 
 
-def scan(root, hashes):
+def scan(root, hashes, only=None):
     matcher = Matcher(hashes)
     listed = tracked_files(root)
-    paths = {path: number for number, path in enumerate(listed, 1)}
+    paths = {path: number for number, path in enumerate(listed, 1) if only is None or path in only}
     by_object = {}
     for path in paths:
         mode, obj = listed[path]
@@ -196,14 +197,33 @@ def scan(root, hashes):
     return sorted(found)
 
 
-def main():
-    root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip())
-    found = scan(root, load_hashes())
+def changed_paths(root, environ):
+    if environ.get("GITHUB_EVENT_NAME") != "pull_request":
+        return None
+    try:
+        base = json.loads(Path(environ["GITHUB_EVENT_PATH"]).read_text())["pull_request"]["base"]["sha"]
+        subprocess.run(["git", "-C", str(root), "fetch", "--quiet", "--no-tags", "--depth=1", "origin", base], check=True, capture_output=True)
+        listed = subprocess.run(
+            ["git", "-C", str(root), "diff", "--name-only", "-z", "--diff-filter=d", base, "HEAD"], check=True, capture_output=True
+        ).stdout
+    except (KeyError, TypeError, OSError, ValueError, subprocess.CalledProcessError):
+        return None
+    return set(filter(None, listed.split(b"\0")))
+
+
+def run(root, hashes, environ):
+    only = changed_paths(root, environ)
+    found = scan(root, hashes, only)
     if found:
         print(f"{len(found)} finding(s): a tracked path, file line or symlink target contains a private downstream name; use example-org and example-repo placeholders. A path is named by its line number in `git ls-files`:")
         print("\n".join(found[:MAX_REPORTED]))
         return 1
     return 0
+
+
+def main():
+    root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip())
+    return run(root, load_hashes(), os.environ)
 
 
 if __name__ == "__main__":

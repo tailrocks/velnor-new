@@ -4,7 +4,7 @@
  "observation_date": "2026-10-26T07:31:15Z",
  "auth": {
   "tool": "gh api",
-  "account": "donbeave",
+  "account": "example-account-1",
   "result": "authenticated; all 9 inventory+usage reads HTTP 200; storage-limit and retention-limit HTTP 402 (no payment method on file)"
  },
  "connector_route_note": "EVIDENCE.md (2026-10-25) records cache inventory/usage/settings requests failing through the plan connector route with HTTP 400 (endpoint allowlist, not a permission denial). That finding is unchanged. This file records a new direct `gh api` observation on 2026-10-26, which succeeds for inventory and usage.",

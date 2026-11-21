@@ -1,10 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 import importlib.util
+import io
+import json
 import os
+import random
 import subprocess
 import tempfile
+import tracemalloc
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("private-names-guard.py")
@@ -203,6 +208,97 @@ class PathTests(unittest.TestCase):
         tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n"})
         with tmp:
             self.assertEqual(guard.scan(root, planted("zzplanted")), ["docs/hard-decisions.md:1"])
+
+
+GIT_ENV = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+
+
+def git(root, *args):
+    return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, env=GIT_ENV).stdout.decode().strip()
+
+
+def pull_request(base_files, head_files, removed=()):
+    tmp = tempfile.TemporaryDirectory(prefix="private-names-pr-")
+    root = Path(tmp.name) / "work"
+    root.mkdir()
+    git(root, "init", "-q")
+    git(root, "config", "user.email", "t@example.invalid")
+    git(root, "config", "user.name", "t")
+    for name, text in base_files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    base = git(root, "rev-parse", "HEAD")
+    git(root, "remote", "add", "origin", str(root))
+    for name, text in head_files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    for name in removed:
+        (root / name).unlink()
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "head")
+    event = Path(tmp.name) / "event.json"
+    event.write_text(json.dumps({"pull_request": {"base": {"sha": base}}}))
+    return tmp, root, {"GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(event)}
+
+
+def outcome(root, names, environ):
+    out = io.StringIO()
+    with redirect_stdout(out):
+        code = guard.run(root, planted(*names), environ)
+    return code, out.getvalue()
+
+
+class PullRequestScopeTests(unittest.TestCase):
+    def test_a_pull_request_scans_only_the_files_it_changes(self):
+        tmp, root, environ = pull_request({"old.md": "zzplanted\n"}, {"new.md": "clean\n"})
+        with tmp:
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 0)
+            self.assertEqual(outcome(root, ["zzplanted"], {})[0], 1)
+
+    def test_a_pull_request_flags_a_planted_name_in_a_changed_file_and_a_changed_path(self):
+        tmp, root, environ = pull_request({"old.md": "clean\n"}, {"new.md": "one\nzzplanted\n", "zzplanted-path.md": "x\n"})
+        with tmp:
+            code, text = outcome(root, ["zzplanted"], environ)
+            self.assertEqual(code, 1)
+            self.assertIn("new.md:2", text)
+            self.assertIn("2 finding(s)", text)
+            self.assertIn("ls-files line 3", text)
+            self.assertNotIn("zzplanted", text)
+
+    def test_a_pull_request_that_deletes_a_file_still_passes(self):
+        tmp, root, environ = pull_request({"old.md": "zzplanted\n", "keep.md": "clean\n"}, {}, removed=["old.md"])
+        with tmp:
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 0)
+
+    def test_an_unreadable_base_falls_back_to_the_whole_tree(self):
+        tmp, root, environ = pull_request({"old.md": "zzplanted\n"}, {"new.md": "clean\n"})
+        with tmp:
+            Path(environ["GITHUB_EVENT_PATH"]).write_text(json.dumps({"pull_request": {"base": {"sha": "0" * 40}}}))
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 1)
+            Path(environ["GITHUB_EVENT_PATH"]).write_text("not json")
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 1)
+
+    def test_push_and_schedule_events_scan_the_whole_tree(self):
+        tmp, root, environ = pull_request({"old.md": "zzplanted\n"}, {"new.md": "clean\n"})
+        with tmp:
+            for name in ["push", "schedule", "merge_group", "workflow_dispatch"]:
+                self.assertEqual(outcome(root, ["zzplanted"], {**environ, "GITHUB_EVENT_NAME": name})[0], 1, name)
+
+
+class LongTokenTests(unittest.TestCase):
+    def test_one_long_token_is_scanned_without_materializing_its_windows(self):
+        token = "".join(random.Random(1).choices("abcdefghijklmnopqrstuvwxyz0123456789", k=100_000)).encode()
+        matcher = guard.Matcher(planted("zzplanted", "zz-two-parts"))
+        tracemalloc.start()
+        try:
+            found = matcher.names_in([token + b"zzplanted" + token])
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(found, {b"zzplanted"})
+        self.assertLess(peak, 2_000_000)
 
 
 if __name__ == "__main__":
