@@ -217,15 +217,24 @@ check footnote_blank_code fail '/// [^x]: prose\n///\n///         compile_error!
 check setext_indent4_cont pass '/// Title\n///     ====\n///     compile_error!("x");\npub fn f() {}\n'
 check block_blank_unstarred fail '/**\n * - item\n\n *     compile_error!("x");\n */\npub fn f() {}\n'
 check cfg_attr_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), doc = "prose")]\npub fn f() {}\n'
+check cfg_attr_raw_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), r#doc = "prose")]\npub fn f() {}\n'
+check line_prose_tab_standalone pass '///     ordinary\tprose\npub fn f() {}\n'
+check cfg_attr_concat_lazy pass '#[cfg_attr(all(), doc = concat!("prose\\n", "    continuation"))]\npub fn f() {}\n'
+check cfg_attr_concat_code fail '#[cfg_attr(all(), doc = concat!("    compile_error!(\"x\");\\n", "prose"))]\npub fn f() {}\n'
+check cfg_attr_nested_fence fail '#[cfg_attr(all(), cfg_attr(all(), doc = "```\ncompile_error!(\"x\");\n```"))]\npub fn f() {}\n'
+check cfg_attr_nested_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), cfg_attr(all(), doc = "prose"))]\npub fn f() {}\n'
+check cfg_attr_nested_predicate pass '#[cfg_attr(all(), cfg_attr(doc = "```", allow(dead_code)))]\npub fn f() {}\n'
+check cfg_attr_same_frame_lazy pass '#[cfg_attr(all(), doc = "a", doc = "    compile_error!(\"x\");\nsecond")]\npub fn f() {}\n'
+check doc_concat_glued_fence fail '#[doc = concat!("a\\n``", "`\\ncompile_error!(\"x\");\\n```")]\npub fn f() {}\n'
 
 long="$work/footnote_long"
 mkdir -p "$long/scripts" "$long/crates/fx/src"
 cp "$repo/scripts/no-doctests.py" "$long/scripts/"
 python3 -c 'import sys; sys.stdout.write("/// [^" + "a" * 120000 + "\npub fn f() {}\n")' > "$long/crates/fx/src/lib.rs"
-if timeout 5 python3 -I "$long/scripts/no-doctests.py" "$long/crates/fx/src/lib.rs" >/dev/null 2>&1; then
-  echo "ok   footnote_label_linear (pass within 5 s)"
+if (ulimit -t 5; python3 -I "$long/scripts/no-doctests.py" "$long/crates/fx/src/lib.rs") >/dev/null 2>&1; then
+  echo "ok   footnote_label_linear (pass within 5 s of CPU)"
 else
-  echo "FAIL footnote_label_linear: no pass within 5 s"
+  echo "FAIL footnote_label_linear: no pass within 5 s of CPU"
   fails=$((fails + 1))
 fi
 
