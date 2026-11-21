@@ -47,8 +47,19 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
     let caches: Vec<_> = caches.iter().map(|key| {
         let root = match key { CacheKey::Tools { .. } | CacheKey::Sources { .. } => None, CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.label().to_owned()) };
         let tools = matches!(key, CacheKey::Tools { .. });
-        let step = |restore: bool, node: bool, id: &str| if tools && node { id.to_owned() } else { cache_id(key, restore) };
-        let mut plan = serde_json::json!({"family":key.family(),"root":root,"restore_step":step(true, node_tools.restore, crate::gate::TOOLS_RESTORED_STEP),"save_step":step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP)});
+        let restore_step = if tools && node_tools.restore {
+            crate::gate::TOOLS_RESTORED_STEP.to_owned()
+        } else {
+            cache_id(key, true)
+        };
+        let save_step = if tools && node_tools.save {
+            serde_json::Value::String(crate::gate::TOOLS_SAVED_STEP.to_owned())
+        } else if tools && !node_tools.network_save {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String(cache_id(key, false))
+        };
+        let mut plan = serde_json::json!({"family":key.family(),"root":root,"restore_step":restore_step,"save_step":save_step});
         if let (false, Some(reason)) = (tools, not_generated) {
             plan["not_generated"] = serde_json::Value::String(reason.to_owned());
         }

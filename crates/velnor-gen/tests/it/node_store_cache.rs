@@ -210,3 +210,66 @@ fn helper_0_1_99_has_neither_the_cold_output_nor_the_checked_save() -> TestResul
     }
     Ok(())
 }
+
+#[test]
+fn a_restore_only_tools_job_names_no_save_step_from_helper_0_1_112() -> TestResult {
+    let groups = format!("shape = \"groups\"\n{SHARED}");
+    let mut restore_only = 0;
+    for config in [SHARED, groups.as_str()] {
+        for (id, job) in workflow_for(config, "0.1.112")? {
+            if named(&job, "Restore the tools cache").is_none() {
+                continue;
+            }
+            let plan = report_plan(&job)?;
+            let Some(save) = plan["save_step"].as_str() else {
+                assert!(plan["save_step"].is_null(), "{id}");
+                restore_only += 1;
+                continue;
+            };
+            assert!(
+                id_of(&job, save).is_some(),
+                "{id}: the report names the missing save step {save}"
+            );
+        }
+    }
+    assert!(restore_only > 0);
+    Ok(())
+}
+
+#[test]
+fn helper_0_1_111_still_names_the_tools_save_step_of_a_restore_only_job() -> TestResult {
+    let groups = format!("shape = \"groups\"\n{SHARED}");
+    let mut restore_only = 0;
+    for (id, job) in workflow_for(&groups, "0.1.111")? {
+        if named(&job, "Download the tests").is_none() {
+            continue;
+        }
+        restore_only += 1;
+        assert_eq!(report_plan(&job)?["save_step"], "save_tools", "{id}");
+    }
+    assert!(restore_only > 0);
+    Ok(())
+}
+
+#[test]
+fn a_tools_saving_job_keeps_its_save_step_from_helper_0_1_112() -> TestResult {
+    let mut saving = 0;
+    for config in ["", SHARED] {
+        for (id, job) in workflow_for(config, "0.1.112")? {
+            if id_of(&job, "save_tools").is_none() {
+                continue;
+            }
+            saving += 1;
+            let plan = report_plan(&job)?;
+            let save = plan["save_step"]
+                .as_str()
+                .ok_or_else(|| format!("{id}: no save step"))?;
+            assert!(
+                id_of(&job, save).is_some(),
+                "{id}: missing save step {save}"
+            );
+        }
+    }
+    assert!(saving > 0);
+    Ok(())
+}

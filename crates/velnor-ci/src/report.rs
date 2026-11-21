@@ -15,7 +15,7 @@ pub struct Cache {
     pub family: String,
     pub root: Option<String>,
     pub restore_step: String,
-    pub save_step: String,
+    pub save_step: Option<String>,
     #[serde(default)]
     pub requested_key: String,
     pub matched_key: Option<String>,

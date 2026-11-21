@@ -11,7 +11,7 @@ pub(crate) struct CachePlan {
     family: String,
     root: Option<String>,
     restore_step: String,
-    save_step: String,
+    save_step: Option<String>,
     #[serde(default)]
     not_generated: Option<String>,
 }
@@ -33,14 +33,13 @@ pub(crate) fn observe_caches(
                 errors.push(format!("{}: {error}", plan.restore_step));
             }
             let (requested_key, matched_key, hit) = evidence.unwrap_or_default();
-            let save = if saving {
-                match steps[&plan.save_step]["outcome"].as_str() {
+            let save = match (saving, plan.save_step.as_deref()) {
+                (true, Some(save_step)) => match steps[save_step]["outcome"].as_str() {
                     Some("failure" | "cancelled") => SaveOutcome::Failed,
                     Some("success") => SaveOutcome::Unknown,
                     _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
+                },
+                _ => SaveOutcome::NotAttempted,
             };
             Cache {
                 family: plan.family,
@@ -110,12 +109,29 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn a_plan_without_a_save_step_is_not_attempted_while_saving() {
+        let plans = vec![CachePlan {
+            family: "tools".to_owned(),
+            root: None,
+            restore_step: "restore".to_owned(),
+            save_step: None,
+            not_generated: None,
+        }];
+        let steps = json!({
+            "restore": {"outcome": "skipped", "outputs": {}},
+        });
+        let (caches, errors) = observe_caches(plans, &steps, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
+    }
+
+    #[test]
     fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
         let plans = vec![CachePlan {
             family: "sources".to_owned(),
             root: None,
             restore_step: "restore".to_owned(),
-            save_step: "save".to_owned(),
+            save_step: Some("save".to_owned()),
             not_generated: None,
         }];
         let steps = json!({

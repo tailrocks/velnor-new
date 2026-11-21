@@ -242,9 +242,15 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
                             .collect::<Vec<_>>(),
                         ["family", "restore_step", "root", "save_step"]
                     );
-                    for key in ["family", "restore_step", "save_step"] {
+                    for key in ["family", "restore_step"] {
                         assert!(cache[key].as_str().is_some_and(|value| !value.is_empty()));
                     }
+                    assert!(
+                        cache["save_step"].is_null()
+                            || cache["save_step"]
+                                .as_str()
+                                .is_some_and(|value| !value.is_empty())
+                    );
                     if cache["family"] == "sources" {
                         assert!(cache["root"].is_null(), "{cache}");
                     } else if !cache["root"].is_null() {
