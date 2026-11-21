@@ -4,7 +4,7 @@
 #![cfg(unix)]
 
 use crate::run::scratch;
-use crate::run_nextest::{execute_nextest, fake_nextest, list_args, listed};
+use crate::run_nextest::{archive_in, execute_nextest, fake_nextest, list_args, listed};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -139,6 +139,7 @@ fn a_list_that_exits_non_zero_names_its_status_and_the_omission() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let outputs = temp.join("github-output");
     fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+    archive_in(&temp);
     let path = format!(
         "{}:{}",
         temp.display(),
@@ -148,6 +149,7 @@ fn a_list_that_exits_non_zero_names_its_status_and_the_omission() {
         .arg("run")
         .arg("--")
         .args(archive_run(&["--extract-to", "."]))
+        .current_dir(&temp)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path)
@@ -168,12 +170,14 @@ fn a_list_that_exits_non_zero_names_its_status_and_the_omission() {
 fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
     let temp = scratch("tests-run-extract-noexec-tmpdir");
     fake_nextest(&temp, RUN_EXTRACT, &listed(&[("kept", &["alpha"])]));
+    archive_in(&temp);
     let unusable = temp.join("unusable-tmpdir");
     fs::create_dir_all(&unusable).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&unusable, fs::Permissions::from_mode(0o000))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let outputs = temp.join("github-output");
     fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+    archive_in(&temp);
     let path = format!(
         "{}:{}",
         temp.display(),
@@ -183,6 +187,7 @@ fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
         .arg("run")
         .arg("--")
         .args(archive_run(&["--extract-to", "."]))
+        .current_dir(&temp)
         .env("RUNNER_TEMP", &temp)
         .env("TMPDIR", &unusable)
         .env("GITHUB_OUTPUT", &outputs)

@@ -96,6 +96,9 @@ pub(crate) fn without_built(written: &str) -> String {
     }
     kept
 }
+pub(crate) fn archive_in(directory: &Path) {
+    fs::write(directory.join("a.tar.zst"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+}
 pub(crate) fn execute_nextest(
     name: &str,
     run: &str,
@@ -105,6 +108,7 @@ pub(crate) fn execute_nextest(
 ) -> (Output, String, PathBuf, std::time::Duration) {
     let started = std::time::Instant::now();
     let temp = scratch(name);
+    archive_in(&temp);
     fake_nextest(&temp, run, list_json);
     let outputs = temp.join("github-output");
     fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
@@ -118,6 +122,7 @@ pub(crate) fn execute_nextest(
         .arg("run")
         .arg("--")
         .args(command)
+        .current_dir(&temp)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path);

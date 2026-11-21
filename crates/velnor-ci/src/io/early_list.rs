@@ -2,13 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsString;
-use std::io::Write;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
 use crate::tests_run::{Listing, extracts, list_argv, retarget_extract, runnable_matches};
+
+const EXPANSION_HEADROOM: u64 = 4;
+
+type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
+
+fn free_bytes(directory: &Path) -> io::Result<u64> {
+    let stats = nix::sys::statvfs::statvfs(directory).map_err(io::Error::from)?;
+    Ok(widen(stats.blocks_available()).saturating_mul(widen(stats.fragment_size())))
+}
+
+fn widen<T: Into<u64>>(value: T) -> u64 {
+    value.into()
+}
 
 const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
@@ -65,7 +80,12 @@ impl EarlyList {
 }
 
 fn list_matches(argv: &[String]) -> Option<Listing> {
-    match try_list(argv, std::env::var_os("RUNNER_TEMP"), &can_execute_from) {
+    match try_list(
+        argv,
+        std::env::var_os("RUNNER_TEMP"),
+        &can_execute_from,
+        &free_bytes,
+    ) {
         Ok(listing) => Some(listing),
         Err(Failure::NotListable) => None,
         Err(Failure::Exited { status, stderr }) => {
@@ -96,9 +116,10 @@ fn try_list(
     argv: &[String],
     runner_temp: Option<OsString>,
     can_execute: &ExecProbe,
+    free: &FreeProbe,
 ) -> Result<Listing, Failure> {
     let mut argv = list_argv(argv).ok_or(Failure::NotListable)?;
-    let directory = isolate(&mut argv, runner_temp, can_execute).map_err(|error| {
+    let directory = isolate(&mut argv, runner_temp, can_execute, free).map_err(|error| {
         Failure::Report(format!(
             "the early nextest list needs its own extraction directory: {error}"
         ))
@@ -131,11 +152,13 @@ fn isolate(
     argv: &mut [String],
     runner_temp: Option<OsString>,
     can_execute: &ExecProbe,
+    free: &FreeProbe,
 ) -> Result<Option<ListDir>, String> {
     if !extracts(argv) {
         return Ok(None);
     }
     let directory = ListDir::create(runner_temp, std::process::id(), can_execute)?;
+    admit(argv, directory.path(), free)?;
     let path = directory
         .path()
         .to_str()
@@ -143,6 +166,38 @@ fn isolate(
         .to_owned();
     retarget_extract(argv, &path);
     Ok(Some(directory))
+}
+
+fn admit(argv: &[String], directory: &Path, free: &FreeProbe) -> Result<(), String> {
+    let archive = match archive_file(argv) {
+        Some(path) => fs::metadata(path)
+            .map_err(|error| format!("cannot read the archive size of {path}: {error}"))?
+            .len(),
+        None => 0,
+    };
+    let needed = archive.saturating_mul(EXPANSION_HEADROOM);
+    let available = free(directory).map_err(|error| {
+        format!(
+            "cannot measure the free space of {}: {error}",
+            directory.display()
+        )
+    })?;
+    if available < needed {
+        return Err(format!(
+            "{} has {available} bytes free, but the extraction may need {needed}",
+            directory.display()
+        ));
+    }
+    Ok(())
+}
+
+fn archive_file(argv: &[String]) -> Option<&str> {
+    argv.iter().enumerate().find_map(|(index, arg)| {
+        if arg == "--archive-file" {
+            return argv.get(index + 1).map(String::as_str);
+        }
+        arg.strip_prefix("--archive-file=")
+    })
 }
 
 #[cfg(test)]
@@ -163,12 +218,14 @@ mod tests {
     }
 
     fn archive_run(program: &Path) -> Vec<String> {
+        let archive = program.with_file_name("a.tar.zst");
+        drop(fs::write(&archive, b""));
         [
             &program.display().to_string(),
             "nextest",
             "run",
             "--archive-file",
-            "a.tar.zst",
+            &archive.display().to_string(),
             "--extract-to",
             ".",
         ]
@@ -195,6 +252,7 @@ mod tests {
             &archive_run(&program),
             Some(OsString::from(&directory)),
             &|_| Ok(true),
+            &|_| Ok(u64::MAX),
         ));
         assert!(
             message.starts_with("cannot start the early nextest list: "),
@@ -210,6 +268,7 @@ mod tests {
             &archive_run(Path::new("/nonexistent/cargo-nextest")),
             None,
             &|_| Ok(true),
+            &|_| Ok(u64::MAX),
         ));
         assert_eq!(
             message,
@@ -226,6 +285,7 @@ mod tests {
             &archive_run(Path::new("/nonexistent/cargo-nextest")),
             Some(OsString::from(&directory)),
             &|_| Ok(true),
+            &|_| Ok(u64::MAX),
         ));
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -254,6 +314,7 @@ mod tests {
             &archive_run(&program),
             Some(OsString::from(&directory)),
             &|_| Ok(true),
+            &|_| Ok(u64::MAX),
         );
         let Err(Failure::Exited { status, stderr }) = result else {
             unreachable!("{result:?}")
@@ -264,12 +325,42 @@ mod tests {
     }
 
     #[test]
+    fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
+        let directory = scratch("no-room");
+        let archive = directory.join("a.tar.zst");
+        fs::write(&archive, vec![0_u8; 100]).unwrap_or_else(|e| unreachable!("{e}"));
+        let run = [
+            "/nonexistent/cargo-nextest".to_owned(),
+            "nextest".to_owned(),
+            "run".to_owned(),
+            "--archive-file".to_owned(),
+            archive.display().to_string(),
+            "--extract-to".to_owned(),
+            ".".to_owned(),
+        ];
+        let message = report(try_list(
+            &run,
+            Some(OsString::from(&directory)),
+            &|_| Ok(true),
+            &|_| Ok(399),
+        ));
+        assert!(
+            message.contains("bytes free, but the extraction may need 400"),
+            "{message}"
+        );
+        let list_dir = directory.join(format!("velnor-nextest-list-{}", std::process::id()));
+        assert!(!list_dir.exists(), "{}", list_dir.display());
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
     fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_starts() {
         let directory = scratch("noexec");
         let message = report(try_list(
             &archive_run(Path::new("/nonexistent/cargo-nextest")),
             Some(OsString::from(&directory)),
             &|_| Ok(false),
+            &|_| Ok(u64::MAX),
         ));
         assert!(
             message.contains("does not allow executing files"),
