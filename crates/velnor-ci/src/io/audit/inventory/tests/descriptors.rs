@@ -3,11 +3,9 @@
 
 use std::os::unix::fs::symlink;
 
-use super::handle::{self, Origin};
-use super::walk::DESCRIPTOR_BUDGET;
 use super::*;
 
-fn deep_tree(root: &Path, depth: usize, siblings: usize) {
+pub(super) fn deep_tree(root: &Path, depth: usize, siblings: usize) {
     let mut directory = root.to_path_buf();
     for _ in 0..depth {
         for sibling in 0..siblings {
@@ -19,47 +17,27 @@ fn deep_tree(root: &Path, depth: usize, siblings: usize) {
     }
 }
 
-fn open_descriptors() -> usize {
-    fs::read_dir("/dev/fd").map_or(0, Iterator::count)
-}
-
-fn scan_deep(name: &str, depth: usize, held: usize) -> (io::Result<Entries>, usize) {
+fn scan_deep(name: &str, depth: usize, held: usize) -> io::Result<Entries> {
     let root = fs::canonicalize(std::env::temp_dir())
         .unwrap_or_else(|e| unreachable!("{e}"))
         .join(format!("velnor-scan-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     deep_tree(&root, depth, 4);
-    let peak = AtomicUsize::new(0);
     let mut budget = Budget::new(usize::MAX);
     let result = scan_with(
         &root,
         &BTreeSet::new(),
         &mut budget,
         &Probe {
-            after_open: &|_| {
-                peak.fetch_max(open_descriptors(), Ordering::Relaxed);
-            },
             held,
             ..Probe::default()
         },
     );
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    (result, peak.load(Ordering::Relaxed))
+    result
 }
 
-#[test]
-fn a_deep_tree_with_pending_siblings_is_walked_within_a_small_descriptor_budget() {
-    let baseline = open_descriptors();
-    let (entries, peak) = scan_deep("deep-budget", 160, Probe::default().held);
-    let entries = entries.unwrap_or_else(|e| panic!("deep tree scan failed: {e}"));
-    assert_eq!(entries.len(), 1 + 160 * 5, "{}", entries.len());
-    assert!(
-        peak <= baseline + DESCRIPTOR_BUDGET,
-        "walk held {peak} descriptors (baseline {baseline}) in a tree 160 levels deep"
-    );
-}
-
-fn deep_links_tree(root: &Path, depth: usize, linked_from: usize, target_depth: usize) {
+pub(super) fn deep_links_tree(root: &Path, depth: usize, linked_from: usize, target_depth: usize) {
     deep_tree(root, depth, 4);
     let mut target = root.join("t");
     for _ in 0..target_depth {
@@ -80,41 +58,9 @@ fn deep_links_tree(root: &Path, depth: usize, linked_from: usize, target_depth: 
 }
 
 #[test]
-fn a_deep_tree_with_deep_link_targets_stays_within_one_descriptor_budget() {
-    let root = fs::canonicalize(std::env::temp_dir())
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-links-budget-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    deep_links_tree(&root, 120, 56, 200);
-    let baseline = open_descriptors();
-    let peak = AtomicUsize::new(0);
-    let sample = || {
-        peak.fetch_max(open_descriptors(), Ordering::Relaxed);
-    };
-    let mut budget = Budget::new(usize::MAX);
-    let result = scan_with(
-        &root,
-        &BTreeSet::new(),
-        &mut budget,
-        &Probe {
-            after_open: &|_| sample(),
-            opened: &sample,
-            ..Probe::default()
-        },
-    );
-    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    result.unwrap_or_else(|e| panic!("deep link scan failed: {e}"));
-    let peak = peak.load(Ordering::Relaxed);
-    assert!(
-        peak <= baseline + DESCRIPTOR_BUDGET,
-        "audit held {peak} descriptors (baseline {baseline}), more than {DESCRIPTOR_BUDGET}"
-    );
-}
-
-#[test]
 fn releasing_every_parent_handle_records_the_same_inventory() {
-    let (kept, _) = scan_deep("kept-handles", 12, usize::MAX);
-    let (released, _) = scan_deep("released-handles", 12, 0);
+    let kept = scan_deep("kept-handles", 12, usize::MAX);
+    let released = scan_deep("released-handles", 12, 0);
     let kept = kept.unwrap_or_else(|e| panic!("{e}"));
     let released = released.unwrap_or_else(|e| panic!("{e}"));
     let relative = |entries: &Entries| -> Vec<_> {
@@ -168,35 +114,5 @@ fn a_parent_swapped_after_its_handle_was_released_fails_the_scan() {
     assert!(
         matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
         "a released parent that was swapped must fail the scan: {entries:?}"
-    );
-}
-
-#[test]
-fn a_parent_whose_inode_is_unchanged_but_whose_stamp_differs_is_refused() {
-    let root = fs::canonicalize(std::env::temp_dir())
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-recycled-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    let parent = root.join("d");
-    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
-    let recorded =
-        handle::stamp(handle::open(&Origin::Path, &parent).unwrap_or_else(|e| unreachable!("{e}")))
-            .unwrap_or_else(|e| unreachable!("{e}"));
-    let origin = Origin::Reopen {
-        parent: parent.clone(),
-        stamp: recorded,
-        name: "sub".into(),
-    };
-    let unchanged = handle::open(&origin, &parent.join("sub"));
-    fs::File::open(&parent)
-        .and_then(|directory| directory.set_modified(std::time::UNIX_EPOCH))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let refused = handle::open(&origin, &parent.join("sub"));
-    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(unchanged.is_ok(), "{:?}", unchanged.err());
-    assert!(
-        matches!(&refused, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
-        "a parent with the recorded inode but another stamp must be refused: {:?}",
-        refused.err()
     );
 }

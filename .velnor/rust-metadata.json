@@ -318,7 +318,8 @@
                 "signal",
                 "fs",
                 "dir",
-                "user"
+                "user",
+                "resource"
               ]
             },
             {
@@ -2012,7 +2013,7 @@
     "Cargo.toml": "0a8af2473ac087ecafb0414a31f77b0d031f92a936d68ed5b9fee04dfe524f91",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "127dc488f22e2152f2bcf8ba6c7d5ba4b3a1e9dd9f61dd7f181661884492b3c9",
+    "crates/velnor-ci/Cargo.toml": "7272dcb083818fcee53997668335bb0d4e667aa24f3729ff4096553c680c4147",
     "crates/velnor-gen/Cargo.toml": "7e54073ac2d73ffa2e29fc3e133c996b635726d1ef87e2feff24589938b1e4ee",
     "crates/velnor-local/Cargo.toml": "e6d3b5198ae94ac9ed44e8c9dad53e7b8231c92f64abd8e33eea72f8812f2ffb",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",

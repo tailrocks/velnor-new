@@ -142,6 +142,7 @@ fn reopening(entry: &Pending, released: &Weak<Dir>) -> Option<Origin> {
     Some(Origin::Reopen {
         parent: entry.path.parent()?.to_path_buf(),
         stamp: *stamp,
+        child: handle::child_stamp(parent, name),
         name: name.clone(),
     })
 }

@@ -30,6 +30,15 @@ pub(in crate::io::audit) struct Stamp {
 }
 
 impl Stamp {
+    fn of(stat: &FileStat) -> Self {
+        Self {
+            device: i128::from(stat.st_dev),
+            inode: i128::from(stat.st_ino),
+            modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
+            changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
+        }
+    }
+
     pub(super) fn is(&self, (device, inode): Identity) -> bool {
         self.device == i128::from(device) && self.inode == i128::from(inode)
     }
@@ -46,6 +55,7 @@ pub(super) enum Origin {
     Reopen {
         parent: PathBuf,
         stamp: Stamp,
+        child: Option<Stamp>,
         name: OsString,
     },
 }
@@ -78,10 +88,23 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
         Origin::Reopen {
             parent,
             stamp,
+            child: recorded,
             name,
-        } => child(reopen(parent, stamp)?.as_fd(), name)?,
+        } => {
+            let opened = child(reopen(parent, stamp)?.as_fd(), name)?;
+            if self::stamp(&opened).ok() != *recorded {
+                return Err(changed(io::ErrorKind::Other, parent));
+            }
+            opened
+        }
     };
     Dir::from_fd(fd).map_err(failure)
+}
+
+pub(super) fn child_stamp(parent: &Opened, name: &OsStr) -> Option<Stamp> {
+    fstatat(parent.as_fd(), name, AtFlags::AT_SYMLINK_NOFOLLOW)
+        .ok()
+        .map(|stat| Stamp::of(&stat))
 }
 
 fn child(parent: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
@@ -97,7 +120,7 @@ fn reopen(parent: &Path, expected: &Stamp) -> io::Result<OwnedFd> {
             error
         }
     })?;
-    if stamp(&held)? == *expected {
+    if expected.is(identity(&held)?) {
         Ok(held)
     } else {
         Err(changed(io::ErrorKind::Other, parent))
@@ -120,14 +143,15 @@ pub(super) fn revisited(
     }
 }
 
-pub(super) fn stamp(directory: impl AsFd) -> io::Result<Stamp> {
+fn identity(directory: impl AsFd) -> io::Result<Identity> {
     let stat = fstat(directory).map_err(failure)?;
-    Ok(Stamp {
-        device: i128::from(stat.st_dev),
-        inode: i128::from(stat.st_ino),
-        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
-        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
-    })
+    Ok((stat.st_dev, stat.st_ino))
+}
+
+pub(super) fn stamp(directory: impl AsFd) -> io::Result<Stamp> {
+    fstat(directory)
+        .map(|stat| Stamp::of(&stat))
+        .map_err(failure)
 }
 pub(super) fn current(origin: &Origin, path: &Path, reach: Reach<'_>) -> io::Result<Current> {
     let held: OwnedFd;
@@ -137,6 +161,7 @@ pub(super) fn current(origin: &Origin, path: &Path, reach: Reach<'_>) -> io::Res
             parent,
             stamp,
             name,
+            ..
         } => {
             held = reopen(parent, stamp)?;
             (held.as_fd(), name.as_os_str())
