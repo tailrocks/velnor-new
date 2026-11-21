@@ -204,3 +204,4 @@ f961fa2aa4f3f422d9cdf5e9905c36fee03f33a6:docs/reviews/ci-performance-owned-sourc
 f961fa2aa4f3f422d9cdf5e9905c36fee03f33a6:docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
 f961fa2aa4f3f422d9cdf5e9905c36fee03f33a6:scripts/download-owned-tool-candidate.py:generic-api-key:62
 fcc9f4916f2a99c41d7794df95f5d724ef6c3ae4:docs/proposed/dbt-contract.md:generic-password:29
+ddbaad770cf30991dcfbc279c63c71c20447e6be:crates/velnor-ci/tests/it/cache_sources_restored.rs:generic-credential-uri:13
