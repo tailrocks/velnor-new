@@ -108,7 +108,7 @@ The obligation key still fails closed and blocks merge (zero retries for green, 
 
 ### N08: Scheduler priority for interactive agent commands
 
-The cluster's five EPYC workers run at `92 to 95%` CPU during peak multi-org bursts (`tailrocks`, `ChainArgos`, `jackin` [M, `§B.2.1`]), where queueing delay reaches `~19x` service time (`§9`, `N38`).
+The cluster's five EPYC workers run at `92 to 95%` CPU during peak multi-org bursts (`tailrocks`, `example-org`, `jackin` [M, `§B.2.1`]), where queueing delay reaches `~19x` service time (`§9`, `N38`).
 If an agent's inner-loop `cargo check` or single-package test queues behind 39-job PR runs or cold Audit A1 rebuilds, the agent stalls for 2 to 4 minutes per tool call.
 We split `velnor-dispatch`'s priority queue (`§9`) into five bands: `merge > gate > interactive-witness-1 > pr = other-org > batch`.
 Any command initiated from an interactive `velnord` client stream with an expected duration `<= 30 s` enters at `interactive-witness-1`, subject to a token bucket of 1 concurrent slot per agent session and at most 50% of non-reserved site capacity.

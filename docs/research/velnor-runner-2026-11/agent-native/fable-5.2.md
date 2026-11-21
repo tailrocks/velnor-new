@@ -151,7 +151,7 @@ most tests), and a soak failure blocks that record until the test is fixed.
 **N10. Scheduling.** An interactive request is short and has an agent waiting on it; a PR request
 is the same work a few minutes later. So interactive sits above PR and below merge and gate, with a
 per-identity budget so a loop of full suites cannot starve verdicts. This also ranks velnor-new's
-agents above ChainArgos's and jackin's CI on shared nodes, which the owner must decide (OQ4).
+agents above example-org's and jackin's CI on shared nodes, which the owner must decide (OQ4).
 
 **N11. Signing.** A Mac cannot prove to the cluster what software produced a result: there is no
 remote attestation for a command-line process. A device signature therefore gives accountability

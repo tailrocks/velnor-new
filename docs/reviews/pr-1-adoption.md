@@ -45,7 +45,7 @@ failure still blocks promotion and never increases its five-minute limit.
 ### Configurable job timeout amendment (2026-10-19)
 
 The repository owner requested a configurable crate-job timeout after hosted
-consumer CI (ChainArgos java-monorepo, scale set temporarily disabled) canceled
+consumer CI (example-org example-repo-2, scale set temporarily disabled) canceled
 every cold Rust crate job at five minutes: checkout took about 1.5 minutes and
 Clippy about 2.2 minutes before test compilation. This supersedes the
 five-minute maximum above for general workflow jobs while keeping five minutes
