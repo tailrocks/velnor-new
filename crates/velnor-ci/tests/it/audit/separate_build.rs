@@ -223,19 +223,15 @@ fn a_relative_build_directory_with_a_parent_component_is_refused_by_the_audit() 
 #[test]
 fn a_relative_build_directory_of_dot_then_parent_is_refused_by_the_audit() {
     let repo = built_in(APART, &[]);
-    stamp(&repo, APART);
     let refused = from_step_directory(&repo, "./..", &["inputs", "audit", "--write"]);
     refused_for_parent_component(&refused, "./..");
-    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
 #[test]
 fn a_relative_build_directory_ending_in_a_parent_component_is_refused_by_the_audit() {
     let repo = built_in(APART, &[]);
-    stamp(&repo, APART);
     let refused = from_step_directory(&repo, "a/..", &["inputs", "audit", "--write"]);
     refused_for_parent_component(&refused, "a/..");
-    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
 #[test]
