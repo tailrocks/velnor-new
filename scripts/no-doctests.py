@@ -188,6 +188,7 @@ def block_start(s):
 class Doc:
     def __init__(self):
         self.para = False
+        self.para_quoted = False
         self.item = None
         self.empty_item = False
         self.html = None
@@ -229,6 +230,8 @@ class Doc:
                 self.item = None
             return False
         self.empty_item = False
+        if quoted and self.para and not self.para_quoted:
+            self.para = False
         if not quoted and self.item is not None and ind < self.item:
             self.item = None
         base = 0 if quoted or self.item is None else self.item
@@ -255,10 +258,12 @@ class Doc:
             if self.open_html(rest, quoted):
                 return plain
             self.para = bool(rest) and not (ATX.match(rest) or THEMATIC.match(rest) or FENCE_OPEN.match(rest))
+            self.para_quoted = quoted
             return plain
         if self.open_html(s, quoted):
             return plain
         self.para = True
+        self.para_quoted = quoted
         return plain
 
 

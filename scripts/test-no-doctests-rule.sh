@@ -170,6 +170,7 @@ check html_type5_lines pass '/// <![CDATA[\n///     code\n/// ]]>\nfn f() {}\n'
 check list_dedent_base_code fail '/// text\n///   1. nested\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
 check html_type7_setext_code fail '/// text\n/// <x>\n/// ---\n///     assert_eq!(1, 1);\npub fn f() {}\n'
 check empty_item_blank_code fail '/// -\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check quote_type7_code fail '/// text\n/// > <x>\n///     assert_eq!(1, 1);\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
