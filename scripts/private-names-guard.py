@@ -28,8 +28,6 @@ BLANKS = re.compile(rb"[ \t\r\f\v]+")
 NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
 MAX_PERCENT_ROUNDS = 4
-# Exact paths the guard does not read. Each entry is a documented exception to the
-# privacy rule (see docs/implemented/ci-maintenance/repo-verification.md); nothing else is exempt.
 EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md"})
 
 
