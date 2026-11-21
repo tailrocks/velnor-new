@@ -296,9 +296,16 @@ pub fn explain(
     for path in unknown {
         let shown = escape(path.as_str(), false);
         if path.as_str().contains('*') {
-            lines.push(format!(
-                "unknown path: {shown}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
-            ));
+            let advice = if path.as_str().contains('/') {
+                format!(
+                    "  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                )
+            } else {
+                format!(
+                    "  no exact rule can name a path with a *, and a root-level path has no folder above it; to select packages for every root-level file, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = \"*\"\n    packages = [\"<package>\"]\n"
+                )
+            };
+            lines.push(format!("unknown path: {shown}\n{advice}"));
             continue;
         }
         let quoted = toml_string(path.as_str());
