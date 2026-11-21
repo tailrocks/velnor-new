@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use velnor_ci::inputs::restored_units_file;
 
 const MISSING_INPUT: &str = "00000000bad00001";
 const KEPT_INPUT: &str = "00000000bad00002";
