@@ -180,6 +180,7 @@ mod needs_size_plan;
 mod nested_target_dir;
 mod newest_helper;
 mod nextest_profile;
+mod nextest_repo_config;
 mod no_programs;
 mod no_test_only_flags;
 mod node_store_cache;
