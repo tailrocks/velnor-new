@@ -19,3 +19,16 @@ f685faa579925b4a08b67dbc4d4db43943d9599a:docs/proposed/dbt-contract.md:generic-p
 fcc9f4916f2a99c41d7794df95f5d724ef6c3ae4:docs/proposed/dbt-contract.md:generic-password:29
 bb7fa33626a19aaf72f79aa646989ca02ee460e8:scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl:generic-api-key:1
 bb7fa33626a19aaf72f79aa646989ca02ee460e8:scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
+.velnor/runner.lock:generic-api-key:73
+docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
+docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:16
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:19
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:27
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:30
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:38
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:41
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:69
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:114
+docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
+scripts/download-owned-tool-candidate.py:generic-api-key:62
