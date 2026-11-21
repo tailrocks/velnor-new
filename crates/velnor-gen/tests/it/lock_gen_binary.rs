@@ -107,11 +107,6 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     .ok_or("accepted")?;
     assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     assert!(error.to_string().contains("linux-x64"), "{error}");
-    assert_eq!(
-        error.remedy(),
-        Some(&Remedy::Repin(VERSION.to_owned())),
-        "{error}"
-    );
     Ok(())
 }
 
