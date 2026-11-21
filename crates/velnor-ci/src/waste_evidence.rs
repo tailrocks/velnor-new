@@ -22,6 +22,8 @@ pub struct MbxSession {
     pub hits: u64,
     pub misses: u64,
     pub not_looked_up: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub bypassed: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verifications: Option<u64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -30,6 +32,10 @@ pub struct MbxSession {
     pub compiler: BTreeMap<String, MbxCompilerWork>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub probe_only: bool,
+}
+
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,12 +67,27 @@ pub fn seed_truncated(runner_temp: &Path) -> bool {
     runner_temp.join(SEED_TRUNCATED).is_file()
 }
 
+const OBJECT_CACHE_LABEL: &str = "object cache:";
+
 fn cache_text(line: &str) -> Option<(bool, &str)> {
     let text = line.split_once("mbx[cache]: ")?.1;
-    Some(match text.strip_prefix("object cache:") {
+    Some(match text.strip_prefix(OBJECT_CACHE_LABEL) {
         Some(rest) => (true, rest.trim_start()),
+        None if !text.trim_end().is_empty() && OBJECT_CACHE_LABEL.starts_with(text.trim_end()) => {
+            (true, "")
+        }
         None => (false, text),
     })
+}
+
+fn has_transfer_suffix(tail: &str) -> bool {
+    let clause = tail.split(',').next().unwrap_or_default();
+    matches!(
+        clause.split_whitespace().collect::<Vec<_>>().as_slice(),
+        [size, unit, "downloaded"]
+            if size.starts_with(|character: char| character.is_ascii_digit())
+                && unit.chars().all(|character| character.is_ascii_alphabetic())
+    )
 }
 
 fn looks_like_lookup_summary(text: &str) -> bool {
@@ -79,21 +100,37 @@ fn looks_like_lookup_summary(text: &str) -> bool {
 }
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
-    let counts = summary.split_once(';').map_or(summary, |(head, _)| head);
+    let (counts, tail) = summary.split_once(';')?;
+    if !has_transfer_suffix(tail) {
+        return None;
+    }
     let mut session = MbxSession::default();
-    let mut seen = [false; 2];
+    let mut seen: Vec<&str> = Vec::new();
     for clause in counts.split(',') {
         let (count, name) = clause.trim().split_once(' ')?;
-        let count = count.parse().ok()?;
-        match name.trim() {
-            "hits" => (session.hits, seen[0]) = (count, true),
-            "misses" => (session.misses, seen[1]) = (count, true),
-            "not looked up" => session.not_looked_up = count,
-            "bypassed" | "incremental" => {}
+        let count: u64 = count.parse().ok()?;
+        let name = match name.trim() {
+            "hit" | "hits" => "hits",
+            "miss" | "misses" => "misses",
+            "not looked up" => "not looked up",
+            "bypassed" => "bypassed",
+            "incremental" => "incremental",
             _ => return None,
+        };
+        if seen.contains(&name) {
+            return None;
+        }
+        seen.push(name);
+        match name {
+            "hits" => session.hits = count,
+            "misses" => session.misses = count,
+            "not looked up" | "incremental" => {
+                session.not_looked_up = session.not_looked_up.saturating_add(count);
+            }
+            _ => {}
         }
     }
-    (seen[0] && seen[1]).then_some(session)
+    (!seen.is_empty()).then_some(session)
 }
 
 #[must_use]
@@ -161,7 +198,12 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .filter(|session| !session.probe_only)
         .collect();
     let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
-        total.saturating_add(session.misses.saturating_add(session.not_looked_up))
+        total.saturating_add(
+            session
+                .misses
+                .saturating_add(session.not_looked_up)
+                .saturating_add(session.bypassed),
+        )
     });
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated

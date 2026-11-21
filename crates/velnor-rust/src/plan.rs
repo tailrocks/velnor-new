@@ -17,7 +17,7 @@ use crate::lane::{
     EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
     used_group_outputs, used_outputs,
 };
-use crate::mbx_steps::{MBX_COMPILING_ONLY_HELPER, MBX_OUT_DIR_HELPER};
+use crate::mbx_steps::MBX_OUT_DIR_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
@@ -29,6 +29,7 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
+const MBX_SELECTED_STORE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 // helper-gate: first in tools-v0.1.110 via c14fa4818f
 pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 110);
@@ -96,6 +97,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
+    crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -182,6 +184,14 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_OUT_DIR_HELPER))
         .then(|| step(StepKind::MbxOutDirs));
+    let selected_store = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
+    let store = Step {
+        gate: seed_gate.cloned().filter(|_| selected_store),
+        ..step(StepKind::MbxStore)
+    };
     let seed = facts
         .helper
         .as_ref()
@@ -190,14 +200,6 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
             gate: seed_gate.cloned(),
             ..step(StepKind::MbxSeed)
         });
-    let gated = facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(MBX_COMPILING_ONLY_HELPER));
-    let store = Step {
-        gate: if gated { seed_gate.cloned() } else { None },
-        ..step(StepKind::MbxStore)
-    };
     [Some(store), out_dirs, seed]
         .into_iter()
         .flatten()
@@ -367,6 +369,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
+        anchor_key_output: false,
         mbx_stats: velnor_model::MbxStats::Summary,
         selection_name: None,
         steps: Vec::new(),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::{TestResult, path};
+use crate::gate_eval::{Context, runs};
 use crate::pipeline::{view, workflow};
 
 const EXEC: &str = "\"$VELNOR_EXEC\" mbx-store";
@@ -175,5 +176,71 @@ fn a_one_job_lane_gates_the_shared_store_on_its_selection_from_helper_0_1_112() 
         }
     }
     assert!(stores > 0);
+    Ok(())
+}
+
+fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    repo.files.insert(
+        path(".velnor/rust-ci.toml")?,
+        b"mbx_shared_store = true\n".to_vec(),
+    );
+    crate::pipeline::pin_helper(&mut repo, helper)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
+    let steps = yaml["jobs"]["rust"]["steps"]
+        .as_array()
+        .ok_or("the one-job workflow has no rust steps")?;
+    steps
+        .iter()
+        .find(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.ends_with("mbx-store"))
+        })
+        .cloned()
+        .ok_or_else(|| "the one-job workflow has no mbx-store".into())
+}
+
+fn store_condition(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let condition = one_root_store_step(helper)?["if"]
+        .as_str()
+        .ok_or("mbx-store has no if")?
+        .to_owned();
+    condition
+        .strip_prefix("${{ ")
+        .and_then(|rest| rest.strip_suffix(" }}"))
+        .map(str::to_owned)
+        .ok_or_else(|| format!("unexpected if: {condition}").into())
+}
+
+#[test]
+fn the_shared_store_is_skipped_on_the_no_work_path_from_0_1_112() -> TestResult {
+    let condition = store_condition("0.1.112")?;
+    let mut context = Context::new(&[
+        ("steps.plan.outcome", "success"),
+        ("steps.plan.outputs.rust_root_mode", "none"),
+    ]);
+    assert!(!runs(&condition, &context)?, "{condition}");
+    context.set("steps.plan.outputs.rust_root_mode", "full");
+    assert!(runs(&condition, &context)?, "{condition}");
+    Ok(())
+}
+
+#[test]
+fn an_older_helper_keeps_the_self_planning_store_ungated() -> TestResult {
+    assert!(one_root_store_step("0.1.111")?.get("if").is_none());
+    Ok(())
+}
+
+#[test]
+fn the_shared_store_is_skipped_when_the_plan_failed_or_was_skipped_from_0_1_112() -> TestResult {
+    let condition = store_condition("0.1.112")?;
+    for outcome in ["failure", "skipped"] {
+        let context = Context::new(&[
+            ("steps.plan.outcome", outcome),
+            ("steps.plan.outputs.rust_root_mode", ""),
+        ]);
+        assert!(!runs(&condition, &context)?, "{outcome}: {condition}");
+    }
     Ok(())
 }

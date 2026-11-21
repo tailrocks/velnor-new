@@ -1,0 +1,17 @@
+[[workspace_groups]]
+name = "tools"
+roots = ["tools/a", "tools/b"]
+
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+job = "parallel"
+
+[[check_configurations]]
+root = "."
+
+[[check_configurations]]
+root = "tools/a"
+
+[[check_configurations]]
+root = "tools/b"
