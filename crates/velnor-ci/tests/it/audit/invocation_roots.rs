@@ -42,9 +42,6 @@ fn grouped_tools() -> Repo {
     repo
 }
 
-/// A build-script output of `tools/b` in the target directory the group shares
-/// with `tools/a`. It names a source file, and no inventory was saved for it, so
-/// it is untrusted.
 fn untrusted_b_output(repo: &Repo) {
     placed(repo, &format!("{SHARED_TARGET}/debug"));
     unit(
@@ -54,8 +51,6 @@ fn untrusted_b_output(repo: &Repo) {
     );
 }
 
-/// Runs `inputs build` in a group root, the way a group's CI step does: the
-/// ambient target directory is the one the group shares.
 fn inputs_build_in(repo: &Repo, root: &str, cargo: &[&str]) -> std::process::Output {
     command(env!("CARGO_BIN_EXE_velnor-ci"))
         .env("CARGO_TARGET_DIR", repo.root().join(SHARED_TARGET))
@@ -68,14 +63,9 @@ fn inputs_build_in(repo: &Repo, root: &str, cargo: &[&str]) -> std::process::Out
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-#[test]
-fn a_failed_build_in_one_root_does_not_blame_another_roots_package_in_the_shared_target() {
+fn a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(failing: &[&str]) {
     let repo = grouped_tools();
-    let failed = inputs_build_in(
-        &repo,
-        "tools/a",
-        &["cargo", "build", "-p", "a", "-p", "b", "--no-such-flag"],
-    );
+    let failed = inputs_build_in(&repo, "tools/a", failing);
     assert!(!failed.status.success(), "{failed:?}");
     assert!(
         repo.root()
@@ -96,4 +86,28 @@ fn a_failed_build_in_one_root_does_not_blame_another_roots_package_in_the_shared
         !stderr.contains("An earlier inputs build failed"),
         "{stderr}"
     );
+}
+
+#[test]
+fn a_failed_build_in_one_root_does_not_blame_another_roots_package_in_the_shared_target() {
+    a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(&[
+        "cargo",
+        "build",
+        "-p",
+        "a",
+        "-p",
+        "b",
+        "--no-such-flag",
+    ]);
+}
+
+#[test]
+fn a_failed_workspace_build_in_one_root_does_not_blame_another_roots_package_in_the_shared_target()
+{
+    a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(&[
+        "cargo",
+        "build",
+        "--workspace",
+        "--no-such-flag",
+    ]);
 }

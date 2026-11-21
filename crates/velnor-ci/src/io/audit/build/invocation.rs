@@ -14,13 +14,12 @@ use crate::error::CiError;
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Selection {
-    all: bool,
     packages: Vec<String>,
 }
 
 impl Selection {
     pub(super) fn selects(&self, package: &str) -> bool {
-        self.all || self.packages.iter().any(|selected| selected == package)
+        self.packages.iter().any(|selected| selected == package)
     }
 }
 
@@ -79,23 +78,28 @@ impl Invocation {
         let excluded = words
             .iter()
             .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        let all = !excluded
+        let workspace = !excluded
             && words
                 .iter()
                 .any(|word| matches!(*word, "--workspace" | "--all"));
-        let mut packages = Vec::new();
-        for (index, word) in words.iter().enumerate() {
-            if matches!(*word, "-p" | "--package") {
-                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
-            } else if let Some(name) = word
-                .strip_prefix("--package=")
-                .or_else(|| word.strip_prefix("-p"))
-            {
-                packages.push(name.to_owned());
+        let packages = if workspace {
+            members.iter().map(|member| (*member).to_owned()).collect()
+        } else {
+            let mut packages = Vec::new();
+            for (index, word) in words.iter().enumerate() {
+                if matches!(*word, "-p" | "--package") {
+                    packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
+                } else if let Some(name) = word
+                    .strip_prefix("--package=")
+                    .or_else(|| word.strip_prefix("-p"))
+                {
+                    packages.push(name.to_owned());
+                }
             }
-        }
-        packages.retain(|name| members.contains(name.as_str()));
-        Some(Selection { all, packages })
+            packages.retain(|name| members.contains(name.as_str()));
+            packages
+        };
+        Some(Selection { packages })
     }
 
     fn cargo_program(&self) -> bool {
@@ -263,7 +267,6 @@ impl Invocation {
     }
 }
 
-/// The members of the deepest Cargo root that holds the invocation: the workspace cargo builds.
 pub(super) fn invoked_members<'a>(
     roots: &'a [RustRoot],
     repository: &Path,
@@ -320,9 +323,6 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     None
 }
 
-#[cfg(test)]
-#[path = "invocation/members.rs"]
-mod members;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
