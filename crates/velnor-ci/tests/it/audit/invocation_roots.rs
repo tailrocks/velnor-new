@@ -158,7 +158,10 @@ fn every_spelling_of_a_member_package_flag_selects_that_member_in_another_roots_
             !stderr.contains("outside this command's explicit selection"),
             "{args:?}: {stderr}"
         );
-        assert!(stderr.contains("build command failed"), "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("build command failed"),
+            "{args:?}: {stderr}"
+        );
     }
 }
 
