@@ -102,3 +102,52 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     }
     Ok(())
 }
+
+const TEN_SECOND_TESTS: [&str; 8] = [
+    "audit::build_directory::a_build_command_naming_a_build_directory_is_refused",
+    "audit::groups::a_real_grouped_build_passes_the_audit",
+    "audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root",
+    "audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages",
+    "plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused",
+    "plan_diff::every_recorded_case_matches_the_legacy_op",
+    "plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget",
+    "io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root",
+];
+
+fn covers(filter: &str, name: &str) -> bool {
+    if filter.contains("test(") {
+        names_test(filter, name)
+    } else {
+        filter.contains("package(=velnor-ci)")
+    }
+}
+
+/// The period that nextest applies to `name`: the first override that sets a slow-timeout and matches it.
+fn first_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
+    entries
+        .iter()
+        .filter(|entry| entry.contains_key("slow-timeout"))
+        .find(|entry| covers(filter(entry), name))
+        .and_then(|entry| {
+            entry
+                .get("slow-timeout")?
+                .get("period")?
+                .as_str()
+                .map(str::to_owned)
+        })
+}
+
+#[test]
+fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult {
+    for profile in PROFILES {
+        let entries = overrides(profile)?;
+        for name in TEN_SECOND_TESTS {
+            assert_eq!(
+                first_timeout_period(&entries, name).as_deref(),
+                Some("10s"),
+                "profile {profile}: {name} does not get the scoped 10 s tier"
+            );
+        }
+    }
+    Ok(())
+}
