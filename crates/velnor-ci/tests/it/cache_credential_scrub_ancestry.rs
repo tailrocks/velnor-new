@@ -156,3 +156,59 @@ fn a_symlinked_cargo_home_stops_the_sources_save() {
         "git/db/shared-1/config",
     );
 }
+
+const REFLOG_CLONE: &str = "0000000000000000000000000000000000000000 0123456789abcdef0123456789abcdef01234567 Builder <builder@example.invalid> 1700000000 +0000\tclone: from ";
+
+#[test]
+fn a_credential_url_in_a_git_reflog_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "reflog-head-userinfo",
+            ".cargo/git/db/shared-1/logs/HEAD",
+            &format!("{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"),
+        ),
+        (
+            "reflog-ref-token",
+            ".cargo/git/db/shared-1/logs/refs/remotes/origin/main",
+            &format!(
+                "{REFLOG_CLONE}https://github.com/acme/ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n"
+            ),
+        ),
+        (
+            "capitalized-logs-token",
+            ".cargo/git/db/shared-1/Logs/HEAD",
+            &format!("{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"),
+        ),
+    ]);
+}
+
+#[test]
+fn a_plain_git_reflog_is_saved() {
+    sources_save_goes_on(&[(
+        "plain-reflog",
+        ".cargo/git/db/shared-1/logs/HEAD",
+        &format!("{REFLOG_CLONE}https://github.com/acme/shared-lib\n"),
+    )]);
+}
+
+#[test]
+fn a_credential_in_a_public_source_cache_stops_the_sources_save() {
+    for (label, relative, content) in [
+        (
+            "public-git-credentials",
+            ".cargo/git/db/shared-1/.git-credentials",
+            "https://x-access-token:ghs_secret@github.com\n",
+        ),
+        (
+            "public-git-config",
+            ".cargo/git/db/shared-1/config",
+            "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n",
+        ),
+    ] {
+        let repo = private_checkout(&format!("decide-{label}"), "version = 4\n");
+        repo.write_unstaged(&format!("home/{relative}"), content);
+        let (output, written) = decide_with(&repo, None);
+        assert!(output.status.success(), "{label}: {output:?}");
+        assert_eq!(written, "save=true\nsources=false\n", "{label}: {output:?}");
+    }
+}

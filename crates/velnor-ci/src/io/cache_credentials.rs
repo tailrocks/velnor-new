@@ -19,9 +19,33 @@ const CREDENTIAL_FILES: &[&str] = &[
 const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "config.bak"];
 const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
+const LOGS: &str = "logs";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Zone {
+    Plain,
+    Hooks,
+    Logs,
+}
+
+impl Zone {
+    fn within(self, directory: &Path) -> Self {
+        if self != Self::Plain {
+            return self;
+        }
+        let name = directory.file_name();
+        if name.is_some_and(|name| name.eq_ignore_ascii_case(HOOKS)) {
+            Self::Hooks
+        } else if name.is_some_and(|name| name.eq_ignore_ascii_case(LOGS)) {
+            Self::Logs
+        } else {
+            Self::Plain
+        }
+    }
+}
 
 pub(super) fn saved_root() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -37,7 +61,7 @@ pub(super) fn find(root: &Path) -> Option<String> {
             Ok(None) => continue,
             Err(reason) => return Some(reason),
         };
-        if let Some(found) = walk(&directory, 0, &mut budget, false) {
+        if let Some(found) = walk(&directory, 0, &mut budget, Zone::Plain) {
             return Some(found);
         }
     }
@@ -70,8 +94,8 @@ fn shown(path: &Path) -> String {
     inert(&path.display().to_string())
 }
 
-fn walk(directory: &Path, depth: usize, budget: &mut usize, below_hooks: bool) -> Option<String> {
-    let in_hooks = below_hooks || is_hooks(directory);
+fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Option<String> {
+    let zone = above.within(directory);
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
@@ -123,8 +147,8 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, below_hooks: bool) -
                 "{} holds a credential or a transport setting",
                 shown(&path)
             ));
-        } else if (GIT_TEXT.contains(&name.as_str()) || in_hooks)
-            && names_credential_file(&path, in_hooks)
+        } else if (GIT_TEXT.contains(&name.as_str()) || zone != Zone::Plain)
+            && names_credential_file(&path, zone)
         {
             return Some(format!(
                 "{} names a credential or a transport setting",
@@ -134,22 +158,16 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, below_hooks: bool) -
     }
     subdirectories
         .iter()
-        .find_map(|path| walk(path, depth + 1, budget, in_hooks))
-}
-
-fn is_hooks(directory: &Path) -> bool {
-    directory
-        .file_name()
-        .is_some_and(|name| name.eq_ignore_ascii_case(HOOKS))
+        .find_map(|path| walk(path, depth + 1, budget, zone))
 }
 
 fn holds_credential(path: &Path) -> bool {
     read_small(path).is_none_or(|text| !crate::io::saved_git_config::is_plain(&text))
 }
 
-fn names_credential_file(path: &Path, hook: bool) -> bool {
+fn names_credential_file(path: &Path, zone: Zone) -> bool {
     read_small(path).is_none_or(|text| {
-        if hook {
+        if zone == Zone::Hooks {
             crate::io::saved_git_config::names_hook_credential(&text)
         } else {
             crate::io::saved_git_config::names_credential(&text)
