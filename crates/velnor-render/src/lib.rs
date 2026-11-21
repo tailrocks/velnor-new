@@ -24,6 +24,7 @@ mod gate_needs;
 mod helper_integrity;
 mod helper_steps;
 mod install_steps;
+mod job_helper;
 mod key_length;
 mod lint_steps;
 mod mbx_out_dirs;
@@ -60,6 +61,7 @@ mod source_roots;
 mod steps;
 mod tests;
 mod token_commands;
+mod tools_anchor_steps;
 mod tools_steps;
 mod workflow;
 mod yaml;
@@ -77,10 +79,10 @@ pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rendered_pins::{RenderedPin, rendered_pins};
 pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob,
-    RenderedMatrix, RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES,
+    RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedTrusted, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION,
+    Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::ShellcheckMarks;
