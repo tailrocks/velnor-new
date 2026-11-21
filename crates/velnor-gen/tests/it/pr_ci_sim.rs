@@ -86,6 +86,15 @@ pub(crate) fn context(
     results: &BTreeMap<String, String>,
     needs: &[String],
 ) -> impl Fn(&str) -> Result<Value, String> {
+    context_in_mode(event, results, needs, "all")
+}
+
+pub(crate) fn context_in_mode(
+    event: &Event,
+    results: &BTreeMap<String, String>,
+    needs: &[String],
+    mode: &'static str,
+) -> impl Fn(&str) -> Result<Value, String> {
     let event = event.clone();
     let results = results.clone();
     let needs = needs.to_vec();
@@ -134,7 +143,7 @@ pub(crate) fn context(
                 let parts: Vec<&str> = other.split('.').collect();
                 match parts.as_slice() {
                     ["needs", job, "result"] => results.get(*job).map_or(Value::Null, |r| text(r)),
-                    ["needs", _, "outputs", key] if key.ends_with("_mode") => text("all"),
+                    ["needs", _, "outputs", key] if key.ends_with("_mode") => text(mode),
                     ["needs", _, "outputs", _] => text("run"),
                     _ => return Err(format!("the simulation does not know {other}")),
                 }
