@@ -8,6 +8,8 @@ use crate::facts::TestResult;
 
 const PROFILES: [&str; 2] = ["default", "ci"];
 const SERIAL_GROUP: &str = "velnor-ci-serial";
+const PLAN_MAIN_GROUPS_ATOM: &str = "test(plan_main_groups::)";
+const VELNOR_CI: &str = "package(=velnor-ci)";
 
 fn root() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
@@ -33,22 +35,6 @@ fn filter(entry: &toml::Table) -> &str {
         .get("filter")
         .and_then(toml::Value::as_str)
         .unwrap_or("")
-}
-
-fn names_test(filter: &str, name: &str) -> bool {
-    filter.split("test(").skip(1).any(|rest| {
-        let pattern = rest.split(')').next().unwrap_or("");
-        if let Some(exact) = pattern.strip_prefix('=') {
-            exact == name
-        } else if let Some(prefix) = pattern
-            .strip_prefix("/^")
-            .and_then(|rest| rest.strip_suffix('/'))
-        {
-            name.starts_with(prefix)
-        } else {
-            name.contains(pattern)
-        }
-    })
 }
 
 fn tests_of(file: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -83,17 +69,20 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
             })
             .collect();
         assert_eq!(grouped.len(), 1, "profile {profile}");
-        for name in &names {
-            assert!(
-                names_test(filter(&grouped[0]), name),
-                "profile {profile}: {name} reaches the mise wrapper but is outside {SERIAL_GROUP}"
-            );
-        }
+        let selection = filter(&grouped[0]);
+        assert!(
+            selection.contains(PLAN_MAIN_GROUPS_ATOM),
+            "profile {profile}: {PLAN_MAIN_GROUPS_ATOM} is missing from the {SERIAL_GROUP} filter"
+        );
+        assert!(
+            !selection.contains("not ") && !selection.contains('!'),
+            "profile {profile}: the {SERIAL_GROUP} filter negates"
+        );
     }
     Ok(())
 }
 
-const SCOPED_NAMED_TESTS: [&str; 19] = [
+const SCOPED_NAMED_TESTS: [&str; 13] = [
     "configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks",
     "configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous",
     "configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies",
@@ -107,67 +96,76 @@ const SCOPED_NAMED_TESTS: [&str; 19] = [
     "plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused",
     "plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget",
     "io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root",
-    "plan_main_groups::a_merge_group_runs_a_group_that_only_names_events",
-    "plan_main_groups::a_merge_group_skips_a_group_whose_paths_the_diff_does_not_touch",
-    "plan_main_groups::a_merge_group_runs_a_group_whose_paths_the_diff_touches",
-    "plan_main_groups::a_merge_group_whose_diff_cannot_be_computed_runs_every_group",
-    "plan_main_groups::a_push_to_main_runs_every_group_whatever_its_paths_or_events",
-    "plan_main_groups::on_a_push_to_main_the_groups_follow_the_selection_of_the_default_lanes",
 ];
 
-fn covers(filter: &str, name: &str) -> bool {
-    filter.contains("package(=velnor-ci)")
-        && (!filter.contains("test(") || names_test(filter, name))
+fn exact(name: &str) -> String {
+    format!("test(={name})")
 }
 
-fn effective_timeout_period(
-    profile: &str,
-    name: &str,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
+fn slow_timeouts(profile: &str) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     let mut chain = overrides(profile)?;
     if profile != "default" {
         chain.extend(overrides("default")?);
     }
     Ok(chain
         .iter()
-        .filter(|entry| entry.contains_key("slow-timeout"))
-        .find(|entry| covers(filter(entry), name))
-        .and_then(|entry| {
-            entry
-                .get("slow-timeout")?
-                .get("period")?
-                .as_str()
-                .map(str::to_owned)
-        }))
+        .filter_map(|entry| {
+            let period = entry.get("slow-timeout")?.get("period")?.as_str()?;
+            Some((filter(entry).to_owned(), period.to_owned()))
+        })
+        .collect())
 }
 
-fn assert_tier(tier: &str, names: &[&str]) -> TestResult {
+fn assert_tier(tier: &str, atoms: &[String]) -> TestResult {
     for profile in PROFILES {
-        for name in names {
-            assert_eq!(
-                effective_timeout_period(profile, name)?.as_deref(),
-                Some(tier),
-                "profile {profile}: {name} does not get the {tier} tier"
+        let timeouts = slow_timeouts(profile)?;
+        for atom in atoms {
+            let periods: Vec<&str> = timeouts
+                .iter()
+                .filter(|(selection, _)| selection.contains(atom.as_str()))
+                .map(|(_, period)| period.as_str())
+                .collect();
+            assert!(
+                !periods.is_empty() && periods.iter().all(|period| *period == tier),
+                "profile {profile}: {atom} carries {periods:?}, not only {tier}"
             );
         }
     }
     Ok(())
 }
 
+fn exact_atoms(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| exact(name)).collect()
+}
+
 #[test]
 fn the_named_slow_velnor_ci_tests_keep_the_thirty_second_tier_main_gives_them() -> TestResult {
-    assert_tier("30s", &SCOPED_NAMED_TESTS)
+    let mut atoms = exact_atoms(&SCOPED_NAMED_TESTS);
+    atoms.push(PLAN_MAIN_GROUPS_ATOM.to_owned());
+    assert_tier("30s", &atoms)
 }
 
 #[test]
 fn a_velnor_ci_test_without_a_scoped_tier_keeps_the_two_second_default() -> TestResult {
-    assert_tier(
-        "2s",
-        &[
-            "gate::current_run::a_changed_listing_refuses_with_a_retry_diagnosis",
-            "tools_digest::a_changed_component_list_still_changes_the_digest",
-        ],
-    )
+    for profile in PROFILES {
+        let velnor_ci: Vec<(String, String)> = slow_timeouts(profile)?
+            .into_iter()
+            .filter(|(selection, _)| selection.contains(VELNOR_CI))
+            .collect();
+        let package_wide: Vec<usize> = velnor_ci
+            .iter()
+            .enumerate()
+            .filter(|(_, (selection, _))| !selection.contains("test("))
+            .map(|(index, _)| index)
+            .collect();
+        assert_eq!(
+            package_wide,
+            [velnor_ci.len() - 1],
+            "profile {profile}: the package-wide velnor-ci tier must be one entry, after every scoped tier"
+        );
+        assert_eq!(velnor_ci[velnor_ci.len() - 1].1, "2s", "profile {profile}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -175,10 +173,12 @@ fn the_measured_slow_velnor_ci_families_get_the_thirty_second_tier() -> TestResu
     assert_tier(
         "30s",
         &[
-            "delta_freshness::changed_member_rechecks_every_cached_package",
-            "plan_git::a_modified_file_selects_its_package_with_no_token",
-            "io_report::provenance::links::tracked_link_cycle_cannot_prove_source_contents",
-            "mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it",
+            "test(/^delta_freshness::/)".to_owned(),
+            "test(/^plan_git::/)".to_owned(),
+            "test(/^io_report::/)".to_owned(),
+            exact(
+                "mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it",
+            ),
         ],
     )
 }
@@ -187,10 +187,10 @@ fn the_measured_slow_velnor_ci_families_get_the_thirty_second_tier() -> TestResu
 fn the_replays_of_every_recorded_case_get_the_sixty_second_tier() -> TestResult {
     assert_tier(
         "60s",
-        &[
+        &exact_atoms(&[
             "plan_diff::every_recorded_case_matches_the_legacy_op",
             "resolve_qualification::every_recorded_case_matches_the_legacy_op",
             "io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs",
-        ],
+        ]),
     )
 }
