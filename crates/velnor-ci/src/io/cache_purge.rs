@@ -59,7 +59,9 @@ pub fn purge_private(
     repo: &Repo,
     delete: bool,
 ) -> Result<String, CiError> {
-    let running = running_workflows(github, repo)?;
+    let first = running_workflows(github, repo)?;
+    let second = running_workflows(github, repo)?;
+    let running = first.max(second);
     let busy = format!(
         "{running} workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
     );

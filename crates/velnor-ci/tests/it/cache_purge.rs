@@ -20,6 +20,8 @@ struct Api {
     listings: Cell<usize>,
     arrivals: RefCell<VecDeque<Vec<Value>>>,
     running: RefCell<Vec<(&'static str, u64)>>,
+    run_listings: Cell<usize>,
+    promoted_to: Option<&'static str>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -36,6 +38,8 @@ impl Api {
             listings: Cell::default(),
             arrivals: RefCell::default(),
             running: RefCell::default(),
+            run_listings: Cell::default(),
+            promoted_to: None,
         }
     }
 
@@ -60,10 +64,16 @@ impl GitHub for Api {
                 .nth(1)
                 .and_then(|rest| rest.split('&').next())
                 .ok_or_else(|| CiError::new("unexpected run listing"))?;
+            let call = self.run_listings.get();
+            self.run_listings.set(call + 1);
             let total: u64 = self
                 .running
                 .borrow()
                 .iter()
+                .map(|(running, count)| match self.promoted_to {
+                    Some(to) if call > 0 && *running == "queued" => (to, count),
+                    _ => (*running, count),
+                })
                 .filter(|(running, _)| *running == status)
                 .map(|(_, count)| count)
                 .sum();

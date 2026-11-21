@@ -106,3 +106,28 @@ fn a_dry_run_warns_about_running_workflows_and_succeeds() {
     );
     assert!(api.deleted.borrow().is_empty());
 }
+
+#[test]
+fn a_run_that_starts_after_the_in_progress_query_is_refused_on_the_second_pass() {
+    let mut api = Api::with_runs(mixed(), &[("queued", 1)]);
+    api.promoted_to = Some("in_progress");
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "1 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}
+
+#[test]
+fn no_running_workflows_in_either_pass_lets_the_purge_proceed() {
+    let api = Api::new(mixed());
+    let report = purge_private(&api, &repo(), true).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("deleted 3 entries"), "{report}");
+    assert_eq!(api.run_listings.get(), 12);
+}
