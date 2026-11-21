@@ -25,15 +25,6 @@ spelling. Declaring it `hosted = true` claims a GitHub-hosted glibc runner. A
 `trusted_runner` pool is always self-hosted and never gets the literal. The design
 and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
 
-The digests come from the official
-[`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.11.10/SHASUMS256.txt)
-of the release and agree with the `digest` field of each release asset in the
-GitHub releases API. The raw executable equals the binary inside the release
-archive that the action downloads and extracts (checked for `linux-x64`: the
-extracted `mise/bin/mise` has the digest below). Both comparisons were made by
-hand. `scripts/mise-binary-digests.sh --check` compares only the checked-in
-table with `SHASUMS256.txt`.
-
 | `runner.os`-`runner.arch` | Official raw executable | SHA-256 |
 | --- | --- | --- |
 | `Linux-X64` | `mise-v2026.11.10-linux-x64` | `b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9` |
