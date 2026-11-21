@@ -53,6 +53,14 @@ fn the_helper_that_mints_first_is_not_warned_about() -> TestResult {
 }
 
 #[test]
+fn a_helper_after_the_one_that_mints_first_is_not_warned_about() -> TestResult {
+    let repo = private_repo(ROOTS, &format!("{SECTION}{}", assets()), "0.1.112")?;
+    let (_, notes) = expected_with_notes(&repo)?;
+    assert!(minted_notes(&notes).is_empty(), "{notes:?}");
+    Ok(())
+}
+
+#[test]
 fn the_warning_changes_neither_the_rendered_files_nor_the_generation() -> TestResult {
     let repo = private_repo(ROOTS, SECTION, "0.1.110")?;
     let (files, notes) = expected_with_notes(&repo)?;

@@ -27,7 +27,8 @@ pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_
 pub use tag::check_tag;
 pub use velnor_workflows::HELPER_COMMANDS;
 
-use std::{collections::BTreeMap, io::Write};
+use std::collections::BTreeMap;
+use std::io::Write;
 
 use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
 use velnor_rust::{

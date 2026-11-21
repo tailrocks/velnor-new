@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::plan::step;
 
-const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
     facts
