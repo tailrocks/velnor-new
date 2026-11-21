@@ -105,3 +105,20 @@ fn a_child_whose_stamp_differs_from_the_one_recorded_at_release_is_refused() {
         refused.err()
     );
 }
+
+#[test]
+fn a_released_parent_replaced_by_an_empty_directory_fails_the_scan() {
+    let (entries, root) = released_scan("replaced-empty", &|directory| {
+        let parent = directory
+            .parent()
+            .unwrap_or_else(|| unreachable!("a child has a parent"));
+        fs::rename(parent, parent.with_file_name("d.aside"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir(parent).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "{entries:?}"
+    );
+}

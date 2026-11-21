@@ -35,7 +35,7 @@ fn confined(body: impl FnOnce()) {
 }
 
 fn open_descriptors() -> usize {
-    fs::read_dir("/dev/fd").map_or(0, Iterator::count)
+    fs::read_dir("/dev/fd").map_or(0, |listing| listing.count().saturating_sub(1))
 }
 
 fn scan_within_the_budget(name: &str, build: impl FnOnce(&Path)) -> io::Result<Entries> {
