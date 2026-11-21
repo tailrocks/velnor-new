@@ -93,7 +93,11 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     Ok(())
 }
 
-const TEN_SECOND_TESTS: [&str; 15] = [
+const TEN_SECOND_TESTS: [&str; 19] = [
+    "configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks",
+    "configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous",
+    "configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies",
+    "configuration_targets::contexts::configuration_targets_uses_global_uncertainty_for_unbounded_graphs",
     "run::run_keeps_each_stream_and_every_byte_and_appends_one_record_per_command",
     "io_target_case::checkout_under_a_cargo_ancestor_still_saves_its_default_target",
     "audit::build_directory::a_build_command_naming_a_build_directory_is_refused",

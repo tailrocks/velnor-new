@@ -255,6 +255,10 @@ filter = 'package(=velnor-ci) and test(=mise_version_plan::a_change_to_mise_vers
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(=configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks) | test(=configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous) | test(=configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies) | test(=configuration_targets::contexts::configuration_targets_uses_global_uncertainty_for_unbounded_graphs))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
@@ -331,4 +335,8 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(=mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it)'
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(=configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks) | test(=configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous) | test(=configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies) | test(=configuration_targets::contexts::configuration_targets_uses_global_uncertainty_for_unbounded_graphs))'
+slow-timeout = { period = "10s", terminate-after = 1 }
 
