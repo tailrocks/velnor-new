@@ -129,7 +129,7 @@ def line_indent_text(body):
 def value_has_fence(value):
     lines = re.split(r"\r\n|\r|\n", value)
     margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
-    state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+    state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None, "list": None}
     return any(doc_line(" " + line[margin:], state) for line in lines)
 
 
@@ -196,7 +196,14 @@ def doc_line(body, state):
         return False
     item = LIST_ITEM.match(text)
     opener = text[item.end() :] if item else text
+    continued = state["prose"] is not None and depth <= state["prose"]
+    if item:
+        state["list"] = (depth, item.end())
+    elif state["list"] is not None and (state["list"][0] != depth or (indent < state["list"][1] and not continued)):
+        state["list"] = None
     item_col = item.end() if item else None
+    if item is None and state["list"] is not None and indent >= state["list"][1]:
+        item_col = state["list"][1]
     if match := RAW_OPEN.match(opener):
         end = raw_end(match)
         state["prose"] = None
@@ -211,7 +218,6 @@ def doc_line(body, state):
         state["depth"] = depth
         state["item"] = item_col
         return False
-    continued = state["prose"] is not None and depth <= state["prose"]
     indented = LINE_INDENT.match(line_indent_text(body)) is not None
     if LIST_CODE.match(text) or (indented and not continued) or (LINE_FENCE.match(body) and not (continued and indented)):
         state["prose"] = None
@@ -229,7 +235,7 @@ def doc_findings(src):
     doc_paren = 0
     doc_value = False
     doc_end = -2
-    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None, "list": None}
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
@@ -238,7 +244,7 @@ def doc_findings(src):
             if LINE_DOC.match(src, i):
                 start = src.rfind("\n", 0, i) + 1
                 if start != doc_end + 1:
-                    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+                    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None, "list": None}
                 doc_end = end
                 if doc_line(src[i + 3 : end], doc_state):
                     yield i
@@ -246,7 +252,7 @@ def doc_findings(src):
         elif src.startswith("/*", i):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
-                state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+                state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None, "list": None}
                 if any(doc_line(doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)), state) for line in NEWLINE.split(src[i + 3 : end])):
                     yield i
             i = end
