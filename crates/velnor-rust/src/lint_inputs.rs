@@ -150,7 +150,7 @@ fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
 fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     let (config, probe) = match &lint.kind {
         LintKind::Jactionlint { config } => (config.as_ref(), None),
-        LintKind::Alint { config, probe } => (Some(config), probe.as_ref()),
+        LintKind::Alint { config, probe, .. } => (Some(config), probe.as_ref()),
         LintKind::MiseTask { .. } | LintKind::GeneratedCheck { .. } => (None, None),
     };
     config.into_iter().chain(probe)
