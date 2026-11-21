@@ -191,7 +191,8 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    restore_inputs_scoped(root, target, None, &mut BTreeMap::new())
+    let report = restore_inputs_scoped(root, target, None, &mut BTreeMap::new())?;
+    Ok(report + &super::restore_floor::mark(root)?)
 }
 
 pub(super) fn restore_inputs_scoped(

@@ -28,13 +28,15 @@ impl Default for Hooks<'_> {
 pub(in crate::io::audit) fn newest(
     scan: &Scan,
     entries: &Entries,
+    floor: Option<SystemTime>,
 ) -> io::Result<Option<SystemTime>> {
-    newest_with(scan, entries, &Hooks::default())
+    newest_with(scan, entries, floor, &Hooks::default())
 }
 
 pub(super) fn newest_with(
     scan: &Scan,
     entries: &Entries,
+    floor: Option<SystemTime>,
     hooks: &Hooks<'_>,
 ) -> io::Result<Option<SystemTime>> {
     let mut newest = SystemTime::UNIX_EPOCH;
@@ -44,14 +46,15 @@ pub(super) fn newest_with(
         };
         for (name, kind) in children {
             let path = directory.join(name);
-            match handle::observe(&listing, name.as_os_str(), &path, &|| {
+            match handle::observe(&listing, name.as_os_str(), &path, floor, &|| {
                 (hooks.resolved)(&path);
             })? {
                 Some(Observed {
                     kind: current,
                     changed,
+                    link,
                 }) if current == *kind && followed_type_kept(scan, kind, changed) => {
-                    if let Some(time) = changed {
+                    for time in changed.into_iter().chain(link) {
                         newest = newest.max(time);
                     }
                     (hooks.observed)(&path);
@@ -59,8 +62,16 @@ pub(super) fn newest_with(
                 _ => return Ok(None),
             }
         }
-        if scan.identities.get(directory) != Some(&handle::stamp(&listing)?) {
+        let stamp = handle::stamp(&listing)?;
+        if scan.identities.get(directory) != Some(&stamp) {
             return Ok(None);
+        }
+        if scan
+            .entries
+            .get(directory)
+            .is_some_and(|walked| walked.len() == children.len())
+        {
+            newest = newest.max(stamp.latest(floor));
         }
     }
     Ok(Some(newest))

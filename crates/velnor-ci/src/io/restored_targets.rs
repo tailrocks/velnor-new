@@ -4,7 +4,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::input_target::target_object;
@@ -101,26 +100,7 @@ pub(super) fn read(root: &Path) -> Result<Pending, CiError> {
 }
 
 fn directory(root: &Path) -> Result<PathBuf, CiError> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args([
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-path",
-            "velnor-restored-targets",
-        ])
-        .output()
-        .map_err(|e| failed("locate", root, e))?;
-    if !output.status.success() {
-        return Err(failed(
-            "locate",
-            root,
-            String::from_utf8_lossy(&output.stderr).trim(),
-        ));
-    }
-    let path = String::from_utf8(output.stdout).map_err(|e| failed("locate", root, e))?;
-    Ok(PathBuf::from(path.trim_end_matches(['\n', '\r'])))
+    super::restore_floor::git_path(root, "velnor-restored-targets")
 }
 
 fn regular_directory(path: &Path) -> Result<(), CiError> {

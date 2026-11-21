@@ -30,7 +30,12 @@ pub(super) fn begin<'a>(
                 .push(index);
         }
     }
-    let freshness = super::freshness::Freshness::new(workspaces, groups, max_directory_entries)?;
+    let freshness = super::freshness::Freshness::new(
+        workspaces,
+        groups,
+        max_directory_entries,
+        super::super::restore_floor::read(&checkout.root),
+    )?;
     let diagnostic = freshness.scratch();
     Ok(Audit {
         repository: &checkout.root,

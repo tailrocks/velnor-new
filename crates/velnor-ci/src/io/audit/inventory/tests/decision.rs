@@ -55,7 +55,7 @@ fn a_link_target_replaced_by_a_directory_after_the_scan_makes_the_snapshot_stale
     fs::remove_file(&outside).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir(&outside).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(outside.join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = newest_with(&scan, &scan.entries, &Hooks::default());
+    let newest = newest_with(&scan, &scan.entries, None, &Hooks::default());
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(newest, Ok(None)),
@@ -73,6 +73,7 @@ fn a_directory_that_grew_after_the_scan_is_not_read_to_its_end() {
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             listed: &|_| {
                 read.fetch_add(1, Ordering::Relaxed);
@@ -93,6 +94,7 @@ fn a_directory_changed_while_its_children_are_observed_makes_the_snapshot_stale(
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             observed: &|_| {
                 if !changed.swap(true, Ordering::Relaxed) {
@@ -149,6 +151,7 @@ fn a_link_target_ancestor_swapped_after_it_is_resolved_never_reports_the_decoy_t
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             resolved: &|_| {
                 if !swapped.swap(true, Ordering::Relaxed) {

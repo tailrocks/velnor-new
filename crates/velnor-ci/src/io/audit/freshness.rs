@@ -26,6 +26,7 @@ pub(super) struct Freshness {
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
     budget: Budget,
     max_directory_entries: usize,
+    floor: Option<SystemTime>,
 }
 
 impl Freshness {
@@ -33,6 +34,7 @@ impl Freshness {
         workspaces: &[Workspace],
         groups: &[PathBuf],
         max_directory_entries: usize,
+        floor: Option<SystemTime>,
     ) -> Result<Self, CiError> {
         let mut targets = inventory::exclusions(workspaces)?;
         for dir in groups {
@@ -45,6 +47,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(max_directory_entries),
             max_directory_entries,
+            floor,
         })
     }
 
@@ -54,6 +57,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(self.max_directory_entries),
             max_directory_entries: self.max_directory_entries,
+            floor: self.floor,
         }
     }
 
@@ -64,16 +68,22 @@ impl Freshness {
         output: &Path,
         targets: &BTreeSet<PathBuf>,
     ) -> io::Result<bool> {
+        if let Ok(link) = fs::symlink_metadata(path)
+            && link.file_type().is_symlink()
+            && changed_since(&link, built, self.floor, false)?
+        {
+            return Ok(true);
+        }
         let metadata = fs::metadata(path)?;
         if !metadata.is_dir() {
-            return changed_since(&metadata, built);
+            return changed_since(&metadata, built, self.floor, true);
         }
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
             let scanned = inventory::scan(&root, targets, &mut self.budget)?;
             let entries = inventory::view(&scanned.entries, &root, targets)?;
-            let Some(newest) = inventory::newest(&scanned, &entries)? else {
+            let Some(newest) = inventory::newest(&scanned, &entries, self.floor)? else {
                 return Ok(true);
             };
             self.directories.insert(key.clone(), (newest, entries));
@@ -172,12 +182,20 @@ impl Audit<'_> {
     }
 }
 
-fn changed_since(metadata: &fs::Metadata, built: SystemTime) -> io::Result<bool> {
+fn changed_since(
+    metadata: &fs::Metadata,
+    built: SystemTime,
+    floor: Option<SystemTime>,
+    keeps_modified: bool,
+) -> io::Result<bool> {
+    let counted = |time: SystemTime| floor.is_none_or(|floor| time >= floor);
     let inode = u64::try_from(metadata.ctime()).ok().map(|seconds| {
         let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
         SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
     });
-    Ok(metadata.modified()? >= built || inode.is_some_and(|inode| inode >= built))
+    let modified = metadata.modified()?;
+    Ok((modified >= built && (keeps_modified || counted(modified)))
+        || inode.is_some_and(|inode| inode >= built && counted(inode)))
 }
 
 fn failed(path: &Path, error: &io::Error) -> CiError {

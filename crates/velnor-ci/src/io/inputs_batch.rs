@@ -172,6 +172,7 @@ pub fn restore_inputs_batch_with(
             || inputs::restore_inputs_scoped(&root, &target, Some(&scope), &mut scans),
         )?);
     }
+    report.push_str(&super::restore_floor::mark(&top)?);
     Ok(report)
 }
 

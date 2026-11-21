@@ -32,6 +32,16 @@ impl Stamp {
     pub(super) fn is(&self, (device, inode): Identity) -> bool {
         self.device == i128::from(device) && self.inode == i128::from(inode)
     }
+
+    pub(super) fn latest(&self, floor: Option<SystemTime>) -> SystemTime {
+        let time = |(seconds, nanos): (i128, i128)| {
+            instant(
+                i64::try_from(seconds).unwrap_or(0),
+                i64::try_from(nanos).unwrap_or(0),
+            )
+        };
+        counted(time(self.modified), floor).max(counted(time(self.changed), floor))
+    }
 }
 
 #[derive(Clone)]
@@ -48,6 +58,7 @@ pub(super) enum Current {
 pub(super) struct Observed {
     pub(super) kind: Kind,
     pub(super) changed: Option<SystemTime>,
+    pub(super) link: Option<SystemTime>,
 }
 
 fn failure(errno: nix::errno::Errno) -> io::Error {
@@ -131,16 +142,17 @@ pub(super) fn names(
 }
 
 pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    Ok(classify(directory, name, path, false, &|| {})?.map(|observed| observed.kind))
+    Ok(classify(directory, name, path, false, None, &|| {})?.map(|observed| observed.kind))
 }
 
 pub(super) fn observe(
     directory: impl AsFd,
     name: &OsStr,
     path: &Path,
+    floor: Option<SystemTime>,
     resolved: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
-    classify(directory, name, path, true, resolved)
+    classify(directory, name, path, true, floor, resolved)
 }
 
 fn instant(seconds: i64, nanos: i64) -> SystemTime {
@@ -151,10 +163,22 @@ fn instant(seconds: i64, nanos: i64) -> SystemTime {
     }
 }
 
-fn changed(stat: &FileStat) -> SystemTime {
-    let modified = instant(stat.st_mtime, stat.st_mtime_nsec);
-    let inode = instant(stat.st_ctime, stat.st_ctime_nsec);
-    modified.max(inode)
+fn counted(time: SystemTime, floor: Option<SystemTime>) -> SystemTime {
+    if floor.is_some_and(|floor| time < floor) {
+        SystemTime::UNIX_EPOCH
+    } else {
+        time
+    }
+}
+
+fn file_changed(stat: &FileStat, floor: Option<SystemTime>) -> SystemTime {
+    instant(stat.st_mtime, stat.st_mtime_nsec)
+        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), floor))
+}
+
+fn link_changed(stat: &FileStat, floor: Option<SystemTime>) -> SystemTime {
+    counted(instant(stat.st_mtime, stat.st_mtime_nsec), floor)
+        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), floor))
 }
 
 fn format_of(stat: &FileStat) -> SFlag {
@@ -166,6 +190,7 @@ fn classify(
     name: &OsStr,
     path: &Path,
     with_changed: bool,
+    floor: Option<SystemTime>,
     after_resolve: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
@@ -182,8 +207,13 @@ fn classify(
         } else {
             Kind::Other
         };
-        let changed = (format != SFlag::S_IFDIR).then(|| changed(&stat));
-        return Ok(Some(Observed { kind, changed }));
+        let changed =
+            (with_changed && format != SFlag::S_IFDIR).then(|| file_changed(&stat, floor));
+        return Ok(Some(Observed {
+            kind,
+            changed,
+            link: None,
+        }));
     }
     let target = match readlinkat(&directory, name) {
         Ok(target) => PathBuf::from(target),
@@ -197,15 +227,14 @@ fn classify(
         Err(error) => return Err(error),
     };
     after_resolve();
-    let changed = if with_changed {
-        let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
-        (format_of(observed) != SFlag::S_IFDIR).then(|| changed(observed))
-    } else {
-        None
-    };
+    let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
+    let changed = (with_changed && format_of(observed) != SFlag::S_IFDIR)
+        .then(|| file_changed(observed, floor));
+    let link = with_changed.then(|| link_changed(&stat, floor));
     let resolved = followed.map(|followed| followed.path);
     Ok(Some(Observed {
         kind: Kind::Link { target, resolved },
         changed,
+        link,
     }))
 }
