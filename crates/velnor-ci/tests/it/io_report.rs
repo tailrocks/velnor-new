@@ -343,6 +343,7 @@ mod api;
 mod build_failure;
 mod evidence;
 mod mbx_reports;
+mod mbx_reports_followups;
 mod mbx_reports_sessions;
 mod policy;
 mod provenance;
