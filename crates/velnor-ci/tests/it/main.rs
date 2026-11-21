@@ -144,7 +144,6 @@ mod prepare_lock_key;
 mod prepare_targets;
 mod preview_helpers;
 mod private_check;
-mod private_names;
 mod private_queue;
 mod public_probe;
 mod qualification_compare;

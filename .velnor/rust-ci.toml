@@ -93,6 +93,14 @@ timeout_minutes = 5
 
 [[lint]]
 kind = "mise-task"
+id = "private-names"
+name = "Private-name guard"
+task = "lint-private-names"
+tools = ["python"]
+timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
 id = "validate-hk"
 name = "hk config"
 task = "validate-hk"

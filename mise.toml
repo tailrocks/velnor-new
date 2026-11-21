@@ -96,6 +96,16 @@ python3 -m unittest scripts/test_parity_verify_candidate.py
 python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 '''
 
+[tasks.lint-private-names]
+description = "Run the private-name guard over every tracked path and file, and its unit tests"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+python3 -m unittest scripts/test_private_names_guard.py
+python3 scripts/private-names-guard.py
+'''
+
 [tasks.validate-hk]
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"
