@@ -130,7 +130,13 @@ fn no_entry_with_the_version_refuses_and_names_the_versions_that_exist() {
 #[test]
 fn a_key_without_any_entry_refuses() {
     let api = api(Vec::new());
-    assert!(delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).is_err());
+    let error = delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN))
+        .err()
+        .unwrap_or_else(|| unreachable!("a key with no entry must be refused"));
+    assert_eq!(
+        error.to_string(),
+        format!("no cache entry has the key {KEY}; nothing was deleted")
+    );
     assert!(api.deleted.borrow().is_empty());
 }
 
