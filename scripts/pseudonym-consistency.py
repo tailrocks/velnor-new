@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
+import json
 import re
 import subprocess
 import sys
@@ -12,6 +13,8 @@ SHA = re.compile(rb"\b[0-9a-f]{40}\b")
 NODE_ID = re.compile(rb"\bR_kgD[A-Za-z0-9_-]+")
 NUMBER = re.compile(rb'^(?:\|\s*|\s*\{?\s*"number":\s*)?([0-9]+)\s*[,|]|"number":\s*([0-9]+)')
 MAX_REPORTED = 50
+OWNER_ALIAS = re.compile(r"example-org(-[a-z0-9]+)*")
+PROJECT_OWNERS = {"tailrocks"}
 
 
 def row_keys(row):
@@ -48,6 +51,36 @@ def disagreements(root):
     return sorted(labelled.items())
 
 
+def iac_owners(node, number=None):
+    if isinstance(node, dict):
+        number = node.get("number", number)
+        if isinstance(node.get("iac_owner"), str):
+            yield number, node["iac_owner"]
+        for value in node.values():
+            yield from iac_owners(value, number)
+    elif isinstance(node, list):
+        for value in node:
+            yield from iac_owners(value, number)
+
+
+def unscrubbed_owners(root):
+    listed = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", "*.json"], capture_output=True).stdout
+    found = []
+    for raw in listed.split(b"\0"):
+        if not raw:
+            continue
+        path = raw.decode()
+        try:
+            data = json.loads((root / path).read_text())
+        except (OSError, ValueError):
+            continue
+        for number, owner in iac_owners(data):
+            org = owner.split("/", 1)[0]
+            if org not in PROJECT_OWNERS and not OWNER_ALIAS.fullmatch(org):
+                found.append((path, number, "iac_owner"))
+    return found
+
+
 def main():
     root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip())
     found = disagreements(root)
@@ -55,6 +88,12 @@ def main():
         print(f"{len(found)} record(s) carry different example-repo-N pseudonyms in different files; one repository must map to one pseudonym everywhere:")
         for key, names in found[:MAX_REPORTED]:
             print(f"  {key.decode().replace(":", " ")}: " + ", ".join(sorted(f"{name.decode()} in {len(paths)} file(s)" for name, paths in names.items())))
+        return 1
+    owners = unscrubbed_owners(root)
+    if owners:
+        print(f"{len(owners)} owner value(s) in iac_owner are not example-org pseudonyms or the project org; replace the owner with an example-org alias:")
+        for path, number, field in owners[:MAX_REPORTED]:
+            print(f"  {path} row {number} field {field}")
         return 1
     return 0
 

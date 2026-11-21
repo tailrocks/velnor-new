@@ -100,5 +100,32 @@ class ConsistencyTests(unittest.TestCase):
             self.assertEqual(check.disagreements(root), [])
 
 
+class OwnerFieldTests(unittest.TestCase):
+    def test_unaliased_owner_in_iac_owner_fails(self):
+        tmp, root = repository(
+            {
+                "readiness.json": '{"repositories": [{"number": 1, "iac_owner": "acme-labs/widget-infra"}]}\n',
+            }
+        )
+        with tmp:
+            found = check.unscrubbed_owners(root)
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0][0], "readiness.json")
+
+    def test_aliased_and_project_owners_in_iac_owner_pass(self):
+        tmp, root = repository(
+            {
+                "readiness.json": (
+                    '{"repositories": ['
+                    '{"number": 1, "iac_owner": "tailrocks/github-terraform"}, '
+                    '{"number": 2, "iac_owner": "example-org/example-repo-5"}, '
+                    '{"number": 3, "iac_owner": "example-org-b/github-terraform"}]}\n'
+                ),
+            }
+        )
+        with tmp:
+            self.assertEqual(check.unscrubbed_owners(root), [])
+
+
 if __name__ == "__main__":
     unittest.main()
