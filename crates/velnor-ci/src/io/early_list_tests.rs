@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Bounds, EarlyList, Environment, Failure, State, try_list};
+use crate::bounded::Cancel;
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
@@ -10,10 +11,13 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+static NEVER_CANCELLED: Cancel = Cancel::new();
+
 const UNBOUNDED: Bounds<'static> = Bounds {
     stdout_bytes: usize::MAX,
     grace: std::time::Duration::ZERO,
     deadline: &|| None,
+    cancel: &NEVER_CANCELLED,
 };
 
 fn scratch(name: &str) -> PathBuf {
@@ -182,4 +186,28 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
         "{message}"
     );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_preparation_that_never_returns_is_abandoned_at_the_join_bound_when_no_listing_started() {
+    let (release, hold) = mpsc::channel::<()>();
+    let hold = std::sync::Mutex::new(hold);
+    let mut list = EarlyList::new(&[]);
+    list.lister = std::sync::Arc::new(move |_, _, _| {
+        hold.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .recv()
+            .ok();
+        None
+    });
+    let started = Instant::now();
+    let counts = list.finish_within(true, Duration::from_millis(100));
+    assert!(counts.is_none());
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+    assert!(list.cancel.is_set());
+    drop(release);
 }

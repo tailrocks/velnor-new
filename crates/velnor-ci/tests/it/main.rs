@@ -195,6 +195,7 @@ mod run_nextest;
 mod run_nextest_archive;
 mod run_nextest_built;
 mod run_nextest_early_bound;
+mod run_nextest_early_cancel;
 mod run_nextest_extract;
 mod run_nextest_list;
 mod run_nextest_output;

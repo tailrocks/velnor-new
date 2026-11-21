@@ -11,8 +11,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use nix::sys::signal::Signal;
+
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
-use crate::bounded::{Outcome, capture_streams};
+use crate::bounded::{Cancel, Outcome, capture_streams};
 use crate::tests_run::{Listing, list_argv, runnable_matches};
 
 const EXPANSION_HEADROOM: u64 = 8;
@@ -41,6 +43,7 @@ struct Bounds<'a> {
     stdout_bytes: usize,
     grace: Duration,
     deadline: &'a dyn Fn() -> Option<Instant>,
+    cancel: &'a Cancel,
 }
 
 type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
@@ -68,10 +71,22 @@ enum State {
     Taken,
 }
 
+type Lister = dyn Fn(&[String], &OnceLock<Instant>, &Cancel) -> Option<Listing> + Send + Sync;
+
 pub(super) struct EarlyList {
     argv: Vec<String>,
     state: Mutex<State>,
     run_ended: Arc<OnceLock<Instant>>,
+    cancel: Arc<Cancel>,
+    lister: Arc<Lister>,
+}
+
+pub(super) struct Abandon(pub(super) Arc<EarlyList>);
+
+impl Drop for Abandon {
+    fn drop(&mut self) {
+        self.0.cancel.cancel(Signal::SIGKILL);
+    }
 }
 
 impl EarlyList {
@@ -80,7 +95,23 @@ impl EarlyList {
             argv: run.to_vec(),
             state: Mutex::new(State::Idle),
             run_ended: Arc::new(OnceLock::new()),
+            cancel: Arc::new(Cancel::new()),
+            lister: Arc::new(list_matches),
         }
+    }
+
+    pub(super) fn interrupt(&self, signal: Signal) {
+        self.cancel.cancel(signal);
+    }
+
+    fn spawn(&self) -> mpsc::Receiver<Option<Listing>> {
+        let argv = self.argv.clone();
+        let ended = Arc::clone(&self.run_ended);
+        let cancel = Arc::clone(&self.cancel);
+        let lister = Arc::clone(&self.lister);
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || sender.send(lister(&argv, &ended, &cancel)).ok());
+        receiver
     }
 
     pub(super) fn start(&self) {
@@ -89,11 +120,7 @@ impl EarlyList {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if matches!(*state, State::Idle) {
-            let argv = self.argv.clone();
-            let ended = Arc::clone(&self.run_ended);
-            let (sender, receiver) = mpsc::channel();
-            thread::spawn(move || sender.send(list_matches(&argv, &ended)).ok());
-            *state = State::Running(receiver);
+            *state = State::Running(self.spawn());
         }
     }
 
@@ -110,30 +137,38 @@ impl EarlyList {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
             State::Taken,
         );
-        match state {
-            State::Running(receiver) => match receiver.recv_timeout(bound) {
-                Ok(listing) => listing,
-                Err(RecvTimeoutError::Timeout) => {
-                    eprintln!(
-                        "::warning::early test listing did not finish within {} s after the test run finished; continuing without test counts",
-                        bound.as_secs_f64()
-                    );
-                    None
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    eprintln!(
-                        "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
-                    );
-                    None
-                }
-            },
-            State::Idle if wanted => list_matches(&self.argv, &self.run_ended),
-            State::Idle | State::Taken => None,
+        let receiver = match state {
+            State::Running(receiver) => receiver,
+            State::Idle if wanted => self.spawn(),
+            State::Idle | State::Taken => return None,
+        };
+        let bound = if wanted {
+            bound
+        } else {
+            self.cancel.cancel(Signal::SIGKILL);
+            bound.min(JOIN_SLACK)
+        };
+        match receiver.recv_timeout(bound) {
+            Ok(listing) => listing,
+            Err(RecvTimeoutError::Timeout) => {
+                self.cancel.cancel(Signal::SIGKILL);
+                eprintln!(
+                    "::warning::early test listing did not finish within {} s after the test run finished; continuing without test counts",
+                    bound.as_secs_f64()
+                );
+                None
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                eprintln!(
+                    "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
+                );
+                None
+            }
         }
     }
 }
 
-fn list_matches(argv: &[String], ended: &OnceLock<Instant>) -> Option<Listing> {
+fn list_matches(argv: &[String], ended: &OnceLock<Instant>, cancel: &Cancel) -> Option<Listing> {
     let grace = grace();
     match try_list(
         argv,
@@ -146,6 +181,7 @@ fn list_matches(argv: &[String], ended: &OnceLock<Instant>) -> Option<Listing> {
             stdout_bytes: ceiling(),
             grace,
             deadline: &|| ended.get().map(|at| *at + grace),
+            cancel,
         },
     ) {
         Ok(listing) => Some(listing),
@@ -234,6 +270,7 @@ fn try_list(
         bounds.stdout_bytes,
         STDERR_KEEP,
         bounds.deadline,
+        bounds.cancel,
     )
     .map_err(|error| Failure::new(format!("cannot start it: {error}")))?;
     drop(directory);
@@ -244,6 +281,16 @@ fn try_list(
                 "exceeded {} s after the test run finished",
                 bounds.grace.as_secs_f64()
             )));
+        }
+        Outcome::Lingering => {
+            return Err(Failure::bounded(
+                "left processes holding its output; stopped them".to_owned(),
+            ));
+        }
+        Outcome::Cancelled => {
+            return Err(Failure::bounded(
+                "was stopped before it finished".to_owned(),
+            ));
         }
         Outcome::Oversized => {
             return Err(Failure::bounded(format!(

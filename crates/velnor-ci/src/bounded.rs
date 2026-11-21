@@ -4,7 +4,7 @@
 use std::io::{self, ErrorKind, Read};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
@@ -70,6 +70,53 @@ pub enum Outcome {
     Exited(Streams),
     TimedOut,
     Oversized,
+    Lingering,
+    Cancelled,
+}
+
+#[derive(Debug, Default)]
+pub struct Cancel {
+    group: AtomicI32,
+    cancelled: AtomicBool,
+}
+
+impl Cancel {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            group: AtomicI32::new(0),
+            cancelled: AtomicBool::new(false),
+        }
+    }
+
+    pub fn cancel(&self, signal: Signal) {
+        self.cancelled.store(true, Ordering::Release);
+        let group = self.group.load(Ordering::Acquire);
+        if group > 0 {
+            killpg(Pid::from_raw(group), signal).ok();
+        }
+    }
+
+    pub(crate) fn is_set(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+}
+
+struct Registered<'a>(&'a Cancel);
+
+impl<'a> Registered<'a> {
+    fn new(cancel: &'a Cancel, child: &Child) -> Self {
+        cancel
+            .group
+            .store(i32::try_from(child.id()).unwrap_or(0), Ordering::Release);
+        Self(cancel)
+    }
+}
+
+impl Drop for Registered<'_> {
+    fn drop(&mut self) {
+        self.0.group.store(0, Ordering::Release);
+    }
 }
 
 pub fn capture_streams(
@@ -77,13 +124,18 @@ pub fn capture_streams(
     stdout_limit: usize,
     stderr_keep: usize,
     deadline: &dyn Fn() -> Option<Instant>,
+    cancel: &Cancel,
 ) -> io::Result<Outcome> {
+    if cancel.is_set() {
+        return Ok(Outcome::Cancelled);
+    }
     let mut child = command
         .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
+    let _registered = Registered::new(cancel, &child);
     let over = Arc::new(AtomicBool::new(false));
     let stdout = child
         .stdout
@@ -100,13 +152,22 @@ pub fn capture_streams(
         if over.load(Ordering::Acquire) {
             return stop(&mut child, Outcome::Oversized);
         }
+        if cancel.is_set() {
+            return stop(&mut child, Outcome::Cancelled);
+        }
         if deadline().is_some_and(|at| Instant::now() >= at) {
             return stop(&mut child, Outcome::TimedOut);
         }
         std::thread::sleep(POLL);
     };
-    let stdout = stdout.and_then(|receiver| receiver.recv_timeout(DRAIN).ok());
-    let stderr = stderr.and_then(|receiver| receiver.recv_timeout(DRAIN).ok());
+    if cancel.is_set() {
+        kill_group(&child);
+        return Ok(Outcome::Cancelled);
+    }
+    let drained_by = Instant::now() + DRAIN;
+    let within = || drained_by.saturating_duration_since(Instant::now());
+    let stdout = stdout.and_then(|receiver| receiver.recv_timeout(within()).ok());
+    let stderr = stderr.and_then(|receiver| receiver.recv_timeout(within()).ok());
     match (stdout, stderr) {
         (Some(_), Some(_)) if over.load(Ordering::Acquire) => Ok(Outcome::Oversized),
         (Some(stdout), Some(stderr)) => Ok(Outcome::Exited(Streams {
@@ -114,14 +175,21 @@ pub fn capture_streams(
             stdout,
             stderr,
         })),
-        _ => Ok(Outcome::TimedOut),
+        _ => {
+            kill_group(&child);
+            Ok(Outcome::Lingering)
+        }
+    }
+}
+
+fn kill_group(child: &Child) {
+    if let Ok(group) = i32::try_from(child.id()) {
+        killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
     }
 }
 
 fn stop(child: &mut Child, outcome: Outcome) -> io::Result<Outcome> {
-    if let Ok(group) = i32::try_from(child.id()) {
-        killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
-    }
+    kill_group(child);
     child.kill().ok();
     child.wait()?;
     Ok(outcome)
