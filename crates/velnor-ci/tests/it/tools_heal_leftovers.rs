@@ -82,6 +82,33 @@ fn pruning_removes_an_old_entry_holding_a_read_only_directory() {
 }
 
 #[test]
+fn a_prune_candidate_whose_save_is_running_is_not_removed() {
+    let job = job("tools-heal-prune-held");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let first = save_as(&store, &job.home, "velnor-tools-first", false);
+    assert!(matches!(first, Outcome::Saved { .. }), "{first:?}");
+    aged(
+        &store.join("tools/velnor-tools-first"),
+        Duration::from_hours(3),
+    );
+    let second = save_as(&store, &job.home, "velnor-tools-second", false);
+    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
+    aged(
+        &store.join("tools/velnor-tools-second"),
+        Duration::from_hours(2),
+    );
+    let lock = store.join("tools/.lock-velnor-tools-first");
+    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    assert!(
+        store.join("tools/velnor-tools-first").is_dir(),
+        "the prune removed an entry whose save is still running"
+    );
+}
+
+#[test]
 fn a_stale_leftover_of_a_key_whose_save_is_running_is_not_swept() {
     let (_repo, job, store) = poisoned_store("tools-heal-live-retired");
     let tools = store.join("tools");
