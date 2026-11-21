@@ -17,7 +17,11 @@ NODE_ID = re.compile(rb"\bR_kgD[A-Za-z0-9_-]+")
 NUMBER = re.compile(rb'^(?:\|\s*|\s*\{?\s*"number":\s*)?([0-9]+)\s*[,|]|"number":\s*([0-9]+)')
 MAX_REPORTED = 50
 ALIAS = re.compile(r"example-(?:org|account)(?:-[a-z0-9]+)*")
-OWNER_FIELD = re.compile(r"(?:^|_)(?:owner|account|login|org|organization)$")
+OWNER_FIELD = re.compile(r"(?:^|_)(?:owner|account|login|org|organization)s?$")
+WORD_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+")
+LIST_DELIMITERS = re.compile(r"[;,|]")
+BOM = "\ufeff"
+EVIDENCE_TABLES = {".csv": ",", ".tsv": "\t"}
 ACCOUNT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)?")
 EVIDENCE_DIRS = ("docs/proposed", "docs/reviews")
 PROJECT_OWNERS = {"tailrocks"}
@@ -64,8 +68,26 @@ def json_rows(node):
             yield from json_rows(value)
 
 
+def reject_duplicate_keys(pairs):
+    keys = [key for key, _value in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError("duplicate JSON key")
+    return dict(pairs)
+
+
+def decode_text(data):
+    text = data.decode().removeprefix(BOM)
+    if "\0" in text:
+        raise ValueError("NUL byte")
+    return text
+
+
+def parse_json(data):
+    return json.loads(decode_text(data), object_pairs_hook=reject_duplicate_keys)
+
+
 def json_document(root, path):
-    return json.loads(index_blob(root, path).decode())
+    return parse_json(index_blob(root, path))
 
 
 def pseudonym_files(root):
@@ -116,32 +138,65 @@ def broken_json(root):
     return broken
 
 
+def owner_key(key):
+    return bool(OWNER_FIELD.search(WORD_BREAK.sub("_", key).lower()))
+
+
+def leaves(node):
+    if isinstance(node, dict):
+        for value in node.values():
+            yield from leaves(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from leaves(value)
+    else:
+        yield node
+
+
 def owner_values(node, number=None):
     if isinstance(node, dict):
         number = node.get("number", number)
         for key, value in node.items():
-            if isinstance(value, str) and OWNER_FIELD.search(key) and ACCOUNT.fullmatch(value):
-                yield number, key, value
-            yield from owner_values(value, number)
+            if owner_key(key):
+                for leaf in leaves(value):
+                    yield number, key, leaf
+            else:
+                yield from owner_values(value, number)
     elif isinstance(node, list):
         for value in node:
             yield from owner_values(value, number)
 
 
-def csv_owner_values(text):
-    rows = csv.DictReader(io.StringIO(text))
-    fields = [name for name in rows.fieldnames or [] if OWNER_FIELD.search(name)]
+def table_owner_values(text, delimiter):
+    rows = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
+    header = next(rows, [])
+    columns = [(index, name) for index, name in enumerate(header) if owner_key(name)]
     for row in rows:
-        for name in fields:
-            if ACCOUNT.fullmatch(row.get(name) or ""):
-                yield None, name, row[name]
+        for index, name in columns:
+            if index < len(row):
+                yield None, name, row[index]
+
+
+def acceptable(value):
+    if value is None or isinstance(value, bool):
+        return True
+    if not isinstance(value, str):
+        return False
+    for part in LIST_DELIMITERS.split(value):
+        account = part.strip()
+        if ACCOUNT.fullmatch(account):
+            org = account.split("/", 1)[0]
+            if org not in PROJECT_OWNERS and not ALIAS.fullmatch(org):
+                return False
+    return True
 
 
 def evidence_values(root, path):
-    text = index_blob(root, os.fsencode(path)).decode()
-    if "\0" in text:
-        raise ValueError(path)
-    return list(owner_values(json.loads(text)) if path.endswith(".json") else csv_owner_values(text))
+    data = index_blob(root, os.fsencode(path))
+    suffix = Path(path.lower()).suffix
+    if suffix == ".json":
+        return list(owner_values(parse_json(data)))
+    return list(table_owner_values(decode_text(data), EVIDENCE_TABLES[suffix]))
 
 
 def describe(path):
@@ -149,19 +204,19 @@ def describe(path):
 
 
 def unscrubbed_owners(root):
-    patterns = [f"{base}/*.{kind}" for base in EVIDENCE_DIRS for kind in ("json", "csv")]
-    listed = git_bytes(root, "ls-files", "-z", "--", *patterns)
+    listed = git_bytes(root, "ls-files", "-z", "--", *EVIDENCE_DIRS)
     found = []
     for raw in filter(None, listed.split(b"\0")):
         path = os.fsdecode(raw)
+        if Path(path.lower()).suffix not in (".json", *EVIDENCE_TABLES):
+            continue
         try:
             values = evidence_values(root, path)
         except (OSError, ValueError, csv.Error, RecursionError, subprocess.CalledProcessError):
             found.append((path, None, "unparseable"))
             continue
         for number, key, value in values:
-            org = value.split("/", 1)[0]
-            if org not in PROJECT_OWNERS and not ALIAS.fullmatch(org):
+            if not acceptable(value):
                 found.append((path, number, key))
     return found
 

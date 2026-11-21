@@ -261,5 +261,73 @@ class FailClosedOwnerTests(unittest.TestCase):
         self.assertEqual(found, [("docs/reviews/x.json", 4, "owner")])
 
 
+BOM = b"\xef\xbb\xbf"
+
+
+class StructuralFailClosedTests(unittest.TestCase):
+    def found(self, name, data):
+        tmp, root = indexed({name: data})
+        with tmp:
+            return check.unscrubbed_owners(root)
+
+    def test_every_shape_that_can_carry_an_unaliased_owner_is_reported(self):
+        unparseable = [(None, "unparseable")]
+        cases = {
+            "list-valued owner": ("x.json", b'{"number": 1, "owner": ["example-org", "acme-labs"]}', [(1, "owner")]),
+            "list-valued plural key": ("x.json", b'{"number": 2, "owners": ["acme-labs"]}', [(2, "owners")]),
+            "nested object under owner": ("x.json", b'{"number": 3, "owner": {"name": "acme-labs"}}', [(3, "owner")]),
+            "list of objects under owner": ("x.json", b'{"number": 4, "account": [{"id": {"v": "acme-labs"}}]}', [(4, "account")]),
+            "number-typed owner": ("x.json", b'{"number": 5, "owner": 12345}', [(5, "owner")]),
+            "float-typed owner in a list": ("x.json", b'{"number": 6, "login": [1.5]}', [(6, "login")]),
+            "upper-case key": ("x.json", b'{"number": 7, "OWNER": "acme-labs"}', [(7, "OWNER")]),
+            "mixed-case key": ("x.json", b'{"number": 8, "Iac_Owner": "acme-labs"}', [(8, "Iac_Owner")]),
+            "camel-case key": ("x.json", b'{"number": 9, "iacOwner": "acme-labs"}', [(9, "iacOwner")]),
+            "hyphenated key": ("x.json", b'{"number": 10, "github-account": "acme-labs"}', [(10, "github-account")]),
+            "BOM before JSON": ("x.json", BOM + b'{"number": 11, "owner": "acme-labs"}', [(11, "owner")]),
+            "duplicate JSON key": ("x.json", b'{"number": 12, "owner": "acme-labs", "owner": "example-org"}', unparseable),
+            "duplicate JSON key in nested object": ("x.json", b'{"a": {"owner": "example-org", "owner": "acme-labs"}}', unparseable),
+            "BOM before CSV header": ("x.csv", BOM + b"owner,note\nacme-labs,x\n", [(None, "owner")]),
+            "upper-case CSV header": ("x.csv", b"number,OWNER\n1,acme-labs\n", [(None, "OWNER")]),
+            "list-valued CSV cell": ("x.csv", b"number,owners\n1,example-org; acme-labs\n", [(None, "owners")]),
+            "duplicate CSV owner header": ("x.csv", b"owner,owner\nacme-labs,example-org\n", [(None, "owner")]),
+            "BOM before TSV header": ("x.tsv", BOM + b"owner\tnote\nacme-labs\tx\n", [(None, "owner")]),
+            "upper-case extension": ("x.JSON", b'{"number": 13, "owner": "acme-labs"}', [(13, "owner")]),
+        }
+        for label, (name, data, expected) in cases.items():
+            with self.subTest(label):
+                path = f"docs/reviews/{name}"
+                found = self.found(path.encode(), data)
+                self.assertEqual(found, [(path, number, key) for number, key in expected])
+
+    def test_aliased_owners_pass_in_every_shape_the_scan_walks(self):
+        cases = {
+            "x.json": BOM + b'{"number": 1, "Owner": ["example-org", {"n": "tailrocks/github-terraform"}], "login": null, "owner_ok": true}',
+            "y.csv": BOM + b"Owner,note\nexample-org; example-account-1,x\n",
+            "z.tsv": b"owner\tnote\nexample-org\tx\n",
+        }
+        for name, data in cases.items():
+            with self.subTest(name):
+                self.assertEqual(self.found(f"docs/proposed/{name}".encode(), data), [])
+
+    def test_a_value_of_a_type_the_check_does_not_understand_is_not_acceptable(self):
+        for value in [1, 1.5, object(), b"acme-labs", ("acme-labs",), {"acme-labs"}]:
+            with self.subTest(value=value):
+                self.assertFalse(check.acceptable(value))
+        for value in [None, True, False, "example-org", "tailrocks/x", "a free text description"]:
+            with self.subTest(value=value):
+                self.assertTrue(check.acceptable(value))
+
+    def test_duplicate_keys_and_a_leading_BOM_are_handled_the_same_way_for_pseudonym_records(self):
+        tmp, root = indexed(
+            {
+                b"a.json": BOM + f'{{"number": 44, "repository": "example-org/{repo(9)}", "sha": "{SHA}"}}'.encode(),
+                b"b.json": f'{{"repository": "example-org/{repo(9)}", "repository": "example-org/{repo(1)}"}}'.encode(),
+            }
+        )
+        with tmp:
+            self.assertEqual(check.broken_json(root), ["b.json"])
+            self.assertEqual(check.disagreements(root), [])
+
+
 if __name__ == "__main__":
     unittest.main()
