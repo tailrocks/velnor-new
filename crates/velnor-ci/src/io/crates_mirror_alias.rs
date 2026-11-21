@@ -10,7 +10,7 @@ use toml::{Table, Value};
 use super::crates_mirror_mbx::{option_value, subcommand};
 
 const DEPTH: usize = 8;
-const CONFIGS: &[&str] = &["config.toml", "config"];
+const CONFIGS: &[&str] = &["config", "config.toml"];
 
 enum Alias {
     Found(Vec<OsString>),
@@ -55,19 +55,28 @@ fn lookup(work: &Path, args: &[OsString], name: &str) -> Alias {
         };
     }
     for directory in config_directories(work) {
-        for config in CONFIGS {
-            match std::fs::read_to_string(directory.join(config)) {
-                Ok(text) => match from_config(&text, name) {
-                    Alias::Absent => {}
-                    found => return found,
-                },
-                Err(error)
-                    if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
-                Err(_) => return Alias::Unknown,
-            }
+        match effective_config(&directory) {
+            Ok(Some(text)) => match from_config(&text, name) {
+                Alias::Absent => {}
+                found => return found,
+            },
+            Ok(None) => {}
+            Err(()) => return Alias::Unknown,
         }
     }
     Alias::Absent
+}
+
+fn effective_config(directory: &Path) -> Result<Option<String>, ()> {
+    for config in CONFIGS {
+        match std::fs::read_to_string(directory.join(config)) {
+            Ok(text) => return Ok(Some(text)),
+            Err(error)
+                if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
+            Err(_) => return Err(()),
+        }
+    }
+    Ok(None)
 }
 
 fn command_line_may_define_aliases(args: &[OsString]) -> bool {

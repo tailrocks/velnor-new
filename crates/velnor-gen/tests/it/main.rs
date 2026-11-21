@@ -228,6 +228,7 @@ mod release_push_names;
 mod release_record_recover;
 mod release_ruleset_lock_version;
 mod release_sample_names;
+mod release_step_refs;
 mod release_symlink;
 mod release_tag_binding;
 mod release_tagged_commit;

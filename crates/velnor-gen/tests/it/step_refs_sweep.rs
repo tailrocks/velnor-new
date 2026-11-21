@@ -23,6 +23,14 @@ use crate::test_groups::{DATABASE, SHELL};
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
+const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n[[test_groups.artifacts]]\nname = 'shell-logs'\npaths = ['target/debug/app']\nwhen = 'always'\n";
+const RESTORE_CACHE_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nrestore_cache = true\n";
+const SWEEP_CONFIGS: &[(&str, &str)] = &[
+    ("mbx_shared_store", SHARED_STORE_ON),
+    ("cache_debug", CACHE_DEBUG_ON),
+    ("test_groups.artifacts", ARTIFACTS_ON),
+    ("test_groups.restore_cache", RESTORE_CACHE_ON),
+];
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
 const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
 
@@ -45,7 +53,7 @@ fn patches_in(text: &str) -> Vec<u64> {
         .collect()
 }
 
-fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
+pub(crate) fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
     for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -66,7 +74,7 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
+pub(crate) fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
     velnor_gen::key_gates()
         .find(|gate| gate.key == key && gate.value.is_none())
         .map(|gate| gate.first.2)
@@ -126,22 +134,22 @@ fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn 
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let patches = gate_patches()?;
-    let shared_store = gate_patch("mbx_shared_store")?;
-    let cache_debug = gate_patch("cache_debug")?;
+    let mut thresholds = Vec::new();
+    for (key, config) in SWEEP_CONFIGS {
+        thresholds.push((gate_patch(key)?, *config));
+    }
     assert!(
         patches.contains(&velnor_gen::HELPER_MINIMUM.2)
-            && patches.contains(&shared_store)
-            && patches.contains(&cache_debug),
-        "gate scan found {patches:?}, which misses the minimum, shared-store or cache_debug gate"
+            && thresholds.iter().all(|(gate, _)| patches.contains(gate)),
+        "gate scan found {patches:?}, which misses a sweep gate in {SWEEP_CONFIGS:?}"
     );
     let mut work: Vec<(u64, Option<&str>)> = Vec::new();
     for patch in patches {
         work.push((patch, None));
-        if patch >= shared_store {
-            work.push((patch, Some(SHARED_STORE_ON)));
-        }
-        if patch >= cache_debug {
-            work.push((patch, Some(CACHE_DEBUG_ON)));
+        for (gate, config) in &thresholds {
+            if patch >= *gate {
+                work.push((patch, Some(config)));
+            }
         }
     }
     let seen = Mutex::new(HashSet::new());
