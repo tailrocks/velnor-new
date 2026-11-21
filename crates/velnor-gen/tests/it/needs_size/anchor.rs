@@ -67,9 +67,13 @@ fn a_required_context_over_the_limit_with_the_anchor_outputs_is_refused() -> Tes
 }
 
 #[test]
-fn only_a_helper_from_0_1_111_budgets_the_anchor_outputs() -> TestResult {
-    let (_, before, _) = check_at(1, "0.1.110")?;
-    let (_, after, _) = check_at(1, "0.1.111")?;
-    assert_eq!(after - before, 664);
+fn the_tools_anchor_outputs_are_budgeted_for_a_0_1_110_helper() -> TestResult {
+    for roots in [1, 2] {
+        let (actual, bound, _) = check_at(roots, "0.1.110")?;
+        assert!(
+            actual <= bound,
+            "roots={roots}, actual={actual}, bound={bound}"
+        );
+    }
     Ok(())
 }

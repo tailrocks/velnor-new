@@ -31,7 +31,8 @@ pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
 pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 pub const TOOLS_ANCHOR_DIGEST_BYTES: usize = 64;
-pub const CACHE_KEY_MAX_BYTES: usize = 512;
+pub const CACHE_KEY_MAX_UNITS: usize = 512;
+pub const JSON_UNIT_MAX_BYTES: usize = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
