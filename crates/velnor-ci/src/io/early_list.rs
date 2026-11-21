@@ -5,14 +5,43 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::Mutex;
-use std::thread::{self, JoinHandle};
+use std::process::Command;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
+use crate::bounded::{Outcome, capture_streams};
 use crate::tests_run::{Listing, list_argv, runnable_matches};
 
 const EXPANSION_HEADROOM: u64 = 8;
+const LIST_GRACE: Duration = Duration::from_secs(60);
+const JOIN_SLACK: Duration = Duration::from_secs(10);
+const STDOUT_CEILING: usize = 128 << 20;
+const STDERR_KEEP: usize = 64 << 10;
+const GRACE_VARIABLE: &str = "VELNOR_CI_RUN_EARLY_LIST_GRACE_MS";
+const CEILING_VARIABLE: &str = "VELNOR_CI_RUN_EARLY_LIST_MAX_BYTES";
+
+fn grace() -> Duration {
+    std::env::var(GRACE_VARIABLE)
+        .ok()
+        .and_then(|millis| millis.parse().ok())
+        .map_or(LIST_GRACE, Duration::from_millis)
+}
+
+fn ceiling() -> usize {
+    std::env::var(CEILING_VARIABLE)
+        .ok()
+        .and_then(|bytes| bytes.parse().ok())
+        .unwrap_or(STDOUT_CEILING)
+}
+
+struct Bounds<'a> {
+    stdout_bytes: usize,
+    grace: Duration,
+    deadline: &'a dyn Fn() -> Option<Instant>,
+}
 
 type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
 
@@ -35,13 +64,14 @@ const STEP_FILE_VARIABLES: &[&str] = &[
 
 enum State {
     Idle,
-    Running(JoinHandle<Option<Listing>>),
+    Running(mpsc::Receiver<Option<Listing>>),
     Taken,
 }
 
 pub(super) struct EarlyList {
     argv: Vec<String>,
     state: Mutex<State>,
+    run_ended: Arc<OnceLock<Instant>>,
 }
 
 impl EarlyList {
@@ -49,6 +79,7 @@ impl EarlyList {
         Self {
             argv: run.to_vec(),
             state: Mutex::new(State::Idle),
+            run_ended: Arc::new(OnceLock::new()),
         }
     }
 
@@ -59,11 +90,15 @@ impl EarlyList {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if matches!(*state, State::Idle) {
             let argv = self.argv.clone();
-            *state = State::Running(thread::spawn(move || list_matches(&argv)));
+            let ended = Arc::clone(&self.run_ended);
+            let (sender, receiver) = mpsc::channel();
+            thread::spawn(move || sender.send(list_matches(&argv, &ended)).ok());
+            *state = State::Running(receiver);
         }
     }
 
     pub(super) fn finish(&self, wanted: bool) -> Option<Listing> {
+        self.run_ended.get_or_init(Instant::now);
         let state = std::mem::replace(
             &mut *self
                 .state
@@ -72,19 +107,30 @@ impl EarlyList {
             State::Taken,
         );
         match state {
-            State::Running(handle) => handle.join().unwrap_or_else(|_| {
-                eprintln!(
-                    "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
-                );
-                None
-            }),
-            State::Idle if wanted => list_matches(&self.argv),
+            State::Running(receiver) => match receiver.recv_timeout(grace() + JOIN_SLACK) {
+                Ok(listing) => listing,
+                Err(RecvTimeoutError::Timeout) => {
+                    eprintln!(
+                        "::warning::early test listing did not finish within {} s after the test run finished; continuing without test counts",
+                        (grace() + JOIN_SLACK).as_secs_f64()
+                    );
+                    None
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    eprintln!(
+                        "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
+                    );
+                    None
+                }
+            },
+            State::Idle if wanted => list_matches(&self.argv, &self.run_ended),
             State::Idle | State::Taken => None,
         }
     }
 }
 
-fn list_matches(argv: &[String]) -> Option<Listing> {
+fn list_matches(argv: &[String], ended: &OnceLock<Instant>) -> Option<Listing> {
+    let grace = grace();
     match try_list(
         argv,
         &Environment {
@@ -92,14 +138,26 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         },
         &can_execute_from,
         &free_bytes,
+        &Bounds {
+            stdout_bytes: ceiling(),
+            grace,
+            deadline: &|| ended.get().map(|at| *at + grace),
+        },
     ) {
         Ok(listing) => Some(listing),
         Err(failure) => {
             drop(std::io::stderr().write_all(&failure.stderr));
-            eprintln!(
-                "velnor-ci: the early nextest list failed: {}; the step reports no tests_listed, tests_by_package or tests_ignored",
-                failure.reason
-            );
+            if failure.bounded {
+                eprintln!(
+                    "::warning::early test listing {}; continuing without test counts",
+                    failure.reason
+                );
+            } else {
+                eprintln!(
+                    "velnor-ci: the early nextest list failed: {}; the step reports no tests_listed, tests_by_package or tests_ignored",
+                    failure.reason
+                );
+            }
             None
         }
     }
@@ -109,6 +167,7 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
 struct Failure {
     reason: String,
     stderr: Vec<u8>,
+    bounded: bool,
 }
 
 impl Failure {
@@ -116,6 +175,14 @@ impl Failure {
         Self {
             reason: reason.into(),
             stderr: Vec::new(),
+            bounded: false,
+        }
+    }
+
+    fn bounded(reason: String) -> Self {
+        Self {
+            bounded: true,
+            ..Self::new(reason)
         }
     }
 }
@@ -129,6 +196,7 @@ fn try_list(
     environment: &Environment,
     can_execute: &ExecProbe,
     free: &FreeProbe,
+    bounds: &Bounds<'_>,
 ) -> Result<Listing, Failure> {
     let mut argv =
         list_argv(argv).ok_or_else(|| Failure::new("the command is not a nextest run"))?;
@@ -152,18 +220,34 @@ fn try_list(
         None
     };
     let mut command = Command::new(&argv[0]);
-    command
-        .args(&argv[1..])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(&argv[1..]);
     for name in STEP_FILE_VARIABLES.iter().copied() {
         command.env_remove(name);
     }
     super::mbx_reports::assign(&mut command, &argv);
-    let output = command
-        .output()
-        .map_err(|error| Failure::new(format!("cannot start it: {error}")))?;
+    let outcome = capture_streams(
+        &mut command,
+        bounds.stdout_bytes,
+        STDERR_KEEP,
+        bounds.deadline,
+    )
+    .map_err(|error| Failure::new(format!("cannot start it: {error}")))?;
     drop(directory);
+    let output = match outcome {
+        Outcome::Exited(output) => output,
+        Outcome::TimedOut => {
+            return Err(Failure::bounded(format!(
+                "exceeded {} s after the test run finished",
+                bounds.grace.as_secs_f64()
+            )));
+        }
+        Outcome::Oversized => {
+            return Err(Failure::bounded(format!(
+                "exceeded {} bytes",
+                bounds.stdout_bytes
+            )));
+        }
+    };
     if !output.status.success() {
         return Err(Failure {
             reason: output.status.code().map_or_else(
@@ -171,6 +255,7 @@ fn try_list(
                 |code| format!("exit code {code}"),
             ),
             stderr: output.stderr,
+            bounded: false,
         });
     }
     runnable_matches(&output.stdout).ok_or_else(|| Failure::new("it printed no usable listing"))

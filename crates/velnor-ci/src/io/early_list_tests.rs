@@ -1,12 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Environment, Failure, try_list};
+use super::{Bounds, Environment, Failure, try_list};
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+
+const UNBOUNDED: Bounds<'static> = Bounds {
+    stdout_bytes: usize::MAX,
+    grace: std::time::Duration::ZERO,
+    deadline: &|| None,
+};
 
 fn scratch(name: &str) -> PathBuf {
     let directory =
@@ -49,6 +55,7 @@ fn a_missing_runner_temp_is_reported_before_anything_is_started() {
         &environment(None),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
+        &UNBOUNDED,
     ));
     assert_eq!(
         message,
@@ -66,6 +73,7 @@ fn a_runner_temp_that_is_a_file_is_reported_with_the_directory_it_could_not_prep
         &environment(Some(OsString::from(&temp))),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
+        &UNBOUNDED,
     ));
     let expected = temp.join(format!("velnor-nextest-list-{}", std::process::id()));
     assert!(
@@ -96,6 +104,7 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(799),
+        &UNBOUNDED,
     ));
     assert!(
         message.contains("bytes free, but the extraction may need 800"),
@@ -127,6 +136,7 @@ fn an_extraction_that_fits_the_headroom_is_admitted() {
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(800),
+        &UNBOUNDED,
     ));
     assert_eq!(message, "it printed no usable listing");
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
@@ -140,6 +150,7 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(false),
         &|_| Ok(u64::MAX),
+        &UNBOUNDED,
     ));
     assert!(
         message.contains("does not allow executing files"),

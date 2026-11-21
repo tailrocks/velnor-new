@@ -19,16 +19,17 @@ const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\nech
 const NEXTEST_TMPDIR_USE: &str = "case \" $* \" in *\" --extract-to \"*) ;; *) mktemp -d \"$TMPDIR/nextest.XXXXXX\" > /dev/null || { echo 'Error: [double-spawn] failed: Permission denied (os error 13)' >&2; exit 104; };; esac\n";
 const WITHHELD: &[&str] = &["tests_listed=", "tests_ignored=", "tests_by_package="];
 
-struct Scenario {
-    list: String,
+pub(crate) struct Scenario {
+    pub(crate) list: String,
     wait: bool,
     tmpdir: Option<PathBuf>,
     archive_env: Option<&'static str>,
     shadowed_tools: bool,
+    pub(crate) settings: Vec<(&'static str, &'static str)>,
 }
 
 impl Scenario {
-    fn listing(json: &str) -> Self {
+    pub(crate) fn listing(json: &str) -> Self {
         let list = format!(
             "{REQUIRE_ARCHIVE_FOR_EXTRACT}printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n\
 p=; for a in \"$@\"; do d=; [ \"$p\" = --extract-to ] && d=$a; [ -n \"$d\" ] && [ -d \"$d\" ] && : > \"$RUNNER_TEMP/list-dest-existed\"; p=$a; done\n\
@@ -40,20 +41,22 @@ printf '%s\\n' '{json}'\nexit 0"
             tmpdir: None,
             archive_env: None,
             shadowed_tools: false,
+            settings: Vec::new(),
         }
     }
 
-    fn failing(list: &str) -> Self {
+    pub(crate) fn failing(list: &str) -> Self {
         Self {
             list: list.to_owned(),
             wait: false,
             tmpdir: None,
             archive_env: None,
             shadowed_tools: false,
+            settings: Vec::new(),
         }
     }
 
-    fn execute(
+    pub(crate) fn execute(
         &self,
         name: &str,
         command: &[String],
@@ -105,6 +108,9 @@ printf '%s\\n' '{json}'\nexit 0"
         if let Some(tmpdir) = &self.tmpdir {
             child.env("TMPDIR", tmpdir);
         }
+        for (name, value) in &self.settings {
+            child.env(name, value);
+        }
         if let Some(archive) = self.archive_env {
             child.env("NEXTEST_ARCHIVE_FILE", archive);
         }
@@ -114,7 +120,7 @@ printf '%s\\n' '{json}'\nexit 0"
     }
 }
 
-fn archive_run(extract: &[&str]) -> Vec<String> {
+pub(crate) fn archive_run(extract: &[&str]) -> Vec<String> {
     let mut command = vec![
         "cargo-nextest".to_owned(),
         "nextest".to_owned(),
@@ -137,7 +143,7 @@ fn extract_to(args: &[String]) -> Option<String> {
         .and_then(|index| args.get(index + 1).cloned())
 }
 
-fn assert_withheld(written: &str) {
+pub(crate) fn assert_withheld(written: &str) {
     assert!(written.contains("tests_run=1\n"), "{written}");
     for name in WITHHELD {
         assert!(!written.contains(name), "{name} leaked into {written}");
