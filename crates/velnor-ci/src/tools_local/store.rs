@@ -291,19 +291,27 @@ fn prune(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
-    let mut older: Vec<(SystemTime, PathBuf)> = entries
+    let mut older: Vec<(SystemTime, u64, PathBuf)> = entries
         .flatten()
         .filter(|entry| {
             let name = entry.file_name();
             name != current && !name.to_string_lossy().starts_with('.')
         })
-        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            Some((metadata.modified().ok()?, metadata.ino(), entry.path()))
+        })
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    for (_, path) in older.into_iter().skip(KEEP_KEYS - 1) {
+    for (modified, ino, path) in older.into_iter().skip(KEEP_KEYS - 1) {
         let key = path.file_name().unwrap_or_default().to_string_lossy();
         if let Claim::Won(_lock) = claim(tools, &key) {
-            remove_tree(&path).ok();
+            let unchanged = fs::symlink_metadata(&path).is_ok_and(|metadata| {
+                metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
+            });
+            if unchanged {
+                remove_tree(&path).ok();
+            }
         }
     }
 }
