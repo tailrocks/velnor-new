@@ -11,6 +11,9 @@ CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
+LIST_START = re.compile(r"[ \t]*" + QUOTE + r"(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
+ORDERED_LEAD = re.compile(r"[ \t]*(?:>[ \t]*)*(\d{1,9})[.)](?=[ \t])")
+HTML_END = re.compile(r"</(?:script|pre|style|textarea)\s*>|-->|\?>|\]\]>", re.I)
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
 QUOTE_START = re.compile(r"[ \t]*>")
@@ -99,7 +102,7 @@ def prose(line):
     if line is None:
         return False
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text) and not HTML_END.search(text)
 
 
 def split_lines(text):
@@ -112,15 +115,30 @@ def doc_text_tabs(text):
     return text.expandtabs(4)
 
 
+def quote_depth(line):
+    return re.match(QUOTE, line).group().count(">")
+
+
+def continues_paragraph(prev, line, opened):
+    if opened or prev is None or not prose(prev) or quote_depth(prev) != quote_depth(line):
+        return False
+    ordered = ORDERED_LEAD.match(line)
+    return ordered is not None and int(ordered.group(1)) != 1
+
+
 def markdown_hit(lines, indent):
     prev = None
+    opened = False
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
         lazy = prose(prev) and not QUOTE_START.match(line)
-        if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
+        continues = continues_paragraph(prev, line, opened)
+        if (LIST_INDENT.match(line) and not continues) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
         if indent.match(line) and not lazy:
             return k
+        if LIST_START.match(line) and not continues:
+            opened = True
         prev = line
     return None
 
