@@ -152,11 +152,15 @@ jobs:
       MISE_NO_ENV: "0"
       MISE_LOCKFILE: "1"
     steps:
-      - name: Checkout with history
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: "0"
+          fetch-depth: "1"
           persist-credentials: "false"
+      # The scanners walk the history of the checked-out commit only. fetch-depth 0 would also
+      # fetch every branch, so a fixture on an unrelated PR branch could fail this job.
+      - name: Fetch the history of the checked-out commit
+        run: git fetch --no-tags --unshallow origin "$(git rev-parse HEAD)"
       - name: Install the pinned secret scanners
         uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
@@ -168,9 +172,9 @@ jobs:
           gitleaks version
           betterleaks version
           kingfisher --version
-      - name: Scan git history with gitleaks
-        run: gitleaks git . --redact --no-banner --config .gitleaks.toml
-      - name: Scan git history with betterleaks
-        run: betterleaks git . --redact -c .gitleaks.toml
+      - name: Scan the commit history with gitleaks
+        run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history HEAD"
+      - name: Scan the commit history with betterleaks
+        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history HEAD"
       - name: Scan the working tree with kingfisher
         run: bash scripts/secret-scan-worktree.sh

@@ -88,8 +88,8 @@ hooks {
   }
   ["pre-push"] {
     steps {
-      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml" }
-      ["kingfisher-worktree"] { check = "sh scripts/secret-scan-worktree.sh" }
+      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history HEAD\"" }
+      ["kingfisher-worktree"] { check = "bash scripts/secret-scan-worktree.sh" }
     }
   }
   // Manual only: full-history kingfisher. Its findings vary between runs, so it is not
