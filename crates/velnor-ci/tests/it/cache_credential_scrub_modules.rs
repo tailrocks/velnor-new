@@ -113,6 +113,37 @@ fn a_config_file_marks_a_git_directory_as_well_as_a_head_file() {
 }
 
 #[test]
+fn a_git_directory_inside_the_refs_of_a_submodule_is_scanned() {
+    let repo = private_checkout("decide-modules-refs-git-directory", GIT_LOCK);
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/HEAD"),
+        "ref: refs/heads/main\n",
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/x/HEAD"),
+        "ref: refs/heads/main\n",
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/x/hooks/post-fetch"),
+        &format!("TOKEN={SHA}\n"),
+    );
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
+}
+
+#[test]
+fn the_modules_of_a_linked_worktree_are_scanned() {
+    hook_stops(&[
+        ("linked-worktree-module", "worktrees/w1/modules/vendor"),
+        (
+            "linked-worktree-nested-module",
+            "worktrees/w1/modules/vendor/modules/deep",
+        ),
+    ]);
+}
+
+#[test]
 fn a_hooks_directory_without_a_git_directory_parent_is_not_a_hook_tree() {
     for (label, directory) in [
         ("plain-directory", "modules/vendor/plain"),
@@ -157,4 +188,24 @@ fn refs_of_a_submodule_repository_are_not_the_hook_tree_and_are_saved() {
             "refs/tags/hooks/v1",
         ),
     ]);
+}
+
+#[test]
+fn a_remote_head_symref_does_not_make_a_refs_directory_a_hook_tree() {
+    let repo = private_checkout("decide-modules-remote-head", GIT_LOCK);
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/HEAD"),
+        "ref: refs/heads/main\n",
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/remotes/origin/HEAD"),
+        "ref: refs/remotes/origin/main\n",
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/remotes/origin/hooks/main"),
+        SHA,
+    );
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
 }

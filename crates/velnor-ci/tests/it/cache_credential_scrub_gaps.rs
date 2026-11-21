@@ -284,3 +284,70 @@ fn a_basic_authorization_header_with_non_ascii_credentials_stops_the_sources_sav
         ),
     ]);
 }
+
+#[test]
+fn a_credential_in_a_comment_of_a_saved_git_config_stops_the_sources_save() {
+    let config = ".cargo/git/db/shared-1/config";
+    sources_save_stops(&[
+        (
+            "config-comment-encoded-token",
+            config,
+            &format!("[core]\n\tbare = true\n# {}\n", TOKEN.replace('_', "%5F")),
+        ),
+        (
+            "config-comment-basic-header",
+            config,
+            "[core]\n\tbare = true\n# Authorization: Basic dXNlcjpwYXNz\n",
+        ),
+    ]);
+}
+
+#[test]
+fn a_form_encoded_basic_header_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "hook-form-encoded-basic",
+            HOOK,
+            "# Authorization%3A+Basic+dXNlcjpwYXNz\n",
+        ),
+        (
+            "fetch-head-form-encoded-basic",
+            FETCH_HEAD,
+            &format!("{SHA}\t\tbranch 'main' Authorization%3A+Basic+dXNlcjpwYXNz\n"),
+        ),
+    ]);
+}
+
+#[test]
+fn a_token_joined_by_a_parameter_expansion_in_a_hook_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "braced-empty-expansion",
+        HOOK,
+        "echo ghp_0123456789${EMPTY}abcdefghijklmnopqrstuvwxyzAB\n",
+    )]);
+}
+
+#[test]
+fn a_basic_payload_with_control_bytes_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "hook-base64-of-a-line-with-a-trailing-newline",
+            HOOK,
+            "Authorization: Basic dXNlcjpwYXNzCg==\n",
+        ),
+        (
+            "fetch-head-base64-with-a-tab",
+            FETCH_HEAD,
+            &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYQlzcw==\n"),
+        ),
+    ]);
+}
+
+#[test]
+fn a_git_directory_inside_a_saved_repository_is_scanned_for_hooks() {
+    sources_save_stops(&[(
+        "dot-git-in-a-database",
+        ".cargo/git/db/shared-1/.git/hooks/post-fetch",
+        &format!("TOKEN={SHA}\n"),
+    )]);
+}

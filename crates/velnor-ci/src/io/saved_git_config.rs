@@ -119,17 +119,46 @@ fn names_in(text: &str, hook: bool) -> bool {
             .any(|url| !plain_remote(url))
 }
 
-fn variants(text: &str) -> Option<[String; 4]> {
+fn variants(text: &str) -> Option<[String; 5]> {
     let decoded = unescaped(text)?;
-    Some([joined(text), joined(&decoded), text.to_owned(), decoded])
+    let form = unescaped(&text.replace('+', " "))?;
+    Some([
+        joined(text),
+        joined(&decoded),
+        text.to_owned(),
+        decoded,
+        form,
+    ])
 }
 
 fn joined(text: &str) -> String {
-    text.replace("\\\r\n", "")
-        .replace("\\\n", "")
-        .replace("$'", "")
-        .replace("$\"", "")
-        .replace(['\\', '\'', '"'], "")
+    without_expansions(
+        &text
+            .replace("\\\r\n", "")
+            .replace("\\\n", "")
+            .replace("$'", "")
+            .replace("$\"", ""),
+    )
+    .replace(['\\', '\'', '"'], "")
+}
+
+fn without_expansions(text: &str) -> String {
+    let mut kept = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('$') {
+        kept.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        let consumed = match after.strip_prefix('{') {
+            Some(braced) => braced.find('}').map_or(after.len(), |close| close + 2),
+            None => after
+                .bytes()
+                .take_while(|each| each.is_ascii_alphanumeric() || *each == b'_')
+                .count(),
+        };
+        rest = &after[consumed..];
+    }
+    kept.push_str(rest);
+    kept
 }
 
 fn names_basic_authorization(text: &str) -> bool {
@@ -171,7 +200,7 @@ fn basic_payload_credential(payload: &str) -> bool {
             bits &= (1 << filled) - 1;
         }
     }
-    decoded.contains(&b':') && !decoded.iter().any(u8::is_ascii_control)
+    decoded.contains(&b':')
 }
 
 fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {

@@ -25,6 +25,9 @@ const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "confi
 const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
+const REFS: &str = "refs";
+const REMOTES: &str = "remotes";
+const WORKTREES: &str = "worktrees";
 const MODULES: &str = "modules";
 const GIT_DIRECTORY_MARKERS: &[&str] = &["head", "config"];
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
@@ -37,6 +40,8 @@ enum Zone {
     Databases,
     Repository,
     Modules,
+    Refs,
+    Worktrees,
     Plain,
     Hooks,
     Logs,
@@ -48,10 +53,14 @@ impl Zone {
         let is = |wanted: &str| name.is_some_and(|name| name.eq_ignore_ascii_case(wanted));
         match self {
             Self::Crate if is(GIT_DIRECTORY) => Self::Repository,
-            Self::Databases => Self::Repository,
+            Self::Databases | Self::Worktrees => Self::Repository,
             Self::Repository => Self::entering_repository(is),
             Self::Modules if parent_is_git_directory && is(HOOKS) => Self::Hooks,
             Self::Modules if parent_is_git_directory && is(LOGS) => Self::Logs,
+            Self::Modules if parent_is_git_directory && is(REFS) => Self::Refs,
+            Self::Refs if !parent_is(directory, REMOTES) && is_git_directory(directory) => {
+                Self::Modules
+            }
             other => other,
         }
     }
@@ -63,6 +72,10 @@ impl Zone {
             Self::Logs
         } else if is(MODULES) {
             Self::Modules
+        } else if is(GIT_DIRECTORY) {
+            Self::Repository
+        } else if is(WORKTREES) {
+            Self::Worktrees
         } else {
             Self::Plain
         }
@@ -208,8 +221,27 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
     })
 }
 
+fn parent_is(directory: &Path, wanted: &str) -> bool {
+    directory
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|name| name.eq_ignore_ascii_case(wanted))
+}
+
+fn is_git_directory(directory: &Path) -> bool {
+    fs::read_dir(directory).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            GIT_DIRECTORY_MARKERS.contains(&name.as_str())
+        })
+    })
+}
+
 fn holds_credential(path: &Path) -> bool {
-    read_small(path).is_none_or(|text| !crate::io::saved_git_config::is_plain(&text))
+    read_small(path).is_none_or(|text| {
+        !crate::io::saved_git_config::is_plain(&text)
+            || crate::io::saved_git_config::names_credential(&text)
+    })
 }
 
 fn names_credential_file(path: &Path, zone: Zone) -> bool {
