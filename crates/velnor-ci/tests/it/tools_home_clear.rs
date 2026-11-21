@@ -298,3 +298,25 @@ fn a_dangling_or_looping_home_link_is_a_warning_and_deletes_nothing() {
     }
     assert!(!node.root.join("missing").exists());
 }
+
+#[test]
+fn a_dangling_home_link_with_a_trailing_slash_or_no_stored_entry_is_a_warning() {
+    let node = node("tools-home-clear-dangling-slash");
+    let dangling = node.root.join("dangling-home");
+    symlink(node.root.join("missing"), &dangling).unwrap_or_else(|e| unreachable!("{e}"));
+    let slashed = PathBuf::from(format!("{}/", dangling.display()));
+    assert!(home_owner(&slashed).is_ok(), "{}", slashed.display());
+    for home in [&slashed, &dangling] {
+        for verb in [Verb::Clear, Verb::Restore] {
+            let outcome = go(&node, verb, home);
+            assert!(
+                matches!(outcome, Outcome::Rejected(_)),
+                "{verb:?} {}: {outcome:?}",
+                home.display()
+            );
+        }
+    }
+    assert!(
+        fs::symlink_metadata(&dangling).is_ok_and(|metadata| metadata.file_type().is_symlink())
+    );
+}
