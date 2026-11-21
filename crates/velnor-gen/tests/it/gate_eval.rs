@@ -218,6 +218,7 @@ impl Parser<'_> {
             "success" => Value::Flag(self.context.job_ok),
             "failure" => Value::Flag(!self.context.job_ok),
             "contains" => Value::Flag(text(0).to_lowercase().contains(&text(1).to_lowercase())),
+            "endsWith" => Value::Flag(text(0).to_lowercase().ends_with(&text(1).to_lowercase())),
             "format" => {
                 let mut formatted = text(0);
                 for index in 1..arguments.len() {
