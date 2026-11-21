@@ -191,11 +191,14 @@ pub(super) fn scan_with(
 }
 
 fn revisited(identities: &BTreeMap<PathBuf, handle::Stamp>, directory: &Path) -> io::Result<()> {
-    match identities.get(directory) {
-        Some(recorded) if !handle::identity_at(directory).is_ok_and(|now| recorded.is(now)) => {
-            Err(changed(io::ErrorKind::Other, directory))
-        }
-        _ => Ok(()),
+    let Some(recorded) = identities.get(directory) else {
+        return Ok(());
+    };
+    match handle::current(&Origin::Path, directory) {
+        Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
+        Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
+        Err(error) if handle::replaced(&error) => Err(changed(error.kind(), directory)),
+        Err(error) => Err(error),
     }
 }
 
@@ -264,9 +267,10 @@ fn settle(
 }
 
 fn is_directory(path: &Path) -> io::Result<bool> {
-    match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata.is_dir()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+    match handle::current(&Origin::Path, path) {
+        Ok(Current::Directory(_) | Current::Other(Kind::Link { .. })) => Ok(true),
+        Ok(Current::Gone | Current::Other(_)) => Ok(false),
+        Err(error) if handle::replaced(&error) => Ok(true),
         Err(error) => Err(error),
     }
 }

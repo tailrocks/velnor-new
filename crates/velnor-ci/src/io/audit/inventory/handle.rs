@@ -134,11 +134,6 @@ pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Re
     Ok(classify(directory, name, path, false, &|| {})?.map(|observed| observed.kind))
 }
 
-pub(super) fn identity_at(path: &Path) -> io::Result<Identity> {
-    let stat = nix::sys::stat::stat(path).map_err(failure)?;
-    Ok((stat.st_dev, stat.st_ino))
-}
-
 pub(super) fn observe(
     directory: impl AsFd,
     name: &OsStr,
