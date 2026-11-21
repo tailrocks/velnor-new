@@ -49,3 +49,18 @@ fn outputs_sharing_one_declared_directory_pass_within_the_entry_limit() {
     let within = build_within(&repo, "900");
     assert!(within.status.success(), "{within:?}");
 }
+
+#[test]
+fn one_output_declaring_one_directory_under_two_spellings_passes_within_the_entry_limit() {
+    let repo = declared_tree(200);
+    let output = "rust/target/debug/build/lib-f00000000000000f/output";
+    unit(
+        &repo,
+        output,
+        "cargo:rerun-if-changed=../../shared/first\ncargo:rerun-if-changed=../../shared/../shared/first\n",
+    );
+    repo.set_mtime(output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    inventory::build(&repo, output, None);
+    let within = build_within(&repo, "600");
+    assert!(within.status.success(), "{within:?}");
+}

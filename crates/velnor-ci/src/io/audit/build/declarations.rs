@@ -139,10 +139,13 @@ fn trusted(
         return Ok(false);
     }
     for path in directories {
-        let key = (path.clone(), targets.clone());
+        let Ok(root) = fs::canonicalize(path) else {
+            return Ok(false);
+        };
+        let key = (root.clone(), targets.clone());
         if !pass.views.contains_key(&key) {
             let scanned = inventory::scan(path, targets, &mut pass.budget)
-                .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets));
+                .and_then(|entries| inventory::view(&entries, &root, targets));
             match scanned {
                 Ok(view) => {
                     pass.views.insert(key.clone(), view);
