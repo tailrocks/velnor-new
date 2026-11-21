@@ -36,7 +36,10 @@ struct Api {
 
 impl Api {
     fn seen(&self) -> Vec<String> {
-        self.requests.lock().map(|r| r.clone()).unwrap_or_default()
+        match self.requests.lock() {
+            Ok(requests) => requests.clone(),
+            Err(_) => Vec::new(),
+        }
     }
 }
 
@@ -119,13 +122,12 @@ fn revoked(api: &Api) -> bool {
 }
 
 fn leftovers(repo: &Repo, dir: &str) -> Vec<String> {
-    fs::read_dir(repo.root().join(dir))
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok()?.file_name().into_string().ok())
-                .collect()
-        })
-        .unwrap_or_default()
+    match fs::read_dir(repo.root().join(dir)) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .collect(),
+        Err(_) => Vec::new(),
+    }
 }
 
 #[test]

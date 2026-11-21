@@ -47,6 +47,7 @@ fn target(job: &str, manifest: &str) -> Result<CacheKey, Box<dyn std::error::Err
         job: JobId::new(job)?,
         root: CacheRoot::new(&manifest, RepoPath::new("target")?),
         host: Host,
+        scope: BaseScope::Shared,
     })
 }
 

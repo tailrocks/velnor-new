@@ -6,6 +6,7 @@ use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
+use crate::plan_gate::PlanFrom;
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,15 @@ pub struct GroupUpload {
 pub enum InputsCli {
     PerRoot,
     Batched,
+}
+
+/// What `cache decide` finds in `VELNOR_REPOSITORY_PRIVATE`: nothing set (helpers before the
+/// variable), an empty string, or the answer of the repository privacy step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivateVerdict {
+    Unset,
+    Cleared,
+    Checked,
 }
 
 pub const BUDGET_JOB: &str = "rust-budget";
@@ -59,6 +69,12 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
+        verdicts: Option<PlanFrom>,
+        private: PrivateVerdict,
+    },
+    PublicSources {
+        manifests: Vec<RepoPath>,
+        selected: Vec<RootSlug>,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -98,6 +114,7 @@ pub enum StepKind {
     },
     TestGroupsCheck(Vec<GroupFilter>),
     CratesMirror(crate::repo::CratesMirror),
+    RepositoryPrivacy,
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,
     },
@@ -123,6 +140,7 @@ pub enum StepKind {
     },
     MbxPin,
     MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
@@ -195,6 +213,7 @@ impl StepKind {
             | Self::SourcesFetchAll { .. }
             | Self::CacheLookup(_)
             | Self::CacheDecide { .. }
+            | Self::PublicSources { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
             | Self::CacheTrim { .. }
@@ -214,12 +233,14 @@ impl StepKind {
             | Self::InputsRestore { .. }
             | Self::TestGroupsCheck(_)
             | Self::CratesMirror(_)
+            | Self::RepositoryPrivacy
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
+            | Self::MbxOutDirs
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)
