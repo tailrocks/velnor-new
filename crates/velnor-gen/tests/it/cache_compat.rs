@@ -23,6 +23,7 @@ fn inputs() -> CompatInputs {
         rustflags: String::new(),
         workspace: "/home/runner/work/p/p".to_owned(),
         driver: "cargo".to_owned(),
+        mbx_out_dir: String::new(),
     }
 }
 
@@ -31,7 +32,7 @@ fn changing_any_compat_input_changes_the_digest() {
     let base = compat(&inputs());
     assert_eq!(base, compat(&inputs()));
     assert_eq!(base.len(), 16);
-    let mutations: [Mutation; 12] = [
+    let mutations: [Mutation; 13] = [
         ("rustc", |i| i.rustc_verbose.push_str("release: 1.99.2\n")),
         ("target", |i| {
             i.target = Some("x86_64-unknown-linux-gnu".to_owned());
@@ -47,6 +48,7 @@ fn changing_any_compat_input_changes_the_digest() {
         }),
         ("workspace", |i| i.workspace = "/work".to_owned()),
         ("driver", |i| i.driver = "mbx".to_owned()),
+        ("mbx out-dir", |i| i.mbx_out_dir = "0".to_owned()),
         ("env", |i| i.profile.env.push(("EXTRA", "1"))),
         ("config", |i| i.profile.cargo_config = "[build]\n"),
         ("repo profile", |i| {

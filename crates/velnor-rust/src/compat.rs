@@ -23,6 +23,7 @@ pub struct CompatInputs {
     pub rustflags: String,
     pub workspace: String,
     pub driver: String,
+    pub mbx_out_dir: String,
 }
 
 /// The build driver for the `cargo` that `PATH` resolves to (`None` when there is none).
@@ -44,7 +45,7 @@ pub fn compat(inputs: &CompatInputs) -> String {
         .collect::<Vec<_>>()
         .concat();
     let schema = COMPAT_SCHEMA.to_string();
-    let fields = [
+    let mut fields: Vec<(&str, &str)> = vec![
         ("schema", schema.as_str()),
         ("rustc", &inputs.rustc_verbose),
         ("target", inputs.target.as_deref().unwrap_or_default()),
@@ -56,6 +57,9 @@ pub fn compat(inputs: &CompatInputs) -> String {
         ("workspace", &inputs.workspace),
         ("driver", &inputs.driver),
     ];
+    if !inputs.mbx_out_dir.is_empty() {
+        fields.push(("mbx-out-dir", inputs.mbx_out_dir.as_str()));
+    }
     let canonical = fields
         .iter()
         .map(|(name, value)| format!("{name}:{}:{value}\n", value.len()))

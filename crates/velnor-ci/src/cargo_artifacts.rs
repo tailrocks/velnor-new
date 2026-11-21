@@ -215,11 +215,16 @@ fn failed_unit(line: &str) -> Option<FailedUnit> {
     })
 }
 
-const FINGERPRINT_TARGET: &str = "cargo::compiler::fingerprint:";
+const FINGERPRINT_TARGETS: [&str; 2] = [
+    "cargo::compiler::fingerprint:",
+    "cargo::core::compiler::fingerprint:",
+];
 const MAX_REASON_CHARS: usize = 512;
 
 fn dirty_unit(line: &str) -> Option<DirtyUnit> {
-    let (span, message) = line.split_once(FINGERPRINT_TARGET)?;
+    let (span, message) = FINGERPRINT_TARGETS
+        .iter()
+        .find_map(|target| line.split_once(target))?;
     let reason = message.trim().strip_prefix("dirty: ")?;
     let identity = span.split_once("package_id=")?.1;
     let mut words = identity.split_whitespace();

@@ -133,7 +133,7 @@ fn a_cargo_build_command_runs_with_the_fingerprint_log_and_records_cargos_dirty_
     for subcommand in ["check", "clippy", "build", "doc"] {
         assert_eq!(
             cargo_log_seen(&temp, &["cargo", subcommand, "--locked"], None),
-            "cargo::compiler::fingerprint=info",
+            "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info",
             "{subcommand}"
         );
     }
@@ -143,6 +143,16 @@ fn a_cargo_build_command_runs_with_the_fingerprint_log_and_records_cargos_dirty_
             r#""dirty":[{"package":"gen","version":"0.1.0","reason":"FsStatusOutdated(StaleItem(MissingFile { path: \"/store/x.rs\" }))"}]"#
         ),
         "{records}"
+    );
+}
+
+#[test]
+fn an_empty_cargo_log_counts_as_unset_for_a_cargo_build_command() {
+    let temp = scratch("run-env-empty-cargo-log");
+    fake_cargo(&temp);
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "check", "--locked"], Some("")),
+        "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info"
     );
 }
 

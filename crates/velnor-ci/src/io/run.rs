@@ -228,7 +228,9 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if super::recording::explains_rebuilds(argv) && std::env::var_os("CARGO_LOG").is_none() {
+    if super::recording::explains_rebuilds(argv)
+        && std::env::var_os("CARGO_LOG").is_none_or(|value| value.is_empty())
+    {
         command.env("CARGO_LOG", super::recording::FINGERPRINT_LOG);
     }
     super::mbx_reports::assign(&mut command, argv);

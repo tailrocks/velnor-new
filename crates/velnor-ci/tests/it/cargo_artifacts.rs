@@ -211,6 +211,21 @@ fn a_build_script_run_is_recorded_with_its_package_and_output_directory() {
 }
 
 #[test]
+fn a_fingerprint_dirty_line_in_cargos_core_namespace_is_read_too() {
+    let input = "2026-11-21T09:23:40.4050213Z    0.024s  INFO prepare_target{force=false package_id=serde_core v1.0.229 target=\"serde_core\"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })\n";
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    assert_eq!(
+        tap.finish().dirty,
+        [DirtyUnit {
+            package: "serde_core".to_owned(),
+            version: "1.0.229".to_owned(),
+            reason: "FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })".to_owned(),
+        }]
+    );
+}
+
+#[test]
 fn a_fingerprint_dirty_line_names_the_package_and_cargos_reason() {
     let missing = "/store/out-dirs/v1/549467dfe87a2a72/x.rs";
     let input = format!(

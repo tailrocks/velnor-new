@@ -33,7 +33,8 @@ pub(super) fn cargo_command(argv: &[String]) -> &[String] {
     }
 }
 
-pub(super) const FINGERPRINT_LOG: &str = "cargo::compiler::fingerprint=info";
+pub(super) const FINGERPRINT_LOG: &str =
+    "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
 
 pub(super) fn explains_rebuilds(argv: &[String]) -> bool {
     let command = cargo_command(argv);
