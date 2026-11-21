@@ -14,12 +14,14 @@ const RECORD_RUN_DESTINATION: &str = "p=; for a in \"$@\"; do [ \"$p\" = --extra
 const WAIT_FOR_LIST: &str = "i=0\nwhile [ ! -f \"$RUNNER_TEMP/list-argv\" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i+1)); done\n";
 const RUN_BODY: &str = "echo '    Starting 1 tests across 1 binary' >&2\n";
 const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2\n";
+const NEXTEST_TMPDIR_USE: &str = "case \" $* \" in *\" --extract-to \"*) ;; *) mktemp -d \"$TMPDIR/nextest.XXXXXX\" > /dev/null || { echo 'Error: [double-spawn] failed: Permission denied (os error 13)' >&2; exit 104; };; esac\n";
 const WITHHELD: &[&str] = &["tests_listed=", "tests_ignored=", "tests_by_package="];
 
 struct Scenario {
     list: String,
     wait: bool,
     tmpdir: Option<PathBuf>,
+    archive_env: Option<&'static str>,
 }
 
 impl Scenario {
@@ -33,6 +35,7 @@ printf '%s\\n' '{json}'\nexit 0"
             list,
             wait: true,
             tmpdir: None,
+            archive_env: None,
         }
     }
 
@@ -41,6 +44,7 @@ printf '%s\\n' '{json}'\nexit 0"
             list: list.to_owned(),
             wait: false,
             tmpdir: None,
+            archive_env: None,
         }
     }
 
@@ -84,6 +88,9 @@ printf '%s\\n' '{json}'\nexit 0"
             .env("PATH", path);
         if let Some(tmpdir) = &self.tmpdir {
             child.env("TMPDIR", tmpdir);
+        }
+        if let Some(archive) = self.archive_env {
+            child.env("NEXTEST_ARCHIVE_FILE", archive);
         }
         let output = child.output().unwrap_or_else(|e| unreachable!("{e}"));
         let written = fs::read_to_string(&outputs).unwrap_or_default();
@@ -183,23 +190,41 @@ fn a_run_that_extracts_nothing_lists_without_a_destination() {
 #[test]
 fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
     let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
-    let probe = scratch("tests-run-extract-tmpdir-parent");
-    let unusable = probe.join("unusable-tmpdir");
-    fs::create_dir_all(&unusable).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(&unusable, fs::Permissions::from_mode(0o000))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    scenario.tmpdir = Some(unusable.clone());
-    let (output, written, temp) = scenario.execute(
-        "tests-run-extract-noexec-tmpdir",
-        &archive_run(&["--extract-to", "."]),
-        None,
-    );
-    fs::set_permissions(&unusable, fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    scenario.list = format!("{NEXTEST_TMPDIR_USE}{}", scenario.list);
+    scenario.tmpdir = Some(scratch("tests-run-extract-tmpdir-parent").join("missing"));
+    let (output, written, temp) =
+        scenario.execute("tests-run-extract-unusable-tmpdir", &archive_run(&[]), None);
     assert!(output.status.success(), "{output:?}");
+    assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
     let value = extract_to(&list_args(&temp)).unwrap_or_default();
     assert!(Path::new(&value).starts_with(&temp), "{value}");
-    assert!(written.contains("tests_by_package="), "{written}");
+}
+
+#[test]
+fn an_archive_named_by_the_environment_is_extracted_into_its_own_directory() {
+    let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
+    scenario.archive_env = Some("a.tar.zst");
+    let command = ["cargo-nextest", "nextest", "run", "--no-tests=pass"].map(str::to_owned);
+    let (output, written, temp) = scenario.execute("tests-run-extract-env", &command, None);
+    assert!(output.status.success(), "{output:?}");
+    assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
+    let args = list_args(&temp);
+    let value = extract_to(&args).unwrap_or_else(|| unreachable!("{args:?}"));
+    assert!(Path::new(&value).starts_with(&temp), "{value}");
+    assert!(temp.join("list-dest-existed").exists());
+}
+
+#[test]
+fn an_archive_named_by_the_environment_is_admitted_by_its_size() {
+    let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
+    scenario.archive_env = Some("a.tar.zst");
+    let command = ["cargo-nextest", "nextest", "run", "--no-tests=pass"].map(str::to_owned);
+    let (output, written, temp) =
+        scenario.execute("tests-run-extract-env-big", &command, Some(1 << 42));
+    assert!(output.status.success(), "{output:?}");
+    assert_withheld(&written);
+    assert!(!temp.join("list-argv").exists(), "the list ran anyway");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("bytes free"));
 }
 
 #[test]

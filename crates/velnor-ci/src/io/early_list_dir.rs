@@ -4,38 +4,31 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, ErrorKind};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::thread;
-use std::time::Duration;
+use std::process::{Command, Stdio};
 
 const PREFIX: &str = "velnor-nextest-list";
 const PROBE: &str = "velnor-exec-probe";
-const TEXT_FILE_BUSY: i32 = 26;
-const PROBE_ATTEMPTS: u32 = 10;
+const NOT_EXECUTABLE: i32 = 126;
+const PROBE_SCRIPT: &str = "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && chmod 755 \"$1\" && \"$1\"; status=$?; rm -f \"$1\"; exit $status";
 
 pub(super) type ExecProbe = dyn Fn(&Path) -> io::Result<bool>;
 
 pub(super) fn can_execute_from(directory: &Path) -> io::Result<bool> {
-    let probe = directory.join(PROBE);
-    fs::write(&probe, "#!/bin/sh\nexit 0\n")?;
-    fs::set_permissions(&probe, fs::Permissions::from_mode(0o755))?;
-    let mut outcome = Ok(false);
-    for _ in 0..PROBE_ATTEMPTS {
-        outcome = match Command::new(&probe).status() {
-            Ok(_) => Ok(true),
-            Err(error) if error.kind() == ErrorKind::PermissionDenied => Ok(false),
-            Err(error) if error.raw_os_error() == Some(TEXT_FILE_BUSY) => {
-                thread::sleep(Duration::from_millis(20));
-                continue;
-            }
-            Err(error) => Err(error),
-        };
-        break;
+    let output = Command::new("/bin/sh")
+        .args(["-c", PROBE_SCRIPT, PROBE])
+        .arg(directory.join(PROBE))
+        .stdin(Stdio::null())
+        .output()?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(NOT_EXECUTABLE) => Ok(false),
+        _ => Err(io::Error::other(format!(
+            "{}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))),
     }
-    drop(fs::remove_file(&probe));
-    outcome
 }
 
 pub(super) struct ListDir(PathBuf);
@@ -156,6 +149,47 @@ mod tests {
         std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(can_execute_from(&temp).unwrap_or_else(|e| unreachable!("{e}")));
         assert_eq!(std::fs::read_dir(&temp).map(Iterator::count).ok(), Some(0));
+        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn the_real_probe_is_not_defeated_by_processes_spawned_concurrently() {
+        let temp = std::env::temp_dir().join(format!("velnor-list-race-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let spawners: Vec<_> = (0..4)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for _ in 0..200 {
+                        drop(
+                            std::process::Command::new("/bin/sh")
+                                .args(["-c", ":"])
+                                .status(),
+                        );
+                    }
+                })
+            })
+            .collect();
+        let probers: Vec<_> = (0..4)
+            .map(|index| {
+                let own = temp.join(index.to_string());
+                std::fs::create_dir_all(&own).unwrap_or_else(|e| unreachable!("{e}"));
+                std::thread::spawn(move || {
+                    (0..50).all(|_| matches!(can_execute_from(&own), Ok(true)))
+                })
+            })
+            .collect();
+        for spawner in spawners {
+            spawner
+                .join()
+                .unwrap_or_else(|_| unreachable!("spawner panicked"));
+        }
+        for prober in probers {
+            assert!(
+                prober
+                    .join()
+                    .unwrap_or_else(|_| unreachable!("prober panicked"))
+            );
+        }
         std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     }
 

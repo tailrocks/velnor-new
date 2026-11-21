@@ -25,6 +25,8 @@ fn widen<T: Into<u64>>(value: T) -> u64 {
     value.into()
 }
 
+const ARCHIVE_VARIABLE: &str = "NEXTEST_ARCHIVE_FILE";
+
 const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
@@ -87,7 +89,10 @@ impl EarlyList {
 fn list_matches(argv: &[String]) -> Option<Listing> {
     match try_list(
         argv,
-        std::env::var_os("RUNNER_TEMP"),
+        &Environment {
+            runner_temp: std::env::var_os("RUNNER_TEMP"),
+            archive_file: std::env::var(ARCHIVE_VARIABLE).ok(),
+        },
         &can_execute_from,
         &free_bytes,
     ) {
@@ -118,17 +123,30 @@ impl Failure {
     }
 }
 
+struct Environment {
+    runner_temp: Option<OsString>,
+    archive_file: Option<String>,
+}
+
 fn try_list(
     argv: &[String],
-    runner_temp: Option<OsString>,
+    environment: &Environment,
     can_execute: &ExecProbe,
     free: &FreeProbe,
 ) -> Result<Listing, Failure> {
     let mut argv =
         list_argv(argv).ok_or_else(|| Failure::new("the command is not a nextest run"))?;
-    let directory = if archive_file(&argv).is_some() {
+    let archive = archive_file(&argv, environment.archive_file.as_deref());
+    let directory = if let Some(archive) = archive {
         Some(
-            extraction_directory(&mut argv, runner_temp, can_execute, free).map_err(|error| {
+            extraction_directory(
+                &mut argv,
+                &archive,
+                environment.runner_temp.clone(),
+                can_execute,
+                free,
+            )
+            .map_err(|error| {
                 Failure::new(format!(
                     "cannot prepare its own extraction directory: {error}"
                 ))
@@ -164,12 +182,13 @@ fn try_list(
 
 fn extraction_directory(
     argv: &mut Vec<String>,
+    archive: &str,
     runner_temp: Option<OsString>,
     can_execute: &ExecProbe,
     free: &FreeProbe,
 ) -> Result<ListDir, String> {
     let directory = ListDir::create(runner_temp, std::process::id(), can_execute)?;
-    admit(argv, directory.path(), free)?;
+    admit(archive, directory.path(), free)?;
     let path = directory
         .path()
         .to_str()
@@ -183,14 +202,11 @@ fn extraction_directory(
     Ok(directory)
 }
 
-fn admit(argv: &[String], directory: &Path, free: &FreeProbe) -> Result<(), String> {
-    let archive = match archive_file(argv) {
-        Some(path) => fs::metadata(path)
-            .map_err(|error| format!("cannot read the archive size of {path}: {error}"))?
-            .len(),
-        None => 0,
-    };
-    let needed = archive.saturating_mul(EXPANSION_HEADROOM);
+fn admit(archive: &str, directory: &Path, free: &FreeProbe) -> Result<(), String> {
+    let size = fs::metadata(archive)
+        .map_err(|error| format!("cannot read the archive size of {archive}: {error}"))?
+        .len();
+    let needed = size.saturating_mul(EXPANSION_HEADROOM);
     let available = free(directory).map_err(|error| {
         format!(
             "cannot measure the free space of {}: {error}",
@@ -206,18 +222,22 @@ fn admit(argv: &[String], directory: &Path, free: &FreeProbe) -> Result<(), Stri
     Ok(())
 }
 
-fn archive_file(argv: &[String]) -> Option<&str> {
+fn archive_file(argv: &[String], environment: Option<&str>) -> Option<String> {
     let end = argv
         .iter()
         .position(|arg| arg == "--")
         .unwrap_or(argv.len());
     let argv = &argv[..end];
-    argv.iter().enumerate().find_map(|(index, arg)| {
-        if arg == "--archive-file" {
-            return argv.get(index + 1).map(String::as_str);
-        }
-        arg.strip_prefix("--archive-file=")
-    })
+    argv.iter()
+        .enumerate()
+        .find_map(|(index, arg)| {
+            if arg == "--archive-file" {
+                return argv.get(index + 1).map(String::as_str);
+            }
+            arg.strip_prefix("--archive-file=")
+        })
+        .or_else(|| environment.filter(|value| !value.is_empty()))
+        .map(str::to_owned)
 }
 
 #[cfg(test)]

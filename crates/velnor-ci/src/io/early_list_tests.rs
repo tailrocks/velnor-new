@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Failure, try_list};
+use super::{Environment, Failure, try_list};
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
@@ -31,6 +31,13 @@ fn archive_run(program: &Path) -> Vec<String> {
     .collect()
 }
 
+fn environment(runner_temp: Option<OsString>) -> Environment {
+    Environment {
+        runner_temp,
+        archive_file: None,
+    }
+}
+
 fn report(result: Result<Listing, Failure>) -> String {
     match result {
         Err(failure) => failure.reason,
@@ -42,7 +49,7 @@ fn report(result: Result<Listing, Failure>) -> String {
 fn a_missing_runner_temp_is_reported_before_anything_is_started() {
     let message = report(try_list(
         &archive_run(Path::new("/nonexistent/cargo-nextest")),
-        None,
+        &environment(None),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
     ));
@@ -59,7 +66,7 @@ fn an_unwritable_runner_temp_is_reported_with_the_directory_it_could_not_create(
         .unwrap_or_else(|e| unreachable!("{e}"));
     let message = report(try_list(
         &archive_run(Path::new("/nonexistent/cargo-nextest")),
-        Some(OsString::from(&directory)),
+        &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
     ));
@@ -89,7 +96,7 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
     ];
     let message = report(try_list(
         &run,
-        Some(OsString::from(&directory)),
+        &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(799),
     ));
@@ -120,7 +127,7 @@ fn an_extraction_that_fits_the_headroom_is_admitted() {
     ];
     let message = report(try_list(
         &run,
-        Some(OsString::from(&directory)),
+        &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(800),
     ));
@@ -133,7 +140,7 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
     let directory = scratch("noexec");
     let message = report(try_list(
         &archive_run(Path::new("/nonexistent/cargo-nextest")),
-        Some(OsString::from(&directory)),
+        &environment(Some(OsString::from(&directory))),
         &|_| Ok(false),
         &|_| Ok(u64::MAX),
     ));
@@ -143,6 +150,28 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
     );
     assert!(
         message.contains(&directory.display().to_string()),
+        "{message}"
+    );
+    fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn an_archive_named_only_by_the_environment_is_admitted_by_its_size() {
+    let directory = scratch("env-archive");
+    let archive = directory.join("a.tar.zst");
+    fs::write(&archive, vec![0u8; 100]).unwrap_or_else(|e| unreachable!("{e}"));
+    let run = ["/nonexistent/cargo-nextest", "nextest", "run"].map(str::to_owned);
+    let message = report(try_list(
+        &run,
+        &Environment {
+            runner_temp: Some(OsString::from(&directory)),
+            archive_file: Some(archive.display().to_string()),
+        },
+        &|_| Ok(true),
+        &|_| Ok(799),
+    ));
+    assert!(
+        message.contains("bytes free, but the extraction may need 800"),
         "{message}"
     );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));

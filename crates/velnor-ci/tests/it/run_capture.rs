@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const TEST_OUTPUT: &str = "tests_run=17\ntests_listed=17\n";
+const TEST_OUTPUT: &str = "tests_run=17\n";
 
 #[test]
 fn completed_observations_survive_a_descendant_holding_the_stream_open() {
