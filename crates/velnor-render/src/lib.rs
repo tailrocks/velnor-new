@@ -24,6 +24,7 @@ mod gate_needs;
 mod helper_integrity;
 mod helper_steps;
 mod install_steps;
+mod job_helper;
 mod key_length;
 mod lint_steps;
 mod mbx_out_dirs;
