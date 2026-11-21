@@ -137,13 +137,13 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
             ".config/nextest.toml",
             "[profile.default]\ndefault-filter = \"not all()\"\n",
             "profile.default.default-filter = \"not all()\"",
-            "limits a plain nextest run to the tests matching \"not all()\"; the nextest step Velnor generates ignores it",
+            "limits the default nextest run to the tests matching \"not all()\"; the generated test step applies it, so only a test group or lane that selects a test runs it",
         ),
         (
             ".config/nextest.toml",
             "[profile.ci]\ndefault-filter = \"none()\"\n",
             "profile.ci.default-filter = \"none()\"",
-            "limits a plain nextest run to the tests matching \"none()\"; the nextest step Velnor generates ignores it",
+            "limits the default nextest run to the tests matching \"none()\"; the generated test step applies it, so only a test group or lane that selects a test runs it",
         ),
     ];
     for (file, text, setting, effect) in cases {
