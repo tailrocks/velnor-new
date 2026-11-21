@@ -52,7 +52,10 @@ fn a_mise_wrapper_and_shim_ahead_on_the_path_never_run_and_the_real_cargo_does()
     assert_eq!(fixture.log("mise.ran"), "", "a mise front held the token");
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
+        format!(
+            "fetch --locked --manifest-path {} --config net.offline=false",
+            fixture.manifest("Cargo.toml")?.display()
+        )
     );
     let environment = fixture.log("cargo.env");
     let search = environment
@@ -150,5 +153,190 @@ fn a_rustup_proxy_resolves_to_the_toolchain_cargo_which_runs_in_place_of_the_pro
         "{search}"
     );
     assert!(environment.contains("RUSTUP_TOOLCHAIN=stable-test"));
+    Ok(())
+}
+
+#[test]
+fn a_cargo_in_a_tool_directory_that_links_outside_every_tool_directory_never_runs() -> TestResult {
+    let fixture = Fixture::new("fetch-linked-cargo", 0)?;
+    let root = fixture.repo.root().to_path_buf();
+    let log = root.join("log");
+    let bin = root.join("trusted/bin");
+    fs::remove_file(bin.join("cargo"))?;
+    script(
+        &root.join("outside/cargo"),
+        &format!("echo ran >> {}/outside.ran", log.display()),
+    )?;
+    symlink(root.join("outside/cargo"), bin.join("cargo"))?;
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[("PATH", &path)]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no real cargo"));
+    assert_eq!(
+        fixture.log("outside.ran"),
+        "",
+        "a linked cargo held the token"
+    );
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_rust_toolchain_file_in_the_workspace_never_changes_which_toolchain_the_fetch_runs()
+-> TestResult {
+    let fixture = Fixture::new("fetch-toolchain-file", 0)?;
+    let root = fixture.repo.root().to_path_buf();
+    let log = root.join("log");
+    let bin = root.join("trusted/bin");
+    fs::remove_file(bin.join("cargo"))?;
+    toolchain_cargo(&root, &log)?;
+    let home = fs::canonicalize(root.join("trusted/rustup"))?;
+    script(
+        &bin.join("rustup"),
+        &format!(
+            "pwd -P >> {log}/rustup.cwd\ncase \"$1\" in which) echo {home}/toolchains/stable-test/bin/cargo ;; *) echo 'stable-test (default)' ;; esac",
+            home = home.display(),
+            log = log.display()
+        ),
+    )?;
+    symlink("rustup", bin.join("cargo"))?;
+    fixture.repo.write_unstaged(
+        "rust-toolchain.toml",
+        "[toolchain]\nchannel = \"nightly-2001-01-01\"\n",
+    );
+    let api = serve(204)?;
+    let output = fixture.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("RUSTUP_HOME", &home.display().to_string())],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        fixture
+            .log("cargo.env")
+            .contains("RUSTUP_TOOLCHAIN=stable-test")
+    );
+    assert!(!fixture.log("cargo.env").contains("nightly"));
+    let environment = fixture.log("cargo.env");
+    let neutral = environment
+        .lines()
+        .find_map(|line| line.strip_prefix("CARGO_HOME="))
+        .ok_or("no CARGO_HOME")?;
+    let checkout = fs::canonicalize(&root)?;
+    for cwd in fixture.log("rustup.cwd").lines() {
+        assert_eq!(Path::new(cwd), Path::new(neutral));
+        assert!(!Path::new(cwd).starts_with(&checkout), "{cwd}");
+    }
+    assert_ne!(fixture.log("rustup.cwd"), "");
+    Ok(())
+}
+
+type Place = fn(&Path, &Path) -> std::io::Result<()>;
+
+fn planted_proxy(
+    fixture: &Fixture,
+    place: Place,
+    which: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let root = fixture.repo.root().to_path_buf();
+    let log = root.join("log");
+    let bin = root.join("trusted/bin");
+    fs::remove_file(bin.join("cargo"))?;
+    toolchain_cargo(&root, &log)?;
+    let home = fs::canonicalize(root.join("trusted/rustup"))?;
+    script(
+        &bin.join("rustup"),
+        &format!(
+            "case \"$0\" in\n*rustup) case \"$1\" in which) echo {home}/{which} ;; *) echo 'stable-test (default)' ;; esac ;;\n*) planted=$(sed -n 's/^path = \"\\(.*\\)\"$/\\1/p' rust-toolchain.toml 2>/dev/null)\n[ -n \"$planted\" ] && exec \"$planted/bin/cargo\" \"$@\"\necho proxy >> {log}/proxy.ran ;;\nesac",
+            home = home.display(),
+            log = log.display()
+        ),
+    )?;
+    place(&bin.join("rustup"), &bin.join("cargo"))?;
+    script(
+        &root.join("evil/bin/cargo"),
+        &format!("env > {}/evil.env", log.display()),
+    )?;
+    fixture.repo.write_unstaged(
+        "rust-toolchain.toml",
+        &format!("[toolchain]\npath = \"{}\"\n", root.join("evil").display()),
+    );
+    Ok(home.display().to_string())
+}
+
+fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::copy(from, to).map(drop)
+}
+
+fn hard_link(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::hard_link(from, to)
+}
+
+#[test]
+fn a_hard_linked_or_copied_rustup_proxy_never_runs_and_the_toolchain_cargo_does() -> TestResult {
+    let places: [(&str, Place); 2] = [("hard-link", hard_link), ("copy", copy)];
+    for (label, place) in places {
+        let fixture = Fixture::new(&format!("fetch-proxy-{label}"), 0)?;
+        let home = planted_proxy(&fixture, place, "toolchains/stable-test/bin/cargo")?;
+        let api = serve(204)?;
+        let output = fixture.run_with(
+            &api,
+            Some(TOKEN),
+            None,
+            &["Cargo.toml"],
+            &[("RUSTUP_HOME", &home)],
+        );
+        assert!(output.status.success(), "{label}: {output:?}");
+        assert_eq!(
+            fixture.log("evil.env"),
+            "",
+            "{label}: the checkout's cargo ran"
+        );
+        assert_eq!(fixture.log("proxy.ran"), "", "{label}: the proxy ran");
+        let environment = fixture.log("cargo.env");
+        assert!(environment.contains(TOKEN), "{label}: {environment}");
+        assert!(
+            environment
+                .lines()
+                .any(|line| line == "RUSTUP_TOOLCHAIN=stable-test"),
+            "{label}: {environment}"
+        );
+        assert!(
+            environment
+                .lines()
+                .any(|line| line == format!("RUSTUP_HOME={home}")),
+            "{label}: {environment}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_cargo_that_is_itself_the_rustup_proxy_runs_nothing_and_still_revokes() -> TestResult
+{
+    let fixture = Fixture::new("fetch-proxy-in-toolchain", 0)?;
+    let home = planted_proxy(&fixture, hard_link, "toolchains/stable-test/bin/cargo")?;
+    let toolchain = fixture
+        .repo
+        .root()
+        .join("trusted/rustup/toolchains/stable-test/bin/cargo");
+    fs::remove_file(&toolchain)?;
+    copy(&fixture.repo.root().join("trusted/bin/rustup"), &toolchain)?;
+    let api = serve(204)?;
+    let output = fixture.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("RUSTUP_HOME", &home)],
+    );
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("evil.env"), "");
+    assert_eq!(fixture.log("proxy.ran"), "");
+    assert_eq!(fixture.log("cargo.env"), "");
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
     Ok(())
 }

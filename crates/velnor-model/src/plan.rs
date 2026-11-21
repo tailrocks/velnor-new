@@ -10,6 +10,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::plan_gate::{Gate, GateNeed, PlanFrom};
 use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
+use crate::setup_phase::SetupOrder;
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -31,7 +32,8 @@ pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
 pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 pub const TOOLS_ANCHOR_DIGEST_BYTES: usize = 64;
-pub const CACHE_KEY_MAX_BYTES: usize = 512;
+pub const CACHE_KEY_MAX_UNITS: usize = 512;
+pub const JSON_UNIT_MAX_BYTES: usize = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -134,9 +136,13 @@ pub struct Step {
     pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
+    pub any_gate: Vec<Gate>,
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,
+    /// Set on the `[[test_setup]]` steps and on the steps after them: they are skipped
+    /// when a setup step before them failed or was cancelled.
+    pub setup_order: SetupOrder,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";
