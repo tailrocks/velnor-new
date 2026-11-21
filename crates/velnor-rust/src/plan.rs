@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
@@ -12,9 +12,7 @@ use velnor_model::{
 
 use crate::audit_job::audit_job;
 use crate::base_cache::{restored, sources_locks};
-use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
-use crate::error::{DetectError, Reason};
 use crate::lane::{
     EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
     used_group_outputs, used_outputs,
@@ -159,25 +157,6 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
         steps,
         ..job(facts, HELPER_JOB)
     }
-}
-pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
-    let mut ids = BTreeSet::new();
-    if let Some(job) = plan.jobs.iter().find(|job| !ids.insert(job.id.as_str())) {
-        return Err(DetectError::JobIdTaken(job.id.to_string()));
-    }
-    let name = &facts.config.required_check;
-    if plan.jobs.iter().any(|job| {
-        job.id.as_str() != "required" && job.name.as_deref().unwrap_or(job.id.as_str()) == name
-    }) {
-        return Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::InvalidValue {
-                key: "required_check",
-                value: name.clone(),
-            },
-        ));
-    }
-    Ok(())
 }
 
 pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -> Vec<Step> {
