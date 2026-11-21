@@ -48,11 +48,61 @@ fn waiting_runs_alone_refuse_the_purge_and_delete_nothing() {
 }
 
 #[test]
-fn action_required_conclusions_of_finished_runs_do_not_refuse_the_purge() {
-    let api = Api::with_runs(mixed(), &[("action_required", 4)]);
-    let report = purge_private(&api, &repo(), true).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(report.contains("deleted 3 entries"), "{report}");
+fn a_retained_action_required_run_does_not_block_the_purge() {
+    let api = Api::with_runs(mixed(), &[("action_required", 1)]);
+    let report = purge_private(&api, &repo(), true);
+    assert!(report.is_ok(), "{report:?}");
     assert_eq!(api.deleted.borrow().len(), 3);
+}
+
+#[test]
+fn enabled_workflows_refuse_the_purge_and_delete_nothing() {
+    let api = Api::with_workflows(mixed(), &["active", "disabled_manually"]);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "1 workflows are enabled; disable every workflow before the purge so no run can start during it"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn disabled_workflows_let_the_purge_proceed() {
+    let api = Api::with_workflows(mixed(), &["disabled_manually", "disabled_inactivity"]);
+    assert!(purge_private(&api, &repo(), true).is_ok());
+}
+
+#[test]
+fn a_dry_run_with_enabled_workflows_still_reports_the_entries() {
+    let api = Api::with_workflows(mixed(), &["active"]);
+    let report = purge_private(&api, &repo(), false);
+    assert!(report.is_ok(), "{report:?}");
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_deleted_workflow_does_not_block_the_purge() {
+    let api = Api::with_workflows(mixed(), &["deleted", "disabled_fork", "disabled_manually"]);
+    let report = purge_private(&api, &repo(), true);
+    assert!(report.is_ok(), "{report:?}");
+    assert_eq!(api.deleted.borrow().len(), 3);
+}
+
+#[test]
+fn an_incomplete_workflow_listing_refuses_the_purge_and_deletes_nothing() {
+    let api = Api::with_incomplete_workflow_listing(mixed(), &["disabled_manually"]);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some("the workflow listing is incomplete; run purge-private again")
+    );
+    assert!(api.deleted.borrow().is_empty());
 }
 
 #[test]
