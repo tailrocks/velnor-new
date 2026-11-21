@@ -17,6 +17,7 @@ const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
 pub(super) struct Resolved {
     pub(super) cargo: PathBuf,
     pub(super) toolchain: OsString,
+    pub(super) rustc: Option<PathBuf>,
 }
 
 pub(super) fn resolve(
@@ -35,6 +36,7 @@ pub(super) fn resolve(
             toolchain: chosen()
                 .or_else(|| default_toolchain(rustup_home))
                 .unwrap_or_else(unpinned),
+            rustc: None,
         });
     };
     let rustup_home = std::fs::canonicalize(rustup_home).map_err(|e| {
@@ -96,10 +98,26 @@ pub(super) fn resolve(
             real.display()
         )));
     }
+    let rustc = fixed.map(|fixed| sealed_rustc(&real, fixed)).transpose()?;
     Ok(Resolved {
         cargo: real,
         toolchain: name.into(),
+        rustc,
     })
+}
+
+fn sealed_rustc(cargo: &Path, fixed: &Located) -> Result<PathBuf, CiError> {
+    cargo
+        .with_file_name("rustc")
+        .canonicalize()
+        .ok()
+        .filter(|rustc| rustc.is_file() && fixed.seals(rustc))
+        .ok_or_else(|| {
+            CiError::new(format!(
+                "no sealed rustc beside {}; refusing to run cargo with the token",
+                cargo.display()
+            ))
+        })
 }
 
 pub(super) fn beside(

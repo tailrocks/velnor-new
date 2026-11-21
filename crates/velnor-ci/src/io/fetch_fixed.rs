@@ -280,9 +280,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_toolchain_cargo_that_rustup_names_outside_the_seal_never_receives_the_token() {
-        let (root, fixed) = sealed_tree("returned");
+    fn named_toolchain(name: &str) -> (PathBuf, Fixed, PathBuf) {
+        let (root, fixed) = sealed_tree(name);
         let rustup = fixed.base.join("cargo/bin/rustup");
         fs::write(
             &rustup,
@@ -292,31 +291,56 @@ mod tests {
         .unwrap_or_else(|e| unreachable!("{e}"));
         let bin = fixed.base.join("rustup/toolchains/t/bin");
         script(&bin.join("cargo"));
+        script(&bin.join("rustc"));
         fs::write(bin.join("cargo"), "#!/bin/sh\necho real\n")
             .unwrap_or_else(|e| unreachable!("{e}"));
+        (root, fixed, bin)
+    }
+
+    fn resolve_named(
+        root: &Path,
+        fixed: &Fixed,
+    ) -> Result<super::super::fetch_toolchain::Resolved, CiError> {
         let neutral = root.join("neutral");
         fs::create_dir_all(&neutral).unwrap_or_else(|e| unreachable!("{e}"));
         let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
         let home = root.join("home");
         let trusted = Trusted::new(&home, &found.roots());
-        let resolve = || {
-            super::super::fetch_toolchain::resolve(
-                &found.cargo,
-                &home,
-                &fixed.base.join("rustup"),
-                &neutral,
-                &trusted,
-                Some(&found),
-            )
-        };
-        let sealed = resolve().unwrap_or_else(|e| unreachable!("{e}"));
+        super::super::fetch_toolchain::resolve(
+            &found.cargo,
+            &home,
+            &fixed.base.join("rustup"),
+            &neutral,
+            &trusted,
+            Some(&found),
+        )
+    }
+
+    #[test]
+    fn a_toolchain_cargo_that_rustup_names_outside_the_seal_never_receives_the_token() {
+        let (root, fixed, bin) = named_toolchain("returned");
+        let sealed = resolve_named(&root, &fixed).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(sealed.cargo, bin.join("cargo"));
         fs::set_permissions(&bin, fs::Permissions::from_mode(0o775))
             .unwrap_or_else(|e| unreachable!("{e}"));
-        let refused = resolve().err().map(|e| e.to_string());
+        let refused = resolve_named(&root, &fixed).err().map(|e| e.to_string());
         assert!(
             refused.is_some_and(|e| e.contains("outside the sealed toolchain")),
             "group-writable bin"
+        );
+    }
+
+    #[test]
+    fn the_token_fetch_runs_the_sealed_rustc_by_absolute_path_and_refuses_a_writable_one() {
+        let (root, fixed, bin) = named_toolchain("rustc");
+        let sealed = resolve_named(&root, &fixed).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(sealed.rustc, Some(bin.join("rustc")));
+        fs::set_permissions(bin.join("rustc"), fs::Permissions::from_mode(0o666))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let refused = resolve_named(&root, &fixed).err().map(|e| e.to_string());
+        assert!(
+            refused.is_some_and(|e| e.contains("rustc") && e.contains("sealed")),
+            "writable rustc"
         );
     }
 }

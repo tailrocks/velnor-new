@@ -123,6 +123,7 @@ fn fetch_with(
         .filter(|_| token.is_some())
         .map(super::fetch_home::Scratch::path);
     let mut toolchain = None;
+    let mut rustc = None;
     if let Some(neutral) = neutral {
         let rustup_home = trusted.home_variable(
             inherited.rustup_home.as_ref(),
@@ -139,9 +140,13 @@ fn fetch_with(
         )?;
         cargo = resolved.cargo;
         toolchain = Some(resolved.toolchain);
+        rustc = resolved.rustc;
     }
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
     environment.extend(toolchain.map(|name| ("RUSTUP_TOOLCHAIN".into(), name)));
+    for name in ["RUSTC", "CARGO_BUILD_RUSTC"] {
+        environment.extend(rustc.iter().map(|rustc| (name.into(), rustc.into())));
+    }
     super::fetch_run::run_fetches(
         &cargo,
         &environment,
