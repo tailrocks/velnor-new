@@ -12,10 +12,10 @@ use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{view, workflow};
 use crate::private_sources::{SECTION, private_repo};
 
-const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
+pub(crate) const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
 const ID: &str = "lint-generated-check";
 const RUN_FROM_SOURCE: &str = "eval \"$VELNOR_GEN_CHECK\"";
-const FIRST: &str = "0.1.112";
+pub(crate) const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
@@ -57,11 +57,11 @@ fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn std::error::E
     packages(config, version, &[("Cargo.toml", "velnor-gen")])
 }
 
-fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::Error>> {
     workflow(&locked(config, version)?)
 }
 
-fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
+pub(crate) fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(text)?["jobs"][ID].clone())
 }
 
@@ -73,7 +73,7 @@ fn run_contains(step: &Value, text: &str) -> bool {
     step["run"].as_str().is_some_and(|run| run.contains(text))
 }
 
-fn check_script(job: &Value) -> String {
+pub(crate) fn check_script(job: &Value) -> String {
     job["steps"]
         .as_array()
         .and_then(|steps| steps.last())
@@ -82,7 +82,7 @@ fn check_script(job: &Value) -> String {
         .to_owned()
 }
 
-fn names(job: &Value) -> Vec<String> {
+pub(crate) fn names(job: &Value) -> Vec<String> {
     job["steps"]
         .as_array()
         .into_iter()
