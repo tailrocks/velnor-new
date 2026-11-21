@@ -5,10 +5,11 @@ use std::error::Error;
 
 use velnor_model::Platform;
 use velnor_rust::{
-    LockError, ReleaseFiles, Remedy, RunningGenerator, check_generator_entry, check_lock_entries,
-    pin_lock, verify_release,
+    DetectError, LOCK_PATH, LockError, Reason, ReleaseFiles, Remedy, RunningGenerator,
+    check_generator_entry, check_lock_entries, detect, pin_lock, verify_release,
 };
 
+use crate::facts::{lib, repo};
 use crate::lock::COMMIT_FILE;
 use crate::lock_archive::{
     ARCHIVE_SUMS, BINARY_SUMS as CI_BINARY_SUMS, GENERATOR_BINARY_SUMS, generator_sums,
@@ -20,6 +21,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const VERSION: &str = "0.1.111";
 const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
+const CI_ARCHIVE_X64: &str = "b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502";
+const CI_BINARY_X64: &str = "9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f";
 const GEN_ARCHIVE_X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const GEN_BINARY_X64: &str = "24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df";
 const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543";
@@ -108,6 +111,61 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
         error.remedy(),
         Some(&Remedy::Repin(VERSION.to_owned())),
         "{error}"
+    );
+    Ok(())
+}
+
+fn lock_refusal(text: &str) -> Result<String, Box<dyn Error>> {
+    let view = repo(
+        vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])],
+        &[(LOCK_PATH.as_str(), text)],
+    )?;
+    match detect(&view) {
+        Err(DetectError::Invalid {
+            path,
+            reason: Reason::HelperLock(error),
+        }) if path == LOCK_PATH => Ok(error.to_string()),
+        Err(error) => Err(format!("refused at another file or reason: {error:?}").into()),
+        Ok(_) => Err("accepted".into()),
+    }
+}
+
+#[test]
+fn detect_names_a_malformed_binary_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(GEN_BINARY_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-gen-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_generator_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(GEN_ARCHIVE_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-gen] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_ARCHIVE_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_binary_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_BINARY_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
     );
     Ok(())
 }

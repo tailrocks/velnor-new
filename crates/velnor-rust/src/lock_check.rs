@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{HelperVersion, Platform};
 
 use crate::lock::{
-    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, Remedy, check_digests, pin_lock,
-    release_commit, release_version,
+    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, Remedy, check_digests, named,
+    pin_lock, release_commit, release_version,
 };
 
 /// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
@@ -70,10 +70,6 @@ pub fn lock_version(bytes: &[u8]) -> Result<HelperVersion, LockError> {
 fn parse(bytes: &[u8]) -> Result<Lock, LockError> {
     let text = std::str::from_utf8(bytes).map_err(|error| LockError::new(error.to_string()))?;
     toml::from_str(text).map_err(|error| LockError::new(error.to_string()))
-}
-
-fn named(section: &str, error: &LockError) -> LockError {
-    LockError::new(format!("[{section}] {error}"))
 }
 
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {

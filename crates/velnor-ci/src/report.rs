@@ -18,6 +18,8 @@ pub struct Cache {
     pub save_step: String,
     #[serde(default)]
     pub requested_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_key: Option<String>,
     pub matched_key: Option<String>,
     pub hit: Hit,
     pub bytes: Option<u64>,
@@ -144,12 +146,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .caches
             .iter()
             .filter(|cache| cache.save == SaveOutcome::Failed)
-            .map(|cache| {
-                format!(
-                    "{} cache save failed: {}",
-                    cache.family, cache.requested_key
-                )
-            }),
+            .map(|cache| format!("{} cache save failed: {}", cache.family, save_key(cache))),
     );
     violations.extend(crate::waste_evidence::waste(metrics));
     violations
@@ -347,6 +344,14 @@ impl LaneMetrics {
     }
 }
 
+fn save_key(cache: &Cache) -> &str {
+    cache
+        .saved_key
+        .as_deref()
+        .filter(|key| !key.is_empty())
+        .unwrap_or(&cache.requested_key)
+}
+
 fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     if let Some(cache) = lane
         .caches
@@ -355,7 +360,8 @@ fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     {
         return Err(CiError::new(format!(
             "cannot verify cache save for lane {}: {}",
-            lane.lane, cache.requested_key
+            lane.lane,
+            save_key(cache)
         )));
     }
     if !lane.verification_errors.is_empty() {
