@@ -82,6 +82,11 @@ fn require_generator_digests(
     if !wanted {
         return Ok(());
     }
+    if is_macos_x64(facts) {
+        return Err(GenerateError::GeneratorMacosX64 {
+            runner: facts.config.runner.to_string(),
+        });
+    }
     let Some(digests) = release.generator_digests() else {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     };
@@ -97,6 +102,11 @@ fn require_generator_digests(
 fn is_macos(facts: &RepoFacts) -> bool {
     MisePlatform::runner(facts.config.runner.as_str())
         .is_some_and(|platform| platform.matches("macos"))
+}
+
+fn is_macos_x64(facts: &RepoFacts) -> bool {
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos/x64"))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {

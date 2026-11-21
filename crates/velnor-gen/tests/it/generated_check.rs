@@ -240,3 +240,18 @@ fn a_macos_runner_needs_a_macos_velnor_gen_digest_before_the_check_can_install_i
     expected_files(&on_macos("", &lock)?)?;
     Ok(())
 }
+
+#[test]
+fn a_macos_x64_runner_is_refused_because_no_x64_velnor_gen_archive_is_pinned() -> TestResult {
+    let config = format!("runner = 'self-macos-intel'\nhosted = false\n\n{CHECK}");
+    let mut view = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+    view.tracked_paths.insert(LOCK_PATH);
+    view.files
+        .insert(LOCK_PATH, archive_lock_at(CHECK_HELPER)?.into_bytes());
+    let result = expected_files(&view);
+    assert!(
+        matches!(result, Err(GenerateError::GeneratorMacosX64 { .. })),
+        "{result:?}"
+    );
+    Ok(())
+}
