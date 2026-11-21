@@ -472,7 +472,7 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 
 ## Files and packages
 
-- `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob, and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
+- `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob (only `*` and `**` are supported; a `?`, `[` or `]` is refused), and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
 
   ```toml
   [[inputs]]
