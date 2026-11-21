@@ -344,7 +344,10 @@ fn the_plan_job_of_helper_0_1_110_emits_the_anchor_digest_and_key_outputs() -> T
             .as_object()
             .ok_or("plan outputs missing")?;
         assert_eq!(outputs["tools_anchor"], READ_ANCHOR, "{config:?}");
-        assert_eq!(outputs["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT, "{config:?}");
+        assert_eq!(
+            outputs["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
+            "{config:?}"
+        );
     }
     Ok(())
 }
