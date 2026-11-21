@@ -1,11 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-// Tests of the walk when a directory is replaced around the moment it is opened.
-
 use super::*;
-
-/// Scans `root/{kept.txt, sub/}`, running `before_open` and `after_open` for `sub` only.
 fn scan_racing(
     name: &str,
     before_open: &dyn Fn(&Path) -> io::Result<()>,

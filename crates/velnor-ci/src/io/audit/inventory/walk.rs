@@ -135,15 +135,13 @@ fn walk(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
-                let (parent, name) = handle::locate(&origin, &directory)?;
-                match handle::current(&parent, &name, &directory)? {
+                match handle::current(&origin, &directory)? {
                     Current::Directory(_) => return Err(changed(error.kind(), &directory)),
                     current => settle(
                         &mut entries,
                         &mut pending,
                         &directory,
-                        &parent,
-                        &name,
+                        &origin,
                         current,
                         (root, targets),
                     )?,
@@ -163,14 +161,17 @@ fn walk(
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
-            let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
+            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path)? else {
                 continue;
             };
-            pending.extend(queue(&kind, &path, &listing, &name, (root, targets))?);
+            let child = Origin::Child {
+                parent: Opened::clone(&listing),
+                name: name.clone(),
+            };
+            pending.extend(queue(&kind, &path, child, (root, targets))?);
             children.insert(PathBuf::from(name), kind);
         }
-        let (parent, name) = handle::locate(&origin, &directory)?;
-        match handle::current(&parent, &name, &directory)? {
+        match handle::current(&origin, &directory)? {
             Current::Directory(now) if now == identity => {
                 entries.insert(directory, children);
             }
@@ -192,8 +193,7 @@ fn walk(
                     &mut entries,
                     &mut pending,
                     &directory,
-                    &parent,
-                    &name,
+                    &origin,
                     current,
                     (root, targets),
                 )?;
@@ -216,8 +216,7 @@ fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
 fn queue(
     kind: &Kind,
     path: &Path,
-    parent: &Opened,
-    name: &OsStr,
+    origin: Origin,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<Option<Pending>> {
     if excluded_entry(path, kind, root, targets) {
@@ -226,10 +225,7 @@ fn queue(
     Ok(match kind {
         Kind::Directory => Some(Pending {
             path: path.to_path_buf(),
-            origin: Origin::Child {
-                parent: Opened::clone(parent),
-                name: name.to_os_string(),
-            },
+            origin,
         }),
         Kind::Link {
             resolved: Some(resolved),
@@ -242,31 +238,28 @@ fn queue(
     })
 }
 
-/// Records what a directory's name holds now, in place of the listing that was
-/// queued or dropped for it: nothing, or the non-directory that replaced it.
 fn settle(
     entries: &mut Entries,
     pending: &mut Vec<Pending>,
     directory: &Path,
-    parent: &Opened,
-    name: &OsStr,
+    origin: &Origin,
     current: Current,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<()> {
     let children = directory
         .parent()
         .and_then(|container| entries.get_mut(container));
-    let key = Path::new(name);
+    let key = directory.file_name().map(Path::new);
     match current {
         Current::Gone => {
-            if let Some(children) = children {
+            if let (Some(children), Some(key)) = (children, key) {
                 children.remove(key);
             }
         }
         Current::Directory(_) => return Err(changed(io::ErrorKind::Other, directory)),
         Current::Other(kind) => {
-            pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
-            if let Some(children) = children {
+            pending.extend(queue(&kind, directory, origin.clone(), (root, targets))?);
+            if let (Some(children), Some(key)) = (children, key) {
                 children.insert(key.to_path_buf(), kind);
             }
         }

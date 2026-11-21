@@ -116,12 +116,22 @@ fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
             "[{section}] is not allowed: release {} does not read it",
             lock.version
         ))),
-        (true, _, None) => Ok(None),
+        (true, false, None) => Ok(None),
+        (true, true, None) => Err(LockError::new(format!(
+            "[{section}] is missing: release {} lists the velnor-gen binary digests, so the lock must list them; {}",
+            lock.version,
+            repin_hint()
+        ))),
         (true, true, Some(binary)) => {
             check_digests(binary).map_err(|error| named(&section, &error))?;
             Ok(Some((section, binary)))
         }
     }
+}
+
+fn repin_hint() -> String {
+    let (major, minor, patch) = GENERATOR_BINARY_RELEASE;
+    format!("re-pin with `velnor-gen pin-helper {major}.{minor}.{patch}` or later")
 }
 
 fn check_format(lock: &Lock) -> Result<bool, LockError> {
@@ -166,8 +176,16 @@ pub fn verify_release(
         release.ci_binary.as_ref(),
     )?;
     compare_section(GENERATOR, Some(&lock.generator), Some(&release.generator))?;
+    let section = format!("{GENERATOR}-binary");
+    if lock.generator_binary.is_none() && release.generator_binary.is_some() {
+        return Err(LockError::new(format!(
+            "[{section}] is missing: release {} lists the velnor-gen binary digests; {}",
+            lock.version,
+            repin_hint()
+        )));
+    }
     compare_section(
-        &format!("{GENERATOR}-binary"),
+        &section,
         lock.generator_binary.as_ref(),
         release.generator_binary.as_ref(),
     )
