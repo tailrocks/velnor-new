@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, WORKFLOWS_CONFIG_PATH};
 
 use crate::facts::{TestResult, lock_pinned_tools};
 use crate::lint_lane::{LINT as LINT_LANE, MISE};
@@ -306,5 +306,55 @@ fn a_needs_output_of_an_outputless_local_reusable_workflow_is_dangling() -> Test
     let caller =
         crate::yaml_tree::document(&files[&RepoPath::new(".github/workflows/rust-ci.yml")?])?;
     assert_eq!(dangling_refs(&caller, &callees).1.len(), 1);
+    Ok(())
+}
+
+const REUSABLE: &str = r#"
+[[workflow]]
+file = "build-assets"
+name = "Build assets"
+
+[[workflow.job]]
+id = "build"
+permissions = { contents = "read" }
+outputs = { artifact_id = "steps.upload.outputs.artifact-id" }
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+id = "build"
+name = "Build"
+run = "cargo build --release --locked"
+
+[[workflow.job.step]]
+id = "upload"
+uses = "upload-artifact"
+with = { name = "assets", path = "target/release/app" }
+"#;
+
+#[test]
+fn every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job() -> TestResult {
+    let pin = gate_patches()?
+        .into_iter()
+        .next_back()
+        .ok_or("no helper gate patch")?;
+    let mut repo = view(ROOTS, None)?;
+    repo.files
+        .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
+    pinned(&mut repo, pin)?;
+    let files = generated(&mut repo)?;
+    let file = RepoPath::new(".github/workflows/build-assets.yml")?;
+    let text = files
+        .get(&file)
+        .ok_or("build-assets.yml was not rendered")?;
+    let mut scan = Scan::default();
+    scan_workflow(
+        &crate::yaml_tree::document(text)?,
+        &callees_of(&files)?,
+        &mut scan,
+    );
+    assert_ne!(scan.refs, 0, "build-assets.yml checked no steps reference");
+    assert!(scan.dangling.is_empty(), "{:#?}", scan.dangling);
     Ok(())
 }
