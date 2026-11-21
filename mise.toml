@@ -26,9 +26,6 @@ cargo-binstall = "1.27.0"
 # and hk's check-only jactionlint step runs the same binaries locally.
 jactionlint = "2.6.0"
 shellcheck = "0.11.0"
-# Verifies the mise release manifest signature (scripts/mise-binary-digests.sh), as mise's install docs do.
-# Release 0.12 ships no Intel-mac build (its macOS zip is arm64-only), so `os` keeps a global
-# `mise install` working there; mise.lock holds exactly these platforms.
 minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 # Repository policy (.alint.yml): the generated Alint job installs this pin.
 "github:asamarts/alint" = "0.22.1"
@@ -125,7 +122,6 @@ cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
 printf "maintenance-phase: mise-binary-digests\n"
-# minisign is the mise.toml pin; `mise run` puts it on PATH. A missing tool fails here, never skips.
 command -v minisign >/dev/null || { echo "minisign is not installed: run mise install" >&2; exit 1; }
 VELNOR_REQUIRE_MINISIGN=1 python3 scripts/test_mise_binary_digests.py
 printf "maintenance-phase: tag-ruleset-drift\n"

@@ -7,21 +7,6 @@
 # The digests come from the official `SHASUMS256.txt` of the mise release
 # (the raw `mise-v<version>-<os>-<arch>` executables), never from a build.
 #
-# The manifest is trusted only after its minisign signature (`SHASUMS256.txt.minisig`,
-# published next to it in every release) verifies against the pinned mise release key
-# `scripts/mise-minisign.pub`; a bad, missing or foreign signature stops the script
-# before any digest is read (fail closed, issue #2331). The key is a verbatim copy of
-# https://github.com/jdx/mise/blob/main/minisign.pub, the key id 64113EDF160FDEC2
-# that mise's install docs (https://mise.jdx.dev/installing-mise.html, "GitHub
-# releases") pass to `minisign -P`. To rotate it, copy the new minisign.pub from the
-# jdx/mise repository over scripts/mise-minisign.pub after checking it against
-# that documentation page, then run `--check`. The check is the real `minisign`
-# tool, `minisign -V -m SHASUMS256.txt -x SHASUMS256.txt.minisig -p
-# scripts/mise-minisign.pub`, the way mise's own docs verify. The tool is the one
-# mise.toml pins, resolved with `mise which minisign`; PATH is only the fallback when
-# mise cannot resolve it. A missing minisign stops the script like a failed check
-# does. There is no bypass flag.
-#
 # Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE [--sig FILE]]
 #   VERSION  the mise release; defaults to MISE_VERSION in crates/velnor-render/src/steps.rs
 #   (none)   print the table row for VERSION
@@ -102,8 +87,6 @@ def minisign():
 
 
 def verify(raw, signature):
-    # The bytes are read once; minisign checks a private copy of exactly those
-    # bytes, so what is verified is what is parsed below.
     tool = minisign()
     if tool is None:
         raise SignatureError("minisign is not installed (mise install minisign)")
@@ -122,7 +105,6 @@ def verify(raw, signature):
             raise SignatureError(f"minisign exited {result.returncode}: {result.stderr.strip()}")
 
 
-# Fail closed: the digests below are read only from bytes whose signature verified.
 try:
     if sums:
         raw, signature = read(sums), read(sig or sums + ".minisig")

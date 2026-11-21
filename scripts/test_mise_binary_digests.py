@@ -115,8 +115,6 @@ class SignatureGate(unittest.TestCase):
             capture_output=True,
             timeout=60,
         )
-        # The foreign signature is genuine for its own key: minisign accepts it with that key,
-        # and only the pinned key makes the script refuse it.
         own = subprocess.run(
             [MINISIGN, "-V", "-m", str(self.sums), "-x", str(self.sig), "-p", str(pub)],
             capture_output=True,
