@@ -103,13 +103,12 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     Ok(())
 }
 
-const TEN_SECOND_TESTS: [&str; 14] = [
+const TEN_SECOND_TESTS: [&str; 13] = [
     "audit::build_directory::a_build_command_naming_a_build_directory_is_refused",
     "audit::groups::a_real_grouped_build_passes_the_audit",
     "audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root",
     "audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages",
     "plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused",
-    "plan_diff::every_recorded_case_matches_the_legacy_op",
     "plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget",
     "io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root",
     "plan_main_groups::a_merge_group_runs_a_group_that_only_names_events",
@@ -154,6 +153,23 @@ fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_
                 "profile {profile}: {name} does not get the scoped 10 s tier"
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_legacy_op_replay_gets_the_sixty_second_tier_in_both_profiles() -> TestResult {
+    for profile in PROFILES {
+        let entries = overrides(profile)?;
+        assert_eq!(
+            first_timeout_period(
+                &entries,
+                "plan_diff::every_recorded_case_matches_the_legacy_op"
+            )
+            .as_deref(),
+            Some("60s"),
+            "profile {profile}: the replay of every recorded case runs past 10 s on a loaded host"
+        );
     }
     Ok(())
 }
