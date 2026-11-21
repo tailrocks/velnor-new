@@ -34,6 +34,32 @@ fn report_observes_a_failed_save_step_of_a_cache_descriptor() -> ResultTest {
     Ok(())
 }
 
+#[test]
+fn report_without_a_save_step_writes_the_schema_that_names_the_field_optional() -> ResultTest {
+    let repo = Repo::new("report-no-save-step");
+    let plan = json!([{"family":"tools","root":null,"restore_step":"restore"}]);
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("report")
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env("GITHUB_JOB", "policy")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+        .env("VELNOR_REPORT_CACHES", plan.to_string())
+        .env(
+            "VELNOR_REPORT_STEPS",
+            r#"{"restore":{"outcome":"success","outputs":{}}}"#,
+        )
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("CARGO_TARGET_DIR")
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    let metrics = metrics(&repo);
+    assert_eq!(metrics.schema, 2);
+    assert!(metrics.caches[0].save_step.is_none());
+    Ok(())
+}
+
 fn metrics(repo: &Repo) -> LaneMetrics {
     serde_json::from_slice(
         &fs::read(repo.root().join("ci-metrics.json"))

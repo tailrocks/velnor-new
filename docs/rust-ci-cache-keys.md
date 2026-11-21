@@ -177,7 +177,7 @@ five more avoidable costs, each only when the evidence shows it was avoidable:
 
 `rust-trim` continues to verify cache uploads and prune old entries without a
 checkout or repository code. The `Cache` job needs no additional permission to
-download artifacts from its own run. The schema-1 JSON separates cache
+download artifacts from its own run. The schema-2 JSON separates cache
 outcomes, captured Cargo invocations, display fields, verification errors, and
 optional diagnostics.
 
