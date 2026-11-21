@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
@@ -9,6 +10,8 @@ use std::path::{Component, Path, PathBuf};
 use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{Mode, SFlag, fstatat};
+
+use super::walk::HELD_HANDLES;
 
 const MAX_LINKS: usize = 40;
 
@@ -50,6 +53,40 @@ pub(super) fn open_path(path: &Path, listing: bool) -> io::Result<OwnedFd> {
     Ok(current)
 }
 
+struct Trail {
+    parents: VecDeque<OwnedFd>,
+    bound: usize,
+}
+
+impl Trail {
+    fn new(bound: usize) -> Self {
+        Self {
+            parents: VecDeque::new(),
+            bound,
+        }
+    }
+
+    fn push(&mut self, parent: OwnedFd) {
+        self.parents.push_back(parent);
+        while self.parents.len() > self.bound {
+            self.parents.pop_front();
+        }
+    }
+
+    fn pop(&mut self) -> Option<OwnedFd> {
+        self.parents.pop_back()
+    }
+
+    fn clear(&mut self) {
+        self.parents.clear();
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.parents.len()
+    }
+}
+
 enum Step {
     Root,
     Parent,
@@ -75,8 +112,17 @@ pub(super) fn resolve(
     base: &Path,
     target: &Path,
 ) -> io::Result<PathBuf> {
+    resolve_within(directory, base, target, HELD_HANDLES)
+}
+
+fn resolve_within(
+    directory: BorrowedFd<'_>,
+    base: &Path,
+    target: &Path,
+    bound: usize,
+) -> io::Result<PathBuf> {
     let mut current = directory.try_clone_to_owned()?;
-    let mut trail: Vec<OwnedFd> = Vec::new();
+    let mut trail = Trail::new(bound);
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
     let mut links = 0;
@@ -123,4 +169,64 @@ pub(super) fn resolve(
         }
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    use super::*;
+
+    fn base(name: &str) -> PathBuf {
+        let base = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-resolve-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+        base
+    }
+
+    fn resolve_from(directory: &Path, target: &Path, bound: usize) -> io::Result<PathBuf> {
+        let held = open_path(directory, false)?;
+        resolve_within(held.as_fd(), directory, target, bound)
+    }
+
+    #[test]
+    fn a_trail_never_holds_more_parents_than_its_bound() {
+        let mut trail = Trail::new(3);
+        for _ in 0..10 {
+            trail.push(open_path(Path::new("/"), false).unwrap_or_else(|e| unreachable!("{e}")));
+        }
+        assert_eq!(trail.len(), 3);
+        trail.clear();
+        assert_eq!(trail.len(), 0);
+    }
+
+    #[test]
+    fn a_target_deeper_than_the_trail_bound_resolves_like_canonicalize() {
+        let base = base("deep");
+        let mut deep = base.join("start");
+        for _ in 0..100 {
+            deep.push("a");
+        }
+        fs::create_dir_all(&deep).unwrap_or_else(|e| unreachable!("{e}"));
+        symlink("../../..", deep.join("hop")).unwrap_or_else(|e| unreachable!("{e}"));
+        let down = "a/".repeat(100);
+        let up = "../".repeat(80);
+        let targets = [
+            format!("{down}{up}a"),
+            format!("{down}{up}../../a/hop/a"),
+            format!("{down}hop/{up}"),
+        ];
+        let start = base.join("start");
+        for target in &targets {
+            let expected = fs::canonicalize(start.join(target)).ok();
+            for bound in [0, 1, 7, HELD_HANDLES, usize::MAX] {
+                let resolved = resolve_from(&start, Path::new(target), bound).ok();
+                assert_eq!(resolved, expected, "bound {bound}, target {target}");
+            }
+        }
+        fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    }
 }

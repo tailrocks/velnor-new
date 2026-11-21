@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::{OsStr, OsString};
+use std::fs::File;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::SystemTime;
 
 use nix::dir::Dir;
 use nix::fcntl::{AtFlags, readlinkat};
@@ -19,7 +21,12 @@ use super::resolve;
 use super::walk::{changed, unresolved_link};
 
 pub(super) type Opened = Rc<Dir>;
-pub(super) type Identity = (libc::dev_t, libc::ino_t);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Identity {
+    pub(super) inode: (libc::dev_t, libc::ino_t),
+    pub(super) born: Option<SystemTime>,
+}
 
 #[derive(Clone)]
 pub(super) enum Origin {
@@ -37,7 +44,7 @@ pub(super) enum Origin {
 }
 pub(super) enum Current {
     Gone,
-    Directory(Identity),
+    Directory((libc::dev_t, libc::ino_t)),
     Other(Kind),
 }
 
@@ -60,7 +67,7 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
             parent,
             identity,
             name,
-        } => child(reopen(parent, *identity)?.as_fd(), name)?,
+        } => child(reopen(parent, identity)?.as_fd(), name)?,
     };
     Dir::from_fd(fd).map_err(failure)
 }
@@ -70,7 +77,7 @@ fn child(parent: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
     openat(parent, name, flags, Mode::empty()).map_err(failure)
 }
 
-fn reopen(parent: &Path, expected: Identity) -> io::Result<OwnedFd> {
+fn reopen(parent: &Path, expected: &Identity) -> io::Result<OwnedFd> {
     let held = resolve::open_path(parent, false).map_err(|error| {
         if replaced(&error) {
             changed(io::ErrorKind::Other, parent)
@@ -78,7 +85,7 @@ fn reopen(parent: &Path, expected: Identity) -> io::Result<OwnedFd> {
             error
         }
     })?;
-    if identity(&held)? == expected {
+    if identity(&held)? == *expected {
         Ok(held)
     } else {
         Err(changed(io::ErrorKind::Other, parent))
@@ -86,8 +93,12 @@ fn reopen(parent: &Path, expected: Identity) -> io::Result<OwnedFd> {
 }
 
 pub(super) fn identity(directory: impl AsFd) -> io::Result<Identity> {
-    let stat = fstat(directory).map_err(failure)?;
-    Ok((stat.st_dev, stat.st_ino))
+    let stat = fstat(&directory).map_err(failure)?;
+    let metadata = File::from(directory.as_fd().try_clone_to_owned()?).metadata()?;
+    Ok(Identity {
+        inode: (stat.st_dev, stat.st_ino),
+        born: metadata.created().ok(),
+    })
 }
 pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
     let held: OwnedFd;
@@ -98,7 +109,7 @@ pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
             identity,
             name,
         } => {
-            held = reopen(parent, *identity)?;
+            held = reopen(parent, identity)?;
             (held.as_fd(), name.as_os_str())
         }
         Origin::Path => {

@@ -65,7 +65,7 @@ pub(in crate::io::audit) fn scan(
     scan_with(root, targets, budget, &Probe::default())
 }
 
-const HELD_HANDLES: usize = 64;
+pub(super) const HELD_HANDLES: usize = 64;
 
 pub(super) struct Probe<'a> {
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
@@ -203,7 +203,7 @@ pub(super) fn scan_with(
         }
         held.track(&listing, &mut pending);
         match handle::current(&origin, &directory)? {
-            Current::Directory(now) if now == identity => {
+            Current::Directory(now) if now == identity.inode => {
                 entries.insert(directory, children);
             }
             Current::Directory(_) => {

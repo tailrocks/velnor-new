@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::handle::{self, Origin};
 use super::*;
 
 fn deep_tree(root: &Path, depth: usize, siblings: usize) {
@@ -112,5 +113,32 @@ fn a_parent_swapped_after_its_handle_was_released_fails_the_scan() {
     assert!(
         matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
         "a released parent that was swapped must fail the scan: {entries:?}"
+    );
+}
+
+#[test]
+fn a_replaced_parent_that_reuses_the_inode_is_refused() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-recycled-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let parent = root.join("d");
+    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(&parent).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    let replacement = handle::open(&Origin::Path, &parent).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut recycled = handle::identity(&replacement).unwrap_or_else(|e| unreachable!("{e}"));
+    recycled.born = Some(std::time::UNIX_EPOCH);
+    let origin = Origin::Reopen {
+        parent: parent.clone(),
+        identity: recycled,
+        name: "sub".into(),
+    };
+    let opened = handle::open(&origin, &parent.join("sub"));
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(&opened, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a replacement with the recorded inode but another birth must be refused: {:?}",
+        opened.as_ref().err()
     );
 }
