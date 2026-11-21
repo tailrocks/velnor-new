@@ -141,9 +141,8 @@ fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdic
         verdict,
         Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
     ) {
-        tools_discard::mark(&context.runner_temp).map_err(|error| {
-            CiError::new(format!("{error}; the poisoned entry would be kept"))
-        })?;
+        tools_discard::mark(&context.runner_temp)
+            .map_err(|error| CiError::new(format!("{error}; the poisoned entry would be kept")))?;
     }
     Ok(verdict)
 }
