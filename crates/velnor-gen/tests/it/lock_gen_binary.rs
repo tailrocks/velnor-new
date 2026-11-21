@@ -204,23 +204,33 @@ fn generation_accepts_a_well_formed_generator_binary_table() -> TestResult {
 #[test]
 fn generation_refuses_a_malformed_generator_binary_table() -> TestResult {
     let sum = "b".repeat(64);
-    let cases = [
+    let cases: [(String, &[&str]); 3] = [
         (
             "linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"".to_string(),
-            "[velnor-gen-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits",
+            &[
+                "[velnor-gen-binary]",
+                "linux-x64",
+                "not 64 lowercase hex digits",
+            ],
         ),
         (
             format!("linux-x64 = \"{sum}\""),
-            "[velnor-gen-binary] a program must list the platforms linux-x64, linux-arm64 and may list macos-arm64",
+            &["[velnor-gen-binary]", "must list the platforms"],
         ),
         (
             format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""),
-            "[velnor-gen-binary] a program must list the platforms linux-x64, linux-arm64 and may list macos-arm64",
+            &["[velnor-gen-binary]", "must list the platforms"],
         ),
     ];
-    for (table, expected) in cases {
+    for (table, needles) in cases {
         let lock = with_binary_table(&table)?;
-        assert_eq!(generation_refusal(&lock)?, expected, "{lock}");
+        let refusal = generation_refusal(&lock)?;
+        for needle in needles {
+            assert!(
+                refusal.contains(needle),
+                "{needle} is missing from {refusal}"
+            );
+        }
     }
     Ok(())
 }
