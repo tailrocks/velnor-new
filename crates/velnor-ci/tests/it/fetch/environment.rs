@@ -101,7 +101,8 @@ fn the_crates_mirror_the_runner_configured_is_used_and_any_other_config_is_refus
     assert_eq!(
         fixture.log("cargo.args").trim(),
         format!(
-            "fetch --config {path} --locked --manifest-path Cargo.toml --config net.offline=false"
+            "fetch --config {path} --locked --manifest-path {} --config net.offline=false",
+            fixture.manifest("Cargo.toml")?.display()
         )
     );
     assert!(!fixture.log("cargo.env").contains("VELNOR_CARGO_CONFIG"));
