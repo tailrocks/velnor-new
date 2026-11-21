@@ -107,6 +107,9 @@ fn a_malformed_anchor_read_in_the_plan_job_still_names_the_anchor_entry_in_the_c
         fs::read_to_string(job.root.join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
     let anchor = read.trim_start_matches("anchor=").trim_end();
     fs::remove_file(&job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    for path in [".local/share/mise", ".rustup"] {
+        fs::remove_dir_all(job.home.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
     let stdout = check_stdout(
         &job,
         anchor,

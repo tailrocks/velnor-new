@@ -260,16 +260,30 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
+fn anchor_unusable(anchor: &Anchor<'_>, file: &Path) -> bool {
+    match expected(anchor) {
+        Err(Discard::NoAnchor) => malformed_anchor(file),
+        Err(_) => true,
+        Ok(_) => false,
+    }
+}
+
 pub fn check(home: &Path, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
+    let unusable = anchor_unusable(anchor, file);
     if HOME_PATHS
         .iter()
         .all(|path| fs::symlink_metadata(home.join(path)).is_err())
     {
-        return Ok(Verdict::NothingRestored);
+        return Ok(if unusable {
+            Verdict::Discarded(Discard::BadAnchor)
+        } else {
+            Verdict::NothingRestored
+        });
     }
-    let outcome = match compare(home, anchor) {
-        Err(Discard::NoAnchor) if malformed_anchor(file) => Err(Discard::BadAnchor),
-        outcome => outcome,
+    let outcome = if unusable {
+        Err(Discard::BadAnchor)
+    } else {
+        compare(home, anchor)
     };
     match outcome {
         Ok(()) => Ok(Verdict::Verified),
