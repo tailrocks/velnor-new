@@ -9,7 +9,10 @@ fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch(
     assert_eq!(fixture.log("hostile.log"), "");
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
+        format!(
+            "fetch --locked --manifest-path {} --config net.offline=false",
+            fixture.manifest("Cargo.toml")?.display()
+        )
     );
     let cargo_env = fixture.log("cargo.env");
     let git_env = fixture.log("git.env");
@@ -21,7 +24,7 @@ fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch(
         assert!(
             environment
                 .lines()
-                .any(|line| line == "GIT_ALLOW_PROTOCOL=https:http:file"),
+                .any(|line| line == "GIT_ALLOW_PROTOCOL=https"),
             "{environment}"
         );
     }
@@ -81,16 +84,21 @@ fn the_runner_proxy_reaches_cargo_and_git_but_a_checkout_cargo_setting_does_not(
 }
 
 #[test]
-fn each_manifest_is_fetched_from_its_own_directory_so_its_cargo_config_applies() -> TestResult {
+fn each_manifest_is_fetched_by_its_absolute_path_from_outside_the_checkout() -> TestResult {
     let fixture = Fixture::new("fetch-nested", 0)?;
     fixture.repo.write_unstaged("tools/Cargo.toml", "");
     let api = serve(204)?;
     let output = fixture.run_with(&api, Some(TOKEN), None, &["tools/Cargo.toml"], &[]);
     assert!(output.status.success(), "{output:?}");
+    let manifest = fixture.manifest("tools/Cargo.toml")?;
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
+        format!(
+            "fetch --locked --manifest-path {} --config net.offline=false",
+            manifest.display()
+        )
     );
-    assert!(fixture.log("cargo.pwd").trim().ends_with("/tools"));
+    let root = std::fs::canonicalize(fixture.repo.root())?;
+    assert!(!std::path::Path::new(fixture.log("cargo.pwd").trim()).starts_with(root));
     Ok(())
 }
