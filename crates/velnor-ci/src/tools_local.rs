@@ -186,9 +186,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
-    let runner_temp = var("RUNNER_TEMP")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from);
+    let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
     let outcome = run(&Inputs {
         verb,

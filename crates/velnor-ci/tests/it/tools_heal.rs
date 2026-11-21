@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use velnor_ci::tools_discard;
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, finish, run};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
 use velnor_ci::tools_verify::Verb as VerifyVerb;
 use velnor_ci::tools_verify_step::run as verify_step;
 
@@ -175,7 +175,7 @@ fn a_replacement_that_cannot_retire_the_poisoned_entry_fails_and_keeps_it() {
     let _locked = Immutable::set(&store.join("tools").join(KEY));
     let outcome = save(&store, &job.home, true);
     assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
-    assert!(finish(Verb::Save, &outcome, "node").is_err());
+    assert!(velnor_ci::tools_local::finish(Verb::Save, &outcome, "node").is_err());
     assert_eq!(stored_rustc(&store), "evil binary!");
     let leftovers: Vec<_> = fs::read_dir(store.join("tools"))
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -185,9 +185,8 @@ fn a_replacement_that_cannot_retire_the_poisoned_entry_fails_and_keeps_it() {
     assert_eq!(leftovers, [KEY], "no staging or retired entry stays");
 }
 
-#[test]
-fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_directory() {
-    let repo = Repo::empty("tools-heal-cli-marker");
+fn save_in_a_working_directory(name: &str, runner_temp: Option<&str>, marker_dir: &str) {
+    let repo = Repo::empty(name);
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let store = root.join("store");
     let home = root.join("home");
@@ -200,8 +199,11 @@ fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_direct
         .unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#)
         .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(root.join("velnor-tools-discarded"), "").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let marker = root.join(marker_dir).join("velnor-tools-discarded");
+    fs::create_dir_all(marker.parent().unwrap_or(&root)).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&marker, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
         .args(["tools-local", "save", "--key", KEY])
         .current_dir(&root)
         .env_remove("RUNNER_TEMP")
@@ -210,9 +212,11 @@ fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_direct
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_PATH", &event)
         .env("VELNOR_MBX_SHARED_DIR", &store)
-        .env("VELNOR_MBX_SEED_DIR", &store)
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .env("VELNOR_MBX_SEED_DIR", &store);
+    if let Some(temp) = runner_temp {
+        command.env("RUNNER_TEMP", temp);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
@@ -221,7 +225,74 @@ fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_direct
     );
     assert!(stdout.contains("tools saved to the node store"), "{stdout}");
     assert!(
-        root.join("velnor-tools-discarded").is_file(),
+        marker.is_file(),
         "a successful save deleted the working directory's marker"
     );
+}
+
+#[test]
+fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_directory() {
+    save_in_a_working_directory("tools-heal-cli-unset", None, ".");
+}
+
+#[test]
+fn an_empty_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_directory() {
+    save_in_a_working_directory("tools-heal-cli-empty", Some(""), ".");
+}
+
+#[test]
+fn a_relative_runner_temp_is_treated_like_an_unset_one() {
+    save_in_a_working_directory(
+        "tools-heal-cli-relative",
+        Some("relative-temp"),
+        "relative-temp",
+    );
+}
+
+fn verify_in_a_working_directory(name: &str, verb: &str, runner_temp: &str) {
+    let job = job(name);
+    let output = job.root.join("github-output");
+    let run = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .env_clear()
+        .args(["tools-verify", verb])
+        .current_dir(&job.root)
+        .env("HOME", &job.home)
+        .env("RUNNER_TEMP", runner_temp)
+        .env("GITHUB_OUTPUT", &output)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_REF", "refs/heads/main")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    assert!(!run.status.success(), "{run:?}");
+    assert!(stderr.contains("RUNNER_TEMP"), "{stderr}");
+    assert!(stderr.contains("absolute"), "{stderr}");
+    let entries: Vec<_> = fs::read_dir(&job.root)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|entry| entry.starts_with("velnor-") || entry == "relative-temp")
+        .collect();
+    assert!(
+        entries.is_empty(),
+        "wrote into the working directory: {entries:?}"
+    );
+}
+
+#[test]
+fn tools_verify_refuses_an_empty_runner_temp_and_writes_nothing_in_the_working_directory() {
+    for verb in ["read", "check", "record"] {
+        verify_in_a_working_directory(&format!("tools-verify-empty-{verb}"), verb, "");
+    }
+}
+
+#[test]
+fn tools_verify_refuses_a_relative_runner_temp_and_writes_nothing_in_the_working_directory() {
+    for verb in ["read", "check", "record"] {
+        verify_in_a_working_directory(
+            &format!("tools-verify-relative-{verb}"),
+            verb,
+            "relative-temp",
+        );
+    }
 }
