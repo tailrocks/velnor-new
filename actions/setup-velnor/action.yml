@@ -67,13 +67,12 @@ runs:
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
-        case "$(uname -s)" in
-          Darwin | *BSD) no_follow=-h ;;
-          *) no_follow=-T ;;
-        esac
         publish_entry() {
-          [ ! -d "$2" ] || return 1
-          mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
+          if [ -d "$2" ]; then
+            echo "::warning title=setup-velnor::refusing to publish over the directory $2"
+            return 1
+          fi
+          mv -f "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         mtime_of() {
           stat -c %Y "$1" 2> /dev/null || stat -f %m "$1" 2> /dev/null
@@ -95,13 +94,13 @@ runs:
         }
         evict_store_entry() {
           quarantine="$dir/.velnor-ci.evict.$$.$RANDOM$RANDOM"
-          if mv -n "$no_follow" "$dir/$archive" "$quarantine" 2> /dev/null; then
+          if mv -n "$dir/$archive" "$quarantine" 2> /dev/null; then
             touch -- "$quarantine" 2> /dev/null || true
             if [ -n "${1:-}" ]; then
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
               rm -f "$quarantine" 2> /dev/null || true
             elif [ "$(digest "$quarantine")" = "$expected" ]; then
-              mv -n "$no_follow" "$quarantine" "$dir/$archive" 2> /dev/null || true
+              [ ! -d "$dir/$archive" ] && mv -n "$quarantine" "$dir/$archive" 2> /dev/null || true
               if [ -e "$quarantine" ]; then
                 echo "::warning title=setup-velnor::the verified copy of $archive for velnor-ci $VERSION is kept at $quarantine, because the store entry path is taken"
                 prune_quarantine
