@@ -198,7 +198,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
-    let runner_temp = var("RUNNER_TEMP").unwrap_or_default();
+    let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
     let outcome = run(&Inputs {
         verb,
@@ -209,7 +209,10 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),
         home: &home,
-        replace: verb == Verb::Save && crate::tools_discard::pending(Path::new(&runner_temp)),
+        replace: verb == Verb::Save
+            && runner_temp
+                .as_deref()
+                .is_some_and(crate::tools_discard::pending),
     });
     if verb == Verb::Restore
         && let Some(file) = var("GITHUB_OUTPUT")
@@ -221,8 +224,11 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     }
-    if verb == Verb::Save && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. }) {
-        crate::tools_discard::clear(Path::new(&runner_temp));
+    if verb == Verb::Save
+        && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. })
+        && let Some(dir) = runner_temp.as_deref()
+    {
+        crate::tools_discard::clear(dir);
     }
     finish(verb, &outcome, &node)
 }
