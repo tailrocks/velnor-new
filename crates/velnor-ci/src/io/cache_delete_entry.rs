@@ -45,17 +45,30 @@ fn holders(
     Ok(held)
 }
 
-pub fn delete_entry(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    pub id: u64,
+    pub version: String,
+    pub reference: String,
+}
+
+pub fn resolve_entry(
     github: &dyn GitHubWrite,
     repo: &Repo,
     key: &str,
     refs: &[String],
-) -> Result<String, CiError> {
+) -> Result<Candidate, CiError> {
     if key.is_empty() || refs.is_empty() || refs.iter().any(String::is_empty) {
         return Err(CiError::new("pass the exact cache key and its refs"));
     }
     let named = inert(key);
     let held = holders(github, repo, key, refs)?;
+    if let Some(unversioned) = held.iter().find(|entry| entry.version.is_empty()) {
+        return Err(CiError::new(format!(
+            "the entry ID {} has the key {named} but the API reported no version for it, so the entries cannot be told apart; nothing was deleted",
+            unversioned.id
+        )));
+    }
     let Some(first) = held.first() else {
         let searched: Vec<String> = refs.iter().map(|reference| inert(reference)).collect();
         return Err(CiError::new(format!(
@@ -82,20 +95,62 @@ pub fn delete_entry(
     if !other_versions.is_empty() {
         let all: Vec<&Entry> = held.iter().collect();
         return Err(CiError::new(format!(
-            "the key {named} is held under more than one version, and the restore may have used any ref that holds it; nothing was deleted. Entries found: {}. Check which version the job used, then delete that entry by its ID with DELETE /repos/{repo}/actions/caches/<ID>",
+            "the key {named} is held under more than one version, and the restore may have used any ref that holds it; nothing was deleted. Entries found: {}. Check which version the job used, then delete that entry with --id <ID> --key {named}",
             describe(&all)
         )));
     }
-    delete_entries(github, repo, &[first.id])?;
+    Ok(Candidate {
+        id: first.id,
+        version: first.version.clone(),
+        reference: first.reference.clone(),
+    })
+}
+
+pub fn delete_by_id(
+    github: &dyn GitHubWrite,
+    repo: &Repo,
+    key: &str,
+    id: u64,
+) -> Result<String, CiError> {
+    if key.is_empty() {
+        return Err(CiError::new("pass the exact cache key and its refs"));
+    }
+    let named = inert(key);
+    let path = format!("/repos/{repo}/actions/caches?key={}", encode(key));
+    let entry = exact_entries(github, &path)?
+        .into_iter()
+        .find(|entry| entry.id == id && entry.key == key);
+    let Some(entry) = entry else {
+        return Err(CiError::new(format!(
+            "no cache entry with ID {id} has the key {named}: it was deleted already or belongs to another key; nothing was deleted"
+        )));
+    };
+    delete_entries(github, repo, &[entry.id])?;
     Ok(format!(
         "deleted cache entry ID {} ({named}, version {}, {})\n",
-        first.id,
-        inert(&first.version),
-        inert(&first.reference)
+        entry.id,
+        inert(&entry.version),
+        inert(&entry.reference)
     ))
+}
+
+fn resolved_report(repo: &Repo, key: &str, found: &Candidate) -> String {
+    let named = inert(key);
+    format!(
+        "cache entry ID {} ({named}, version {}, {}) is the entry the restore read; nothing was deleted\nTo delete exactly this entry, run the same command (same GITHUB_API_URL and GITHUB_TOKEN) with the refs replaced by its ID: velnor-ci cache delete-entry --repo {repo} --key '{}' --id {}\n",
+        found.id,
+        inert(&found.version),
+        inert(&found.reference),
+        named.replace('\'', "'\\''"),
+        found.id
+    )
 }
 
 pub(super) fn run(args: &DeleteEntryArgs) -> Result<String, CiError> {
     let (github, repo) = client(args.repo.as_deref())?;
-    delete_entry(&github, &repo, &args.key, &args.refs)
+    if let Some(id) = args.id {
+        return delete_by_id(&github, &repo, &args.key, id);
+    }
+    let found = resolve_entry(&github, &repo, &args.key, &args.refs)?;
+    Ok(resolved_report(&repo, &args.key, &found))
 }

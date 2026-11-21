@@ -115,17 +115,14 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
 fn the_notice_states_the_refusal_rule_and_not_that_the_restored_entry_is_deleted() {
     let stdout = poisoned("tools-verify-named-scope", &[]);
     assert!(
-        stdout.contains("lists every ref the action can have read"),
+        stdout.contains("it lists every ref the action can have read"),
         "{stdout}"
     );
     assert!(
-        stdout.contains("only when that ref has exactly one entry and no later ref holds the key under a different version"),
+        stdout.contains("refuses, printing nothing to delete, when that ref has more than one entry, when a later ref holds the key under a different version"),
         "{stdout}"
     );
-    assert!(
-        stdout.contains("otherwise it refuses and deletes nothing"),
-        "{stdout}"
-    );
+    assert!(stdout.contains("It deletes nothing itself"), "{stdout}");
 }
 
 #[test]

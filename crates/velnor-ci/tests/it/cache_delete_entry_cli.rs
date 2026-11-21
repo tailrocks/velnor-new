@@ -134,7 +134,7 @@ fn deleted(served: &Served) -> Vec<String> {
 }
 
 #[test]
-fn the_binary_deletes_the_only_entry_its_key_and_ref_name() {
+fn the_binary_resolves_the_only_entry_its_key_and_ref_name_and_deletes_nothing() {
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_B),
@@ -143,11 +143,44 @@ fn the_binary_deletes_the_only_entry_its_key_and_ref_name() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stdout}{stderr}");
+    assert!(stdout.contains("cache entry ID 12"), "{stdout}");
+    assert!(stdout.contains("nothing was deleted"), "{stdout}");
+    assert!(
+        stdout.contains(&format!(
+            "cache delete-entry --repo {REPO} --key '{KEY}' --id 12"
+        )),
+        "{stdout}"
+    );
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn the_binary_deletes_by_id_only_when_the_key_still_has_that_id() {
+    let (api, served) = serve(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let output = delete_entry(&api, &["--key", KEY, "--id", "12"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
     assert!(stdout.contains("deleted cache entry ID 12"), "{stdout}");
     assert_eq!(
         deleted(&served),
         [format!("/repos/{REPO}/actions/caches/12")]
     );
+    let stale = delete_entry(&api, &["--key", KEY, "--id", "13"]);
+    assert!(!stale.status.success());
+    let other = delete_entry(&api, &["--key", "another", "--id", "11"]);
+    assert!(!other.status.success());
+    assert_eq!(deleted(&served).len(), 1);
+}
+
+#[test]
+fn an_id_together_with_a_ref_is_refused_by_the_parser() {
+    let (api, served) = serve(vec![entry(12, KEY, MERGE, VERSION_B)]);
+    let output = delete_entry(&api, &["--key", KEY, "--id", "12", "--ref", MERGE]);
+    assert!(!output.status.success());
+    assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]
@@ -239,17 +272,15 @@ fn a_missing_token_is_refused_and_nothing_is_deleted() {
 }
 
 #[test]
-fn the_binary_deletes_on_the_first_ref_when_a_later_ref_holds_the_same_version() {
+fn the_binary_resolves_the_first_ref_when_a_later_ref_holds_the_same_version() {
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_A),
     ]);
     let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
     assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        deleted(&served),
-        [format!("/repos/{REPO}/actions/caches/12")]
-    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("--id 12"));
+    assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]
@@ -260,10 +291,8 @@ fn the_binary_respects_the_order_of_the_refs() {
     ]);
     let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN, "--ref", MERGE]);
     assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        deleted(&served),
-        [format!("/repos/{REPO}/actions/caches/11")]
-    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("--id 11"));
+    assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]

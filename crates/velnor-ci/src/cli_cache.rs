@@ -37,7 +37,7 @@ pub enum CacheCommand {
     )]
     PurgePrivate(PurgePrivateArgs),
     #[command(
-        about = "Delete the one cache entry with the exact --key on the FIRST --ref that holds it (the refs are printed by the tools-verify notice in restore order), through the GitHub API; lists every --ref first and refuses, and deletes nothing, when no ref holds the key, when any listing fails or is inconsistent, when the first ref that holds it has more than one entry (two versions under one key), or when a later ref holds the key under a different version (delete by ID after checking which version the job used); reads GITHUB_TOKEN, which needs actions: write"
+        about = "Delete one poisoned cache entry in two steps. With --key and one or more --ref (the refs the tools-verify notice prints, in restore order) it only READS: it resolves the one entry the restore read, on the FIRST --ref that holds the key, prints its ID, version and ref and the command that deletes it, and deletes nothing, so running it again is harmless; it refuses when no ref holds the key, when any listing fails or is inconsistent, when an entry has no version, when the first ref that holds the key has more than one entry (two versions under one key), or when a later ref holds the key under a different version. With --key and --id it deletes exactly that entry, and refuses, deleting nothing, when the ID no longer exists or does not have that exact key. Reads GITHUB_TOKEN, which needs actions: write to delete"
     )]
     DeleteEntry(DeleteEntryArgs),
 }
@@ -48,10 +48,16 @@ pub struct DeleteEntryArgs {
     pub key: String,
     #[arg(
         long = "ref",
-        required = true,
+        required_unless_present = "id",
+        conflicts_with = "id",
         help = "A ref the entry can belong to, such as refs/pull/7/merge or refs/heads/main; repeat it in the order the cache action reads refs (the run's own ref, then the base branch, then the default branch)"
     )]
     pub refs: Vec<String>,
+    #[arg(
+        long,
+        help = "Delete exactly this cache entry ID, which must still exist under --key; the ID comes from the output of the --ref form"
+    )]
+    pub id: Option<u64>,
     #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
     pub repo: Option<String>,
 }
