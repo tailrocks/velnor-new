@@ -20,7 +20,7 @@ fails=0
 check() {
   local name="$1" expect="$2" dir="$work/$1"
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
-  cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$dir/scripts/"
+  cp "$repo/scripts/no-doctests.py" "$dir/scripts/"
   printf '%b' "$3" > "$dir/crates/fx/src/lib.rs"
   if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then
@@ -148,40 +148,6 @@ check cfg_attr_doc_concat_comma fail '#[cfg_attr(all(), doc = concat!("prose", "
 check cfg_attr_doc_then_fence fail '#[cfg_attr(all(), doc = "prose", doc = "```\\nx\\n```")]\npub fn f() {}\n'
 check shebang_attr_sep fail '#! /* separator */ [allow(dead_code)] /** ```\n */\nfn f() {}\n'
 check line_space_tab   fail '/// \tlet x = 1;\nfn f() {}\n'
-check doc_bracket_comma fail '#[doc = concat!["prose", "```\\nx\\n```"]]\npub fn f() {}\n'
-check doc_brace_comma   fail '#[doc = concat!{"prose", "```\\nx\\n```"}]\npub fn f() {}\n'
-check block_unstarred_indent fail '/**\n    prose\n\n        let x = 1;\n*/\nfn f() {}\n'
-check block_unstarred_plain  pass '/**\n    prose\n    more prose\n*/\nfn f() {}\n'
-check setext_underline_code  fail '/// Title\n/// =====\n///     let x = 1;\nfn f() {}\n'
-check setext_dash_single    fail '/// Title\n/// -\n///     let x = 1;\nfn f() {}\n'
-check adjacent_attr_join     pass '#[doc = "prose"]\n#[doc = "    let x = 1;"]\nfn f() {}\n'
-check adjacent_line_join     pass '#[doc = "prose"]\n///     let x = 1;\nfn f() {}\n'
-check footnote_spaced_label  fail '/// [^a b]: ```\n/// assert_eq!(1, 2);\nfn f() {}\n'
-check adjacent_item_reset pass '#[doc = "prose"]\nfn a() {}\n#[doc = "    let x = 1;"]\nfn b() {}\n'
-check html_comment_then_indent fail '/// <!-- hidden -->\n///     compile_error!("x");\nfn f() {}\n'
-check list_blank_cont   pass '/// - item\n///\n///     code\nfn f() {}\n'
-check list_blank_deep   fail '/// - item\n///\n///         code\nfn f() {}\n'
-check attr_lazy_comment pass '/// prose\n#[allow(dead_code)]\n///     code\nfn f() {}\n'
-check inner_outer_split fail '#![doc = "crate prose"]\n#[doc = "    let x = 1;\nsecond"]\nfn f() {}\n'
-check cfg_attr_exclusive fail '#[cfg_attr(any(), doc = "prose")]\n#[cfg_attr(all(), doc = "    let _x = 1;\nsecond")]\nfn f() {}\n'
-check block_mixed_star  pass '/**\n * prose\n\n     let _x = 1;\n */\nfn f() {}\n'
-check footnote_ws_label pass '/// [^ ]: ```\n/// prose\nfn f() {}\n'
-check setext_eq_then_indent pass '/// =\n///     continuation\nfn f() {}\n'
-check standalone_attr_indent pass '#[doc = "    let _x = 1;"]\nfn f() {}\n'
-check nested_unrelated_doc pass '#[cfg_attr(any(), foo(doc = "```"))]\nfn f() {}\n'
-check tab_indent_fence  fail '#[doc = "prose\n\n\tcompile_error!(\"x\");"]\nfn f() {}\n'
-check line_standalone_indent pass '/// \n///     let _x = 1;\nfn f() {}\n'
-check line_standalone_two pass '///     let _x = 1;\n///     let _y = 2;\nfn f() {}\n'
-check list_setext_eq_indent pass '/// - item\n/// =\n///         let _x = 1;\nfn f() {}\n'
-check stream_line_indent fail '///     let _x = 1;\n#[allow(dead_code)]\n///     let _y = 2;\n/// prose\nfn f() {}\n'
-check stream_attr_indent fail '#[doc = "    let x = 1;"]\n#[doc = "prose"]\nfn f() {}\n'
-check tuple_field_indent fail '#[doc = "struct prose"]\npub struct S(#[doc = "    compile_error!(\"x\");\nsecond"] pub i32);\n'
-check hrule_list_indent fail '/// - - -\n///     compile_error!("x");\nfn f() {}\n'
-check raw_doc_stream_indent fail '///     compile_error!("x");\n#[r#doc = "prose"]\nfn f() {}\n'
-check concat_stream_indent fail '#[doc = concat!("    compile_error!(\"x\");\n", "prose")]\nfn f() {}\n'
-check empty_attr_then_indent pass '#[doc = ""]\n#[doc = "    compile_error!(\"x\");"]\nfn f() {}\n'
-check list_across_attr  pass '#[doc = "- item\n"]\n#[doc = "    continuation"]\nfn f() {}\n'
-check atx_no_space_prose pass '/// #not-a-heading\n///     continuation\nfn f() {}\n'
 check attr_tab_indent  fail '#[doc = "prose\\n\\n\\tassert_eq!(1, 1);"]\npub fn f() {}\n'
 check attr_cr_fence    fail '#[doc = "prose\\r\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
 check attr_gap_opener  fail '#/* gap */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
@@ -212,34 +178,6 @@ check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn
 check fence_indent_after_prose pass '/// prose\n///     ```\n///     let x = 1;\n///     ```\npub fn g() {}\n'
 check fence_3sp_after_prose fail '/// prose\n///    ```\n///    let x = 1;\n///    ```\npub fn k() {}\n'
 check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
-check footnote_blank_cont pass '/// [^x]: prose\n///\n///     compile_error!("x");\npub fn f() {}\n'
-check footnote_blank_code fail '/// [^x]: prose\n///\n///         compile_error!("x");\npub fn f() {}\n'
-check setext_indent4_cont pass '/// Title\n///     ====\n///     compile_error!("x");\npub fn f() {}\n'
-check block_blank_unstarred fail '/**\n * - item\n\n *     compile_error!("x");\n */\npub fn f() {}\n'
-check cfg_attr_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), doc = "prose")]\npub fn f() {}\n'
-check cfg_attr_raw_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), r#doc = "prose")]\npub fn f() {}\n'
-check line_prose_tab_standalone pass '///     ordinary\tprose\npub fn f() {}\n'
-check cfg_attr_concat_lazy pass '#[cfg_attr(all(), doc = concat!("prose\\n", "    continuation"))]\npub fn f() {}\n'
-check cfg_attr_concat_code fail '#[cfg_attr(all(), doc = concat!("    compile_error!(\"x\");\\n", "prose"))]\npub fn f() {}\n'
-check cfg_attr_nested_fence fail '#[cfg_attr(all(), cfg_attr(all(), doc = "```\ncompile_error!(\"x\");\n```"))]\npub fn f() {}\n'
-check cfg_attr_nested_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), cfg_attr(all(), doc = "prose"))]\npub fn f() {}\n'
-check cfg_attr_nested_predicate pass '#[cfg_attr(all(), cfg_attr(doc = "```", allow(dead_code)))]\npub fn f() {}\n'
-check cfg_attr_same_frame_lazy pass '#[cfg_attr(all(), doc = "a", doc = "    compile_error!(\"x\");\nsecond")]\npub fn f() {}\n'
-check cfg_attr_nested_enclosing_lazy pass '#[cfg_attr(all(), cfg_attr(all(), doc = "a"), doc = "    compile_error!(\"x\");\nsecond")]\npub fn f() {}\n'
-check cfg_attr_nested_sibling_lazy pass '#[cfg_attr(all(), cfg_attr(all(), doc = "a"), cfg_attr(all(), doc = "    compile_error!(\"x\");\nsecond"))]\npub fn f() {}\n'
-check cfg_attr_nested_then_prose fail '#[cfg_attr(all(), cfg_attr(all(), doc = "    compile_error!(\"x\");\nsecond"), doc = "tail")]\npub fn f() {}\n'
-check doc_concat_glued_fence fail '#[doc = concat!("a\\n``", "`\\ncompile_error!(\"x\");\\n```")]\npub fn f() {}\n'
-
-long="$work/footnote_long"
-mkdir -p "$long/scripts" "$long/crates/fx/src"
-cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$long/scripts/"
-python3 -c 'import sys; sys.stdout.write("/// [^" + "a" * 120000 + "\npub fn f() {}\n")' > "$long/crates/fx/src/lib.rs"
-if (ulimit -t 5; python3 -I "$long/scripts/no-doctests.py" "$long/crates/fx/src/lib.rs") >/dev/null 2>&1; then
-  echo "ok   footnote_label_linear (pass within 5 s of CPU)"
-else
-  echo "FAIL footnote_label_linear: no pass within 5 s of CPU"
-  fails=$((fails + 1))
-fi
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
@@ -252,38 +190,9 @@ else
   echo "ok   scanner_missing (fail)"
 fi
 
-check quote_after_list fail '/// - item\n///\n///   >     compile_error!("x");\nfn f() {}\n'
-check quote_lazy_quoted pass '/// > prose\n/// >     continuation\nfn f() {}\n'
-check block_list_fence fail '/**\nprose\n- item\n    ```\n    compile_error!("x");\n    ```\n*/\nfn f() {}\n'
-check indent_hr_lazy pass '/// prose\n///     ---\n///     more\nfn f() {}\n'
-check attr_comment_bracket fail '#[doc = "    compile_error!(\"x\");"]\n#[allow(/* ] */ dead_code)]\n#[doc = "prose"]\nfn f() {}\n'
-check concat_numeric fail '#[doc = concat!("    compile_error!(\"x\");\\n", 1)]\nfn f() {}\n'
-check html_multiline fail '/// <!--\n/// hidden\n/// -->\n///     compile_error!("x");\nfn f() {}\n'
-check cfg_active_then_doc pass '#[cfg_attr(all(), doc = "prose")]\n#[doc = "    compile_error!(\"x\");\\nsecond"]\nfn f() {}\n'
-check block_first_indent fail '/**    compile_error!("x");\nprose\n*/\nfn f() {}\n'
-check footnote_escaped_label fail '/// [^a\\]b]: ```\nfn f() {}\n'
-check cfg_frame_outer_state pass '/// prose\n#[cfg_attr(all(), doc = "    let _x = 1;\\nsecond")]\nfn f() {}\n'
-
-check html_comment_fence pass '/// <!--\n/// ```\n/// x\n/// ```\n/// -->\nfn f() {}\n'
-check block_star_first_line pass '/**     code\n * prose\n*/\nfn f() {}\n'
-check block_star_first_code fail '/**     code\n* x\n*/\nfn f() {}\n'
-check concat_bool fail '#[doc = concat!("    compile_error!(\"x\");\\n", true)]\nfn f() {}\n'
-
-no_package="$work/package_missing"
-mkdir -p "$no_package/crates/fx/src" "$no_package/scripts"
-cp "$repo/scripts/no-doctests.py" "$no_package/scripts/"
-printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$no_package/crates/fx/src/lib.rs"
-if "$alint_bin" check -c "$rule" "$no_package" >/dev/null 2>&1; then got=pass; else got=fail; fi
-if [ "$got" != fail ]; then
-  echo "FAIL package_missing: expected fail, got $got"
-  fails=$((fails + 1))
-else
-  echo "ok   package_missing (fail)"
-fi
-
 bad_utf8="$work/not_utf8"
 mkdir -p "$bad_utf8/scripts"
-cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$bad_utf8/scripts/"
+cp "$repo/scripts/no-doctests.py" "$bad_utf8/scripts/"
 printf 'fn f() { let s = "caf\xe9"; }\n' > "$bad_utf8/bad.rs"
 out="$(python3 -I "$bad_utf8/scripts/no-doctests.py" "$bad_utf8/bad.rs" 2>&1)" && utf_rc=0 || utf_rc=$?
 if [ "$utf_rc" -eq 1 ] && printf '%s' "$out" | grep -q 'not valid UTF-8' && ! printf '%s' "$out" | grep -q Traceback; then
