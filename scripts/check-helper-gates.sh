@@ -110,6 +110,7 @@ verify_correction() {
 scan() {
   local tree=$1 file=$2
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
+  BEGIN { lx_mode = "code"; sq = sprintf("%c", 39) }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -122,59 +123,122 @@ scan() {
     }
     return n
   }
-  function in_string(s,    i, c, n, sq) {
-    sq = sprintf("%c", 39)
-    n = 0
-    for (i = 1; i <= length(s); i++) {
-      c = substr(s, i, 1)
-      if (c == "\\") { i++; continue }
-      if (c == sq && substr(s, i + 1, 1) == "\"" && substr(s, i + 2, 1) == sq) { i += 2; continue }
-      if (c == "\"") n++
-    }
-    return n % 2
+  function isword(ch) { return ch ~ /^[A-Za-z0-9_]$/ }
+  function lex_addr(a, b) { nr++; rs[nr] = a; re[nr] = b }
+  function inrange(p,    k) {
+    for (k = 1; k <= nr; k++) if (rs[k] <= p && p < re[k]) return 1
+    return 0
   }
-  function marker(line, out,    m, pre) {
-    if (!match(line, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
-    pre = substr(line, 1, RSTART - 1)
-    if (pre !~ /^[ \t]*(\/\/|\/\*|\*)/ && !(pre ~ /[;,{}][ \t]*\/\/[^"]*$/ && !in_string(pre))) return 0
-    m = substr(line, RSTART, RLENGTH)
-    match(m, /0\.1\.[0-9]+/)
-    out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
-    out["commit"] = substr(m, index(m, " via ") + 5)
-    return 1
+  # Walks one line of Rust source, carrying string and comment state from the
+  # lines before it. Records the column ranges that are real comments: a //
+  # or /* opened in code, or a /* still open from an earlier line. Text inside
+  # normal, byte, raw (any number of #) or multi-line string literals is never
+  # recorded, so a marker there cannot count.
+  function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
+    split("", rs)
+    split("", re)
+    nr = 0
+    n = length(s)
+    cs = (lx_mode == "block") ? 1 : 0
+    for (i = 1; i <= n; i++) {
+      c = substr(s, i, 1)
+      if (lx_mode == "block") {
+        if (c == "*" && substr(s, i + 1, 1) == "/") { i++; lx_mode = "code"; lex_addr(cs, i + 1); cs = 0 }
+        continue
+      }
+      if (lx_mode == "str") {
+        if (c == "\\") i++
+        else if (c == "\"") lx_mode = "code"
+        continue
+      }
+      if (lx_mode == "raw") {
+        if (c == "\"" && substr(s, i + 1, lx_h) == lx_hs) { i += lx_h; lx_mode = "code" }
+        continue
+      }
+      if (c == "/" && substr(s, i + 1, 1) == "/") { lex_addr(i, n + 1); break }
+      if (c == "/" && substr(s, i + 1, 1) == "*") { cs = i; lx_mode = "block"; i++; continue }
+      if (c == "\"") { lx_mode = "str"; continue }
+      if (c == sq) {
+        if (substr(s, i + 1, 1) == "\\") { k = index(substr(s, i + 3), sq); if (k > 0) i += 2 + k }
+        else if (substr(s, i + 2, 1) == sq) i += 2
+        continue
+      }
+      if (c == "r") {
+        pc = (i > 1) ? substr(s, i - 1, 1) : ""
+        ppc = (i > 2) ? substr(s, i - 2, 1) : ""
+        if (!isword(pc) || (pc == "b" && !isword(ppc))) {
+          j = i + 1
+          h = 0
+          while (substr(s, j, 1) == "#") { h++; j++ }
+          if (substr(s, j, 1) == "\"") {
+            hs = ""
+            for (k = 0; k < h; k++) hs = hs "#"
+            lx_mode = "raw"; lx_h = h; lx_hs = hs
+            i = j
+          }
+        }
+      }
+    }
+    if (lx_mode == "block" && cs) lex_addr(cs, n + 1)
+  }
+  # Sets c_mv (a released-form marker sits in a real comment), c_mn and c_mc
+  # (its version and commit), and c_mention (a helper-gate: text sits in a
+  # comment). Must run once per new-file line, in order.
+  function analyze(line,    s, off, p, m, st) {
+    c_mv = 0; c_mn = ""; c_mc = ""; c_mention = 0
+    lex_line(line)
+    off = 0; s = line
+    while (!c_mv && match(s, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) {
+      st = off + RSTART
+      m = substr(s, RSTART, RLENGTH)
+      off = st + RLENGTH - 1
+      s = substr(line, off + 1)
+      if (inrange(st)) {
+        match(m, /0\.1\.[0-9]+/)
+        c_mn = substr(m, RSTART + 4, RLENGTH - 4)
+        c_mc = substr(m, index(m, " via ") + 5)
+        c_mv = 1
+      }
+    }
+    off = 0; s = line
+    while ((p = index(s, "helper-gate:")) > 0) {
+      if (inrange(off + p)) c_mention = 1
+      off += p + 11
+      s = substr(line, off + 1)
+    }
   }
   function strip(line,    s) {
     s = line
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
-  /^@@/ { prevnew = ""; prevadded = 0; next }
+  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; next }
+  /^@@/ { prevnew = ""; prevadded = 0; p_mv = 0; c_mv = 0; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
     above = prevnew
     aboveadded = prevadded
+    p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
+    analyze(text)
     prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
-      if (!counted || !aboveadded || !marker(above, am) || versions(strip(above), av) > 0) next
+      if (!counted || !aboveadded || !p_mv || versions(strip(above), av) > 0) next
       added[++count] = file SUBSEP strip(text)
-      markN[count] = am["n"]
-      markC[count] = am["commit"]
+      markN[count] = p_mn
+      markC[count] = p_mc
       ctx[count] = 1
-      delete am
       next
     }
     if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
-    if (!tree && text ~ /^[ \t]*(\/\/|\/\*|\*).*helper-gate:|[;,{}][ \t]*\/\/.*helper-gate:/ && !marker(text, probe_mk)) { printf "MARKER\t%s\t%s\n", file, text; next }
+    if (!tree && c_mention && !c_mv) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
     stripped = strip(text)
-    has = marker(text, mk) || marker(above, mk)
-    markN_now = has ? mk["n"] : ""
-    markC_now = has ? mk["commit"] : ""
-    delete mk
+    has = c_mv || p_mv
+    markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
+    markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(stripped, probe) == 0) next
     if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && stripped !~ /(const|static) [^=]*= *\(0, ?1, ?[0-9]+\)/) next
     added[++count] = file SUBSEP stripped

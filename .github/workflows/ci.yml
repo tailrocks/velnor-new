@@ -142,6 +142,13 @@ jobs:
             fi
           done
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-string.diff" --current 0.1.110
+          for f in gate-string-marker-raw gate-string-marker-raw-hash gate-string-marker-multiline; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted a helper-gate marker inside a raw or multi-line string literal: $f" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-raw-string.diff" --current 0.1.110
           if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
             echo "the check accepted a malformed marker comment" >&2
             exit 1
