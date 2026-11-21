@@ -215,7 +215,12 @@ impl Builder<'_> {
             }
         }
         let mut budget = inventory::Budget::new(self.max_entries);
-        for root in &self.roots {
+        let roots: BTreeSet<PathBuf> = self
+            .roots
+            .iter()
+            .map(|root| fs::canonicalize(root).unwrap_or_else(|_| root.clone()))
+            .collect();
+        for root in &roots {
             if !root.exists() {
                 continue;
             }

@@ -60,6 +60,42 @@ pub(super) fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
     }
 }
 
+fn any_gate(step: &Step, setup: Setup) -> Option<String> {
+    let gates: Vec<Vec<String>> = step
+        .any_gate
+        .iter()
+        .map(|gate| crate::gate::gate_parts(gate, setup == Setup::Replanned))
+        .collect();
+    let first = gates.first()?;
+    let shared: Vec<&String> = first
+        .iter()
+        .filter(|part| gates.iter().all(|parts| parts.contains(part)))
+        .collect();
+    let owns: Vec<Vec<&String>> = gates
+        .iter()
+        .map(|parts| parts.iter().filter(|part| !shared.contains(part)).collect())
+        .collect();
+    let mut terms: Vec<String> = shared.into_iter().cloned().collect();
+    if owns.iter().any(Vec::is_empty) {
+        return (!terms.is_empty()).then(|| terms.join(" && "));
+    }
+    let alternatives: Vec<String> = owns
+        .iter()
+        .map(|own| match own.as_slice() {
+            [only] => (*only).clone(),
+            _ => format!(
+                "({})",
+                own.iter()
+                    .map(|part| part.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" && ")
+            ),
+        })
+        .collect();
+    terms.push(format!("({})", alternatives.join(" || ")));
+    Some(terms.join(" && "))
+}
+
 pub(super) fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
     let mut extra = saved_unless_hit(&step.kind);
     extra.extend(crate::private_steps::repository_conditions(step));
@@ -67,6 +103,7 @@ pub(super) fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
         step.hosted_only
             .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
     );
+    extra.extend(any_gate(step, setup));
     extra.extend(
         step.skip_when_cold
             .then(|| crate::gate::PREPARE_COLD.to_owned()),

@@ -189,17 +189,18 @@ fn seeded_message(store: &Path, copied: &Copied, elapsed: Duration) -> String {
 
 pub fn record_truncation(runner_temp: &Path, outcome: &Outcome) -> Result<(), CiError> {
     let marker = runner_temp.join(SEED_TRUNCATED);
-    if matches!(outcome, Outcome::Seeded { copied, .. } if copied.expired) {
-        return fs::write(&marker, b"")
-            .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display())));
-    }
-    match fs::remove_file(&marker) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(CiError::new(format!(
-            "cannot remove {}: {error}",
-            marker.display()
-        ))),
+    match outcome {
+        Outcome::Seeded { copied, .. } if copied.expired => fs::write(&marker, b"")
+            .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display()))),
+        Outcome::Seeded { .. } => match fs::remove_file(&marker) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(CiError::new(format!(
+                "cannot remove {}: {error}",
+                marker.display()
+            ))),
+        },
+        Outcome::NotOffered | Outcome::Trusted | Outcome::Empty | Outcome::Rejected(_) => Ok(()),
     }
 }
 

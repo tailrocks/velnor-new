@@ -165,6 +165,7 @@ impl Lane {
             private_repo: false,
             pr: PrRun::Always,
             hosted_only: false,
+            any_gate: Vec::new(),
         }
     }
 }
@@ -224,11 +225,12 @@ pub(crate) fn plan_job(
     facts: &RepoFacts,
     outputs: Vec<(RootSlug, GateNeed)>,
     group_outputs: Vec<(RootSlug, JobId)>,
+    anchor_gates: &[Gate],
 ) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     steps.extend(crate::base_cache::public_sources_step(facts));
-    steps.extend(crate::plan_tools::tools_anchor_read(facts));
+    steps.extend(crate::plan_tools::tools_anchor_read(facts, anchor_gates));
     Job {
         plan_outputs: outputs,
         group_outputs,
