@@ -14,10 +14,7 @@ fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>
 fn setups(jobs: &serde_json::Value) -> Vec<(String, usize, Option<usize>, serde_json::Value)> {
     let mut found = Vec::new();
     for (id, job) in jobs.as_object().into_iter().flatten() {
-        let steps = job["steps"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+        let steps = job["steps"].as_array().map_or_default(Vec::as_slice);
         let tests = steps.iter().position(|step| step["id"] == "test");
         for (index, step) in steps.iter().enumerate() {
             if step["name"] == "Prepare the fixture" {
@@ -178,11 +175,7 @@ fn a_clippy_or_doc_step_after_the_tests_does_not_wait_for_the_test_setup() -> Te
     let jobs = crate::feature_lanes::jobs_of(&format!("{FIXTURE}{LINT_LANE}"))?;
     let mut checked = 0;
     for (id, job) in jobs.as_object().into_iter().flatten() {
-        for step in job["steps"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-        {
+        for step in job["steps"].as_array().map_or_default(Vec::as_slice) {
             let run = step["run"].as_str().unwrap_or_default();
             if !(run.contains("cargo clippy") || run.contains("cargo doc")) {
                 continue;
@@ -295,10 +288,7 @@ fn a_failed_setup_of_one_grouped_root_stops_the_other_roots_later_cargo_steps() 
         let jobs = grouped_jobs(phase)?;
         let mut checked_a = 0;
         for (id, job) in jobs.as_object().into_iter().flatten() {
-            let steps = job["steps"]
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or_default();
+            let steps = job["steps"].as_array().map_or_default(Vec::as_slice);
             let Some(index) = steps.iter().position(|step| step["name"] == "Prepare b") else {
                 continue;
             };

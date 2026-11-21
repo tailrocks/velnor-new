@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, ToolsAnchor, Triggers,
-    WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
+    PullRequestType, RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, ToolsAnchor,
+    Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -251,8 +251,9 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             steps: vec![Step {
                 kind: StepKind::CacheSave(key.clone()),

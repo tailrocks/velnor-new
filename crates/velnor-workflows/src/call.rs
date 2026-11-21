@@ -95,8 +95,7 @@ pub(crate) fn call(
         target,
         with: values,
         outputs: inputs
-            .map(|call| call.outputs.iter().map(|out| out.name.clone()).collect())
-            .unwrap_or_default(),
+            .map_or_default(|call| call.outputs.iter().map(|out| out.name.clone()).collect()),
     })
 }
 
