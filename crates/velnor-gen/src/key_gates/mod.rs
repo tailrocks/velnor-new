@@ -51,7 +51,6 @@ const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> Ke
     }
 }
 
-#[expect(dead_code, reason = "house form for unreleased gates")]
 const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
     gate(file, key, first)
 }
