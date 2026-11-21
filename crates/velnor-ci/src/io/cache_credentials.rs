@@ -199,7 +199,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
         } else {
             is_git_directory(&listed)
         };
-    if context == Context::Prunable && !is_git_directory {
+    if context == Context::Prunable {
         return prune(directory, listed, depth, budget);
     }
     let context = if is_git_directory {
