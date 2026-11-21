@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use velnor_model::{CacheKey, Host, ToolsAnchor};
+use velnor_model::{CacheKey, CachePath, Host, ToolsAnchor};
 
 use crate::cache_version::{Compression, cache_version};
 use crate::error::CiError;
@@ -17,17 +17,23 @@ use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
 pub fn tools_paths() -> Result<Vec<&'static str>, CiError> {
-    CacheKey::Tools {
-        host: Host,
-        anchor: ToolsAnchor::Unanchored,
-    }
-    .paths()
-    .iter()
-    .map(|path| {
-        path.literal()
-            .ok_or_else(|| CiError::new("a tools cache path is not a literal directory"))
-    })
-    .collect()
+    literal_paths(
+        &CacheKey::Tools {
+            host: Host,
+            anchor: ToolsAnchor::Unanchored,
+        }
+        .paths(),
+    )
+}
+
+pub fn literal_paths(paths: &[CachePath]) -> Result<Vec<&'static str>, CiError> {
+    paths
+        .iter()
+        .map(|path| {
+            path.literal()
+                .ok_or_else(|| CiError::new("a tools cache path is not a literal directory"))
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]

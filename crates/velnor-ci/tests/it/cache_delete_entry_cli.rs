@@ -99,13 +99,24 @@ fn serve(entries: Vec<Value>) -> (String, Arc<Served>) {
 }
 
 fn delete_entry(api: &str, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["cache", "delete-entry", "--repo", REPO])
+    run(api, args, Some(REPO), Some("recorded"))
+}
+
+fn run(api: &str, args: &[&str], repo: Option<&str>, token: Option<&str>) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command.args(["cache", "delete-entry"]);
+    if let Some(repo) = repo {
+        command.args(["--repo", repo]);
+    }
+    command
         .args(args)
         .env("GITHUB_API_URL", api)
-        .env("GITHUB_TOKEN", "recorded")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
+        .env_remove("GITHUB_REPOSITORY");
+    match token {
+        Some(token) => command.env("GITHUB_TOKEN", token),
+        None => command.env_remove("GITHUB_TOKEN"),
+    };
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn deleted(served: &Served) -> Vec<String> {
@@ -165,6 +176,66 @@ fn an_empty_key_is_refused_and_nothing_is_deleted() {
     assert!(!output.status.success(), "{stderr}");
     assert!(
         stderr.contains("pass the exact cache key and its version"),
+        "{stderr}"
+    );
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn no_entry_with_the_version_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(51, KEY, MAIN, GZIP)]);
+    let output = delete_entry(&api, &["--key", KEY, "--version", ZSTD, "--ref", MAIN]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("nothing was deleted"), "{stderr}");
+    assert!(stderr.contains("ID 51"), "{stderr}");
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn a_key_without_any_entry_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(52, KEY, MAIN, ZSTD)]);
+    let output = delete_entry(
+        &api,
+        &["--key", "velnor-tools-Linux-X64-other", "--version", ZSTD],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("no cache entry has the key"), "{stderr}");
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn a_missing_repo_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(61, KEY, MAIN, ZSTD)]);
+    let output = run(
+        &api,
+        &["--key", KEY, "--version", ZSTD, "--ref", MAIN],
+        None,
+        Some("recorded"),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("set GITHUB_REPOSITORY or pass --repo owner/name"),
+        "{stderr}"
+    );
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn a_missing_token_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(71, KEY, MAIN, ZSTD)]);
+    let output = run(
+        &api,
+        &["--key", KEY, "--version", ZSTD, "--ref", MAIN],
+        Some(REPO),
+        None,
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("set GITHUB_TOKEN to a GitHub token"),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());

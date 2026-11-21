@@ -52,3 +52,17 @@ fn the_notice_versions_the_two_tools_directories_and_nothing_else() {
         ["~/.local/share/mise", "~/.rustup"]
     );
 }
+
+#[test]
+fn a_path_that_is_not_a_literal_directory_is_refused_with_that_reason() {
+    let target = velnor_model::CachePath::Target(
+        velnor_model::RepoPath::new("target").unwrap_or_else(|e| unreachable!("{e}")),
+    );
+    let error = velnor_ci::tools_verify_step::literal_paths(&[target])
+        .err()
+        .unwrap_or_else(|| unreachable!("a target path has no literal"));
+    assert_eq!(
+        error.to_string(),
+        "a tools cache path is not a literal directory"
+    );
+}
