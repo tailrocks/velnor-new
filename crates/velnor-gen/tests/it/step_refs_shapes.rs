@@ -6,6 +6,7 @@ use std::error::Error;
 
 use velnor_model::{RepoPath, WORKFLOWS_CONFIG_PATH};
 
+use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
 use crate::release_family_fixture;
@@ -79,5 +80,52 @@ fn every_steps_reference_in_a_public_sources_job_names_a_step_of_its_own_job() -
             ("Cargo.lock", lock.as_str()),
             ("tools/Cargo.lock", lock.as_str()),
         ],
+    }])
+}
+
+const PARALLEL_LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\njob = 'parallel'\n";
+
+#[test]
+fn every_steps_reference_in_a_workspace_group_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: gate_patch("workspace_groups")?,
+        config: Some("[[workspace_groups]]\nname = 'pair'\nroots = ['.', 'tools']\n"),
+        files: &[],
+    }])
+}
+
+#[test]
+fn every_steps_reference_in_a_lint_test_shape_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: 0,
+        config: Some("shape = 'lint-test'\n"),
+        files: &[],
+    }])
+}
+
+#[test]
+fn every_steps_reference_in_a_parallel_test_lane_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: gate_patch("test_lane.job")?,
+        config: Some(PARALLEL_LANE),
+        files: &[],
+    }])
+}
+
+#[test]
+fn every_steps_reference_in_an_mbx_remote_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: gate_patch("cache.mbx_remote")?,
+        config: Some("[cache]\nmbx_remote = \"github-actions\"\n"),
+        files: &[],
+    }])
+}
+
+#[test]
+fn every_steps_reference_in_a_dependency_policy_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: 0,
+        config: None,
+        files: &[("deny.toml", ""), ("mise.toml", DENY_MISE)],
     }])
 }
