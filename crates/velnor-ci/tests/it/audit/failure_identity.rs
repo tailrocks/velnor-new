@@ -64,3 +64,67 @@ fn a_workspace_build_that_excludes_the_refused_package_is_not_named() {
     assert!(!stderr.contains(NAMED), "{stderr}");
     assert!(stderr.contains("explicit selection: lib"), "{stderr}");
 }
+
+#[test]
+fn a_workspace_build_with_a_bare_exclusion_is_not_named() {
+    let stderr = refusal_after(&["cargo", "build", "--workspace", "--exclude"], None);
+    assert!(!stderr.contains(NAMED), "{stderr}");
+}
+
+#[test]
+fn a_workspace_build_with_a_package_flag_and_no_name_is_not_named() {
+    let stderr = refusal_after(&["cargo", "build", "--workspace", "-p"], None);
+    assert!(!stderr.contains(NAMED), "{stderr}");
+}
+
+#[test]
+fn a_workspace_build_with_an_unprovable_exclusion_is_not_named() {
+    let failing = [
+        "cargo",
+        "build",
+        "--workspace",
+        "--exclude",
+        "lib@0.1.0",
+        "-p",
+        "lib",
+        "--all-targets",
+        "--offline",
+        "--no-such-flag",
+    ];
+    let stderr = refusal_after(&failing, None);
+    assert!(!stderr.contains(NAMED), "{stderr}");
+}
+
+#[test]
+fn a_workspace_build_that_excludes_and_names_the_refused_package_is_not_named() {
+    let failing = [
+        "cargo",
+        "build",
+        "--workspace",
+        "--exclude",
+        "lib",
+        "-p",
+        "lib",
+        "--all-targets",
+        "--offline",
+        "--no-such-flag",
+    ];
+    let stderr = refusal_after(&failing, None);
+    assert!(!stderr.contains(NAMED), "{stderr}");
+}
+
+#[test]
+fn a_workspace_build_with_a_package_id_spec_is_named() {
+    let failing = [
+        "cargo",
+        "build",
+        "--workspace",
+        "-p",
+        "app@0.1.0",
+        "--all-targets",
+        "--offline",
+        "--no-such-flag",
+    ];
+    let stderr = refusal_after(&failing, None);
+    assert!(stderr.contains(NAMED), "{stderr}");
+}

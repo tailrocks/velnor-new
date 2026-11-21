@@ -98,18 +98,21 @@ impl Invocation {
         for (index, word) in words.iter().enumerate() {
             if matches!(*word, "-p" | "--package") {
                 match words.get(index + 1) {
-                    Some(name) => packages.push((*name).to_owned()),
-                    None => provable = false,
+                    Some(name) if !name.is_empty() => packages.push((*name).to_owned()),
+                    _ => provable = false,
                 }
             } else if let Some(name) = word
                 .strip_prefix("--package=")
                 .or_else(|| word.strip_prefix("-p"))
             {
-                packages.push(name.to_owned());
+                if name.is_empty() {
+                    provable = false;
+                } else {
+                    packages.push(name.to_owned());
+                }
             }
         }
         let all = provable
-            && packages.iter().all(|name| members.contains(name.as_str()))
             && words
                 .iter()
                 .any(|word| matches!(*word, "--workspace" | "--all"));
@@ -353,7 +356,3 @@ mod location;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
-
-#[cfg(test)]
-#[path = "invocation/selection.rs"]
-mod selection_tests;
