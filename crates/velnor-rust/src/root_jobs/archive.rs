@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    ArtifactWhen, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host, Job, JobId,
-    NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
+    ArtifactWhen, BaseScope, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host,
+    Job, JobId, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -150,11 +150,13 @@ impl RootJobs<'_> {
             step(StepKind::CacheRestore(CacheKey::Sources {
                 host: Host,
                 lane: cache_root.clone(),
+                scope: BaseScope::Shared,
             })),
             step(StepKind::CacheRestore(CacheKey::Target {
                 job: build_id.clone(),
                 root: cache_root,
                 host: Host,
+                scope: BaseScope::Shared,
             })),
         ]
         .into_iter()

@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AnchorSource, CacheKey, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When};
+use velnor_model::{
+    AnchorSource, CacheKey, TOOLS_ANCHOR_KEY_OUTPUT as ANCHOR_KEY_OUTPUT,
+    TOOLS_ANCHOR_OUTPUT as ANCHOR_OUTPUT, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+};
 
 use crate::gate::{
     ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
@@ -13,8 +16,6 @@ const RECORD_STEP: &str = "toolsrecord";
 const ANCHOR_STEP: &str = "toolsanchor";
 const READ_STEP: &str = "toolsread";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
-const ANCHOR_OUTPUT: &str = "tools_anchor";
-const ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
 const ANCHOR_RUN_ATTEMPT: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 

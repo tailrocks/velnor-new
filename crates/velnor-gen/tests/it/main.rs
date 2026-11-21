@@ -130,6 +130,7 @@ mod io_record_boundaries;
 
 mod job_setup;
 mod job_setup_env;
+mod mise_binary_pin;
 mod mise_safety;
 
 mod detect_private;
@@ -185,7 +186,9 @@ mod pr_ci;
 mod pr_ci_labels;
 mod pr_ci_queue;
 mod pr_ci_sim;
+mod private_base_budget;
 mod private_base_caches;
+mod private_base_prefix;
 mod private_sources;
 mod private_sources_advisory;
 mod private_sources_phase;
@@ -286,6 +289,7 @@ mod shared_sources;
 mod single_fetch;
 mod skip_push;
 mod skip_push_policy;
+mod source_roots_env;
 mod source_roots_limit;
 mod sparse_checkout;
 mod sparse_suggestion;
