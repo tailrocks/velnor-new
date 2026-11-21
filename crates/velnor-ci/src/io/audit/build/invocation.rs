@@ -253,13 +253,14 @@ impl Invocation {
             directory,
         };
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
-            let manifest = expected.workspace_root.join("Cargo.toml");
+            let manifest = expected.root.join("Cargo.toml");
             let actual = root_workspace(&manifest, Some(&invocation), *inherit, *alone, groups)?;
-            if actual.workspace_root != expected.workspace_root
+            if actual.root != expected.root
                 || actual.target_directory != expected.target_directory
+                || actual.build_directory != expected.build_directory
             {
                 return Err(CiError::new(
-                    "Cargo invocation configuration redirects the workspace or target away from inputs audit; use persistent Cargo configuration or CARGO_TARGET_DIR for both build and audit",
+                    "Cargo invocation configuration redirects the workspace, target or build directory away from inputs audit; use persistent Cargo configuration, CARGO_TARGET_DIR or CARGO_BUILD_BUILD_DIR for both build and audit",
                 ));
             }
         }
@@ -284,13 +285,12 @@ pub(super) fn invoked_members<'a>(
                 .then_some((directory.components().count(), root))
         })
         .max_by_key(|(depth, _)| *depth)
-        .map(|(_, root)| {
+        .map_or_default(|(_, root)| {
             root.members
                 .iter()
                 .map(|member| member.name.as_str())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn subcommand(words: &[&str]) -> Option<usize> {
