@@ -191,7 +191,7 @@ fn a_malformed_anchor_does_not_name_the_tools_entry() {
 }
 
 #[test]
-fn a_restore_on_github_com_names_the_repository_without_a_host() {
+fn a_restore_on_github_com_names_the_host_in_the_delete_command() {
     let job = job("tools-verify-named-github-com");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
@@ -204,8 +204,7 @@ fn a_restore_on_github_com_names_the_repository_without_a_host() {
         ],
     );
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-abc123' -R tailrocks/velnor-new"),
+        stdout.contains("gh cache delete 'velnor-tools-abc123' -R github.com/tailrocks/velnor-new"),
         "{stdout}"
     );
-    assert!(!stdout.contains("github.com/tailrocks"), "{stdout}");
 }
