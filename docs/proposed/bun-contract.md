@@ -17,7 +17,7 @@ roots = ["frontend"]                       # required, sorted, unique; "." is th
 timeout_minutes = 10                       # 1..=360; default workflow.crate_timeout_minutes
 scripts = ["typecheck", "lint", "test", "build"]   # default; intersected with each member's scripts
 
-[stacks.bun.members."@example-org/example-repo"]
+[stacks.bun.members."@example-org/example-repo-18"]
 scripts = ["typecheck", "lint", "test"]    # replaces the list; every name must exist in package.json
 browsers = ["chromium"]                    # sorted, unique; chromium | firefox | webkit
 timeout_minutes = 30                       # 1..=360; this member's job only

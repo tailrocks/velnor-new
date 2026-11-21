@@ -17,18 +17,18 @@ Decision records: hard decision 8 in [`../hard-decisions.md`](../hard-decisions.
 
 ```toml
 [[images]]
-id = "example-repo"
-repository = "ghcr.io/example-org/example-repo"
-dockerfile = "backend-rust/example-repo/Dockerfile"   # or { linux_amd64 = "...", linux_arm64 = "..." }
+id = "example-repo-14"
+repository = "ghcr.io/example-org/example-repo-14"
+dockerfile = "backend-rust/example-repo-14/Dockerfile"   # or { linux_amd64 = "...", linux_arm64 = "..." }
 context = "."
 platforms = ["linux_amd64", "linux_arm64"]
-version_file = "backend-rust/example-repo/Cargo.toml"
+version_file = "backend-rust/example-repo-14/Cargo.toml"
 
 [images.prebuilt]                    # optional
 kind = "cargo_bin"                   # closed union; gradle_task arrives with the Gradle stack
-package = "example-repo"
-bin = "example-repo"
-stage = "dist/example-repo"
+package = "example-repo-14"
+bin = "example-repo-14"
+stage = "dist/example-repo-14"
 ```
 
 | Key | Rule |

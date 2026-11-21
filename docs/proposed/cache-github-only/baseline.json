@@ -58,7 +58,7 @@
    "fitted": null
   },
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "audited_source_sha": "cd0a5bfb92538c230d1762b0ab7fafb52282fc33",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 6506789758,
@@ -82,7 +82,7 @@
    "fitted": null
   },
   {
-   "repository": "example-org/example-repo-2",
+   "repository": "example-org/example-repo-11",
    "audited_source_sha": "d9115d1d42c881b23e6a5dd2f0dcd2dab5f3babd",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3579123515,
@@ -154,7 +154,7 @@
    "fitted": null
   },
   {
-   "repository": "example-org/example-repo-5",
+   "repository": "example-org/example-repo-12",
    "audited_source_sha": "c08aa7d5232e43466fcfd4fa6929ef7dec7bb76c",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3582319132,

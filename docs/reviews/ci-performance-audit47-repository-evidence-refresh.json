@@ -718,7 +718,7 @@
     {
       "number": 44,
       "wave": "C",
-      "repository": "example-org/example-repo-3",
+      "repository": "example-org/example-repo-9",
       "observed_source_sha": "6b2ac2277103a22b9ae155bc92415ca5ddf05f95",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -734,7 +734,7 @@
     {
       "number": 45,
       "wave": "C",
-      "repository": "example-org/example-repo-4",
+      "repository": "example-org/example-repo-10",
       "observed_source_sha": "cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",

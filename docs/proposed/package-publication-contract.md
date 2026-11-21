@@ -76,8 +76,8 @@ or `deps.lock` SHA recorded at release" depends on item P's `deps.lock`.
 ```toml
 [[publish.bundles]]
 id = "explorer-schema"
-paths = ["backend-rust/example-repo-1/schemas/schema.graphql"]
-version_file = "backend-rust/example-repo-1/Cargo.toml"
+paths = ["backend-rust/example-repo-3/schemas/schema.graphql"]
+version_file = "backend-rust/example-repo-3/Cargo.toml"
 ```
 
 `paths` are sorted, unique, repo-relative files or directories (no globs, no
@@ -167,7 +167,7 @@ Rust crates consumed as `git` dependencies release by tag. The same
 [[publish.npm]]
 id = "ui"                                    # tag ui-v1.4.0
 root = "frontend"                            # a [stacks.bun] root
-member = "@example-org/example-repo-2"                    # workspace member published at the tag
+member = "@example-org/example-repo-18"                    # workspace member published at the tag
 pack_script = "pack"                         # root script writing the tarballs
 tarballs = "frontend/.portable/tarballs"     # directory it writes <scope>-<name>-<version>.tgz into
 registry = "github"                          # closed: npm.pkg.github.com

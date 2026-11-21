@@ -19,8 +19,8 @@ is shared from `/tmp/velnor-ci-performance-scope-audit/`.
 |---|---|---|---|---|
 | `example-org/example-repo-1` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 | INCOMPLETE |
 | `example-org/example-repo-2` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | 2081 | INCOMPLETE |
-| `example-org/example-repo-3` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 | INCOMPLETE |
-| `example-org/example-repo-4` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 | INCOMPLETE |
+| `example-org/example-repo-9` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 | INCOMPLETE |
+| `example-org/example-repo-10` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 | INCOMPLETE |
 | `example-org/example-repo-5` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | 14 | INCOMPLETE |
 
 All five remain `INCOMPLETE`: this audit precedes qualified regeneration and
@@ -37,8 +37,8 @@ claim. Attempts are 1 unless the external index records otherwise.
 |---|---|---|---|
 | `example-org/example-repo-1` | 37027342900 | 37028375599 | success; prior coverage differs |
 | `example-org/example-repo-2` | 37026992841 | 37027060262 | failed validation; baseline unavailable |
-| `example-org/example-repo-3` | 37027272296 | 37027341624 | success with no selected substantive work |
-| `example-org/example-repo-4` | 37026608163 | 37026620591 | substantive success; performance unqualified |
+| `example-org/example-repo-9` | 37027272296 | 37027341624 | success with no selected substantive work |
+| `example-org/example-repo-10` | 37026608163 | 37026620591 | substantive success; performance unqualified |
 | `example-org/example-repo-5` | 37026792292 | 37026808351 | substantive success; performance unqualified |
 
 Historical repetitive release output has been parsed and compared across every
@@ -69,8 +69,8 @@ the verdict does not rely on a successful run summary or a file index.
 |---|---|---|---|
 | `example-org/example-repo-1` | inspected; omitted API bodies recovered | 4 / 5; skipped PR baseline accounted | no missing representative log; additional prior job logs inspected |
 | `example-org/example-repo-2` | inspected; omitted API bodies recovered | 23 / 23; failed-run baseline skips accounted | completed later candidate separately inspected; old pending-run 404 superseded |
-| `example-org/example-repo-3` | inspected; repeated commands fully compared | 3 / 4; skipped PR baseline accounted | six historical empty archives and three HTTP 404 retained without inferred cause |
-| `example-org/example-repo-4` | inspected; merged versus proposed changes distinguished | 5 / 6; skipped PR baseline accounted | seven historical empty archives and one HTTP 404 retained |
+| `example-org/example-repo-9` | inspected; repeated commands fully compared | 3 / 4; skipped PR baseline accounted | six historical empty archives and three HTTP 404 retained without inferred cause |
+| `example-org/example-repo-10` | inspected; merged versus proposed changes distinguished | 5 / 6; skipped PR baseline accounted | seven historical empty archives and one HTTP 404 retained |
 | `example-org/example-repo-5` | inspected; provider/policy path omissions corrected | nine executed raw jobs across PR/default; skipped baseline accounted | 21 historical/skipped/queued HTTP 404 retained without inferred cause |
 
 No missing representative executed-job log requires retrieval in the bounded W0

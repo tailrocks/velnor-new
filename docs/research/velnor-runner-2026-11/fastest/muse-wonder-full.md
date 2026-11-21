@@ -142,7 +142,7 @@ Reserved merge capacity protects one slot per site; PR-verdict P90 — the headl
 metric — is exactly what contention eats. Likelihood: **high** that loaded P90 is
 2–3× the idle estimate. Settle it: replay a recorded busy day's arrival trace against
 the new scheduler (or shadow-run it) and report verdict P50/P90 at 70/85/95%
-utilisation. Pass: P90 ≤4 min at 85% with example-org/example-repo quotas honoured.
+utilisation. Pass: P90 ≤4 min at 85% with example-org/example-repo-13 quotas honoured.
 
 ### 6. The executor delta — the thing "runner" names — is the smallest, least-proven part
 

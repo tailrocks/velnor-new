@@ -37,20 +37,20 @@ npm_scopes = ["@example-org"]                           # registry fixed to npm.
 
 [[private_sources.maven_bundles]]                      # fixed location, no extract_to
 id = "shared-libs"
-repository = "example-org/example-repo-1"
+repository = "example-org/example-repo-21"
 tag = "shared-libs-v2.3.0"
 asset = "shared-libs-2.3.0-maven.tar.gz"
 
 [[private_sources.release_assets]]
 id = "explorer-schema"
-repository = "example-org/example-repo-2"
+repository = "example-org/example-repo-3"
 tag = "explorer-schema-v1.4.0"
 asset = "explorer-schema-1.4.0.tar.gz"
 extract_to = "explorer-schema"                         # under the Velnor-owned dependency root
 
 [[private_sources.git_trees]]
 id = "platform-history-2025-11"
-repository = "example-org/example-repo-3"
+repository = "example-org/example-repo-2"
 tag = "platform-history/2025-11"
 ```
 
@@ -78,7 +78,7 @@ schema = 1
 
 [[maven_bundles]]
 id = "shared-libs"
-repository = "example-org/example-repo-1"
+repository = "example-org/example-repo-21"
 tag = "shared-libs-v2.3.0"
 commit = "<40 lowercase hex>"
 asset = "shared-libs-2.3.0-maven.tar.gz"
@@ -249,7 +249,7 @@ the extracted trees match `.velnor/deps.lock` without fetching again:
       "kind": "release-assets",
       "id": "bitcoin-protos",
       "path": "bitcoin-protos",
-      "repository": "example-org/example-repo-4",
+      "repository": "example-org/example-repo-22",
       "tag": "bitcoin-protos-v1.0.0",
       "commit": "<40 lowercase hex>",
       "asset": "bitcoin-protos-1.0.0.tar.gz",

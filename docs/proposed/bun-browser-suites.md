@@ -34,21 +34,21 @@ more of the member's scripts that runs in its own job beside the member job,
 the way Rust suites and the dependency-seed job sit beside crate jobs.
 
 ```toml
-[stacks.bun.members."@example-org/example-repo"]
+[stacks.bun.members."@example-org/example-repo-17"]
 scripts = ["ci", "test", "test:browser"]
 timeout_minutes = 20                         # member job only
 
-[stacks.bun.members."@example-org/example-repo".suites.unit]
+[stacks.bun.members."@example-org/example-repo-17".suites.unit]
 scripts = ["test"]
 timeout_minutes = 25
 
-[stacks.bun.members."@example-org/example-repo".suites.browser]
+[stacks.bun.members."@example-org/example-repo-17".suites.browser]
 scripts = ["test:browser"]                   # exactly one script with [playwright]
 browsers = ["chromium", "webkit"]
 timeout_minutes = 25                         # per leg when sharded
 # required = true                            # false: runs, but outside Required
 
-[stacks.bun.members."@example-org/example-repo".suites.browser.playwright]
+[stacks.bun.members."@example-org/example-repo-17".suites.browser.playwright]
 projects = ["chromium-desktop", "webkit-desktop"]   # optional, sorted, unique
 shards = 2                                   # 1..=64, per project when projects is set
 # max_parallel = 4                           # 1..=legs

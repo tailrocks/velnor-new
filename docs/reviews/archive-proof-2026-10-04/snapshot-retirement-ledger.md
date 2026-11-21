@@ -106,7 +106,7 @@ does not close known owner decisions or replace a final scan after rollout.
 Deep audits still record the fixture's live scheduled/manual workflow removal
 under PR #172, stale workflow state in `tailrocks/velnor#1133`, and unfinished
 example-org #2085 MBX cache qualification. Forty-five consumer default CI
-workflows still stage Velnor Actions `0.1.0`; `example-org/example-repo` stages
+workflows still stage Velnor Actions `0.1.0`; `example-org/example-repo-2` stages
 generator `d40868152f7fe0106e3ede858a411f502f00810f`. Ordered migration to the
 replacement artifact remains pending.
 

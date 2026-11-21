@@ -4,7 +4,7 @@
 clauses of [the deferred self-hosted roadmap](../deferred/self-hosted-runner.md).
 It is not a claim that live qualification or the example-org rollout has passed.
 
-**Repository:** `tailrocks/velnor-new`. **First consumer:** `example-org/example-repo`.
+**Repository:** `tailrocks/velnor-new`. **First consumer:** `example-org/example-repo-2`.
 **Host:** macOS, one explicitly selected local Docker engine. **Runtime:** the
 unmodified official GitHub Actions runner, Ubuntu 26.04, `linux/amd64`, registered
 with the Runner Scale Set protocol and JIT.

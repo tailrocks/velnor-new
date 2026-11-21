@@ -31,7 +31,7 @@
   whose verified tree changes `.github/workflows/` (see
   [Credentials](#credentials)).
 - Follow-up: the owner grants the App permissions below; then enable
-  `[upgrades]` in example-repo first (WP-E5 rollout).
+  `[upgrades]` in example-repo-19 first (WP-E5 rollout).
 
 ## Configuration
 

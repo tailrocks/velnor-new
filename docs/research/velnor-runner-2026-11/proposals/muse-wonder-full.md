@@ -342,7 +342,7 @@ Today: one ephemeral pod + privileged dind sidecar per job, `emptyDir` everythin
 
 New lifecycle: **long-lived slot pods** managed by our controller (not ARC, not a Deployment — controller-owned pods under the journal, replaced on image bump or taint). Anatomy:
 
-- Per worker: 8 slots of 12 CPU / 14 GiB (§8a) = 40 cluster slots, plus per-org namespaces preserved (tailrocks/example-org/example-repo isolation [M] stays; slots are org-dedicated, never shared across orgs mid-lifetime).
+- Per worker: 8 slots of 12 CPU / 14 GiB (§8a) = 40 cluster slots, plus per-org namespaces preserved (tailrocks/example-org/example-repo-13 isolation [M] stays; slots are org-dedicated, never shared across orgs mid-lifetime).
 - A slot pod contains: pause/agent container (our slot agent: probe + cache-index reporter + exec server), and **no runner until assigned**. Assignment injects the job: Lane O starts the official runner binary inside the slot's pre-created container (image already present, JIT via per-job Secret mounted tmpfs, never env/args — PR #1324 s4 [E]); Lane N's executor runs steps via the slot agent directly.
 - Between jobs: scrub (kill process tree by cgroup, wipe workdir overlay, rotate per-job credentials, verify no leftover mounts/processes via probe) then return slot to pool. Scrub failure ⇒ slot pod is deleted and replaced (rare path pays pod-create; happy path never does). Every N jobs or T hours (suggest N=50/T=24 h [Est]) slots recycle anyway to bound drift.
 - dind becomes a **separate on-demand pool**: only jobs whose plan declares Docker (runner-host docker groups, image builds [E] C.5) get a slot with a dind sidecar, on tainted nodes (`velnor.io/dind=true:NoSchedule`, brief's decided direction). Most slots run unprivileged with `RuntimeDefault` seccomp, drop ALL + the 14 caps velnor-host already whitelists ([E] D.4.1). This shrinks the privileged surface from "every job" to "the jobs that asked", and removes dind startup from the common path.
@@ -368,7 +368,7 @@ Threat: PR code is arbitrary code execution by design; the assets are other tena
 
 ### 6.4 What stays ARC-shaped (nothing) and migration safety
 
-ARC remains running untouched until Lane O slots pass qualification (§8 Phase 1 gate), serving a **separate scale set name** (e.g. `velnor` labels on a new set) so workflows cut over by label, repo by repo, with instant rollback by label flip. Running two controllers against one scale set is forbidden (double-acquire); cutover is per-scale-set. example-org/example-repo sets migrate last, after tailrocks soaks — multi-tenancy is a reason for caution, not speed.
+ARC remains running untouched until Lane O slots pass qualification (§8 Phase 1 gate), serving a **separate scale set name** (e.g. `velnor` labels on a new set) so workflows cut over by label, repo by repo, with instant rollback by label flip. Running two controllers against one scale set is forbidden (double-acquire); cutover is per-scale-set. example-org/example-repo-13 sets migrate last, after tailrocks soaks — multi-tenancy is a reason for caution, not speed.
 
 ## 7. mbx and blaze
 
@@ -464,7 +464,7 @@ Work, in strict order: expression transplant + differential fuzzer vs Lane O (ra
 | mbx key instability (hits ≪85%) | Phase 0 per-workspace measurement; Cache check red on regression | Fix build-script hygiene list; if a workspace can't cache, it pays cold builds while others speed up — no big-bang dependency. |
 | Cluster single points (1 control-plane node, per-site loss) | Node/API health alerts; slot capacity headroom metric | Jobs survive API outage via 60 s renewals + journal; site loss degrades to single-site cold-ish (§6.2). HA control plane only if outage data demands it. |
 | Test-skip hides flake/environment failure | 5% audit re-runs; nightly full; flake ledger (skip-eligible list excludes any test that ever flaked) | Per-family auto-disable on first audit divergence (§5.3); skipping is revocable per binary without deploy. |
-| Multi-org blast radius (example-org/example-repo share nodes) | Per-org slot/queue dashboards; tailrocks-only until Phase 3 gate | Org-dedicated slots/namespaces; migrate orgs last (§6.4); resource quotas per namespace before any sharing change. |
+| Multi-org blast radius (example-org/example-repo-13 share nodes) | Per-org slot/queue dashboards; tailrocks-only until Phase 3 gate | Org-dedicated slots/namespaces; migrate orgs last (§6.4); resource quotas per namespace before any sharing change. |
 | Effort sink: Lane N consumes the team (legacy's 800k-line gravity) | Phase 4 entry gate (overhead ≥15% proof required); LOC budget: executor+proto+expr ≤60k lines or stop-review [Est guardrail vs legacy's 74k in two files alone] | Phases 0–3 deliver ~90% of the win without Lane N; abandoning Phase 4 leaves a fast, supportable system. |
 
 ## Owner questions

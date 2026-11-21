@@ -70,8 +70,8 @@ The 47-repository JSON, text and CSV inventories match exactly, in order, includ
 | tailrocks/tailrocks-code-quality-skills | B | [Audit limitations](ci-performance-wave-b-audit.md) | NOT_PERFORMED |
 | example-org/example-repo-1 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
 | example-org/example-repo-2 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
-| example-org/example-repo-3 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
-| example-org/example-repo-4 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
+| example-org/example-repo-9 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
+| example-org/example-repo-10 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
 | example-org/example-repo-5 | C | [Audit limitations](ci-performance-wave-c-audit.md) | NOT_PERFORMED |
 
 All 47 performance statuses remain `INCOMPLETE`. Green historical CI, retained source, a workflow index and waived CI are separate evidence states. These rows do not mark indexed workflow references as completed performance audits. Raw private source, diffs, commands, logs and operational configuration are not published here.

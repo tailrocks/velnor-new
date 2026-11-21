@@ -6,7 +6,7 @@ adopted per the split brief; owner may revisit. This page states what exists
 today and what each remaining piece must satisfy; it does not claim the stack
 is complete.
 
-## Consumer shape (`example-org/example-repo`)
+## Consumer shape (`example-org/example-repo-16`)
 
 - Playbooks live directly in `ansible-configs/` (47 top-level files plus
   `tasks/`, `config/`, `debian/`); inventory `ansible-configs/hosts.ini`;

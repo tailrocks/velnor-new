@@ -16,8 +16,9 @@ trap cleanup EXIT
 
 cd "$ROOT" || exit 1
 
-python3 -m unittest scripts/test_private_names_guard.py || exit 1
+python3 -m unittest scripts/test_private_names_guard.py scripts/test_pseudonym_consistency.py || exit 1
 python3 scripts/private-names-guard.py || exit 1
+python3 scripts/pseudonym-consistency.py || exit 1
 
 for lines in 401 400; do
   rm -f "$PROBE"

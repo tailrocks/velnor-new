@@ -126,7 +126,7 @@ derives `Default`, so downstream literals add `..Default::default()`.
 [stacks.bun]
 timeout_minutes = 30                          # every Bun member job
 
-[stacks.bun.members."@example-org/example-repo"]
+[stacks.bun.members."@example-org/example-repo-17"]
 timeout_minutes = 60                          # this member's job only
 ```
 

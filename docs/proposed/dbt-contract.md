@@ -6,9 +6,9 @@ the split brief; owner may revisit. This page states what exists today and
 what each remaining piece must satisfy; it does not claim the stack is
 complete.
 
-## Consumer shape (`example-org/example-repo`)
+## Consumer shape (`example-org/example-repo-20`)
 
-- Project directory `example-repo/` (holds `dbt_project.yml`, `profiles.yml`,
+- Project directory `example-repo-20/` (holds `dbt_project.yml`, `profiles.yml`,
   `packages.yml`, `package-lock.yml`, `models/`, `macros/`), repository-root
   `mise.toml` declaring `dbt-fusion = "2.0.0-preview.219"` (aqua backend) and a
   `mise.lock` with per-platform URLs.
@@ -24,7 +24,7 @@ complete.
 
 ```toml
 [stacks.dbt]
-projects = ["example-repo"]        # required, sorted, unique; "." is the repository root
+projects = ["example-repo-20"]        # required, sorted, unique; "." is the repository root
 services = ["postgres"]              # closed catalog; needed by compile
 env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "example-org", DBT_PASSWORD = "example-org", DBT_DBNAME = "example-org" }
 checks = ["parse", "compile"]        # closed; default ["parse"]; "compile" requires a service

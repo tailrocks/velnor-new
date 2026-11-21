@@ -1075,7 +1075,7 @@
    ]
   },
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "inventory_endpoint": "<redacted-private-endpoint>",
    "inventory_pages_fetched": 1,
    "inventory_page_truncated": false,
@@ -1350,7 +1350,7 @@
    ]
   },
   {
-   "repository": "example-org/example-repo-2",
+   "repository": "example-org/example-repo-11",
    "inventory_endpoint": "<redacted-private-endpoint>",
    "inventory_pages_fetched": 1,
    "inventory_page_truncated": false,
@@ -1896,7 +1896,7 @@
    ]
   },
   {
-   "repository": "example-org/example-repo-5",
+   "repository": "example-org/example-repo-12",
    "inventory_endpoint": "<redacted-private-endpoint>",
    "inventory_pages_fetched": 1,
    "inventory_page_truncated": false,
