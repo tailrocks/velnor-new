@@ -280,10 +280,12 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
         .and_then(|path| fs::read_to_string(path).ok())
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
+    let home = required("HOME")?;
     run(
         verb,
         &Context {
-            home: required("HOME")?,
+            compression: Compression::detect(&home),
+            home,
             runner_temp: tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
                 CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
             })?,
@@ -301,7 +303,6 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
                 var("GITHUB_API_URL").as_deref(),
                 var("GITHUB_REPOSITORY").as_deref(),
             ),
-            compression: Compression::detect(),
         },
     )
 }

@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 
 use velnor_ci::cache_version::{Compression, cache_version};
 use velnor_ci::tools_verify_step::tools_paths;
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
-const GZIP_VERSION: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
-const ZSTD_VERSION: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
+pub(crate) const GZIP_VERSION: &str =
+    "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
+pub(crate) const ZSTD_VERSION: &str =
+    "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const REPO: &str = "tailrocks/velnor-new";
 const ANCHOR_VERSION: &str = "fdc9a87fe2dcd2021bb6b6640eb35094a7299abb6781b70cfb9a8cc2e1ff5133";
 
 fn tools_version() -> String {
-    cache_version(&literal_tools_paths(), Compression::detect())
+    cache_version(&literal_tools_paths(), Compression::Gzip)
 }
 
 fn literal_tools_paths() -> Vec<&'static str> {
@@ -24,27 +25,10 @@ fn literal_tools_paths() -> Vec<&'static str> {
 
 fn anchor_entry_version(job: &Job) -> String {
     let anchor = format!("{}/velnor-tools-anchor", job.root.display());
-    cache_version(&[anchor.as_str()], Compression::detect())
+    cache_version(&[anchor.as_str()], Compression::Gzip)
 }
 
-fn zstd_on_path(job: &Job, ran: &std::path::Path) -> String {
-    let bin = job.root.join("zstd-bin");
-    fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
-    let zstd = bin.join("zstd");
-    fs::write(
-        &zstd,
-        format!(
-            "#!/bin/sh\necho ran > '{}'\necho '*** Zstandard CLI v1.5.5'\n",
-            ran.display()
-        ),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(&zstd, fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    bin.display().to_string()
-}
-
-fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
+pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -52,6 +36,7 @@ fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
     fs::create_dir_all(&no_tools).unwrap_or_default();
     command
         .env_clear()
+        .current_dir(&job.root)
         .env("PATH", &no_tools)
         .args(["tools-verify", "check"])
         .env("HOME", &job.home)
@@ -93,23 +78,6 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it_by_i
     );
     assert!(!stdout.contains("gh cache delete"), "{stdout}");
     assert!(discarded(&job));
-}
-
-#[test]
-fn a_zstd_on_the_path_is_never_run_while_the_notice_is_built() {
-    let job = job("tools-verify-zstd-on-path");
-    let anchor = recorded(&job);
-    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let ran = job.root.join("zstd-ran");
-    let stdout = check_stdout(
-        &job,
-        &anchor,
-        &[
-            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
-            ("PATH", &zstd_on_path(&job, &ran)),
-        ],
-    );
-    assert!(!ran.exists(), "{stdout}");
 }
 
 #[test]
