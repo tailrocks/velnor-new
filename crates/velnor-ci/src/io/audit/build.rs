@@ -227,7 +227,7 @@ impl Builder<'_> {
                 continue;
             }
             match inventory::scan(root, &self.targets, &mut budget) {
-                Ok(found) => evidence.entries.extend(found),
+                Ok(found) => evidence.entries.extend(found.entries),
                 Err(error) if budget.overflowed() => {
                     return Err(CiError::new(error.to_string()));
                 }
