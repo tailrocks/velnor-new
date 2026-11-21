@@ -5,12 +5,13 @@ use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_s
 use crate::waste_evidence::MbxSession;
 use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
+use nix::unistd::Uid;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions, TryLockError};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -66,6 +67,10 @@ fn accepts_without_blocking(path: &Path) -> bool {
 const SESSION_LEASE: &str = "owner.lock";
 
 fn session_lease_is_held(socket: &Path) -> bool {
+    lease_held_by(socket, Uid::current().as_raw())
+}
+
+fn lease_held_by(socket: &Path, owner: u32) -> bool {
     let Some(directory) = socket.parent() else {
         return false;
     };
@@ -76,6 +81,12 @@ fn session_lease_is_held(socket: &Path) -> bool {
     else {
         return false;
     };
+    if !lease
+        .metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.uid() == owner)
+    {
+        return false;
+    }
     let outcome = lease.try_lock_shared();
     drop(lease);
     matches!(outcome, Err(TryLockError::WouldBlock))

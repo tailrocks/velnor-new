@@ -168,13 +168,15 @@ versions.
   `velnor-ci` keeps an inherited `MBX_SOCKET` only when a nonblocking connect
   to it succeeds or reports a full queue (`EAGAIN`, `EINPROGRESS`). macOS
   answers `ECONNREFUSED` both for a live listener with a full backlog and for
-  a socket file left by a killed session (observed with mbx 1.30.0 on macOS),
-  so on `ECONNREFUSED` it tries a nonblocking shared `flock` on `owner.lock`
-  next to the socket, opened read-only without creating it and without
-  following a symlink, and releases the lock at once if it gets it. A held
-  lock means a live session; an acquired, missing or unreadable lock means a
-  stale socket, which is removed from the child's environment. Linux reports
-  a full queue as `EAGAIN`; the lease check runs on every Unix target.
+  a socket file left by a killed session, so on `ECONNREFUSED` it tries a
+  nonblocking shared `flock` on `owner.lock` next to the socket, opened
+  read-only without creating it and without following a symlink, and releases
+  the lock at once if it gets it. The lease counts only when it is a regular
+  file owned by the user running `velnor-ci`. A held lock means a live
+  session; an acquired, missing, unreadable, foreign-owned or non-regular
+  lock means a stale socket, which is removed from the child's environment.
+  Linux reports a full queue as `EAGAIN`; the lease check runs on every Unix
+  target.
 
 ### Optional: name `mise.toml` the authority
 

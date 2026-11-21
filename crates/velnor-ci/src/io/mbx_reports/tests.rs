@@ -3,14 +3,19 @@
 
 use super::collect;
 use super::inside_session;
+use super::lease_held_by;
 use super::session_lease_is_held;
+use nix::sys::stat::Mode;
+use nix::unistd::{Uid, mkfifo};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io;
 use std::os::unix::fs::symlink;
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[test]
 fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
@@ -142,4 +147,33 @@ fn a_refused_socket_with_a_symlinked_held_lease_is_not_a_nested_session() {
     holder.lock().unwrap_or_else(|e| unreachable!("{e}"));
     symlink(&target, dir.0.join("owner.lock")).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!inside_session(Some(path.as_os_str())));
+}
+
+fn within_limit<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let _ignored = sender.send(work());
+    });
+    receiver.recv_timeout(Duration::from_secs(30)).ok()
+}
+
+#[test]
+fn a_fifo_named_like_the_lease_is_stale_and_does_not_block_the_probe() {
+    let dir = Dir::new("refused-fifo");
+    let path = dir.0.join("cache-agent.sock");
+    drop(UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}")));
+    mkfifo(&dir.0.join("owner.lock"), Mode::S_IRUSR | Mode::S_IWUSR)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let nested = within_limit(move || inside_session(Some(path.as_os_str())));
+    assert_eq!(nested, Some(false));
+}
+
+#[test]
+fn a_held_lease_owned_by_someone_else_is_not_a_live_session() {
+    let dir = Dir::new("lease-foreign");
+    let _holder = held_lease(&dir);
+    let socket = dir.0.join("cache-agent.sock");
+    let ours = Uid::current().as_raw();
+    assert!(lease_held_by(&socket, ours));
+    assert!(!lease_held_by(&socket, ours.wrapping_add(1)));
 }
