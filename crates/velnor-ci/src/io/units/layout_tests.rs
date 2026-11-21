@@ -192,12 +192,16 @@ fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
         "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
         "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
     ] {
-        let root = target_with(&[layout, "debug/out/libdep.rlib"]);
+        let root = target_with(&[
+            layout,
+            "debug/deps/libdep-5c64b2dee9af80ce.rlib",
+            "debug/deps/libdep-5c64b2dee9af80ce.d",
+        ]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(
             found.unwrap_or_else(|e| unreachable!("{e}")).len(),
-            1,
+            2,
             "{layout}"
         );
     }
@@ -227,4 +231,14 @@ fn a_shared_target_is_scanned_strictly_only_when_every_workspace_using_it_is_pla
         mixed.is_ok(),
         "a target shared with a separate build directory must keep the unchecked scan"
     );
+}
+
+#[test]
+fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_build_units_unchecked()
+{
+    let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
+    let group = [sharing(&root, &root.join("build")), sharing(&root, &root)];
+    let found = group[1].build_units(&group);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(found.is_ok(), "{found:?}");
 }

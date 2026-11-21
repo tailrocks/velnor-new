@@ -97,15 +97,25 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let (found, built) = scan(target, limit, None)?;
+    let Scanned {
+        found,
+        built,
+        orphan,
+    } = scan(target, limit, None)?;
     built::refuse_without_units(target, built, &found)?;
+    built::refuse_orphan(orphan.as_deref())?;
     Ok(found)
 }
 
-type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
+struct Scanned {
+    found: Vec<(UnitFile, PathBuf)>,
+    built: bool,
+    orphan: Option<PathBuf>,
+}
 
 fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
+    let mut outputs = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
     let mut built = false;
@@ -155,10 +165,24 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
+                if !generated(&path) && !built::run_folder(&path) {
+                    outputs.push(path);
+                }
             }
         }
     }
-    Ok((found, built))
+    let orphan = outputs.into_iter().find(|output| {
+        output.parent().is_some_and(|directory| {
+            !found.iter().any(|(unit, path)| {
+                !matches!(unit, UnitFile::Directory { .. }) && path.starts_with(directory)
+            })
+        })
+    });
+    Ok(Scanned {
+        found,
+        built,
+        orphan,
+    })
 }
 
 fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
@@ -338,12 +362,15 @@ fn metadata(
         command
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_BUILD_DIR");
-    } else if invocation.is_none()
-        && let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR")
-            .map(PathBuf::from)
-            .filter(|build| build.is_relative())
-    {
-        command.env("CARGO_BUILD_BUILD_DIR", build_dir::step_relative(&build)?);
+    } else if invocation.is_none() {
+        for name in ["CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
+            if let Some(value) = std::env::var_os(name)
+                .map(PathBuf::from)
+                .filter(|value| value.is_relative())
+            {
+                command.env(name, build_dir::step_relative(&value)?);
+            }
+        }
     }
     let output = command
         .args([

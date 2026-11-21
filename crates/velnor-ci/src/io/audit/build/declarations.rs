@@ -63,7 +63,7 @@ pub(super) fn declarations(
                     .insert(base.to_path_buf());
             }
         }
-        for (unit, output) in workspace.build_units()? {
+        for (unit, output) in workspace.build_units(workspaces)? {
             let UnitFile::BuildOutput { package, .. } = unit else {
                 continue;
             };
