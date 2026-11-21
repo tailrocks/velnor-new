@@ -55,10 +55,10 @@ These results belong to the separate cache-foundation worktree, based on
 
 - The reviewed eight-family filter `d799720a-3dab-4805-bfe4-849a58de8f45`
   passed 33/33 with 313 filtered. Log:
-  `/tmp/velnor-cache-renderer-eight-family-fixed-anchor-nextest.log`.
+  `<tmp>`.
 - The full renderer run `60fecb18-8738-4900-8f4a-c722502b132f` ran 346
   tests: 328 passed and 18 failed, with no skipped tests. Log:
-  `/tmp/velnor-cache-renderer-full-fixed-anchor-nextest.log`.
+  `<tmp>`.
 - Independent review accepted only the eight-file fixture slice and its
   scoped run. It did not accept the broader cache migration. The 18 failures
   remain open; the current cache work is not a mergeable V2 implementation.
@@ -93,14 +93,14 @@ assets and no canonical release manifest. It remains unqualified and is not
 used as evidence for the native branch.
 
 The requested and resolved implementation role was
-`/root/performance_coordinator`, OpenAI `gpt-6-luna` / `max`, session
+`<home>/performance_coordinator`, OpenAI `gpt-6-luna` / `max`, session
 `01a1069c-8b77-75f2-87b9-cba3e754aa53`, turn
 `01a1096e-e174-78d3-a560-7f9182b62fed`. The test-only fixture worker was
-`/root/generator_manifest`, OpenAI `gpt-6-luna` / `max`, session
+`<home>/generator_manifest`, OpenAI `gpt-6-luna` / `max`, session
 `01a107f8-805d-74e0-aa1e-1f6d84875cd2`, execution turn
 `01a1099f-5ed0-7883-ba04-955ed9277df3`; its later source-only repair turn was
 `01a109b0-d9ad-7211-adb2-e840a20f4f89`. The independent eight-file review
-role was `/root/review_shell_context`, OpenAI `gpt-6.1-sol` / `medium`, session
+role was `<home>/review_shell_context`, OpenAI `gpt-6.1-sol` / `medium`, session
 `01a10895-d912-7a63-8796-3ca0f1939db9`, turn
 `01a109ad-6a18-7b41-a7c5-3971a271c193`. Root's separate review/routing role
 was OpenAI `gpt-6.1-sol` / `medium`, session

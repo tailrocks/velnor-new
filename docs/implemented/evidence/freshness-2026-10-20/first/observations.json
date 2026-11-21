@@ -5,7 +5,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -59,7 +59,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -83,7 +83,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -107,7 +107,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -131,7 +131,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -155,7 +155,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -207,7 +207,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -259,7 +259,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -283,7 +283,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -307,7 +307,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -326,7 +326,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -350,7 +350,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -369,7 +369,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -393,7 +393,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -412,7 +412,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -436,7 +436,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -455,7 +455,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -479,7 +479,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -498,7 +498,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -522,7 +522,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -541,7 +541,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -565,7 +565,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -581,7 +581,7 @@
         },
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -600,7 +600,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -624,7 +624,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -643,7 +643,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -667,7 +667,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -686,7 +686,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -710,7 +710,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -729,7 +729,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -753,7 +753,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",
@@ -772,7 +772,7 @@
     {
       "capture": {
         "argv": [
-          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
           "api",
           "--method",
           "GET",
@@ -796,7 +796,7 @@
       "tag_captures": [
         {
           "argv": [
-            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
             "api",
             "--method",
             "GET",

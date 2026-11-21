@@ -60,8 +60,8 @@ qualification.
 | Official Mise | Public refresh `2026-10-04T12:10:38Z`: stable `2026.10.1`, release `402539535`, tag `b752bdc` peels to `050ce5a`; accepted fix `dfe74a90` remains eight commits ahead. | Adoption remains `PARTIAL`; no fixed official distribution. |
 
 On `2026-10-04T11:18:32.580Z`, parent
-`/root/velnor_coordinator_v2/mbx_registration_workflow_v17` spawned
-`/root/velnor_coordinator_v2/mbx_registration_workflow_v17/renderer_test_pattern_scout`
+`<home>/velnor_coordinator_v2/mbx_registration_workflow_v17` spawned
+`<home>/velnor_coordinator_v2/mbx_registration_workflow_v17/renderer_test_pattern_scout`
 without explicit model or effort (parent log
 `rollout-2026-10-04T18-17-36-01a106a2-35ac-78f1-943d-b08f8b0bd9b2.jsonl`,
 ordinal 41; `fork_turns=none`). Its child task was recorded at ordinal 9 in
@@ -70,7 +70,7 @@ session `01a106a3-119f-7930-a2d2-fee87e5ebf39` turn
 `01a106a3-126a-7c52-ad03-cab727c73565` used `gpt-5.6-luna/max`. The scout
 report was rejected as acceptance evidence; no product change came from it.
 
-The documentation actor `/root/cache_progress_evidence_docs_v20` committed
+The documentation actor `<home>/cache_progress_evidence_docs_v20` committed
 `fedf114a770f4e8a1d77cde7fedd87ec4b819fb4` on the shared integration worktree
 instead of its assigned isolated worktree.
 `git show` confirms one file only, `docs/implemented/cache-measurements.md`
@@ -139,7 +139,7 @@ candidate and typed owner change each have separate source/test gates.
 ## Follow-up resumption incident
 
 At 2026-10-04 02:49:45 UTC, a follow-up call resumed the completed
-`/root/upstream_mise_release` actor from its pre-policy session instead of
+`<home>/upstream_mise_release` actor from its pre-policy session instead of
 starting a fresh actor. The follow-up therefore retained the old runtime:
 
 | Evidence | Value |
@@ -157,7 +157,7 @@ spawned with `model=gpt-6-luna`, `reasoning_effort=max`, and `fork_turns=none`:
 
 | Evidence | Value |
 | --- | --- |
-| Replacement actor | `/root/official_mise_refresh_v3` |
+| Replacement actor | `<home>/official_mise_refresh_v3` |
 | Spawn | Root log `rollout-2026-10-04T06-50-27-01a1042d-1d81-7771-9165-c462f3fb2b4d.jsonl`, line 3781; returned handle line 3784 |
 | Child session/log | `01a104d4-f9a5-75f3-bd3f-7f0252b64f05`; `rollout-2026-10-04T09-53-48-01a104d4-f9a5-75f3-bd3f-7f0252b64f05.jsonl` |
 | Parent thread | `01a1042d-1d81-7771-9165-c462f3fb2b4d` |
@@ -173,7 +173,7 @@ no product-code change and does not qualify the earlier actor's report.
 ## Follow-up reviewer model-policy incident
 
 At `2026-10-04T05:45:58.925Z`, the compliant implementation actor
-`/root/version_fixture_closure_v4` spawned a nested independent reviewer
+`<home>/version_fixture_closure_v4` spawned a nested independent reviewer
 without a model and with a full-history fork. The parent actor itself was
 verified `gpt-6-luna/max`; that did not override the nested call's inherited
 runtime.
@@ -183,8 +183,8 @@ runtime.
 | Parent session/log | `01a1056e-8937-7b10-94ee-28b58d9724e0`; `rollout-2026-10-04T12-41-32-01a1056e-8937-7b10-94ee-28b58d9724e0.jsonl` |
 | Parent runtime | Latest turn `01a1056e-8a07-7d22-a049-1504a5e0c878`, `2026-10-04T05:53:54.754Z`, `gpt-6-luna/max` |
 | Spawn | Parent log line 152, call `call_OhFB3Kv9LvOrll0o5XIv8kPw`, `2026-10-04T05:45:58.925Z`; `model` omitted, `reasoning_effort=medium`, `fork_turns=all` |
-| Returned handle | Parent log line 155: `/root/version_fixture_closure_v4/versionfixture_independent_review` |
-| Child task | Child log line 16, `2026-10-04T05:46:02.317Z`, sender `/root/version_fixture_closure_v4` |
+| Returned handle | Parent log line 155: `<home>/version_fixture_closure_v4/versionfixture_independent_review` |
+| Child task | Child log line 16, `2026-10-04T05:46:02.317Z`, sender `<home>/version_fixture_closure_v4` |
 | Child log | `rollout-2026-10-04T12-45-59-01a10572-99d4-7e93-b44d-4b55a3bb1eab.jsonl`; child thread `01a10572-99d4-7e93-b44d-4b55a3bb1eab`; parent thread `01a1056e-8937-7b10-94ee-28b58d9724e0` |
 | Invalid review turn | Child log line 14, turn `01a10572-9af4-7462-acc7-478435e4122f`, `2026-10-04T05:46:02.254Z`, actual `gpt-5.6-luna/medium` |
 
@@ -201,7 +201,7 @@ The owner then obtained a new independent exact review with explicit
 | Evidence | Value |
 | --- | --- |
 | Spawn | Parent log line 825, call `call_a7LFQSVFXUIxveQ3TilLClcY`, `2026-10-04T06:10:48.814Z`, model `gpt-6.1-sol`, effort `medium`, fork `none` |
-| Returned handle | Parent log line 828: `/root/version_fixture_closure_v4/versionfixture_final_review` |
+| Returned handle | Parent log line 828: `<home>/version_fixture_closure_v4/versionfixture_final_review` |
 | Reviewer log/session | `rollout-2026-10-04T13-10-48-01a10589-557c-7da1-9df5-4146dc3a969c.jsonl`; child thread `01a10589-557c-7da1-9df5-4146dc3a969c`; parent thread `01a1056e-8937-7b10-94ee-28b58d9724e0` |
 | Verified review turn | `01a10589-57df-7ef0-8f3a-d3947dd4d869`, `2026-10-04T06:10:52.449Z`, actual `gpt-6.1-sol/medium`; a later reviewer turn at `06:15:24.030Z` retained the same model/effort |
 | Reviewed source | `fbff07adba5f6e33b4dc8d41ed1f39216908488b` |
@@ -224,10 +224,10 @@ new child spawns.
 | Parent session/log | `01a105a0-e4c4-7f61-ba91-ea83879d678c`; `rollout-2026-10-04T13-36-32-01a105a0-e4c4-7f61-ba91-ea83879d678c.jsonl` |
 | Parent latest turn | `01a105a0-e7b1-7ca0-807b-79dea9bd61f4`, `2026-10-04T06:57:52.504Z`, `gpt-6-luna/max` |
 | First spawn | Parent log zero-based record index 36 (line 37), `2026-10-04T06:37:12.959Z`; call `fc_0837f7d3faf136bb016ac1f416c7e087d08e5f756ec54c2dad`; model/effort omitted, `fork_turns=all` |
-| First returned handle | Parent log zero-based record index 39 (line 40): `/root/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/release_qual_research` |
+| First returned handle | Parent log zero-based record index 39 (line 40): `<home>/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/release_qual_research` |
 | First invalid turn | `01a105a1-8313-7253-917e-4650b4191b74`, `2026-10-04T06:37:16.049Z`, actual `gpt-5.6-luna/max`; child log `rollout-2026-10-04T13-37-13-01a105a1-81a1-7683-97b6-bd0474c2f07e.jsonl` |
 | Second spawn | Parent log zero-based record index 42 (line 43), `2026-10-04T06:37:16.626Z`; call `fc_0837f7d3faf136bb016ac1f41ac10c87d0a9d3233ef2fb5f59`; model/effort omitted, `fork_turns=all` |
-| Second returned handle | Parent log zero-based record index 45 (line 46): `/root/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/bootstrap_contract` |
+| Second returned handle | Parent log zero-based record index 45 (line 46): `<home>/velnor_coordinator_v2/release_exact_artifact_qualification_fix_v7/bootstrap_contract` |
 | Second invalid turn | `01a105a1-904a-7003-8234-bb44e455576e`, `2026-10-04T06:37:19.134Z`, actual `gpt-5.6-luna/max`; child log `rollout-2026-10-04T13-37-16-01a105a1-8fde-7de3-8b2c-0df03ed99344.jsonl` |
 
 Both invalid actors were interrupted, and their reports are not accepted as
