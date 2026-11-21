@@ -44,3 +44,12 @@ fn the_config_cargo_reads_still_refuses_the_save() {
         );
     }
 }
+
+#[test]
+fn a_cargo_entry_that_cannot_be_inspected_refuses_the_save() {
+    let repo = private_checkout("decide-uninspectable-cargo", GIT_LOCK);
+    repo.write_unstaged(".cargo", "a file where Cargo keeps its directory\n");
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=false\nsources=false\n");
+}
