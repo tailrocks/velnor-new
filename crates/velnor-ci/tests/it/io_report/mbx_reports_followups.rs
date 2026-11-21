@@ -137,7 +137,7 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
     assert_eq!(
         session,
         json!({
-            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4,
+            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4, "bypassed": 5,
             "bypasses": {"compiler-query": 2, "unsupported-flag": 5},
             "compiler": {
                 "miss": {"invocations": 1, "duration_ns": 900},
