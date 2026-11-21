@@ -289,7 +289,8 @@ fn mixed_case_runner_inputs(helper: &str) -> Result<Vec<String>, Box<dyn std::er
 }
 
 #[test]
-fn a_mixed_case_ubuntu_label_gets_the_linux_digest_from_the_case_insensitive_helper() -> TestResult {
+fn a_mixed_case_ubuntu_label_gets_the_linux_digest_from_the_case_insensitive_helper() -> TestResult
+{
     let inputs = mixed_case_runner_inputs("0.1.112")?;
     assert!(!inputs.is_empty(), "no mise-action step rendered");
     for input in inputs {

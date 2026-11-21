@@ -145,8 +145,8 @@ fn roots_with_command_separators_are_refused_instead_of_expanded() -> TestResult
 }
 
 #[test]
-fn a_helper_with_the_literal_roots_argument_never_reads_the_roots_from_the_environment() -> TestResult
-{
+fn a_helper_with_the_literal_roots_argument_never_reads_the_roots_from_the_environment()
+-> TestResult {
     let workflow = rendered_with(&PLAIN_ROOTS, LITERAL_HELPER)?;
     assert!(workflow.env.is_empty(), "{:?}", workflow.env);
     let [run] = &workflow.runs[..] else {
