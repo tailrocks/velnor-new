@@ -23,8 +23,7 @@ pub fn declared_in(directory: &Path) -> bool {
 #[must_use]
 pub fn declared_or_unreadable_in(directory: &Path) -> bool {
     let configs = configs_in(directory);
-    configs.iter().any(|(_, table)| table.is_none())
-        || tables_declare(&configs).unwrap_or(true)
+    configs.iter().any(|(_, table)| table.is_none()) || tables_declare(&configs).unwrap_or(true)
 }
 
 fn configs_in(directory: &Path) -> Vec<(&'static str, Option<Table>)> {
@@ -34,10 +33,7 @@ fn configs_in(directory: &Path) -> Vec<(&'static str, Option<Table>)> {
             let text = match std::fs::read_to_string(directory.join(name)) {
                 Ok(text) => text,
                 Err(error)
-                    if matches!(
-                        error.kind(),
-                        ErrorKind::NotFound | ErrorKind::NotADirectory
-                    ) =>
+                    if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) =>
                 {
                     return None;
                 }
