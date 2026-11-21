@@ -37,7 +37,7 @@ fn inside_session(socket: Option<&OsStr>) -> bool {
 }
 
 fn is_live_socket(path: &Path) -> bool {
-    is_socket(path) && accepts_without_blocking(path)
+    path.is_absolute() && is_socket(path) && accepts_without_blocking(path)
 }
 
 fn accepts_without_blocking(path: &Path) -> bool {

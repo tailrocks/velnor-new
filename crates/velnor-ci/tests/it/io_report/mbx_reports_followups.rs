@@ -87,6 +87,24 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 }
 
 #[test]
+fn a_relative_socket_path_is_not_a_live_session() -> ResultTest {
+    let repo = fixture("mbx-reports-relative-socket")?;
+    let _listener = UnixListener::bind(repo.root().join("cache-agent.sock"))?;
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 2, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(std::path::Path::new("cache-agent.sock")),
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
+    Ok(())
+}
+
+#[test]
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
     let repo = fixture("mbx-reports-stuck-listener")?;
     let stuck = repo.root().join("stuck.sock");
