@@ -135,8 +135,10 @@ fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
 
 fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], None)?;
-    repo.files
-        .insert(path(".velnor/rust-ci.toml")?, b"mbx_shared_store = true\n".to_vec());
+    repo.files.insert(
+        path(".velnor/rust-ci.toml")?,
+        b"mbx_shared_store = true\n".to_vec(),
+    );
     crate::pipeline::pin_helper(&mut repo, helper)?;
     let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
     let steps = yaml["jobs"]["rust"]["steps"]
@@ -144,7 +146,11 @@ fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::e
         .ok_or("the one-job workflow has no rust steps")?;
     steps
         .iter()
-        .find(|step| step["run"].as_str().is_some_and(|run| run.ends_with("mbx-store")))
+        .find(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.ends_with("mbx-store"))
+        })
         .cloned()
         .ok_or_else(|| "the one-job workflow has no mbx-store".into())
 }
