@@ -3,11 +3,12 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
+use crate::tools_discard;
 use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
@@ -53,6 +54,13 @@ fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
     )
 }
 
+fn anchor_sentence(remedy: Remedy<'_>) -> String {
+    if remedy.anchor_key.is_empty() {
+        return String::new();
+    }
+    delete_sentence("anchor entry", remedy.anchor_key, remedy.repository)
+}
+
 fn delete_hint(remedy: Remedy<'_>) -> String {
     let mut hint = String::new();
     if !remedy.key.is_empty() {
@@ -62,14 +70,12 @@ fn delete_hint(remedy: Remedy<'_>) -> String {
             remedy.repository,
         ));
     }
-    if !remedy.anchor_key.is_empty() {
-        hint.push_str(&delete_sentence(
-            "anchor entry",
-            remedy.anchor_key,
-            remedy.repository,
-        ));
-    }
+    hint.push_str(&anchor_sentence(remedy));
     escape(&hint, false)
+}
+
+fn anchor_hint(remedy: Remedy<'_>) -> String {
+    escape(&anchor_sentence(remedy), false)
 }
 
 fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
@@ -99,10 +105,10 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
         }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
         Verdict::Discarded(why) => {
-            let hint = if *why == Discard::Mismatch {
-                delete_hint(remedy)
-            } else {
-                String::new()
+            let hint = match why {
+                Discard::Mismatch => delete_hint(remedy),
+                Discard::BadAnchor => anchor_hint(remedy),
+                _ => String::new(),
             };
             format!(
                 "::notice::the restored tools were discarded ({}); they install from scratch{hint}",
@@ -129,12 +135,23 @@ fn outputs(verdict: &Verdict) -> String {
     }
 }
 
+fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
+    let verdict = check(&context.home, anchor, file)?;
+    if matches!(
+        verdict,
+        Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
+    ) {
+        tools_discard::mark(&context.runner_temp)?;
+    }
+    Ok(verdict)
+}
+
 pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let file = context.runner_temp.join(ANCHOR_DIR).join(ANCHOR_NAME);
     let anchor = Anchor(&context.anchor);
     let verdict = match verb {
         Verb::Read => read(&file, context.anchor_matched),
-        Verb::Check => check(&context.home, &anchor)?,
+        Verb::Check => checked(context, &anchor, &file)?,
         Verb::Record => record(
             &context.home,
             &Recording {

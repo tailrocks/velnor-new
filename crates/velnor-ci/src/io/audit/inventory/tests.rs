@@ -8,7 +8,9 @@ use super::super::options::MAX_ENTRIES_VARIABLE;
 use super::walk::{Probe, scan_with as walk};
 use super::*;
 
+mod ancestors;
 mod decision;
+mod links;
 mod placement;
 mod racing;
 

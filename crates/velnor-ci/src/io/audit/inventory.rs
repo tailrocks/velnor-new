@@ -4,6 +4,7 @@
 mod evidence;
 mod handle;
 mod latest;
+mod resolve;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};

@@ -19,6 +19,7 @@ mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_alias;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;
@@ -150,7 +151,6 @@ where
     Cli::from_arg_matches(&matches)
 }
 
-#[must_use]
 pub fn main() -> ExitCode {
     if crates_mirror::is_wrapper() {
         return crates_mirror::run();
