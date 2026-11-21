@@ -68,11 +68,10 @@ fn template() -> (velnor_test_support::ScratchDir, Shas) {
     (root, shas)
 }
 
-pub(crate) fn copy_repo(dest: &Path) {
-    let (root, _) = template();
+pub(crate) fn copy_repo(world: &World, dest: &Path) {
     let copied = Command::new("cp")
         .arg("-R")
-        .arg(format!("{}/.", root.join("repo").display()))
+        .arg(format!("{}/.", world.template.join("repo").display()))
         .arg(dest)
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -114,6 +113,7 @@ type Edit = Box<dyn Fn(&mut Node) + Send>;
 
 /// Everything outside the repository a case reads, and the ways a case can differ.
 pub(crate) struct World {
+    template: velnor_test_support::ScratchDir,
     pub(crate) shas: Shas,
     pub(crate) request: Value,
     pub(crate) payload: Value,
@@ -156,7 +156,7 @@ impl World {
     /// A `phase` dispatch with its predecessors: warm has the cold run, third the warm and cold,
     /// `useful_delta` the third, warm and cold.
     pub(crate) fn new(phase: &str) -> Self {
-        let (_, shas) = template();
+        let (template, shas) = template();
         let phases: &[&str] = match phase {
             "warm" => &["cold"],
             "third" => &["warm", "cold"],
@@ -209,6 +209,7 @@ impl World {
         .map(|(key, value)| (key.to_owned(), value))
         .collect();
         Self {
+            template,
             request: json!({
                 "base": null, "event": "qualification", "head": source, "op": "plan-v1",
                 "qualification": context, "repository": REPO, "root": ".", "schema": 1

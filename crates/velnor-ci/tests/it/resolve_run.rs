@@ -217,7 +217,7 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
     if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
+        copy_repo(world, &laid.repo);
     }
     let (api, log) = serve(world);
     let mut command = Command::new(bin);
@@ -263,7 +263,7 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-request.json");
     if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
+        copy_repo(world, &laid.repo);
     }
     let bin_dir = laid.root.join("bin");
     let api_dir = laid.root.join("api");
