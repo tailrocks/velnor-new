@@ -89,8 +89,6 @@ pub(crate) fn context(
     context_in_mode(event, results, needs, "all")
 }
 
-/// The context of a run whose plan selected `mode` (`all`, `some` or `none`)
-/// for every `rust_<root>_mode` output.
 pub(crate) fn context_in_mode(
     event: &Event,
     results: &BTreeMap<String, String>,

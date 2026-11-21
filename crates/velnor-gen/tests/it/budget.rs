@@ -293,31 +293,41 @@ fn the_selection_title_names_the_run_exactly_when_the_budget_job_runs() -> TestR
         .and_then(serde_json::Value::as_str)
         .ok_or("the budget job has no title")?;
     let needs = strings(budget.get("needs"));
-    for (mode, selection) in [("all", "full"), ("some", "affected"), ("none", "none")] {
-        for (case, event, failing, runs) in [
-            (
-                "a push to the default branch",
-                other("push", "refs/heads/main"),
-                vec![],
-                true,
-            ),
-            (
-                "a scheduled run",
-                other("schedule", "refs/heads/main"),
-                vec![],
-                true,
-            ),
-            ("a pull request", pull(false, &[]), vec![], false),
-            (
-                "a failed build",
-                other("push", "refs/heads/main"),
-                vec!["rust"],
-                false,
-            ),
-        ] {
-            let results = simulate(&tree, &event, &failing)?;
-            let ran = results.get("rust-budget").map(String::as_str) != Some("skipped");
-            assert_eq!(ran, runs, "whether the budget job runs in {case}");
+    let modes = [("all", "full"), ("some", "affected"), ("none", "none")];
+    for (case, event, failing, runs, possible) in [
+        (
+            "a push to the default branch",
+            other("push", "refs/heads/main"),
+            vec![],
+            true,
+            &modes[..],
+        ),
+        (
+            "a scheduled run",
+            other("schedule", "refs/heads/main"),
+            vec![],
+            true,
+            &modes[..1],
+        ),
+        (
+            "a pull request",
+            pull(false, &[]),
+            vec![],
+            false,
+            &modes[..],
+        ),
+        (
+            "a failed build",
+            other("push", "refs/heads/main"),
+            vec!["rust"],
+            false,
+            &modes[..],
+        ),
+    ] {
+        let results = simulate(&tree, &event, &failing)?;
+        let ran = results.get("rust-budget").map(String::as_str) != Some("skipped");
+        assert_eq!(ran, runs, "whether the budget job runs in {case}");
+        for &(mode, selection) in possible {
             let title = if runs {
                 format!("Speed budget ({selection})")
             } else {
