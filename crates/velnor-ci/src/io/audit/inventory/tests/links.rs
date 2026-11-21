@@ -3,7 +3,8 @@
 
 use std::os::unix::fs::symlink;
 
-use super::handle::{self, Origin};
+use super::handle::{self, Climb, Origin};
+use super::resolve::Reach;
 use super::*;
 
 fn base(name: &str) -> PathBuf {
@@ -16,10 +17,16 @@ fn base(name: &str) -> PathBuf {
 }
 
 fn link_kind(directory: &Path, name: &str) -> Kind {
-    let opened = handle::open(&Origin::Path, directory).unwrap_or_else(|e| unreachable!("{e}"));
-    handle::kind_at(&opened, name.as_ref(), &directory.join(name))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .unwrap_or_else(|| unreachable!("{name} is missing"))
+    let opened = handle::open(&Origin::Path, directory, &Climb::none())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    handle::kind_at(
+        &opened,
+        name.as_ref(),
+        &directory.join(name),
+        Reach::default(),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"))
+    .unwrap_or_else(|| unreachable!("{name} is missing"))
 }
 
 #[test]
@@ -31,10 +38,11 @@ fn a_link_target_is_resolved_through_the_opened_directory_not_the_path() {
     let other = base.join("d2");
     fs::create_dir_all(other.join("other")).unwrap_or_else(|e| unreachable!("{e}"));
     symlink("other", other.join("l")).unwrap_or_else(|e| unreachable!("{e}"));
-    let opened = handle::open(&Origin::Path, &held).unwrap_or_else(|e| unreachable!("{e}"));
+    let opened =
+        handle::open(&Origin::Path, &held, &Climb::none()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::rename(&held, base.join("d.old")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::rename(&other, &held).unwrap_or_else(|e| unreachable!("{e}"));
-    let kind = handle::kind_at(&opened, "l".as_ref(), &held.join("l"));
+    let kind = handle::kind_at(&opened, "l".as_ref(), &held.join("l"), Reach::default());
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         kind.unwrap_or_else(|e| unreachable!("{e}")),
