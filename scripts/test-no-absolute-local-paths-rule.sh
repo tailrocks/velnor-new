@@ -85,6 +85,14 @@ check placeholder       pass "kept under <retained-cache>/artifacts/log.txt"
 check relative_path     pass "see ../../goals.md and docs/implemented/a.md"
 check url_segment       pass "https://example.com${mac}/someone/page and https://example.com${root}/page"
 check dotted_prefix     pass "pkg.${root}/x and a-${mac}/someone/y"
+check json_escaped_macos  fail "{\"directory\": \"\\/Us""ers\\/someone\\/.cache\\/x\"}" json
+check json_escaped_macos_bare fail "{\"owner\": \"\\/Us""ers\\/someone\"}" json
+check json_double_escaped fail "{\"log\": \"\\\\/Us""ers\\\\/someone\\\\/out.log\"}" json
+check json_unicode_escape fail "{\"directory\": \"\\u002fUs""ers\\u002fsomeone\\u002fx\"}" json
+check json_escaped_linux  fail "{\"directory\": \"\\/ho""me\\/someone\\/work\"}" json
+check json_escaped_agent  fail "{\"scratch\": \"\\/priv""ate\\/tmp\\/claude-501\\/x\"}" json
+check json_escaped_runner pass "{\"workdir\": \"\\/ho""me\\/runner\\/work\\/repo\"}" json
+check json_escaped_repo   pass "{\"path\": \"docs\\/implemented\\/a.md\"}" json
 
 if [ "$fails" -ne 0 ]; then
   echo "no-absolute-local-paths fixtures: $fails failing"
