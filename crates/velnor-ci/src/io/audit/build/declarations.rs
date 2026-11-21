@@ -102,9 +102,6 @@ pub(super) fn declarations(
     Ok(found)
 }
 
-/// One declaration pass. A directory is walked once per exclusion set and its
-/// view is shared by every build output that declares it, so the entry budget
-/// charges the tree once instead of once per output.
 struct Pass {
     budget: inventory::Budget,
     views: BTreeMap<(PathBuf, BTreeSet<PathBuf>), inventory::Entries>,

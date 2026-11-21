@@ -59,8 +59,6 @@ const DIRECT_SPAWN: &str = concat!("Command", "::new(");
 const BINARY: &str = concat!("CARGO_BIN_EXE_", "velnor-ci");
 const SHELL: &str = concat!("\"", "sh", "\"");
 
-// Fixture code embedded in string literals spawns other programs; only spawns
-// of the audited binary, or of the shell that wraps it, must go through a helper.
 fn direct_launch_sites(dir: &Path, found: &mut Vec<String>) {
     for entry in fs::read_dir(dir).unwrap_or_else(|e| unreachable!("{e}")) {
         let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
