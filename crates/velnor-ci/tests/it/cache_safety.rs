@@ -19,6 +19,7 @@ fn decide(repo: &Repo) -> (Output, String) {
         .args(["cache", "decide", "--target-dir", "target"])
         .env("RUNNER_TEMP", repo.root().join("temp"))
         .env("GITHUB_OUTPUT", repo.root().join("output"))
+        .env("HOME", repo.root())
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .current_dir(repo.root())
         .output()

@@ -6,7 +6,7 @@ pub use crate::build_profile::{BuildProfile, build_profile, rustc_release};
 pub use crate::build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use crate::cache_budget::{
     CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request, target_family_prefix,
+    cache_family, delta_pull_request, is_sources_prefix, target_family_prefix,
 };
 pub use crate::classify::is_workflow_file;
 pub use crate::compat::{
@@ -44,8 +44,9 @@ pub use crate::metadata_file::{
 };
 pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins, tool_requests};
 pub use crate::owners::{Owner, Owners, add_reads};
-pub use crate::plan::{check_required_check, plan, plan_without_deltas};
-pub use crate::policy::{DENY_OFF_NOTE, PolicyRuns, deny_off_note, policy_runs};
+pub use crate::plan::{plan, plan_without_deltas};
+pub use crate::plan_check::check_required_check;
+pub use crate::policy::{DENY_OFF_NOTE, PolicyRuns, deny_off_note, policy_runs, policy_unread};
 pub use crate::private_sources::{base_cache_note, cacheable_config, cacheable_private_lock};
 pub use crate::public_git::{LockAdmission, PinnedGit, lock_admission, merge_pinned};
 pub use crate::reads::{
