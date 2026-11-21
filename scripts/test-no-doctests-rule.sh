@@ -138,6 +138,12 @@ check attr_list_indent  fail '#[doc = "-     assert_eq!(1, 1);"]\npub fn f() {}\
 check line_tab_no_space pass '/// text\n///\n///\tassert_eq!(1, 1);\npub fn f() {}\n'
 check block_tab_no_indent pass '/**\n * prose\n *\n *\tassert_eq!(1, 1);\n */\npub fn f() {}\n'
 check line_list_prose   pass '/// -    not code\npub fn f() {}\n'
+check task_fence_line  fail '/// - [ ] ```\n///   let x = 1;\npub fn f() {}\n'
+check task_fence_block fail '/**\n * - [ ] ```\n *   let x = 1;\n */\npub fn f() {}\n'
+check dash_adjacent_prose pass '/// Doc.\n/// -- text\n/// --     text\npub fn f() {}\n'
+check line_tab_then_space pass '/// text\n///\n///\t assert_eq!(1, 1);\npub fn f() {}\n'
+check line_tab_two_tabs fail '/// text\n///\n///\t\tassert_eq!(1, 1);\npub fn f() {}\n'
+check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"

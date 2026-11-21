@@ -6,8 +6,8 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+|\[\^[^\]\s]+\]:[ \t]*)*"
-MARKER = r"[ \t]*(?:>|[-*+]|\d{1,9}[.)]|\[\^[^\]\s]+\]:)"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\s]+\]:[ \t]*)*"
+MARKER = r"[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])|\[\^[^\]\s]+\]:)"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(r"(?:" + MARKER + r")* {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:" + MARKER + r")+ {5,}\S")
@@ -92,6 +92,28 @@ def attr_open(src, i):
     return k + 1 if src.startswith("[", k) else None
 
 
+def expand_tabs(text):
+    out = []
+    col = 0
+    for ch in text:
+        if ch == "\t":
+            width = 4 - col % 4
+            out.append(" " * width)
+            col += width
+        else:
+            out.append(ch)
+            col += 1
+    return "".join(out)
+
+
+def line_indent_text(body):
+    # rustdoc drops one leading space or tab after `///`; the tabs left after that
+    # expand to the next 4-column stop, not to a fixed four spaces each.
+    if body[:1] in (" ", "\t"):
+        return " " + expand_tabs(body[1:])
+    return expand_tabs(body)
+
+
 def value_has_fence(value):
     return any(
         LINE_FENCE.match(line) or ATTR_INDENT.match(line.replace("\t", "    "))
@@ -130,7 +152,7 @@ def doc_findings(src):
             end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
                 body = src[i + 3 : end]
-                if LINE_FENCE.match(body) or LINE_INDENT.match(body.replace("\t", "    ")):
+                if LINE_FENCE.match(body) or LINE_INDENT.match(line_indent_text(body)):
                     yield i
             i = end
         elif src.startswith("/*", i):
