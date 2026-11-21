@@ -20,6 +20,15 @@ pub fn external_config_profile(files: &[(String, Vec<u8>)]) -> Result<String, St
                 "{path} uses include, which is not supported: the base cache key cannot cover the included files"
             ));
         }
+        if parsed
+            .get("build")
+            .and_then(toml::Value::as_table)
+            .is_some_and(|build| build.contains_key("build-dir"))
+        {
+            return Err(format!(
+                "{path}: build.build-dir is not supported: the target cache cannot model a separate build directory, so remove it"
+            ));
+        }
         out = format!("{out}{path}\n{}\n", sha256_hex(bytes));
     }
     Ok(out)

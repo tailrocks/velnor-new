@@ -23,10 +23,14 @@ pub enum Owner {
 /// unkeyed: it stops accidental copies of the marker, not a deliberate forger.
 #[must_use]
 pub fn seal(header: &str, body: &str) -> String {
-    format!("{header}{DIGEST_PREFIX}{}\n{body}", digest(body.as_bytes()))
+    format!(
+        "{header}{DIGEST_PREFIX}{}\n{body}",
+        sha256_hex(body.as_bytes())
+    )
 }
 
-fn digest(bytes: &[u8]) -> String {
+#[must_use]
+pub fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     Sha256::digest(bytes)
         .iter()
@@ -63,7 +67,7 @@ fn digest_verifies(contents: &[u8]) -> bool {
     };
     second
         .strip_prefix(DIGEST_PREFIX.as_bytes())
-        .is_some_and(|hex| hex == digest(body).as_bytes())
+        .is_some_and(|hex| hex == sha256_hex(body).as_bytes())
 }
 
 #[must_use]

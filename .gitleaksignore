@@ -20,6 +20,9 @@ fcc9f4916f2a99c41d7794df95f5d724ef6c3ae4:docs/proposed/dbt-contract.md:generic-p
 bb7fa33626a19aaf72f79aa646989ca02ee460e8:scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl:generic-api-key:1
 bb7fa33626a19aaf72f79aa646989ca02ee460e8:scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
 .velnor/runner.lock:generic-api-key:73
+crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs:generic-api-key:13
+crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs:generic-api-key:18
+crates/velnor-ci/tests/it/cache_credential_scrub_hardening.rs:gitlab-pat:236
 docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
 docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
 docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:16

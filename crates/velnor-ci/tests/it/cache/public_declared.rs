@@ -127,6 +127,7 @@ fn an_unreadable_declaration_is_not_cacheable() {
         .args(["--public-probe-api", &mock.url])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .env_remove("GITHUB_TOKEN")
         .env_remove("VELNOR_PUBLIC_VERDICTS")
         .current_dir(repo.root())
