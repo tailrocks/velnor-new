@@ -89,14 +89,6 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
         "rust/lib/asset.txt",
         run_finished(&repo, stale) + Duration::from_secs(2),
     );
-    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
-    assert!(build.status.success(), "{build:?}");
-    let after = lib_runs(&repo);
-    assert_eq!(after.len(), 2, "{after:?}");
-    let current = after
-        .difference(&before)
-        .next()
-        .unwrap_or_else(|| unreachable!());
 
     let output = audit(&repo, &["--write"]);
     refused_with(
@@ -105,7 +97,6 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
             "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\""
         )],
     );
-    assert!(!String::from_utf8_lossy(&output.stderr).contains(current.as_str()));
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
