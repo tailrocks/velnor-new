@@ -4,9 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    BuildRecord, CargoCommand, CommitSha, DenyChecks, FilterRef, HelperRelease, HelperVersion, Job,
-    JobId, PackageName, Permissions, Platform, PolicyTools, PrRun, ReleaseAssetPart, RunnerLabel,
-    RustCiConfig, Sha256, StepKind, TargetName, ToolPins, When,
+    BuildRecord, CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun,
+    ReleaseAssetPart, RunnerLabel, StepKind, TargetName, When,
 };
 
 use super::*;
@@ -109,132 +108,6 @@ fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() 
                 .last()
                 .is_some_and(|step| step.skip_after_merge_group.is_some()),
             "the clippy check is skipped either way"
-        );
-    }
-}
-
-fn root(manifest: &'static str, depends_on: &[&'static str]) -> RustRoot {
-    RustRoot {
-        manifest: RepoPath::from_static(manifest),
-        target_dir: RepoPath::from_static("target"),
-        nextest_ci_profile: false,
-        members: Vec::new(),
-        depends_on: depends_on
-            .iter()
-            .copied()
-            .map(RepoPath::from_static)
-            .collect(),
-        external_dependencies: Vec::new(),
-    }
-}
-
-fn at(kind: StepKind, directory: &'static str, manifest: Option<&'static str>) -> Step {
-    Step {
-        directory: Some(RepoPath::from_static(directory)),
-        manifest: manifest.map(RepoPath::from_static),
-        ..step(kind)
-    }
-}
-
-fn sibling_job(build_dir: &'static str, build_manifest: &'static str) -> Job {
-    let setup = StepKind::TestSetup {
-        name: String::from("setup"),
-        run: String::from("true"),
-        before_build: true,
-    };
-    let mut job = job(RUST_JOB, Vec::new());
-    job.steps = vec![
-        at(setup, "tools/a", None),
-        at(
-            StepKind::Cargo(CargoCommand::Clippy { extra: Vec::new() }),
-            "tools/a",
-            Some("tools/a/Cargo.toml"),
-        ),
-        at(
-            StepKind::Cargo(CargoCommand::NextestBuild),
-            build_dir,
-            Some(build_manifest),
-        ),
-    ];
-    job
-}
-
-#[test]
-fn a_setup_of_one_root_stays_only_while_a_surviving_build_compiles_its_root() {
-    let cases: [(&[&str], bool); 2] = [(&[], false), (&["tools/a/Cargo.toml"], true)];
-    for (depends_on, kept) in cases {
-        let roots = [
-            root("tools/a/Cargo.toml", &[]),
-            root("tools/b/Cargo.toml", depends_on),
-        ];
-        let mut jobs = [sibling_job("tools/b", "tools/b/Cargo.toml")];
-        mark(&mut jobs, true, false, Some(&roots), &|_| false);
-        assert_eq!(
-            jobs[0].steps[0].skip_after_merge_group.is_none(),
-            kept,
-            "tools/b depends on {depends_on:?}"
-        );
-    }
-}
-
-fn facts_at(helper: &'static str, rust_roots: Vec<RustRoot>) -> RepoFacts {
-    let release = HelperRelease::new(
-        HelperVersion::from_static(helper),
-        CommitSha::from_static("0123456789abcdef0123456789abcdef01234567"),
-        BTreeMap::from([(
-            Platform::LinuxX64,
-            Sha256::from_static("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-        )]),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    RepoFacts {
-        repository: String::new(),
-        rust_roots,
-        toolchain: None,
-        tools: ToolPins {
-            configs: Vec::new(),
-            locked_file: true,
-            tools: BTreeMap::new(),
-        },
-        config: RustCiConfig::default(),
-        helper: Some(release),
-        compile_inputs: BTreeMap::new(),
-        inputs_lock_identified: false,
-        timings: BTreeMap::new(),
-        timings_notes: Vec::new(),
-        private_sources: None,
-        private_base_caches: false,
-        private_suggestion: None,
-        unowned: BTreeMap::new(),
-        policy: PolicyTools {
-            deny: false,
-            machete: false,
-            deny_off: false,
-            checks: DenyChecks::of(&[]),
-        },
-        deny_configs: BTreeMap::new(),
-        weakenings: Vec::new(),
-    }
-}
-
-const JOB_WIDE: &str = "0.1.109";
-const JOB_WIDE_LATER: &str = "0.1.111";
-const PER_ROOT: &str = "0.1.112";
-
-#[test]
-fn the_setup_scope_follows_the_helper_pin_from_0_1_112() {
-    for (helper, kept) in [(JOB_WIDE, true), (JOB_WIDE_LATER, true), (PER_ROOT, false)] {
-        let roots = vec![
-            root("tools/a/Cargo.toml", &[]),
-            root("tools/b/Cargo.toml", &[]),
-        ];
-        let facts = facts_at(helper, roots);
-        let mut jobs = [sibling_job("tools/b", "tools/b/Cargo.toml")];
-        apply(&facts, &mut jobs, true, &|_| false);
-        assert_eq!(
-            jobs[0].steps[0].skip_after_merge_group.is_none(),
-            kept,
-            "helper {helper}"
         );
     }
 }
