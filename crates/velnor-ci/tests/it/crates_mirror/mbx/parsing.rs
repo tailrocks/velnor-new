@@ -110,6 +110,23 @@ fn a_clustered_zscript_flag_scopes_the_script_it_names_alone() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn an_equals_attached_zscript_flag_scopes_the_script_it_names_alone() -> TestResult {
+    let repo = declared_job()?;
+    fs::create_dir_all(repo.root().join("scratch-project"))?;
+    let outside = repo
+        .root()
+        .join("scratch-project/tool.rs")
+        .display()
+        .to_string();
+    assert_plain(&run_with_args(
+        &repo,
+        repo.root(),
+        &["-Z=script", &outside],
+    )?);
+    Ok(())
+}
+
 fn run_os_args(
     repo: &crate::io::Repo,
     directory: &Path,

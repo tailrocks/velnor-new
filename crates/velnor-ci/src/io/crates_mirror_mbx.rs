@@ -128,6 +128,7 @@ fn script_enabled(args: &[OsString]) -> bool {
         let Some((flag, attached)) = arg.to_str().and_then(value_flag) else {
             continue;
         };
+        let attached = attached.strip_prefix('=').unwrap_or(attached);
         if flag == 'Z'
             && (attached == "script"
                 || (attached.is_empty() && args.next().is_some_and(|word| word == "script")))
