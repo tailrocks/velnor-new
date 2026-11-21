@@ -97,7 +97,7 @@ fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
                 .parent()
                 .map_or_else(|| base.clone(), Path::to_path_buf),
         ];
-        if may_be_external_subcommand(target, &args) {
+        if may_be_external_subcommand(&args) {
             directories.push(manifest_directory(&base, &args, false));
         }
         return Some(directories);
@@ -117,8 +117,8 @@ fn manifest_directory(base: &Path, args: &[OsString], shorthand: bool) -> PathBu
         .unwrap_or_else(|| base.to_path_buf())
 }
 
-fn may_be_external_subcommand(target: &str, args: &[OsString]) -> bool {
-    Path::new(target).components().count() == 1 && !script_enabled(args)
+fn may_be_external_subcommand(args: &[OsString]) -> bool {
+    !script_enabled(args)
 }
 
 fn script_enabled(args: &[OsString]) -> bool {
