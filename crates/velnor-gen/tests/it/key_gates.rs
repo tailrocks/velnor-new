@@ -295,10 +295,7 @@ fn pr_only_checks_key_gate_and_generator_agree_at_0_1_81() -> Result<(), Box<dyn
     release
         .files
         .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.82").into_bytes());
-    let accepted = expected_files(&release).err();
-    assert!(
-        !matches!(accepted, Some(GenerateError::ConfigKeyHelperTooOld { .. })),
-        "{accepted:?}"
-    );
+    let accepted = expected_files(&release);
+    assert!(accepted.is_ok(), "{:?}", accepted.as_ref().err());
     Ok(())
 }
