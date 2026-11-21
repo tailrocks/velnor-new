@@ -86,3 +86,16 @@ fn an_exclusion_flag_with_no_name_selects_nothing_it_cannot_prove() {
         assert!(!selected(line, "app"), "{line}");
     }
 }
+
+#[test]
+fn a_package_flag_with_no_valid_member_name_selects_nothing_it_cannot_prove() {
+    for line in [
+        "cargo build --workspace -p",
+        "cargo build --workspace --package",
+        "cargo build --workspace --package=",
+        "cargo build --workspace -p nope",
+    ] {
+        assert!(!selected(line, "lib"), "{line}");
+        assert!(!selected(line, "app"), "{line}");
+    }
+}

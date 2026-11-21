@@ -94,14 +94,13 @@ impl Invocation {
                 }
             }
         }
-        let all = provable
-            && words
-                .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"));
         let mut packages = Vec::new();
         for (index, word) in words.iter().enumerate() {
             if matches!(*word, "-p" | "--package") {
-                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
+                match words.get(index + 1) {
+                    Some(name) => packages.push((*name).to_owned()),
+                    None => provable = false,
+                }
             } else if let Some(name) = word
                 .strip_prefix("--package=")
                 .or_else(|| word.strip_prefix("-p"))
@@ -109,6 +108,11 @@ impl Invocation {
                 packages.push(name.to_owned());
             }
         }
+        let all = provable
+            && packages.iter().all(|name| members.contains(name.as_str()))
+            && words
+                .iter()
+                .any(|word| matches!(*word, "--workspace" | "--all"));
         packages.retain(|name| provable && members.contains(name.as_str()));
         Some(Selection {
             all,
