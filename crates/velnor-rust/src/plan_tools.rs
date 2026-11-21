@@ -20,6 +20,7 @@ pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // helper-gate: first in tools-v0.1.111 via a1a1595d9f
 pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
+const ANCHOR_KEY_PRUNE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const TOOLS_SAVED_KEY_HELPER: (u64, u64, u64) = (0, 1, 112);
 const TOOLS_ANCHOR_ATTEMPT_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
@@ -45,6 +46,31 @@ fn restored_anchor(facts: &RepoFacts, plan: Option<&JobId>) -> ToolsAnchor {
         return ToolsAnchor::Unanchored;
     }
     ToolsAnchor::Restored(plan.map_or(AnchorSource::ThisJob, |job| AnchorSource::Job(job.clone())))
+}
+
+fn prunes_anchor_keys(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(ANCHOR_KEY_PRUNE_HELPER))
+}
+
+pub(crate) fn mark_anchor_keys(facts: &RepoFacts, jobs: &mut [Job]) {
+    let always = !prunes_anchor_keys(facts);
+    let named: Vec<JobId> = jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .filter_map(|step| match &step.kind {
+            StepKind::ToolsLocal(
+                ToolsLocalVerb::VerifyNamedAnchor,
+                ToolsAnchor::Restored(AnchorSource::Job(source)),
+            ) => Some(source.clone()),
+            _ => None,
+        })
+        .collect();
+    for job in jobs {
+        job.anchor_key_output = always || named.contains(&job.id);
+    }
 }
 
 pub(crate) fn tools_anchor_read(facts: &RepoFacts, any_gate: &[Gate]) -> Vec<Step> {

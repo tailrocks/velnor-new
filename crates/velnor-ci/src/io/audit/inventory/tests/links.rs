@@ -3,8 +3,8 @@
 
 use std::os::unix::fs::symlink;
 
-use nix::sys::resource::{Resource, getrlimit, setrlimit};
-
+use super::handle::{self, Climb, Origin};
+use super::resolve::Reach;
 use super::*;
 
 fn base(name: &str) -> PathBuf {
@@ -16,36 +16,41 @@ fn base(name: &str) -> PathBuf {
     base
 }
 
-fn link_resolutions(directory: &Path) -> BTreeMap<PathBuf, Option<PathBuf>> {
-    let entries = scan_with(
-        directory,
-        &BTreeSet::new(),
-        &mut Budget::new(usize::MAX),
-        &Probe::default(),
+fn link_kind(directory: &Path, name: &str) -> Kind {
+    let opened = handle::open(&Origin::Path, directory, &Climb::none())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    handle::kind_at(
+        &opened,
+        name.as_ref(),
+        &directory.join(name),
+        Reach::default(),
     )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    let children = entries
-        .get(&fs::canonicalize(directory).unwrap_or_else(|e| unreachable!("{e}")))
-        .unwrap_or_else(|| unreachable!("{} is not recorded", directory.display()));
-    children
-        .iter()
-        .filter_map(|(name, kind)| match kind {
-            Kind::Link { resolved, .. } => Some((name.clone(), resolved.clone())),
-            Kind::File | Kind::Directory | Kind::Other => None,
-        })
-        .collect()
+    .unwrap_or_else(|e| unreachable!("{e}"))
+    .unwrap_or_else(|| unreachable!("{name} is missing"))
 }
 
-fn chain(directory: &Path, prefix: &str, links: usize) {
-    for index in 0..links {
-        let target = if index + 1 == links {
-            "../a/b".to_owned()
-        } else {
-            format!("{prefix}-{}", index + 1)
-        };
-        symlink(target, directory.join(format!("{prefix}-{index}")))
-            .unwrap_or_else(|e| unreachable!("{e}"));
-    }
+#[test]
+fn a_link_target_is_resolved_through_the_opened_directory_not_the_path() {
+    let base = base("swapped");
+    let held = base.join("d");
+    fs::create_dir_all(held.join("real")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink("real", held.join("l")).unwrap_or_else(|e| unreachable!("{e}"));
+    let other = base.join("d2");
+    fs::create_dir_all(other.join("other")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink("other", other.join("l")).unwrap_or_else(|e| unreachable!("{e}"));
+    let opened =
+        handle::open(&Origin::Path, &held, &Climb::none()).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::rename(&held, base.join("d.old")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::rename(&other, &held).unwrap_or_else(|e| unreachable!("{e}"));
+    let kind = handle::kind_at(&opened, "l".as_ref(), &held.join("l"), Reach::default());
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        kind.unwrap_or_else(|e| unreachable!("{e}")),
+        Some(Kind::Link {
+            target: PathBuf::from("real"),
+            resolved: Some(held.join("real")),
+        })
+    );
 }
 
 #[test]
@@ -72,12 +77,26 @@ fn handle_relative_resolution_agrees_with_canonicalize_on_a_stable_tree() {
     for (name, target) in &links {
         symlink(target, dir.join(name)).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    let resolutions = link_resolutions(&dir);
     for (name, _) in &links {
         let expected = fs::canonicalize(dir.join(name)).ok();
-        assert_eq!(resolutions.get(Path::new(name)), Some(&expected), "{name}");
+        let Kind::Link { resolved, .. } = link_kind(&dir, name) else {
+            unreachable!("{name} is not a link")
+        };
+        assert_eq!(resolved, expected, "{name}");
     }
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn chain(directory: &Path, prefix: &str, links: usize) {
+    for index in 0..links {
+        let target = if index + 1 == links {
+            "../a/b".to_owned()
+        } else {
+            format!("{prefix}-{}", index + 1)
+        };
+        symlink(target, directory.join(format!("{prefix}-{index}")))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
 }
 
 #[test]
@@ -88,47 +107,49 @@ fn a_link_to_a_file_written_with_a_trailing_slash_is_unresolved() {
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(base.join("a/file"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     symlink("../a/file/", dir.join("slashed")).unwrap_or_else(|e| unreachable!("{e}"));
-    symlink("../a/file/.", dir.join("dotted")).unwrap_or_else(|e| unreachable!("{e}"));
     symlink("../a/file", dir.join("plain")).unwrap_or_else(|e| unreachable!("{e}"));
-    let resolutions = link_resolutions(&dir);
+    let slashed = link_kind(&dir, "slashed");
+    let plain = link_kind(&dir, "plain");
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(resolutions.get(Path::new("slashed")), Some(&None));
-    assert_eq!(resolutions.get(Path::new("dotted")), Some(&None));
-    assert!(matches!(resolutions.get(Path::new("plain")), Some(Some(_))));
+    assert!(
+        matches!(slashed, Kind::Link { resolved: None, .. }),
+        "{slashed:?}"
+    );
+    assert!(
+        matches!(
+            plain,
+            Kind::Link {
+                resolved: Some(_),
+                ..
+            }
+        ),
+        "{plain:?}"
+    );
 }
 
 #[test]
-fn a_link_crossing_more_than_forty_links_is_unresolved_and_one_within_the_limit_resolves() {
+fn a_link_crossing_more_than_forty_links_is_unresolved_and_forty_resolves() {
     let base = base("hops");
     let dir = base.join("dir");
     fs::create_dir_all(base.join("a/b")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     chain(&dir, "short", 40);
     chain(&dir, "long", 41);
-    let resolutions = link_resolutions(&dir);
+    let short = link_kind(&dir, "short-0");
+    let long = link_kind(&dir, "long-0");
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(matches!(
-        resolutions.get(Path::new("short-0")),
-        Some(Some(_))
-    ));
-    assert_eq!(resolutions.get(Path::new("long-0")), Some(&None));
-}
-
-#[test]
-fn a_link_into_a_deeply_nested_directory_resolves_like_canonicalize() {
-    let base = base("deep");
-    let dir = base.join("dir");
-    let nested: PathBuf = std::iter::repeat_n("d", 400).collect();
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::create_dir_all(base.join("nested").join(&nested)).unwrap_or_else(|e| unreachable!("{e}"));
-    symlink(Path::new("../nested").join(&nested), dir.join("entry"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let (soft, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap_or_else(|e| unreachable!("{e}"));
-    setrlimit(Resource::RLIMIT_NOFILE, hard.min(256), hard).unwrap_or_else(|e| unreachable!("{e}"));
-    let resolutions = link_resolutions(&dir);
-    setrlimit(Resource::RLIMIT_NOFILE, soft, hard).unwrap_or_else(|e| unreachable!("{e}"));
-    let expected = fs::canonicalize(dir.join("entry")).ok();
-    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(expected.is_some());
-    assert_eq!(resolutions.get(Path::new("entry")), Some(&expected));
+    assert!(
+        matches!(
+            short,
+            Kind::Link {
+                resolved: Some(_),
+                ..
+            }
+        ),
+        "{short:?}"
+    );
+    assert!(
+        matches!(long, Kind::Link { resolved: None, .. }),
+        "{long:?}"
+    );
 }

@@ -308,3 +308,15 @@ fn a_root_replaced_by_a_file_while_it_is_listed_fails_the_scan() {
         "{entries:?}"
     );
 }
+
+#[test]
+fn a_root_replaced_by_a_directory_while_it_is_listed_fails_the_scan() {
+    let entries = scan_with_root_replaced_after_it_is_opened("directory", |root, aside| {
+        fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir(root).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("was replaced by another directory while it was listed")),
+        "{entries:?}"
+    );
+}
