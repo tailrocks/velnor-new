@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
+use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
@@ -24,9 +24,10 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// An enclosing mbx session (its socket is set) answers for nested cargo calls and writes no report of their own.
 fn inside_session() -> bool {
-    std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
+    std::env::var_os("MBX_SOCKET")
+        .filter(|socket| !socket.is_empty())
+        .is_some_and(|socket| is_socket(Path::new(&socket)))
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
