@@ -39,34 +39,84 @@ fn runs(
     let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
         return true;
     };
+    triggered(lint, changed, symlinks) || !has_tracked_input(lint, tracked, symlinks)
+}
+
+fn triggered(lint: &LintJob, changed: &BTreeSet<RepoPath>, symlinks: &BTreeSet<RepoPath>) -> bool {
     symlinks
         .iter()
         .chain(changed)
         .any(|path| reached(lint, path))
-        || !has_tracked_input(lint, tracked, symlinks)
 }
 
 #[must_use]
 pub fn unmatched_inputs(
     facts: &RepoFacts,
+    event: EventKind,
+    changed: Option<&BTreeSet<RepoPath>>,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
-    facts
+    let changed = changed.filter(|_| event == EventKind::PullRequest);
+    let entries = facts
         .config
         .lint
         .iter()
+        .filter(|lint| !changed.is_some_and(|changed| triggered(lint, changed, symlinks)))
         .flat_map(|lint| {
             lint.inputs
                 .iter()
-                .filter(|glob| {
-                    !tracked
-                        .iter()
-                        .any(|path| input_matches(glob, path, symlinks))
-                })
                 .map(|glob| (lint.id.clone(), glob.clone()))
         })
+        .collect();
+    unmatched_entries(entries, tracked, |glob, path| {
+        input_matches(glob, path, symlinks)
+    })
+}
+
+#[must_use]
+pub fn unmatched_entries<T>(
+    entries: Vec<(T, PathGlob)>,
+    tracked: &BTreeSet<RepoPath>,
+    matches: impl Fn(&PathGlob, &RepoPath) -> bool,
+) -> Vec<(T, PathGlob)> {
+    let mut by_head: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, (_, glob)) in entries.iter().enumerate() {
+        by_head.entry(head(glob)).or_default().push(index);
+    }
+    let mut open = vec![true; entries.len()];
+    let mut left = entries.len();
+    for path in tracked {
+        if left == 0 {
+            break;
+        }
+        for key in [first_segment(path.as_str()), "*"] {
+            for &index in by_head.get(key).into_iter().flatten() {
+                if open[index] && matches(&entries[index].1, path) {
+                    open[index] = false;
+                    left -= 1;
+                }
+            }
+        }
+    }
+    entries
+        .into_iter()
+        .zip(open)
+        .filter_map(|(entry, open)| open.then_some(entry))
         .collect()
+}
+
+fn head(glob: &PathGlob) -> &str {
+    first_segment(fixed(glob))
+}
+
+fn first_segment(text: &str) -> &str {
+    text.split('/').next().unwrap_or("")
+}
+
+fn fixed(glob: &PathGlob) -> &str {
+    let text = glob.as_str();
+    text.strip_suffix("/**").unwrap_or(text)
 }
 
 fn input_matches(glob: &PathGlob, path: &RepoPath, symlinks: &BTreeSet<RepoPath>) -> bool {
@@ -139,11 +189,7 @@ fn covers(glob: &PathGlob, path: &RepoPath) -> bool {
 fn matches(glob: &PathGlob, path: &RepoPath, ancestors: bool) -> bool {
     let text = glob.as_str();
     let trailing = text.ends_with("/**");
-    let fixed = if trailing {
-        &text[..text.len() - "/**".len()]
-    } else {
-        text
-    };
+    let fixed = fixed(glob);
     let open = trailing || !text.contains('*');
     let (want, got) = (depth(fixed), depth(path.as_str()));
     let agrees = fixed

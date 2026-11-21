@@ -1,14 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Evidence and rules for the waste a green lane hides: a sources miss that had a saved entry, an
-//! MBX session with no hits on a primed store, a toolchain install on an exact tools hit.
-
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// `prepare` appends one line per `rustup component add` or `rustup target add` it had to run.
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
 
 pub const SEED_TRUNCATED: &str = "velnor-mbx-seed-truncated";
@@ -24,10 +20,8 @@ pub struct MbxSession {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MbxEvidence {
-    /// The checkout declares that cargo runs through MBX (mise `mr_boxington` or the cargo wrapper).
     #[serde(default)]
     pub declared: bool,
-    /// `MBX_CACHE_DIR` named a store that held an entry older than the first cargo invocation.
     pub store_primed: bool,
     #[serde(default)]
     pub seed_truncated: bool,
@@ -52,9 +46,12 @@ pub fn seed_truncated(runner_temp: &Path) -> bool {
     runner_temp.join(SEED_TRUNCATED).is_file()
 }
 
-fn cache_text(line: &str) -> Option<&str> {
+fn cache_text(line: &str) -> Option<(bool, &str)> {
     let text = line.split_once("mbx[cache]: ")?.1;
-    Some(text.strip_prefix("object cache: ").unwrap_or(text))
+    Some(match text.strip_prefix("object cache:") {
+        Some(rest) => (true, rest.trim_start()),
+        None => (false, text),
+    })
 }
 
 fn looks_like_lookup_summary(text: &str) -> bool {
@@ -81,7 +78,8 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
             "hits" => (session.hits, seen[0]) = (count, true),
             "misses" => (session.misses, seen[1]) = (count, true),
             "not looked up" => session.not_looked_up = count,
-            _ => {}
+            "bypassed" | "incremental" => {}
+            _ => return None,
         }
     }
     (seen[0] && seen[1]).then_some(session)
@@ -91,7 +89,7 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
 pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
     String::from_utf8_lossy(log)
         .lines()
-        .filter_map(|line| parse_lookup_summary(cache_text(line)?))
+        .filter_map(|line| parse_lookup_summary(cache_text(line)?.1))
         .collect()
 }
 
@@ -100,8 +98,9 @@ pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
     String::from_utf8_lossy(log)
         .lines()
         .filter(|line| {
-            cache_text(line).is_some_and(|text| {
-                looks_like_lookup_summary(text) && parse_lookup_summary(text).is_none()
+            cache_text(line).is_some_and(|(labelled, text)| {
+                (labelled || looks_like_lookup_summary(text))
+                    && parse_lookup_summary(text).is_none()
             })
         })
         .map(|line| line.trim().to_owned())
@@ -136,10 +135,9 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         }
     }
     let sessions = &metrics.mbx.sessions;
-    let lookups: u64 = sessions
-        .iter()
-        .map(|session| session.misses + session.not_looked_up)
-        .sum();
+    let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
+        total.saturating_add(session.misses.saturating_add(session.not_looked_up))
+    });
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated
         && metrics.mbx.unparsed == 0

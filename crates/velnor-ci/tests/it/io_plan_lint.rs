@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
+use std::collections::BTreeSet;
 use std::fs;
 use std::os::unix::fs::symlink;
+
+use velnor_model::{PathGlob, RepoPath};
+use velnor_rust::unmatched_entries;
 
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo};
@@ -262,5 +267,66 @@ fn plan_explain_warns_about_an_input_that_matches_no_tracked_file_and_keeps_the_
     assert_eq!(
         lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
         "lint_hk=skip "
+    );
+}
+
+#[test]
+fn plan_explain_does_not_warn_about_an_input_of_a_lint_that_runs_on_a_changed_input() {
+    let repo = folder_repo("lint-typo-runs", "['cfg/hk.pkl', 'cfgg/hk.pkl']");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "cfg/hk.pkl"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let explained = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !explained.contains("matches no tracked file"),
+        "{explained}"
+    );
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["cfg/hk.pkl"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn unmatched_inputs_take_one_pass_over_the_tracked_paths() {
+    let tracked: BTreeSet<RepoPath> = (0..20_000)
+        .map(|i| {
+            RepoPath::new(format!("lint{}/src/{i}.rs", i % 120))
+                .unwrap_or_else(|e| unreachable!("{e}"))
+        })
+        .collect();
+    let entries: Vec<(usize, PathGlob)> = (0..120)
+        .map(|k| {
+            let folder = if k % 2 == 0 {
+                format!("lint{k}")
+            } else {
+                format!("typo{k}")
+            };
+            (
+                k,
+                PathGlob::new(folder).unwrap_or_else(|e| unreachable!("{e}")),
+            )
+        })
+        .collect();
+    let calls = Cell::new(0_usize);
+    let unmatched = unmatched_entries(entries, &tracked, |glob, path| {
+        calls.set(calls.get() + 1);
+        path.as_str()
+            .strip_prefix(glob.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    });
+    let names: Vec<usize> = unmatched.iter().map(|(k, _)| *k).collect();
+    assert_eq!(names, (0..120).filter(|k| k % 2 == 1).collect::<Vec<_>>());
+    assert!(
+        calls.get() <= tracked.len(),
+        "{} matcher calls for {} tracked paths",
+        calls.get(),
+        tracked.len()
     );
 }
