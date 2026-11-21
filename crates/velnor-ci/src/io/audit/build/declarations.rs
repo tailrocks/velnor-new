@@ -132,8 +132,12 @@ fn trusted(
             .and_then(|entries| inventory::matches(output, path, &entries, targets));
         match matched {
             Ok(true) => {}
-            Err(error) if budget.fatal() => return Err(CiError::new(error.to_string())),
-            Ok(false) | Err(_) => return Ok(false),
+            Err(error) if budget.overflowed() => return Err(CiError::new(error.to_string())),
+            Err(error) => {
+                budget.warn_descriptors_exhausted(&error);
+                return Ok(false);
+            }
+            Ok(false) => return Ok(false),
         }
     }
     Ok(true)

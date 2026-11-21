@@ -108,6 +108,7 @@ pub(super) fn names(
             names.push(name);
         }
     }
+    names.sort();
     Ok(names)
 }
 

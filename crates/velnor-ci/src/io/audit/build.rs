@@ -35,6 +35,7 @@ struct Builder<'a> {
     workspaces: Vec<Workspace>,
     directories: Vec<PathBuf>,
     max_entries: usize,
+    open_files: Option<inventory::OpenFileLimit>,
     targets: BTreeSet<PathBuf>,
     roots: BTreeSet<PathBuf>,
     declared: BTreeSet<PathBuf>,
@@ -44,7 +45,7 @@ struct Builder<'a> {
 type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
-    inventory::raise_open_file_limit();
+    let open_files = inventory::raise_open_file_limit();
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
@@ -72,6 +73,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         workspaces,
         directories,
         max_entries: max_entries_from_env()?,
+        open_files,
         roots,
         declared: BTreeSet::new(),
         location,
@@ -222,10 +224,13 @@ impl Builder<'_> {
             }
             match inventory::scan(root, &self.targets, &mut budget) {
                 Ok(found) => evidence.entries.extend(found),
-                Err(error) if budget.fatal() => {
+                Err(error) if budget.overflowed() => {
                     return Err(CiError::new(error.to_string()));
                 }
-                Err(_) => return Ok((evidence, false)),
+                Err(error) => {
+                    budget.warn_descriptors_exhausted(&error);
+                    return Ok((evidence, false));
+                }
             }
         }
         Ok((evidence, true))
@@ -279,9 +284,11 @@ impl Builder<'_> {
         {
             build.env(TARGET_VARIABLE, target);
         }
-        let status = build
-            .status()
-            .map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
+        let spawned = match self.open_files {
+            Some(limit) => limit.for_child(|| build.status()),
+            None => build.status(),
+        };
+        let status = spawned.map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
         self.record(
             entries,
             complete,

@@ -233,7 +233,7 @@ fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
         error.to_string().contains(MAX_ENTRIES_VARIABLE),
         "limit error does not name {MAX_ENTRIES_VARIABLE}: {error}"
     );
-    assert!(budget.fatal());
+    assert!(budget.overflowed());
     let read = read.load(Ordering::Relaxed);
     assert!(
         read <= limit + 1,

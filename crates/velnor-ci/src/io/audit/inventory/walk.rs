@@ -15,7 +15,8 @@ use super::{Entries, Kind, excluded_entry};
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
-    fatal: bool,
+    overflowed: bool,
+    descriptors: bool,
 }
 
 impl Budget {
@@ -23,17 +24,24 @@ impl Budget {
         Self {
             remaining: limit,
             limit,
-            fatal: false,
+            overflowed: false,
+            descriptors: false,
         }
     }
 
-    pub(in crate::io::audit) fn fatal(&self) -> bool {
-        self.fatal
+    pub(in crate::io::audit) fn overflowed(&self) -> bool {
+        self.overflowed
+    }
+
+    pub(in crate::io::audit) fn warn_descriptors_exhausted(&self, error: &io::Error) {
+        if self.descriptors {
+            eprintln!("velnor-ci: WARNING: {error}");
+        }
     }
 
     fn reserve(&mut self) -> io::Result<()> {
         let Some(remaining) = self.remaining.checked_sub(1) else {
-            self.fatal = true;
+            self.overflowed = true;
             return Err(io::Error::other(format!(
                 "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
                 self.limit
@@ -85,7 +93,7 @@ pub(super) fn scan_with(
         if !descriptors_exhausted(&error) {
             return error;
         }
-        budget.fatal = true;
+        budget.descriptors = true;
         io::Error::other(format!(
             "directory tree deeper than {depth} levels with pending siblings exceeds the open-file limit ({}); raise the open-file limit",
             open_file_limit()
