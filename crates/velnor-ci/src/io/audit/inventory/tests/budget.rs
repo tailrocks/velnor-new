@@ -15,10 +15,10 @@ fn confined(body: impl FnOnce()) {
     if std::env::var_os(CONFINED).is_some() {
         return body();
     }
-    let name = std::thread::current()
-        .name()
-        .map(str::to_owned)
-        .unwrap_or_else(|| unreachable!("a test runs on a thread named after it"));
+    let name = std::thread::current().name().map_or_else(
+        || unreachable!("a test runs on a thread named after it"),
+        str::to_owned,
+    );
     let exe = std::env::current_exe().unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(exe)
         .args(["--exact", &name, "--nocapture"])
