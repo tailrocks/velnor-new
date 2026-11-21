@@ -129,9 +129,13 @@ pub fn mint(
     let minted: Minted = serde_json::from_str(&answer)
         .map_err(|_| CiError::new("the installation token answer holds no token"))?;
     let token = Zeroizing::new(minted.token);
-    if token.is_empty() || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+    if token.is_empty()
+        || !token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+    {
         return Err(CiError::new(
-            "the installation token answer holds a token that is not plain letters, digits and _",
+            "the installation token answer holds a token that is not plain letters, digits, _, . and -",
         ));
     }
     Ok(token)

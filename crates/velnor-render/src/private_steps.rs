@@ -156,8 +156,6 @@ fn token(sources: &PrivateSources, mint: TokenMint) -> RenderedStep {
     }
 }
 
-/// The token step body. With [`TokenMint::Helper`] the private key is in the environment of
-/// this one step only, and no post step that runs after checkout code ever receives it.
 pub(crate) fn app_token(
     sources: &PrivateSources,
     owner: &str,

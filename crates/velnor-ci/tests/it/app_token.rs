@@ -24,6 +24,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const CLIENT_ID: &str = "Iv23liTestClient";
 const MINTED: &str = "ghs_mintedInstallationToken0123456789";
+const STATELESS: &str = "ghs_eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4LXkifQ.c2ln-bmF0dXJl_x";
 const INSTALLATION: &str = "/repos/acme/shared-lib/installation";
 const ACCESS_TOKENS: &str = "/app/installations/4242/access_tokens";
 
@@ -248,6 +249,23 @@ fn the_minted_token_reaches_the_log_only_inside_the_add_mask_command() -> TestRe
 }
 
 #[test]
+fn a_stateless_token_with_dots_and_dashes_is_masked_and_written() -> TestResult {
+    let key = Key::pkcs1("app-token-stateless")?;
+    let answer = json!({"token": STATELESS, "expires_at": "2026-11-21T12:00:00Z"}).to_string();
+    let api = serve((200, r#"{"id":4242}"#), (201, &answer))?;
+    let output = key.path("github-output");
+    let run = mint(&key.pem, &api, &output, &["shared-lib"]);
+    assert!(run.status.success(), "{run:?}");
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert_eq!(
+        stdout.lines().next(),
+        Some(format!("::add-mask::{STATELESS}").as_str())
+    );
+    assert_eq!(fs::read_to_string(&output)?, format!("token={STATELESS}\n"));
+    Ok(())
+}
+
+#[test]
 fn a_refused_mint_writes_no_output_and_never_echoes_the_key_or_the_jwt() -> TestResult {
     let key = Key::pkcs1("app-token-refused")?;
     let answers = [
@@ -265,6 +283,18 @@ fn a_refused_mint_writes_no_output_and_never_echoes_the_key_or_the_jwt() -> Test
         (
             (200, r#"{"id":4242}"#),
             (201, r#"{"token":"ghs_a\nevil=1"}"#.to_owned()),
+        ),
+        (
+            (200, r#"{"id":4242}"#),
+            (201, r#"{"token":"ghs_a evil"}"#.to_owned()),
+        ),
+        (
+            (200, r#"{"id":4242}"#),
+            (201, r#"{"token":"ghs_a%0Aevil"}"#.to_owned()),
+        ),
+        (
+            (200, r#"{"id":4242}"#),
+            (201, r#"{"token":"ghs_a=evil"}"#.to_owned()),
         ),
         ((200, r#"{"id":"x"}"#), (201, minted_answer())),
     ];
