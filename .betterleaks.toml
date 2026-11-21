@@ -112,3 +112,27 @@ paths = [
 regexes = [
   '''^secret$''',
 ]
+
+[[allowlists]]
+description = "public test-only RSA key fixture TEST-ONLY-not-a-secret-rsa-pkcs1.pem (not a secret)"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1\.pem$''',
+]
+regexes = [
+  '''^\-\-\-\-\-BEGIN RSA PRIVATE KEY\-\-\-\-\-\nMIIEowIBAAKCAQEAwcanHl0rMq5YAwCdCcSTfZ3kftUczCiOEw7KL9BG2rtZUvRb\nBZKtDvaNmBrXVZhF6TMzpGeFQjRslrQ\+HllDXt2CfdVUhDbv/OXh4fnFjIEkogFI\nKoaZrs0vGkTxU8M/y5bgsQ6erjgzIOXYN0p1xwhAcSJzFlXb2\+SHRsbt\+eSmkCYR\nnuK7/UoQ2GeS4zS66VIxv2ZfS8/OBLF\+Py83Lbt1a8mcpjPmgMd/d5PHtDbJr0El\n2OjyXlun0Uhh/4jEhene0Wg1BiSyHJN0SZ6oQR08CtY3cKx/P9KweUDWLuHdUtMd\n9\+IDlkk6k//0Qmvse3XUaCstcw0qkfyVp3yzQwIDAQABAoIBAAnsso4dXkmhoLco\nQEkwY0MRlvlg0Ur3ky2qTUEdQ41b/4HLK1Ph8X3zTMjXxX2hze4MUrHLh4mFHw0Q\nI22K5UA/mIZfXcCXAiJx/huEnzfIb\+euqLnDQq3JEbq6GzrocVg5D9fU4UJ\+qGFT\nKruYoBpwjSeX1X/1J8ySxaCI\+1\+xqnJHZEFSJRtgNNILOsvPp0BsflepFkvEDh6E\nO1SbDQvTOJWOf/5aWZ63G3C2HdilCzKVLiQFJumKmT5hnwCNuWJT9RKqOaS4urfU\nHH2CTyjao\+cNfHxumi9rbtCjqCHym3ZWDadWeKPxV0um63Y4f0SpjjJfuzRSHZkV\nonlCMKECgYEA7ZDWAaMsWvEz6gPlWnCK76/1vF95eO3aent80tUueZXqicBCwGjr\njiG68EVIlrXS3RxGyT\+cl1RCaglt6BBKuaca3rpQafRhrGclqJM2M19puyeWiqyF\n7ypM/4ob6sWym76AEt7Y0aqivNYid6/7baRTo03t\+1FCyXJ7CL4ECPECgYEA0M/y\nmAVaRrH1xMq2SwIiWlt45MZV2PSDrlemmDjnN60uYNWHUlvTEBhW2PIkAh9geT17\nzxtnX/Gna64Zu\+SKPRS7\+qiDOxhqF1hRsI9IY281TI\+dTkL2NTOtVRo293X4vUJj\njGcUJhFEWNgKAMN/d7hVup5TKZ3WnnE3e4QPn3MCgYEAtx2xF8oC4oaRkYw3OaMO\nNPrY275sD36nrUmKSajxDd80zcFYsp8tEn2Fbra44RJ92tl05qMVvL/CAaILCZml\nP71CxPOwEDvDHfTT3kC6wpaFFTHKpFGfW16rwz1dj3Wb2tjYN7N2RQbWMeCM6NzJ\nXRYRMgtbqSBV7plDpNVynsECgYAhMy7rJM65tsnQxDo/qtMzcp/CIBa\+LAJT0fPW\n\+BUrMQnSs6CUY60nPfdw/u7it4JrRG9O\+phxFMb9w\+yrhybDl2xb6jcTSkpz88Lp\nQ57K0H\+08JCeRN9IjjLc\+RIMPmGSFeAmDq2Rb\+ViCtdsT6kQq\+pVhZ7LWyEoh\+\+\+\nX7zsKQKBgEgjiys0GvASacB0LyzmXTKc01f/7d8WDN0IcywZ\+5TQrp9p10xbvTIh\ng7NQZFppxS/OEuNN9VCJpYllgzx/b1IPpr4KMLyPwGqGtf8oT9PjohFiBWaQaO1U\nsoVbNUaau9TU9K3OZl6d/AFFbwJ204xIXSAKvb0iCoW69fZfA9yz\n\-\-\-\-\-END RSA PRIVATE KEY\-\-\-\-\-$''',
+]
+
+[[allowlists]]
+description = "public test-only RSA key fixture TEST-ONLY-not-a-secret-rsa-pkcs8.pem (not a secret)"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8\.pem$''',
+]
+regexes = [
+  '''^\-\-\-\-\-BEGIN PRIVATE KEY\-\-\-\-\-\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDBxqceXSsyrlgD\nAJ0JxJN9neR\+1RzMKI4TDsov0Ebau1lS9FsFkq0O9o2YGtdVmEXpMzOkZ4VCNGyW\ntD4eWUNe3YJ91VSENu/85eHh\+cWMgSSiAUgqhpmuzS8aRPFTwz/LluCxDp6uODMg\n5dg3SnXHCEBxInMWVdvb5IdGxu355KaQJhGe4rv9ShDYZ5LjNLrpUjG/Zl9Lz84E\nsX4/Lzctu3VryZymM\+aAx393k8e0NsmvQSXY6PJeW6fRSGH/iMSF6d7RaDUGJLIc\nk3RJnqhBHTwK1jdwrH8/0rB5QNYu4d1S0x334gOWSTqT//RCa\+x7ddRoKy1zDSqR\n/JWnfLNDAgMBAAECggEACeyyjh1eSaGgtyhASTBjQxGW\+WDRSveTLapNQR1DjVv/\ngcsrU\+HxffNMyNfFfaHN7gxSscuHiYUfDRAjbYrlQD\+Yhl9dwJcCInH\+G4SfN8hv\n566oucNCrckRurobOuhxWDkP19ThQn6oYVMqu5igGnCNJ5fVf/UnzJLFoIj7X7Gq\nckdkQVIlG2A00gs6y8\+nQGx\+V6kWS8QOHoQ7VJsNC9M4lY5//lpZnrcbcLYd2KUL\nMpUuJAUm6YqZPmGfAI25YlP1Eqo5pLi6t9QcfYJPKNqj5w18fG6aL2tu0KOoIfKb\ndlYNp1Z4o/FXS6brdjh/RKmOMl\+7NFIdmRWieUIwoQKBgQDtkNYBoyxa8TPqA\+Va\ncIrvr/W8X3l47dp6e3zS1S55leqJwELAaOuOIbrwRUiWtdLdHEbJP5yXVEJqCW3o\nEEq5pxreulBp9GGsZyWokzYzX2m7J5aKrIXvKkz/ihvqxbKbvoAS3tjRqqK81iJ3\nr/ttpFOjTe37UULJcnsIvgQI8QKBgQDQz/KYBVpGsfXEyrZLAiJaW3jkxlXY9IOu\nV6aYOOc3rS5g1YdSW9MQGFbY8iQCH2B5PXvPG2df8adrrhm75Io9FLv6qIM7GGoX\nWFGwj0hjbzVMj51OQvY1M61VGjb3dfi9QmOMZxQmEURY2AoAw393uFW6nlMpndae\ncTd7hA\+fcwKBgQC3HbEXygLihpGRjDc5ow40\+tjbvmwPfqetSYpJqPEN3zTNwViy\nny0SfYVutrjhEn3a2XTmoxW8v8IBogsJmaU/vULE87AQO8Md9NPeQLrCloUVMcqk\nUZ9bXqvDPV2PdZva2Ng3s3ZFBtYx4Izo3MldFhEyC1upIFXumUOk1XKewQKBgCEz\nLuskzrm2ydDEOj\+q0zNyn8IgFr4sAlPR89b4FSsxCdKzoJRjrSc993D\+7uK3gmtE\nb076mHEUxv3D7KuHJsOXbFvqNxNKSnPzwulDnsrQf7TwkJ5E30iOMtz5Egw\+YZIV\n4CYOrZFv5WIK12xPqRCr6lWFnstbISiH775fvOwpAoGASCOLKzQa8BJpwHQvLOZd\nMpzTV//t3xYM3QhzLBn7lNCun2nXTFu9MiGDs1BkWmnFL84S4031UImliWWDPH9v\nUg\+mvgowvI/Aaoa1/yhP0\+OiEWIFZpBo7VSyhVs1Rpq71NT0rc5mXp38AUVvAnbT\njEhdIAq9vSIKhbr19l8D3LM=\n\-\-\-\-\-END PRIVATE KEY\-\-\-\-\-$''',
+]

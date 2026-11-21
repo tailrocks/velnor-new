@@ -24,6 +24,8 @@ fixtures=(
   crates/velnor-ci/tests/it/audit/selection.rs
   crates/velnor-ci/tests/it/cache_credential_scrub.rs
   crates/velnor-ci/tests/it/cache_private_repo.rs
+  crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem
+  crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem
   crates/velnor-ci/tests/it/public_probe.rs
   crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
   crates/velnor-runner/crates/velnor-runner-host/src/launch/gate/removal_tests.rs
