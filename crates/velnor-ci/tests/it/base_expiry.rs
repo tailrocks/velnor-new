@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -104,6 +106,25 @@ fn expiry_refuses_nested_checkouts_before_removing_any_target() {
         );
         assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
     }
+}
+
+#[test]
+fn restored_refuses_a_max_age_that_is_not_unicode_and_keeps_the_base() {
+    let repo = built("report-non-unicode-age", Some(&today(8)));
+    let outputs = repo.root().join("github-output");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(repo.root())
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("VELNOR_BASE_MAX_AGE_DAYS", OsStr::from_bytes(b"\xff"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("VELNOR_BASE_MAX_AGE_DAYS"),
+        "{output:?}"
+    );
+    assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
 }
 
 #[test]

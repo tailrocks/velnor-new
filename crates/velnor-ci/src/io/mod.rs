@@ -11,6 +11,7 @@ mod build_inputs;
 mod cache;
 pub mod cache_api;
 mod cache_credentials;
+mod cache_limits;
 mod cache_paths;
 mod cache_prune;
 pub mod cache_purge;

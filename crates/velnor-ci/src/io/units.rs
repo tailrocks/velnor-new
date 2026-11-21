@@ -90,8 +90,7 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
         .filter(|limit| (1..=TARGET_DIRECTORIES_CEILING).contains(limit))
         .ok_or_else(|| {
             CiError::new(format!(
-                "{MAX_TARGET_DIRECTORIES_VARIABLE} must be a number from 1 to {TARGET_DIRECTORIES_CEILING}, not {}",
-                value.display()
+                "{MAX_TARGET_DIRECTORIES_VARIABLE} must be a number from 1 to {TARGET_DIRECTORIES_CEILING}, not {value:?}",
             ))
         })
 }
