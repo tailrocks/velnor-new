@@ -117,20 +117,18 @@ fn a_mismatching_restore_marks_the_job_and_a_clean_one_does_not() {
 }
 
 #[test]
-fn an_unwritable_discard_marker_is_reported_and_the_discard_still_happens() {
+fn an_unwritable_discard_marker_fails_the_step_and_the_discard_still_happened() {
     let job = job("tools-heal-marker-blocked");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir(job.root.join("velnor-tools-discarded")).unwrap_or_else(|e| unreachable!("{e}"));
-    let out = verify_step(VerifyVerb::Check, &context(&job, &anchor, "push"))
-        .unwrap_or_else(|e| unreachable!("the verify step aborted: {e}"));
+    let error = verify_step(VerifyVerb::Check, &context(&job, &anchor, "push"))
+        .expect_err("an unwritable marker must fail the verify step")
+        .to_string();
+    assert!(error.contains("cannot record the discard"), "{error}");
     assert!(
-        out.contains("::notice::the restored tools were discarded"),
-        "{out}"
-    );
-    assert!(
-        out.contains("::warning::cannot record the discard"),
-        "{out}"
+        error.contains("the poisoned entry would be kept"),
+        "{error}"
     );
     assert!(!job.home.join(".rustup").exists());
 }
@@ -183,6 +181,27 @@ fn a_replacement_that_cannot_retire_the_poisoned_entry_fails_and_keeps_it() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(leftovers, [KEY], "no staging or retired entry stays");
+}
+
+#[test]
+fn a_blocked_retirement_fails_the_replacement_and_keeps_the_poisoned_entry() {
+    let (_repo, job, store) = poisoned_store("tools-heal-blocked-retire");
+    let tools = store.join("tools");
+    let blocker = format!(".staging-retired-{KEY}");
+    fs::write(tools.join(&blocker), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = save(&store, &job.home, true);
+    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert!(velnor_ci::tools_local::finish(Verb::Save, &outcome, "node").is_err());
+    assert_eq!(stored_rustc(&store), "evil binary!");
+    let mut names: Vec<_> = fs::read_dir(&tools)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    let mut expected = vec![KEY.to_owned(), blocker];
+    expected.sort();
+    assert_eq!(names, expected, "no staging directory stays");
 }
 
 fn save_in_a_working_directory(name: &str, runner_temp: Option<&str>, marker_dir: &str) {

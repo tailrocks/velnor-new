@@ -179,7 +179,8 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         fs::remove_dir_all(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    let retired = tools.join(format!("{STAGING_PREFIX}retired-{:016x}", random_u64()));
+    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    fs::remove_dir_all(&retired).ok();
     let present = fs::symlink_metadata(&entry).is_ok();
     let replaced = present && fs::rename(&entry, &retired).is_ok();
     if inputs.replace && present && !replaced {
