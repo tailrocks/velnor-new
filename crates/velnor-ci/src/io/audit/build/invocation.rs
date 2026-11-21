@@ -321,11 +321,11 @@ fn subcommand(words: &[&str]) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "invocation/location.rs"]
-mod location;
-#[cfg(test)]
 #[path = "invocation/label.rs"]
 mod label;
+#[cfg(test)]
+#[path = "invocation/location.rs"]
+mod location;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
