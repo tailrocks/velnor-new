@@ -8,6 +8,7 @@ mod build_directory;
 mod build_script_source;
 mod freshness;
 mod gated;
+mod global_options;
 mod groups;
 mod guards;
 mod identity;
@@ -81,7 +82,7 @@ pub(super) fn placed(repo: &Repo, target: &str) {
 pub(super) fn workspace_below_the_root() -> Repo {
     let repo = Repo::new("audit");
     unit(&repo, ".gitignore", "target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(
         &repo,
         "rust/Cargo.toml",
@@ -240,7 +241,7 @@ pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&s
 pub(super) fn root_package_with_path_dependencies() -> Repo {
     let repo = Repo::new("audit-owners");
     unit(&repo, ".gitignore", "target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     unit(
         &repo,

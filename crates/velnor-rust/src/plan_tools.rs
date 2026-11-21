@@ -20,8 +20,7 @@ pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // helper-gate: first in tools-v0.1.111 via a1a1595d9f
 pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
-// helper-gate: first in tools-v0.1.111 via 19e135fac1
-const TOOLS_ANCHOR_BUDGET_HELPER: (u64, u64, u64) = (0, 1, 111);
+const TOOLS_ANCHOR_ATTEMPT_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
@@ -51,7 +50,12 @@ pub(crate) fn tools_anchor_read(facts: &RepoFacts, any_gate: &[Gate]) -> Vec<Ste
     if facts.tools.tools.is_empty() || !tools_anchored(facts) {
         return Vec::new();
     }
-    [ToolsLocalVerb::AnchorFind, ToolsLocalVerb::AnchorRead]
+    let find = if names_anchor_attempt(facts) {
+        ToolsLocalVerb::AnchorFindAttempt
+    } else {
+        ToolsLocalVerb::AnchorFind
+    };
+    [find, ToolsLocalVerb::AnchorRead]
         .map(|verb| Step {
             any_gate: any_gate.to_vec(),
             ..step(StepKind::ToolsLocal(verb, ToolsAnchor::Unanchored))
@@ -144,18 +148,18 @@ fn names_cache_entry(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
 }
 
-pub(crate) fn budgets_anchor_outputs(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_BUDGET_HELPER))
-}
-
 fn names_anchor_entry(facts: &RepoFacts) -> bool {
     facts
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_KEY_HELPER))
+}
+
+fn names_anchor_attempt(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_ATTEMPT_HELPER))
 }
 
 fn tools_local(facts: &RepoFacts) -> bool {
@@ -257,7 +261,11 @@ pub(crate) fn tools_save(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step> {
         vec![
             tools_step(ToolsLocalVerb::Record, restored.clone(), When::Success),
             tools_step(
-                ToolsLocalVerb::AnchorSave,
+                if names_anchor_attempt(facts) {
+                    ToolsLocalVerb::AnchorSaveAttempt
+                } else {
+                    ToolsLocalVerb::AnchorSave
+                },
                 saved.clone(),
                 When::SaveVerifiedTools(VerifiedSave::Anchor),
             ),

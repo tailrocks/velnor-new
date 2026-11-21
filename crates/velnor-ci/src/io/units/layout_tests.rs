@@ -120,6 +120,20 @@ fn files_a_build_script_generated_are_not_dep_info() {
 }
 
 #[test]
+fn files_a_build_script_generated_in_the_old_layout_do_not_make_the_target_unknown() {
+    let root = std::env::temp_dir().join(format!("velnor-units-old-{}", std::process::id()));
+    let unit = root.join("debug/build/dep-5c64b2dee9af80ce");
+    fs::create_dir_all(unit.join("out")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(unit.join("out/generated.d"), "not dep-info").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(unit.join("output"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let found = unit_files_within(&root, 100);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let found = found.unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(matches!(found[0].0, UnitFile::BuildOutput { .. }));
+}
+
+#[test]
 fn the_old_layout_is_still_read() {
     assert_eq!(
         parsed("debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep"),
@@ -192,12 +206,16 @@ fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
         "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
         "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
     ] {
-        let root = target_with(&[layout, "debug/out/libdep.rlib"]);
+        let root = target_with(&[
+            layout,
+            "debug/deps/libdep-5c64b2dee9af80ce.rlib",
+            "debug/deps/libdep-5c64b2dee9af80ce.d",
+        ]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(
             found.unwrap_or_else(|e| unreachable!("{e}")).len(),
-            1,
+            2,
             "{layout}"
         );
     }
@@ -227,4 +245,14 @@ fn a_shared_target_is_scanned_strictly_only_when_every_workspace_using_it_is_pla
         mixed.is_ok(),
         "a target shared with a separate build directory must keep the unchecked scan"
     );
+}
+
+#[test]
+fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_build_units_unchecked()
+{
+    let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
+    let group = [sharing(&root, &root.join("build")), sharing(&root, &root)];
+    let found = group[1].build_units(&group);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(found.is_ok(), "{found:?}");
 }

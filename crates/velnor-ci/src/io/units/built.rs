@@ -19,6 +19,23 @@ pub(super) fn output(name: &OsStr) -> bool {
         || name == "invoked.timestamp"
 }
 
+pub(super) fn run_folder(file: &Path) -> bool {
+    file.parent()
+        .and_then(Path::file_name)
+        .is_some_and(|folder| folder == "run")
+}
+
+pub(super) fn refuse_orphan(output: Option<&Path>) -> Result<(), CiError> {
+    let Some(output) = output else {
+        return Ok(());
+    };
+    let directory = output.parent().unwrap_or(output);
+    Err(CiError::new(format!(
+        "found no units in {}; unknown cargo layout?",
+        directory.display()
+    )))
+}
+
 pub(super) fn refuse_without_units(
     target: &Path,
     built: bool,
