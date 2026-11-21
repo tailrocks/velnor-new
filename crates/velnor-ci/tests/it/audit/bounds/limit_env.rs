@@ -4,7 +4,7 @@
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 
-use super::super::velnor_ci;
+use super::super::{command, velnor_ci};
 use super::entries::{VARIABLE, audit_within, declared_tree};
 
 #[test]
@@ -29,4 +29,16 @@ fn a_tree_above_100000_entries_passes_under_the_default_limit() {
     let repo = declared_tree(100_001);
     let within = audit_within(&repo, None);
     assert!(within.status.success(), "{within:?}");
+}
+
+#[test]
+fn every_audit_launcher_clears_an_inherited_entry_limit() {
+    for launcher in [command("true"), velnor_ci()] {
+        assert!(
+            launcher
+                .get_envs()
+                .any(|(name, value)| name == VARIABLE && value.is_none()),
+            "{launcher:?}"
+        );
+    }
 }
