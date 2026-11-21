@@ -298,14 +298,14 @@ pub fn explain(
         if path.as_str().contains(['*', '?', '[', ']']) {
             let advice = if path.as_str().contains('/') {
                 format!(
-                    "use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}"
+                    "  no exact rule can name a path with a *, ?, [ or ]; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
                 )
             } else {
-                "rename the file so its name has none of them".to_owned()
+                format!(
+                    "  no rule can name a root-level path with a *, ?, [ or ]: rename it without those characters, or move it into a folder and use a glob of that folder that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                )
             };
-            lines.push(format!(
-                "unknown path: {shown}\n  no exact rule can name a path with a *, ?, [ or ]; {advice}\n"
-            ));
+            lines.push(format!("unknown path: {shown}\n{advice}"));
             continue;
         }
         let quoted = toml_string(path.as_str());
