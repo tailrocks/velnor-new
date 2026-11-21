@@ -15,15 +15,13 @@ const FAKE_NEXTEST: &str = r#"#!/bin/sh
 if [ "$2" = list ]; then
     : > "$RUNNER_TEMP/list-started"
     dest=
-    overwrite=
     while [ $# -gt 0 ]; do
         case "$1" in
             --extract-to) dest="$2" ;;
-            --extract-overwrite) overwrite=1 ;;
         esac
         shift
     done
-    if [ -n "$overwrite" ] && [ -n "$dest" ]; then
+    if [ "$dest" = "$TREE" ]; then
         chmod 644 "$dest/test-bin"
         sleep 0.5
         chmod 755 "$dest/test-bin"
@@ -71,11 +69,13 @@ fn the_early_list_of_an_archive_run_leaves_the_running_test_binaries_alone() {
         std::env::var("PATH").unwrap_or_default()
     );
     let extract = tree.display().to_string();
+    fs::write(temp.join("a.tar.zst"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "cargo-nextest", "nextest", "run"])
         .args(["--archive-file", "a.tar.zst", "--extract-to", &extract])
         .args(["--extract-overwrite", "--workspace-remap", &extract])
         .args(["--no-fail-fast", "--no-tests=pass"])
+        .current_dir(&temp)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", temp.join("github-output"))
         .env("LIST_JSON", listed(&[("kept", &["alpha"])]))

@@ -8,7 +8,6 @@ use velnor_model::{
 };
 use velnor_rust::{PackageCounts, encode_package_counts};
 
-mod extract_to;
 #[cfg(test)]
 mod list_argv;
 #[path = "tests_run/listed.rs"]
@@ -19,7 +18,6 @@ mod status;
 mod statuses;
 mod tap;
 
-pub(crate) use extract_to::{extracts, retarget_extract};
 pub(crate) use listed::{Listing, runnable_matches};
 pub use tap::SummaryTap;
 
@@ -115,13 +113,6 @@ pub fn output_lines(counts: TestCounts) -> String {
         lines.push(format!("{TESTS_BY_PACKAGE_OUTPUT}={encoded}"));
     }
     lines.join("\n") + "\n"
-}
-
-fn skipped(line: &str) -> Option<u64> {
-    let (_, tail) = line.split_once(" run:")?;
-    tail.split(',')
-        .find_map(|part| part.trim().strip_suffix(" skipped"))
-        .and_then(|count| count.trim().parse().ok())
 }
 
 #[must_use]

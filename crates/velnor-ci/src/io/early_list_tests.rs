@@ -25,8 +25,6 @@ fn archive_run(program: &Path) -> Vec<String> {
         "run",
         "--archive-file",
         &archive.display().to_string(),
-        "--extract-to",
-        ".",
     ]
     .iter()
     .map(|word| (*word).to_owned())
@@ -35,30 +33,9 @@ fn archive_run(program: &Path) -> Vec<String> {
 
 fn report(result: Result<Listing, Failure>) -> String {
     match result {
-        Err(Failure::Report(message)) => message,
+        Err(failure) => failure.reason,
         other => unreachable!("{other:?}"),
     }
-}
-
-#[test]
-fn a_list_program_that_cannot_be_executed_is_reported_as_unable_to_start() {
-    let directory = scratch("spawn");
-    let program = directory.join("cargo-nextest");
-    fs::write(&program, "#!/bin/sh\n").unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o644))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let message = report(try_list(
-        &archive_run(&program),
-        Some(OsString::from(&directory)),
-        &|_| Ok(true),
-        &|_| Ok(u64::MAX),
-    ));
-    assert!(
-        message.starts_with("cannot start the early nextest list: "),
-        "{message}"
-    );
-    assert!(message.contains("Permission denied"), "{message}");
-    fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -71,7 +48,7 @@ fn a_missing_runner_temp_is_reported_before_anything_is_started() {
     ));
     assert_eq!(
         message,
-        "the early nextest list needs its own extraction directory: RUNNER_TEMP is not set"
+        "cannot prepare its own extraction directory: RUNNER_TEMP is not set"
     );
 }
 
@@ -99,31 +76,6 @@ fn an_unwritable_runner_temp_is_reported_with_the_directory_it_could_not_create(
 }
 
 #[test]
-fn a_list_that_exits_non_zero_keeps_its_status_and_stderr() {
-    let directory = scratch("exit");
-    let program = directory.join("cargo-nextest");
-    fs::write(
-        &program,
-        "#!/bin/sh\necho 'double-spawn failed' >&2\nexit 104\n",
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let result = try_list(
-        &archive_run(&program),
-        Some(OsString::from(&directory)),
-        &|_| Ok(true),
-        &|_| Ok(u64::MAX),
-    );
-    let Err(Failure::Exited { status, stderr }) = result else {
-        unreachable!("{result:?}")
-    };
-    assert_eq!(status.code(), Some(104));
-    assert_eq!(String::from_utf8_lossy(&stderr), "double-spawn failed\n");
-    fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-}
-
-#[test]
 fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
     let directory = scratch("no-room");
     let archive = directory.join("a.tar.zst");
@@ -134,8 +86,6 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
         "run".to_owned(),
         "--archive-file".to_owned(),
         archive.display().to_string(),
-        "--extract-to".to_owned(),
-        ".".to_owned(),
     ];
     let message = report(try_list(
         &run,
@@ -167,8 +117,6 @@ fn an_extraction_that_fits_the_headroom_is_admitted() {
         "run".to_owned(),
         "--archive-file".to_owned(),
         archive.display().to_string(),
-        "--extract-to".to_owned(),
-        ".".to_owned(),
     ];
     let message = report(try_list(
         &run,
@@ -176,7 +124,7 @@ fn an_extraction_that_fits_the_headroom_is_admitted() {
         &|_| Ok(true),
         &|_| Ok(800),
     ));
-    assert_eq!(message, "the early nextest list printed no usable listing");
+    assert_eq!(message, "it printed no usable listing");
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
 }
 

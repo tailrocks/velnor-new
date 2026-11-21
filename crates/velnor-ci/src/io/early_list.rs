@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
-use crate::tests_run::{Listing, extracts, list_argv, retarget_extract, runnable_matches};
+use crate::tests_run::{Listing, list_argv, runnable_matches};
 
 const EXPANSION_HEADROOM: u64 = 8;
 
@@ -72,7 +72,12 @@ impl EarlyList {
             State::Taken,
         );
         match state {
-            State::Running(handle) => handle.join().ok().flatten(),
+            State::Running(handle) => handle.join().unwrap_or_else(|_| {
+                eprintln!(
+                    "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
+                );
+                None
+            }),
             State::Idle if wanted => list_matches(&self.argv),
             State::Idle | State::Taken => None,
         }
@@ -87,29 +92,30 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         &free_bytes,
     ) {
         Ok(listing) => Some(listing),
-        Err(Failure::NotListable) => None,
-        Err(Failure::Exited { status, stderr }) => {
-            drop(std::io::stderr().write_all(&stderr));
+        Err(failure) => {
+            drop(std::io::stderr().write_all(&failure.stderr));
             eprintln!(
-                "velnor-ci: the early nextest list exited with {status}; the step reports no per-package counts"
+                "velnor-ci: the early nextest list failed: {}; the step reports no tests_listed, tests_by_package or tests_ignored",
+                failure.reason
             );
-            None
-        }
-        Err(Failure::Report(message)) => {
-            eprintln!("velnor-ci: {message}; the step reports no per-package counts");
             None
         }
     }
 }
 
 #[derive(Debug)]
-enum Failure {
-    NotListable,
-    Exited {
-        status: std::process::ExitStatus,
-        stderr: Vec<u8>,
-    },
-    Report(String),
+struct Failure {
+    reason: String,
+    stderr: Vec<u8>,
+}
+
+impl Failure {
+    fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            stderr: Vec::new(),
+        }
+    }
 }
 
 fn try_list(
@@ -118,12 +124,19 @@ fn try_list(
     can_execute: &ExecProbe,
     free: &FreeProbe,
 ) -> Result<Listing, Failure> {
-    let mut argv = list_argv(argv).ok_or(Failure::NotListable)?;
-    let directory = isolate(&mut argv, runner_temp, can_execute, free).map_err(|error| {
-        Failure::Report(format!(
-            "the early nextest list needs its own extraction directory: {error}"
-        ))
-    })?;
+    let mut argv =
+        list_argv(argv).ok_or_else(|| Failure::new("the command is not a nextest run"))?;
+    let directory = if archive_file(&argv).is_some() {
+        Some(
+            extraction_directory(&mut argv, runner_temp, can_execute, free).map_err(|error| {
+                Failure::new(format!(
+                    "cannot prepare its own extraction directory: {error}"
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
     let mut command = Command::new(&argv[0]);
     command
         .args(&argv[1..])
@@ -133,30 +146,28 @@ fn try_list(
         command.env_remove(name);
     }
     super::mbx_reports::assign(&mut command, &argv);
-    let output = command.output().map_err(|error| {
-        Failure::Report(format!("cannot start the early nextest list: {error}"))
-    })?;
+    let output = command
+        .output()
+        .map_err(|error| Failure::new(format!("cannot start it: {error}")))?;
     drop(directory);
     if !output.status.success() {
-        return Err(Failure::Exited {
-            status: output.status,
+        return Err(Failure {
+            reason: output.status.code().map_or_else(
+                || output.status.to_string(),
+                |code| format!("exit code {code}"),
+            ),
             stderr: output.stderr,
         });
     }
-    runnable_matches(&output.stdout).ok_or_else(|| {
-        Failure::Report("the early nextest list printed no usable listing".to_owned())
-    })
+    runnable_matches(&output.stdout).ok_or_else(|| Failure::new("it printed no usable listing"))
 }
 
-fn isolate(
-    argv: &mut [String],
+fn extraction_directory(
+    argv: &mut Vec<String>,
     runner_temp: Option<OsString>,
     can_execute: &ExecProbe,
     free: &FreeProbe,
-) -> Result<Option<ListDir>, String> {
-    if !extracts(argv) {
-        return Ok(None);
-    }
+) -> Result<ListDir, String> {
     let directory = ListDir::create(runner_temp, std::process::id(), can_execute)?;
     admit(argv, directory.path(), free)?;
     let path = directory
@@ -164,8 +175,12 @@ fn isolate(
         .to_str()
         .ok_or("the directory is not valid UTF-8")?
         .to_owned();
-    retarget_extract(argv, &path);
-    Ok(Some(directory))
+    let at = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(argv.len());
+    argv.splice(at..at, ["--extract-to".to_owned(), path]);
+    Ok(directory)
 }
 
 fn admit(argv: &[String], directory: &Path, free: &FreeProbe) -> Result<(), String> {
@@ -192,6 +207,11 @@ fn admit(argv: &[String], directory: &Path, free: &FreeProbe) -> Result<(), Stri
 }
 
 fn archive_file(argv: &[String]) -> Option<&str> {
+    let end = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(argv.len());
+    let argv = &argv[..end];
     argv.iter().enumerate().find_map(|(index, arg)| {
         if arg == "--archive-file" {
             return argv.get(index + 1).map(String::as_str);

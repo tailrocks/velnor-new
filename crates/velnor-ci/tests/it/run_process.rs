@@ -209,10 +209,7 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-split", &split, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(
-            without_built(&written),
-            "existing=1\ntests_run=7\ntests_listed=7\n"
-        );
+        assert_eq!(without_built(&written), "existing=1\ntests_run=7\n");
     }
 
     #[test]
@@ -222,10 +219,7 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-failed", &script, NEXTEST_RUN);
         assert_eq!(output.status.code(), Some(100));
-        assert_eq!(
-            without_built(&written),
-            "existing=1\ntests_run=5\ntests_listed=5\n"
-        );
+        assert_eq!(without_built(&written), "existing=1\ntests_run=5\n");
     }
 
     #[test]
@@ -233,33 +227,24 @@ mod tests_run {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
         let (output, written, _) = run_with_output("tests-run-zero", script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(
-            written,
-            "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\n"
-        );
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\n");
     }
 
     #[test]
-    fn run_reports_the_skipped_tests_as_listed_when_a_filter_ran_none() {
+    fn run_reports_no_listed_count_from_the_summary_when_a_filter_ran_none() {
         let script = format!(
             "echo '     Summary [   0.001s] {BOLD}0{RESET} tests run: 0 passed, {BOLD}4{RESET} skipped' >&2"
         );
         let (output, written, _) = run_with_output("tests-run-filtered", &script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(
-            written,
-            "existing=1\nbuilt=true\ntests_run=0\ntests_listed=4\n"
-        );
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\n");
     }
 
     #[test]
-    fn run_lists_run_plus_skipped_and_leaves_listed_out_without_a_skipped_count() {
+    fn run_never_derives_a_listed_count_from_the_skipped_tests_of_the_summary() {
         let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
         let (_, written, _) = run_with_output("tests-run-mixed", mixed, NEXTEST_RUN);
-        assert_eq!(
-            without_built(&written),
-            "existing=1\ntests_run=3\ntests_listed=8\n"
-        );
+        assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
         let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
         let (_, written, _) = run_with_output("tests-run-bare", bare, NEXTEST_RUN);
         assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
