@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use crate::error::CiError;
+use crate::io::assign_mbx_report;
 
 pub type TestKey = (String, String);
 
@@ -68,18 +69,24 @@ impl Listing {
 }
 
 pub fn list(prefix: &str, extra: &[String]) -> Result<Listing, CiError> {
-    let output = Command::new("cargo-nextest")
-        .args([
-            "nextest",
-            "list",
-            "--workspace",
-            "--locked",
-            "--ignore-default-filter",
-            "--message-format",
-            "json",
-        ])
-        .args(extra)
-        .stderr(Stdio::inherit())
+    let argv: Vec<String> = [
+        "cargo-nextest",
+        "nextest",
+        "list",
+        "--workspace",
+        "--locked",
+        "--ignore-default-filter",
+        "--message-format",
+        "json",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .chain(extra.iter().cloned())
+    .collect();
+    let mut command = Command::new(&argv[0]);
+    command.args(&argv[1..]).stderr(Stdio::inherit());
+    assign_mbx_report(&mut command, &argv);
+    let output = command
         .output()
         .map_err(|e| CiError::new(format!("{prefix}: cannot run cargo-nextest: {e}")))?;
     if !output.status.success() {

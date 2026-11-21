@@ -55,7 +55,6 @@ pub struct Staged {
     pub skipped: BTreeMap<PathBuf, Skip>,
 }
 
-#[must_use]
 pub fn run(args: &ArtifactsStageArgs) -> ExitCode {
     let root = std::env::var_os(WORKSPACE_VARIABLE)
         .map(PathBuf::from)
