@@ -32,7 +32,7 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let directory = std::fs::canonicalize(&directory).unwrap_or(directory);
     scope(&directory, workspace().as_deref())
         .into_iter()
-        .any(crate::mbx_declared::declared_in)
+        .any(crate::mbx_declared::declared_or_unreadable_in)
 }
 
 fn project_directory(work: &Path, args: &[OsString]) -> PathBuf {
@@ -44,14 +44,19 @@ fn project_directory(work: &Path, args: &[OsString]) -> PathBuf {
 fn manifest(args: &[OsString]) -> Option<OsString> {
     let mut args = args.iter().take_while(|arg| *arg != "--");
     while let Some(arg) = args.next() {
-        if arg == "--manifest-path" {
+        if arg == "--manifest-path" || arg == "-m" {
             return args.next().cloned();
         }
-        if let Some(value) = arg
-            .to_str()
-            .and_then(|arg| arg.strip_prefix("--manifest-path="))
-        {
+        let Some(arg) = arg.to_str() else {
+            continue;
+        };
+        if let Some(value) = arg.strip_prefix("--manifest-path=") {
             return Some(value.into());
+        }
+        if !arg.starts_with("--")
+            && let Some(value) = arg.strip_prefix("-m")
+        {
+            return Some(value.strip_prefix('=').unwrap_or(value).into());
         }
     }
     None

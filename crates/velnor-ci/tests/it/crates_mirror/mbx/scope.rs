@@ -141,6 +141,107 @@ fn a_manifest_path_inside_the_declaring_directory_still_fails_closed() -> TestRe
     Ok(())
 }
 
+fn run_with_args(
+    repo: &Repo,
+    directory: &Path,
+    args: &[&str],
+) -> Result<Output, Box<dyn std::error::Error>> {
+    let plain = plain_cargo(repo)?;
+    fs::create_dir_all(directory)?;
+    Ok(wrapper_command(repo.root(), &plain, false, &[])?
+        .current_dir(directory)
+        .env("VELNOR_CARGO_MBX", "required")
+        .args(args)
+        .output()?)
+}
+
+fn assert_refused(output: &Output) {
+    assert!(!output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains(REFUSED));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
+}
+
+#[test]
+fn every_manifest_path_spelling_decides_by_the_project_it_names() -> TestResult {
+    let repo = declared_job()?;
+    let scratch = repo.root().join("scratch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    let outside = repo
+        .root()
+        .join("scratch-project/Cargo.toml")
+        .display()
+        .to_string();
+    for manifest in [&inside, &outside] {
+        let spellings: [Vec<String>; 4] = [
+            vec!["metadata".into(), "-m".into(), manifest.clone()],
+            vec!["metadata".into(), format!("-m={manifest}")],
+            vec!["metadata".into(), format!("-m{manifest}")],
+            vec![
+                "metadata".into(),
+                "--manifest-path".into(),
+                manifest.clone(),
+            ],
+        ];
+        for spelling in &spellings {
+            let args: Vec<&str> = spelling.iter().map(String::as_str).collect();
+            if manifest == &inside {
+                assert_refused(&run_with_args(&repo, &scratch, &args)?);
+            } else {
+                assert_plain(&run_with_args(&repo, repo.root(), &args)?);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn an_unreadable_or_invalid_config_counts_as_declaring_mbx() -> TestResult {
+    let broken: [(&str, &[u8]); 3] = [
+        ("invalid toml", b"[tools\n"),
+        ("invalid utf-8", &[0xff, 0xfe, 0x00]),
+        ("truncated mid-table", b"[wrappers.cargo]\ncommand = "),
+    ];
+    for (name, bytes) in broken {
+        let repo = declared_job()?;
+        fs::write(repo.root().join("mise.toml"), bytes)?;
+        let output = run_in(&repo, repo.root(), None, false)?;
+        assert!(!output.status.success(), "{name}: {output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(REFUSED),
+            "{name}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_config_that_is_a_directory_counts_as_declaring_mbx() -> TestResult {
+    let repo = declared_job()?;
+    fs::remove_file(repo.root().join("mise.toml"))?;
+    fs::create_dir(repo.root().join("mise.toml"))?;
+    assert_refused(&run_in(&repo, repo.root(), None, false)?);
+    Ok(())
+}
+
+#[test]
+fn a_broken_config_in_the_workspace_root_fails_closed_for_a_member_build() -> TestResult {
+    let repo = declared_job()?;
+    let workspace = repo.root().join("workspace");
+    let member = workspace.join("crates/member");
+    fs::create_dir_all(&member)?;
+    fs::write(workspace.join("mise.toml"), "[tools\n")?;
+    assert_refused(&run_in(&repo, &member, Some(&workspace), false)?);
+    Ok(())
+}
+
+#[test]
+fn a_directory_without_any_config_still_runs_plain() -> TestResult {
+    let repo = declared_job()?;
+    let fixture = repo.root().join("fixture-without-config");
+    assert_plain(&run_in(&repo, &fixture, None, false)?);
+    Ok(())
+}
+
 #[test]
 fn a_cargo_started_by_a_running_cargo_or_test_runs_plain_but_a_step_cargo_fails_closed()
 -> TestResult {
