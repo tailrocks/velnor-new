@@ -16,7 +16,6 @@ grep -q 'id: no-doctests$' "$rule" || { echo "no-doctests rule not found in $con
 grep -q 'id: no-doctests-scanner' "$rule" || { echo "no-doctests-scanner rule not found in $config" >&2; exit 2; }
 
 fails=0
-# check <name> <fail|pass> <file content with printf %b escapes>
 check() {
   local name="$1" expect="$2" dir="$work/$1"
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
@@ -227,6 +226,18 @@ check item_ordered_pre_indented_fence pass '/// 1. <pre>\n///    ```rust\n///   
 check item_lazy_text_pre_col0_pass pass '/// - item\n/// <pre>\n/// ```rust\n/// assert_eq!(1, 1);\n/// ```\npub fn f() {}\n'
 check fence_indent_after_prose pass '/// prose\n///     ```\n///     let x = 1;\n///     ```\npub fn g() {}\n'
 check fence_3sp_after_prose fail '/// prose\n///    ```\n///    let x = 1;\n///    ```\npub fn k() {}\n'
+check cdata_lowercase_fence fail '/// <![cdata[\n/// ```\n/// assert_eq!(1, 2);\n/// ```\npub fn f() {}\n'
+check cdata_upper_fence pass '/// <![CDATA[\n/// ```\n/// assert_eq!(1, 2);\n/// ```\npub fn f() {}\n'
+check type6_slash_tag   fail '/// <div/x\n/// ```\n/// assert_eq!(1, 2);\n/// ```\npub fn f() {}\n'
+check type6_self_close_fence pass '/// <div/>\n/// ```\n/// assert_eq!(1, 2);\n/// ```\npub fn f() {}\n'
+check quote_html_blank_fence fail '/// > <div>\n/// >\n/// > ```\n/// > assert_eq!(1, 2);\n/// > ```\npub fn f() {}\n'
+check quote_prose_blank_indent fail '/// > prose\n/// >\n/// >     assert_eq!(1, 2);\npub fn f() {}\n'
+check footnote_empty_indent fail '/// [^x]:\n///         assert_eq!(1, 2);\npub fn f() {}\n'
+check setext_eq_at_start pass '/// ===\n///     assert_eq!(1, 2);\npub fn f() {}\n'
+check quote_list_fence_indent fail '/// > - item\n/// >     ```rust\n/// >     assert_eq!(1, 2);\n/// >     ```\npub fn f() {}\n'
+check attr_split_pre_fence fail '#[doc = "<pre>"]\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
+check attr_split_across_attr fail '#[doc = "<pre>"]\n#[allow(dead_code)]\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
+check attr_split_across_item pass '#[doc = "<pre>"]\npub fn g() {}\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
 check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
 
 missing="$work/scanner_missing"
