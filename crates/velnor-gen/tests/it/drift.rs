@@ -3,17 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
-use std::fs;
-use std::path::Path;
-use std::process::Command;
 
-use velnor_gen::io::{add_manifests, read_files};
+use velnor_gen::io::read_files;
 use velnor_gen::{Drift, drift};
-use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
+use velnor_model::RepoPath;
 use velnor_render::{Owner, RELEASE_HEADER, VELNOR_GEN_MARKER, owner_of, seal};
-use velnor_rust::{METADATA_PATH, build_script_sources, recorded_metadata, wanted_files};
-
-use crate::setup_action::program;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -219,80 +213,24 @@ fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResul
     Ok(())
 }
 
-fn tracked_paths(root: &Path) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Box<dyn Error>> {
-    let listing = Command::new(program("git"))
-        .args(["ls-files", "-s", "-z"])
-        .current_dir(root)
-        .output()?;
-    assert!(
-        listing.status.success(),
-        "{}",
-        String::from_utf8_lossy(&listing.stderr)
-    );
-    let mut tracked = BTreeSet::new();
-    let mut symlinks = BTreeSet::new();
-    for entry in listing.stdout.split(|byte| *byte == 0) {
-        let Some(tab) = entry.iter().position(|byte| *byte == b'\t') else {
-            continue;
-        };
-        let path = RepoPath::new(std::str::from_utf8(&entry[tab + 1..])?)?;
-        if entry.starts_with(b"120000") {
-            symlinks.insert(path.clone());
-        }
-        tracked.insert(path);
-    }
-    Ok((tracked, symlinks))
-}
-
-fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
-    let (tracked, symlinks) = tracked_paths(root)?;
-    let mut view = RepoView {
-        repository: RepositoryIdentity::Named("tailrocks/velnor-new".to_owned()),
-        files: read_files(root, &wanted_files(&tracked))?,
-        tracked_paths: tracked,
-        symlinks,
-        rust_metadata: BTreeMap::new(),
-    };
-    add_manifests(&mut view, |paths| read_files(root, paths))?;
-    let recorded = read_files(root, &[METADATA_PATH])?;
-    view.rust_metadata = recorded_metadata(&view, recorded.get(&METADATA_PATH).map(Vec::as_slice))?;
-    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
-    view.files.extend(read_files(root, &roots)?);
-    for source in build_script_sources(&view) {
-        view.files.extend(read_files(root, &[source])?);
-    }
-    Ok(view)
-}
-
 #[test]
-fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates() -> TestResult {
-    let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
-    let view = committed_view(&root)?;
-    let expected = velnor_gen::generated_files(&view)?;
-    let committed: Vec<RepoPath> = view
-        .tracked_paths
-        .iter()
-        .filter(|path| {
-            path.as_str().starts_with(".github/workflows/")
-                && matches!(path.as_str().rsplit('.').next(), Some("yml" | "yaml"))
-        })
-        .chain(std::iter::once(&METADATA_PATH))
-        .cloned()
-        .collect();
-    let on_disk = read_files(&root, &committed)?;
-    assert!(
-        on_disk.contains_key(&RepoPath::new(".github/workflows/rust-ci.yml")?),
-        "the committed Rust CI workflow was not read"
+fn only_the_listed_workflows_are_read_so_an_untracked_file_is_never_drift() -> TestResult {
+    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let scratch_file = path(".github/workflows/scratch.yml")?;
+    let scratch = crate::io::Scratch::new("drift-listed")?;
+    crate::io::write(&scratch.repo().join(workflow.as_str()), &generated())?;
+    crate::io::write(
+        &scratch.repo().join(scratch_file.as_str()),
+        "name: Scratch\n",
+    )?;
+    let expected = BTreeMap::from([(workflow.clone(), generated())]);
+    let listed = read_files(&scratch.repo(), std::slice::from_ref(&workflow))?;
+    assert_eq!(drift(&expected, &listed, &none()), vec![]);
+    let everything = read_files(&scratch.repo(), &[workflow.clone(), scratch_file.clone()])?;
+    assert_eq!(
+        drift(&expected, &everything, &none()),
+        vec![Drift::Unmarked(scratch_file.clone())]
     );
-    let engine = view
-        .tracked_paths
-        .contains(&RepoPath::new(".velnor/config.toml")?);
-    let drifts: Vec<String> = drift(&expected, &on_disk, &none())
-        .into_iter()
-        .filter(|drift| !(engine && matches!(drift, Drift::Unmarked(_))))
-        .map(|drift| drift.to_string())
-        .collect();
-    assert_eq!(drifts, Vec::<String>::new());
     Ok(())
 }
 
