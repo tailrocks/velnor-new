@@ -208,7 +208,7 @@ scan() {
     off = 0; s = line
     while (match(s, tup)) {
       st = off + RSTART
-      if (!inrange(st) && !inlit(st) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
+      if (!inrange(st) && !inlit(st) && (st < 2 || !isword(substr(line, st - 1, 1))) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
       off = st + RLENGTH - 1
       s = substr(line, off + 1)
     }
@@ -278,7 +278,7 @@ scan() {
   function analyze(line,    s, off, p, m, st) {
     c_mv = 0; c_mn = ""; c_mc = ""; c_mention = 0
     lex_line(line)
-    c_tuple = tuple_code(line)
+    c_tuple = tuple_code(mask_code(line))
     off = 0; s = line
     while (!c_mv && match(s, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) {
       st = off + RSTART
@@ -304,20 +304,22 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
-  /^@@/ { inhdr = 0; prevnew = ""; prevadded = 0; p_mv = 0; c_mv = 0; next }
+  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; prevdecl = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
+  /^@@/ { inhdr = 0; prevnew = ""; prevadded = 0; prevdecl = 0; p_mv = 0; c_mv = 0; next }
   inhdr && /^(\+\+\+|---) / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
     above = prevnew
+    wasdecl = prevdecl
     aboveadded = prevadded
     p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
     analyze(text)
     scanned_now = strip(mask_code(text))
-    split_min = (scanned_now ~ /HELPER_MINIMUM[[:space:]]*:[^;]*=[[:space:]]*$/)
+    split_min = ((" " scanned_now) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:[^;]*=[[:space:]]*$/)
     if (split_min && !c_mv && p_mv) { c_mv = 1; c_mn = p_mn; c_mc = p_mc }
     prevnew = text
+    prevdecl = split_min
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
       if (!counted || !aboveadded || !p_mv || versions(strip(above), av) > 0) next
@@ -334,7 +336,7 @@ scan() {
     if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && tuple_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
-    if (!tree && (mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ || mask_code(text) ~ ("^" ws tup ws ";" ws "$")) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
+    if (!tree && (((" " mask_code(text)) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:/) || (wasdecl && mask_code(text) ~ ("^" ws tup ws ";" ws "$"))) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(scanned_now, probe) == 0) next

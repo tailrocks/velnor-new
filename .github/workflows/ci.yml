@@ -198,6 +198,16 @@ jobs:
           for f in gate-dotted-comment gate-dotted-string gate-dotted-gate-string; do
             bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110
           done
+          for f in gate-comment-in-tuple gate-comment-in-tuple-marker gate-marker-not-a-commit; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted $f.diff" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-comment-in-tuple-marked.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-standalone-tuple.diff" --current 0.1.111
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-minimum-prefix.diff" --current 0.1.111
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-call-ctor-tuple.diff" --current 0.1.111
           bash scripts/test-helper-gates-history.sh
       - name: Check the added gates against the base
         env:
