@@ -206,7 +206,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 # These velnor-gen tests walk the repository or render workflows on a loaded host, and ran past the 2 s default.
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job) | test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 # Each of these starts bash, perl or a rendered helper, or reads the repository, and ran past the 2 s default on a loaded host.
 [[profile.default.overrides]]
@@ -270,7 +270,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 # Same 10 s tier for the velnor-gen file-scan tests added above.
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job) | test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 # Same 10 s tier for the tests added to profile.default above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
