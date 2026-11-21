@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, GateNeed, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed,
-    Unread, Weakening, WorkspaceGroup, group_output_name,
+    AllTrigger, GateNeed, JobId, OptionalSteps, PackageName, PathGlob, RepoPath, RootSlug,
+    RustSelection, StepNeed, Unread, Weakening, WorkspaceGroup, group_output_name,
 };
 use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
 
@@ -150,6 +150,21 @@ pub fn lint_explanation(skipped: &[String]) -> String {
 }
 
 #[must_use]
+pub fn input_warnings(unmatched: &[(JobId, PathGlob)]) -> String {
+    unmatched
+        .iter()
+        .map(|(id, glob)| {
+            format!(
+                "warning: {}: inputs entry {} matches no tracked file\n",
+                inert(id.as_str()),
+                toml_string(glob.as_str())
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
 pub fn tests_outputs(expected: &BTreeMap<RepoPath, bool>) -> String {
     expected
         .iter()
@@ -280,10 +295,17 @@ pub fn explain(
     }
     for path in unknown {
         let shown = escape(path.as_str(), false);
-        if path.as_str().contains('*') {
-            lines.push(format!(
-                "unknown path: {shown}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
-            ));
+        if path.as_str().contains(['*', '?', '[', ']']) {
+            let advice = if path.as_str().contains('/') {
+                format!(
+                    "  no exact rule can name a path with a *, ?, [ or ]; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                )
+            } else {
+                format!(
+                    "  no rule can name a root-level path with a *, ?, [ or ]: rename it without those characters, or move it into a folder and use a glob of that folder that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                )
+            };
+            lines.push(format!("unknown path: {shown}\n{advice}"));
             continue;
         }
         let quoted = toml_string(path.as_str());

@@ -211,13 +211,14 @@ impl Parser<'_> {
     }
 
     fn call(&self, name: &str, arguments: &[Value]) -> Fallible<Value> {
-        let text = |index: usize| arguments.get(index).map(Value::text).unwrap_or_default();
+        let text = |index: usize| arguments.get(index).map_or_default(Value::text);
         Ok(match name {
             "cancelled" => Value::Flag(false),
             "always" => Value::Flag(true),
             "success" => Value::Flag(self.context.job_ok),
             "failure" => Value::Flag(!self.context.job_ok),
             "contains" => Value::Flag(text(0).to_lowercase().contains(&text(1).to_lowercase())),
+            "endsWith" => Value::Flag(text(0).to_lowercase().ends_with(&text(1).to_lowercase())),
             "format" => {
                 let mut formatted = text(0);
                 for index in 1..arguments.len() {

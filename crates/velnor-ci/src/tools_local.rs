@@ -37,6 +37,7 @@ pub struct Inputs<'a> {
     pub seed_dir: Option<&'a str>,
     pub home: &'a Path,
     pub owner: u32,
+    pub replace: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub enum Outcome {
     Restored { from: PathBuf },
     Rejected(&'static str),
     Saved { to: PathBuf },
+    Healed { to: PathBuf },
     AlreadySaved,
     Busy,
     Failed(&'static str),
@@ -152,6 +154,10 @@ fn describe(outcome: &Outcome) -> String {
         Outcome::Saved { to } => {
             format!("velnor: tools saved to the node store {}", to.display())
         }
+        Outcome::Healed { to } => format!(
+            "velnor: replaced the node store entry the tools check discarded {}",
+            to.display()
+        ),
         Outcome::AlreadySaved => "velnor: the node store already holds this key".to_owned(),
         Outcome::Busy => "velnor: another job is saving this key to the node store".to_owned(),
         Outcome::Failed(reason) => {
@@ -180,6 +186,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
+    let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
     let outcome = run(&Inputs {
         verb,
@@ -190,6 +197,10 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),
         home: &home,
+        replace: verb == Verb::Save
+            && runner_temp
+                .as_deref()
+                .is_some_and(crate::tools_discard::pending),
         owner: fs::metadata(&home)
             .map(|metadata| metadata.uid())
             .map_err(|error| CiError::new(format!("cannot stat {}: {error}", home.display())))?,
@@ -203,6 +214,12 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
             .open(&file)
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
+    }
+    if verb == Verb::Save
+        && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. })
+        && let Some(dir) = runner_temp.as_deref()
+    {
+        crate::tools_discard::clear(dir);
     }
     finish(verb, &outcome, &node)
 }

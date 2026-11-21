@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 use super::clear::clear_home;
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
 use crate::mbx_store::{random_u64, writable_by_job};
+use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
@@ -150,7 +151,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
     };
     let tools = base.join(TOOLS_DIR);
     let entry = tools.join(inputs.key);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, inputs.owner) {
         return Outcome::AlreadySaved;
     }
     if fs::create_dir_all(&tools).is_err() {
@@ -162,7 +163,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
     sweep(&tools);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, inputs.owner) {
         return Outcome::AlreadySaved;
     }
     let staging = tools.join(format!(
@@ -179,19 +180,38 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         fs::remove_dir_all(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    if fs::symlink_metadata(&entry).is_ok() {
-        fs::remove_dir_all(&entry).ok();
+    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    if fs::remove_dir_all(&retired).is_err()
+        && fs::symlink_metadata(&retired).is_ok_and(|metadata| metadata.is_dir())
+    {
+        remove_tree(&retired).ok();
+    }
+    let present = fs::symlink_metadata(&entry).is_ok();
+    let replaced = present && fs::rename(&entry, &retired).is_ok();
+    if inputs.replace && present && !replaced {
+        fs::remove_dir_all(&staging).ok();
+        return Outcome::Failed("the poisoned entry could not be retired");
     }
     if fs::rename(&staging, &entry).is_err() {
+        if replaced {
+            fs::rename(&retired, &entry).ok();
+        }
         fs::remove_dir_all(&staging).ok();
-        return if complete(&entry, inputs.owner) {
+        return if !inputs.replace && complete(&entry, inputs.owner) {
             Outcome::AlreadySaved
         } else {
             Outcome::Failed("the entry could not be published")
         };
     }
+    if replaced && remove_tree(&retired).is_err() {
+        return Outcome::Failed("the replaced entry could not be removed");
+    }
     prune(&tools, inputs.key);
-    Outcome::Saved { to: entry }
+    if replaced {
+        Outcome::Healed { to: entry }
+    } else {
+        Outcome::Saved { to: entry }
+    }
 }
 
 fn prune(tools: &Path, current: &str) {

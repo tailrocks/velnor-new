@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    GateNeed, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, cache_lane_outputs,
-    group_output_name, json_char_bytes, json_string_bytes,
+    CACHE_KEY_MAX_UNITS, GateNeed, JSON_UNIT_MAX_BYTES, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts,
+    RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
+    ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -61,6 +62,7 @@ pub(crate) fn needs_max_bytes<'a>(
         total
             .saturating_add(64)
             .saturating_add(skip_push)
+            .saturating_add(anchor_bytes(job))
             .saturating_add(json_string_bytes(job.id.as_str()))
             .saturating_add(json_string_bytes("cancelled"))
             .saturating_add(outputs)
@@ -77,6 +79,24 @@ pub(crate) fn needs_max_bytes<'a>(
                     }),
             )
     })
+}
+
+fn anchor_bytes(job: &Job) -> usize {
+    let reads = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
+        )
+    });
+    if !reads {
+        return 0;
+    }
+    property_bytes(TOOLS_ANCHOR_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES + 2).saturating_add(
+        property_bytes(
+            TOOLS_ANCHOR_KEY_OUTPUT,
+            CACHE_KEY_MAX_UNITS * JSON_UNIT_MAX_BYTES + 2,
+        ),
+    )
 }
 
 fn package_map_bytes(facts: &RepoFacts, slug: Option<&RootSlug>) -> usize {

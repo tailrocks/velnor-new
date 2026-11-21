@@ -161,6 +161,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .transpose()?;
     crate::groups::check_helper(&config, helper.as_ref())?;
     refuse_locked_credentials(view, &config, &rust_roots)?;
+    crate::public_advice::check(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny_configs = deny_configs(view, &rust_roots);
     let lane = config
@@ -173,6 +174,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .and_then(|policy| policy.deny_checks.as_deref())
         .map_or(DenyChecks::ALL, DenyChecks::of);
     let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
+    if config
+        .policy
+        .as_ref()
+        .is_some_and(|table| table.gate_on_plan)
+        && !(policy.deny || policy.machete)
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::PolicyGateWithoutLane,
+        ));
+    }
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
@@ -182,6 +194,9 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         repository,
         timings,
         timings_notes,
+        private_base_caches: config.private_sources.is_some()
+            && crate::private_sources::private_cause(view, &config, &rust_roots).is_some()
+            && crate::private_sources::only_private_git(view, &rust_roots),
         private_sources,
         private_suggestion: private_suggestion(view, &config, &rust_roots),
         weakenings,
