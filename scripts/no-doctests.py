@@ -7,7 +7,8 @@ IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 QUOTE = r"(?:[ \t]*>)*"
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\[\^[^\]]*[^\]\s][^\]]*\]:[ \t]*)*"
+FOOTNOTE = r"\[\^(?!\s*\])[^\]]*\]:"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|" + FOOTNOTE + r"[ \t]*)*"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
@@ -19,6 +20,8 @@ QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT = re.compile(r"=+[ \t]*|-+[ \t]*")
 ATX = re.compile(r"#{1,6}(?:[ \t]|$)")
+FOOTNOTE_DEF = re.compile(r"[ \t]*" + FOOTNOTE)
+CFG_DOC = re.compile(r",\s*doc\s*=")
 HTML_DONE = re.compile(r"<!--.*-->|<\?.*\?>|<![A-Za-z].*>|<!\[CDATA\[.*\]\]>")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
@@ -119,7 +122,10 @@ def doc_text_tabs(text):
 
 def block_text(lines, normalize=True):
     rest = lines[1:]
-    if all(not line.strip() or BLOCK_STAR.match(line) for line in rest):
+    body_lines = rest[:]
+    while body_lines and not body_lines[-1].strip():
+        body_lines.pop()
+    if all(BLOCK_STAR.match(line) for line in body_lines):
         body = [BLOCK_MARGIN.sub("", line, count=1) for line in rest]
     else:
         text = [line for line in rest if line.strip()]
@@ -157,7 +163,9 @@ def markdown_hit(lines, indent, prev=None, item=None):
         match = LIST_ITEM.match(line)
         if match and not HRULE.fullmatch(line.strip()):
             item = match.end() - 1
-        heading = prose(prev) and SETEXT.fullmatch(line.strip()) and (was is None or width >= was)
+        elif FOOTNOTE_DEF.match(line):
+            item = width + 4
+        heading = prose(prev) and SETEXT.fullmatch(line.strip()) and not indent.match(line) and (was is None or width >= was)
         prev = "" if heading else line
     return None, item
 
@@ -201,6 +209,8 @@ def has_following_doc(src, j, inner):
                 elif src[m] == "]":
                     depth -= 1
                 m += 1
+            if name and name.group() == "cfg_attr" and CFG_DOC.search(src, k, m):
+                return src.startswith("!", skip_trivia(src, j + 1)) == inner
             j = m
         elif m := IDENT.match(src, j):
             j = m.end()
