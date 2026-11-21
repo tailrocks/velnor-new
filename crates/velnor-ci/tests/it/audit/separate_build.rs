@@ -171,9 +171,9 @@ fn an_untrusted_build_output_in_a_build_directory_inside_the_target_is_invalidat
 }
 
 #[test]
-fn a_relative_build_directory_that_the_workspace_and_the_command_read_differently_is_refused() {
+fn a_relative_build_directory_names_the_same_directory_for_the_workspace_and_the_command() {
     let repo = workspace_below_the_root();
-    let refused = velnor_ci()
+    let built = velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_BUILD_BUILD_DIR", "build")
         .args([
@@ -187,11 +187,86 @@ fn a_relative_build_directory_that_the_workspace_and_the_command_read_differentl
         ])
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+    assert!(repo.root().join("build/debug").is_dir(), "{built:?}");
+}
+
+#[test]
+fn a_relative_build_directory_is_audited_from_the_step_directory_as_cargo_writes_it() {
+    let repo = built_in(APART, &[]);
+    stamp(&repo, APART);
+    let written = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
+fn a_relative_build_directory_resolves_parent_components_through_a_symlink_as_cargo_does() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/app.d", "app: app/src/lib.rs\n");
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    fs::create_dir_all(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(repo.root().join("rust/inner")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../inner", repo.root().join("rust/app/link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "link/../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let resolved =
+        fs::canonicalize(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        String::from_utf8_lossy(&refused.stderr).contains("build directory"),
-        "{refused:?}"
+        stderr.contains("found no units in") && stderr.contains(&*resolved.to_string_lossy()),
+        "the audit must read the directory cargo resolves through the link: {stderr}"
     );
+}
+
+fn link_to_build(repo: &Repo) {
+    std::os::unix::fs::symlink("../build", repo.root().join("rust/app/link-to-build"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_relative_build_directory_through_a_symlink_without_parent_components_is_audited_to_success() {
+    let repo = built_in(APART, &[]);
+    link_to_build(&repo);
+    stamp(&repo, APART);
+    let written = from_step_directory(&repo, "link-to-build", &["inputs", "audit", "--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
+fn an_absolute_build_directory_through_a_symlink_is_audited_to_success() {
+    let repo = built_in(APART, &[]);
+    link_to_build(&repo);
+    stamp(&repo, APART);
+    let through_link = repo.root().join("rust/app/link-to-build");
+    let written = from_step_directory(
+        &repo,
+        &through_link.to_string_lossy(),
+        &["inputs", "audit", "--write"],
+    );
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
+    velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 #[test]

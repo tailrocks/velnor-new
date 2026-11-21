@@ -6,6 +6,7 @@ mod declarations;
 mod failure;
 mod generated;
 mod invocation;
+mod outputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -17,7 +18,9 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
+use super::super::units::{
+    MetadataInvocation, Workspace, apart, build_unit_files, unchecked_unit_files,
+};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -25,6 +28,7 @@ use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
+use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -51,7 +55,13 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
-    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
+    let step = invocation.step(directory);
+    let baseline = MetadataInvocation {
+        executable: "cargo",
+        arguments: &[],
+        directory: &step,
+    };
+    let workspaces = workspaces(&facts, &checkout.root, &step, Some(&baseline), &inherit)?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(
@@ -238,7 +248,7 @@ impl Builder<'_> {
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
         for directory in &self.directories {
-            for (unit, path) in unchecked_unit_files(directory)? {
+            for (unit, path) in build_unit_files(&self.workspaces, directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -326,7 +336,12 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unchecked_unit_files(directory)? {
+            let units = if status.success() {
+                build_unit_files(&self.workspaces, directory)?
+            } else {
+                unchecked_unit_files(directory)?
+            };
+            for (unit, file) in units {
                 if !output(&unit) {
                     continue;
                 }
@@ -379,19 +394,4 @@ fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiEr
         "untrusted build outputs include packages outside this command's explicit selection: {}. {cause}",
         names.join(", ")
     ))
-}
-
-fn output(unit: &UnitFile) -> bool {
-    matches!(
-        unit,
-        UnitFile::BuildOutput { .. } | UnitFile::DepInfo { .. } | UnitFile::Script { .. }
-    )
-}
-
-fn identity(path: &Path) -> Result<(String, SystemTime), CiError> {
-    let bytes = fs::read(path).map_err(|e| CiError::new(e.to_string()))?;
-    let modified = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .map_err(|e| CiError::new(e.to_string()))?;
-    Ok((sha256_hex(&bytes), modified))
 }

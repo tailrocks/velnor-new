@@ -4,7 +4,6 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Deserialize;
 use velnor_rust::NESTED_ROOTS_FOLDER;
@@ -19,12 +18,16 @@ mod fill;
 mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
+mod metadata;
+#[cfg(test)]
+mod owner_tests;
 mod separation;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
+pub(super) use metadata::{MetadataInvocation, own_workspace, workspace};
 pub(super) use separation::apart;
-pub(super) use workspace::{unchecked_unit_files, unit_files_apart};
+pub(super) use workspace::{build_unit_files, unchecked_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -97,15 +100,25 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let (found, built) = scan(target, limit, None)?;
+    let Scanned {
+        found,
+        built,
+        orphan,
+    } = scan(target, limit, None)?;
     built::refuse_without_units(target, built, &found)?;
+    built::refuse_orphan(orphan.as_deref())?;
     Ok(found)
 }
 
-type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
+struct Scanned {
+    found: Vec<(UnitFile, PathBuf)>,
+    built: bool,
+    orphan: Option<PathBuf>,
+}
 
 fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
+    let mut outputs = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
     let mut built = false;
@@ -155,10 +168,19 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
+                if !generated(&path) && !built::bookkeeping(&entry.file_name()) {
+                    outputs.push(path);
+                }
             }
         }
     }
-    Ok((found, built))
+    let owners = built::Owners::new(&found, &outputs);
+    let orphan = outputs.iter().find(|output| !owners.owns(output)).cloned();
+    Ok(Scanned {
+        found,
+        built,
+        orphan,
+    })
 }
 
 fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
@@ -180,7 +202,10 @@ fn generated(file: &Path) -> bool {
     let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
         return false;
     };
-    out.parent().is_some_and(|unit| unit.join("run").is_dir())
+    let Some(unit) = out.parent() else {
+        return false;
+    };
+    unit.join("run").is_dir() || unit.parent().is_some_and(|build| build.ends_with("build"))
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -207,12 +232,14 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
     let unit = folders.last().and_then(|folder| split(folder));
     let parent = folders.len().checked_sub(2).map(|at| folders[at]);
     match (parent, unit) {
-        (Some(".fingerprint"), Some((package, hash))) => Some(UnitFile::Fingerprint {
-            configuration: configuration(2)?,
-            package: package.to_owned(),
-            hash: hash.to_owned(),
-            name: (*name).to_owned(),
-        }),
+        (Some(".fingerprint"), Some((package, hash))) if !built::artifact(OsStr::new(name)) => {
+            Some(UnitFile::Fingerprint {
+                configuration: configuration(2)?,
+                package: package.to_owned(),
+                hash: hash.to_owned(),
+                name: (*name).to_owned(),
+            })
+        }
         (Some("build"), Some((package, hash))) if *name == "output" => {
             Some(UnitFile::BuildOutput {
                 configuration: configuration(2)?,
@@ -256,7 +283,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
     let configuration = configuration.join("/");
     let (package, hash) = ((*package).to_owned(), (*hash).to_owned());
     match (*kind, name) {
-        ("fingerprint", _) => Some(UnitFile::Fingerprint {
+        ("fingerprint", _) if !built::artifact(OsStr::new(name)) => Some(UnitFile::Fingerprint {
             configuration,
             package,
             hash,
@@ -299,66 +326,4 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
-}
-
-pub(super) struct MetadataInvocation<'a> {
-    pub(super) executable: &'a str,
-    pub(super) arguments: &'a [String],
-    pub(super) directory: &'a Path,
-}
-
-pub(super) fn workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, false)
-}
-
-pub(super) fn own_workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, true)
-}
-
-fn metadata(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-    own_target: bool,
-) -> Result<Workspace, CiError> {
-    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
-    if let Some(invocation) = invocation {
-        command
-            .args(invocation.arguments)
-            .current_dir(invocation.directory);
-    } else {
-        command.current_dir(manifest.parent().unwrap_or(manifest));
-    }
-    if own_target {
-        command
-            .env_remove("CARGO_TARGET_DIR")
-            .env_remove("CARGO_BUILD_BUILD_DIR");
-    }
-    let output = command
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-        ])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    let workspace: Workspace = serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))?;
-    build_dir::refuse(&workspace, &output.stdout)?;
-    Ok(workspace)
 }

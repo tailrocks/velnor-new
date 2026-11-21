@@ -1,0 +1,252 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use super::new_layout::own_units_1100;
+use super::{unit, velnor_ci, workspace_below_the_root};
+
+#[test]
+fn a_plain_target_that_holds_outputs_and_no_unit_makes_the_build_refuse_up_front() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_plain_target_with_units_builds_without_refusal() {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}
+
+#[test]
+fn a_failed_command_that_leaves_output_and_no_unit_reports_its_own_failure() {
+    let repo = workspace_below_the_root();
+    let failed = velnor_ci()
+        .current_dir(repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "sh",
+            "-c",
+            "mkdir -p rust/target/debug && : > rust/target/debug/libapp.rlib && exit 3",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        stderr.contains("build command failed") && !stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_plain_target_named_through_a_parent_component_still_refuses_an_unknown_layout() {
+    let repo = workspace_below_the_root();
+    std::fs::create_dir_all(repo.root().join("scratch")).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", "scratch/../rust/target")
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn an_unknown_output_beside_stale_units_in_a_plain_target_makes_the_build_refuse() {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    unit(&repo, "rust/target/debug/other/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+}
+
+fn refuses_beside_stale_units(output: &str) {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    unit(&repo, output, "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{output}: {refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+}
+
+#[test]
+fn an_unknown_output_directly_in_the_configuration_beside_stale_units_makes_the_build_refuse() {
+    for output in [
+        "rust/target/debug/libapp.rlib",
+        "rust/target/debug/libapp.rmeta",
+        "rust/target/debug/other.d",
+        "rust/target/libapp.rlib",
+        "rust/target/debug/examples/libapp.rlib",
+    ] {
+        refuses_beside_stale_units(output);
+    }
+}
+
+#[test]
+fn the_outputs_cargo_places_beside_its_units_do_not_make_a_plain_build_refuse() {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    for output in [
+        "rust/target/debug/build/app/f000000000000001/out/libapp-f000000000000001.rlib",
+        "rust/target/debug/libapp.rlib",
+        "rust/target/debug/libapp.d",
+        "rust/target/debug/app.d",
+        "rust/target/debug/examples/app.d",
+    ] {
+        unit(&repo, output, "");
+    }
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}
+
+#[test]
+fn a_plain_target_named_through_a_parent_component_that_the_command_creates_still_refuses() {
+    let repo = workspace_below_the_root();
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", "scratch/../rust/target")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "sh",
+            "-c",
+            "mkdir -p rust/target/debug && : > rust/target/debug/libapp.rlib",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+}
+
+#[test]
+fn a_relative_plain_target_is_audited_from_the_step_directory_as_cargo_writes_it() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_TARGET_DIR", "../target")
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+}
+
+#[test]
+fn a_relative_target_dir_is_resolved_after_the_command_changes_directory() {
+    let repo = workspace_below_the_root();
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_TARGET_DIR", "target")
+        .env("RUSTC_BOOTSTRAP", "1")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "-Z",
+            "unstable-options",
+            "-C",
+            "rust",
+            "build",
+            "--offline",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}
+
+#[test]
+fn a_templated_build_directory_is_refused_by_inputs_build_and_audit() {
+    let repo = workspace_below_the_root();
+    for arguments in [
+        &["inputs", "build", "--", "true"][..],
+        &["inputs", "audit"][..],
+    ] {
+        let refused = velnor_ci()
+            .current_dir(repo.root())
+            .env("CARGO_BUILD_BUILD_DIR", "{workspace-root}/target")
+            .args(arguments)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.contains(
+                "CARGO_BUILD_BUILD_DIR={workspace-root}/target uses a cargo path template; set a plain absolute path instead"
+            ),
+            "{stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_cargo_configuration_under_the_changed_directory_decides_the_target_the_build_audits() {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../elsewhere\"\n",
+    );
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("RUSTC_BOOTSTRAP", "1")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "-Z",
+            "unstable-options",
+            "-C",
+            "rust/app",
+            "build",
+            "--offline",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+    assert!(repo.root().join("rust/elsewhere/debug").is_dir());
+}

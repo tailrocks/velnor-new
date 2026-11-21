@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::super::super::units::{UnitFile, Workspace, unchecked_unit_files};
+use super::super::super::units::{UnitFile, Workspace, build_unit_files};
 use super::super::groups::scan_dirs;
 use super::super::inventory::{self, Evidence, State};
 use super::{identity, output};
@@ -16,7 +16,7 @@ pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiEr
     let base = inventory::exclusions(workspaces)?;
     let mut found = BTreeSet::new();
     for target in scan_dirs(workspaces) {
-        for (unit, path) in unchecked_unit_files(&target)? {
+        for (unit, path) in build_unit_files(workspaces, &target)? {
             if output(&unit)
                 && let Ok(saved) = inventory::load(&path)
                 && base.is_subset(&saved.targets)
@@ -35,7 +35,7 @@ pub(super) fn targets(
 ) -> Result<BTreeSet<PathBuf>, CiError> {
     let mut found = BTreeSet::new();
     for target in scan_dirs(workspaces) {
-        for (unit, path) in unchecked_unit_files(&target)? {
+        for (unit, path) in build_unit_files(workspaces, &target)? {
             let (UnitFile::Fingerprint { configuration, .. }
             | UnitFile::BuildOutput { configuration, .. }
             | UnitFile::DepInfo {
