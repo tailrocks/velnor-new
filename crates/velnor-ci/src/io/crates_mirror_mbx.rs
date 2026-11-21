@@ -43,6 +43,53 @@ const MANIFEST_COMMANDS: &[&str] = &[
     "vendor",
     "verify-project",
 ];
+const BUILT_IN_COMMANDS: &[&str] = &[
+    "add",
+    "b",
+    "bench",
+    "build",
+    "c",
+    "check",
+    "clean",
+    "clippy",
+    "config",
+    "d",
+    "doc",
+    "fetch",
+    "fix",
+    "generate-lockfile",
+    "help",
+    "info",
+    "init",
+    "install",
+    "locate-project",
+    "login",
+    "logout",
+    "metadata",
+    "new",
+    "owner",
+    "package",
+    "pkgid",
+    "publish",
+    "r",
+    "read-manifest",
+    "remove",
+    "report",
+    "rm",
+    "run",
+    "rustc",
+    "rustdoc",
+    "search",
+    "t",
+    "test",
+    "tree",
+    "uninstall",
+    "update",
+    "vendor",
+    "verify-project",
+    "version",
+    "yank",
+];
 
 pub(super) fn required(args: &[OsString]) -> bool {
     recorded() && !nested_in_cargo() && declared_for_project(args)
@@ -87,7 +134,7 @@ fn declared_for_project(args: &[OsString]) -> bool {
 
 fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
     let base = directory_flag(work, args);
-    let args = super::crates_mirror_alias::expand(&base, args, MANIFEST_COMMANDS)?;
+    let args = super::crates_mirror_alias::expand(&base, args, BUILT_IN_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if let Some(target) = command.filter(|command| direct_target(command)) {
         let script = base.join(target);

@@ -261,3 +261,20 @@ fn an_unknown_custom_alias_fails_closed() -> TestResult {
     assert_refused(&run_with_args(&repo, &launch, &["x"])?);
     Ok(())
 }
+
+#[test]
+fn a_user_alias_named_like_any_cargo_built_in_is_ignored() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(
+        &launch,
+        &format!("[alias]\nsearch = \"build --manifest-path {inside}\"\n"),
+    )?;
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["search", "--manifest-path", &outside],
+    )?);
+    Ok(())
+}
