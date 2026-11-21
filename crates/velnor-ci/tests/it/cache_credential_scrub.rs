@@ -342,3 +342,19 @@ fn a_credential_file_name_cannot_inject_workflow_commands_into_the_report() {
     assert!(stdout.lines().all(|line| !line.contains("::")), "{stdout}");
     assert!(stdout.contains("x%0A%3A%3Aerror%3A%3Apwn"), "{stdout}");
 }
+
+#[test]
+fn the_reported_credential_is_the_first_one_in_name_order() {
+    let repo = private_checkout("decide-credential-order", GIT_LOCK);
+    for name in ["a1", "b2", "c3", "d4", "e5", "f6"] {
+        repo.write_unstaged(&format!("home/.cargo/git/db/shared-1/{name}/.netrc"), "x\n");
+    }
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("shared-1/a1/.netrc is a credential file"),
+        "{stdout}"
+    );
+}

@@ -51,8 +51,8 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
+    let mut entries: Vec<_> = match fs::read_dir(directory) {
+        Ok(entries) => entries.take(*budget + 1).collect(),
         Err(error) => {
             return Some(format!(
                 "cannot read {}: {}",
@@ -61,6 +61,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
             ));
         }
     };
+    entries.sort_by_key(|entry| entry.as_ref().ok().map(fs::DirEntry::file_name));
     let mut subdirectories: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let Some(left) = budget.checked_sub(1) else {
