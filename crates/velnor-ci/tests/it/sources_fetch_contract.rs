@@ -77,6 +77,7 @@ pub(crate) fn plan(
                 skip_when_cold: false,
                 private_repo: false,
                 hosted_only: false,
+                any_gate: Vec::new(),
                 gate: None,
                 reads: None,
             }],
