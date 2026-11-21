@@ -296,6 +296,17 @@ check cfg_attr_doc_concat_comma fail '#[cfg_attr(all(), doc = concat!("prose", "
 check cfg_attr_doc_then_fence fail '#[cfg_attr(all(), doc = "prose", doc = "```\\nx\\n```")]\npub fn f() {}\n'
 check shebang_attr_sep fail '#! /* separator */ [allow(dead_code)] /** ```\n */\nfn f() {}\n'
 
+check line_space_tab   fail '/// \tlet x = 1;\nfn f() {}\n'
+check attr_tab_indent  fail '#[doc = "prose\\n\\n\\tassert_eq!(1, 1);"]\npub fn f() {}\n'
+check attr_cr_fence    fail '#[doc = "prose\\r\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
+check attr_gap_opener  fail '#/* gap */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check attr_empty_marker fail '#[doc = "1.\\n       assert_eq!(1, 1);"]\npub fn f() {}\n'
+check cfg_doc_value    pass '#![allow(unexpected_cfgs)]\n#[cfg(doc = "```not documentation```")]\npub fn f() {}\n'
+check attr_env_macro   fail '#[doc = env!("MYDOC")]\npub fn f() {}\n'
+
+check attr_margin_pass pass '#[doc = "    assert!(true);"]\npub fn f() {}\n'
+check attr_margin_fence fail '#[doc = "    assert!(true);\\n\\nprose\\n\\n        code();"]\npub fn f() {}\n'
+
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
 printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$missing/crates/fx/src/lib.rs"
