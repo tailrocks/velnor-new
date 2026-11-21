@@ -131,6 +131,20 @@ fn a_registry_version_change_moves_the_lock_key() {
     );
 }
 
+fn git_workspace(commit: &str) -> String {
+    format!(
+        "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\"termpane\"]\n\n[[package]]\nname = \"termpane\"\nversion = \"0.2.0\"\nsource = \"git+https://github.com/acme/termpane?rev=v2#{commit}\"\n"
+    )
+}
+
+#[test]
+fn a_new_commit_of_a_git_dependency_moves_the_lock_key() {
+    let members = ["app"];
+    let before = key(&git_workspace(&"a".repeat(40)), &members);
+    assert_eq!(before, key(&git_workspace(&"a".repeat(40)), &members));
+    assert_ne!(before, key(&git_workspace(&"b".repeat(40)), &members));
+}
+
 #[test]
 fn a_registry_version_change_during_a_bump_moves_the_lock_key() {
     let members = ["app", "core"];

@@ -5,10 +5,15 @@ use velnor_model::{
     Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, StepKind,
 };
 
-use crate::lane::PLAN_JOB;
+use crate::lane::{PLAN_JOB, POLICY_JOB};
 use crate::plan::{RUST_JOB, step};
 
-pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKind) -> bool) {
+pub(crate) fn apply(
+    jobs: &mut [Job],
+    single: bool,
+    whole_jobs: bool,
+    after_merge: &dyn Fn(&StepKind) -> bool,
+) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
@@ -19,6 +24,12 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKi
         } else {
             continue;
         };
+        let whole =
+            whole_jobs && from != PlanFrom::ThisJob && (is_lint_job(job) || job.id == POLICY_JOB);
+        if whole {
+            skip_whole_job(job, &from, single);
+            continue;
+        }
         let builds = job
             .steps
             .iter()
@@ -37,6 +48,13 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKi
             job.skip_after_merge_group = Some(from);
         }
     }
+}
+
+fn skip_whole_job(job: &mut Job, from: &PlanFrom, single: bool) {
+    if !single && !job.needs.contains(&PLAN_JOB) {
+        job.needs.push(PLAN_JOB);
+    }
+    job.skip_after_merge_group = Some(from.clone());
 }
 
 fn keeps_target_build(kind: &StepKind) -> bool {
@@ -121,10 +139,12 @@ pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
 /// disables the skip.
 fn assert_skips_resolve(jobs: &[Job]) {
     for job in jobs {
-        for step in &job.steps {
-            let Some(from) = &step.skip_after_merge_group else {
-                continue;
-            };
+        let marks = job.skip_after_merge_group.iter().chain(
+            job.steps
+                .iter()
+                .filter_map(|step| step.skip_after_merge_group.as_ref()),
+        );
+        for from in marks {
             let reader = match from {
                 PlanFrom::ThisJob => Some(job),
                 PlanFrom::Job(id) | PlanFrom::WorkJob(id) => jobs.iter().find(|job| &job.id == id),
@@ -149,8 +169,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use velnor_model::{
-        CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun, ReleaseAssetPart,
-        RunnerLabel, StepKind, TargetName, When,
+        BuildRecord, CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun,
+        ReleaseAssetPart, RunnerLabel, StepKind, TargetName, When,
     };
 
     use super::*;
@@ -171,8 +191,9 @@ mod tests {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }
@@ -240,7 +261,7 @@ mod tests {
     fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() {
         for (build, skipped) in [(true, false), (false, true)] {
             let mut jobs = [build_inputs(build)];
-            apply(&mut jobs, true, &|_| false);
+            apply(&mut jobs, true, false, &|_| false);
             let marks: Vec<bool> = jobs[0].steps[..2]
                 .iter()
                 .map(|step| step.skip_after_merge_group.is_some())

@@ -11,7 +11,8 @@ use crate::error::CiError;
 use crate::tools_local::HOME_PATHS;
 use crate::tree_removal::remove_tree;
 
-const FORMAT: &str = "velnor-tools-anchor-v1";
+const FORMAT: &str = "velnor-tools-anchor-v2";
+const SET_MAX_BYTES: u64 = 1 << 20;
 const ANCHOR_MAX_BYTES: u64 = 1024;
 const FILE_MAX_BYTES: u64 = 2 << 30;
 const TREE_MAX_BYTES: u64 = 16 << 30;
@@ -64,6 +65,35 @@ fn field(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
+fn is_component_list(relative: &Path) -> bool {
+    let parts: Vec<_> = relative
+        .components()
+        .map(|part| part.as_os_str().as_bytes())
+        .collect();
+    matches!(
+        parts.as_slice(),
+        [
+            b".rustup",
+            b"toolchains",
+            _,
+            b"lib",
+            b"rustlib",
+            b"components"
+        ]
+    )
+}
+
+fn sorted_lines(file: fs::File, content: &mut blake3::Hasher) -> std::io::Result<u64> {
+    let mut bytes = Vec::new();
+    let read = file.take(SET_MAX_BYTES + 1).read_to_end(&mut bytes)? as u64;
+    let mut lines: Vec<&[u8]> = bytes.split_inclusive(|byte| *byte == b'\n').collect();
+    lines.sort_unstable();
+    for line in lines {
+        field(content, line);
+    }
+    Ok(read)
+}
+
 fn entry(
     hasher: &mut blake3::Hasher,
     root: &Path,
@@ -103,8 +133,12 @@ fn entry(
         let file = fs::File::open(path)
             .map_err(|error| format!("cannot open {}: {error}", relative.display()))?;
         let mut content = blake3::Hasher::new();
-        let read = std::io::copy(&mut file.take(length.saturating_add(1)), &mut content)
-            .map_err(|error| format!("cannot read {}: {error}", relative.display()))?;
+        let read = if is_component_list(relative) && length <= SET_MAX_BYTES {
+            sorted_lines(file, &mut content)
+        } else {
+            std::io::copy(&mut file.take(length.saturating_add(1)), &mut content)
+        }
+        .map_err(|error| format!("cannot read {}: {error}", relative.display()))?;
         if read != length {
             return Err(format!("{} changed while it was read", relative.display()));
         }
@@ -198,6 +232,10 @@ pub fn read(file: &Path, matched: bool) -> Verdict {
         .map_or(Verdict::Unanchored(Discard::BadAnchor), Verdict::Anchored)
 }
 
+fn malformed_anchor(file: &Path) -> bool {
+    matches!(read(file, true), Verdict::Unanchored(Discard::BadAnchor))
+}
+
 fn compare(home: &Path, anchor: &Anchor<'_>) -> Result<(), Discard> {
     let expected = expected(anchor)?;
     let actual = digest(home).map_err(Discard::Unreadable)?;
@@ -221,14 +259,18 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-pub fn check(home: &Path, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
+pub fn check(home: &Path, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
     if HOME_PATHS
         .iter()
         .all(|path| fs::symlink_metadata(home.join(path)).is_err())
     {
         return Ok(Verdict::NothingRestored);
     }
-    match compare(home, anchor) {
+    let outcome = match compare(home, anchor) {
+        Err(Discard::NoAnchor) if malformed_anchor(file) => Err(Discard::BadAnchor),
+        outcome => outcome,
+    };
+    match outcome {
         Ok(()) => Ok(Verdict::Verified),
         Err(reason) => {
             discard(home)?;

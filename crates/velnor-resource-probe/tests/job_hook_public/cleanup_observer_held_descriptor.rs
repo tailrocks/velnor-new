@@ -4,7 +4,8 @@
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
-    time::Duration,
+    thread,
+    time::{Duration, Instant},
 };
 
 use velnor_resource_probe::cleanup_observer::CleanupObserverRecord;
@@ -28,6 +29,8 @@ fn scan_until_owned(runner_namespace: ([u32; 2], u64)) -> TestResult<CleanupObse
     poll_observation(
         SCAN_POLL_LIMIT,
         SCAN_POLL_INTERVAL,
+        Instant::now,
+        thread::sleep,
         || {
             scan(Scenario {
                 runner_namespace,

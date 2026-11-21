@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, RepoPath, RootSlug, StepKind};
+use velnor_model::{PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind};
 
 use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
@@ -10,7 +10,8 @@ use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
-
+pub(crate) const PRIVACY_STEP: &str = "private_repo";
+const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
 pub(crate) mod release_asset_steps;
 
 /// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
@@ -23,6 +24,7 @@ pub(crate) fn token_allowed(check: &str) -> String {
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
+        StepKind::RepositoryPrivacy => privacy(),
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
@@ -30,6 +32,57 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
             crate::private_steps::release_asset_steps::render(assets, part)
         }
         _ => RenderedStep::default(),
+    }
+}
+
+pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
+    if !step.private_repo {
+        return Vec::new();
+    }
+    let mut conditions = vec![PRIVATE_REPOSITORY.to_owned()];
+    if matches!(step.kind, StepKind::CacheRestore(_)) {
+        conditions.push(format!("({})", token_allowed(CHECK_STEP)));
+    }
+    conditions
+}
+
+/// `cache decide` trusts `VELNOR_REPOSITORY_PRIVATE` alone, and a step `env` overrides
+/// `$GITHUB_ENV`, so the step always sets it itself: to the privacy step's answer, or to an
+/// empty string that refuses every private source.
+pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
+    let StepKind::CacheDecide { private, .. } = &step.kind else {
+        return Vec::new();
+    };
+    let value = match private {
+        PrivateVerdict::Unset => return Vec::new(),
+        PrivateVerdict::Cleared => Value::Text(String::new()),
+        PrivateVerdict::Checked => {
+            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}"))
+        }
+    };
+    vec![("VELNOR_REPOSITORY_PRIVATE".to_owned(), value)]
+}
+
+fn api_env() -> Vec<(String, Value)> {
+    vec![
+        (
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        ),
+        (
+            "VELNOR_API_URL".to_owned(),
+            Value::Expr("${{ github.api_url }}".to_owned()),
+        ),
+    ]
+}
+
+fn privacy() -> RenderedStep {
+    RenderedStep {
+        id: Some(PRIVACY_STEP.to_owned()),
+        name: "Check that the repository is private".to_owned(),
+        env: api_env(),
+        run: Some("velnor-ci cache private-repo".to_owned()),
+        ..RenderedStep::default()
     }
 }
 

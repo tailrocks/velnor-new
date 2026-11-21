@@ -223,3 +223,14 @@ impl HttpGitHub {
         super::read_limited(response.body_mut().as_reader(), limit).ok()
     }
 }
+
+pub(super) fn trusted_api(api: &str) -> bool {
+    let Ok(uri) = api.parse::<ureq::http::Uri>() else {
+        return false;
+    };
+    match uri.scheme_str() {
+        Some("https") => uri.host().is_some(),
+        Some("http") => matches!(uri.host(), Some("127.0.0.1" | "localhost")),
+        _ => false,
+    }
+}
