@@ -20,6 +20,13 @@ use crate::{
 
 const TEST: &str = "host_controller::loop_driver::connection_poll::turn::tests::restore_timeout::a_timed_out_restore_releases_its_claim_before_retry";
 const CHILD: &str = "VELNOR_RESTORE_TIMEOUT_FIXTURE";
+const STALL: &str = "VELNOR_RESTORE_TIMEOUT_STALL_MS";
+const RESTORE_BUDGET: Duration = Duration::from_secs(2);
+const RECOVERY_BUDGET: Duration = Duration::from_secs(10);
+const STUB_STALL: Duration = Duration::from_secs(3);
+const JOURNAL_HOLD: Duration = Duration::from_secs(4);
+const _: () = assert!(RESTORE_BUDGET.as_millis() < STUB_STALL.as_millis());
+const _: () = assert!(STUB_STALL.as_millis() < JOURNAL_HOLD.as_millis());
 
 #[tokio::test]
 async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()> {
@@ -54,6 +61,7 @@ async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()>
     let status = Command::new(std::env::current_exe()?)
         .args(["--exact", TEST, "--nocapture"])
         .env(CHILD, temp.path())
+        .env(STALL, STUB_STALL.as_millis().to_string())
         .env(
             "PATH",
             std::env::join_paths(std::iter::once(temp.path().to_path_buf()).chain(
@@ -72,11 +80,11 @@ async fn timed_out_restore() -> TestResult<()> {
     let journal = fixture.journal.clone();
     let writer = tokio::task::spawn_blocking(move || hold_terminal_write(&journal, &root));
     let began = std::time::Instant::now();
-    let first_result = restore(&mut fixture, Duration::from_secs(10)).await;
+    let first_result = restore(&mut fixture, RESTORE_BUDGET).await;
     let completed_at = tokio::time::Instant::now().into_std();
     writer.await??;
     assert!(!first_result?);
-    assert!((10..60).contains(&began.elapsed().as_secs()));
+    assert!((2..60).contains(&began.elapsed().as_secs()));
     assert!(fixture.prepared.credentials.is_none());
     let first = refreshes(&fixture).await?;
     let retry_at = fixture.prepared.restore_retry_at.ok_or("retry deadline")?;
@@ -87,7 +95,7 @@ async fn timed_out_restore() -> TestResult<()> {
     assert!(fixture.prepared.credentials.is_none());
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(30)).await;
-    let recovered = restore(&mut fixture, Duration::from_secs(10)).await?;
+    let recovered = restore(&mut fixture, RECOVERY_BUDGET).await?;
     let after = refreshes(&fixture).await?;
     eprintln!(
         "restore evidence first={first:?} after={after:?} recovered={recovered} credentials={}",
@@ -107,7 +115,6 @@ async fn timed_out_restore() -> TestResult<()> {
             (2, "succeeded".to_owned())
         ]
     );
-    std::thread::sleep(Duration::from_millis(10_100));
     assert!(fixture.poll().await?.is_some());
     assert!(fixture.control.complete_session_poll_receipts()?.is_some());
     Ok(())
@@ -123,7 +130,7 @@ fn hold_terminal_write(journal: &Journal, root: &std::path::Path) -> Result<(), 
     }
     let _guard = tokio::runtime::Handle::current().block_on(journal.write_guard());
     fs::write(root.join("journal-held"), "held").map_err(|error| error.to_string())?;
-    std::thread::sleep(Duration::from_secs(12));
+    std::thread::sleep(JOURNAL_HOLD);
     Ok(())
 }
 

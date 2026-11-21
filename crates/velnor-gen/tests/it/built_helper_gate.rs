@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The `built` output of the test step is used only by a job whose pinned helper
-//! records it (`Job::records_build`), never because a job lacks a build step.
+//! records it (`Job::build_record`), never because a job lacks a build step.
 
 use velnor_model::{BaseExpiry, CargoCommand, FilterRef, HelperCommand, StepKind, When};
 use velnor_render::rendered_workflow;
@@ -19,7 +19,11 @@ fn save_condition(records_build: bool) -> Result<Option<String>, Box<dyn std::er
         }),
         StepKind::Helper(HelperCommand::PlanFull),
     ])?;
-    plan.jobs[0].records_build = records_build;
+    plan.jobs[0].build_record = if records_build {
+        velnor_model::BuildRecord::Tests
+    } else {
+        velnor_model::BuildRecord::Unrecorded
+    };
     plan.jobs[0].steps[2].when = When::SaveBase;
     let rendered = rendered_workflow(&plan);
     Ok(rendered.jobs[0].steps[2].condition.clone())

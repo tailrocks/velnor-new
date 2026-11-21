@@ -99,14 +99,48 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_lock_pinned_before_the_binary_section_still_passes() -> TestResult {
-    let old: Vec<String> = lock()?
+fn without_binary_section() -> Result<String, Box<dyn Error>> {
+    Ok(lock()?
         .split("\n\n")
         .filter(|block| !block.starts_with("[velnor-gen-binary]"))
-        .map(str::to_owned)
-        .collect();
-    assert_eq!(check(&old.join("\n\n"), running(GEN_BINARY_X64)), Ok(()));
+        .collect::<Vec<_>>()
+        .join("\n\n"))
+}
+
+#[test]
+fn a_lock_pinned_before_the_binary_section_still_passes() -> TestResult {
+    let old = pin_lock("0.1.110", COMMIT_FILE, &sums(), Some(BINARY_SUMS))?;
+    let older = RunningGenerator {
+        version: "0.1.110",
+        ..running(GEN_BINARY_X64)
+    };
+    assert_eq!(check(&old, older), Ok(()));
+    Ok(())
+}
+
+#[test]
+fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() -> TestResult {
+    let error = check(&without_binary_section()?, running(GEN_BINARY_X64))
+        .err()
+        .ok_or("accepted a 0.1.111 lock without [velnor-gen-binary]")?;
+    assert!(error.contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn verify_release_names_the_repin_when_the_binary_section_is_missing() -> TestResult {
+    let error = verify_release(
+        without_binary_section()?.as_bytes(),
+        &sums(),
+        COMMIT_FILE,
+        Some(BINARY_SUMS),
+    )
+    .err()
+    .ok_or("accepted")?
+    .to_string();
+    assert!(error.contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.contains("pin-helper 0.1.111"), "{error}");
     Ok(())
 }
 

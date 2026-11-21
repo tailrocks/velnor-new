@@ -45,7 +45,7 @@ archive_guard_target_identity() {
   cargo_identity="${cargo_identity//)/}"
   platform_name="$(uname -s)"
   platform_machine="$(uname -m)"
-  [[ "$rustc_release" == 1.99.1 && "$rustc_commit" =~ ^[A-Za-z0-9._-]+$ \
+  [[ "$rustc_release" == 1.100.0 && "$rustc_commit" =~ ^[A-Za-z0-9._-]+$ \
     && "$rustc_host" =~ ^[A-Za-z0-9._-]+$ && "$llvm_version" =~ ^[A-Za-z0-9._-]+$ \
     && "$cargo_identity" =~ ^[A-Za-z0-9._-]+$ && "$platform_name" =~ ^[A-Za-z0-9._-]+$ \
     && "$platform_machine" =~ ^[A-Za-z0-9._-]+$ ]] \

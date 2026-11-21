@@ -18,8 +18,8 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.11.1"
-rust = "1.99.1"
+mise = "2026.11.10"
+rust = "1.100.0"
 mr-boxington = "1.30.0"
 gh = "2.104.0"
 jactionlint = "2.6.0"
