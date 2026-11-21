@@ -50,6 +50,14 @@ fn an_older_helper_with_release_assets_is_warned_about_the_token_order() -> Test
 }
 
 #[test]
+fn an_older_helper_without_private_sources_or_release_assets_is_not_warned_about() -> TestResult {
+    let repo = private_repo(ROOTS, "", "0.1.110")?;
+    let (_, notes) = expected_with_notes(&repo)?;
+    assert!(minted_notes(&notes).is_empty(), "{notes:?}");
+    Ok(())
+}
+
+#[test]
 fn the_helper_that_mints_first_is_not_warned_about() -> TestResult {
     let repo = private_repo(ROOTS, &format!("{SECTION}{}", assets()), "0.1.111")?;
     let (_, notes) = expected_with_notes(&repo)?;
