@@ -85,6 +85,7 @@ impl Fixture {
         let root = repo.root().to_path_buf();
         let log = root.join("log");
         fs::create_dir_all(&log)?;
+        fs::create_dir_all(root.join("home/.cargo"))?;
         let trusted = root.join("trusted/bin");
         script(
             &trusted.join("cargo"),
@@ -133,6 +134,9 @@ impl Fixture {
             .arg("fetch")
             .arg("--trusted-dir")
             .arg(root.join("trusted"))
+            .arg("--home")
+            .arg(root.join("home"))
+            .arg("--no-fixed-toolchain")
             .env_clear()
             .env("PATH", path)
             .env("VELNOR_API_URL", &api.url)
@@ -154,12 +158,17 @@ impl Fixture {
         command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
+    pub(crate) fn manifest(&self, name: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+        Ok(fs::canonicalize(self.repo.root().join(name))?)
+    }
+
     pub(crate) fn log(&self, name: &str) -> String {
         fs::read_to_string(self.repo.root().join("log").join(name)).unwrap_or_default()
     }
 }
 
 mod environment;
+mod fixed_toolchain;
 mod token;
 
 const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";

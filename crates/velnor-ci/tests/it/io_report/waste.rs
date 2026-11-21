@@ -96,6 +96,31 @@ fn report_records_mbx_sessions_a_primed_store_and_toolchain_installs() -> Result
     Ok(())
 }
 
+#[test]
+fn only_object_cache_entries_make_the_store_primed_not_out_dirs_or_shims() -> ResultTest {
+    let repo = fixture("report-store-out-dirs")?;
+    repo.git(&["add", "."]);
+    run_cargo(&repo)?;
+    let old = UNIX_EPOCH + Duration::from_secs(1_000_000);
+    for file in [
+        "store/out-dirs/v1/0123/private.rs",
+        "store/shims/rust/mbx-rustc",
+        "store/actions/sessions/v1/session",
+    ] {
+        let path = repo.root().join(file);
+        fs::create_dir_all(path.parent().ok_or("parent")?)?;
+        fs::write(&path, "entry")?;
+        fs::File::options()
+            .write(true)
+            .open(&path)?
+            .set_modified(old)?;
+    }
+    assert!(!with_store(&repo, true)?.mbx.store_primed);
+    primed_store(&repo)?;
+    assert!(with_store(&repo, true)?.mbx.store_primed);
+    Ok(())
+}
+
 fn sources_entry(created_at: &str, reference: &str, version: &str) -> serde_json::Value {
     json!({"key":"velnor-src-key","ref":reference,"created_at":created_at,"version":version,"size_in_bytes":9})
 }
