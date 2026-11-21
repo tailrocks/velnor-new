@@ -130,6 +130,15 @@ class MultiLineJsonTests(unittest.TestCase):
             self.assertEqual([label for label, _names in found], [b"record:44"])
             self.assertEqual(sorted(found[0][1]), [repo(3).encode(), repo(9).encode()])
 
+    def test_uppercase_and_mixed_case_json_extensions_are_parsed_like_json(self):
+        for name in ["docs/reviews/a.JSON", "docs/reviews/a.Json", "docs/reviews/a.jSoN"]:
+            with self.subTest(name=name):
+                tmp, root = repository({name: pretty(44, repo(9)), "docs/reviews/b.json": pretty(44, repo(3))})
+                with tmp:
+                    found = check.disagreements(root)
+                    self.assertEqual([label for label, _names in found], [b"record:44"])
+                    self.assertEqual(sorted(found[0][1]), [repo(3).encode(), repo(9).encode()])
+
     def test_pretty_printed_record_agreeing_with_a_companion_row_passes(self):
         tmp, root = repository(
             {"a.json": pretty(44, repo(9)), "b.md": f"| 44 | C | `example-org/{repo(9)}` | {SHA} |\n", "c.json": pretty(45, repo(2), OTHER)}
@@ -165,6 +174,13 @@ class MultiLineJsonTests(unittest.TestCase):
         )
         with tmp:
             self.assertEqual(check.broken_json(root), ["anywhere/a.json", "anywhere/b.json", "anywhere/c.json"])
+
+
+class UppercaseJsonTests(unittest.TestCase):
+    def test_broken_json_with_an_uppercase_extension_is_reported(self):
+        tmp, root = indexed({b"anywhere/a.JSON": f'{{"repository": "example-org/{repo(1)}",'.encode()})
+        with tmp:
+            self.assertEqual(check.broken_json(root), ["anywhere/a.JSON"])
 
 
 class OwnerFieldTests(unittest.TestCase):

@@ -101,7 +101,7 @@ def pseudonym_files(root):
 
 
 def file_rows(root, path):
-    if path.endswith(b".json"):
+    if path.lower().endswith(b".json"):
         try:
             return list(json_rows(json_document(root, path)))
         except (ValueError, RecursionError):
@@ -130,7 +130,7 @@ def disagreements(root):
 def broken_json(root):
     broken = []
     for path in pseudonym_files(root):
-        if path.endswith(b".json"):
+        if path.lower().endswith(b".json"):
             try:
                 json_document(root, path)
             except (ValueError, RecursionError):
@@ -237,7 +237,7 @@ def main():
         return 1
     owners = unscrubbed_owners(root)
     if owners:
-        print(f"{len(owners)} owner, account, login or org value(s) in evidence files are not example-org or example-account pseudonyms or the project org, or the file cannot be parsed; replace each with an alias or fix the file:")
+        print(f"{len(owners)} owner, account, login or org value(s) in evidence files are not example-org or example-account aliases or the project org, or the file cannot be parsed; one original owner must always map to the same alias, so replace each with its alias or fix the file. Private names are decided by scripts/private-names-guard.py, not by this check:")
         for path, number, field in owners[:MAX_REPORTED]:
             print(f"  {describe(path)} row {number} field {field}")
         return 1

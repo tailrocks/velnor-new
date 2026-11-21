@@ -16,7 +16,7 @@ trap cleanup EXIT
 
 cd "$ROOT" || exit 1
 
-python3 -m unittest scripts/test_private_names_guard.py scripts/test_pseudonym_consistency.py || exit 1
+python3 -m unittest scripts/test_private_names_guard.py scripts/test_private_names_spellings.py scripts/test_pseudonym_consistency.py || exit 1
 python3 scripts/private-names-guard.py || exit 1
 python3 scripts/pseudonym-consistency.py || exit 1
 

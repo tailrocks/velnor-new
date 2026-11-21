@@ -2,13 +2,16 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 import hashlib
+import html
 import json
 import multiprocessing
 import os
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
+from urllib.parse import unquote_to_bytes
 
 SALT = b"velnor-private-name-guard-v1:"
 HASH_FILE = Path(__file__).with_name("private-names-hashes.txt")
@@ -18,6 +21,15 @@ DROP = b"._-"
 SYMLINK_MODE = "120000"
 GITLINK_MODE = "160000"
 TRIM = b".-_"
+GIT_SUFFIX = b".git"
+ENCODED = re.compile(rb"%[0-9a-f]{2}|\\u[0-9a-f]{4}|\\x[0-9a-f]{2}|&#?[a-z0-9]+;|[\x80-\xff]")
+ESCAPE = re.compile(r"\\u([0-9a-f]{4})|\\x([0-9a-f]{2})")
+SLASH_SPACE = re.compile(rb"[ \t\r\f\v]+/[ \t\r\f\v]*|/[ \t\r\f\v]+")
+LETTER_RUN = re.compile(rb"(?<![a-z0-9])[a-z0-9](?:[ \t\r\f\v]+[a-z0-9](?![a-z0-9]))+")
+BLANKS = re.compile(rb"[ \t\r\f\v]+")
+NON_ASCII = re.compile(r"[^\x00-\x7f]+")
+IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
+MAX_PERCENT_ROUNDS = 4
 
 
 def sha(candidate):
@@ -25,7 +37,7 @@ def sha(candidate):
 
 
 def join(first, second):
-    return first.strip(TRIM) + b"/" + second.strip(TRIM)
+    return first.strip(TRIM) + b"/" + second.removesuffix(GIT_SUFFIX).strip(TRIM)
 
 
 def digest(word):
@@ -138,9 +150,48 @@ class Matcher:
         return sorted({number for view in views for number in self.lines(view)})
 
 
+def unpercent(line):
+    for _round in range(MAX_PERCENT_ROUNDS):
+        decoded = unquote_to_bytes(line)
+        if decoded == line:
+            break
+        line = decoded
+    return line
+
+
+def fold(text):
+    text = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", text).casefold())
+    kept = "".join(char for char in text if unicodedata.category(char) not in IGNORED_CATEGORIES)
+    return unicodedata.normalize("NFKC", kept).casefold()
+
+
+def decode_line(line):
+    text = unpercent(line).decode("utf-8", "replace")
+    text = ESCAPE.sub(lambda found: chr(int(found.group(1) or found.group(2), 16)), text)
+    text = html.unescape(text).encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
+    return NON_ASCII.sub(lambda run: fold(run.group()), text).casefold().encode().translate(None, b"\r\n")
+
+
+def decoded(text):
+    if not ENCODED.search(text):
+        return text
+    return b"\n".join(decode_line(line) if ENCODED.search(line) else line for line in text.split(b"\n"))
+
+
+def spaced(text):
+    return LETTER_RUN.sub(lambda run: BLANKS.sub(b"", run.group()), SLASH_SPACE.sub(b"/", text))
+
+
 def views(content):
     lowered = content.lower()
-    return (lowered, lowered.replace(b"\0", b"")) if b"\0" in lowered else (lowered,)
+    bases = (lowered, lowered.replace(b"\0", b"")) if b"\0" in lowered else (lowered,)
+    found = []
+    for base in bases:
+        for view in (base, decoded(base)):
+            for candidate in (view, spaced(view)):
+                if candidate not in found:
+                    found.append(candidate)
+    return tuple(found)
 
 
 def tracked_files(root):
@@ -188,7 +239,7 @@ def scan(root, hashes, only=None):
     contents = blobs(root, {obj for _symlink, obj in by_object})
     texts = {key: views(contents[key[1]]) for key in by_object}
     seen = {key: set().union(*(CHUNK.findall(view) for view in found)) for key, found in texts.items()}
-    seen.update((path, set(CHUNK.findall(path.lower()))) for path in paths)
+    seen.update((path, set().union(*(CHUNK.findall(view) for view in views(path)))) for path in paths)
     matcher.learn(set().union(*seen.values()))
     found = []
     labels = {}
