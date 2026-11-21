@@ -26,6 +26,8 @@ const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
 const REFS: &str = "refs";
+const HEADS: &str = "heads";
+const TAGS: &str = "tags";
 const REMOTES: &str = "remotes";
 const WORKTREES: &str = "worktrees";
 const MODULES: &str = "modules";
@@ -45,6 +47,7 @@ enum Zone {
     Plain,
     Hooks,
     Logs,
+    Namespace,
 }
 
 impl Zone {
@@ -58,9 +61,8 @@ impl Zone {
             Self::Modules if parent_is_git_directory && is(HOOKS) => Self::Hooks,
             Self::Modules if parent_is_git_directory && is(LOGS) => Self::Logs,
             Self::Modules if parent_is_git_directory && is(REFS) => Self::Refs,
-            Self::Refs if !parent_is(directory, REMOTES) && is_git_directory(directory) => {
-                Self::Modules
-            }
+            Self::Refs if is(HEADS) || is(TAGS) || is(REMOTES) => Self::Namespace,
+            Self::Refs if is_git_directory(directory) => Self::Modules,
             other => other,
         }
     }
@@ -219,13 +221,6 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
             zone.entering(path, is_git_directory),
         )
     })
-}
-
-fn parent_is(directory: &Path, wanted: &str) -> bool {
-    directory
-        .parent()
-        .and_then(Path::file_name)
-        .is_some_and(|name| name.eq_ignore_ascii_case(wanted))
 }
 
 fn is_git_directory(directory: &Path) -> bool {

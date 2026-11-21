@@ -361,3 +361,21 @@ fn a_git_directory_inside_a_saved_repository_is_scanned_for_hooks() {
         &format!("TOKEN={SHA}\n"),
     )]);
 }
+
+#[test]
+fn a_form_encoded_basic_header_split_by_shell_quotes_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "hook-form-encoded-basic-split-by-quotes",
+        HOOK,
+        "# Authorization%3A+Basic+dXNl\"\"cjpwYXNz\n",
+    )]);
+}
+
+#[test]
+fn a_token_split_by_nested_parameter_expansions_in_a_hook_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "nested-braced-expansions",
+        HOOK,
+        "echo ghp_0123456789${A:-${B}}abcdefghijklmnopqrstuvwxyzAB\n",
+    )]);
+}

@@ -119,12 +119,13 @@ fn names_in(text: &str, hook: bool) -> bool {
             .any(|url| !plain_remote(url))
 }
 
-fn variants(text: &str) -> Option<[String; 5]> {
+fn variants(text: &str) -> Option<[String; 6]> {
     let decoded = unescaped(text)?;
     let form = unescaped(&text.replace('+', " "))?;
     Some([
         joined(text),
         joined(&decoded),
+        joined(&form),
         text.to_owned(),
         decoded,
         form,
@@ -149,7 +150,7 @@ fn without_expansions(text: &str) -> String {
         kept.push_str(&rest[..at]);
         let after = &rest[at + 1..];
         let consumed = match after.strip_prefix('{') {
-            Some(braced) => braced.find('}').map_or(after.len(), |close| close + 2),
+            Some(braced) => closing_brace(braced).map_or(after.len(), |close| close + 2),
             None => after
                 .bytes()
                 .take_while(|each| each.is_ascii_alphanumeric() || *each == b'_')
@@ -159,6 +160,19 @@ fn without_expansions(text: &str) -> String {
     }
     kept.push_str(rest);
     kept
+}
+
+fn closing_brace(text: &str) -> Option<usize> {
+    let mut depth = 0_usize;
+    for (index, each) in text.bytes().enumerate() {
+        match each {
+            b'{' => depth += 1,
+            b'}' if depth == 0 => return Some(index),
+            b'}' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 fn names_basic_authorization(text: &str) -> bool {

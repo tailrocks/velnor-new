@@ -189,3 +189,23 @@ fn a_remote_head_symref_does_not_make_a_refs_directory_a_hook_tree() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
 }
+
+#[test]
+fn a_branch_with_a_head_component_does_not_make_its_ref_directory_a_module() {
+    let repo = private_checkout("decide-modules-topic-head", GIT_LOCK);
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/HEAD"),
+        "ref: refs/heads/main\n",
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/heads/topic/HEAD"),
+        SHA,
+    );
+    repo.write_unstaged(
+        &format!("home/{DATABASE}/modules/vendor/refs/heads/topic/hooks/main"),
+        SHA,
+    );
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
+}
