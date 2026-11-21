@@ -11,9 +11,10 @@ use velnor_ci::io::cache_delete_entry::delete_entry;
 
 const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
 const MAIN: &str = "refs/heads/main";
-const ZSTD: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
+const MERGE: &str = "refs/pull/7/merge";
+const VERSION_A: &str = "a1a1";
+const VERSION_B: &str = "b2b2";
 const PAGE_SIZE: usize = 100;
-const GZIP: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 
 struct Api {
     entries: Vec<Value>,
@@ -90,100 +91,91 @@ fn repo() -> Repo {
 }
 
 #[test]
-fn two_versions_under_one_key_on_one_ref_lose_only_the_restored_one() {
-    let api = api(vec![entry(11, KEY, MAIN, GZIP), entry(12, KEY, MAIN, ZSTD)]);
-    let report =
-        delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
+fn exactly_one_entry_on_the_ref_is_deleted_by_its_id() {
+    let api = api(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let report = delete_entry(&api, &repo(), KEY, MERGE).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [12]);
     assert!(report.contains("12"), "{report}");
     let asked = api.asked.borrow();
     assert!(
         asked[0].starts_with(&format!(
-            "/repos/tailrocks/velnor-new/actions/caches?key={KEY}&ref=refs%2Fheads%2Fmain"
+            "/repos/tailrocks/velnor-new/actions/caches?key={KEY}&ref=refs%2Fpull%2F7%2Fmerge"
         )),
         "{asked:?}"
     );
 }
 
 #[test]
-fn an_entry_whose_key_only_starts_with_the_key_is_never_a_candidate() {
-    let longer = format!("{KEY}-other");
+fn two_versions_under_one_key_on_one_ref_are_refused_and_nothing_is_deleted() {
     let api = api(vec![
-        entry(20, &longer, MAIN, ZSTD),
-        entry(21, KEY, MAIN, ZSTD),
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MAIN, VERSION_B),
     ]);
-    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(*api.deleted.borrow(), [21]);
-}
-
-#[test]
-fn no_entry_with_the_version_refuses_and_names_the_versions_that_exist() {
-    let api = api(vec![entry(11, KEY, MAIN, GZIP)]);
-    let error = delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN))
+    let error = delete_entry(&api, &repo(), KEY, MAIN)
         .err()
-        .unwrap_or_else(|| unreachable!("a missing version must be refused"));
+        .unwrap_or_else(|| unreachable!("two versions under one key must be refused"));
     let text = error.to_string();
-    assert!(text.contains(ZSTD) && text.contains(GZIP), "{text}");
-    assert!(api.deleted.borrow().is_empty());
-}
-
-#[test]
-fn a_key_without_any_entry_refuses() {
-    let api = api(Vec::new());
-    let error = delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN))
-        .err()
-        .unwrap_or_else(|| unreachable!("a key with no entry must be refused"));
-    assert_eq!(
-        error.to_string(),
-        format!("no cache entry has the key {KEY}; nothing was deleted")
+    assert!(
+        text.contains(&format!("ID 11 version {VERSION_A}"))
+            && text.contains(&format!("ID 12 version {VERSION_B}")),
+        "{text}"
     );
     assert!(api.deleted.borrow().is_empty());
 }
 
 #[test]
-fn one_version_on_two_refs_is_ambiguous_without_a_ref_and_deletes_nothing() {
+fn an_entry_whose_key_only_starts_with_the_key_is_never_a_candidate() {
+    let longer = format!("{KEY}-other");
     let api = api(vec![
-        entry(31, KEY, MAIN, ZSTD),
-        entry(32, KEY, "refs/pull/7/merge", ZSTD),
+        entry(20, &longer, MAIN, VERSION_A),
+        entry(21, KEY, MAIN, VERSION_A),
     ]);
-    let error = delete_entry(&api, &repo(), KEY, ZSTD, None)
+    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [21]);
+}
+
+#[test]
+fn a_key_without_any_entry_on_the_ref_is_refused() {
+    let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
+    let error = delete_entry(&api, &repo(), KEY, MERGE)
         .err()
-        .unwrap_or_else(|| unreachable!("an ambiguous match must be refused"));
-    let text = error.to_string();
-    assert!(text.contains("31") && text.contains("32"), "{text}");
-    assert!(text.contains("--ref"), "{text}");
+        .unwrap_or_else(|| unreachable!("a key with no entry on the ref must be refused"));
+    assert_eq!(
+        error.to_string(),
+        format!("no cache entry has the key {KEY} on {MERGE}; nothing was deleted")
+    );
     assert!(api.deleted.borrow().is_empty());
 }
 
 #[test]
-fn a_ref_narrows_an_otherwise_ambiguous_match_to_one_entry() {
-    let api = api(vec![
-        entry(31, KEY, MAIN, ZSTD),
-        entry(32, KEY, "refs/pull/7/merge", ZSTD),
-    ]);
-    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(*api.deleted.borrow(), [31]);
+fn an_empty_listing_is_refused() {
+    let api = api(Vec::new());
+    assert!(delete_entry(&api, &repo(), KEY, MAIN).is_err());
+    assert!(api.deleted.borrow().is_empty());
 }
 
 #[test]
 fn an_entry_on_another_ref_is_ignored_even_when_the_listing_returns_it() {
     let mut api = api(vec![
-        entry(31, KEY, MAIN, ZSTD),
-        entry(32, KEY, "refs/pull/7/merge", ZSTD),
+        entry(31, KEY, MAIN, VERSION_A),
+        entry(32, KEY, MERGE, VERSION_A),
     ]);
     api.filters_by_ref = false;
-    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
+    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [31]);
 }
 
 #[test]
 fn a_match_on_the_second_page_is_found_and_deleted() {
     let mut entries: Vec<Value> = (1..=PAGE_SIZE as u64)
-        .map(|id| entry(id, KEY, MAIN, GZIP))
+        .map(|id| entry(id, &format!("{KEY}-{id}"), MAIN, VERSION_A))
         .collect();
-    entries.push(entry(500, KEY, MAIN, ZSTD));
+    entries.push(entry(500, KEY, MAIN, VERSION_B));
     let api = api(entries);
-    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
+    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [500]);
     assert!(
         api.asked
@@ -197,11 +189,13 @@ fn a_match_on_the_second_page_is_found_and_deleted() {
 
 #[test]
 fn an_ambiguity_spanning_two_pages_deletes_nothing_and_names_both_ids() {
-    let mut entries = vec![entry(1, KEY, MAIN, ZSTD)];
-    entries.extend((2..=PAGE_SIZE as u64).map(|id| entry(id, KEY, MAIN, GZIP)));
-    entries.push(entry(500, KEY, "refs/pull/7/merge", ZSTD));
+    let mut entries = vec![entry(1, KEY, MAIN, VERSION_A)];
+    entries.extend(
+        (2..=PAGE_SIZE as u64).map(|id| entry(id, &format!("{KEY}-{id}"), MAIN, VERSION_A)),
+    );
+    entries.push(entry(500, KEY, MAIN, VERSION_B));
     let api = api(entries);
-    let error = delete_entry(&api, &repo(), KEY, ZSTD, None)
+    let error = delete_entry(&api, &repo(), KEY, MAIN)
         .err()
         .unwrap_or_else(|| unreachable!("an ambiguous match must be refused"));
     let text = error.to_string();

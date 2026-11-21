@@ -146,20 +146,6 @@ pub enum CachePath {
     Delta(CacheRoot),
 }
 
-impl CachePath {
-    #[must_use]
-    pub const fn literal(&self) -> Option<&'static str> {
-        match self {
-            Self::MiseData => Some("~/.local/share/mise"),
-            Self::RustupHome => Some("~/.rustup"),
-            Self::CargoRegistryIndex => Some("~/.cargo/registry/index"),
-            Self::CargoRegistryCache => Some("~/.cargo/registry/cache"),
-            Self::CargoGitDb => Some("~/.cargo/git/db"),
-            Self::Target(_) | Self::Delta(_) => None,
-        }
-    }
-}
-
 impl CacheKey {
     #[must_use]
     pub const fn family(&self) -> &'static str {

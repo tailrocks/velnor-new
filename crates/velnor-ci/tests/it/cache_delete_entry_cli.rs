@@ -12,8 +12,9 @@ use serde_json::{Value, json};
 const REPO: &str = "tailrocks/velnor-new";
 const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
 const MAIN: &str = "refs/heads/main";
-const ZSTD: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
-const GZIP: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
+const MERGE: &str = "refs/pull/7/merge";
+const VERSION_A: &str = "a1a1";
+const VERSION_B: &str = "b2b2";
 
 struct Served {
     entries: Vec<Value>,
@@ -128,9 +129,12 @@ fn deleted(served: &Served) -> Vec<String> {
 }
 
 #[test]
-fn the_binary_deletes_the_one_entry_its_key_version_and_ref_name() {
-    let (api, served) = serve(vec![entry(11, KEY, MAIN, GZIP), entry(12, KEY, MAIN, ZSTD)]);
-    let output = delete_entry(&api, &["--key", KEY, "--version", ZSTD, "--ref", MAIN]);
+fn the_binary_deletes_the_only_entry_its_key_and_ref_name() {
+    let (api, served) = serve(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stdout}{stderr}");
@@ -142,27 +146,41 @@ fn the_binary_deletes_the_one_entry_its_key_version_and_ref_name() {
 }
 
 #[test]
-fn the_binary_refuses_an_ambiguous_match_and_deletes_nothing() {
+fn two_versions_under_one_key_on_one_ref_are_refused_and_both_are_named() {
     let (api, served) = serve(vec![
-        entry(31, KEY, MAIN, ZSTD),
-        entry(32, KEY, "refs/pull/7/merge", ZSTD),
+        entry(31, KEY, MAIN, VERSION_A),
+        entry(32, KEY, MAIN, VERSION_B),
     ]);
-    let output = delete_entry(&api, &["--key", KEY, "--version", ZSTD]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(stderr.contains("2 entries have the key"), "{stderr}");
-    assert!(stderr.contains("--ref"), "{stderr}");
+    assert!(
+        stderr.contains(&format!("version {VERSION_A}"))
+            && stderr.contains(&format!("version {VERSION_B}")),
+        "{stderr}"
+    );
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]
-fn an_empty_version_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(41, KEY, MAIN, "")]);
-    let output = delete_entry(&api, &["--key", KEY, "--version", "", "--ref", MAIN]);
+fn a_key_with_no_entry_on_the_ref_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(51, KEY, MAIN, VERSION_A)]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("nothing was deleted"), "{stderr}");
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn an_empty_ref_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(41, KEY, "", VERSION_A)]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", ""]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("pass the exact cache key and its version"),
+        stderr.contains("pass the exact cache key and its ref"),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());
@@ -170,50 +188,29 @@ fn an_empty_version_is_refused_and_nothing_is_deleted() {
 
 #[test]
 fn an_empty_key_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(42, "", MAIN, ZSTD)]);
-    let output = delete_entry(&api, &["--key", "", "--version", ZSTD, "--ref", MAIN]);
+    let (api, served) = serve(vec![entry(42, "", MAIN, VERSION_A)]);
+    let output = delete_entry(&api, &["--key", "", "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("pass the exact cache key and its version"),
+        stderr.contains("pass the exact cache key and its ref"),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]
-fn no_entry_with_the_version_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(51, KEY, MAIN, GZIP)]);
-    let output = delete_entry(&api, &["--key", KEY, "--version", ZSTD, "--ref", MAIN]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("nothing was deleted"), "{stderr}");
-    assert!(stderr.contains("ID 51"), "{stderr}");
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn a_key_without_any_entry_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(52, KEY, MAIN, ZSTD)]);
-    let output = delete_entry(
-        &api,
-        &["--key", "velnor-tools-Linux-X64-other", "--version", ZSTD],
-    );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("no cache entry has the key"), "{stderr}");
+fn a_missing_ref_argument_is_refused_and_nothing_is_deleted() {
+    let (api, served) = serve(vec![entry(43, KEY, MAIN, VERSION_A)]);
+    let output = delete_entry(&api, &["--key", KEY]);
+    assert!(!output.status.success());
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
 #[test]
 fn a_missing_repo_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(61, KEY, MAIN, ZSTD)]);
-    let output = run(
-        &api,
-        &["--key", KEY, "--version", ZSTD, "--ref", MAIN],
-        None,
-        Some("recorded"),
-    );
+    let (api, served) = serve(vec![entry(61, KEY, MAIN, VERSION_A)]);
+    let output = run(&api, &["--key", KEY, "--ref", MAIN], None, Some("recorded"));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
@@ -225,13 +222,8 @@ fn a_missing_repo_is_refused_and_nothing_is_deleted() {
 
 #[test]
 fn a_missing_token_is_refused_and_nothing_is_deleted() {
-    let (api, served) = serve(vec![entry(71, KEY, MAIN, ZSTD)]);
-    let output = run(
-        &api,
-        &["--key", KEY, "--version", ZSTD, "--ref", MAIN],
-        Some(REPO),
-        None,
-    );
+    let (api, served) = serve(vec![entry(71, KEY, MAIN, VERSION_A)]);
+    let output = run(&api, &["--key", KEY, "--ref", MAIN], Some(REPO), None);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(

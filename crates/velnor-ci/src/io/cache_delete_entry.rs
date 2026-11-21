@@ -27,46 +27,37 @@ pub fn delete_entry(
     github: &dyn GitHubWrite,
     repo: &Repo,
     key: &str,
-    version: &str,
-    reference: Option<&str>,
+    reference: &str,
 ) -> Result<String, CiError> {
-    if key.is_empty() || version.is_empty() {
-        return Err(CiError::new("pass the exact cache key and its version"));
+    if key.is_empty() || reference.is_empty() {
+        return Err(CiError::new("pass the exact cache key and its ref"));
     }
-    let by_ref = reference.map_or_else(String::new, |reference| {
-        format!("&ref={}", encode(reference))
-    });
-    let path = format!("/repos/{repo}/actions/caches?key={}{by_ref}", encode(key));
+    let path = format!(
+        "/repos/{repo}/actions/caches?key={}&ref={}",
+        encode(key),
+        encode(reference)
+    );
     let (listed, _) = pages::<Entry>(github, &path, None)?;
-    let same_key: Vec<&Entry> = listed
+    let matching: Vec<&Entry> = listed
         .iter()
-        .filter(|entry| entry.key == key)
-        .filter(|entry| reference.is_none_or(|reference| entry.reference == reference))
-        .collect();
-    let matching: Vec<&Entry> = same_key
-        .iter()
-        .copied()
-        .filter(|entry| entry.version == version)
+        .filter(|entry| entry.key == key && entry.reference == reference)
         .collect();
     let named = inert(key);
+    let on = inert(reference);
     match matching.as_slice() {
         [entry] => {
             delete_entries(github, repo, &[entry.id])?;
             Ok(format!(
-                "deleted cache entry ID {} ({named}, version {version}, {})\n",
+                "deleted cache entry ID {} ({named}, version {}, {on})\n",
                 entry.id,
-                inert(&entry.reference)
+                inert(&entry.version)
             ))
         }
-        [] if same_key.is_empty() => Err(CiError::new(format!(
-            "no cache entry has the key {named}; nothing was deleted"
-        ))),
         [] => Err(CiError::new(format!(
-            "no entry with the key {named} has version {version}; nothing was deleted. The entries with that key are: {}",
-            describe(&same_key)
+            "no cache entry has the key {named} on {on}; nothing was deleted"
         ))),
         several => Err(CiError::new(format!(
-            "{} entries have the key {named} and version {version}; nothing was deleted. Pass --ref to choose one ref: {}",
+            "{} entries have the key {named} on {on}; nothing was deleted. Entries found: {}",
             several.len(),
             describe(several)
         ))),
@@ -75,11 +66,5 @@ pub fn delete_entry(
 
 pub(super) fn run(args: &DeleteEntryArgs) -> Result<String, CiError> {
     let (github, repo) = client(args.repo.as_deref())?;
-    delete_entry(
-        &github,
-        &repo,
-        &args.key,
-        &args.version,
-        args.reference.as_deref(),
-    )
+    delete_entry(&github, &repo, &args.key, &args.reference)
 }

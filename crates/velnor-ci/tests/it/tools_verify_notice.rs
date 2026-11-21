@@ -3,30 +3,9 @@
 
 use std::fs;
 
-use velnor_ci::cache_version::{Compression, cache_version};
-use velnor_ci::tools_verify_step::tools_paths;
-
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
-pub(crate) const GZIP_VERSION: &str =
-    "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
-pub(crate) const ZSTD_VERSION: &str =
-    "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const REPO: &str = "tailrocks/velnor-new";
-const ANCHOR_VERSION: &str = "fdc9a87fe2dcd2021bb6b6640eb35094a7299abb6781b70cfb9a8cc2e1ff5133";
-
-fn tools_version() -> String {
-    cache_version(&literal_tools_paths(), Compression::Gzip)
-}
-
-fn literal_tools_paths() -> Vec<&'static str> {
-    tools_paths().unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-fn anchor_entry_version(job: &Job) -> String {
-    let anchor = format!("{}/velnor-tools-anchor", job.root.display());
-    cache_version(&[anchor.as_str()], Compression::Gzip)
-}
 
 pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
@@ -55,10 +34,8 @@ pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> Str
     String::from_utf8_lossy(&run.stdout).into_owned()
 }
 
-fn delete_entry(key: &str, version: &str) -> String {
-    format!(
-        "cache delete-entry --repo '{REPO}' --key '{key}' --version {version} --ref 'refs/heads/main'"
-    )
+fn delete_entry(key: &str) -> String {
+    format!("cache delete-entry --repo '{REPO}' --key '{key}' --ref 'refs/heads/main'")
 }
 
 #[test]
@@ -73,30 +50,11 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it_by_i
     );
     assert!(stdout.contains("::notice::"), "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-abc123", &tools_version())),
+        stdout.contains(&delete_entry("velnor-tools-abc123")),
         "{stdout}"
     );
     assert!(!stdout.contains("gh cache delete"), "{stdout}");
     assert!(discarded(&job));
-}
-
-#[test]
-fn the_pinned_versions_are_what_the_cache_service_stores_for_the_tools_paths() {
-    assert_eq!(
-        GZIP_VERSION,
-        cache_version(&literal_tools_paths(), Compression::Gzip)
-    );
-    assert_eq!(
-        ZSTD_VERSION,
-        cache_version(&literal_tools_paths(), Compression::ZstdWithoutLong)
-    );
-    assert_eq!(
-        ANCHOR_VERSION,
-        cache_version(
-            &["/home/runner/_work/_temp/velnor-tools-anchor"],
-            Compression::ZstdWithoutLong
-        )
-    );
 }
 
 #[test]
@@ -112,9 +70,8 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
             ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
         ],
     );
-    let anchor_version = anchor_entry_version(&job);
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
+        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
         "{stdout}"
     );
 }
@@ -127,10 +84,9 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
         "not-a-digest",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = anchor_entry_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
+        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
         "{stdout}"
     );
     assert!(discarded(&job));
@@ -147,10 +103,9 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
         "",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = anchor_entry_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
+        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
         "{stdout}"
     );
     assert!(discarded(&job));
@@ -158,20 +113,13 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
 
 #[test]
 fn the_notice_promises_one_entry_and_a_refusal_when_several_match() {
-    let job = job("tools-verify-named-scope");
-    let anchor = recorded(&job);
-    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(
-        &job,
-        &anchor,
-        &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
-    );
+    let stdout = poisoned("tools-verify-named-scope", &[]);
     assert!(
-        stdout.contains("deletes only the entry with that key and version"),
+        stdout.contains("deletes only the one entry with that key on its ref"),
         "{stdout}"
     );
     assert!(
-        stdout.contains("refuses when more than one entry matches"),
+        stdout.contains("refuses unless exactly one entry has it"),
         "{stdout}"
     );
     assert!(!stdout.contains("on any ref"), "{stdout}");
@@ -265,8 +213,71 @@ fn a_hostile_cache_key_cannot_forge_a_second_workflow_command() {
     );
     assert_eq!(stdout.lines().count(), 1, "{stdout:?}");
     assert!(
-        stdout.contains("--key 'velnor-tools-50%25%0D%0A::error::forged' --version"),
+        stdout.contains("--key 'velnor-tools-50%25%0D%0A::error::forged' --ref"),
         "{stdout}"
     );
     assert!(!stdout.contains('\r'), "{stdout:?}");
+}
+
+fn refs_named(stdout: &str) -> Vec<String> {
+    stdout
+        .split("--ref '")
+        .skip(1)
+        .filter_map(|rest| rest.split_once('\'').map(|(name, _)| name.to_owned()))
+        .collect()
+}
+
+fn poisoned(name: &str, env: &[(&str, &str)]) -> String {
+    let job = job(name);
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut all = vec![("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")];
+    all.extend_from_slice(env);
+    check_stdout(&job, &anchor, &all)
+}
+
+#[test]
+fn a_pull_request_run_names_its_merge_ref_and_the_default_branch() {
+    let stdout = poisoned(
+        "tools-verify-merge-ref",
+        &[
+            ("GITHUB_EVENT_NAME", "pull_request"),
+            ("GITHUB_REF", "refs/pull/7/merge"),
+            ("GITHUB_BASE_REF", "main"),
+        ],
+    );
+    assert_eq!(
+        refs_named(&stdout),
+        ["refs/pull/7/merge", "refs/heads/main"],
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_pull_request_into_another_branch_names_the_base_and_the_default_branch_too() {
+    let stdout = poisoned(
+        "tools-verify-base-ref",
+        &[
+            ("GITHUB_EVENT_NAME", "pull_request"),
+            ("GITHUB_REF", "refs/pull/7/merge"),
+            ("GITHUB_BASE_REF", "release"),
+        ],
+    );
+    assert_eq!(
+        refs_named(&stdout),
+        ["refs/pull/7/merge", "refs/heads/release", "refs/heads/main"],
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_push_to_the_default_branch_names_that_ref_once() {
+    let stdout = poisoned("tools-verify-default-ref", &[]);
+    assert_eq!(refs_named(&stdout), ["refs/heads/main"], "{stdout}");
+}
+
+#[test]
+fn the_notice_prints_no_version() {
+    let stdout = poisoned("tools-verify-no-version", &[]);
+    assert!(!stdout.contains("--version"), "{stdout}");
 }

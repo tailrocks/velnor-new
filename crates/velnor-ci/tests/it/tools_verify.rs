@@ -5,7 +5,6 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
 
-use velnor_ci::cache_version::Compression;
 use velnor_ci::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, record};
 use velnor_ci::tools_verify_step::{Context, Remote, run};
 
@@ -255,6 +254,7 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
         verified: false,
         event_name: event.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
+        base_ref: String::new(),
         default_branch: Some("main".to_owned()),
         cache_key: String::new(),
         anchor_key: String::new(),
@@ -263,7 +263,6 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
             api_url: "https://api.github.com".to_owned(),
             repository: "tailrocks/velnor-new".to_owned(),
         },
-        compression: Compression::Gzip,
     }
 }
 

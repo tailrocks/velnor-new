@@ -5,9 +5,6 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use velnor_model::{CacheKey, CachePath, Host, ToolsAnchor};
-
-use crate::cache_version::{Compression, cache_version};
 use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
@@ -16,25 +13,6 @@ use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
-pub fn tools_paths() -> Result<Vec<&'static str>, CiError> {
-    literal_paths(
-        &CacheKey::Tools {
-            host: Host,
-            anchor: ToolsAnchor::Unanchored,
-        }
-        .paths(),
-    )
-}
-
-pub fn literal_paths(paths: &[CachePath]) -> Result<Vec<&'static str>, CiError> {
-    paths
-        .iter()
-        .map(|path| {
-            path.literal()
-                .ok_or_else(|| CiError::new("a tools cache path is not a literal directory"))
-        })
-        .collect()
-}
 
 #[derive(Debug, Clone)]
 pub struct Remote {
@@ -53,21 +31,19 @@ pub struct Context {
     pub verified: bool,
     pub event_name: String,
     pub git_ref: String,
+    pub base_ref: String,
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
     pub remote: Remote,
-    pub compression: Compression,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Remedy<'a> {
     pub key: &'a str,
-    pub key_version: &'a str,
     pub anchor_key: &'a str,
-    pub anchor_version: &'a str,
     pub remote: &'a Remote,
-    pub reference: Option<&'a str>,
+    pub refs: &'a [String],
 }
 
 fn reason(discard: &Discard) -> String {
@@ -84,26 +60,30 @@ fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
 
-fn delete_command(key: &str, version: &str, remedy: Remedy<'_>) -> String {
-    let remote = remedy.remote;
-    let mut command = format!(
-        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {} --version {version}",
+fn delete_command(key: &str, reference: &str, remote: &Remote) -> String {
+    format!(
+        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {} --ref {}",
         quoted(&remote.api_url),
         quoted(&remote.host),
         quoted(&remote.repository),
         quoted(key),
-    );
-    if let Some(reference) = remedy.reference {
-        command = format!("{command} --ref {}", quoted(reference));
-    }
-    command
+        quoted(reference),
+    )
 }
 
-fn delete_sentence(what: &str, key: &str, version: &str, remedy: Remedy<'_>) -> String {
+fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
+    if remedy.refs.is_empty() {
+        return String::new();
+    }
+    let commands: Vec<String> = remedy
+        .refs
+        .iter()
+        .map(|reference| format!("`{}`", delete_command(key, reference, remedy.remote)))
+        .collect();
     format!(
-        ". The restored {what} is {} (version {version}); delete that entry by ID with `{}`, which deletes only the entry with that key and version and refuses when more than one entry matches",
+        ". The restored {what} is {}; the cache action does not report which ref it came from (it reads the ref of this run, then the base and default branches), so run the command whose ref lists it: {}. Each deletes only the one entry with that key on its ref, and refuses unless exactly one entry has it",
         quoted(key),
-        delete_command(key, version, remedy)
+        commands.join(" or ")
     )
 }
 
@@ -111,23 +91,13 @@ fn anchor_sentence(remedy: Remedy<'_>) -> String {
     if remedy.anchor_key.is_empty() {
         return String::new();
     }
-    delete_sentence(
-        "anchor entry",
-        remedy.anchor_key,
-        remedy.anchor_version,
-        remedy,
-    )
+    delete_sentence("anchor entry", remedy.anchor_key, remedy)
 }
 
 fn delete_hint(remedy: Remedy<'_>) -> String {
     let mut hint = String::new();
     if !remedy.key.is_empty() {
-        hint.push_str(&delete_sentence(
-            "Actions cache entry",
-            remedy.key,
-            remedy.key_version,
-            remedy,
-        ));
+        hint.push_str(&delete_sentence("Actions cache entry", remedy.key, remedy));
     }
     hint.push_str(&anchor_sentence(remedy));
     escape(&hint, false)
@@ -221,6 +191,27 @@ fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdic
     Ok(verdict)
 }
 
+fn restore_refs(context: &Context) -> Vec<String> {
+    let branch = |name: Option<&str>| {
+        name.filter(|name| !name.is_empty())
+            .map(|name| format!("refs/heads/{name}"))
+    };
+    let mut refs: Vec<String> = Vec::new();
+    for candidate in [
+        Some(context.git_ref.clone()),
+        branch(Some(&context.base_ref)),
+        branch(context.default_branch.as_deref()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !candidate.is_empty() && !refs.contains(&candidate) {
+            refs.push(candidate);
+        }
+    }
+    refs
+}
+
 pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let file = context.runner_temp.join(ANCHOR_DIR).join(ANCHOR_NAME);
     let anchor = Anchor(&context.anchor);
@@ -251,20 +242,12 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .open(path)
         .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
-    let anchor_dir = context.runner_temp.join(ANCHOR_DIR);
-    let key_version = cache_version(&tools_paths()?, context.compression);
-    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], context.compression);
-    let reference = context
-        .default_branch
-        .as_ref()
-        .map(|branch| format!("refs/heads/{branch}"));
+    let refs = restore_refs(context);
     let remedy = Remedy {
         key: &context.cache_key,
-        key_version: &key_version,
         anchor_key: &context.anchor_key,
-        anchor_version: &anchor_version,
         remote: &context.remote,
-        reference: reference.as_deref(),
+        refs: &refs,
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
 }
@@ -280,12 +263,10 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
         .and_then(|path| fs::read_to_string(path).ok())
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
-    let home = required("HOME")?;
     run(
         verb,
         &Context {
-            compression: Compression::detect(&home),
-            home,
+            home: required("HOME")?,
             runner_temp: tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
                 CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
             })?,
@@ -295,6 +276,7 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             verified: var("VELNOR_TOOLS_VERIFIED").as_deref() == Some("true"),
             event_name: var("GITHUB_EVENT_NAME").unwrap_or_default(),
             git_ref: var("GITHUB_REF").unwrap_or_default(),
+            base_ref: var("GITHUB_BASE_REF").unwrap_or_default(),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
