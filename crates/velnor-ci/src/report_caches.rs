@@ -126,6 +126,30 @@ mod tests {
     }
 
     #[test]
+    fn a_legacy_report_naming_a_save_step_the_job_lacks_is_never_attempted() {
+        let plans = vec![CachePlan {
+            family: "tools".to_owned(),
+            root: None,
+            restore_step: "restore".to_owned(),
+            save_step: Some("save_tools".to_owned()),
+            not_generated: None,
+        }];
+        let steps = json!({
+            "restore": {
+                "outcome": "success",
+                "outputs": {
+                    "cache-primary-key": "tools-key",
+                    "cache-matched-key": "tools-key",
+                    "cache-hit": "true",
+                },
+            },
+        });
+        let (caches, errors) = observe_caches(plans, &steps, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
+    }
+
+    #[test]
     fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
         let plans = vec![CachePlan {
             family: "sources".to_owned(),
