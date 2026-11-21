@@ -13,15 +13,23 @@ use super::inventory::build;
 use super::{own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
 
-const DEPTH: usize = 300;
-const SIBLINGS: usize = 20;
+const DEPTH: usize = 120;
+const SIBLINGS: usize = 8;
 const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
 const SOFT_LIMIT_WITHOUT_RAISE: u32 = 256;
-const CLEAR_LIMIT: u32 = 128;
+const TIGHT_LIMIT: u32 = 40;
 const RAISE_NEEDS_HARD_LIMIT: u64 = 1024;
 
 fn hard_open_file_limit() -> u64 {
     getrlimit(Resource::RLIMIT_NOFILE).map_or(0, |(_, hard)| hard)
+}
+
+fn assert_the_raise_can_run() {
+    let hard = hard_open_file_limit();
+    assert!(
+        hard >= RAISE_NEEDS_HARD_LIMIT,
+        "the hard open-file limit {hard} is below {RAISE_NEEDS_HARD_LIMIT}, so the soft limit cannot be raised past {TIGHT_LIMIT} and the raise path would not run"
+    );
 }
 
 fn deep_repository() -> Repo {
@@ -97,13 +105,9 @@ fn receipt(repo: &Repo) -> PathBuf {
 
 #[test]
 fn a_deep_tree_with_pending_siblings_audits_once_the_open_file_limit_is_raised() {
-    let hard = hard_open_file_limit();
-    assert!(
-        hard >= RAISE_NEEDS_HARD_LIMIT,
-        "the hard open-file limit {hard} is below {RAISE_NEEDS_HARD_LIMIT}, so the soft limit cannot be raised past {SOFT_LIMIT_WITHOUT_RAISE} and the raise path would not run"
-    );
+    assert_the_raise_can_run();
     let repo = deep_repository();
-    let audited = audit_under(&repo, &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"));
+    let audited = audit_under(&repo, &format!("ulimit -Sn {TIGHT_LIMIT}"));
     assert!(audited.status.success(), "{audited:?}");
     assert!(repo.root().join(".velnor/rust-inputs.lock").exists());
 }
@@ -113,14 +117,14 @@ fn exhausting_the_open_file_limit_names_the_depth_and_the_limit() {
     let repo = deep_repository();
     let audited = audit_under(
         &repo,
-        &format!("ulimit -Sn {CLEAR_LIMIT} && ulimit -Hn {CLEAR_LIMIT}"),
+        &format!("ulimit -Sn {TIGHT_LIMIT} && ulimit -Hn {TIGHT_LIMIT}"),
     );
     assert_eq!(audited.status.code(), Some(1), "{audited:?}");
     let stderr = String::from_utf8_lossy(&audited.stderr);
     assert!(
         stderr.contains("directory tree deeper than ")
             && stderr.contains(&format!(
-                " levels with pending siblings exceeds the open-file limit ({CLEAR_LIMIT}); raise the open-file limit"
+                " levels with pending siblings exceeds the open-file limit ({TIGHT_LIMIT}); raise the open-file limit"
             )),
         "{stderr}"
     );
@@ -136,7 +140,7 @@ fn a_build_that_exhausts_the_open_file_limit_runs_cargo_warns_and_treats_the_tre
     let (_bin, path) = fake_cargo();
     let built = velnor_ci_under(
         &repo,
-        &format!("ulimit -Sn {CLEAR_LIMIT} && ulimit -Hn {CLEAR_LIMIT}"),
+        &format!("ulimit -Sn {TIGHT_LIMIT} && ulimit -Hn {TIGHT_LIMIT}"),
         &["inputs", "build", "--", "cargo", "build"],
         Some(&path),
     );
@@ -145,14 +149,14 @@ fn a_build_that_exhausts_the_open_file_limit_runs_cargo_warns_and_treats_the_tre
     assert!(
         stderr.contains("velnor-ci: WARNING: directory tree deeper than ")
             && stderr.contains(&format!(
-                " levels with pending siblings exceeds the open-file limit ({CLEAR_LIMIT}); raise the open-file limit"
+                " levels with pending siblings exceeds the open-file limit ({TIGHT_LIMIT}); raise the open-file limit"
             )),
         "{stderr}"
     );
     assert!(
         String::from_utf8_lossy(&built.stdout)
             .lines()
-            .any(|line| line == CLEAR_LIMIT.to_string()),
+            .any(|line| line == TIGHT_LIMIT.to_string()),
         "cargo did not run under the original limit: {built:?}"
     );
     assert!(
@@ -163,11 +167,12 @@ fn a_build_that_exhausts_the_open_file_limit_runs_cargo_warns_and_treats_the_tre
 
 #[test]
 fn a_deep_tree_is_captured_completely_by_a_build_that_raised_the_open_file_limit() {
+    assert_the_raise_can_run();
     let repo = deep_repository();
     let (_bin, path) = fake_cargo();
     let built = velnor_ci_under(
         &repo,
-        &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"),
+        &format!("ulimit -Sn {TIGHT_LIMIT}"),
         &["inputs", "build", "--", "cargo", "build"],
         Some(&path),
     );

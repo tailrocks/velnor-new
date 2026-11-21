@@ -7,6 +7,7 @@ use std::fmt;
 pub struct CiError {
     message: String,
     missing: bool,
+    transient: bool,
 }
 
 impl CiError {
@@ -14,6 +15,15 @@ impl CiError {
         Self {
             message: message.into(),
             missing: false,
+            transient: false,
+        }
+    }
+
+    pub fn transient(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            missing: false,
+            transient: true,
         }
     }
 
@@ -21,6 +31,7 @@ impl CiError {
         Self {
             message: message.into(),
             missing: true,
+            transient: false,
         }
     }
 
@@ -29,7 +40,13 @@ impl CiError {
         Self {
             message: format!("{prefix}: {}", self.message),
             missing: self.missing,
+            transient: self.transient,
         }
+    }
+
+    #[must_use]
+    pub fn is_transient(&self) -> bool {
+        self.transient
     }
 
     #[must_use]

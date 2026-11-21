@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::os::fd::{AsFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -14,8 +15,8 @@ use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
-use super::resolve;
-use super::walk::unresolved_link;
+use super::resolve::{self, Reach};
+use super::walk::{changed, unresolved_link};
 
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
@@ -29,6 +30,15 @@ pub(in crate::io::audit) struct Stamp {
 }
 
 impl Stamp {
+    fn of(stat: &FileStat) -> Self {
+        Self {
+            device: i128::from(stat.st_dev),
+            inode: i128::from(stat.st_ino),
+            modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
+            changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
+        }
+    }
+
     pub(super) fn is(&self, (device, inode): Identity) -> bool {
         self.device == i128::from(device) && self.inode == i128::from(inode)
     }
@@ -37,8 +47,37 @@ impl Stamp {
 #[derive(Clone)]
 pub(super) enum Origin {
     Path,
-    Child { parent: Opened, name: OsString },
+    Child {
+        parent: Opened,
+        stamp: Stamp,
+        name: OsString,
+    },
+    Reopen {
+        parent: PathBuf,
+        stamp: Stamp,
+        child: Option<Stamp>,
+        name: OsString,
+    },
 }
+pub(super) struct Anchor {
+    pub(super) dir: Opened,
+    pub(super) path: PathBuf,
+}
+
+pub(super) struct Climb<'a> {
+    pub(super) anchor: Option<Anchor>,
+    pub(super) stepped: &'a dyn Fn(&Path, usize),
+}
+
+impl Climb<'_> {
+    pub(super) fn none() -> Self {
+        Self {
+            anchor: None,
+            stepped: &|_, _| {},
+        }
+    }
+}
+
 pub(super) enum Current {
     Gone,
     Directory(Identity),
@@ -61,29 +100,109 @@ pub(super) fn replaced(error: &io::Error) -> bool {
     ) || error.raw_os_error() == Some(libc::ELOOP)
 }
 
-pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
+pub(super) fn open(origin: &Origin, path: &Path, climb: &Climb<'_>) -> io::Result<Dir> {
     let fd = match origin {
         Origin::Path => resolve::open_path(path, true)?,
-        Origin::Child { parent, name } => {
-            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
-            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty()).map_err(failure)?
+        Origin::Child { parent, name, .. } => child(parent.as_fd(), name)?,
+        Origin::Reopen {
+            parent,
+            stamp,
+            child: recorded,
+            name,
+        } => {
+            let opened = child(reopen(parent, stamp, climb)?.as_fd(), name)?;
+            if self::stamp(&opened).ok() != *recorded {
+                return Err(changed(io::ErrorKind::Other, parent));
+            }
+            opened
         }
     };
     Dir::from_fd(fd).map_err(failure)
 }
-pub(super) fn stamp(directory: &Dir) -> io::Result<Stamp> {
-    let stat = fstat(directory).map_err(failure)?;
-    Ok(Stamp {
-        device: i128::from(stat.st_dev),
-        inode: i128::from(stat.st_ino),
-        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
-        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
-    })
+
+pub(super) fn child_stamp(parent: &Opened, name: &OsStr) -> Option<Stamp> {
+    fstatat(parent.as_fd(), name, AtFlags::AT_SYMLINK_NOFOLLOW)
+        .ok()
+        .map(|stat| Stamp::of(&stat))
 }
-pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
+
+fn child(parent: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
+    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+    openat(parent, name, flags, Mode::empty()).map_err(failure)
+}
+
+fn reopen(parent: &Path, expected: &Stamp, climb: &Climb<'_>) -> io::Result<OwnedFd> {
+    let below = climb
+        .anchor
+        .as_ref()
+        .and_then(|anchor| Some((anchor, parent.strip_prefix(&anchor.path).ok()?)));
+    let steps = below.map_or_else(
+        || parent.components().count(),
+        |(_, below)| below.components().count(),
+    );
+    (climb.stepped)(parent, steps);
+    let opened = match below {
+        Some((anchor, below)) => resolve::open_below(anchor.dir.as_fd(), below, false),
+        None => resolve::open_path(parent, false),
+    };
+    let held = opened.map_err(|error| {
+        if replaced(&error) {
+            changed(io::ErrorKind::Other, parent)
+        } else {
+            error
+        }
+    })?;
+    if expected.is(identity(&held)?) {
+        Ok(held)
+    } else {
+        Err(changed(io::ErrorKind::Other, parent))
+    }
+}
+
+pub(super) fn revisited(
+    identities: &BTreeMap<PathBuf, Stamp>,
+    directory: &Path,
+    reach: Reach<'_>,
+) -> io::Result<()> {
+    let Some(recorded) = identities.get(directory) else {
+        return Ok(());
+    };
+    match current(&Origin::Path, directory, reach, &Climb::none()) {
+        Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
+        Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
+        Err(error) if replaced(&error) => Err(changed(error.kind(), directory)),
+        Err(error) => Err(error),
+    }
+}
+
+fn identity(directory: impl AsFd) -> io::Result<Identity> {
+    let stat = fstat(directory).map_err(failure)?;
+    Ok((stat.st_dev, stat.st_ino))
+}
+
+pub(super) fn stamp(directory: impl AsFd) -> io::Result<Stamp> {
+    fstat(directory)
+        .map(|stat| Stamp::of(&stat))
+        .map_err(failure)
+}
+pub(super) fn current(
+    origin: &Origin,
+    path: &Path,
+    reach: Reach<'_>,
+    climb: &Climb<'_>,
+) -> io::Result<Current> {
     let held: OwnedFd;
     let (anchor, name) = match origin {
-        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+        Origin::Child { parent, name, .. } => (parent.as_fd(), name.as_os_str()),
+        Origin::Reopen {
+            parent,
+            stamp,
+            name,
+            ..
+        } => {
+            held = reopen(parent, stamp, climb)?;
+            (held.as_fd(), name.as_os_str())
+        }
         Origin::Path => {
             let (container, name) = match (path.parent(), path.file_name()) {
                 (Some(container), Some(name)) => (container, name),
@@ -108,7 +227,7 @@ pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
     if format == SFlag::S_IFDIR {
         return Ok(Current::Directory((stat.st_dev, stat.st_ino)));
     }
-    Ok(match kind_at(anchor, name, path)? {
+    Ok(match kind_at(anchor, name, path, reach)? {
         Some(kind) => Current::Other(kind),
         None => Current::Gone,
     })
@@ -127,12 +246,16 @@ pub(super) fn names(
             names.push(name);
         }
     }
-    names.sort();
     Ok(names)
 }
 
-pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    Ok(classify(directory, name, path, false, &|| {})?.map(|observed| observed.kind))
+pub(super) fn kind_at(
+    directory: impl AsFd,
+    name: &OsStr,
+    path: &Path,
+    reach: Reach<'_>,
+) -> io::Result<Option<Kind>> {
+    Ok(classify(directory, name, path, false, &|| {}, reach)?.map(|observed| observed.kind))
 }
 
 pub(super) fn observe(
@@ -141,7 +264,7 @@ pub(super) fn observe(
     path: &Path,
     resolved: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
-    classify(directory, name, path, true, resolved)
+    classify(directory, name, path, true, resolved, Reach::default())
 }
 
 fn modified(stat: &FileStat) -> SystemTime {
@@ -163,6 +286,7 @@ fn classify(
     path: &Path,
     with_modified: bool,
     after_resolve: &dyn Fn(),
+    reach: Reach<'_>,
 ) -> io::Result<Option<Observed>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
@@ -187,7 +311,7 @@ fn classify(
         Err(errno) => return Err(failure(errno)),
     };
     let base = path.parent().unwrap_or(path);
-    let followed = match resolve::resolve(directory.as_fd(), base, &target) {
+    let followed = match resolve::resolve(directory.as_fd(), base, &target, reach) {
         Ok(followed) => Some(followed),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),

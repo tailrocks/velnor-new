@@ -164,7 +164,7 @@ impl Repo {
 
     pub(crate) fn new(name: &str) -> Self {
         let repo = Self::empty(name);
-        repo.git(&["init", "--quiet"]);
+        repo.git(&["init", "--quiet", "--object-format=sha1"]);
         repo.write_unstaged(".gitignore", "/target/\n");
         repo
     }
@@ -176,7 +176,7 @@ impl Repo {
             "velnor-ci-inputs",
             name,
         ));
-        repo.git(&["init", "--quiet"]);
+        repo.git(&["init", "--quiet", "--object-format=sha1"]);
         repo.write_unstaged(".gitignore", "/target/\n");
         repo
     }

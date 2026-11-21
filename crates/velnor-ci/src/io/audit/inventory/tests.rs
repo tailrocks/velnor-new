@@ -9,11 +9,15 @@ use super::walk::{Probe, scan_with as walk};
 use super::*;
 
 mod ancestors;
+mod budget;
+mod checkpoints;
 mod decision;
+mod descriptors;
 mod exhaustion;
 mod links;
 mod placement;
 mod racing;
+mod released;
 
 fn scan_with(
     root: &Path,

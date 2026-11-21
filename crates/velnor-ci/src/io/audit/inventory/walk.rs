@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::descriptors::open_file_limit;
-use super::handle::{self, Current, Opened, Origin};
+use super::descriptors::{descriptor_shortage, shortage_message};
+use super::handle::{self, Climb, Current, Opened, Origin, Stamp};
+use super::held::Held;
+use super::resolve::Reach;
 use super::{Entries, Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
@@ -76,10 +78,17 @@ pub(in crate::io::audit) fn scan(
     scan_with(root, targets, budget, &Probe::default())
 }
 
+pub(super) const DESCRIPTOR_BUDGET: usize = 64;
+pub(super) const HELD_HANDLES: usize = 48;
+pub(super) const UNTRACKED_LISTING: usize = 1;
+
 pub(super) struct Probe<'a> {
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
     pub(super) after_open: &'a dyn Fn(&Path),
     pub(super) listed: &'a dyn Fn(&OsStr),
+    pub(super) opened: &'a dyn Fn(),
+    pub(super) reopened: &'a dyn Fn(&Path, usize),
+    pub(super) held: usize,
 }
 
 impl Default for Probe<'_> {
@@ -88,13 +97,16 @@ impl Default for Probe<'_> {
             before_open: &|_| Ok(()),
             after_open: &|_| {},
             listed: &|_| {},
+            opened: &|| {},
+            reopened: &|_, _| {},
+            held: HELD_HANDLES,
         }
     }
 }
 
-struct Pending {
-    path: PathBuf,
-    origin: Origin,
+pub(super) struct Pending {
+    pub(super) path: PathBuf,
+    pub(super) origin: Origin,
     depth: usize,
 }
 
@@ -115,24 +127,6 @@ pub(super) fn scan_with(
     })
 }
 
-fn descriptor_shortage(error: &io::Error) -> Option<i32> {
-    error
-        .raw_os_error()
-        .filter(|errno| matches!(*errno, libc::EMFILE | libc::ENFILE))
-}
-
-fn shortage_message(errno: i32, depth: usize) -> String {
-    if errno == libc::ENFILE {
-        return format!(
-            "the system-wide open-file table is full while scanning {depth} levels deep; free descriptors on this host or retry (raising the per-process open-file limit does not help)"
-        );
-    }
-    format!(
-        "directory tree deeper than {depth} levels with pending siblings exceeds the open-file limit ({}); raise the open-file limit",
-        open_file_limit()
-    )
-}
-
 fn walk(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
@@ -148,6 +142,7 @@ fn walk(
         depth: 0,
     }];
     let mut visited = BTreeSet::new();
+    let mut held = Held::new(probe);
     while let Some(Pending {
         path: directory,
         origin,
@@ -156,19 +151,21 @@ fn walk(
     {
         *depth = level;
         if !visited.insert(directory.clone()) {
-            revisited(&identities, &directory)?;
+            handle::revisited(&identities, &directory, held.reach())?;
             continue;
         }
         budget.reserve()?;
-        let opened =
-            (probe.before_open)(&directory).and_then(|()| handle::open(&origin, &directory));
+        let opened = (probe.before_open)(&directory)
+            .and_then(|()| handle::open(&origin, &directory, &held.climb(&origin)));
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
                 if matches!(origin, Origin::Path) {
                     return Err(changed(error.kind(), &directory));
                 }
-                match handle::current(&origin, &directory)? {
+                let current =
+                    handle::current(&origin, &directory, held.reach(), &held.climb(&origin))?;
+                match current {
                     Current::Directory(_) => return Err(changed(error.kind(), &directory)),
                     current => settle(
                         &mut entries,
@@ -176,6 +173,7 @@ fn walk(
                         (&directory, &origin, level),
                         current,
                         (root, targets),
+                        held.reach(),
                     )?,
                 }
                 continue;
@@ -191,20 +189,15 @@ fn walk(
         })?;
         let listing = Opened::new(listing);
         let queued_before = pending.len();
-        let mut children = BTreeMap::new();
-        for name in names {
-            let path = directory.join(&name);
-            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path)? else {
-                continue;
-            };
-            let child = Origin::Child {
-                parent: Opened::clone(&listing),
-                name: name.clone(),
-            };
-            pending.extend(queue(&kind, &path, (child, level + 1), (root, targets))?);
-            children.insert(PathBuf::from(name), kind);
-        }
-        match handle::current(&origin, &directory)? {
+        let children = list(
+            (&listing, names),
+            (&directory, stamp, level),
+            (&mut pending, &mut held),
+            (root, targets),
+        )?;
+        held.track(&listing, &directory, &mut pending, queued_before);
+        let current = handle::current(&origin, &directory, held.reach(), &held.climb(&origin))?;
+        match current {
             Current::Directory(now) if stamp.is(now) => {
                 entries.insert(directory, children);
             }
@@ -231,6 +224,7 @@ fn walk(
                     (&directory, &origin, level),
                     current,
                     (root, targets),
+                    held.reach(),
                 )?;
             }
         }
@@ -241,19 +235,36 @@ fn walk(
     })
 }
 
-fn revisited(identities: &BTreeMap<PathBuf, handle::Stamp>, directory: &Path) -> io::Result<()> {
-    let Some(recorded) = identities.get(directory) else {
-        return Ok(());
-    };
-    match handle::current(&Origin::Path, directory) {
-        Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
-        Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
-        Err(error) if handle::replaced(&error) => Err(changed(error.kind(), directory)),
-        Err(error) => Err(error),
+fn list(
+    (listing, names): (&Opened, Vec<OsString>),
+    (directory, stamp, level): (&Path, Stamp, usize),
+    (pending, held): (&mut Vec<Pending>, &mut Held<'_, '_>),
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<BTreeMap<PathBuf, Kind>> {
+    let mut children = BTreeMap::new();
+    for name in names {
+        let path = directory.join(&name);
+        let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path, held.reach())? else {
+            continue;
+        };
+        let child = Origin::Child {
+            parent: Opened::clone(listing),
+            stamp,
+            name: name.clone(),
+        };
+        pending.extend(queue(
+            &kind,
+            &path,
+            (child, level + 1),
+            (root, targets),
+            held.reach(),
+        )?);
+        children.insert(PathBuf::from(name), kind);
     }
+    Ok(children)
 }
 
-fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
+pub(super) fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
     io::Error::new(
         kind,
         format!(
@@ -268,6 +279,7 @@ fn queue(
     path: &Path,
     (origin, depth): (Origin, usize),
     (root, targets): (&Path, &BTreeSet<PathBuf>),
+    reach: Reach<'_>,
 ) -> io::Result<Option<Pending>> {
     if excluded_entry(path, kind, root, targets) {
         return Ok(None);
@@ -281,7 +293,7 @@ fn queue(
         Kind::Link {
             resolved: Some(resolved),
             ..
-        } if is_directory(resolved)? => Some(Pending {
+        } if is_directory(resolved, reach)? => Some(Pending {
             path: resolved.clone(),
             origin: Origin::Path,
             depth,
@@ -296,6 +308,7 @@ fn settle(
     (directory, origin, level): (&Path, &Origin, usize),
     current: Current,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
+    reach: Reach<'_>,
 ) -> io::Result<()> {
     let children = directory
         .parent()
@@ -314,6 +327,7 @@ fn settle(
                 directory,
                 (origin.clone(), level),
                 (root, targets),
+                reach,
             )?);
             if let (Some(children), Some(key)) = (children, key) {
                 children.insert(key.to_path_buf(), kind);
@@ -323,8 +337,8 @@ fn settle(
     Ok(())
 }
 
-fn is_directory(path: &Path) -> io::Result<bool> {
-    match handle::current(&Origin::Path, path) {
+fn is_directory(path: &Path, reach: Reach<'_>) -> io::Result<bool> {
+    match handle::current(&Origin::Path, path, reach, &Climb::none()) {
         Ok(Current::Directory(_) | Current::Other(Kind::Link { .. })) => Ok(true),
         Ok(Current::Gone | Current::Other(_)) => Ok(false),
         Err(error) if handle::replaced(&error) => Ok(true),
