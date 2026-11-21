@@ -109,6 +109,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<
     let node_tools = ToolsTelemetry {
         restore: has(ToolsLocalVerb::RecordRestore),
         save: has(ToolsLocalVerb::RecordSave),
+        saved_key: has(ToolsLocalVerb::RecordSavedKey),
     };
     job.steps.extend(
         [
