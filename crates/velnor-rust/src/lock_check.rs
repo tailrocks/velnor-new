@@ -39,7 +39,6 @@ pub fn running_platform() -> Option<Platform> {
     }
 }
 
-/// The files a release publishes for its version, as fetched for the online check.
 #[derive(Debug, Clone)]
 pub struct ReleaseFiles {
     pub sums: String,
@@ -47,9 +46,6 @@ pub struct ReleaseFiles {
     pub binary_sums: Option<String>,
 }
 
-/// The lock's `[velnor-gen]` entry checked against this binary, and with `release` the whole
-/// lock checked against what the release publishes. The release comes first, so a tampered
-/// `[velnor-gen-binary]` is reported as tampered rather than as a binary to reinstall.
 pub fn check_lock_entries(
     bytes: &[u8],
     release: Option<ReleaseFiles>,

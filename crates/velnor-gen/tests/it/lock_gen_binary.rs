@@ -228,42 +228,21 @@ fn the_release_is_checked_before_the_offline_entry_so_a_tampered_binary_is_named
 fn a_repin_names_the_version_of_the_lock_it_repairs() -> TestResult {
     let later = "0.1.112";
     let tampered = lock_at(later)?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
-    let online = verify_release(
-        tampered.as_bytes(),
-        &generator_sums(),
-        COMMIT_FILE,
-        Some(GENERATOR_BINARY_SUMS),
-    )
-    .err()
-    .ok_or("accepted a tampered digest")?;
-    assert_eq!(
-        online.remedy(),
-        Some(&Remedy::Repin(later.to_owned())),
-        "{online}"
-    );
-
     let missing = without_binary_section(&lock_at(later)?);
-    let offline = check(&missing, running(GEN_BINARY_X64))
-        .err()
-        .ok_or("accepted a 0.1.112 lock without [velnor-gen-binary]")?;
-    assert_eq!(
-        offline.remedy(),
-        Some(&Remedy::Repin(later.to_owned())),
-        "{offline}"
-    );
-
-    let online_missing = verify_release(
-        missing.as_bytes(),
-        &generator_sums(),
-        COMMIT_FILE,
-        Some(GENERATOR_BINARY_SUMS),
-    )
-    .err()
-    .ok_or("accepted")?;
-    assert_eq!(
-        online_missing.remedy(),
-        Some(&Remedy::Repin(later.to_owned())),
-        "{online_missing}"
-    );
+    let cases = [
+        ("online, tampered digest", tampered, Some(release_files())),
+        ("offline, missing section", missing.clone(), None),
+        ("online, missing section", missing, Some(release_files())),
+    ];
+    for (case, bytes, release) in cases {
+        let error = check_lock_entries(bytes.as_bytes(), release, running(GEN_BINARY_X64))
+            .err()
+            .ok_or(case)?;
+        assert_eq!(
+            error.remedy(),
+            Some(&Remedy::Repin(later.to_owned())),
+            "{case}: {error}"
+        );
+    }
     Ok(())
 }
