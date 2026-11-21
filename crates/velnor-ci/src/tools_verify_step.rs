@@ -135,23 +135,35 @@ fn outputs(verdict: &Verdict) -> String {
     }
 }
 
-fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
+fn checked(
+    context: &Context,
+    anchor: &Anchor<'_>,
+    file: &Path,
+) -> Result<(Verdict, String), CiError> {
     let verdict = check(&context.home, anchor, file)?;
-    if matches!(
+    let warning = if matches!(
         verdict,
         Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
-    ) {
-        tools_discard::mark(&context.runner_temp)?;
-    }
-    Ok(verdict)
+    ) && let Err(error) = tools_discard::mark(&context.runner_temp)
+    {
+        format!("::warning::{}\n", inert(&error.to_string()))
+    } else {
+        String::new()
+    };
+    Ok((verdict, warning))
 }
 
 pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let file = context.runner_temp.join(ANCHOR_DIR).join(ANCHOR_NAME);
     let anchor = Anchor(&context.anchor);
+    let mut warning = String::new();
     let verdict = match verb {
         Verb::Read => read(&file, context.anchor_matched),
-        Verb::Check => checked(context, &anchor, &file)?,
+        Verb::Check => {
+            let (verdict, note) = checked(context, &anchor, &file)?;
+            warning = note;
+            verdict
+        }
         Verb::Record => record(
             &context.home,
             &Recording {
@@ -181,7 +193,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         anchor_key: &context.anchor_key,
         repository: &context.repository,
     };
-    Ok(format!("{}\n", message(&verdict, remedy)))
+    Ok(format!("{warning}{}\n", message(&verdict, remedy)))
 }
 
 pub fn setup(verb: Verb) -> Result<String, CiError> {

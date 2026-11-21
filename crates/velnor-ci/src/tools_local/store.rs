@@ -180,13 +180,18 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         return Outcome::Failed("the copy to the store failed");
     }
     let retired = tools.join(format!("{STAGING_PREFIX}retired-{:016x}", random_u64()));
-    let replaced = fs::symlink_metadata(&entry).is_ok() && fs::rename(&entry, &retired).is_ok();
+    let present = fs::symlink_metadata(&entry).is_ok();
+    let replaced = present && fs::rename(&entry, &retired).is_ok();
+    if inputs.replace && present && !replaced {
+        fs::remove_dir_all(&staging).ok();
+        return Outcome::Failed("the poisoned entry could not be retired");
+    }
     if fs::rename(&staging, &entry).is_err() {
         if replaced {
             fs::rename(&retired, &entry).ok();
         }
         fs::remove_dir_all(&staging).ok();
-        return if complete(&entry, inputs.owner) {
+        return if !inputs.replace && complete(&entry, inputs.owner) {
             Outcome::AlreadySaved
         } else {
             Outcome::Failed("the entry could not be published")

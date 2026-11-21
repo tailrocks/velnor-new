@@ -4,9 +4,10 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use velnor_ci::tools_discard;
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, finish, run};
 use velnor_ci::tools_verify::Verb as VerifyVerb;
 use velnor_ci::tools_verify_step::run as verify_step;
 
@@ -113,4 +114,114 @@ fn a_mismatching_restore_marks_the_job_and_a_clean_one_does_not() {
     assert!(tools_discard::pending(&job.root));
     tools_discard::clear(&job.root);
     assert!(!tools_discard::pending(&job.root));
+}
+
+#[test]
+fn an_unwritable_discard_marker_is_reported_and_the_discard_still_happens() {
+    let job = job("tools-heal-marker-blocked");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir(job.root.join("velnor-tools-discarded")).unwrap_or_else(|e| unreachable!("{e}"));
+    let out = verify_step(VerifyVerb::Check, &context(&job, &anchor, "push"))
+        .unwrap_or_else(|e| unreachable!("the verify step aborted: {e}"));
+    assert!(
+        out.contains("::notice::the restored tools were discarded"),
+        "{out}"
+    );
+    assert!(
+        out.contains("::warning::cannot record the discard"),
+        "{out}"
+    );
+    assert!(!job.home.join(".rustup").exists());
+}
+
+#[cfg(target_os = "macos")]
+struct Immutable(PathBuf);
+
+#[cfg(target_os = "macos")]
+impl Immutable {
+    fn set(path: &Path) -> Self {
+        let status = Command::new("chflags")
+            .arg("uchg")
+            .arg(path)
+            .status()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(status.success());
+        let locked = Self(path.to_path_buf());
+        let probe = path.with_file_name("probe-retire");
+        assert!(
+            fs::rename(path, &probe).is_err(),
+            "the entry must be unmovable for this test to mean anything"
+        );
+        locked
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for Immutable {
+    fn drop(&mut self) {
+        Command::new("chflags")
+            .arg("nouchg")
+            .arg(&self.0)
+            .status()
+            .ok();
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_replacement_that_cannot_retire_the_poisoned_entry_fails_and_keeps_it() {
+    let (_repo, job, store) = poisoned_store("tools-heal-unretired");
+    let _locked = Immutable::set(&store.join("tools").join(KEY));
+    let outcome = save(&store, &job.home, true);
+    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert!(finish(Verb::Save, &outcome, "node").is_err());
+    assert_eq!(stored_rustc(&store), "evil binary!");
+    let leftovers: Vec<_> = fs::read_dir(store.join("tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(leftovers, [KEY], "no staging or retired entry stays");
+}
+
+#[test]
+fn an_unset_runner_temp_neither_reads_nor_deletes_a_marker_in_the_working_directory() {
+    let repo = Repo::empty("tools-heal-cli-marker");
+    let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let store = root.join("store");
+    let home = root.join("home");
+    let event = root.join("event.json");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(home.join(".local/share/mise")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(home.join(".rustup/toolchains/stable"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(home.join(".rustup/toolchains/stable/rustc"), "rustc")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("velnor-tools-discarded"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["tools-local", "save", "--key", KEY])
+        .current_dir(&root)
+        .env_remove("RUNNER_TEMP")
+        .env("HOME", &home)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_EVENT_PATH", &event)
+        .env("VELNOR_MBX_SHARED_DIR", &store)
+        .env("VELNOR_MBX_SEED_DIR", &store)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{stdout}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("tools saved to the node store"), "{stdout}");
+    assert!(
+        root.join("velnor-tools-discarded").is_file(),
+        "a successful save deleted the working directory's marker"
+    );
 }
