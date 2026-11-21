@@ -10,6 +10,7 @@ use velnor_model::{
 };
 
 use crate::config::{CONFIG_PATH, TIMEOUT_RANGE, runner};
+use crate::config_glob::unsupported_glob;
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
@@ -113,7 +114,10 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
     let paths = raw
         .paths
         .iter()
-        .map(|path| PathGlob::new(path.clone()).map_err(|_| invalid("test_groups.paths", path)))
+        .map(|path| {
+            unsupported_glob("test_groups.paths", path)?;
+            PathGlob::new(path.clone()).map_err(|_| invalid("test_groups.paths", path))
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let events = raw
         .events

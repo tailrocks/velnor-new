@@ -90,7 +90,7 @@ Each job with a building Cargo step gets the step `Private mbx store` (`echo "MB
 
 ## Skip the push run after a merge queue run
 
-`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.103 or later, the first release whose `merge-group-passed` reads only the latest merge_group run on the commit and knows the job conditions of the skipped test jobs; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.97 or later; an earlier release waits for the whole queue run to complete).
+`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.103 or later, the first release whose `merge-group-passed` reads only the latest merge_group run on the commit and knows the job conditions of the skipped test jobs; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. With `velnor-ci` 0.1.111 or later in the lock, a workflow with a plan job also puts the skip into the job condition of the `policy` job and of every `[[lint]]` job, so a skipped push allocates no runner for them, and the `Required` verdict accepts their skipped result; an older pin keeps those jobs and skips their steps. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.97 or later; an earlier release waits for the whole queue run to complete).
 
 ```toml
 [ci]
@@ -134,7 +134,7 @@ Mise-managed Cargo retains its configured command wrappers, including MBX, and t
 
 Writing the configuration only above the checkout misses temporary directories. Writing it only in Cargo's home misses a changed home. A configuration at `/.cargo/config.toml` would reach unrelated directories but needs filesystem-root access and changes unrelated jobs. The wrapper uses a per-job configuration instead.
 
-This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
+This repository selects its scale-set runner and names its mirror in this configuration. Its hand-maintained `ci.yml` is separate from the generator and does not consume this setting. Running a generated Rust workflow requires the compatible helper release.
 
 ## Optional private dependencies
 
@@ -369,6 +369,7 @@ job = "parallel"
 ```
 
 - The lane job needs the plan job, so a repository that had the single `rust` job and no plan job gets a `rust-plan` job (a few seconds of setup) once it has a parallel lane. The job runs when the plan selects the root, the same condition as the root's other jobs, and its steps keep the conditions they have inline (the package selection of `packages`, the `docs` plan output and `docs = "post_merge"`).
+- With `pr_ci = "label"` the lane job runs on every pull request, labeled or not, like the root's lint job: its `Lint` and `Documentation` steps run in the quick set, and its test step and guard wait for the `ci:run` or `ci:auto` label. The saves of the lane's target cache wait for the lane's test step to record its build (`steps.test.outputs.built`) and for every lint and doc step to pass, so a failed test still saves the cache and a failed compile step never does. Both need velnor-ci 0.1.111 or later in the lock; an older pin keeps the label on the whole job and the saves behind the job result.
 - The `Required` job waits for the lane job through `needs`, like every generated job. The lane adds no check name to the branch protection or the ruleset.
 - The lane's test step reports `tests_run`, `tests_listed` and `tests_by_package` as outputs of the job, and the `velnor-ci gate` verdict reads them under the root's name, next to the root's default test job. A package that the lane lists tests for and that ran none in any job fails the gate. When the plan selects none of the lane's `packages`, the test step is skipped, and the job reports zero tests, which the gate accepts.
 - The job restores the tools, the sources and its own target cache, and on a push to the default branch, a schedule and a manual run it saves its own target cache (`velnor-tgt-<job>...`). It never writes the root's target cache or the sources cache, so the lane's feature-on build stays out of the default job's cache and the other way round. The first run after the key appears has a cold target cache.
@@ -473,7 +474,7 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 
 ## Files and packages
 
-- `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob, and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
+- `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob (only `*` and `**` are supported; a `?`, `[` or `]` is refused), and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
 
   ```toml
   [[inputs]]
@@ -583,7 +584,7 @@ timeout_minutes = 5
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
 | `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
-| `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
+| `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder; an entry without a `*` also covers everything below it, so `cfg` is `cfg/**`, and a list that matches no tracked file runs the lint, both from `velnor-ci` 0.1.111; `?`, `[` and `]` are refused at config load, since only `*` and `**` are supported). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.111 or later. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
 | `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |

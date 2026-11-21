@@ -111,7 +111,7 @@ pub struct RepoFacts {
     pub weakenings: Vec<Weakening>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
@@ -119,7 +119,7 @@ pub struct PolicyTools {
     pub checks: DenyChecks,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DenyChecks(u8);
 
 impl DenyChecks {

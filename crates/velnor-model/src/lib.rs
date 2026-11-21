@@ -17,6 +17,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod plan_gate;
 mod policy_table;
 mod public_sources;
 mod release_asset;
@@ -47,6 +48,7 @@ pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
     PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use cargo_build::BuildRecord;
 pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
@@ -56,18 +58,18 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
-pub use mbx::MbxMode;
+pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{
     MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
 };
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
-    FilterRef, Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
-    PermissionScope, Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Step, TEST_STEP,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan, group_output_name,
+    FilterRef, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
+    Permissions, PlanRef, PrRun, PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
+pub use plan_gate::{Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
