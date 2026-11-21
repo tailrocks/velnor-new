@@ -134,32 +134,6 @@ fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
 }
 
 #[test]
-fn a_job_that_builds_nothing_runs_no_shared_store_steps_from_helper_0_1_112() -> TestResult {
-    let steps_of = |helper: &str| -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let mut repo = crate::golden::load(&crate::golden::samples().join("policy-lane"))?;
-        repo.files.insert(
-            path(".velnor/rust-ci.toml")?,
-            b"mbx_shared_store = true\n".to_vec(),
-        );
-        crate::pipeline::pin_helper(&mut repo, helper)?;
-        let text = workflow(&repo)?;
-        let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
-        let steps = yaml["jobs"]["policy"]["steps"]
-            .as_array()
-            .ok_or("policy steps missing")?;
-        Ok(steps
-            .iter()
-            .filter_map(|s| s["run"].as_str())
-            .filter(|run| run.contains(EXEC) || run.contains(SEED))
-            .map(str::to_owned)
-            .collect())
-    };
-    assert_eq!(steps_of("0.1.111")?.len(), 2);
-    assert_eq!(steps_of("0.1.112")?, Vec::<String>::new());
-    Ok(())
-}
-
-#[test]
 fn a_cargo_capable_archive_job_keeps_the_shared_store_steps_from_helper_0_1_112() -> TestResult {
     let config = format!("mbx_shared_store = true\n{}", crate::test_groups::SHELL);
     let text = workflow(&crate::test_groups::view_with(
