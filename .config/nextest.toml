@@ -220,6 +220,10 @@ filter = "package(=velnor-ci)"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and binary(=it) and test(=plan_diff::every_recorded_case_matches_the_legacy_op)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 

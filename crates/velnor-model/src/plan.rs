@@ -134,6 +134,7 @@ pub struct Step {
     pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
+    pub any_gate: Vec<Gate>,
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,
