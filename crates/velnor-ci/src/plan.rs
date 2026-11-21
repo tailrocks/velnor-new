@@ -295,9 +295,9 @@ pub fn explain(
     }
     for path in unknown {
         let shown = escape(path.as_str(), false);
-        if path.as_str().contains('*') {
+        if path.as_str().contains(['*', '?', '[', ']']) {
             lines.push(format!(
-                "unknown path: {shown}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                "unknown path: {shown}\n  no exact rule can name a path with a *, ?, [ or ]; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
             ));
             continue;
         }

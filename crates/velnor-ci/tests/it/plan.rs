@@ -166,6 +166,25 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
 }
 
 #[test]
+fn an_unknown_path_with_a_question_mark_or_a_bracket_gets_no_config_line_that_would_not_load() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    for name in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(!text.contains(&format!("\"{name}\"")), "{text}");
+    }
+}
+
+#[test]
 fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_package_arguments() {
     for bad in [
         "a;b",
