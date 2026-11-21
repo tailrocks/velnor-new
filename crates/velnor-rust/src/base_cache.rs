@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RootSlug, RustRoot,
-    Step, StepKind, TrimFamily, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
+    RootSlug, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -40,6 +40,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
+const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -58,7 +59,46 @@ pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
 }
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
-    facts.private_sources.is_none() && has_saving_helper(facts)
+    has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
+}
+
+fn has_private_base_helper(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+}
+
+pub(crate) fn private_base(facts: &RepoFacts) -> bool {
+    facts.private_sources.is_some() && facts.private_base_caches && has_private_base_helper(facts)
+}
+
+fn private_verdict(facts: &RepoFacts) -> PrivateVerdict {
+    if private_base(facts) {
+        PrivateVerdict::Checked
+    } else if has_private_base_helper(facts) {
+        PrivateVerdict::Cleared
+    } else {
+        PrivateVerdict::Unset
+    }
+}
+
+pub(crate) fn private_only(facts: &RepoFacts, step: Step) -> Step {
+    Step {
+        private_repo: private_base(facts),
+        ..step
+    }
+}
+
+pub(crate) fn privacy_check(facts: &RepoFacts) -> Vec<Step> {
+    if private_base(facts) {
+        vec![
+            step(StepKind::RepositoryPrivacy),
+            step(StepKind::PrivateCheck { cached: Vec::new() }),
+        ]
+    } else {
+        Vec::new()
+    }
 }
 
 pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
@@ -226,6 +266,7 @@ pub(crate) fn save_steps(
                     .public_sources
                     .as_ref()
                     .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
+                private: private_verdict(facts),
             })
         },
         Step {
@@ -246,6 +287,7 @@ pub(crate) fn save_steps(
     }
     steps
         .into_iter()
+        .map(|saved| private_only(facts, saved))
         .map(|saved| Step {
             gate: lane.steps(),
             ..saved

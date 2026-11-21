@@ -10,6 +10,7 @@ mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
+mod cache_credentials;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
@@ -48,11 +49,14 @@ mod inputs;
 mod inputs_batch;
 mod inputs_git;
 mod manifests;
+mod mbx_reports;
+pub(crate) use mbx_reports::assign as assign_mbx_report;
 mod merge_group;
 mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
+mod private_repo;
 mod public_repo;
 mod public_sources;
 pub mod pump;
@@ -74,6 +78,7 @@ mod restored;
 mod restored_targets;
 mod restored_units;
 mod run;
+mod saved_git_config;
 mod scope_cache;
 mod setup;
 mod small;
@@ -252,6 +257,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
+        Command::Cache(CacheCommand::PrivateRepo) => private_repo::run(),
         Command::Cache(CacheCommand::PublicSources(args)) => public_sources::run(&args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
