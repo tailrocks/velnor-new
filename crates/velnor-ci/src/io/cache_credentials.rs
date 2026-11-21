@@ -7,15 +7,20 @@ use std::path::{Path, PathBuf};
 use crate::escape::inert;
 
 const SAVED_ROOT: &str = ".cargo";
-const SAVED: &[&str] = &["registry/index", "registry/cache", "git/db"];
+const SAVED: &[(&str, Zone)] = &[
+    ("registry/index", Zone::Crate),
+    ("registry/cache", Zone::Crate),
+    ("git/db", Zone::Plain),
+];
+const GIT_DIRECTORY: &str = ".git";
 const CREDENTIAL_FILES: &[&str] = &[
     ".git-credentials",
     ".netrc",
     "_netrc",
-    "credentials",
     "credentials.toml",
     "hosts.yml",
 ];
+const GIT_CREDENTIAL_FILES: &[&str] = &["credentials"];
 const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "config.bak"];
 const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
@@ -26,6 +31,7 @@ const MAX_ENTRIES: usize = 2_000_000;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Zone {
+    Crate,
     Plain,
     Hooks,
     Logs,
@@ -33,10 +39,17 @@ enum Zone {
 
 impl Zone {
     fn within(self, directory: &Path) -> Self {
+        let name = directory.file_name();
+        if self == Self::Crate {
+            return if name.is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIRECTORY)) {
+                Self::Plain
+            } else {
+                self
+            };
+        }
         if self != Self::Plain {
             return self;
         }
-        let name = directory.file_name();
         if name.is_some_and(|name| name.eq_ignore_ascii_case(HOOKS)) {
             Self::Hooks
         } else if name.is_some_and(|name| name.eq_ignore_ascii_case(LOGS)) {
@@ -55,13 +68,13 @@ pub(super) fn saved_root() -> Option<PathBuf> {
 
 pub(super) fn find(root: &Path) -> Option<String> {
     let mut budget = MAX_ENTRIES;
-    for saved in SAVED {
+    for (saved, zone) in SAVED {
         let directory = match plain_path(root, saved) {
             Ok(Some(directory)) => directory,
             Ok(None) => continue,
             Err(reason) => return Some(reason),
         };
-        if let Some(found) = walk(&directory, 0, &mut budget, Zone::Plain) {
+        if let Some(found) = walk(&directory, 0, &mut budget, *zone) {
             return Some(found);
         }
     }
@@ -132,7 +145,10 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Opti
                 shown(&path)
             ));
         }
-        if CREDENTIAL_FILES.contains(&name.as_str()) {
+        let git = zone != Zone::Crate;
+        if CREDENTIAL_FILES.contains(&name.as_str())
+            || (git && GIT_CREDENTIAL_FILES.contains(&name.as_str()))
+        {
             return Some(format!("{} is a credential file", shown(&path)));
         }
         if kind.is_dir() {
@@ -142,12 +158,13 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Opti
                 "{} is not a regular file that can be checked for a credential",
                 shown(&path)
             ));
-        } else if GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path) {
+        } else if git && GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path) {
             return Some(format!(
                 "{} holds a credential or a transport setting",
                 shown(&path)
             ));
-        } else if (GIT_TEXT.contains(&name.as_str()) || zone != Zone::Plain)
+        } else if git
+            && (GIT_TEXT.contains(&name.as_str()) || zone != Zone::Plain)
             && names_credential_file(&path, zone)
         {
             return Some(format!(
