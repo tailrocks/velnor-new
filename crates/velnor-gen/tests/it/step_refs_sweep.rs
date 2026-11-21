@@ -317,6 +317,7 @@ name = "Build assets"
 [[workflow.job]]
 id = "build"
 permissions = { contents = "read" }
+outputs = { artifact_id = "steps.upload.outputs.artifact-id" }
 
 [[workflow.job.step]]
 uses = "checkout"
@@ -334,25 +335,26 @@ with = { name = "assets", path = "target/release/app" }
 
 #[test]
 fn every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let mut sweep = Sweep::default();
-    let mut rendered = BTreeSet::new();
-    for patch in gate_patches()? {
-        let mut repo = view(ROOTS, None)?;
-        repo.files
-            .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
-        let effective = pinned(&mut repo, patch)?;
-        if rendered.insert(effective) {
-            let files = generated(&mut repo)?;
-            assert!(
-                files
-                    .keys()
-                    .any(|path| path.to_string() == ".github/workflows/build-assets.yml"),
-                "{:?}",
-                files.keys().collect::<Vec<_>>()
-            );
-            sweep.add(&format!("0.1.{effective}"), &files)?;
-        }
-    }
-    sweep.finish();
+    let patch = gate_patches()?
+        .into_iter()
+        .last()
+        .ok_or("no helper gate patch")?;
+    let mut repo = view(ROOTS, None)?;
+    repo.files
+        .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
+    pinned(&mut repo, patch)?;
+    let files = generated(&mut repo)?;
+    let path = RepoPath::new(".github/workflows/build-assets.yml")?;
+    let text = files
+        .get(&path)
+        .ok_or("build-assets.yml was not rendered")?;
+    let mut scan = Scan::default();
+    scan_workflow(
+        &crate::yaml_tree::document(text)?,
+        &callees_of(&files)?,
+        &mut scan,
+    );
+    assert_ne!(scan.refs, 0, "build-assets.yml checked no steps reference");
+    assert!(scan.dangling.is_empty(), "{:#?}", scan.dangling);
     Ok(())
 }
