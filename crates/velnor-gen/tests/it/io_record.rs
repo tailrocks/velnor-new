@@ -30,11 +30,8 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
     let samples = scratch.repo().join("generator/samples");
     let sample = scratch.repo().join("generator/samples/demo");
     let expected = sample.join("expected");
-    write(
-        &sample.join("expected/.github/workflows/rust-ci.yml"),
-        "kept\n",
-    )?;
-    symlink(".github/workflows/rust-ci.yml", expected.join("link"))?;
+    write(&sample.join("expected/.github/workflows/ci.yml"), "kept\n")?;
+    symlink(".github/workflows/ci.yml", expected.join("link"))?;
     write(&sample.join("view/old/Cargo.toml"), "")?;
     write(&sample.join("cargo-metadata/old.json"), "{}")?;
     fs::set_permissions(&expected, fs::Permissions::from_mode(0o555))?;
@@ -64,7 +61,7 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
         ("symlinks.txt", ".cargo\n"),
         ("view/mise.toml", "[tools]\n"),
         ("cargo-metadata/lab/Cargo.toml.json", "{}\n"),
-        ("expected/.github/workflows/rust-ci.yml", "kept\n"),
+        ("expected/.github/workflows/ci.yml", "kept\n"),
     ] {
         assert_eq!(fs::read_to_string(sample.join(path))?, bytes, "{path}");
     }
@@ -72,7 +69,7 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
     assert!(!sample.join("cargo-metadata/old.json").exists());
     assert_eq!(
         fs::read_link(sample.join("expected/link"))?,
-        Path::new(".github/workflows/rust-ci.yml")
+        Path::new(".github/workflows/ci.yml")
     );
     assert_eq!(fs::read_dir(&samples)?.count(), 1);
     Ok(())

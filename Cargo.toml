@@ -50,7 +50,7 @@ velnor-release = { version = "=0.0.0", path = "crates/velnor-release" }
 velnor-workflows = { version = "=0.0.0", path = "crates/velnor-workflows" }
 serde-saphyr = "=2.2.0"
 similar = { version = "=3.2.1" }
-url = "=2.5.8"
+url = "=2.5.9"
 
 [workspace.package]
 edition = "2024"
