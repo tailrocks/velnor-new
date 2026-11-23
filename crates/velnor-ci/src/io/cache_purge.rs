@@ -172,11 +172,12 @@ pub fn purge_private_if_public(github: &dyn GitHubWrite, repo: &Repo) -> Result<
                 "{repo} is private; its {PRIVATE_PREFIX} entries are kept\n"
             ));
         }
-        Err(error) => format!("{}\n", inert(&error.to_string())),
+        Err(error) => inert(&error.to_string()),
     };
     let pending = private_entries(github, repo)?;
-    let report = format!("{lookup}{}", entry_report(&pending, repo));
+    let report = format!("{lookup}\n{}", entry_report(&pending, repo));
     sweep(github, repo, pending, &report)
+        .map_err(|error| CiError::new(format!("{lookup}: {error}")))
 }
 
 pub(super) fn run(args: &PurgePrivateArgs) -> Result<String, CiError> {

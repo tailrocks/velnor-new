@@ -17,7 +17,7 @@ struct Api {
     entries: RefCell<Vec<Value>>,
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
-    fail_delete: Option<u64>,
+    fail_deletes: Vec<u64>,
     listings: Cell<usize>,
     arrivals: RefCell<VecDeque<Vec<Value>>>,
     running: RefCell<Vec<(&'static str, u64)>>,
@@ -38,7 +38,7 @@ impl Api {
             entries: RefCell::new(entries),
             asked: RefCell::default(),
             deleted: RefCell::default(),
-            fail_delete: None,
+            fail_deletes: Vec::new(),
             listings: Cell::default(),
             arrivals: RefCell::default(),
             running: RefCell::default(),
@@ -158,7 +158,7 @@ impl GitHubWrite for Api {
             .next()
             .and_then(|id| id.parse().ok())
             .ok_or_else(|| CiError::new("invalid id"))?;
-        if self.fail_delete == Some(id) {
+        if self.fail_deletes.contains(&id) {
             return Err(CiError::new("HTTP 403"));
         }
         self.deleted.borrow_mut().push(id);
@@ -276,7 +276,7 @@ fn a_repository_without_private_entries_reports_zero_and_succeeds() {
 #[test]
 fn a_failed_delete_is_an_error() {
     let mut api = Api::new(mixed());
-    api.fail_delete = Some(2);
+    api.fail_deletes = vec![2];
     let error = purge_private(&api, &repo(), true)
         .err()
         .map(|e| e.to_string());
@@ -285,6 +285,20 @@ fn a_failed_delete_is_an_error() {
         Some("deleted 2 of 3; failed 1 entries: ID 2: HTTP 403")
     );
     assert_eq!(*api.deleted.borrow(), vec![1, 3]);
+}
+
+#[test]
+fn every_failed_delete_is_reported_together_by_yes() {
+    let mut api = Api::new(mixed());
+    api.fail_deletes = vec![1, 3];
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some("deleted 1 of 3; failed 2 entries: ID 1: HTTP 403; ID 3: HTTP 403")
+    );
+    assert_eq!(*api.deleted.borrow(), vec![2]);
 }
 
 #[test]
@@ -353,7 +367,7 @@ fn the_deleted_count_is_cumulative_across_passes() {
         "velnor-private-src-Linux-X64-all.roots-aa",
         "refs/heads/main",
     )];
-    api.fail_delete = Some(9);
+    api.fail_deletes = vec![9];
     let error = purge_private(&api, &repo(), true)
         .err()
         .map(|e| e.to_string());

@@ -1,6 +1,9 @@
 use super::*;
 use velnor_ci::io::cache_purge::purge_private_if_public;
 
+const VERDICT: &str =
+    "tailrocks/lab is not private, and a cache of a public repository can be read by a fork";
+
 fn left(api: &Api) -> Vec<Value> {
     api.entries
         .borrow()
@@ -58,16 +61,34 @@ fn running_and_enabled_workflows_do_not_stop_the_purge() {
 #[test]
 fn a_failed_delete_does_not_stop_the_others_and_every_failure_is_reported() {
     let mut api = Api::with_repository(mixed(), false, "public");
-    api.fail_delete = Some(1);
+    api.fail_deletes = vec![1];
     let error = purge_private_if_public(&api, &repo())
         .err()
         .map(|e| e.to_string());
     assert_eq!(
-        error.as_deref(),
-        Some("deleted 2 of 3; failed 1 entries: ID 1: HTTP 403")
+        error,
+        Some(format!(
+            "{VERDICT}: deleted 2 of 3; failed 1 entries: ID 1: HTTP 403"
+        ))
     );
     assert_eq!(*api.deleted.borrow(), vec![2, 3]);
     assert_eq!(left(&api).len(), 6);
+}
+
+#[test]
+fn every_failed_delete_is_reported_together_by_if_public() {
+    let mut api = Api::with_repository(mixed(), false, "public");
+    api.fail_deletes = vec![1, 3];
+    let error = purge_private_if_public(&api, &repo())
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error,
+        Some(format!(
+            "{VERDICT}: deleted 1 of 3; failed 2 entries: ID 1: HTTP 403; ID 3: HTTP 403"
+        ))
+    );
+    assert_eq!(*api.deleted.borrow(), vec![2]);
 }
 
 #[test]
