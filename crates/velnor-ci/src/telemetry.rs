@@ -40,6 +40,10 @@ pub struct Invocation {
     pub execution: BTreeMap<String, String>,
     #[serde(default)]
     pub target_directory: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dirty: Vec<crate::cargo_artifacts::DirtyUnit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_manifest: Option<crate::restored_units::Manifest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +56,8 @@ pub struct Compilation {
     pub dependencies: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restored: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub missing_input: bool,
 }
