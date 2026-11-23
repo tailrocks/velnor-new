@@ -43,6 +43,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 // helper-gate: first in tools-v0.1.111 via 193adc8c56
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
+const PRIVATE_PURGE_HELPER: (u64, u64, u64) = (0, 1, 112);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -331,7 +332,15 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         })
     });
     let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
+    let purge = release
+        .version()
+        .at_least(PRIVATE_PURGE_HELPER)
+        .then(|| Step {
+            when: When::Finalizer,
+            ..step(StepKind::CachePurgePrivate)
+        });
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
+        .chain(purge)
         .chain(trims)
         .chain(verifies)
         .chain(result)

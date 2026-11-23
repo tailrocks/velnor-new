@@ -10,6 +10,7 @@ use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, GitHubWrite, Repo};
 use velnor_ci::io::cache_purge::purge_private;
 
+mod if_public;
 mod running;
 
 struct Api {
@@ -24,6 +25,7 @@ struct Api {
     promoted_to: Option<&'static str>,
     workflows: RefCell<Vec<&'static str>>,
     workflows_total: Cell<Option<u64>>,
+    repository: RefCell<Option<Value>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -44,6 +46,7 @@ impl Api {
             promoted_to: None,
             workflows: RefCell::default(),
             workflows_total: Cell::default(),
+            repository: RefCell::default(),
         }
     }
 
@@ -65,6 +68,13 @@ impl Api {
         api
     }
 
+    fn with_repository(entries: Vec<Value>, private: bool, visibility: &str) -> Self {
+        let api = Self::new(entries);
+        *api.repository.borrow_mut() =
+            Some(json!({"full_name":"tailrocks/lab","private":private,"visibility":visibility}));
+        api
+    }
+
     fn arriving_after_each_relist(batches: Vec<Vec<Value>>) -> Self {
         let api = Self::new(mixed());
         *api.arrivals.borrow_mut() = batches.into();
@@ -74,6 +84,14 @@ impl Api {
 
 impl GitHub for Api {
     fn get(&self, path: &str) -> Result<String, CiError> {
+        if path == "/repos/tailrocks/lab" {
+            return self
+                .repository
+                .borrow()
+                .as_ref()
+                .map(Value::to_string)
+                .ok_or_else(|| CiError::new("HTTP 500"));
+        }
         if path.contains("/actions/workflows?") {
             let states = self.workflows.borrow();
             let rows: Vec<Value> = states.iter().map(|state| json!({"state": state})).collect();
@@ -264,9 +282,9 @@ fn a_failed_delete_is_an_error() {
         .map(|e| e.to_string());
     assert_eq!(
         error.as_deref(),
-        Some("deleted 1 of 3; failed at entry ID 2: HTTP 403")
+        Some("deleted 2 of 3; failed 1 entries: ID 2: HTTP 403")
     );
-    assert_eq!(*api.deleted.borrow(), vec![1]);
+    assert_eq!(*api.deleted.borrow(), vec![1, 3]);
 }
 
 #[test]
@@ -341,7 +359,7 @@ fn the_deleted_count_is_cumulative_across_passes() {
         .map(|e| e.to_string());
     assert_eq!(
         error.as_deref(),
-        Some("deleted 1 of 2; failed at entry ID 9: HTTP 403")
+        Some("deleted 1 of 2; failed 1 entries: ID 9: HTTP 403")
     );
     assert_eq!(*api.deleted.borrow(), vec![1]);
 }

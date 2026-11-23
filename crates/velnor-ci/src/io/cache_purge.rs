@@ -7,7 +7,9 @@ use super::cache_api::{Entry, delete_entries, pages};
 use crate::cache::encode;
 use crate::cli_cache::PurgePrivateArgs;
 use crate::error::CiError;
+use crate::escape::inert;
 use crate::github::{GitHubWrite, Repo};
+use crate::private_repo::require_private;
 
 const PRIVATE_PREFIX: &str = "velnor-private-";
 const PURGE_PASSES: usize = 3;
@@ -96,17 +98,8 @@ pub fn purge_private(
     if delete && running > 0 {
         return Err(CiError::new(busy));
     }
-    let mut pending = private_entries(github, repo)?;
-    let bytes: u128 = pending
-        .iter()
-        .map(|entry| u128::from(entry.size_in_bytes))
-        .sum();
-    let refs: BTreeSet<_> = pending.iter().map(|entry| &entry.reference).collect();
-    let report = format!(
-        "{} entries ({bytes} bytes) in {} refs of {repo} have a key starting with {PRIVATE_PREFIX}\n",
-        pending.len(),
-        refs.len()
-    );
+    let pending = private_entries(github, repo)?;
+    let report = entry_report(&pending, repo);
     if !delete {
         let warning = if running > 0 {
             format!("warning: {busy}\n")
@@ -118,18 +111,48 @@ pub fn purge_private(
             pending.len()
         ));
     }
+    sweep(github, repo, pending, report)
+}
+
+fn entry_report(entries: &[Entry], repo: &Repo) -> String {
+    let bytes: u128 = entries
+        .iter()
+        .map(|entry| u128::from(entry.size_in_bytes))
+        .sum();
+    let refs: BTreeSet<_> = entries.iter().map(|entry| &entry.reference).collect();
+    format!(
+        "{} entries ({bytes} bytes) in {} refs of {repo} have a key starting with {PRIVATE_PREFIX}\n",
+        entries.len(),
+        refs.len()
+    )
+}
+
+fn sweep(
+    github: &dyn GitHubWrite,
+    repo: &Repo,
+    mut pending: Vec<Entry>,
+    report: String,
+) -> Result<String, CiError> {
     let mut deleted = 0;
     let mut seen = 0;
     for _ in 0..PURGE_PASSES {
-        let ids: Vec<u64> = pending.iter().map(|entry| entry.id).collect();
-        seen += ids.len();
-        for id in &ids {
-            if let Err(error) = delete_entries(github, repo, &[*id]) {
-                return Err(CiError::new(format!(
-                    "deleted {deleted} of {seen}; failed at entry ID {id}: {error}"
-                )));
-            }
-            deleted += 1;
+        seen += pending.len();
+        let failures: Vec<String> = pending
+            .iter()
+            .filter_map(|entry| {
+                match delete_entries(github, repo, &[entry.id]) {
+                    Ok(()) => deleted += 1,
+                    Err(error) => return Some(format!("ID {}: {error}", entry.id)),
+                }
+                None
+            })
+            .collect();
+        if !failures.is_empty() {
+            return Err(CiError::new(format!(
+                "deleted {deleted} of {seen}; failed {} entries: {}",
+                failures.len(),
+                failures.join("; ")
+            )));
         }
         pending = private_entries(github, repo)?;
         if pending.is_empty() {
@@ -142,7 +165,25 @@ pub fn purge_private(
     )))
 }
 
+pub fn purge_private_if_public(github: &dyn GitHubWrite, repo: &Repo) -> Result<String, CiError> {
+    let lookup = match require_private(&repo.to_string(), github) {
+        Ok(()) => {
+            return Ok(format!(
+                "{repo} is private; its {PRIVATE_PREFIX} entries are kept\n"
+            ));
+        }
+        Err(error) => format!("{}\n", inert(&error.to_string())),
+    };
+    let pending = private_entries(github, repo)?;
+    let report = format!("{lookup}{}", entry_report(&pending, repo));
+    sweep(github, repo, pending, report)
+}
+
 pub(super) fn run(args: &PurgePrivateArgs) -> Result<String, CiError> {
     let (github, repo) = super::cache_api::client(args.repo.as_deref())?;
-    purge_private(&github, &repo, args.yes)
+    if args.if_public {
+        purge_private_if_public(&github, &repo)
+    } else {
+        purge_private(&github, &repo, args.yes)
+    }
 }
