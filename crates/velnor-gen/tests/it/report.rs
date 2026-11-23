@@ -355,9 +355,18 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
     Ok(())
 }
 
+const ACTIVE: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+
 #[test]
 fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it() -> TestResult {
-    for (version, gated) in [("0.1.111", false), ("0.1.112", true)] {
+    let gated = "needs.rust-root.result != 'skipped' || needs.rust-tools.result != 'skipped' || needs.rust-trim.result != 'skipped'";
+    for (version, expected) in [
+        ("0.1.111", format!("${{{{ {ACTIVE} && (!cancelled()) }}}}")),
+        (
+            "0.1.112",
+            format!("${{{{ {ACTIVE} && (!cancelled() && ({gated})) }}}}"),
+        ),
+    ] {
         let view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
         let mut facts = detect(&view)?;
         let helper = facts.helper.as_ref().ok_or("helper")?;
@@ -372,21 +381,12 @@ fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it(
             &crate::archive::plain_invocations(rendered.values().next().ok_or("workflow")?),
         )?;
         let cache = &parsed["jobs"]["cache"];
-        let condition = cache["if"].as_str().ok_or("cache if")?;
-        let needs: Vec<&str> = cache["needs"]
-            .as_array()
-            .ok_or("cache needs")?
-            .iter()
-            .filter_map(|need| need.as_str())
-            .collect();
-        assert_ne!(needs, [] as [&str; 0]);
-        for need in needs {
-            assert_eq!(
-                condition.contains(&format!("needs.{need}.result != 'skipped'")),
-                gated,
-                "{version} {need}: {condition}"
-            );
-        }
+        assert_eq!(
+            cache["needs"],
+            serde_json::json!(["rust-root", "rust-tools", "rust-trim"]),
+            "{version}"
+        );
+        assert_eq!(cache["if"].as_str(), Some(expected.as_str()), "{version}");
     }
     Ok(())
 }
