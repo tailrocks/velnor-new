@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
-    Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
-    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
-    TargetName, Toolchain, WORKFLOW_NAME, When, WorkflowPlan,
+    Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Gate, HelperCommand, Host, Job, JobId,
+    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, TargetName,
+    Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -18,7 +18,7 @@ use crate::lane::{
     used_group_outputs, used_outputs,
 };
 use crate::mbx_steps::MBX_OUT_DIR_HELPER;
-use crate::plan_budget::{draft_guard, expose_selection, triggers};
+use crate::plan_budget::{draft_guard, expose_selection, workflow};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::{lane_jobs, root_jobs};
@@ -52,7 +52,7 @@ pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
 
 fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     if facts.rust_roots.is_empty() {
-        return planned(facts, crate::lint_jobs::lint_jobs(facts));
+        return workflow(facts, crate::lint_jobs::lint_jobs(facts));
     }
     let units = units(facts);
     let suffixed = units.len() > 1;
@@ -102,23 +102,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     apply_extensions(facts, &mut jobs, single);
     crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
-    planned(facts, jobs)
-}
-
-fn planned(facts: &RepoFacts, jobs: Vec<Job>) -> WorkflowPlan {
-    WorkflowPlan {
-        name: WORKFLOW_NAME.to_owned(),
-        triggers: triggers(facts),
-        concurrency: match facts.config.pr_ci {
-            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
-            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
-        },
-        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
-        fork_runner: facts.config.fork_runner.clone(),
-        hosted_runners: facts.config.hosted_runners.clone(),
-        trusted_runners: facts.config.trusted_runners.clone(),
-        jobs,
-    }
+    workflow(facts, jobs)
 }
 
 fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {

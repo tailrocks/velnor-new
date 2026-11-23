@@ -21,7 +21,6 @@ pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, 
 pub use drifts::{Drift, drift};
 pub use error::{ExternalWorkflowError, GenerateError};
 pub use external::external_skips;
-use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use tag::check_tag;
@@ -30,14 +29,8 @@ pub use velnor_workflows::HELPER_COMMANDS;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{
-    CacheKey, LintKind, RELEASE_CONFIG_PATH, RepoFacts, RepoPath, RepoView, RunnerLabel, StepKind,
-    WORKFLOWS_CONFIG_PATH, WorkflowPlan,
-};
-use velnor_rust::{
-    METADATA_PATH, check_lint_tools, check_mbx, check_tools, detect, metadata_file,
-    source_roots_over_limit,
-};
+use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
+use velnor_rust::{METADATA_PATH, detect, metadata_file, source_roots_over_limit};
 
 use crate::plan_render::plan_and_render;
 
@@ -91,22 +84,8 @@ pub fn expected_with_notes(
     if let Some(finding) = excluded.iter().find(|finding| finding.refusal) {
         return Err(GenerateError::ExcludedLockRun(finding.clone()));
     }
-    let rust = !facts.rust_roots.is_empty();
-    let helper = if rust || facts.helper.is_some() || needs_pinned_helper(view, &facts) {
-        let helper = check_helper(&facts)?;
-        key_gates::check_config_keys(view, helper.version())?;
-        Some(helper)
-    } else if key_gates::required_helper(view).is_some() {
-        return Err(GenerateError::HelperNotPinned);
-    } else {
-        None
-    };
-    if rust {
-        check_tools(&facts)?;
-        check_mbx(&facts, &view.files)?;
-    } else if needs_lint_tools(&facts) {
-        check_lint_tools(&facts)?;
-    }
+    let helper = helper_gate::pinned_helper(view, &facts)?;
+    helper_gate::check_stack_tools(view, &facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
@@ -145,25 +124,6 @@ pub fn expected_with_notes(
             .map(velnor_rust::ExcludedLockFinding::message),
     );
     Ok((files, notes))
-}
-
-fn needs_pinned_helper(view: &RepoView, facts: &RepoFacts) -> bool {
-    view.files.contains_key(&WORKFLOWS_CONFIG_PATH)
-        || view.files.contains_key(&RELEASE_CONFIG_PATH)
-        || facts
-            .config
-            .lint
-            .iter()
-            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck))
-}
-
-fn needs_lint_tools(facts: &RepoFacts) -> bool {
-    facts.config.lint.iter().any(|lint| {
-        matches!(
-            lint.kind,
-            LintKind::Jactionlint { .. } | LintKind::Alint { .. } | LintKind::MiseTask { .. }
-        )
-    })
 }
 
 pub fn plan_generate(
