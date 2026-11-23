@@ -24,7 +24,7 @@ fn sample(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> 
 
 fn text_of(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     expected_files(view)?
-        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .remove(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or_else(|| "no workflow".into())
 }
 

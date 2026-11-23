@@ -248,12 +248,12 @@ fn the_command_measures_the_successful_first_attempts_and_names_the_slow_job() {
     let empty = serde_json::json!({"total_count": 0, "workflow_runs": []}).to_string();
     for query in ["event=push&branch=main", "event=schedule"] {
         responses.insert(
-            format!("/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&{query}&per_page=100&page=1"),
+            format!("/repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?status=success&{query}&per_page=100&page=1"),
             empty.clone(),
         );
     }
     responses.insert(
-        "/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&event=pull_request&per_page=100&page=1".to_owned(),
+        "/repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?status=success&event=pull_request&per_page=100&page=1".to_owned(),
         listing(),
     );
     responses.insert(

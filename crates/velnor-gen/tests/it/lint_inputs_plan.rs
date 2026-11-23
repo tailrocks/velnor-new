@@ -78,7 +78,7 @@ fn a_pull_request_that_changes_an_input_runs_the_lint() -> TestResult {
 
 #[test]
 fn the_workflow_and_the_config_that_generate_the_lint_always_run_it() -> TestResult {
-    for path in [".github/workflows/rust-ci.yml", ".velnor/rust-ci.toml"] {
+    for path in [".github/workflows/ci.yml", ".velnor/rust-ci.toml"] {
         assert!(hk(EventKind::PullRequest, Some(&[path]))?, "{path}");
     }
     Ok(())

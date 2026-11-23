@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::error::CiError;
 use crate::write_request::internal;
 
-const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
+const CI_WORKFLOW_PATH: &str = ".github/workflows/repository-checks.yml";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -71,7 +71,7 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 
 #[test]
 fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
-    let repo = fixture("mbx-reports-orphan-socket")?;
+    let repo = fixture("sock-orphan")?;
     let orphan = repo.root().join("orphan.sock");
     drop(UnixListener::bind(&orphan)?);
     cargo_with(
@@ -89,7 +89,7 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 
 #[test]
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
-    let repo = fixture("mbx-reports-stuck-listener")?;
+    let repo = fixture("sock-stuck")?;
     let stuck = repo.root().join("stuck.sock");
     let listener = UnixListener::bind(&stuck)?;
     let mut command = cargo_command(

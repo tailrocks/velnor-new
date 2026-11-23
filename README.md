@@ -1,6 +1,6 @@
 # Velnor
 
-Velnor provides a GitHub Actions workflow generator (`velnor-gen`, `crates/velnor-gen`) and runner support via the Runner Scale Set controller (`crates/velnor-runner-*`). `velnor-gen` writes the Rust CI workflow of a repository from `.velnor/rust-ci.toml` and every other workflow declared in `.velnor/workflows.toml`; `velnor-ci` is the one program the generated steps call at run time. The old `velnor-actions` engine is deleted (#1459).
+Velnor provides a GitHub Actions workflow generator (`velnor-gen`, `crates/velnor-gen`) and runner support via the Runner Scale Set controller (`crates/velnor-runner-*`). `velnor-gen` writes one CI workflow, `.github/workflows/ci.yml`, named `CI`, from `.velnor/rust-ci.toml`, for the stacks the repository has, and every other workflow declared in `.velnor/workflows.toml`. `.velnor/rust-ci.toml` is that CI configuration; it does not mean the repository is Rust. `velnor-ci` is the one program the generated steps call at run time. The old `velnor-actions` engine is deleted (#1459).
 
 See the [documentation index](docs/README.md) for specifications, Runner Scale Set architecture, and implemented status.
 
@@ -9,7 +9,7 @@ For the Rust CI generator, see [how Velnor keeps Rust CI fast](docs/rust-ci.md).
 ## Generate the workflows
 
 ```text
-velnor-gen generate   # write .github/workflows/rust-ci.yml, the declared workflows and .velnor/rust-metadata.json
+velnor-gen generate   # write .github/workflows/ci.yml, the declared workflows and .velnor/rust-metadata.json
 velnor-gen check      # exit 1 when a generated file differs from what generate would write
 ```
 
