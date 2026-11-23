@@ -5,6 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use velnor_test_support::real_cargo;
+
 use crate::cache_private_repo::{GIT_LOCK, decide_with, private_checkout};
 use crate::io::Repo;
 
@@ -30,7 +32,7 @@ fn git(directory: &Path, args: &[&str]) -> String {
 }
 
 fn cargo(directory: &Path, home: &Path, target: &Path, offline: bool, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO"));
+    let mut command = Command::new(real_cargo());
     command
         .current_dir(directory)
         .args(args)

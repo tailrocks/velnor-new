@@ -328,28 +328,46 @@ fn config_with_comment(comment: &str) -> Vec<(String, String)> {
     files
 }
 
-#[test]
-fn adversarial_one_mebibyte_config_comments_are_decided_without_quadratic_work() {
-    let limit = (1 << 20) - 1024;
-    let repeated = |unit: &str| unit.repeat(limit / unit.len());
-    let near_cap = format!("authorization basic {} ", "A".repeat(480));
-    for (label, comment, outcome) in [
-        ("run-of-basic", repeated("authorizationbasic"), REFUSED),
-        (
-            "short-headers",
-            repeated("Authorization: Basic abcd "),
-            SAVED,
-        ),
-        ("headers-near-the-cap", repeated(&near_cap), SAVED),
-        ("schemes", repeated("http://"), REFUSED),
-        ("hosts", repeated("http://a/"), SAVED),
-        ("tokens", repeated("ghp_"), REFUSED),
-        ("escapes", repeated("%25"), SAVED),
-    ] {
+fn adversarial_comments(cases: &[(&str, String, &str)]) {
+    for (label, comment, outcome) in cases {
         let decided = decided(
             &format!("adversarial-{label}"),
-            &config_with_comment(&comment),
+            &config_with_comment(comment),
         );
-        assert_eq!(decided.written, outcome, "{label}");
+        assert_eq!(decided.written, *outcome, "{label}");
     }
+}
+
+fn mebibyte_of(unit: &str) -> String {
+    unit.repeat(((1 << 20) - 1024) / unit.len())
+}
+
+#[test]
+fn adversarial_one_mebibyte_credential_runs_are_decided_without_quadratic_work() {
+    adversarial_comments(&[
+        ("run-of-basic", mebibyte_of("authorizationbasic"), REFUSED),
+        ("schemes", mebibyte_of("http://"), REFUSED),
+        ("tokens", mebibyte_of("ghp_"), REFUSED),
+    ]);
+}
+
+#[test]
+fn adversarial_one_mebibyte_headers_are_decided_without_quadratic_work() {
+    let near_cap = format!("authorization basic {} ", "A".repeat(480));
+    adversarial_comments(&[
+        (
+            "short-headers",
+            mebibyte_of("Authorization: Basic abcd "),
+            SAVED,
+        ),
+        ("headers-near-the-cap", mebibyte_of(&near_cap), SAVED),
+    ]);
+}
+
+#[test]
+fn adversarial_one_mebibyte_plain_runs_are_decided_without_quadratic_work() {
+    adversarial_comments(&[
+        ("hosts", mebibyte_of("http://a/"), SAVED),
+        ("escapes", mebibyte_of("%25"), SAVED),
+    ]);
 }
