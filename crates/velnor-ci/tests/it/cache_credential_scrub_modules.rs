@@ -113,23 +113,39 @@ const SYMBOLIC_TARGET: &str = concat!(
     "0123456789abcdefghijklmnopqrstuvwxyzAB\n"
 );
 
-fn namespace_with_config_ref(label: &str, config_ref: &str) -> (String, crate::io::Repo) {
+fn namespace_with_config_ref(
+    label: &str,
+    config_name: &str,
+    config_ref: &str,
+) -> (String, crate::io::Repo) {
     let mut files = repository("modules/x", BARE);
-    files.extend(
-        [
-            ("modules/x/refs/notes/HEAD", SHA),
-            ("modules/x/refs/notes/config", config_ref),
-            ("modules/x/refs/notes/hooks/main", SHA),
-        ]
-        .map(|(path, content)| (path.to_owned(), content.to_owned())),
-    );
+    for (path, content) in [
+        ("HEAD", SHA),
+        (config_name, config_ref),
+        ("hooks/main", SHA),
+    ] {
+        files.push((format!("modules/x/refs/notes/{path}"), content.to_owned()));
+    }
     decided(label, &files)
+}
+
+#[test]
+fn a_ref_named_config_in_capitals_does_not_make_its_namespace_a_repository() {
+    let (written, repo) =
+        namespace_with_config_ref("config-in-capitals", "Config", "ref: refs/heads/main\n");
+    assert_eq!(written, "save=true\nsources=true\n");
+    let namespace = repo
+        .root()
+        .join("home")
+        .join(DATABASE)
+        .join("modules/x/refs/notes");
+    assert!(namespace.join("hooks/main").is_file());
 }
 
 #[test]
 fn a_symbolic_ref_named_config_does_not_make_its_namespace_a_repository() {
     let (written, repo) =
-        namespace_with_config_ref("symbolic-config-ref", "ref: refs/heads/main\n");
+        namespace_with_config_ref("symbolic-config-ref", "config", "ref: refs/heads/main\n");
     assert_eq!(written, "save=true\nsources=true\n");
     let hooks = repo
         .root()
@@ -141,7 +157,8 @@ fn a_symbolic_ref_named_config_does_not_make_its_namespace_a_repository() {
 
 #[test]
 fn a_symbolic_ref_naming_a_credential_stops_the_sources_save() {
-    let (written, _repo) = namespace_with_config_ref("symbolic-credential-target", SYMBOLIC_TARGET);
+    let (written, _repo) =
+        namespace_with_config_ref("symbolic-credential-target", "config", SYMBOLIC_TARGET);
     assert_eq!(written, "save=true\nsources=false\n");
 }
 

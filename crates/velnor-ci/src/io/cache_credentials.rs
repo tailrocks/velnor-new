@@ -258,11 +258,23 @@ fn walk(
 }
 
 fn has_entry(listed: &[fs::DirEntry], wanted: &str, directory: bool) -> bool {
+    has_named(listed, wanted, directory, false)
+}
+
+fn has_exact_entry(listed: &[fs::DirEntry], wanted: &str, directory: bool) -> bool {
+    has_named(listed, wanted, directory, true)
+}
+
+fn has_named(listed: &[fs::DirEntry], wanted: &str, directory: bool, exact: bool) -> bool {
     listed.iter().any(|entry| {
-        entry.file_name().eq_ignore_ascii_case(wanted)
-            && entry
-                .file_type()
-                .is_ok_and(|kind| kind.is_dir() == directory && (directory || kind.is_file()))
+        let name = entry.file_name();
+        (if exact {
+            name == wanted
+        } else {
+            name.eq_ignore_ascii_case(wanted)
+        }) && entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_dir() == directory && (directory || kind.is_file()))
     })
 }
 
@@ -276,17 +288,16 @@ fn is_repository_in_refs(
     listed: &[fs::DirEntry],
     budget: &mut usize,
 ) -> Result<bool, String> {
-    if !has_entry(listed, HEAD, false) {
+    if !has_exact_entry(listed, "HEAD", false) {
         return Ok(false);
     }
     Ok(has_object_store(listed, budget)?
-        || (has_entry(listed, CONFIG, false) && !is_ref_value(&directory.join(CONFIG))))
+        || (has_exact_entry(listed, CONFIG, false) && !is_ref_value(&directory.join(CONFIG))))
 }
 
 fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool, String> {
     let Some(objects) = listed.iter().find(|entry| {
-        entry.file_name().eq_ignore_ascii_case(OBJECTS)
-            && entry.file_type().is_ok_and(|kind| kind.is_dir())
+        entry.file_name() == OBJECTS && entry.file_type().is_ok_and(|kind| kind.is_dir())
     }) else {
         return Ok(false);
     };
@@ -299,7 +310,7 @@ fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool,
         charge(budget, &path)?;
         inner.push(entry);
     }
-    Ok(has_entry(&inner, OBJECT_INFO, true) && has_entry(&inner, OBJECT_PACK, true))
+    Ok(has_exact_entry(&inner, OBJECT_INFO, true) && has_exact_entry(&inner, OBJECT_PACK, true))
 }
 
 fn is_ref_value(path: &Path) -> bool {
