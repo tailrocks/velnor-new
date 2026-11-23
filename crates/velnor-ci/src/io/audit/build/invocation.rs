@@ -114,10 +114,9 @@ impl Invocation {
                 }
             }
         }
-        if words.iter().any(|word| target_filter(word)) {
-            provable = false;
-        }
+        let narrowed = words.iter().any(|word| target_filter(word));
         let all = provable
+            && !narrowed
             && words
                 .iter()
                 .any(|word| matches!(*word, "--workspace" | "--all"));
@@ -319,7 +318,7 @@ fn chdir(globals: &[&str]) -> Option<PathBuf> {
 }
 
 fn target_filter(word: &str) -> bool {
-    const FILTERS: [&str; 10] = [
+    const FILTERS: [&str; 9] = [
         "--lib",
         "--bins",
         "--bin",
@@ -329,7 +328,6 @@ fn target_filter(word: &str) -> bool {
         "--test",
         "--benches",
         "--bench",
-        "--doc",
     ];
     FILTERS.iter().any(|filter| {
         word == *filter
