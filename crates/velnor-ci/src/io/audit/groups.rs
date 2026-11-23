@@ -124,9 +124,6 @@ pub(super) fn inheriting(
         .collect())
 }
 
-/// The roots whose Cargo configuration the step directory decides: the root
-/// that holds the step and the roots of its workspace group. A root of another
-/// group is probed from its own directory.
 pub(super) fn stepped(
     facts: &RepoFacts,
     repository: &Path,
