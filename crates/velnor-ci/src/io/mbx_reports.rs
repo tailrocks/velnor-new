@@ -205,11 +205,9 @@ fn read_regular(file: &Path, spent: &mut u64) -> Result<Vec<u8>, String> {
         return Err("not a regular file".to_owned());
     }
     let mut bytes = Vec::new();
-    report
-        .take(MAX_REPORT_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+    let read = report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes);
     *spent = spent.saturating_add(bytes.len() as u64);
+    read.map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_REPORT_BYTES {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
     }
