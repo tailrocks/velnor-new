@@ -5,49 +5,23 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{Duration, Instant};
-
-use crate::bounded::{Cancel, Outcome, capture_streams};
+use std::process::{Command, Stdio};
 
 const PREFIX: &str = "velnor-nextest-list";
 const PROBE: &str = "velnor-exec-probe";
 const NOT_EXECUTABLE: i32 = 126;
-const PROBE_LIMIT: Duration = Duration::from_secs(10);
-const PROBE_OUTPUT: usize = 4096;
 const SHELL: &str = "/bin/sh";
 const PROBE_SCRIPT: &str = "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && /bin/chmod 755 \"$1\" && \"$1\"; status=$?; /bin/rm -f \"$1\"; exit $status";
 
 pub(super) type ExecProbe = dyn Fn(&Path) -> io::Result<bool>;
 
 pub(super) fn can_execute_from(directory: &Path) -> io::Result<bool> {
-    probe(PROBE_SCRIPT, directory, PROBE_LIMIT)
-}
-
-fn probe(script: &str, directory: &Path, limit: Duration) -> io::Result<bool> {
-    let mut command = Command::new(SHELL);
-    command
+    let output = Command::new(SHELL)
         .env_clear()
-        .args(["-c", script, PROBE])
-        .arg(directory.join(PROBE));
-    let at = Instant::now() + limit;
-    let outcome = capture_streams(
-        &mut command,
-        PROBE_OUTPUT,
-        PROBE_OUTPUT,
-        &|| Some(at),
-        &Cancel::new(),
-    )?;
-    let output = match outcome {
-        Outcome::Exited(output) => output,
-        Outcome::TimedOut | Outcome::Lingering | Outcome::Cancelled => {
-            return Err(io::Error::other(format!(
-                "the check did not finish within {} s",
-                limit.as_secs_f64()
-            )));
-        }
-        Outcome::Oversized => return Err(io::Error::other("the check printed too much")),
-    };
+        .args(["-c", PROBE_SCRIPT, PROBE])
+        .arg(directory.join(PROBE))
+        .stdin(Stdio::null())
+        .output()?;
     match output.status.code() {
         Some(0) => Ok(true),
         Some(NOT_EXECUTABLE) => Ok(false),
@@ -112,7 +86,7 @@ impl Drop for ListDir {
 
 #[cfg(test)]
 mod tests {
-    use super::{ListDir, can_execute_from, probe};
+    use super::{ListDir, can_execute_from};
     use std::ffi::OsString;
     use std::io;
 
@@ -225,41 +199,6 @@ mod tests {
                     .unwrap_or_else(|_| unreachable!("prober panicked"))
             );
         }
-        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-
-    #[test]
-    fn a_probe_that_hangs_is_stopped_with_its_descendants_and_reported() {
-        let temp = std::env::temp_dir().join(format!("velnor-list-hang-{}", std::process::id()));
-        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-        let started = std::time::Instant::now();
-        let error = probe(
-            "sleep 30 & echo $! > \"$1\"; wait",
-            &temp,
-            std::time::Duration::from_millis(300),
-        )
-        .err()
-        .unwrap_or_else(|| unreachable!("a hanging probe was accepted"));
-        assert!(
-            error.to_string().contains("did not finish within 0.3 s"),
-            "{error}"
-        );
-        assert!(started.elapsed() < std::time::Duration::from_secs(9));
-        let pid = std::fs::read_to_string(temp.join("velnor-exec-probe"))
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .trim()
-            .to_owned();
-        let limit = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        let alive = || {
-            std::process::Command::new("kill")
-                .args(["-0", &pid])
-                .output()
-                .is_ok_and(|output| output.status.success())
-        };
-        while alive() && std::time::Instant::now() < limit {
-            std::thread::yield_now();
-        }
-        assert!(!alive(), "the probe's descendant {pid} survived");
         std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     }
 

@@ -17,7 +17,7 @@ use signal_hook::iterator::Signals;
 use velnor_model::BUILT_OUTPUT;
 
 use super::append_outputs;
-use super::early_list::{Abandon, EarlyList};
+use super::early_list::EarlyList;
 use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::escape::stderr_line;
@@ -113,7 +113,6 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let early = runs_nextest(&args.command).then(|| Arc::new(EarlyList::new(&args.command)));
-    let _abandon = early.clone().map(Abandon);
     let Pumps { receiver, slots } = start_pumps(
         &mut child,
         &log,
@@ -122,7 +121,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         early.as_ref(),
     );
     let handle = signals.handle();
-    forward(signals, pid, own_group, early.clone());
+    forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
@@ -249,12 +248,9 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
     Ok((child, own_group))
 }
 
-fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool, early: Option<Arc<EarlyList>>) {
+fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     thread::spawn(move || {
         for received in signals.forever() {
-            if let (Some(early), Ok(signal)) = (&early, Signal::try_from(received)) {
-                early.interrupt(signal);
-            }
             if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
                 if own_group {
                     killpg(pid, signal).ok();

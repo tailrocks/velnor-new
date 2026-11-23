@@ -1,24 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Bounds, EarlyList, Environment, Failure, State, try_list};
-use crate::bounded::Cancel;
+use super::{Environment, Failure, try_list};
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
-
-static NEVER_CANCELLED: Cancel = Cancel::new();
-
-const UNBOUNDED: Bounds<'static> = Bounds {
-    stdout_bytes: usize::MAX,
-    grace: std::time::Duration::ZERO,
-    deadline: &|| None,
-    cancel: &NEVER_CANCELLED,
-};
 
 fn scratch(name: &str) -> PathBuf {
     let directory =
@@ -55,32 +43,12 @@ fn report(result: Result<Listing, Failure>) -> String {
 }
 
 #[test]
-fn a_listing_that_never_reports_is_abandoned_at_the_join_bound_without_counts() {
-    let list = EarlyList::new(&[]);
-    let (sender, receiver) = mpsc::channel::<Option<Listing>>();
-    *list
-        .state
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = State::Running(receiver);
-    let started = Instant::now();
-    let counts = list.finish_within(true, Duration::from_millis(100));
-    assert!(counts.is_none());
-    assert!(
-        started.elapsed() < Duration::from_secs(5),
-        "{:?}",
-        started.elapsed()
-    );
-    drop(sender);
-}
-
-#[test]
 fn a_missing_runner_temp_is_reported_before_anything_is_started() {
     let message = report(try_list(
         &archive_run(Path::new("/nonexistent/cargo-nextest")),
         &environment(None),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
-        &UNBOUNDED,
     ));
     assert_eq!(
         message,
@@ -98,7 +66,6 @@ fn a_runner_temp_that_is_a_file_is_reported_with_the_directory_it_could_not_prep
         &environment(Some(OsString::from(&temp))),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
-        &UNBOUNDED,
     ));
     let expected = temp.join(format!("velnor-nextest-list-{}", std::process::id()));
     assert!(
@@ -129,7 +96,6 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(799),
-        &UNBOUNDED,
     ));
     assert!(
         message.contains("bytes free, but the extraction may need 800"),
@@ -161,7 +127,6 @@ fn an_extraction_that_fits_the_headroom_is_admitted() {
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(true),
         &|_| Ok(800),
-        &UNBOUNDED,
     ));
     assert_eq!(message, "it printed no usable listing");
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
@@ -175,7 +140,6 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
         &environment(Some(OsString::from(&directory))),
         &|_| Ok(false),
         &|_| Ok(u64::MAX),
-        &UNBOUNDED,
     ));
     assert!(
         message.contains("does not allow executing files"),
@@ -186,28 +150,4 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
         "{message}"
     );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-}
-
-#[test]
-fn a_preparation_that_never_returns_is_abandoned_at_the_join_bound_when_no_listing_started() {
-    let (release, hold) = mpsc::channel::<()>();
-    let hold = std::sync::Mutex::new(hold);
-    let mut list = EarlyList::new(&[]);
-    list.lister = std::sync::Arc::new(move |_, _, _| {
-        hold.lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .recv()
-            .ok();
-        None
-    });
-    let started = Instant::now();
-    let counts = list.finish_within(true, Duration::from_millis(100));
-    assert!(counts.is_none());
-    assert!(
-        started.elapsed() < Duration::from_secs(5),
-        "{:?}",
-        started.elapsed()
-    );
-    assert!(list.cancel.is_set());
-    drop(release);
 }
