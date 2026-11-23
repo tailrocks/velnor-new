@@ -15,9 +15,6 @@ pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts>
     };
     let run = named(TESTS_RUN_OUTPUT);
     let listed = named(TESTS_LISTED_OUTPUT);
-    // An absent package map is missing evidence, never an empty selection: GitHub
-    // drops empty job outputs, so a step that ran with zero packages writes `{}`.
-    // Only that present marker (or a reconciled non-empty map) proves the step ran.
     let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
     let run = number(run?)?;
     let listed = number(listed?)?;

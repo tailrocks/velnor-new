@@ -224,16 +224,14 @@ pub fn verdict(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
-            // An absent ignored count is no evidence of ignored tests: the
-            // renderer declares no fallback for it, so a skipped step leaves it
-            // absent. Only a positive count proves tests existed but were ignored.
-            let lane_empty = counts.iter().flatten().all(|job| {
-                job.listed == 0 && job.run == 0 && job.ignored.is_none_or(|ignored| ignored == 0)
-            });
+            let lane_empty = counts
+                .iter()
+                .flatten()
+                .all(|job| job.listed == 0 && job.run == 0 && job.ignored.unwrap_or(0) == 0);
             for job in counts.iter().flatten() {
                 if job.listed == 0
                     && job.run == 0
-                    && job.ignored.is_none_or(|ignored| ignored == 0)
+                    && job.ignored.unwrap_or(0) == 0
                     && (!job.packages.is_empty() || lane_empty)
                 {
                     out.problems.push(format!(

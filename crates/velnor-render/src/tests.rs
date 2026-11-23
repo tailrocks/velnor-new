@@ -51,11 +51,6 @@ impl Tests {
             return format!("${{{{ {output} || '0' }}}}");
         }
         if name == TESTS_BY_PACKAGE_OUTPUT {
-            // A skipped step leaves every output absent. For a selection-gated
-            // step that means nothing was selected, so the job reports the
-            // explicit empty map the gate accepts; a step that ran emits it
-            // itself. Either way a present map proves the outcome, while an
-            // absent one on a non-skippable job stays fail-closed.
             return format!("${{{{ {output} || '{EMPTY_PACKAGE_MAP}' }}}}");
         }
         format!("${{{{ {output} }}}}")
