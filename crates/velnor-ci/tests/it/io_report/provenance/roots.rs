@@ -11,7 +11,7 @@ use velnor_ci::telemetry::INVOCATIONS;
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn independent_symlink_root_preserves_regular_warm_dependency_waste() -> ResultTest {
+fn independent_symlink_root_preserves_regular_warm_workspace_waste() -> ResultTest {
     independent_roots("lock")
 }
 
@@ -85,12 +85,20 @@ fn independent_roots(linked: &str) -> ResultTest {
     assert_eq!(metrics.invocations[0].compilations.len(), 2);
     assert!(metrics.caches[0].usable_same_lock);
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
-    for package in ["dependency", "regular"] {
-        assert!(
-            metrics.violations.iter().any(|line| line.contains(package)),
-            "{metrics:?}"
-        );
-    }
+    assert!(
+        metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("regular")),
+        "{metrics:?}"
+    );
+    assert!(
+        !metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("dependency")),
+        "{metrics:?}"
+    );
     Ok(())
 }
 

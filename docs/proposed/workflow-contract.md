@@ -189,8 +189,8 @@ The following labels are GitHub Actions job IDs only. They are not Cargo package
 The job list of the retired `velnor-actions` workflow (`plan`, `rust-<slug>`, `ledger-cli`, `jactionlint`, `required`, `required-gate`, the repository-policy jobs and the `merge-v1` verdict) was removed in #1459. The generated workflows are now written by `velnor-gen` (`.velnor/rust-ci.toml`, `.velnor/workflows.toml`); their jobs are described in [how Velnor keeps Rust CI fast](../rust-ci.md) and in `generator/CONFIG.md`.
 
 Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator. Its five-phase hosted cache campaign ([contract](hosted-cache-qualification-contract.md)) uses `workflow_dispatch` inputs in generated `ci.yml`: required `campaign` and `phase` (`cold`, `control`, `third`, `useful_delta`, or `warm`), plus the paired optional `predecessor_run_id` and `predecessor_run_attempt`. The plan job resolves and validates predecessor evidence when the phase requires it. This Velnor-only campaign is not a separate workflow file. Independently, schema-2 `[execution].workflows` may select the optional generic `.github/workflows/qualification.yml` under either workflow policy.
-The repository-policy jobs and any emitted workflows are rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint` checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`, `config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny` and `cargo-machete` each run their single dependency check in their own job; no umbrella grouping exists. Workflow security audits run in the `jactionlint` job ([hard decision 10](../jactionlint-decision.md)); there is no separate zizmor job.
-Each job conclusion is required evidence; Velnor does not assume validator-specific report artifacts. All repository-policy job conclusions are required even with no crate selected. `consumer-v1` MUST NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit repository validators. GitHub Action steps use Velnor's compiled-in registry and exact config overrides; they are not Mise-managed tools.
+The repository-policy jobs and any emitted workflows are rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint` checks out source with `persist-credentials: false` and installs Alint through `jdx/mise-action` (`install_args: 'github:asamarts/alint'`, version pinned in `mise.toml` and digest-locked in `mise.lock`) and runs `alint --format github --config .alint.yml --fail-on-warning check .`. `cargo-deny` and `cargo-machete` each run their single dependency check in their own job; no umbrella grouping exists. Workflow security audits run in the `jactionlint` job ([hard decision 10](../jactionlint-decision.md)); there is no separate zizmor job.
+Each job conclusion is required evidence; Velnor does not assume validator-specific report artifacts. All repository-policy job conclusions are required even with no crate selected. `consumer-v1` MUST NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit repository validators. GitHub Action steps use Velnor's compiled-in registry and exact config overrides; they are not Mise-managed tools. Alint is not an action step: it is a Mise-managed tool.
 
 Under `workflow.policy = "velnor-repository-v1"`, the `cargo-deny` and `cargo-machete` jobs MUST run even when no crate is selected; `alint` follows the separate contract above. jactionlint remains in the always-on `jactionlint` job. `plan` runs formatting for each selected stack configuration. Rust documentation warnings run in the crate job's parallel documentation step. Clippy, the detected test runner, and rustdoc are package-scoped in the Rust adapter; a workspace-wide compile is not a default pull-request check. MSRV verification runs in the pinned toolchain-update qualification workflow, tests every product crate against the exact declared `rust-version`, and is not repeated on every pull request. `Required` depends on the plan, every crate job, the lint and validator conclusions, and every repository validator; `Required` (the gate) depends only on the verdict.
 
@@ -203,7 +203,7 @@ Every concrete generated job MUST carry a literal per-job `timeout-minutes` from
 
 The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
 
-Workflow shell may invoke Mise directly for exact tool installation and generated command steps. Every command step MUST use a fixed `mise --no-config exec` invocation with exact tool pins, except a qualified Gate 6 task-cache step, which uses a Velnor-versioned task TOML under `$RUNNER_TEMP`. It MUST NOT invoke private or removed `velnor-actions` subcommands or look up a repository Mise task file. Checkout, artifact transfer, and Alint are fixed GitHub Actions primitives. Planning and report aggregation are fixed internal workflow steps. Any helper binary is staged in runner temporary storage and never written to the repo.
+Workflow shell may invoke Mise directly for exact tool installation and generated command steps. Every command step MUST use a fixed `mise --no-config exec` invocation with exact tool pins, except a qualified Gate 6 task-cache step, which uses a Velnor-versioned task TOML under `$RUNNER_TEMP`. It MUST NOT invoke private or removed `velnor-actions` subcommands or look up a repository Mise task file. Checkout and artifact transfer are fixed GitHub Actions primitives; Alint is a Mise-installed binary. Planning and report aggregation are fixed internal workflow steps. Any helper binary is staged in runner temporary storage and never written to the repo.
 
 `plan` steps, in order:
 
@@ -216,7 +216,7 @@ Workflow shell may invoke Mise directly for exact tool installation and generate
 7. `Plan`: run the generated fixed planner step with the exact event comparison refs. It writes the schema-1 plan to `$RUNNER_TEMP/velnor/<run-key>/plan.json`. Both refs MUST identify the exact event comparison, including the pull request merge result where applicable. The step uses direct pinned Mise commands or a locked helper staged under the runner's temporary directory.
 8. `Publish plan`: validate the plan, emit the bounded `matrix.include` output, and upload `velnor-plan-<run-key>` with `if: always()`.
 
-Under `velnor-repository-v1`, Alint uses the full-SHA-pinned `asamarts/alint` action against Velnor's `.alint.yml`; the final gate checks its conclusion. The `cargo-deny` and `cargo-machete` jobs use pinned Mise. `consumer-v1` emits none of these jobs and needs no policy-only files.
+Under `velnor-repository-v1`, Alint is installed through Mise from the `mise.toml` pin and runs against Velnor's `.alint.yml`; the final gate checks its conclusion. The `cargo-deny` and `cargo-machete` jobs use pinned Mise. `consumer-v1` emits none of these jobs and needs no policy-only files.
 
 Crate-job steps are the named steps in the task execution contract. Each consumes obligations from `plan` and
 MUST NOT rediscover stacks or packages. `required` downloads the plan and expected matrix artifacts, merges the
@@ -236,7 +236,6 @@ actions/cache/restore
 actions/cache/save
 actions/upload-artifact
 actions/download-artifact
-asamarts/alint
 ```
 
 Velnor's compiled-in action registry supplies the latest stable release, full
@@ -249,11 +248,10 @@ cache restore/save for their respective cache phases, and upload/download
 artifact actions for required reports or transferred outputs. It MUST emit
 `jdx/mr-boxington-action` only when the Rust detector selects MBX. Every Rust lane uses the shared
 exact-path Cargo sources archive; broad Cargo-home cache actions are forbidden.
-`asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
+Alint is limited to Velnor's own repository-policy job, where it is installed through Mise (`github:asamarts/alint`), not as an action. Branches,
 moving refs, `pull_request_target`, `actions/setup-*`, and
 `taiki-e/install-action` MUST NOT appear. `jactionlint` MUST validate
-generated workflows. No tag exception exists: `asamarts/alint` pins
-a full SHA in `alint` like every other action.
+generated workflows. No `asamarts/alint` action reference exists.
 
 `velnor-actions generate` MUST render a staging tree containing `.github/`,
 run the exact pinned jactionlint binary through Mise with the staging tree as
