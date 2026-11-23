@@ -57,7 +57,8 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     };
     if reports.overflowed {
         metrics.verification_errors.push(format!(
-            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions, {MAX_ENTRIES} entries or {MAX_TOTAL_BYTES} bytes); the MBX session counts are unknown."
+            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions, {MAX_ENTRIES} entries or {} MiB in total); the MBX session counts are unknown.",
+            MAX_TOTAL_BYTES >> 20
         ));
         return (Vec::new(), 1);
     }
