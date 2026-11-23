@@ -124,7 +124,7 @@ scan() {
     gsub(/"([^"\\]|\\.)*"/, "\"\"", line)
     rest = line
     off = 0
-    while (match(rest, /\(0, ?1, ?[0-9]+\)|0\.1\.[0-9]+/)) {
+    while (match(rest, /\(0, ?1, ?[0-9]+,?\)|0\.1\.[0-9]+/)) {
       v = substr(rest, RSTART, RLENGTH)
       before = substr(line, 1, off + RSTART - 1)
       sub(/[ \t]+$/, "", before)
@@ -133,6 +133,7 @@ scan() {
       off += RSTART + RLENGTH - 1
       rest = after
       if (substr(v, 1, 1) == "(" && (before == "!" || after ~ /^[ \t]*(=>|=([^=]|$)|if[ \t]|\|)/)) continue
+      sub(/,\)$/, ")", v)
       gsub(/[() ]/, "", v)
       gsub(/,/, ".", v)
       out[++n] = v
@@ -160,7 +161,7 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $NF; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
+  /^diff --git / { hdr = $0; cut = 0; while ((at = index(substr(hdr, cut + 1), " b/")) > 0) cut += at; file = substr(hdr, cut + 3); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
   /^@@/ { prevnew = ""; prevadded = 0; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
