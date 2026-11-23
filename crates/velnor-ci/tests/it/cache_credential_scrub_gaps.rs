@@ -189,6 +189,25 @@ fn a_basic_payload_with_control_bytes_stops_the_sources_save() {
 }
 
 #[test]
+fn a_double_quoted_basic_payload_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "config-double-quoted-basic",
+            CONFIG,
+            &commented("Authorization: Basic \"dXNlcjpwYXNz\""),
+        ),
+        (
+            "config-double-quoted-basic-after-a-space",
+            CONFIG,
+            &commented(&format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic  \" {}\"",
+                encode_basic(b"user:pass")
+            )),
+        ),
+    ]);
+}
+
+#[test]
 fn a_form_encoded_basic_payload_with_an_encoded_plus_stops_the_sources_save() {
     let line = |text: &str| commented(&format!("{SHA}\t\tbranch 'main' {text}"));
     sources_save_stops(&[

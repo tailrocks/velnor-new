@@ -146,10 +146,9 @@ fn names_basic_authorization(text: &str) -> bool {
             });
             rest.get(..BASIC.len())
                 .is_some_and(|word| word.eq_ignore_ascii_case(BASIC))
-                && basic_payload_credential(
-                    rest[BASIC.len()..]
-                        .trim_start_matches(|each: char| each.is_whitespace() || each == '\''),
-                )
+                && basic_payload_credential(rest[BASIC.len()..].trim_start_matches(|each: char| {
+                    each.is_whitespace() || matches!(each, '\'' | '"')
+                }))
         })
 }
 
