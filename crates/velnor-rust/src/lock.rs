@@ -176,7 +176,6 @@ type Binaries = (
     Option<BTreeMap<String, String>>,
 );
 
-/// The velnor-ci binary digests and, when the release lists any, the velnor-gen ones.
 fn binary_digests(binary_sums: &str, listed: &BTreeMap<&str, &str>) -> Result<Binaries, LockError> {
     let expected = listed
         .get(BINARY_SUMS)

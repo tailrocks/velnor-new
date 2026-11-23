@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The offline and online checks of the lock's `[velnor-gen]` entry, used by `velnor-gen check`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,20 +11,15 @@ use crate::lock::{
     release_commit, release_version,
 };
 
-/// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
 const UNSTAMPED: &str = "unknown";
 
 const FIRST_ARCHIVE_RELEASE: (u64, u64, u64) = (0, 1, 94);
 
-/// The velnor-gen binary that runs `check`, as its own build describes it.
 #[derive(Debug, Clone, Copy)]
 pub struct RunningGenerator<'a> {
     pub version: &'a str,
-    /// The `VELNOR_COMMIT` the binary was built with; `unknown` for a local build.
     pub commit: &'a str,
-    /// This binary's platform, when the lock lists one.
     pub platform: Option<Platform>,
-    /// The SHA-256 of the executable file, lowercase hex.
     pub sha256: Option<&'a str>,
 }
 
@@ -39,7 +33,6 @@ pub fn running_platform() -> Option<Platform> {
     }
 }
 
-/// The version of the lock's helper release.
 pub fn lock_version(bytes: &[u8]) -> Result<HelperVersion, LockError> {
     release_version(&parse(bytes)?.version)
 }
@@ -139,8 +132,6 @@ fn check_format(lock: &Lock) -> Result<bool, LockError> {
     }
 }
 
-/// Online: the lock is what the release publishes. Pins the release again from its own
-/// `SHA256SUMS`, `COMMIT` and `BINARY-SHA256SUMS` and names the first field that differs.
 pub fn verify_release(
     bytes: &[u8],
     sums: &str,
