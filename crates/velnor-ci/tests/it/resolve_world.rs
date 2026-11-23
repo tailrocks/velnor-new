@@ -21,7 +21,7 @@ pub(crate) use crate::resolve_wire::{
 };
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
-pub(crate) const WORKFLOW: &str = ".github/workflows/ci.yml";
+pub(crate) const WORKFLOW: &str = ".github/workflows/repository-checks.yml";
 pub(crate) const ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
 pub(crate) const MEMBER: &str = "qualification-cache-receipt.json";
 const CURRENT_RUN: u64 = 2001;

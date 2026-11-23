@@ -35,6 +35,6 @@ pub struct DeltaArgs {
 
 #[derive(Debug, Args)]
 pub struct TrimDeltasArgs {
-    #[arg(long, help = "Completed Rust CI workflow run id")]
+    #[arg(long, help = "Completed CI workflow run id")]
     pub run_id: u64,
 }

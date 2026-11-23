@@ -19,7 +19,7 @@ Repositories read: tailrocks/velnor-new main @ 95de9b704b; tailrocks/velnor-lega
   - State seals succeeded only for generator (6 of 18 runs) and ci-helper (4), never for root, local or runner. (A, C)
 - **Duplicate verification.** Each merge runs the same 39-job set three times, in the PR run, the merge_group run and the push-to-main run. 120 of 159 successful merge_group runs have a push run on the identical SHA. (A)
 - **Cluster.** There are 5 workers with 96 threads and about 125 GiB each.
-  - Three ARC scale sets share the nodes: tailrocks (max 60 runners), ChainArgos (60) and jackin (40).
+  - Three ARC scale sets share the nodes: tailrocks (max 60 runners), example-org (60) and jackin (40).
   - Each runner pod requests 2 CPU and 4Gi with a 32Gi memory limit, runs a privileged dind sidecar, and uses only emptyDir volumes. No state survives between jobs.
   - Worker CPU was 92–95% in samples on 2026-11-18. The owner's earlier note recorded 18–29%.
   - The kubelet has no reservations, and the CPU manager is `none`. (B)
@@ -533,22 +533,22 @@ Memory (MiB used; percent of node): sample 1: 105=35,939 (27%), 190=39,298 (30%)
 ### 3. ARC (Actions Runner Controller)
 
 #### 3.1 Versions and layout [K; D RESULT "Versions", RN/README.md:8-20]
-- Chart `gha-runner-scale-set` 0.15.1 (helm release `ubuntu-26-04-scale-set[-chainargos|-jackin]`), controller image `ghcr.io/actions/gha-runner-scale-set-controller:0.15.1` in ns arc-systems (1 controller pod, 3 listener pods) [K].
-- Auth: GitHub App `tailrocks-arc-runners` (App ID 5771152) with secrets `github-app`, `github-app-chainargos`, `github-app-jackin` (names only) (RESULT "Runner scale set", multi-org table).
+- Chart `gha-runner-scale-set` 0.15.1 (helm release `ubuntu-26-04-scale-set[-example-org|-jackin]`), controller image `ghcr.io/actions/gha-runner-scale-set-controller:0.15.1` in ns arc-systems (1 controller pod, 3 listener pods) [K].
+- Auth: GitHub App `tailrocks-arc-runners` (App ID 5771152) with secrets `github-app`, `github-app-example-org`, `github-app-jackin` (names only) (RESULT "Runner scale set", multi-org table).
 
 #### 3.2 Scale sets [K `kubectl get autoscalingrunnerset,ephemeralrunnerset -A`]
 | Namespace | Org (githubConfigUrl) | Name | runnerGroup | min / max | runnerScaleSetLabels | EphemeralRunnerSet desiredReplicas |
 |---|---|---|---|---|---|---|
 | arc-runners | github.com/tailrocks | ubuntu-26.04-scale-set | velnor-ci | 4 / 60 | [velnor] | 26 |
-| arc-runners-chainargos | github.com/ChainArgos | ubuntu-26.04-scale-set | velnor-ci | 4 / 60 | [velnor] | 4 |
+| arc-runners-example-org | github.com/example-org | ubuntu-26.04-scale-set | velnor-ci | 4 / 60 | [velnor] | 4 |
 | arc-runners-jackin | github.com/jackin-project | ubuntu-26.04-scale-set | velnor-ci | 2 / 40 | [velnor] | 2 |
 - Listener config on tailrocks set: `scaler: {burst: 100, qps: 50}` [K ars.json].
 - Docs show a different max for jackin (20 in LOG at 18:49Z, 40 in RESULT multi-org table); the live value is 40. Docs 35 max (RN/README.md:42) is stale vs live 60.
 - Runner labels for `runs-on`: `[velnor, ubuntu-26.04-scale-set]` (RESULT "Runner scale set").
-- Runner groups: tailrocks velnor-ci id 4 (velnor-new, velnor-lab, ruxel, tuiscotti, termpane), ChainArgos velnor-ci id 5 (15 private repos), jackin-project group id 4 (4 repos) (RESULT multi-org table).
+- Runner groups: tailrocks velnor-ci id 4 (velnor-new, velnor-lab, ruxel, tuiscotti, termpane), example-org velnor-ci id 5 (15 private repos), jackin-project group id 4 (4 repos) (RESULT multi-org table).
 - Control/release/seal jobs stay on GitHub-hosted runners by design (RESULT "Stays on hosted runners").
 
-#### 3.3 Runner pod spec (same in all three scale sets except as noted) [K ars.json, chainargos/jackin spec]
+#### 3.3 Runner pod spec (same in all three scale sets except as noted) [K ars.json, example-org/example-repo-13 spec]
 - Runner container image `ghcr.io/tailrocks/velnor-ci-runner:2026-11-16.2`, imagePullPolicy IfNotPresent, command `/usr/local/bin/velnor-runner-start`.
 - Env: `ImageOS=velnor-arc-ubuntu24`, `DOCKER_HOST=unix:///var/run/docker.sock`, `RUNNER_WAIT_FOR_DOCKER_IN_SECONDS=120`.
 - Resources: requests cpu 2, memory 4Gi; limits memory 32Gi; no cpu limit; no ephemeral-storage request/limit.
@@ -561,8 +561,8 @@ Memory (MiB used; percent of node): sample 1: 105=35,939 (27%), 190=39,298 (30%)
 - Image distribution: imported into containerd on every worker (privileged pod, `import-pod.sh`); also pushed to ghcr private package (RESULT). Live events show only "already present on machine" pulls: 0 of 1,424 Pulled events were real pulls [K events].
 
 #### 3.4 Runner states right now [K `get ephemeralrunner -A`, `get pods -A`]
-- Pods: arc-runners 40 Running + 14 in Init (4 `Init:0/2`, 10 `Init:1/2`) at first snapshot; chainargos 4 Running; jackin 2 Running; arc-systems 4; kube-system 3 + 1 Completed; velnor-system 6.
-- EphemeralRunner phases (later snapshot): tailrocks 26 desired: ~21 Running (all with jobs from tailrocks/velnor-new ci.yml: 5 PR refs + merge-queue refs), 5 Pending; ChainArgos 4 Pending (idle min runners, no job); jackin 2 Pending (no job).
+- Pods: arc-runners 40 Running + 14 in Init (4 `Init:0/2`, 10 `Init:1/2`) at first snapshot; example-org 4 Running; jackin 2 Running; arc-systems 4; kube-system 3 + 1 Completed; velnor-system 6.
+- EphemeralRunner phases (later snapshot): tailrocks 26 desired: ~21 Running (all with jobs from tailrocks/velnor-new ci.yml: 5 PR refs + merge-queue refs), 5 Pending; example-org 4 Pending (idle min runners, no job); jackin 2 Pending (no job).
 - Churn: in the last ~1 h window of events, 485 Scheduled and 489 "Killing ... Stopping container dind" events [K events].
 
 ### 4. Storage, caches, network, priority
@@ -587,7 +587,7 @@ Memory (MiB used; percent of node): sample 1: 105=35,939 (27%), 190=39,298 (30%)
 Only `system-cluster-critical` (2000000000) and `system-node-critical` (2000001000). No custom classes; runner pods use none (default priority 0).
 
 #### 4.5 Namespaces [K]
-arc-runners, arc-runners-chainargos, arc-runners-jackin, arc-systems, velnor-system (crates-mirror), default, kube-system, kube-public, kube-node-lease.
+arc-runners, arc-runners-example-org, arc-runners-jackin, arc-systems, velnor-system (crates-mirror), default, kube-system, kube-public, kube-node-lease.
 
 ### 5. Cross-site network facts (documented only)
 - Pod ping velnor-241 (FI) -> velnor-240 (DE): 3/3 replies, 35 ms (LOG:9, 2026-11-15T13:10:45Z). Not re-measured live.

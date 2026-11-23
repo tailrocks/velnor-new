@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn rust_ci_workflow() -> Result<String, Box<dyn Error>> {
     let files = expected_files(&load(&samples().join("velnor-new"))?)?;
     let workflow = files
-        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .get(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or("no generated workflow")?;
     Ok(workflow.clone())
 }

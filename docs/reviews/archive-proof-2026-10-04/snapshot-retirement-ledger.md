@@ -105,8 +105,8 @@ found no exact snapshot refs or SHAs in the scanned default/open-PR trees; that
 does not close known owner decisions or replace a final scan after rollout.
 Deep audits still record the fixture's live scheduled/manual workflow removal
 under PR #172, stale workflow state in `tailrocks/velnor#1133`, and unfinished
-ChainArgos #2085 MBX cache qualification. Forty-five consumer default CI
-workflows still stage Velnor Actions `0.1.0`; `ChainArgos/java-monorepo` stages
+example-org #2085 MBX cache qualification. Forty-five consumer default CI
+workflows still stage Velnor Actions `0.1.0`; `example-org/example-repo-2` stages
 generator `d40868152f7fe0106e3ede858a411f502f00810f`. Ordered migration to the
 replacement artifact remains pending.
 
@@ -125,7 +125,7 @@ superseding the PR.
 
 | Gate | Owner | Next probe | Resolving event |
 |---|---|---|---|
-| Final ref and consumer closure | Velnor goal coordinator `@donbeave`, with each consumer owner | After source/release candidate is final, re-fetch all nine Velnor source refs and current default/open-PR union; rescan all ref names, 15 custom SHAs, newly found refs, and indirect workflow/action references. Close the fixture, Velnor #1133, and ChainArgos #2085 owner decisions against exact heads. | Every scoped repo has a recorded merged migration with exact post-merge CI, or a reviewed exact-head `NO-CHANGE`; no unresolved branch-name/full-SHA runtime caller remains. |
+| Final ref and consumer closure | Velnor goal coordinator `@donbeave`, with each consumer owner | After source/release candidate is final, re-fetch all nine Velnor source refs and current default/open-PR union; rescan all ref names, 15 custom SHAs, newly found refs, and indirect workflow/action references. Close the fixture, Velnor #1133, and example-org #2085 owner decisions against exact heads. | Every scoped repo has a recorded merged migration with exact post-merge CI, or a reviewed exact-head `NO-CHANGE`; no unresolved branch-name/full-SHA runtime caller remains. |
 | PR #12 source closure | Velnor goal coordinator `@donbeave` and PR #12 disposition owner | Refresh the 252-path c694 disposition against the final integration SHA; classify executable Foundation/custom-source callers, preserved PR #12 fixes, and current feedback. | Final-SHA file/caller disposition is integrated and PR #12 is closed or explicitly superseded after final feedback refresh. |
 | Six-ref deletion safety | Velnor goal coordinator `@donbeave`; independent deletion reviewer | At final integration SHA, recheck all six tag targets/protection, immutable archive retrieval, six branch tips, and required action/history ancestry. Test exact `uses@SHA` resolution if any current caller is found. | Independent review approves deletion of each exact branch after the caller and history gates above close. |
 

@@ -10,8 +10,8 @@ use velnor_local::timeout::TimeoutScale;
 use crate::local_ci::{ELF_ARM64, binary, parsed};
 use crate::support::temp_dir;
 
-const SAMPLE: &str = "../../generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml";
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const SAMPLE: &str = "../../generator/samples/helper-lock/expected/.github/workflows/ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const LINUX_ARM64: &str = "runner.arch == ''ARM64'' && ''";
 const REFUSAL: &str = "velnor-ci integrity check failed";
 
@@ -244,7 +244,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
 
 fn outside(name: &str) -> velnor_test_support::ScratchDir {
     let dir = temp_dir(name);
-    std::fs::write(dir.join("rust-ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(dir.join("ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
@@ -276,7 +276,7 @@ fn link(target: &Path, at: &Path) {
 async fn a_symlinked_workflow_file_is_refused_and_its_target_outside_the_copy_is_left_alone() {
     let repo = checkout("dev-binary-link-file");
     let elsewhere = outside("dev-binary-victim-file");
-    let victim = elsewhere.join("rust-ci.yml");
+    let victim = elsewhere.join("ci.yml");
     let at = repo.join(".github/workflows/linked.yml");
     link(&victim, &at);
     let message = refusal(&repo, "dev-binary-link-file-bin").await;
@@ -293,7 +293,7 @@ async fn a_symlinked_workflows_directory_is_refused_and_its_target_is_left_alone
     link(&elsewhere, &at);
     let message = refusal(&repo, "dev-binary-link-workflows-bin").await;
     assert!(message.contains(&at.display().to_string()), "{message}");
-    unchanged(&elsewhere.join("rust-ci.yml"));
+    unchanged(&elsewhere.join("ci.yml"));
 }
 
 #[tokio::test]
@@ -301,7 +301,7 @@ async fn a_symlinked_github_directory_is_refused_and_its_target_is_left_alone() 
     let repo = checkout("dev-binary-link-github");
     let elsewhere = temp_dir("dev-binary-victim-github");
     std::fs::create_dir_all(elsewhere.join("workflows")).unwrap_or_else(|e| unreachable!("{e}"));
-    let victim = elsewhere.join("workflows/rust-ci.yml");
+    let victim = elsewhere.join("workflows/ci.yml");
     std::fs::write(&victim, sample()).unwrap_or_else(|e| unreachable!("{e}"));
     let at = repo.join(".github");
     std::fs::remove_dir_all(&at).unwrap_or_else(|e| unreachable!("{e}"));
