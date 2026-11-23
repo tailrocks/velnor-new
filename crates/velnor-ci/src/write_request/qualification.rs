@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::{internal, nonempty};
 use crate::error::CiError;
 
-const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
+const CI_WORKFLOW_PATH: &str = ".github/workflows/repository-checks.yml";
 
 /// The runner's view of the run, as `GITHUB_*` names it.
 #[derive(Debug, Clone, Copy, Default)]

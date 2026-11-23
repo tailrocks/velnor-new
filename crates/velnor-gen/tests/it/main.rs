@@ -310,6 +310,7 @@ mod source_roots_env;
 mod source_roots_limit;
 mod sparse_checkout;
 mod sparse_suggestion;
+mod stacks;
 mod step_refs;
 mod step_refs_sweep;
 mod step_refs_tests;
