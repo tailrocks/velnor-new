@@ -11,14 +11,16 @@ use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath, RunnerLabe
 
 pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
 
+// helper-gate: first in tools-v0.1.102 via d56256c182
+pub const DELTA_CLEANUP_HELPER: (u64, u64, u64) = (0, 1, 102);
+
 #[must_use]
 pub fn delta_cleanup(
     helper: &HelperRelease,
     workflow: &str,
     runner: &RunnerLabel,
 ) -> Option<String> {
-    // helper-gate: first in tools-v0.1.102 via d56256c182
-    if !helper.version().at_least((0, 1, 102)) {
+    if !helper.version().at_least(DELTA_CLEANUP_HELPER) {
         return None;
     }
     let job = RenderedJob {

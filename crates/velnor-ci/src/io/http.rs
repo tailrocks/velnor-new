@@ -311,17 +311,16 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_connection_is_transient() {
-        let port = TcpListener::bind("127.0.0.1:0")
-            .expect("bind")
-            .local_addr()
-            .expect("addr")
-            .port();
+    fn a_dropped_connection_is_transient() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let address = listener.local_addr().expect("addr");
+        thread::spawn(move || listener.incoming().for_each(drop));
         let api = HttpGitHub::new(
-            format!("http://127.0.0.1:{port}"),
+            format!("http://{address}"),
             "t".to_owned(),
             Duration::from_secs(5),
         );
-        assert!(api.get("/x").expect_err("failure").is_transient());
+        let error = api.get("/x").expect_err("failure");
+        assert!(error.is_transient(), "{error}");
     }
 }
