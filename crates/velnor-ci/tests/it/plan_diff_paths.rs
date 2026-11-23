@@ -52,7 +52,12 @@ fn workspace(name: &str) -> Repo {
     repo
 }
 
-fn plan_changing_a(repo: &Repo, routed_dir: &str, tools: Option<&Path>) -> (Output, String) {
+fn plan_changing_a(
+    repo: &Repo,
+    io: &Path,
+    routed_dir: &str,
+    tools: Option<&Path>,
+) -> (Output, String) {
     let base = head_of(repo);
     repo.write("a/src/lib.rs", "pub fn changed() {}\n");
     repo.commit();
@@ -69,9 +74,9 @@ fn plan_changing_a(repo: &Repo, routed_dir: &str, tools: Option<&Path>) -> (Outp
         "root": ".",
         "schema": 1,
     });
-    let file = aside(repo.root()).join("plan-request.json");
+    let file = io.join("plan-request.json");
     fs::write(&file, request.to_string()).unwrap_or_else(|e| unreachable!("{e}"));
-    let outputs = aside(repo.root()).join("outputs");
+    let outputs = io.join("outputs");
     let mut path = std::env::var_os("PATH").unwrap_or_default();
     if let Some(dir) = tools {
         let mut prefixed = dir.as_os_str().to_owned();
@@ -97,14 +102,14 @@ fn plan_changing_a(repo: &Repo, routed_dir: &str, tools: Option<&Path>) -> (Outp
     } else {
         String::new()
     };
-    fs::remove_dir_all(aside(repo.root())).unwrap_or_else(|e| unreachable!("{e}"));
     (output, written)
 }
 
 #[test]
 fn a_routed_package_under_a_newline_directory_selects_only_its_own_jobs() {
     let repo = workspace("diff-newline-directory");
-    let (output, written) = plan_changing_a(&repo, "pk\nx", None);
+    let io = aside(repo.root());
+    let (output, written) = plan_changing_a(&repo, &io, "pk\nx", None);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(
@@ -117,7 +122,8 @@ fn a_routed_package_under_a_newline_directory_selects_only_its_own_jobs() {
 #[test]
 fn a_routed_directory_holding_a_nul_byte_never_reaches_the_object_reader() {
     let repo = workspace("diff-nul-directory");
-    let (output, written) = plan_changing_a(&repo, "pk\u{0}x", None);
+    let io = aside(repo.root());
+    let (output, written) = plan_changing_a(&repo, &io, "pk\u{0}x", None);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(written.contains("\nnot_affected_jobs=\n"), "{written}");
@@ -125,12 +131,13 @@ fn a_routed_directory_holding_a_nul_byte_never_reaches_the_object_reader() {
     assert!(!stderr.contains("cat-file"), "{stderr}");
 }
 
-fn tools_without_nul_framing() -> PathBuf {
+fn tools_without_nul_framing(io: &Path) -> PathBuf {
     let real = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
         .map(|dir| dir.join("git"))
         .find(|candidate| candidate.is_file())
         .unwrap_or_else(|| unreachable!("git on PATH"));
-    let dir = crate::support::fresh_dir("velnor-ci-old-git", "bin");
+    let dir = io.join("bin");
+    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     let script = format!(
         "#!/bin/sh\ncase \" $* \" in\n  *\" cat-file -Z \"*)\n    echo \"erreur : option inconnue \\`Z'\" >&2\n    exit 129\n    ;;\nesac\nexec '{}' \"$@\"\n",
         real.display()
@@ -145,9 +152,9 @@ fn tools_without_nul_framing() -> PathBuf {
 #[test]
 fn a_git_without_nul_framed_cat_file_runs_every_job_with_a_stable_reason() {
     let repo = workspace("diff-old-git");
-    let bin = tools_without_nul_framing();
-    let (output, written) = plan_changing_a(&repo, "pk\nx", Some(&bin));
-    fs::remove_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
+    let io = aside(repo.root());
+    let bin = tools_without_nul_framing(&io);
+    let (output, written) = plan_changing_a(&repo, &io, "pk\nx", Some(&bin));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(written.contains("\nnot_affected_jobs=\n"), "{written}");
