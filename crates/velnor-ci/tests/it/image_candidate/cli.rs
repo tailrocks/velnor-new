@@ -19,7 +19,7 @@ use crate::support::fresh_dir;
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 struct Candidate {
-    dir: PathBuf,
+    dir: velnor_test_support::ScratchDir,
 }
 
 impl Candidate {
@@ -119,12 +119,6 @@ impl Candidate {
 
     fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
-    }
-}
-
-impl Drop for Candidate {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.dir).ok();
     }
 }
 

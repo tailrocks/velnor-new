@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::Platform;
+use velnor_model::{Platform, WORKFLOW_NAME};
 
 use crate::asset_name;
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
@@ -139,7 +139,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             checks: Vec::new(),
         },
     };
-    let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    let after = raw.after.unwrap_or_else(|| vec![WORKFLOW_NAME.to_owned()]);
     refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
     for (index, name) in raw.pr_only_checks.iter().enumerate() {
         let problem = if name.trim().is_empty() {

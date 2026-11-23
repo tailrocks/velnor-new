@@ -50,13 +50,16 @@ fn bound(harness: &Harness, name: &str, runs: Option<&Value>, ledger: Option<&[V
     });
     let standin =
         runs.map(|runs| Arc::new(Runs(runs.to_string().into_bytes())) as Arc<dyn StandIn>);
-    Stub::job_grants(&repo, &state, harness.dir(), (standin, folder))
+    Stub::job_grants(&repo, &state, harness.dir(), (standin, folder)).keeping(vec![repo, state])
 }
 
 fn stub(harness: &Harness, name: &str, override_all: bool) -> Stub {
     if override_all {
-        let repo = temp_dir(&format!("{name}-repo"));
-        return Stub::job_cache_admin(&repo, &temp_dir(&format!("{name}-state")), harness.dir());
+        let (repo, state) = (
+            temp_dir(&format!("{name}-repo")),
+            temp_dir(&format!("{name}-state")),
+        );
+        return Stub::job_cache_admin(&repo, &state, harness.dir()).keeping(vec![repo, state]);
     }
     let dispatched = [recorded("push", MAIN, &[])];
     bound(harness, name, Some(&run("push", MAIN)), Some(&dispatched))

@@ -1,12 +1,12 @@
 # Gradle stack contract
 
-Status: partly implemented. Source design: the ChainArgos split stacks design
+Status: partly implemented. Source design: the example-org split stacks design
 (§2, §2.6, §4.1). Decisions: [HD-4a and HD-5](../hard-decisions.md), adopted
 per the split brief; owner may revisit. This page states what exists today and
 what each remaining piece must satisfy; it does not claim the stack is
 complete.
 
-## Consumer shape (the ten ChainArgos Java repositories)
+## Consumer shape (the ten example-org Java repositories)
 
 - Gradle root in `backend/` (`roots = ["backend"]`), Gradle wrapper pinned by
   `distributionUrl` and `distributionSha256Sum`, JDK declared in the
@@ -103,7 +103,7 @@ secret from `[private_sources]`), Mise, the generated project-tool resolver
 (`VELNOR_TOOL_JAVA`), then the `gradle-run-v1` step. That operation re-verifies
 the wrapper before `./gradlew` runs, installs the exact JDK, writes the
 Velnor-owned Gradle home (toolchain pinning, and an init script that adds each
-fetched bundle's `repository/` for the `com.chainargos` group) and runs
+fetched bundle's `repository/` for the `com.example` group) and runs
 `:p:assemble :p:check` as one `--continue --dependency-verification strict`
 invocation in a cleared environment. Consumer policy only (the helper is
 required). There is no `Stack::Gradle` detector: roots are configured, as for Bun.

@@ -209,7 +209,7 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     let generated = generated_files(&files)?;
     assert_eq!(
         generated.keys().cloned().collect::<Vec<_>>(),
-        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
+        [path(".github/workflows/ci.yml")?, METADATA_PATH]
     );
     let on_disk = generated
         .iter()

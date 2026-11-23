@@ -13,8 +13,6 @@ fn directory_of(root: &RustRoot) -> String {
         .map_or_else(|| ".".to_owned(), |parent| parent.as_str().to_owned())
 }
 
-/// Which roots one audit covers: all of them, or with `--root` the root whose
-/// manifest sits in that directory plus every root of its workspace group.
 pub(super) fn selected(
     facts: &RepoFacts,
     shared: &[Vec<usize>],
@@ -48,7 +46,6 @@ pub(super) fn selected(
     Ok(chosen)
 }
 
-/// The lock lines of packages that are members of the selected roots.
 pub(super) fn within(listed: CompileInputs, facts: &RepoFacts, chosen: &[bool]) -> CompileInputs {
     let members: Vec<&RustMember> = facts
         .rust_roots

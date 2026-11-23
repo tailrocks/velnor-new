@@ -10,15 +10,10 @@ use crate::golden::{load, samples};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-// The sample is the repository itself, and the repository opts into
-// `pr_ci = "label"` (#1476), so its rust-ci.yml renders the label-mode
-// concurrency (`CancelOlderPullRequestRunsExceptUnrelatedLabels`). That mode
-// gives an edit that keeps the base its own group through the `-ignored-`
-// suffix instead of a `cancel-in-progress` exception; `pr_ci_labels.rs` pins it.
 fn rust_ci_workflow() -> Result<String, Box<dyn Error>> {
     let files = expected_files(&load(&samples().join("velnor-new"))?)?;
     let workflow = files
-        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .get(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or("no generated workflow")?;
     Ok(workflow.clone())
 }

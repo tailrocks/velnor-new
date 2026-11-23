@@ -23,6 +23,7 @@ fn inputs() -> CompatInputs {
         rustflags: String::new(),
         workspace: "/home/runner/work/p/p".to_owned(),
         driver: "cargo".to_owned(),
+        mbx_share_out_dir: None,
     }
 }
 
@@ -31,7 +32,7 @@ fn changing_any_compat_input_changes_the_digest() {
     let base = compat(&inputs());
     assert_eq!(base, compat(&inputs()));
     assert_eq!(base.len(), 16);
-    let mutations: [Mutation; 12] = [
+    let mutations: [Mutation; 13] = [
         ("rustc", |i| i.rustc_verbose.push_str("release: 1.99.2\n")),
         ("target", |i| {
             i.target = Some("x86_64-unknown-linux-gnu".to_owned());
@@ -54,6 +55,9 @@ fn changing_any_compat_input_changes_the_digest() {
                 ".cargo/config.toml\n[profile.dev.package.\"*\"]\ndebug = true\n".to_owned();
         }),
         ("image", |i| i.image = "ubuntu22".to_owned()),
+        ("mbx out dirs", |i| {
+            i.mbx_share_out_dir = Some("0".to_owned());
+        }),
         ("old rustc", |i| {
             i.profile = build_profile(CiDebugInfo::LineTablesOnly, (1, 70));
         }),

@@ -38,7 +38,7 @@ fn view(after: &str) -> Result<velnor_model::RepoView, Box<dyn Error>> {
 
 #[test]
 fn a_declared_push_workflow_can_be_named_in_the_release_after_list() -> TestResult {
-    let files = expected_files(&view("\"Rust CI\", \"Declared\"")?)?;
+    let files = expected_files(&view("\"CI\", \"Declared\"")?)?;
     let release = files
         .get(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release workflow")?;
@@ -47,14 +47,14 @@ fn a_declared_push_workflow_can_be_named_in_the_release_after_list() -> TestResu
         tree.at(&["on", "workflow_run", "workflows"])
             .ok_or("no workflow_run workflows")?
             .texts(),
-        ["Rust CI", "Declared"]
+        ["CI", "Declared"]
     );
     Ok(())
 }
 
 #[test]
 fn a_declared_push_workflow_left_out_of_after_is_refused() -> TestResult {
-    let error = expected_files(&view("\"Rust CI\"")?)
+    let error = expected_files(&view("\"CI\"")?)
         .err()
         .ok_or("expected a refusal")?
         .to_string();

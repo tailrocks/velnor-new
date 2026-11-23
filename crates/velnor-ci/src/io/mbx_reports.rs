@@ -16,6 +16,7 @@ const EXPECTED: &str = "expected";
 const UNRECORDED: &str = "velnor-mbx-reports.unrecorded";
 pub(super) const MAX_SESSIONS: usize = 4096;
 pub(super) const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
+pub(super) const MAX_TOTAL_BYTES: u64 = 32 << 20;
 const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
@@ -30,8 +31,17 @@ fn inside_session() -> bool {
         .is_some_and(|socket| is_socket(Path::new(&socket)))
 }
 
+fn starts_velnor_ci(argv: &[String]) -> bool {
+    argv.first()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "velnor-ci")
+}
+
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
+    if !starts_velnor_ci(argv) {
+        command.env_remove(SWITCH);
+    }
     if !enabled() || !reports_session(argv) || inside_session() {
         return;
     }
@@ -87,7 +97,7 @@ pub(super) fn unrecorded(runner_temp: &Path) -> Result<u64, String> {
     if fs::symlink_metadata(&file).is_err_and(|error| error.kind() == io::ErrorKind::NotFound) {
         return Ok(0);
     }
-    let bytes = read_regular(&file)?;
+    let bytes = read_regular(&file, &mut 0)?;
     let text = String::from_utf8(bytes).map_err(|_| "not UTF-8".to_owned())?;
     Ok(u64::try_from(text.lines().count()).unwrap_or(u64::MAX))
 }
@@ -157,11 +167,12 @@ fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Re
         unlisted,
         ..Reports::default()
     };
+    let mut spent = 0;
     for (name, session) in found {
         match session.report {
             None if session.marker => reports.missing.push(name),
             None => {}
-            Some(file) => match read_regular(&file).and_then(|bytes| {
+            Some(file) => match read_regular(&file, &mut spent).and_then(|bytes| {
                 if session.marker {
                     parse(&bytes)
                 } else {
@@ -175,11 +186,17 @@ fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Re
                 )),
             },
         }
+        if spent > MAX_TOTAL_BYTES {
+            return Some(Reports {
+                overflowed: true,
+                ..Reports::default()
+            });
+        }
     }
     Some(reports)
 }
 
-fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
+fn read_regular(file: &Path, spent: &mut u64) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(file).map_err(|error| error.to_string())?;
     if !metadata.file_type().is_file() {
         return Err("not a regular file".to_owned());
@@ -197,10 +214,9 @@ fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
         return Err("not a regular file".to_owned());
     }
     let mut bytes = Vec::new();
-    report
-        .take(MAX_REPORT_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+    let read = report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes);
+    *spent = spent.saturating_add(bytes.len() as u64);
+    read.map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_REPORT_BYTES {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
     }

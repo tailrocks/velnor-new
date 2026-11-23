@@ -1,5 +1,5 @@
 roots = ["."]
-after = ["CI", "Qualification", "Rust CI"]
+after = ["CI", "Qualification"]
 family_tag = "tools-v{{ version }}"
 family_trigger = "tag_push"
 checksums_file = "BINARY-SHA256SUMS"
