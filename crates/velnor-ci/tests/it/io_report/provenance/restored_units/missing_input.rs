@@ -81,13 +81,13 @@ fn sources_cargo_unpacks_again_do_not_make_a_unit_a_base_gap()
         &repo,
         REGISTRY_SOURCE,
         &format!(
-            "{root}/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
+            "{root}/srv/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
         ),
     );
     dep_info_unit(
         &repo,
         GIT_CHECKOUT,
-        &format!("{root}/home/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
+        &format!("{root}/srv/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
     );
     restore(&repo);
     let record = restored_record(&repo)?;

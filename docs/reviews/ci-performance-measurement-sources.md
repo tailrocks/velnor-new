@@ -2,7 +2,7 @@
 
 Status: source qualification only, 2026-10-03. No hosted performance claim.
 Read the complete performance specification, including T01–T26 and reporting
-requirements. Inspect MBX 1.21.0 source at `/tmp/velnor-mbx-source-1.21.0`.
+requirements. Inspect MBX 1.21.0 source at `<tmp>/velnor-mbx-source-1.21.0`.
 This review defines the narrow supported reporting integration and identifies
 upstream requirements before Velnor can attribute measurements correctly.
 
