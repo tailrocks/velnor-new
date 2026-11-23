@@ -380,6 +380,19 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         );
         assert_eq!(line.matches('\n').count(), 1, "{outcome:?}: {line:?}");
     }
+    let pruned = Outcome::Saved {
+        to: PathBuf::from("/store/tools/k"),
+        kept: vec!["old-entry".to_owned()],
+    };
+    let text = message(&pruned, "velnor-240");
+    assert_eq!(text.lines().count(), 2, "{text:?}");
+    for line in text.lines() {
+        assert!(line.ends_with(" node=velnor-240"), "{line:?}");
+    }
+    assert!(
+        text.contains("::warning::") && text.contains("old-entry"),
+        "{text:?}"
+    );
     let error = finish(Verb::Save, &Outcome::Failed("x"), "velnor-240").expect_err("failed save");
     assert!(error.to_string().contains("node=velnor-240"), "{error}");
 }

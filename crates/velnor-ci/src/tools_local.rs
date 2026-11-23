@@ -138,7 +138,9 @@ fn this_node() -> String {
 #[must_use]
 pub fn message(outcome: &Outcome, node: &str) -> String {
     let warnings = kept(outcome).iter().map(|name| {
-        format!("::warning::node-local tools store kept {name}; it could not be pruned\n")
+        format!(
+            "::warning::node-local tools store kept {name}; it could not be pruned node={node}\n"
+        )
     });
     std::iter::once(format!("{} node={node}\n", describe(outcome)))
         .chain(warnings)
