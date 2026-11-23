@@ -92,7 +92,16 @@ fn require_generator_digests(
     let Some(digests) = release.generator_digests() else {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     };
-    if is_macos(facts) && !digests.contains_key(&Platform::MacosArm64) {
+    let installs_archive = facts.config.lint.iter().any(|lint| {
+        matches!(
+            lint.kind,
+            LintKind::GeneratedCheck {
+                from_source: false,
+                ..
+            }
+        )
+    });
+    if installs_archive && is_macos(facts) && !digests.contains_key(&Platform::MacosArm64) {
         return Err(GenerateError::GeneratorLockLacksMacos {
             version: release.version().clone(),
             runner: facts.config.runner.to_string(),
