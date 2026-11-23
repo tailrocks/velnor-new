@@ -5,7 +5,7 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, restore_notices, waste};
 use crate::report_caches::{CachePlan, observe_caches};
 use crate::telemetry::{INVOCATIONS, Invocation};
 use serde_json::Value;
@@ -318,7 +318,11 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
             &format!("## {}\n\n{}", lane.lane, lane.summary()),
         )?;
     }
-    check(&lanes)
+    let verdict = check(&lanes);
+    if verdict.is_err() {
+        print!("{}", restore_notices(&lanes));
+    }
+    verdict
 }
 fn find_metrics(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), CiError> {
     if !directory.exists() {
