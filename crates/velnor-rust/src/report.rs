@@ -196,10 +196,12 @@ pub fn finish_present(facts: &RepoFacts, jobs: &mut Vec<Job>) {
         let outputs = used_outputs(jobs);
         jobs.insert(0, present_plan_job(facts, outputs));
     }
+    crate::merge_queue_check::ask(facts, jobs, false);
     jobs.push(crate::required_job::verdict_job(
         facts,
         jobs,
         false,
         crate::plan_budget::draft_guard(facts),
     ));
+    jobs.extend(label_reset(facts));
 }

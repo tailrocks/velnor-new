@@ -3,7 +3,10 @@
 
 use std::error::Error;
 
-use velnor_model::{ChangeSet, EventKind, RepoPath, RepoView, WORKFLOW_PATH};
+use velnor_model::{
+    ChangeSet, EventKind, PackageName, RepoPath, RepoView, RustMetadata, RustPackage, Target,
+    TargetKind, TargetName, WORKFLOW_PATH,
+};
 use velnor_rust::{CONFIG_PATH, ansible_runs, detect, unknown_paths};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -74,7 +77,7 @@ fn runs(
 }
 
 #[test]
-fn ansible_runs_on_a_pull_request_only_for_ansible_ci_and_unknown_paths() -> TestResult {
+fn ansible_runs_for_every_changed_path_when_a_play_exists() -> TestResult {
     let view = play()?;
     let facts = detect(&view)?;
     for path in [
@@ -84,6 +87,8 @@ fn ansible_runs_on_a_pull_request_only_for_ansible_ci_and_unknown_paths() -> Tes
         WORKFLOW_PATH.as_str(),
         CONFIG_PATH.as_str(),
         "notes/stray.txt",
+        "README.md",
+        "docs/tasks.yml",
     ] {
         assert_eq!(
             runs(&view, &facts, EventKind::PullRequest, &[path])?,
@@ -92,11 +97,53 @@ fn ansible_runs_on_a_pull_request_only_for_ansible_ci_and_unknown_paths() -> Tes
         );
     }
     assert_eq!(
-        runs(&view, &facts, EventKind::PullRequest, &["README.md"])?,
-        Some(false)
+        runs(&view, &facts, EventKind::Push, &["README.md"])?,
+        Some(true)
+    );
+    let mut rooted = play()?;
+    let manifest = RepoPath::new("Cargo.toml")?;
+    rooted.tracked_paths.insert(manifest.clone());
+    rooted.tracked_paths.insert(RepoPath::new("Cargo.lock")?);
+    put(&mut rooted, "mise.toml", b"[tools]\n")?;
+    put(
+        &mut rooted,
+        "Cargo.toml",
+        b"[package]\nname = \"app\"\nversion = \"0.1.0\"\n",
+    )?;
+    rooted.rust_metadata.insert(
+        manifest.clone(),
+        RustMetadata {
+            members: vec![RustPackage {
+                name: PackageName::new("app")?,
+                version: Some("0.1.0".to_owned()),
+                manifest,
+                dependencies: Vec::new(),
+                targets: vec![Target {
+                    name: TargetName::new("app")?,
+                    kinds: vec![TargetKind::Lib],
+                    tests: false,
+                    doctest: false,
+                    source: None,
+                    requires_features: false,
+                }],
+            }],
+        },
+    );
+    let facts = detect(&rooted)?;
+    let set = changed(&["src/deploy.yml"])?;
+    let unknown = unknown_paths(&facts, &set);
+    assert!(
+        !unknown.iter().any(|path| path.as_str() == "src/deploy.yml"),
+        "{unknown:?}"
     );
     assert_eq!(
-        runs(&view, &facts, EventKind::Push, &["README.md"])?,
+        ansible_runs(
+            &rooted,
+            &facts,
+            EventKind::PullRequest,
+            Some(&set.paths),
+            &unknown,
+        )?,
         Some(true)
     );
     let mut quiet = RepoView::default();

@@ -181,6 +181,88 @@ fn ansible_play() -> Result<RepoView, Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn label_mode_runs_ansible_on_an_unlabeled_ready_pull_request() -> TestResult {
+    let mut view = ansible_play()?;
+    put_config(&mut view, "pr_ci = \"label\"\n")?;
+    crate::pipeline::pin_helper(&mut view, "0.1.111")?;
+    let files = expected_with_notes(&view)?.0;
+    assert!(!files.contains_key(&velnor_model::CACHE_TRIM_WORKFLOW_PATH));
+    let workflow = files
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?;
+    let tree = crate::yaml_tree::document(workflow)?;
+    let jobs = &tree["jobs"];
+    for id in ["ansible", "required", "rust-plan", "ci-run-label"] {
+        assert!(jobs.get(id).is_some(), "{id} missing");
+    }
+    assert!(jobs.get("cache").is_none(), "{jobs}");
+    assert!(jobs.get("rust-budget").is_none(), "{jobs}");
+    assert_eq!(
+        crate::pr_ci_sim::strings(jobs["ci-run-label"].get("needs")),
+        ["required".to_owned()]
+    );
+    let plans = crate::lint_lane::runs(&jobs["rust-plan"]);
+    assert!(
+        plans.iter().any(|run| run.contains("merge-queue-check")),
+        "{plans:?}"
+    );
+    let (ready, _) = crate::pr_ci_sim::outcome(&tree, &crate::pr_ci_sim::pull(false, &[]), &[])?;
+    assert_eq!(crate::pr_ci_sim::state(&ready, "ansible"), "success");
+    let (draft, _) = crate::pr_ci_sim::outcome(&tree, &crate::pr_ci_sim::pull(true, &[]), &[])?;
+    assert_eq!(crate::pr_ci_sim::state(&draft, "ansible"), "skipped");
+    let (bug, _) =
+        crate::pr_ci_sim::outcome(&tree, &crate::pr_ci_sim::labeled("bug", &["bug"]), &[])?;
+    assert_eq!(crate::pr_ci_sim::state(&bug, "ansible"), "skipped");
+    Ok(())
+}
+
+#[test]
+fn gating_ansible_grows_the_cache_bound() -> TestResult {
+    let mut view = crate::pipeline::view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut view, "0.1.112")?;
+    let core = "0123456789abcdef".repeat(4);
+    let lint = "fedcba9876543210".repeat(4);
+    let requirements = format!(
+        "ansible-core==2.16.14 \\\n    --hash=sha256:{core}\nansible-lint==24.2.0 \\\n    --hash=sha256:{lint}\n"
+    );
+    crate::stacks::put(
+        &mut view,
+        "ansible-configs/requirements.txt",
+        requirements.as_bytes(),
+    )?;
+    crate::stacks::put(
+        &mut view,
+        "ansible-configs/requirements.yaml",
+        b"collections: []\n",
+    )?;
+    crate::stacks::put(
+        &mut view,
+        "ansible-configs/site.yml",
+        b"---\n- hosts: all\n",
+    )?;
+    let facts = velnor_rust::detect(&view)?;
+    let mut planned = velnor_rust::plan(&facts);
+    let before = cache_bound(&planned)?;
+    velnor_rust::attach_ansible(&view, &facts, &mut planned)?;
+    let after = cache_bound(&planned)?;
+    assert!(after > before, "before={before} after={after}");
+    Ok(())
+}
+
+fn cache_bound(plan: &velnor_model::WorkflowPlan) -> Result<usize, Box<dyn std::error::Error>> {
+    plan.jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .find_map(|step| match &step.kind {
+            velnor_model::StepKind::CheckMetrics {
+                needs_max_bytes, ..
+            } => Some(*needs_max_bytes),
+            _ => None,
+        })
+        .ok_or_else(|| "no cache bound".into())
+}
+
+#[test]
 fn a_lint_slug_ansible_beside_a_play_is_refused() -> TestResult {
     let config = "[[lint]]\nkind = 'jactionlint'\nid = 'ansible'\ninputs = ['mise.toml']\n";
     let mut played =

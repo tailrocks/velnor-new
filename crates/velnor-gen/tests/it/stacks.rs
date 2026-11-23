@@ -61,7 +61,7 @@ pub(crate) fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), B
     Ok(())
 }
 
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$RUNNER_TEMP/ansible/bin:$PATH\"";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
 
 pub(crate) fn ansible_repository(
     playbook: &str,

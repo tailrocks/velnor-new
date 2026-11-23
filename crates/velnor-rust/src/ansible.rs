@@ -10,8 +10,8 @@ use velnor_model::{
 
 use crate::error::{DetectError, Reason};
 use crate::lane::PLAN_JOB;
-use crate::plan::{CHECKOUT_DEPTH, RUST_JOB, job, step};
-use crate::required_size::needs_max_bytes;
+use crate::plan::{CHECKOUT_DEPTH, RUST_JOB, job, quick, step};
+use crate::required_size::{charge_output, needs_max_bytes};
 
 mod select;
 
@@ -21,7 +21,7 @@ pub(super) const LAYOUT: &str = "ansible-configs/";
 const REQUIREMENTS_TXT: RepoPath = RepoPath::from_static("ansible-configs/requirements.txt");
 const REQUIREMENTS_YAML: RepoPath = RepoPath::from_static("ansible-configs/requirements.yaml");
 const INSTALL: &str = "python3 -m pip install --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r ansible-configs/requirements.txt";
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$RUNNER_TEMP/ansible/bin:$PATH\"";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
 const RUN_LIMIT: usize = 2000;
 
 pub const ANSIBLE_SLUG: RootSlug = RootSlug::from_static("ansible");
@@ -61,6 +61,7 @@ pub fn attach_ansible(
 
 fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath]) -> Job {
     let mut ansible = job(facts, JobId::from_static("ansible"));
+    ansible.pr = quick(facts);
     ansible.name = Some("Ansible".to_owned());
     ansible.steps.push(step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
@@ -117,10 +118,20 @@ fn gate_ansible(
         also: Vec::new(),
     };
     ansible.needs = vec![source.clone()];
-    if let Some(job) = plan.jobs.iter_mut().find(|job| job.id == source) {
-        job.plan_outputs.extend(gate.outputs());
-        job.plan_outputs.sort();
-        job.plan_outputs.dedup();
+    let output = GateNeed::Lint.output_name(&ANSIBLE_SLUG);
+    let added = plan
+        .jobs
+        .iter_mut()
+        .find(|job| job.id == source)
+        .is_some_and(|job| {
+            let before = job.plan_outputs.len();
+            job.plan_outputs.extend(gate.outputs());
+            job.plan_outputs.sort();
+            job.plan_outputs.dedup();
+            job.plan_outputs.len() > before
+        });
+    if added {
+        charge_output(&mut plan.jobs, &source, &output);
     }
     ansible.gate = Some(gate);
     Ok(())
