@@ -218,7 +218,7 @@ pub fn cargo_reason(compilation: &Compilation) -> String {
 }
 
 #[must_use]
-pub fn unknown_restores(metrics: &LaneMetrics) -> Vec<String> {
+pub fn unknown_restores(metrics: &LaneMetrics) -> Vec<(&'static str, String)> {
     let mut unknown: BTreeMap<(&str, Option<Manifest>), BTreeSet<String>> = BTreeMap::new();
     for invocation in &metrics.invocations {
         if invocation.restored_target_usable == Some(false) || !same_lock(metrics, &invocation.root)
@@ -250,9 +250,12 @@ pub fn unknown_restores(metrics: &LaneMetrics) -> Vec<String> {
                 Some(Manifest::Unreadable) => ("warning", "unreadable"),
                 None => ("warning", "not recorded"),
             };
-            format!(
-                "::{level}::{root}: dependency compiles with an unknown restore status (restored-units manifest {state}): {}",
-                packages.into_iter().collect::<Vec<_>>().join(", ")
+            (
+                level,
+                format!(
+                    "{root}: dependency compiles with an unknown restore status (restored-units manifest {state}): {}",
+                    packages.into_iter().collect::<Vec<_>>().join(", ")
+                ),
             )
         })
         .collect()

@@ -15,7 +15,8 @@ pub struct Cache {
     pub family: String,
     pub root: Option<String>,
     pub restore_step: String,
-    pub save_step: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_step: Option<String>,
     #[serde(default)]
     pub requested_key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -171,22 +172,6 @@ fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
     })
 }
 
-#[must_use]
-pub fn notices(lanes: &[LaneMetrics]) -> Vec<String> {
-    let mut notices = Vec::new();
-    for lane in lanes {
-        notices.extend(
-            crate::restored_units::base_gaps(lane)
-                .into_iter()
-                .map(|gap| format!("::notice::{gap}")),
-        );
-        notices.extend(crate::restored_units::unknown_restores(lane));
-    }
-    notices.sort();
-    notices.dedup();
-    notices
-}
-
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut identities = BTreeSet::new();
     let mut violations = Vec::new();
@@ -211,15 +196,32 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     violations.sort();
     violations.dedup();
     if violations.is_empty() {
-        let mut text = format!("Cache: {} lanes checked, no waste\n", lanes.len());
-        for notice in notices(lanes) {
-            text.push_str(&notice);
-            text.push('\n');
-        }
-        Ok(text)
+        Ok(format!(
+            "Cache: {} lanes checked, no waste\n{}",
+            lanes.len(),
+            restore_notices(lanes)
+        ))
     } else {
         Err(CiError::new(violations.join("\n")))
     }
+}
+
+pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
+    let mut notices: Vec<(&'static str, String)> = Vec::new();
+    for lane in lanes {
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| ("notice", gap)),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
+    }
+    notices.sort();
+    notices.dedup();
+    notices
+        .iter()
+        .map(|(level, notice)| crate::escape::command_line(level, notice))
+        .collect()
 }
 
 fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {

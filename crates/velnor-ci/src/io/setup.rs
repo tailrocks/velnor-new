@@ -63,7 +63,7 @@ pub(super) fn prepare(args: &PrepareArgs) -> Result<String, CiError> {
         driver: build_driver(cargo_on_path().as_deref()).to_owned(),
         repo_profile,
         image,
-        mbx_out_dir: env_text("MBX_SHARE_OUT_DIR").unwrap_or_default(),
+        mbx_share_out_dir: env_text("MBX_SHARE_OUT_DIR"),
     };
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;

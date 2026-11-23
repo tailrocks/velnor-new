@@ -7,7 +7,7 @@ use crate::build_profile::BuildProfile;
 use crate::sha256::sha256_hex;
 use velnor_model::CACHE_COMPAT_LENGTH;
 
-pub const COMPAT_SCHEMA: u32 = 1;
+pub const COMPAT_SCHEMA: u32 = 2;
 pub const BUILD_DRIVER: &str = "cargo";
 /// The driver when `cargo` resolves to mise's command wrapper, which runs mbx: its
 /// artifacts differ from a plain build, so a plain target must never restore into it.
@@ -23,7 +23,7 @@ pub struct CompatInputs {
     pub rustflags: String,
     pub workspace: String,
     pub driver: String,
-    pub mbx_out_dir: String,
+    pub mbx_share_out_dir: Option<String>,
 }
 
 /// The build driver for the `cargo` that `PATH` resolves to (`None` when there is none).
@@ -45,7 +45,7 @@ pub fn compat(inputs: &CompatInputs) -> String {
         .collect::<Vec<_>>()
         .concat();
     let schema = COMPAT_SCHEMA.to_string();
-    let mut fields: Vec<(&str, &str)> = vec![
+    let mut fields = vec![
         ("schema", schema.as_str()),
         ("rustc", &inputs.rustc_verbose),
         ("target", inputs.target.as_deref().unwrap_or_default()),
@@ -57,8 +57,8 @@ pub fn compat(inputs: &CompatInputs) -> String {
         ("workspace", &inputs.workspace),
         ("driver", &inputs.driver),
     ];
-    if !inputs.mbx_out_dir.is_empty() {
-        fields.push(("mbx-out-dir", inputs.mbx_out_dir.as_str()));
+    if let Some(share) = &inputs.mbx_share_out_dir {
+        fields.push(("mbx-share-out-dir", share));
     }
     let canonical = fields
         .iter()

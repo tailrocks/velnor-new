@@ -165,6 +165,7 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         saved_keys: bool,
@@ -176,6 +177,10 @@ pub enum StepKind {
     CheckMetrics {
         needs_max_bytes: usize,
         trusted_api: bool,
+    },
+    Ansible {
+        name: String,
+        run: String,
     },
     Budget {
         last: usize,
@@ -263,7 +268,8 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::MergeQueueCheck { .. } => false,
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
         }
     }
 

@@ -31,7 +31,7 @@
   whose verified tree changes `.github/workflows/` (see
   [Credentials](#credentials)).
 - Follow-up: the owner grants the App permissions below; then enable
-  `[upgrades]` in processor-shared-rust first (WP-E5 rollout).
+  `[upgrades]` in example-repo-19 first (WP-E5 rollout).
 
 ## Configuration
 
@@ -219,7 +219,7 @@ The minted token requests:
 this repository only. The token is revoked when the job ends.
 
 **Owner action required.** On 2026-10-22 the `velnor-deps` App (id 5394413,
-owner ChainArgos) had only `contents: read` and `metadata: read`
+owner example-org) had only `contents: read` and `metadata: read`
 (`gh api /apps/velnor-deps`). Before enabling `[upgrades]`, grant the App
 `Contents: Read and write`, `Pull requests: Read and write` and
 `Workflows: Read and write`, accept the new permissions on each installation,

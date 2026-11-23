@@ -77,12 +77,12 @@ fn a_failing_check_keeps_the_restore_warning_out_of_the_error_text() {
         .to_string();
     assert!(error.contains(".: a failing lane"), "{error}");
     assert!(!error.contains("::warning::"), "{error}");
+    let notices = restore_notices(&lanes);
     assert!(
-        notices(&lanes).contains(
-            &"::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0".to_owned()
+        notices.contains(
+            "::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0\n"
         ),
-        "{:?}",
-        notices(&lanes)
+        "{notices}"
     );
 }
 
@@ -179,4 +179,57 @@ fn a_gap_on_a_changed_lock_is_no_notice() {
     value["invocations"][0]["compilations"][0]["restored"] = json!(false);
     let report = check(&[metrics(value)]).unwrap_or_else(|error| unreachable!("{error}"));
     assert!(!report.contains("restored base"), "{report}");
+}
+
+#[test]
+fn a_failed_check_prints_the_restore_notices_on_their_own_lines() {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["restored"] = json!(false);
+    value["invocations"][0]["compilations"][0]["missing_input"] = json!(true);
+    value["violations"] = json!(["rust: a lane violation"]);
+    let error = check(&[metrics(value.clone())])
+        .err()
+        .map_or_default(|error| error.to_string());
+    assert_eq!(error, "rust: a lane violation");
+    let notices = restore_notices(&[metrics(value)]);
+    assert!(notices.starts_with("::notice::"), "{notices}");
+    assert!(
+        notices.contains("dependency packages whose restored dep-info names a file outside target/ that is missing"),
+        "{notices}"
+    );
+}
+
+#[test]
+fn the_check_command_prints_the_restore_notices_before_it_fails()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = crate::io::Repo::empty("report-check-restore-notice");
+    let mut value = lane();
+    value["invocations"][0]["compilations"] = json!([
+        {"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[],"restored":true},
+        {"package":"tokio","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[],"restored":false,"missing_input":true}
+    ]);
+    std::fs::write(repo.root().join("ci-metrics.json"), value.to_string())?;
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["report", "--check"])
+        .arg(repo.root())
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+        .env("VELNOR_REPORT_NEEDS", "{}")
+        .env("GITHUB_STEP_SUMMARY", repo.root().join("summary"))
+        .env_remove("GITHUB_TOKEN")
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(
+        stderr.contains("compiled despite usable restored inputs"),
+        "{stderr}"
+    );
+    assert!(
+        stdout.lines().any(|line| line.starts_with("::notice::")
+            && line.contains("names a file outside target/ that is missing")
+            && line.contains("tokio")),
+        "{stdout}"
+    );
+    Ok(())
 }

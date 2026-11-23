@@ -120,7 +120,7 @@ every build experiment ran on nearly idle nodes, while evidence §B measured wor
    reported per unit class, with zero unexplained mismatches tolerated.
 5. **Capacity: the design doubles work on a saturated cluster.** Evidence: two witnesses per
    new key + A1 third execution + 2% sampling, on 5×96-thread workers measured at 92–95% CPU,
-   shared with ChainArgos (60) and jackin (40) scale sets; reflink clones do not share page
+   shared with example-org (60) and jackin (40) scale sets; reflink clones do not share page
    cache (14.29 GB per read clone [M]), capping ~4–6 build sandboxes/node; the reserved merge
    path is ~7.7% of CPU. At 95% utilisation queueing delay grows ~19× (design §9's own figure).
    Likelihood: high that P90 under real load misses 4 min even if P50 hits 90 s. Measurement:

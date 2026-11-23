@@ -127,7 +127,7 @@ fn generated_save_and_restore_share_custom_targets_and_detect_once_for_three_roo
     let files = velnor_gen::generated_files(&checkout.view).unwrap_or_else(|e| unreachable!("{e}"));
     let workflow = files
         .iter()
-        .find(|(path, _)| path.as_str().ends_with("rust-ci.yml"))
+        .find(|(path, _)| path.as_str().ends_with("ci.yml"))
         .map_or_else(|| unreachable!(), |(_, text)| text);
     let built = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
     for path in ["src/lib.rs", "one/src/lib.rs", "two/src/lib.rs"] {

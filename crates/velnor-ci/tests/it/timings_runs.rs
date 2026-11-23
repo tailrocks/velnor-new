@@ -113,7 +113,7 @@ fn a_second_page_is_read_and_ten_runs_are_the_most() {
     second.extend(ordinary(&[NEWEST[0]; 7]));
     second.extend(ordinary(&[1, 2, 3, 4, 5]));
     let mut fake = recorded(&list(&first));
-    fake.respond(workflow_runs_path(&lab(), "rust-ci.yml", 2), &list(&second));
+    fake.respond(workflow_runs_path(&lab(), "ci.yml", 2), &list(&second));
     let report = gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report.timings.len(), 2);
     assert_eq!(report.notes, Vec::<String>::new());
@@ -182,13 +182,10 @@ fn pages_are_read_until_enough_ordinary_runs_are_found() {
         let manual: Vec<Value> = (0..100)
             .map(|n| entry(10_000 + n, "workflow_dispatch", "topic"))
             .collect();
-        fake.respond(
-            workflow_runs_path(&lab(), "rust-ci.yml", page),
-            &list(&manual),
-        );
+        fake.respond(workflow_runs_path(&lab(), "ci.yml", page), &list(&manual));
     }
     fake.respond(
-        workflow_runs_path(&lab(), "rust-ci.yml", 7),
+        workflow_runs_path(&lab(), "ci.yml", 7),
         &list(&ordinary(NEWEST)),
     );
     let report = gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
