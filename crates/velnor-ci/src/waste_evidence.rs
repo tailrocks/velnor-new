@@ -3,7 +3,7 @@
 
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
