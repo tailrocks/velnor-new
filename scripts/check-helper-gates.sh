@@ -121,6 +121,7 @@ scan() {
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
   function versions(line, out,    rest, n, v, off, before, after) {
     n = 0
+    gsub(/"[^"\\]*"/, "\"\"", line)
     rest = line
     off = 0
     while (match(rest, /\(0, ?1, ?[0-9]+\)|0\.1\.[0-9]+/)) {
@@ -129,12 +130,17 @@ scan() {
       after = substr(rest, RSTART + RLENGTH)
       off += RSTART + RLENGTH - 1
       rest = after
-      if (substr(v, 1, 1) == "(" && (before == "!" || after ~ /^[ \t]*(=>|=([^=]|$))/)) continue
+      if (substr(v, 1, 1) == "(" && (before == "!" || after ~ /^[ \t]*(=>|=([^=]|$)|if[ \t]|\|)/)) continue
       gsub(/[() ]/, "", v)
       gsub(/,/, ".", v)
       out[++n] = v
     }
     return n
+  }
+  function const_item(s) {
+    if (s !~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?(const|static)[ \t]+(mut[ \t]+)?[A-Za-z_]/) return 0
+    if (s ~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?const[ \t]+(fn|unsafe|async|extern)[ \t(]/) return 0
+    return versions(s, cprobe) > 0
   }
   function marker(line, out,    m) {
     if (!match(line, /(^[ \t]*(\/\/|\/\*|\*)|[;,{}][ \t]*\/\/).*helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
@@ -179,7 +185,7 @@ scan() {
     markC_now = has ? mk["commit"] : ""
     delete mk
     if (has && versions(stripped, probe) == 0) next
-    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && (stripped !~ /^[ \t]*(pub(\([^)]*\))?[ \t]+)?(const|static)[ \t]+(mut[ \t]+)?[A-Za-z_]/ || stripped !~ /\(0, ?1, ?[0-9]+\)/ || stripped ~ /^[ \t]*(pub(\([^)]*\))?[ \t]+)?const[ \t]+(fn|unsafe|async|extern)[ \t(]/)) next
+    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && !const_item(stripped)) next
     added[++count] = file SUBSEP stripped
     markN[count] = markN_now
     markC[count] = markC_now
