@@ -134,6 +134,51 @@ fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn a_cargo_capable_archive_job_keeps_the_shared_store_steps_from_helper_0_1_112() -> TestResult {
+    let config = format!("mbx_shared_store = true\n{}", crate::test_groups::SHELL);
+    let text = workflow(&crate::test_groups::view_with(
+        &["Cargo.toml"],
+        &config,
+        "0.1.112",
+    )?)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+    let job = crate::test_groups::job(&yaml, "rust-test-shell")?;
+    let runs: Vec<&str> = job["steps"]
+        .as_array()
+        .ok_or("steps missing")?
+        .iter()
+        .filter_map(|s| s["run"].as_str())
+        .collect();
+    assert!(runs.iter().any(|run| run.contains(EXEC)), "{runs:?}");
+    assert!(runs.iter().any(|run| run.contains(SEED)), "{runs:?}");
+    Ok(())
+}
+
+#[test]
+fn a_one_job_lane_gates_the_shared_store_on_its_selection_from_helper_0_1_112() -> TestResult {
+    let text = workflow(&crate::test_groups::view_with(
+        &["Cargo.toml"],
+        "mbx_shared_store = true\n",
+        "0.1.112",
+    )?)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+    let mut stores = 0;
+    for (id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {
+        for step in job["steps"].as_array().ok_or("steps missing")? {
+            if step["run"].as_str().is_some_and(|run| run.contains(EXEC)) {
+                assert!(
+                    step.get("if").is_some(),
+                    "{id}: mbx-store runs without a selection gate"
+                );
+                stores += 1;
+            }
+        }
+    }
+    assert!(stores > 0);
+    Ok(())
+}
+
 fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], None)?;
     repo.files.insert(

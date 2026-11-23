@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, Platform};
+use velnor_model::{HelperRelease, Platform, RepoPath};
 
+use crate::cargo::{CargoLane, cache_debug_env, offline_env};
 use crate::mise_digest::pinned_sha256;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
-use crate::steps::{MISE, MISE_VERSION};
+use crate::steps::{MISE, MISE_VERSION, RUN};
 
 pub(crate) fn install_tools(only: Option<&str>) -> RenderedStep {
     let mut with = vec![
@@ -104,6 +105,49 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
             ),
             ("VELNOR_GEN_SHA256".to_owned(), Value::Expr(choice(digest))),
         ],
+        ..RenderedStep::default()
+    }
+}
+
+fn path_to_root(directory: Option<&RepoPath>) -> String {
+    directory.map_or_else(
+        || ".".to_owned(),
+        |directory| {
+            directory
+                .as_str()
+                .split('/')
+                .map(|_| "..")
+                .collect::<Vec<_>>()
+                .join("/")
+        },
+    )
+}
+
+pub(crate) fn generator_check_step(
+    from_source: bool,
+    directory: Option<&RepoPath>,
+    lane: CargoLane,
+) -> RenderedStep {
+    if !from_source {
+        return RenderedStep {
+            name: "Check the generated workflow".to_owned(),
+            run: Some("velnor-gen check --verify-release".to_owned()),
+            ..RenderedStep::default()
+        };
+    }
+    let offline = if lane.offline { " --offline" } else { "" };
+    RenderedStep {
+        name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
+        run: Some(format!(
+            "{RUN} cargo run --locked{offline} --target host-tuple --package velnor-gen --bin velnor-gen -- --root {} check --verify-release",
+            path_to_root(directory)
+        )),
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
         ..RenderedStep::default()
     }
 }
