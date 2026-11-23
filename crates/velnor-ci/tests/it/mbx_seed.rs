@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
+use velnor_ci::mbx_seed_copy::SUBSETS;
 
 use crate::io::Repo;
 
@@ -55,6 +56,12 @@ fn warm_seed(host: &Host) -> PathBuf {
         ("notice", "not copied"),
     ] {
         put(&seed.join(path), text);
+    }
+    for subset in SUBSETS {
+        assert!(
+            fs::read_dir(seed.join("actions").join(subset)).is_ok_and(|mut d| d.next().is_some()),
+            "the fixture holds no {subset} files that mbx-seed copies"
+        );
     }
     read_only(&seed);
     seed

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS};
+use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS, MAX_TOTAL_BYTES};
 use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
@@ -57,7 +57,8 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     };
     if reports.overflowed {
         metrics.verification_errors.push(format!(
-            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions or {MAX_ENTRIES} entries); the MBX session counts are unknown."
+            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions, {MAX_ENTRIES} entries or {} MiB in total); the MBX session counts are unknown.",
+            MAX_TOTAL_BYTES >> 20
         ));
         return (Vec::new(), 1);
     }
