@@ -50,7 +50,7 @@ fn git(repo: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn checkout(name: &str) -> std::path::PathBuf {
+fn checkout(name: &str) -> velnor_test_support::ScratchDir {
     let repo = temp_dir(name);
     git(&repo, &["init", "-q", "-b", "main"]);
     std::fs::create_dir_all(repo.join(".github/workflows")).unwrap_or_else(|e| unreachable!("{e}"));

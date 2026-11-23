@@ -3,20 +3,20 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use velnor_test_support::{is_mirror_wrapper, real_cargo};
 
 const PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 
-struct Checkout(PathBuf);
+struct Checkout(velnor_test_support::ScratchDir);
 
 impl Checkout {
     fn new(name: &str) -> Self {
         let dir = crate::scratch_path("velnor-ci-manifests", name);
-        fs::remove_dir_all(&dir).ok();
-        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(dir.path()).ok();
+        fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
         Self(dir)
     }
 
@@ -59,7 +59,7 @@ impl Checkout {
             .args(files)
             .arg("--manifests")
             .args(extra)
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .env_remove("RUSTUP_TOOLCHAIN");
         if let Some(toolchain) = toolchain {
             command.env("RUSTUP_TOOLCHAIN", toolchain);
@@ -79,12 +79,6 @@ impl Checkout {
     fn run_released(&self, files: &[&str]) -> (Option<i32>, String) {
         let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
         self.check_with(files, Some(&toolchain), &["--released-versions"])
-    }
-}
-
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).ok();
     }
 }
 
@@ -166,7 +160,7 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
     let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["release", "check-config", "release-plz.toml", "--manifests"])
-        .current_dir(&checkout.0)
+        .current_dir(checkout.0.path())
         .env("RUSTUP_TOOLCHAIN", toolchain)
         .env("RUSTC_WRAPPER", "must-be-removed")
         .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
@@ -210,7 +204,7 @@ fn a_cargo_config_hazard_is_refused_before_cargo_metadata_runs() {
     .unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["release", "check-config", "release-plz.toml", "--manifests"])
-        .current_dir(&checkout.0)
+        .current_dir(checkout.0.path())
         .env("RUSTUP_TOOLCHAIN", "stable")
         .env("PATH", path)
         .output()

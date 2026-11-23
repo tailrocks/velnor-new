@@ -174,11 +174,11 @@ fn pinned_nextest_problem(data_dir: Option<&std::path::Path>) -> Option<String> 
 
 #[test]
 fn nextest_discovery_names_the_missing_pin_before_running() {
-    let data_dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join("nextest-discovery-empty-mise-data");
-    fs::create_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
-    let problem = pinned_nextest_problem(Some(&data_dir));
-    fs::remove_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let data_dir = velnor_test_support::ScratchDir::new(
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join("nextest-discovery-empty-mise-data"),
+    );
+    let problem = pinned_nextest_problem(Some(data_dir.path()));
     let problem = problem.expect("an empty mise data directory has no pinned cargo-nextest");
     assert!(problem.contains("mise.toml"), "{problem}");
     assert!(problem.contains("`mise install`"), "{problem}");

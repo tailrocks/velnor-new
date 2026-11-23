@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
 use super::mbx_socket::SocketDir;
 use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -297,4 +298,66 @@ fn a_verification_only_report_is_a_session() {
             ..session(0, 0, 0)
         }))
     );
+}
+
+const WORKSPACE_CARGO: &str = "#!/bin/sh\nif [ \"$1\" = metadata ]; then printf '{\"packages\":[],\"workspace_root\":\"%s\",\"target_directory\":\"%s/target\"}' \"$PWD\" \"$PWD\"; exit 0; fi\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const TEST_STARTING_VELNOR_CI: &str =
+    "#!/bin/sh\nexec \"$VELNOR_CI\" inputs build -- cargo build\n";
+
+fn executable(path: &std::path::Path, script: &str) -> ResultTest {
+    fs::create_dir_all(path.parent().ok_or("parent")?)?;
+    fs::write(path, script)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+    Ok(())
+}
+
+fn job_step(repo: &super::Repo, command: &[&str], report: &str) -> ResultTest {
+    let path = format!(
+        "{}:{}",
+        repo.root().join("bin").display(),
+        std::env::var("PATH")?
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--"])
+        .args(command)
+        .current_dir(repo.root())
+        .env("PATH", path)
+        .env("RUNNER_TEMP", repo.root())
+        .env(SWITCH, "true")
+        .env("VELNOR_CI", env!("CARGO_BIN_EXE_velnor-ci"))
+        .env("FAKE_MBX_REPORT", report)
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("MBX_STATS_REPORT")
+        .env_remove("MBX_SOCKET")
+        .output()?;
+    assert!(output.status.success(), "{command:?}: {output:?}");
+    Ok(())
+}
+
+#[test]
+fn a_velnor_ci_that_the_projects_tests_start_adds_no_session_to_the_job() -> ResultTest {
+    let repo = fixture("mbx-reports-test-processes")?;
+    let runner = repo.root().join("test-runner");
+    executable(&repo.root().join("bin/cargo"), WORKSPACE_CARGO)?;
+    executable(&runner.join("cargo-nextest"), TEST_STARTING_VELNOR_CI)?;
+    executable(&runner.join("cargo"), TEST_STARTING_VELNOR_CI)?;
+    let wrapper = [env!("CARGO_BIN_EXE_velnor-ci"), "inputs", "build", "--"];
+    let nextest = runner.join("cargo-nextest");
+    let doctests = runner.join("cargo");
+    job_step(
+        &repo,
+        &[&wrapper[..], &["cargo", "build"]].concat(),
+        &report_json(5, 3, 0, 0),
+    )?;
+    let nextest = [nextest.to_str().ok_or("path")?, "nextest", "run"];
+    job_step(&repo, &[&wrapper[..], &nextest].concat(), "")?;
+    job_step(
+        &repo,
+        &[doctests.to_str().ok_or("path")?, "test", "--doc"],
+        "",
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(3, 0, 0)], "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
 }

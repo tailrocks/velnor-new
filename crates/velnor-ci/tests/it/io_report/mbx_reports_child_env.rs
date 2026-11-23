@@ -119,3 +119,32 @@ fn a_dead_session_whose_lease_is_free_loses_its_socket_and_gets_a_report() -> Re
     );
     Ok(())
 }
+
+#[test]
+fn a_live_enclosing_session_still_hides_the_reports_switch_from_a_foreign_child() -> ResultTest {
+    let repo = fixture("mbx-live-switch")?;
+    let bin = repo.root().join("fake-bin");
+    fs::create_dir_all(&bin)?;
+    let cargo = bin.join("cargo");
+    fs::write(
+        &cargo,
+        "#!/bin/sh\nprintf '%s' \"${VELNOR_MBX_REPORTS-unset}\" > \"$FAKE_CHILD_ENV\"\n",
+    )?;
+    fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755))?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
+    let _listener = UnixListener::bind(&socket)?;
+    let observed = repo.root().join("child-env");
+    let output = run_bounded(
+        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["run", "--", cargo.to_str().ok_or("path")?, "build"])
+            .current_dir(repo.root())
+            .env("RUNNER_TEMP", repo.root())
+            .env(SWITCH, "true")
+            .env("MBX_SOCKET", &socket)
+            .env("FAKE_CHILD_ENV", &observed),
+    )?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fs::read_to_string(&observed)?, "unset");
+    Ok(())
+}
