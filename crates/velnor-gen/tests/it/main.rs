@@ -77,6 +77,7 @@ mod detect;
 mod doc_steps;
 mod docs_on_pr;
 mod docs_run;
+mod download_retry;
 mod draft_skip_matrix;
 mod drift;
 mod events;

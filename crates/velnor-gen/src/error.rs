@@ -22,6 +22,13 @@ pub enum GenerateError {
     ReleaseToolchainPath,
     HelperNotPinned,
     GeneratorNotLocked(HelperVersion),
+    GeneratorLockLacksMacos {
+        version: HelperVersion,
+        runner: String,
+    },
+    GeneratorMacosX64 {
+        runner: String,
+    },
     HelperTooOld(HelperVersion),
     ConfigKeyHelperTooOld {
         file: String,
@@ -65,6 +72,14 @@ impl fmt::Display for GenerateError {
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
             Self::GeneratorNotLocked(v) => write!(f, "{}", generator_not_locked(v)),
+            Self::GeneratorLockLacksMacos { version, runner } => write!(
+                f,
+                "the generated-check lint on the macOS runner `{runner}` installs the pinned velnor-gen archive, but the velnor-gen entry of velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest; pin a release that lists a macos-arm64 velnor-gen archive with `velnor-gen pin-helper <version>`, or use a Linux runner"
+            ),
+            Self::GeneratorMacosX64 { runner } => write!(
+                f,
+                "the generated-check lint on the macOS x64 runner `{runner}` would install a velnor-gen archive, but velnor-gen ships only linux and macos-arm64 archives; use a Linux runner or a macOS arm64 runner",
+            ),
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),

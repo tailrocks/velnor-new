@@ -50,6 +50,14 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include:
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-gen) and test(=download_retry::a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_bytes)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and test(=download_retry::a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_bytes)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
 slow-timeout = { period = "10s", terminate-after = 1 }
 

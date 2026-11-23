@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, Platform,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, MisePlatform, Platform,
     PushAfterMergeGroup, RELEASE_CONFIG_PATH, RepoFacts, RepoView, WORKFLOWS_CONFIG_PATH,
 };
 
@@ -25,14 +25,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     if !release.version().at_least(HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
-    if facts
-        .config
-        .runner
-        .as_str()
-        .to_ascii_lowercase()
-        .starts_with("macos")
-        && !release.digests().contains_key(&Platform::MacosArm64)
-    {
+    if is_macos(facts) && !release.digests().contains_key(&Platform::MacosArm64) {
         return Err(GenerateError::HelperLockLacksMacos {
             version: release.version().clone(),
             runner: facts.config.runner.to_string(),
@@ -88,10 +81,43 @@ fn require_generator_digests(
         .lint
         .iter()
         .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }));
-    if wanted && release.generator_digests().is_none() {
+    if !wanted {
+        return Ok(());
+    }
+    if is_macos_x64(facts) {
+        return Err(GenerateError::GeneratorMacosX64 {
+            runner: facts.config.runner.to_string(),
+        });
+    }
+    let Some(digests) = release.generator_digests() else {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
+    };
+    let installs_archive = facts.config.lint.iter().any(|lint| {
+        matches!(
+            lint.kind,
+            LintKind::GeneratedCheck {
+                from_source: false,
+                ..
+            }
+        )
+    });
+    if installs_archive && is_macos(facts) && !digests.contains_key(&Platform::MacosArm64) {
+        return Err(GenerateError::GeneratorLockLacksMacos {
+            version: release.version().clone(),
+            runner: facts.config.runner.to_string(),
+        });
     }
     Ok(())
+}
+
+fn is_macos(facts: &RepoFacts) -> bool {
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos"))
+}
+
+fn is_macos_x64(facts: &RepoFacts) -> bool {
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos/x64"))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
