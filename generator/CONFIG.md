@@ -134,7 +134,7 @@ Mise-managed Cargo retains its configured command wrappers, including MBX, and t
 
 Writing the configuration only above the checkout misses temporary directories. Writing it only in Cargo's home misses a changed home. A configuration at `/.cargo/config.toml` would reach unrelated directories but needs filesystem-root access and changes unrelated jobs. The wrapper uses a per-job configuration instead.
 
-This repository selects its scale-set runner and names its mirror in this configuration. Its hand-maintained `ci.yml` is separate from the generator and does not consume this setting. Running a generated Rust workflow requires the compatible helper release.
+This repository selects its scale-set runner and names its mirror in this configuration. The generated workflow `.github/workflows/ci.yml` consumes this setting. The hand-maintained `.github/workflows/repository-checks.yml` does not. Running a generated Rust workflow requires the compatible helper release.
 
 ## Optional private dependencies
 
@@ -608,7 +608,7 @@ Every tool a lint entry needs is checked at generation. The tool must be pinned 
 
 ### Skipping a lint on an unrelated pull request
 
-A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it. A tracked symlink that an input, one of these files or a folder on their path reaches also runs the lint on every pull request, because the change list names the target and not the link; a changed path that is a folder on the path to an input (a deleted symlink to a folder) runs it too. A lint the plan leaves out is listed in the step summary and in `velnor-ci plan --explain` with its reason.
+A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it. A tracked symlink that an input, one of these files or a folder on their path reaches also runs the lint on every pull request, because the change list names the target and not the link; a changed path that is a folder on the path to an input (a deleted symlink to a folder) runs it too. A lint the plan leaves out is listed in the step summary and in `velnor-ci plan --explain` with its reason.
 
 Narrow `inputs` on a tool that checks the whole tree (`alint`, `jactionlint`) skip the pull requests that change files the tool checks, so declare broad globs for such a tool or leave `inputs` unset. Declare every local override file the tool reads as well (for example `hk.local.pkl` next to `hk.pkl`): the plan only knows the globs and the files listed above.
 
@@ -758,7 +758,7 @@ A check job checks out the verified commit without persisting credentials, and r
 
 ## Declared workflows
 
-`.velnor/workflows.toml` makes the generator write one workflow file, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is the only place that declares extra workflows: the `[[workflow]]` table of the earlier `fast/1290-source-preview` draft in `rust-ci.toml` is gone, and the reusable-workflow section that stood here is replaced by this one. The file is off when it is absent, and then the generated files are byte-identical to the output without it. `file` is lower case letters, digits and dashes; `rust-ci` and `release` belong to other outputs and are refused. A workflow sets `permissions: {}` at the top, and each job lists only the scopes it names. The samples `reusable-workflows`, `declared-workflow` and `declared-workflows` use every key below.
+`.velnor/workflows.toml` makes the generator write one workflow file, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is the only place that declares extra workflows: the `[[workflow]]` table of the earlier `fast/1290-source-preview` draft in `rust-ci.toml` is gone, and the reusable-workflow section that stood here is replaced by this one. The file is off when it is absent, and then the generated files are byte-identical to the output without it. `file` is lower case letters, digits and dashes; `ci` and `release` belong to other outputs and are refused. A workflow sets `permissions: {}` at the top, and each job lists only the scopes it names. The samples `reusable-workflows`, `declared-workflow` and `declared-workflows` use every key below.
 
 ```toml
 [[workflow]]
@@ -904,7 +904,7 @@ A `[[workflow.case]]` is one qualification case that runs on a hosted runner and
 
 ### Later
 
-A `workflow_run` name is checked for form only, not against the workflows that exist: the generator reads the names of declared workflows from this file and does not read the `name:` of a hand-written file or of `rust-ci` (which is configurable), so a name that matches nothing is a workflow that never starts.
+A `workflow_run` name is checked for form only, not against the workflows that exist: the generator reads the names of declared workflows from this file and does not read the `name:` of a hand-written file or of the CI workflow (that name is `CI`), so a name that matches nothing is a workflow that never starts.
 
 ## CI on a pull request only on request
 
@@ -955,7 +955,7 @@ These top-level keys of `.velnor/release.toml` sit beside `[[binaries]]`, `[[che
 The `release-pr` job's `permissions:` shows `contents: read`, but it mints a GitHub App token with `contents` and `pull-requests` write for release-plz, gated to default-branch pushes and `environment: release`.
 
 - `roots` is the list of Cargo root folders that the release reads. It is `["."]` by default. Each root is a relative folder with no leading `/` or `-` and no empty, `.` or `..` part. `"."` alone is the repository root. An expression is refused.
-- `after` is the list of workflow names that the release follows with `workflow_run`. It is `["Rust CI"]` by default. The list may not be empty or hold a blank name, and a name that no workflow has is an error.
+- `after` is the list of workflow names that the release follows with `workflow_run`. It is `["CI"]` by default. The list may not be empty or hold a blank name, and a name that no workflow has is an error.
 - `pr_only_checks` is a list of required checks that run only on pull requests. The release gate does not wait for them on the tagged commit. Each name must be a required check of the default branch, and each name is listed once; blank and repeated names are refused. It is refused together with `family_required_checks = false`.
 
 ## Release binaries and their Cargo profile

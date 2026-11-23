@@ -1,6 +1,6 @@
 # Wave C performance audit
 
-Read-only W0 audit, 3 October 2026. Scope is the five ChainArgos consumers in
+Read-only W0 audit, 3 October 2026. Scope is the five example-org consumers in
 the exact 47-repository inventory. No dispatch, push, merge, protection change,
 release, or deployment occurred. The latest explicit execution instruction
 selects `gpt-6.1-sol` with medium reasoning for delegated work.
@@ -17,11 +17,11 @@ is shared from `/tmp/velnor-ci-performance-scope-audit/`.
 
 | Repository | Visibility | Audited default SHA | Migration PR | Qualification |
 |---|---|---|---|---|
-| `ChainArgos/blockchain-nodes` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | [729](https://github.com/ChainArgos/blockchain-nodes/pull/729) | INCOMPLETE |
-| `ChainArgos/java-monorepo` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | [2081](https://github.com/ChainArgos/java-monorepo/pull/2081) | INCOMPLETE |
-| `ChainArgos/jackin-agent-brown` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | [243](https://github.com/ChainArgos/jackin-agent-brown/pull/243) | INCOMPLETE |
-| `ChainArgos/cloudflare-tofu` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | [6](https://github.com/ChainArgos/cloudflare-tofu/pull/6) | INCOMPLETE |
-| `ChainArgos/github-terraform` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | [14](https://github.com/ChainArgos/github-terraform/pull/14) | INCOMPLETE |
+| `example-org/example-repo-1` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 | INCOMPLETE |
+| `example-org/example-repo-2` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | 2081 | INCOMPLETE |
+| `example-org/example-repo-9` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 | INCOMPLETE |
+| `example-org/example-repo-10` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 | INCOMPLETE |
+| `example-org/example-repo-5` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | 14 | INCOMPLETE |
 
 All five remain `INCOMPLETE`: this audit precedes qualified regeneration and
 rollout. No controlled isolated cold/warm/third-run experiment exists for these
@@ -35,11 +35,11 @@ claim. Attempts are 1 unless the external index records otherwise.
 
 | Repository | PR run | Default run | Observed execution |
 |---|---|---|---|
-| `ChainArgos/blockchain-nodes` | [37027342900](https://github.com/ChainArgos/blockchain-nodes/actions/runs/37027342900) | [37028375599](https://github.com/ChainArgos/blockchain-nodes/actions/runs/37028375599) | success; prior coverage differs |
-| `ChainArgos/java-monorepo` | [37026992841](https://github.com/ChainArgos/java-monorepo/actions/runs/37026992841) | [37027060262](https://github.com/ChainArgos/java-monorepo/actions/runs/37027060262) | failed validation; baseline unavailable |
-| `ChainArgos/jackin-agent-brown` | [37027272296](https://github.com/ChainArgos/jackin-agent-brown/actions/runs/37027272296) | [37027341624](https://github.com/ChainArgos/jackin-agent-brown/actions/runs/37027341624) | success with no selected substantive work |
-| `ChainArgos/cloudflare-tofu` | [37026608163](https://github.com/ChainArgos/cloudflare-tofu/actions/runs/37026608163) | [37026620591](https://github.com/ChainArgos/cloudflare-tofu/actions/runs/37026620591) | substantive success; performance unqualified |
-| `ChainArgos/github-terraform` | [37026792292](https://github.com/ChainArgos/github-terraform/actions/runs/37026792292) | [37026808351](https://github.com/ChainArgos/github-terraform/actions/runs/37026808351) | substantive success; performance unqualified |
+| `example-org/example-repo-1` | 37027342900 | 37028375599 | success; prior coverage differs |
+| `example-org/example-repo-2` | 37026992841 | 37027060262 | failed validation; baseline unavailable |
+| `example-org/example-repo-9` | 37027272296 | 37027341624 | success with no selected substantive work |
+| `example-org/example-repo-10` | 37026608163 | 37026620591 | substantive success; performance unqualified |
+| `example-org/example-repo-5` | 37026792292 | 37026808351 | substantive success; performance unqualified |
 
 Historical repetitive release output has been parsed and compared across every
 job, step, command, action, option and security attribute; unique patterns were
@@ -67,11 +67,11 @@ the verdict does not rely on a successful run summary or a file index.
 
 | Repository | Current source and relevant diffs | Representative PR/default executed raw logs | Remaining historical evidence limit |
 |---|---|---|---|
-| `ChainArgos/blockchain-nodes` | inspected; omitted API bodies recovered | 4 / 5; skipped PR baseline accounted | no missing representative log; additional prior job logs inspected |
-| `ChainArgos/java-monorepo` | inspected; omitted API bodies recovered | 23 / 23; failed-run baseline skips accounted | completed later candidate separately inspected; old pending-run 404 superseded |
-| `ChainArgos/jackin-agent-brown` | inspected; repeated commands fully compared | 3 / 4; skipped PR baseline accounted | six historical empty archives and three HTTP 404 retained without inferred cause |
-| `ChainArgos/cloudflare-tofu` | inspected; merged versus proposed changes distinguished | 5 / 6; skipped PR baseline accounted | seven historical empty archives and one HTTP 404 retained |
-| `ChainArgos/github-terraform` | inspected; provider/policy path omissions corrected | nine executed raw jobs across PR/default; skipped baseline accounted | 21 historical/skipped/queued HTTP 404 retained without inferred cause |
+| `example-org/example-repo-1` | inspected; omitted API bodies recovered | 4 / 5; skipped PR baseline accounted | no missing representative log; additional prior job logs inspected |
+| `example-org/example-repo-2` | inspected; omitted API bodies recovered | 23 / 23; failed-run baseline skips accounted | completed later candidate separately inspected; old pending-run 404 superseded |
+| `example-org/example-repo-9` | inspected; repeated commands fully compared | 3 / 4; skipped PR baseline accounted | six historical empty archives and three HTTP 404 retained without inferred cause |
+| `example-org/example-repo-10` | inspected; merged versus proposed changes distinguished | 5 / 6; skipped PR baseline accounted | seven historical empty archives and one HTTP 404 retained |
+| `example-org/example-repo-5` | inspected; provider/policy path omissions corrected | nine executed raw jobs across PR/default; skipped baseline accounted | 21 historical/skipped/queued HTTP 404 retained without inferred cause |
 
 No missing representative executed-job log requires retrieval in the bounded W0
 scope. Unknown compiler CPU, precise linking, unsupported download/transfer
@@ -93,7 +93,7 @@ repository-wide disposition. Current generated success therefore cannot prove
 equivalence to the previous workflow family. Private findings and exact workload
 contracts remain in external evidence for upstream implementation and review.
 
-For public `blockchain-nodes`, PR #729 removes the previous Docker validation
+For public `example-repo-1`, PR #729 removes the previous Docker validation
 and tag publishing families while Docker inputs remain in the repository.
 The generated current run succeeds on a much narrower workload. The old DCO
 workflow was removed, but a separate DCO commit status supplies a successful

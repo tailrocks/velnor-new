@@ -69,7 +69,7 @@ fn the_update_switch_leaves_the_expected_files_alone_when_it_is_zero() -> TestRe
     )?;
     let workflow = root
         .0
-        .join("single-crate/expected/.github/workflows/rust-ci.yml");
+        .join("single-crate/expected/.github/workflows/ci.yml");
     fs::write(&workflow, "stale\n")?;
     let output = run(GOLDEN_TEST, &root.0, "0")?;
     assert!(
@@ -90,7 +90,7 @@ fn the_update_switch_rewrites_the_expected_files_when_it_is_one() -> TestResult 
     )?;
     let workflow = root
         .0
-        .join("single-crate/expected/.github/workflows/rust-ci.yml");
+        .join("single-crate/expected/.github/workflows/ci.yml");
     fs::write(&workflow, "stale\n")?;
     let output = run(GOLDEN_TEST, &root.0, "1")?;
     assert!(

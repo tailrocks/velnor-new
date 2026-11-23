@@ -61,7 +61,7 @@ pub(crate) fn classify<'c>(
     if let Some(trigger) = global(path, is_root_manifest) {
         return Class::Global(trigger);
     }
-    // velnor-gen owns this workflow and it runs no Rust code; rust-ci.yml is matched above.
+    // velnor-gen owns this workflow and it runs no Rust code; ci.yml is matched above.
     if generated {
         return Class::Nothing;
     }
