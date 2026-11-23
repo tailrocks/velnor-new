@@ -166,3 +166,15 @@ fn a_symlink_inside_a_hooks_tree_is_removed_without_touching_its_target() {
     assert_eq!(left, 3);
     assert!(gone);
 }
+
+#[test]
+fn an_object_store_probe_in_a_refs_namespace_counts_against_the_entry_budget() {
+    let root = home("probe-budget");
+    let namespace = database(&root).join("refs/heads/vendor");
+    tree(&namespace.join("objects"), 500);
+    fs::write(namespace.join("HEAD"), "ref: refs/heads/main\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let found = find_within(&root.join(".cargo"), 800);
+    drop(fs::remove_dir_all(&root));
+    assert!(found.is_some_and(|reason| reason.contains("too many entries")));
+}

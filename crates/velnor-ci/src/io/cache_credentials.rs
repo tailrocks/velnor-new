@@ -126,6 +126,17 @@ fn shown(path: &Path) -> String {
     inert(&path.display().to_string())
 }
 
+fn charge(budget: &mut usize, directory: &Path) -> Result<(), String> {
+    let Some(left) = budget.checked_sub(1) else {
+        return Err(format!(
+            "{} holds too many entries to scan",
+            shown(directory)
+        ));
+    };
+    *budget = left;
+    Ok(())
+}
+
 fn list(directory: &Path, budget: &mut usize) -> Result<Vec<fs::DirEntry>, String> {
     let entries = fs::read_dir(directory).map_err(|error| {
         format!(
@@ -136,13 +147,7 @@ fn list(directory: &Path, budget: &mut usize) -> Result<Vec<fs::DirEntry>, Strin
     })?;
     let mut listed = Vec::new();
     for entry in entries {
-        let Some(left) = budget.checked_sub(1) else {
-            return Err(format!(
-                "{} holds too many entries to scan",
-                shown(directory)
-            ));
-        };
-        *budget = left;
+        charge(budget, directory)?;
         listed.push(entry.map_err(|_| format!("cannot list {}", shown(directory)))?);
     }
     listed.sort_by_key(fs::DirEntry::file_name);
@@ -182,7 +187,10 @@ fn walk(
     let databases = depth == 0 && context.git();
     let is_git_directory = context == Context::Declared
         || if context.names_refs() {
-            is_repository_in_refs(directory, &listed)
+            match is_repository_in_refs(directory, &listed, budget) {
+                Ok(found) => found,
+                Err(reason) => return Some(reason),
+            }
         } else {
             is_git_directory(&listed)
         };
@@ -256,24 +264,35 @@ fn is_git_directory(listed: &[fs::DirEntry]) -> bool {
         && (has_entry(listed, CONFIG, false) || has_entry(listed, OBJECTS, true))
 }
 
-fn is_repository_in_refs(directory: &Path, listed: &[fs::DirEntry]) -> bool {
-    has_entry(listed, HEAD, false)
-        && (has_object_store(listed)
-            || (has_entry(listed, CONFIG, false) && !is_object_id(&directory.join(CONFIG))))
+fn is_repository_in_refs(
+    directory: &Path,
+    listed: &[fs::DirEntry],
+    budget: &mut usize,
+) -> Result<bool, String> {
+    if !has_entry(listed, HEAD, false) {
+        return Ok(false);
+    }
+    Ok(has_object_store(listed, budget)?
+        || (has_entry(listed, CONFIG, false) && !is_object_id(&directory.join(CONFIG))))
 }
 
-fn has_object_store(listed: &[fs::DirEntry]) -> bool {
-    listed
-        .iter()
-        .find(|entry| {
-            entry.file_name().eq_ignore_ascii_case(OBJECTS)
-                && entry.file_type().is_ok_and(|kind| kind.is_dir())
-        })
-        .and_then(|objects| fs::read_dir(objects.path()).ok())
-        .is_some_and(|inner| {
-            let inner: Vec<_> = inner.flatten().collect();
-            has_entry(&inner, OBJECT_INFO, true) && has_entry(&inner, OBJECT_PACK, true)
-        })
+fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool, String> {
+    let Some(objects) = listed.iter().find(|entry| {
+        entry.file_name().eq_ignore_ascii_case(OBJECTS)
+            && entry.file_type().is_ok_and(|kind| kind.is_dir())
+    }) else {
+        return Ok(false);
+    };
+    let path = objects.path();
+    let Ok(entries) = fs::read_dir(&path) else {
+        return Ok(false);
+    };
+    let mut inner = Vec::new();
+    for entry in entries.flatten() {
+        charge(budget, &path)?;
+        inner.push(entry);
+    }
+    Ok(has_entry(&inner, OBJECT_INFO, true) && has_entry(&inner, OBJECT_PACK, true))
 }
 
 fn is_object_id(path: &Path) -> bool {
