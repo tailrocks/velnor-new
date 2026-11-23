@@ -27,6 +27,11 @@ pub const BUILT_OUTPUT: &str = "built";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
+/// The wire form of a package map with no packages. GitHub drops empty job
+/// outputs from the needs context, so the emitter writes this instead of an
+/// empty string: a present `{}` proves the test step ran and reconciled zero
+/// packages, while an absent map stays fail-closed.
+pub const EMPTY_PACKAGE_MAP: &str = "{}";
 pub const MERGE_GROUP_STEP: &str = "merge_group";
 pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";

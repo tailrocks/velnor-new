@@ -33,8 +33,7 @@ fn selected() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
-#[test]
-fn a_lone_job_that_listed_and_ran_no_tests_fails() -> TestResult {
+fn lone_needs(map: Option<&str>) -> Result<BTreeMap<JobId, Need>, Box<dyn std::error::Error>> {
     let mut needs = BTreeMap::new();
     needs.insert(
         JobId::new("rust-plan")?,
@@ -58,6 +57,9 @@ fn a_lone_job_that_listed_and_ran_no_tests_fails() -> TestResult {
             outputs.insert("tests_run".to_owned(), "0".to_owned());
             outputs.insert("tests_listed".to_owned(), "0".to_owned());
             outputs.insert("tests_ignored".to_owned(), "0".to_owned());
+            if let Some(map) = map {
+                outputs.insert("tests_by_package".to_owned(), map.to_owned());
+            }
         }
         needs.insert(
             JobId::new(job)?,
@@ -67,7 +69,26 @@ fn a_lone_job_that_listed_and_ran_no_tests_fails() -> TestResult {
             },
         );
     }
-    let verdict = decide(&spec()?, &needs, Some("pull_request"));
+    Ok(needs)
+}
+
+#[test]
+fn a_lone_job_without_a_package_map_fails_as_missing_evidence() -> TestResult {
+    let verdict = decide(&spec()?, &lone_needs(None)?, Some("pull_request"));
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict
+            .table()
+            .contains("tests_by_package is missing or malformed in a test job of root"),
+        "{}",
+        verdict.table()
+    );
+    Ok(())
+}
+
+#[test]
+fn a_lone_job_that_reports_the_empty_map_fails_as_a_zero_test_lane() -> TestResult {
+    let verdict = decide(&spec()?, &lone_needs(Some("{}"))?, Some("pull_request"));
     assert!(!verdict.passed, "{}", verdict.table());
     assert!(
         verdict

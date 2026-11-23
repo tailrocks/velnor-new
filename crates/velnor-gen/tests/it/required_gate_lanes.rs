@@ -172,12 +172,32 @@ fn shard_needs(
     run: &str,
     listed: &str,
     map: Option<&str>,
+    sibling_ran: bool,
 ) -> Result<BTreeMap<JobId, Need>, Box<dyn std::error::Error>> {
     let owned = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
         pairs
             .iter()
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect()
+    };
+    let sibling = if sibling_ran {
+        owned(&[
+            ("tests_run", "4"),
+            ("tests_listed", "4"),
+            ("tests_ignored", "0"),
+            ("tests_by_package", "pkg=4/4"),
+        ])
+    } else {
+        let mut empty = owned(&[
+            ("tests_run", "0"),
+            ("tests_listed", "0"),
+            ("tests_ignored", "0"),
+        ]);
+        empty.insert(
+            "tests_by_package".to_owned(),
+            map.unwrap_or("{}").to_owned(),
+        );
+        empty
     };
     let mut shard = owned(&[
         ("tests_run", run),
@@ -206,12 +226,7 @@ fn shard_needs(
             JobId::new("rust-test-a")?,
             Need {
                 result: Some("success".to_owned()),
-                outputs: owned(&[
-                    ("tests_run", "4"),
-                    ("tests_listed", "4"),
-                    ("tests_ignored", "0"),
-                    ("tests_by_package", "pkg=4/4"),
-                ]),
+                outputs: sibling,
             },
         ),
         (
@@ -232,8 +247,23 @@ fn shard_needs(
 }
 
 #[test]
-fn a_shard_whose_filter_matched_no_tests_passes_while_another_shard_ran_some() -> TestResult {
-    let needs = shard_needs("0", "0", None)?;
+fn a_shard_without_a_package_map_fails_even_while_another_shard_ran_some() -> TestResult {
+    let needs = shard_needs("0", "0", None, true)?;
+    let verdict = decide(&spec()?, &needs, Some("pull_request"));
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict
+            .table()
+            .contains("tests_by_package is missing or malformed in a test job of root"),
+        "{}",
+        verdict.table()
+    );
+    Ok(())
+}
+
+#[test]
+fn a_shard_that_reports_the_empty_map_passes_while_another_shard_ran_some() -> TestResult {
+    let needs = shard_needs("0", "0", Some("{}"), true)?;
     let verdict = decide(&spec()?, &needs, Some("pull_request"));
     assert!(verdict.passed, "{}", verdict.table());
     assert!(
@@ -245,8 +275,61 @@ fn a_shard_whose_filter_matched_no_tests_passes_while_another_shard_ran_some() -
 }
 
 #[test]
+fn a_skipped_shard_with_the_empty_map_passes_while_another_shard_ran_some() -> TestResult {
+    let mut needs = shard_needs("0", "0", Some("{}"), true)?;
+    needs
+        .get_mut(&JobId::new("rust-test-b")?)
+        .ok_or("no shard")?
+        .outputs
+        .remove("tests_ignored");
+    let verdict = decide(&spec()?, &needs, Some("pull_request"));
+    assert!(verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict.table().contains("Required: pass"),
+        "{}",
+        verdict.table()
+    );
+    Ok(())
+}
+
+#[test]
+fn a_lane_where_every_shard_reports_no_tests_fails() -> TestResult {
+    let needs = shard_needs("0", "0", Some("{}"), false)?;
+    let verdict = decide(&spec()?, &needs, Some("pull_request"));
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict
+            .table()
+            .contains("a test job of root listed no tests and ran none"),
+        "{}",
+        verdict.table()
+    );
+    Ok(())
+}
+
+#[test]
+fn a_lane_where_every_shard_is_skipped_fails_without_ignored_counts() -> TestResult {
+    let mut needs = shard_needs("0", "0", Some("{}"), false)?;
+    for job in ["rust-test-a", "rust-test-b"] {
+        let id = JobId::new(job)?;
+        let need = needs.get_mut(&id).ok_or("no shard")?;
+        need.outputs.remove("tests_ignored");
+    }
+    let verdict = decide(&spec()?, &needs, Some("pull_request"));
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict
+            .table()
+            .contains("a test job of root listed no tests and ran none"),
+        "{}",
+        verdict.table()
+    );
+    Ok(())
+}
+
+#[test]
 fn a_shard_that_ran_none_of_its_listed_tests_still_needs_its_package_map() -> TestResult {
-    let needs = shard_needs("0", "3", None)?;
+    let needs = shard_needs("0", "3", None, true)?;
     let verdict = decide(&spec()?, &needs, Some("pull_request"));
     assert!(!verdict.passed, "{}", verdict.table());
     assert!(

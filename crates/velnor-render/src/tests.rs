@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, Job, RootSlug, StepKind, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    CargoCommand, EMPTY_PACKAGE_MAP, Job, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
 
 use crate::cargo::reports_tests;
 
@@ -41,11 +44,21 @@ impl Tests {
 
     fn read(&self, id: &str, name: &str) -> String {
         let output = format!("steps.{id}.outputs.{name}");
-        if self.skippable && [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
-            format!("${{{{ {output} || '0' }}}}")
-        } else {
-            format!("${{{{ {output} }}}}")
+        if !self.skippable {
+            return format!("${{{{ {output} }}}}");
         }
+        if [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
+            return format!("${{{{ {output} || '0' }}}}");
+        }
+        if name == TESTS_BY_PACKAGE_OUTPUT {
+            // A skipped step leaves every output absent. For a selection-gated
+            // step that means nothing was selected, so the job reports the
+            // explicit empty map the gate accepts; a step that ran emits it
+            // itself. Either way a present map proves the outcome, while an
+            // absent one on a non-skippable job stays fail-closed.
+            return format!("${{{{ {output} || '{EMPTY_PACKAGE_MAP}' }}}}");
+        }
+        format!("${{{{ {output} }}}}")
     }
 
     pub(crate) fn id(&self, slug: Option<&RootSlug>) -> String {
