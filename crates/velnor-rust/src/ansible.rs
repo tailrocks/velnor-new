@@ -19,8 +19,11 @@ pub use select::ansible_runs;
 pub(super) const LAYOUT: &str = "ansible-configs/";
 const REQUIREMENTS_TXT: RepoPath = RepoPath::from_static("ansible-configs/requirements.txt");
 const REQUIREMENTS_YAML: RepoPath = RepoPath::from_static("ansible-configs/requirements.yaml");
-const INSTALL: &str = "python3 -m pip install --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r ansible-configs/requirements.txt";
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
+const INSTALL: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r ansible-configs/requirements.txt";
+const REMOVE_TOOLS: &str =
+    "rm -rf \"$RUNNER_TEMP/ansible/ansible\" \"$RUNNER_TEMP/ansible/ansiblelint\"";
+const HOOKS: &str = "python3 -c '(lambda d: (d.mkdir(parents=True, exist_ok=True), (d/\"sitecustomize.py\").write_text(\"\"), (d/\"usercustomize.py\").write_text(\"\")))(__import__(\"pathlib\").Path(__import__(\"os\").environ[\"RUNNER_TEMP\"])/\"ansible-clean\")'";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
 const RUN_LIMIT: usize = 2000;
 
 pub const ANSIBLE_SLUG: RootSlug = RootSlug::from_static("ansible");
@@ -75,8 +78,16 @@ fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath], reinstall: &pins::Rein
         run: reinstall.write.clone(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
+        name: "Remove planted Ansible modules".to_owned(),
+        run: REMOVE_TOOLS.to_owned(),
+    }));
+    ansible.steps.push(step(StepKind::Ansible {
         name: "Install ansible-core and ansible-lint".to_owned(),
         run: reinstall.install.clone(),
+    }));
+    ansible.steps.push(step(StepKind::Ansible {
+        name: "Install empty Python site hooks".to_owned(),
+        run: HOOKS.to_owned(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
         name: "Install collections".to_owned(),

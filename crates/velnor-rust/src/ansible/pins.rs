@@ -9,7 +9,7 @@ use super::refuse;
 use crate::error::DetectError;
 
 const TOOLS: [&str; 2] = ["ansible-core", "ansible-lint"];
-const INSTALL: &str = "python3 -m pip install --upgrade --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-tools.txt\"";
+const INSTALL: &str = "python3 -m pip install --upgrade --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-tools.txt\"";
 
 struct Pin {
     spec: String,

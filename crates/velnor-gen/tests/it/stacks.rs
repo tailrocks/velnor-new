@@ -61,7 +61,7 @@ pub(crate) fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), B
     Ok(())
 }
 
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
 
 pub(crate) fn ansible_repository(
     playbook: &str,
@@ -156,7 +156,7 @@ fn an_ansible_repository_without_cargo_writes_one_ci_workflow_and_no_rust_job() 
     let syntax = command(&steps, "--syntax-check")?;
     assert!(syntax.starts_with(PREFIX), "{syntax}");
     assert!(syntax.contains("'ansible-configs/site.yml'"), "{syntax}");
-    let lint = command(&steps, "ansiblelint")?;
+    let lint = command(&steps, "python3 -m ansiblelint")?;
     assert!(lint.starts_with(PREFIX), "{lint}");
     let workflows: Vec<_> = files
         .keys()
@@ -349,7 +349,7 @@ fn an_extra_hashed_requirement_cannot_replace_the_imported_ansible_tools() -> Te
     assert!(!writer.contains(&extra), "{writer}");
     let import_at = steps
         .iter()
-        .position(|run| run.contains("PYTHONPATH=\"$RUNNER_TEMP/ansible\""))
+        .position(|run| run.contains(PREFIX))
         .ok_or("no step imports the Ansible target")?;
     let second = &steps[pip_at[1]];
     assert!(pip_at[0] < writer_at && writer_at < pip_at[1] && pip_at[1] < import_at);
