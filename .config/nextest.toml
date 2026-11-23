@@ -251,6 +251,14 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = "package(=velnor-ci) and test(=cache_credential_scrub_cargo::a_restored_git_database_without_hooks_fetch_head_or_logs_still_serves_real_cargo)"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = "package(=velnor-ci) and test(=cache_credential_scrub_cargo::a_restored_git_database_without_hooks_fetch_head_or_logs_still_serves_real_cargo)"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
