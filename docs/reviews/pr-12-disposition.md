@@ -362,7 +362,7 @@ scripts/ci-performance-analysis-requirements.txt
 ## Separate archive and consumer holds
 
 **Archive status: TEMPORARY-HOLD.** The local candidate at
-`/private/tmp/velnor-owned-source-archive-candidate-20261004` is unpublished and
+`<tmp>/velnor-owned-source-archive-candidate-20261004` is unpublished and
 not durable. A live `ls-remote` on 2026-10-04 returned all eight owned-source
 refs, including these six in-scope tips; none was deleted.
 

@@ -225,10 +225,12 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
             return newest_anchor_step(crate::steps::CACHE_SAVE, false, false);
         }
-        Verb::AnchorSaveAttempt => {
+        Verb::AnchorSaveAttempt if *anchor == ToolsAnchor::Recorded => {
             return newest_anchor_step(crate::steps::CACHE_SAVE, false, true);
         }
-        Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
+        Verb::AnchorSave | Verb::AnchorSaveAttempt => {
+            return anchor_cache_step(crate::steps::CACHE_SAVE, "Save");
+        }
         Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true, false),
         Verb::AnchorFindAttempt => {
             return newest_anchor_step(crate::steps::CACHE_RESTORE, true, true);
@@ -342,5 +344,47 @@ fn tools_saved_step() -> RenderedStep {
         )],
         run: Some("velnor-ci cache check --success \"$CACHE_OK\"".to_owned()),
         ..RenderedStep::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_model::{AnchorSource, ToolsAnchor, ToolsLocalVerb};
+
+    use super::tools_local_step;
+
+    #[test]
+    fn an_unrecorded_anchor_saves_by_the_fixed_key_whichever_save_verb_asks() {
+        for anchor in [
+            ToolsAnchor::Unanchored,
+            ToolsAnchor::Restored(AnchorSource::ThisJob),
+        ] {
+            let fixed = tools_local_step(ToolsLocalVerb::AnchorSave, &anchor);
+            assert_eq!(
+                tools_local_step(ToolsLocalVerb::AnchorSaveAttempt, &anchor),
+                fixed
+            );
+        }
+    }
+
+    fn save_key(step: &crate::rules::RenderedStep) -> String {
+        step.with
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                ("key", crate::rules::Value::Expr(key)) => Some(key.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_recorded_anchor_saves_by_the_run_key_or_the_run_attempt_key_as_asked() {
+        let run = tools_local_step(ToolsLocalVerb::AnchorSave, &ToolsAnchor::Recorded);
+        let attempt = tools_local_step(ToolsLocalVerb::AnchorSaveAttempt, &ToolsAnchor::Recorded);
+        assert!(save_key(&run).ends_with("-${{ github.run_id }}-${{ github.job }}"));
+        assert!(
+            save_key(&attempt)
+                .ends_with("-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}")
+        );
     }
 }

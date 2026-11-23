@@ -2,7 +2,7 @@
   "schema": 1,
   "source_commit": "714714ad9aef04cd445f59b972d52f82dd90f022",
   "collector": {
-    "path": "/private/tmp/sdk67-freshness-capture-20261028.cjs",
+    "path": "<tmp>/sdk67-freshness-capture-20261028.cjs",
     "sha256": "23a058861d4a7832b8e7880f14fa6acdc2a087a9a30f8b65934150ffc8d18d44"
   },
   "independent_native_probe": {

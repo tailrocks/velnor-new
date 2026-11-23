@@ -53,7 +53,7 @@ refresh-aware authentication plumbing; it does not change the publisher's
 GraphQL request or header semantics. This is source-only compatibility evidence,
 not hosted runtime qualification. Evidence files and comparison
 notes are retained under
-`/Users/donbeave/Projects/release-evidence-20261022/jackin-immutable-preview/gh2103-qualification/`.
+`<local-path>`.
 
 ## GitHub CLI 2.103.2 bounded source comparison (2026-10-24)
 
@@ -102,6 +102,6 @@ This is provider identity evidence, not a hosted Jackin release qualification.
 The observed upstream push was a release tag, not a main-branch push, and
 `GITHUB_WORKFLOW_SHA` was not directly logged. The bounded API metadata and
 checkout/log excerpts are indexed under
-`/Users/donbeave/Projects/release-evidence-20261022/jackin-immutable-preview/workflow-run-authority-audit/`.
+`<local-path>`.
 The capture index SHA-256 is
 `f3ab41274201aaf9794e366ec25989fc88d9109c807881ef0099cfc55293b7ef`.
