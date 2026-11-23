@@ -354,3 +354,39 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it() -> TestResult {
+    for (version, gated) in [("0.1.111", false), ("0.1.112", true)] {
+        let view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+        let mut facts = detect(&view)?;
+        let helper = facts.helper.as_ref().ok_or("helper")?;
+        facts.helper = Some(HelperRelease::new(
+            HelperVersion::new(version)?,
+            helper.action().clone(),
+            helper.digests().clone(),
+        )?);
+        let plan = plan(&facts);
+        let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
+        let parsed: serde_json::Value = serde_saphyr::from_str(
+            &crate::archive::plain_invocations(rendered.values().next().ok_or("workflow")?),
+        )?;
+        let cache = &parsed["jobs"]["cache"];
+        let condition = cache["if"].as_str().ok_or("cache if")?;
+        let needs: Vec<&str> = cache["needs"]
+            .as_array()
+            .ok_or("cache needs")?
+            .iter()
+            .filter_map(|need| need.as_str())
+            .collect();
+        assert_ne!(needs, [] as [&str; 0]);
+        for need in needs {
+            assert_eq!(
+                condition.contains(&format!("needs.{need}.result != 'skipped'")),
+                gated,
+                "{version} {need}: {condition}"
+            );
+        }
+    }
+    Ok(())
+}
