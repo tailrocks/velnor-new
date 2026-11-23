@@ -340,11 +340,11 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
             ..step(StepKind::CachePurgePrivate)
         });
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
-        .chain(purge)
         .chain(trims)
         .chain(verifies)
         .chain(result)
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
+        .chain(purge)
         .collect();
     Some(Job {
         name: Some("Cache maintenance".to_owned()),
