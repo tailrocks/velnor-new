@@ -67,8 +67,28 @@ runs:
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
+        move_file() {
+          if [ -z "${MOVE_FILE_GNU:-}" ]; then
+            probe="$(mv -T 2>&1 || true)"
+            case "$probe" in
+              *illegal\ option*) MOVE_FILE_GNU=no ;;
+              *) MOVE_FILE_GNU=yes ;;
+            esac
+          fi
+          if [ "$MOVE_FILE_GNU" = yes ]; then
+            mv "$1" -T "$2" "$3"
+            return $?
+          fi
+          if [ -L "$3" ] || [ -d "$3" ]; then
+            return 1
+          fi
+          if [ "$1" = "-n" ] && [ -e "$3" ]; then
+            return 1
+          fi
+          mv "$1" "$2" "$3"
+        }
         publish_entry() {
-          mv -f -T "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
+          move_file -f "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         mtime_of() {
           stat -c %Y "$1" 2> /dev/null || stat -f %m "$1" 2> /dev/null
@@ -90,13 +110,13 @@ runs:
         }
         evict_store_entry() {
           quarantine="$dir/.velnor-ci.evict.$$.$RANDOM$RANDOM"
-          if mv -n -T "$dir/$archive" "$quarantine" 2> /dev/null; then
+          if move_file -n "$dir/$archive" "$quarantine" 2> /dev/null; then
             touch -- "$quarantine" 2> /dev/null || true
             if [ -n "${1:-}" ]; then
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
               rm -f "$quarantine" 2> /dev/null || true
             elif [ "$(digest "$quarantine")" = "$expected" ]; then
-              mv -n -T "$quarantine" "$dir/$archive" 2> /dev/null || true
+              move_file -n "$quarantine" "$dir/$archive" 2> /dev/null || true
               if [ -e "$quarantine" ]; then
                 echo "::warning title=setup-velnor::the verified copy of $archive for velnor-ci $VERSION is kept at $quarantine, because the store entry path is taken"
                 prune_quarantine

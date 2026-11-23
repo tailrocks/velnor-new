@@ -101,7 +101,7 @@ have no reason to compile on a laptop. If the harness runs its tools in a Velnor
 then local *is* CI's platform. The arm64 question goes away, every command is observed, and the loop gets
 16–64 CPUs and the node's warm generation. The sticky shell is incremental and therefore non-minting (ruling
 Q17). Its value is that `velnor verify` from inside it costs only a reflink clone, not an upload. The open
-question is capacity. Five workers are shared with ChainArgos and jackin. 108 sessions in 14 days with
+question is capacity. Five workers are shared with example-org and jackin. 108 sessions in 14 days with
 median calls of 2–3 s suggest a small steady load, but a session holds memory while idle: 24 GiB per build
 sandbox (§9). The owner should decide whether agents may hold cluster sandboxes, and how many.
 

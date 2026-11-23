@@ -116,14 +116,14 @@ The generated workflows size `timeout-minutes` for the CI cluster. On a loaded l
 A workflow generated with a `[crates_mirror]` table in `.velnor/rust-ci.toml` (see `generator/CONFIG.md`) runs `velnor-ci crates-mirror`, which fails when the mirror's CA bundle is missing. Neither exists on a developer machine, so every runner that `velnor-local` starts, in `pair` and in `plain` mode, has `VELNOR_CRATES_MIRROR=off` in its environment. The step then prints `crates mirror disabled by VELNOR_CRATES_MIRROR=off` and Cargo uses crates.io. The generator refuses a pinned velnor-ci older than 0.1.93 for such a workflow. Run the generated workflow unchanged, with no override file:
 
 ```sh
-velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository owner/name
+velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/ci.yml --repository owner/name
 ```
 
 Production runners never set `VELNOR_CRATES_MIRROR`, so they still fail closed without the mirror.
 
 ## Run velnor-new's workflows
 
-This runs velnor-new's own `rust-ci.yml` on the Mac, with the `velnor-new` scenario (push, pull request, second push). No run of it is recorded in this README, so treat it as untested.
+This runs velnor-new's own `ci.yml` on the Mac, with the `velnor-new` scenario (push, pull request, second push). No run of it is recorded in this README, so treat it as untested.
 
 Start from the same setup as [From zero to a run](#from-zero-to-a-run), with velnor-new as both `$VELNOR` and the repository to run. `build` refuses a dirty tree, so `git status --short` must print nothing; `run` itself copies the checkout with its uncommitted changes, so `REPO` is never modified.
 
@@ -133,10 +133,10 @@ cd "$VELNOR" && git status --short
 
 velnor-local doctor
 velnor-local build
-velnor-local run velnor-new --repo "$VELNOR" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository tailrocks/velnor-new --label ubuntu-26.04-scale-set --keep
+velnor-local run velnor-new --repo "$VELNOR" --dir "$STATE" --workflow .github/workflows/ci.yml --repository tailrocks/velnor-new --label ubuntu-26.04-scale-set --keep
 ```
 
-The generated `rust-ci.yml` asks for `ubuntu-26.04-scale-set`, the `runner` of `.velnor/rust-ci.toml`, which the local runners do not register by default; `--label` adds it. Do not edit the generated workflow to get around it. Its `[crates_mirror]` table is handled as described in [Workflows with a crates mirror](#workflows-with-a-crates-mirror).
+The generated `ci.yml` asks for `ubuntu-26.04-scale-set`, the `runner` of `.velnor/rust-ci.toml`, which the local runners do not register by default; `--label` adds it. Do not edit the generated workflow to get around it. Its `[crates_mirror]` table is handled as described in [Workflows with a crates mirror](#workflows-with-a-crates-mirror).
 
 The scenario sends a push to the default branch first, which saves the caches, then opens a pull request that appends a line to `crates/velnor-archive-guard/src/lib.rs`, then pushes a second commit to that pull request's branch. The verdict should list a run for the push, one for the pull request's `opened` event and one for its `synchronize` event, with the restores of each. The second and third runs are the ones that show whether the caches the first run saved are restored.
 

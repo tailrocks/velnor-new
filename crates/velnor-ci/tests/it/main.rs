@@ -73,6 +73,7 @@ mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
 mod fetch_unpinned;
+mod fresh_dir_sweep;
 mod gate;
 mod group_runs;
 mod helper_commands;
@@ -99,6 +100,7 @@ mod io_policy;
 mod io_raw_paths;
 mod io_release;
 mod io_report;
+mod io_report_saves;
 mod io_report_slowest;
 mod io_report_sparse;
 mod io_required;
@@ -187,6 +189,7 @@ mod resolve_cases;
 mod resolve_cases_receipts;
 mod resolve_qualification;
 mod resolve_run;
+mod resolve_template;
 mod resolve_wire;
 mod resolve_world;
 mod rulesets;
@@ -236,10 +239,14 @@ mod unowned;
 mod version;
 mod write_request;
 
-pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+pub(crate) fn scratch_name(prefix: &str, name: &str) -> std::path::PathBuf {
     let owner = std::thread::current()
         .name()
         .unwrap_or("main")
         .replace("::", "-");
     std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(scratch_name(prefix, name))
 }
