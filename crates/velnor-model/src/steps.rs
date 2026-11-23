@@ -298,6 +298,7 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    RecordSavedKey,
     AnchorReset,
     AnchorRestore,
     AnchorFind,
@@ -337,6 +338,7 @@ pub enum VerifiedSave {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub saved_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

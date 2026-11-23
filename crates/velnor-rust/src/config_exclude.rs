@@ -3,6 +3,7 @@
 
 use velnor_model::PathGlob;
 
+use crate::config_glob::unsupported_glob;
 use crate::error::Reason;
 
 pub(crate) fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
@@ -12,6 +13,9 @@ pub(crate) fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
     };
     entries
         .into_iter()
-        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
+        .map(|entry| {
+            unsupported_glob("exclude", &entry)?;
+            PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry))
+        })
         .collect()
 }
