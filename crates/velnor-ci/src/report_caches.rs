@@ -11,7 +11,8 @@ pub(crate) struct CachePlan {
     family: String,
     root: Option<String>,
     restore_step: String,
-    save_step: String,
+    #[serde(default)]
+    save_step: Option<String>,
     #[serde(default)]
     save_key_step: Option<String>,
     #[serde(default)]
@@ -35,14 +36,13 @@ pub(crate) fn observe_caches(
                 errors.push(format!("{}: {error}", plan.restore_step));
             }
             let (requested_key, matched_key, hit) = evidence.unwrap_or_default();
-            let save = if saving {
-                match steps[&plan.save_step]["outcome"].as_str() {
+            let save = match plan.save_step.as_deref() {
+                Some(step) if saving => match steps[step]["outcome"].as_str() {
                     Some("failure" | "cancelled") => SaveOutcome::Failed,
                     Some("success") => SaveOutcome::Unknown,
                     _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
+                },
+                _ => SaveOutcome::NotAttempted,
             };
             let saved_key = plan
                 .save_key_step
@@ -128,7 +128,7 @@ mod tests {
             family: "sources".to_owned(),
             root: None,
             restore_step: "restore".to_owned(),
-            save_step: "save".to_owned(),
+            save_step: Some("save".to_owned()),
             save_key_step: None,
             not_generated: None,
         }];
