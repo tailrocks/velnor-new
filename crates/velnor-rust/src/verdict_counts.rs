@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use super::{
     Need, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
     TESTS_RUN_OUTPUT, TestCounts, parse_package_counts,
@@ -13,9 +15,19 @@ pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts>
             .get(&format!("{name}_{slug}"))
             .or_else(|| need.outputs.get(name))
     };
-    let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(named(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(named(TESTS_LISTED_OUTPUT)?)?;
+    let run = named(TESTS_RUN_OUTPUT);
+    let listed = named(TESTS_LISTED_OUTPUT);
+    let packages = match named(TESTS_BY_PACKAGE_OUTPUT) {
+        Some(text) => parse_package_counts(text)?,
+        None if run.is_some_and(|text| text.as_str() == "0")
+            && listed.is_some_and(|text| text.as_str() == "0") =>
+        {
+            BTreeMap::new()
+        }
+        None => return None,
+    };
+    let run = number(run?)?;
+    let listed = number(listed?)?;
     let summed_run = packages
         .values()
         .try_fold(0u64, |total, package| total.checked_add(package.run))?;
