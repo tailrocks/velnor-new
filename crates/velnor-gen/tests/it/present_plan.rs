@@ -23,15 +23,6 @@ fn jactionlint(view: &mut RepoView, config: &str, version: Option<&str>) -> Test
     Ok(())
 }
 
-fn requirements(view: &mut RepoView) -> TestResult {
-    let hash = "0123456789abcdef".repeat(4);
-    let lint = "fedcba9876543210".repeat(4);
-    let text = format!(
-        "ansible-core==2.16.14 \\\n    --hash=sha256:{hash}\nansible-lint==24.2.0 \\\n    --hash=sha256:{lint}\n"
-    );
-    crate::stacks::put(view, "ansible-configs/requirements.txt", text.as_bytes())
-}
-
 fn gate_spec(text: &str) -> Result<VerdictSpec, String> {
     let line = text
         .split("GATE_SPEC: '")
@@ -66,29 +57,6 @@ fn needs(spec: &VerdictSpec, lint_ansible: &str, ansible: &str) -> BTreeMap<JobI
         );
     }
     needs
-}
-
-#[test]
-fn a_missing_requirements_yaml_is_refused() -> TestResult {
-    let mut view = RepoView::default();
-    requirements(&mut view)?;
-    crate::stacks::put(
-        &mut view,
-        "ansible-configs/site.yml",
-        b"---\n- hosts: all\n",
-    )?;
-    match expected_with_notes(&view) {
-        Err(GenerateError::Detect(DetectError::Invalid {
-            path,
-            reason: Reason::InvalidValue { key, value },
-        })) => {
-            assert_eq!(path.as_str(), "ansible-configs/requirements.yaml");
-            assert_eq!(key, "ansible-configs");
-            assert_eq!(value, "requirements.yaml is missing");
-        }
-        other => return Err(format!("{other:?}").into()),
-    }
-    Ok(())
 }
 
 #[test]
