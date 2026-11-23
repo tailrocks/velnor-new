@@ -206,6 +206,7 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     }
 }
 
+#[must_use]
 pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
     let mut notices: Vec<(&'static str, String)> = Vec::new();
     for lane in lanes {
