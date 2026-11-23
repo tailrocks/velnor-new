@@ -276,6 +276,100 @@ fn playbook_paths_are_bash_single_quoted() -> TestResult {
 }
 
 #[test]
+fn an_extra_hashed_requirement_cannot_replace_the_imported_ansible_tools() -> TestResult {
+    let core = "0123456789abcdef".repeat(4);
+    let lint = "fedcba9876543210".repeat(4);
+    let extra = "1".repeat(64);
+    assert!(
+        core.len() == 64
+            && lint.len() == 64
+            && extra.len() == 64
+            && core != lint
+            && core != extra
+            && lint != extra
+            && !core.contains("aaa")
+            && !lint.contains("aaa")
+            && !core.contains(&extra)
+            && !lint.contains(&extra)
+    );
+    let mut view = ansible_repository(
+        "---\n- hosts: all\n  tasks: []\n",
+        "ansible-configs/site.yml",
+    )?;
+    let requirements = format!(
+        "aaa==1.0.0 \\\n    --hash=sha256:{extra}\nansible-core==2.16.14 \\\n    --hash=sha256:{core}\nansible-lint==24.2.0 \\\n    --hash=sha256:{lint}\n"
+    );
+    put(
+        &mut view,
+        "ansible-configs/requirements.txt",
+        requirements.as_bytes(),
+    )?;
+    let workflow = expected_with_notes(&view)?
+        .0
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?
+        .clone();
+    let steps = runs(&workflow, "ansible")?;
+    let pip_at: Vec<_> = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, run)| run.contains("pip install"))
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(pip_at.len(), 2, "{steps:?}");
+    for index in &pip_at {
+        assert!(
+            steps[*index].contains("--target \"$RUNNER_TEMP/ansible\""),
+            "{}",
+            steps[*index]
+        );
+    }
+    let first = &steps[pip_at[0]];
+    assert!(
+        first.contains("-r ansible-configs/requirements.txt"),
+        "{first}"
+    );
+    assert!(first.contains("--require-hashes"), "{first}");
+    assert!(first.contains("--no-deps"), "{first}");
+    assert!(!first.contains("--upgrade"), "{first}");
+    assert!(!first.contains("PATH="), "{first}");
+    let core_pin = format!("ansible-core==2.16.14 --hash=sha256:{core}");
+    let lint_pin = format!("ansible-lint==24.2.0 --hash=sha256:{lint}");
+    let writer_at = steps
+        .iter()
+        .position(|run| {
+            run.contains("RUNNER_TEMP")
+                && run.contains("ansible-tools.txt")
+                && run.contains(&core_pin)
+                && run.contains(&lint_pin)
+        })
+        .ok_or("no tool-pin writer")?;
+    let writer = &steps[writer_at];
+    assert!(!writer.contains("aaa"), "{writer}");
+    assert!(!writer.contains(&extra), "{writer}");
+    let import_at = steps
+        .iter()
+        .position(|run| run.contains("PYTHONPATH=\"$RUNNER_TEMP/ansible\""))
+        .ok_or("no step imports the Ansible target")?;
+    let second = &steps[pip_at[1]];
+    assert!(pip_at[0] < writer_at && writer_at < pip_at[1] && pip_at[1] < import_at);
+    assert!(second.contains("--upgrade"), "{second}");
+    assert!(second.contains("--require-hashes"), "{second}");
+    assert!(second.contains("--no-deps"), "{second}");
+    assert!(
+        second.contains("-r \"$RUNNER_TEMP/ansible-tools.txt\""),
+        "{second}"
+    );
+    assert!(!second.contains("PATH="), "{second}");
+    assert!(!second.contains("aaa"), "{second}");
+    assert!(
+        !second.contains("ansible-configs/requirements.txt"),
+        "{second}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_cargo_workspace_writes_ci_with_fmt_clippy_test_mbx_and_cache() -> TestResult {
     let view = crate::pipeline::with_deltas(crate::pipeline::view(&["Cargo.toml"], None)?)?;
     let files = expected_with_notes(&view)?.0;

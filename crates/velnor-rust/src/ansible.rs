@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use velnor_model::{
     Gate, GateNeed, Job, JobCondition, JobId, PlanFrom, RepoFacts, RepoPath, RepoView, RootSlug,
     StepKind, VerdictJob, WorkflowPlan,
@@ -13,6 +11,7 @@ use crate::lane::PLAN_JOB;
 use crate::plan::{CHECKOUT_DEPTH, RUST_JOB, job, quick, step};
 use crate::required_size::{charge_output, needs_max_bytes};
 
+mod pins;
 mod select;
 
 pub use select::ansible_runs;
@@ -49,17 +48,17 @@ pub fn attach_ansible(
     facts: &RepoFacts,
     plan: &mut WorkflowPlan,
 ) -> Result<(), DetectError> {
-    let Some(playbooks) = playbooks(view)? else {
+    let Some((playbooks, reinstall)) = playbooks(view)? else {
         return Ok(());
     };
-    let mut ansible = ansible_job(facts, &playbooks);
+    let mut ansible = ansible_job(facts, &playbooks, &reinstall);
     gate_ansible(facts, plan, &mut ansible)?;
     record_ansible(facts, plan, &ansible);
     place_ansible(plan, ansible);
     Ok(())
 }
 
-fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath]) -> Job {
+fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath], reinstall: &pins::Reinstall) -> Job {
     let mut ansible = job(facts, JobId::from_static("ansible"));
     ansible.pr = quick(facts);
     ansible.name = Some("Ansible".to_owned());
@@ -70,6 +69,14 @@ fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath]) -> Job {
     ansible.steps.push(step(StepKind::Ansible {
         name: "Install Ansible".to_owned(),
         run: INSTALL.to_owned(),
+    }));
+    ansible.steps.push(step(StepKind::Ansible {
+        name: "Write Ansible tool pins".to_owned(),
+        run: reinstall.write.clone(),
+    }));
+    ansible.steps.push(step(StepKind::Ansible {
+        name: "Install ansible-core and ansible-lint".to_owned(),
+        run: reinstall.install.clone(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
         name: "Install collections".to_owned(),
@@ -206,7 +213,7 @@ fn place_ansible(plan: &mut WorkflowPlan, ansible: Job) {
     }
 }
 
-pub(super) fn playbooks(view: &RepoView) -> Result<Option<Vec<RepoPath>>, DetectError> {
+fn playbooks(view: &RepoView) -> Result<Option<(Vec<RepoPath>, pins::Reinstall)>, DetectError> {
     let mut found = Vec::new();
     for path in &view.tracked_paths {
         let Some(name) = path.as_str().strip_prefix(LAYOUT) else {
@@ -233,11 +240,11 @@ pub(super) fn playbooks(view: &RepoView) -> Result<Option<Vec<RepoPath>>, Detect
         .files
         .get(&REQUIREMENTS_TXT)
         .ok_or_else(|| refuse(&REQUIREMENTS_TXT, "requirements.txt is missing"))?;
-    hashed(text)?;
+    let reinstall = pins::reinstall(text, &REQUIREMENTS_TXT)?;
     if !view.files.contains_key(&REQUIREMENTS_YAML) {
         return Err(refuse(&REQUIREMENTS_YAML, "requirements.yaml is missing"));
     }
-    Ok(Some(found))
+    Ok(Some((found, reinstall)))
 }
 
 fn is_play(bytes: &[u8]) -> bool {
@@ -283,79 +290,6 @@ fn play_key(text: &str) -> bool {
     text.starts_with("hosts:") || text.starts_with("import_playbook:")
 }
 
-fn hashed(bytes: &[u8]) -> Result<(), DetectError> {
-    let text = std::str::from_utf8(bytes).map_err(|_| {
-        refuse(
-            &REQUIREMENTS_TXT,
-            "requirements.txt is not utf-8".to_owned(),
-        )
-    })?;
-    let mut pending = String::new();
-    let mut names = BTreeSet::new();
-    for (index, line) in text.lines().enumerate() {
-        let trimmed = line.trim();
-        if let Some(head) = trimmed.strip_suffix('\\') {
-            pending.push_str(head.trim_end());
-            pending.push(' ');
-            continue;
-        }
-        pending.push_str(trimmed);
-        let joined = std::mem::take(&mut pending);
-        let joined = joined.trim();
-        if joined.is_empty() || joined.starts_with('#') {
-            continue;
-        }
-        names.insert(requirement(joined).map_err(|reason| {
-            refuse(&REQUIREMENTS_TXT, format!("line {}: {reason}", index + 1))
-        })?);
-    }
-    if !pending.trim().is_empty() {
-        return Err(refuse(
-            &REQUIREMENTS_TXT,
-            "requirements.txt ends with a continuation".to_owned(),
-        ));
-    }
-    for name in ["ansible-core", "ansible-lint"] {
-        if !names.contains(name) {
-            return Err(refuse(
-                &REQUIREMENTS_TXT,
-                format!("requirements.txt does not pin {name}"),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn requirement(line: &str) -> Result<String, String> {
-    let mut parts = line.split_whitespace();
-    let spec = parts.next().ok_or("empty requirement")?;
-    let Some((name, version)) = spec.split_once("==") else {
-        return Err(format!("{spec} must be name==version"));
-    };
-    if name.is_empty()
-        || version.is_empty()
-        || !name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-    {
-        return Err(format!("invalid requirement {spec}"));
-    }
-    let mut hashes = 0;
-    for part in parts {
-        let Some(hex) = part.strip_prefix("--hash=sha256:") else {
-            return Err(format!("unsupported requirement option {part}"));
-        };
-        if hex.len() != 64 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Err("a hash must be sha256 and 64 hex characters".to_owned());
-        }
-        hashes += 1;
-    }
-    if hashes == 0 {
-        return Err(format!("{name} has no --hash=sha256"));
-    }
-    Ok(name.to_owned())
-}
-
 fn syntax_runs(playbooks: &[RepoPath]) -> Vec<String> {
     let prefix = format!("{PREFIX} python3 -m ansible.cli.playbook --syntax-check");
     let mut runs = Vec::new();
@@ -377,7 +311,7 @@ fn bash_single(path: &RepoPath) -> String {
     format!("'{}'", path.as_str().replace('\'', "'\\''"))
 }
 
-fn refuse(path: &RepoPath, value: impl Into<String>) -> DetectError {
+pub(super) fn refuse(path: &RepoPath, value: impl Into<String>) -> DetectError {
     DetectError::invalid(
         path,
         Reason::InvalidValue {
