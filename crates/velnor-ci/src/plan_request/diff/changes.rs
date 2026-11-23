@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use super::Event;
 
 const NON_UTF8: &str = "non_utf8_path";
+const GIT_USAGE_ERROR: i32 = 129;
 const SHORT_SHA_MIN: usize = 7;
 const FULL_SHA: usize = 64;
 const PROJECT_TOOL_FILES: &[&str] = &[".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
@@ -57,9 +58,6 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     if specs.is_empty() {
         return Ok(Vec::new());
     }
-    if specs.iter().any(|spec| spec.contains('\0')) {
-        return Err("unsafe_object_path".to_owned());
-    }
     let mut child = Command::new("git")
         .arg("-C")
         .arg(root)
@@ -79,16 +77,21 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     let output = child
         .wait_with_output()
         .map_err(|error| error.to_string())?;
-    writer
-        .join()
-        .map_err(|_| "git_stdin_failed".to_owned())?
-        .map_err(|error| error.to_string())?;
     if !output.status.success() {
+        if output.status.code() == Some(GIT_USAGE_ERROR)
+            && String::from_utf8_lossy(&output.stderr).contains("unknown switch")
+        {
+            return Err("git_too_old".to_owned());
+        }
         return Err(format!(
             "git cat-file failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
+    writer
+        .join()
+        .map_err(|_| "git_stdin_failed".to_owned())?
+        .map_err(|error| error.to_string())?;
     split_blobs(&output.stdout, specs)
 }
 
