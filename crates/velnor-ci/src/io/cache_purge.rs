@@ -111,7 +111,7 @@ pub fn purge_private(
             pending.len()
         ));
     }
-    sweep(github, repo, pending, report)
+    sweep(github, repo, pending, &report)
 }
 
 fn entry_report(entries: &[Entry], repo: &Repo) -> String {
@@ -131,7 +131,7 @@ fn sweep(
     github: &dyn GitHubWrite,
     repo: &Repo,
     mut pending: Vec<Entry>,
-    report: String,
+    report: &str,
 ) -> Result<String, CiError> {
     let mut deleted = 0;
     let mut seen = 0;
@@ -176,7 +176,7 @@ pub fn purge_private_if_public(github: &dyn GitHubWrite, repo: &Repo) -> Result<
     };
     let pending = private_entries(github, repo)?;
     let report = format!("{lookup}{}", entry_report(&pending, repo));
-    sweep(github, repo, pending, report)
+    sweep(github, repo, pending, &report)
 }
 
 pub(super) fn run(args: &PurgePrivateArgs) -> Result<String, CiError> {
