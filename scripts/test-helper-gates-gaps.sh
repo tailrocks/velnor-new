@@ -21,6 +21,8 @@ cd "$work"
 git init -q
 git config user.name ci
 git config user.email ci@invalid
+git config commit.gpgsign false
+git config tag.gpgsign false
 mkdir -p crates/velnor-ci generator "generator/old dir"
 printf '[package]\nname = "velnor-ci"\nversion = "0.1.110"\n' >crates/velnor-ci/Cargo.toml
 echo 'gate(RustCi, "budget", (0, 1, 110)),' >generator/gates.rs
