@@ -257,7 +257,7 @@ impl Invocation {
             arguments: &self.globals,
             directory,
         };
-        let local_arguments = without_chdir(&self.globals);
+        let local_arguments = without_command_scope(&self.globals);
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.root.join("Cargo.toml");
             let local = MetadataInvocation {
@@ -286,13 +286,13 @@ impl Invocation {
     }
 }
 
-fn without_chdir(globals: &[String]) -> Vec<String> {
+fn without_command_scope(globals: &[String]) -> Vec<String> {
     let mut kept = Vec::new();
     let mut words = globals.iter();
     while let Some(word) = words.next() {
-        if word == "-C" {
+        if word == "-C" || word == "--config" {
             words.next();
-        } else if !word.starts_with("-C") {
+        } else if !word.starts_with("-C") && !word.starts_with("--config=") {
             kept.push(word.clone());
         }
     }

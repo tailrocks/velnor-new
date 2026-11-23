@@ -103,3 +103,31 @@ fn a_cargo_command_validates_a_standalone_root_from_its_own_directory_not_the_st
     assert!(built.status.success(), "{stderr}");
     assert!(repo.root().join("shared/debug").is_dir());
 }
+
+#[test]
+fn a_relative_config_file_of_the_command_is_not_applied_from_an_unrelated_roots_directory() {
+    let repo = two_standalone_roots();
+    unit(&repo, "web/settings.toml", "[build]\njobs = 1\n");
+    repo.git(&["add", "--all"]);
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("RUSTC_BOOTSTRAP", "1")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "-Z",
+            "unstable-options",
+            "-C",
+            "web",
+            "--config",
+            "settings.toml",
+            "build",
+            "--offline",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{stderr}");
+}
