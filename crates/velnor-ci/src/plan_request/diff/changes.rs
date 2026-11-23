@@ -57,13 +57,13 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     if specs.is_empty() {
         return Ok(Vec::new());
     }
-    if specs.iter().any(|spec| spec.contains('\n')) {
+    if specs.iter().any(|spec| spec.contains('\0')) {
         return Err("unsafe_object_path".to_owned());
     }
     let mut child = Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["cat-file", "--batch"])
+        .args(["cat-file", "-Z", "--batch"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -73,7 +73,7 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     let mut input = String::new();
     for spec in specs {
         input.push_str(spec);
-        input.push('\n');
+        input.push('\0');
     }
     let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
     let output = child
@@ -98,7 +98,7 @@ fn split_blobs(mut rest: &[u8], specs: &[String]) -> Result<Vec<Vec<u8>>, String
         let missing = || format!("missing_object:{spec}");
         let end = rest
             .iter()
-            .position(|byte| *byte == b'\n')
+            .position(|byte| *byte == 0)
             .ok_or_else(missing)?;
         let header = String::from_utf8_lossy(&rest[..end]).into_owned();
         let mut fields = header.rsplitn(3, ' ');

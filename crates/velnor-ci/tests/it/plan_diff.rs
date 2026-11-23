@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use crate::io::Repo;
 use crate::plan_diff_repo::{collect_files, repository, repository_with};
 
 pub(crate) fn data() -> PathBuf {
@@ -313,4 +314,80 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
     );
     fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn head_of(repo: &Repo) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo.root())
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+fn route(job: &str, dir: &str) -> serde_json::Value {
+    serde_json::json!({
+        "job_id": job,
+        "logical_job_id": job,
+        "runner": "scale-set:velnor+ubuntu-26.04-scale-set",
+        "target": "x86_64-unknown-linux-gnu",
+        "task_ids": [format!("stack/rust/{dir}/build/default")],
+    })
+}
+
+#[test]
+fn a_routed_package_under_a_newline_directory_selects_only_its_own_jobs() {
+    let repo = Repo::new("diff-newline-directory");
+    repo.write_all(&[
+        (".velnor/config.toml", "schema = 2\n"),
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"a\", \"b\", \"pk\\nx\"]\nresolver = \"3\"\n",
+        ),
+        (
+            "a/Cargo.toml",
+            "[package]\nname = \"a\"\nedition = \"2024\"\n",
+        ),
+        ("a/src/lib.rs", ""),
+        (
+            "b/Cargo.toml",
+            "[package]\nname = \"b\"\nedition = \"2024\"\n",
+        ),
+        ("b/src/lib.rs", ""),
+        (
+            "pk\nx/Cargo.toml",
+            "[package]\nname = \"pkx\"\nedition = \"2024\"\n",
+        ),
+        ("pk\nx/src/lib.rs", ""),
+    ]);
+    repo.commit();
+    let base = head_of(&repo);
+    repo.write("a/src/lib.rs", "pub fn changed() {}\n");
+    repo.commit();
+    let request = serde_json::json!({
+        "base": base,
+        "event": "pull_request",
+        "head": head_of(&repo),
+        "lane_inventory": {
+            "mode": null,
+            "routes": [route("rust-a", "a"), route("rust-b", "b"), route("rust-pkx", "pk\nx")],
+        },
+        "op": "plan-v1",
+        "repository": "tailrocks/velnor-new",
+        "root": ".",
+        "schema": 1,
+    });
+    let file = aside(repo.root()).join("plan-request.json");
+    fs::write(&file, request.to_string()).unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = aside(repo.root()).join("outputs");
+    let output = plan(repo.root(), &file, &outputs);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let written = read(&outputs);
+    assert!(
+        written.contains("\nnot_affected_jobs=,rust-b,rust-pkx,\n"),
+        "{written} {stderr}"
+    );
+    fs::remove_dir_all(aside(repo.root())).unwrap_or_else(|e| unreachable!("{e}"));
 }
