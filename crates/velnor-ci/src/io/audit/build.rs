@@ -54,12 +54,14 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
     let step = invocation.step(directory);
-    let baseline = MetadataInvocation {
-        executable: "cargo",
-        arguments: &[],
-        directory: &step,
-    };
-    let workspaces = workspaces(&facts, &checkout.root, &step, Some(&baseline), &inherit)?;
+    let baseline = MetadataInvocation::at(&step);
+    let workspaces = workspaces(
+        &facts,
+        &checkout.root,
+        &step,
+        Some((&baseline, &location)),
+        &inherit,
+    )?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(

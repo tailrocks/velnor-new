@@ -156,7 +156,10 @@ impl Invocation {
         });
         let running = matches!(
             (program, arguments),
-            ("cargo", ["run" | "r" | "bench" | "rustc", ..])
+            (
+                "cargo",
+                ["run" | "r" | "bench" | "rustc" | "rustdoc" | "fix", ..]
+            )
         );
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())

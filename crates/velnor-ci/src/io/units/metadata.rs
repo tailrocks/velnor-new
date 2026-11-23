@@ -13,6 +13,16 @@ pub(in crate::io) struct MetadataInvocation<'a> {
     pub(in crate::io) directory: &'a Path,
 }
 
+impl<'a> MetadataInvocation<'a> {
+    pub(in crate::io) fn at(directory: &'a Path) -> Self {
+        Self {
+            executable: "cargo",
+            arguments: &[],
+            directory,
+        }
+    }
+}
+
 pub(in crate::io) fn workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,

@@ -227,3 +227,31 @@ fn a_build_refused_for_an_unknown_layout_in_a_later_target_saves_nothing_for_an_
         "an inventory was saved before the later directory was refused: {saved:?}"
     );
 }
+
+#[test]
+fn fix_and_rustdoc_are_audited_where_cargo_dash_c_writes_them() {
+    for subcommand in [
+        &["fix", "--allow-no-vcs", "--allow-dirty", "-p", "lib"][..],
+        &["rustdoc", "-p", "lib"][..],
+    ] {
+        let repo = workspace_below_the_root();
+        let mut command = vec!["inputs", "build", "--", "cargo", "-Z", "unstable-options"];
+        command.extend(["-C", "rust"]);
+        command.extend(subcommand);
+        command.push("--offline");
+        let built = velnor_ci()
+            .current_dir(repo.root())
+            .env("CARGO_TARGET_DIR", "target")
+            .env("RUSTC_BOOTSTRAP", "1")
+            .args(&command)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(built.status.success(), "{subcommand:?}: {built:?}");
+        assert!(
+            repo.root()
+                .join("rust/target/.velnor-input-inventories")
+                .is_dir(),
+            "{subcommand:?}: the build did not audit the target cargo wrote"
+        );
+    }
+}

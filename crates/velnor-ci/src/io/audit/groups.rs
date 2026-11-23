@@ -87,22 +87,14 @@ pub(super) fn root_workspace(
     Ok(found)
 }
 
-pub(super) fn inheriting(
-    facts: &RepoFacts,
-    repository: &Path,
-    location: Option<&Path>,
-) -> Result<Vec<bool>, CiError> {
-    let standalone = standalone(facts);
-    let Some(location) = location else {
-        return Ok(vec![false; standalone.len()]);
-    };
+fn holder(facts: &RepoFacts, repository: &Path, location: &Path) -> Result<Option<usize>, CiError> {
     let location = resolve(location).map_err(|error| unresolved(location, &error))?;
     let mut directories = Vec::new();
     for root in &facts.rust_roots {
         let manifest = repository.join(root.manifest.as_str());
         directories.push(resolve(&manifest).map_err(|error| unresolved(&manifest, &error))?);
     }
-    let holder = directories
+    Ok(directories
         .iter()
         .enumerate()
         .filter_map(|(index, directory)| {
@@ -112,11 +104,49 @@ pub(super) fn inheriting(
                 .then(|| (directory.components().count(), index))
         })
         .max_by_key(|(depth, _)| *depth)
-        .map(|(_, index)| index);
+        .map(|(_, index)| index))
+}
+
+pub(super) fn inheriting(
+    facts: &RepoFacts,
+    repository: &Path,
+    location: Option<&Path>,
+) -> Result<Vec<bool>, CiError> {
+    let standalone = standalone(facts);
+    let Some(location) = location else {
+        return Ok(vec![false; standalone.len()]);
+    };
+    let holder = holder(facts, repository, location)?;
     Ok(standalone
         .into_iter()
         .enumerate()
         .map(|(index, alone)| !alone || holder.is_none_or(|holder| holder == index))
+        .collect())
+}
+
+/// The roots whose Cargo configuration the step directory decides: the root
+/// that holds the step and the roots of its workspace group. A root of another
+/// group is probed from its own directory.
+pub(super) fn stepped(
+    facts: &RepoFacts,
+    repository: &Path,
+    location: &Path,
+    inherit: &[bool],
+) -> Result<Vec<bool>, CiError> {
+    let holder = holder(facts, repository, location)?;
+    let groups = shared_groups(facts);
+    Ok(inherit
+        .iter()
+        .enumerate()
+        .map(|(index, inherit)| {
+            *inherit
+                && holder.is_none_or(|holder| {
+                    holder == index
+                        || groups
+                            .iter()
+                            .any(|group| group.contains(&holder) && group.contains(&index))
+                })
+        })
         .collect())
 }
 
@@ -141,20 +171,25 @@ pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
     step: &Path,
-    probe: Option<&MetadataInvocation<'_>>,
+    probe: Option<(&MetadataInvocation<'_>, &Path)>,
     inherit: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
+    let stepped = match probe {
+        Some((_, location)) => stepped(facts, repository, location, inherit)?,
+        None => vec![false; inherit.len()],
+    };
+    let probe = probe.map(|(probe, _)| probe);
     facts
         .rust_roots
         .iter()
         .zip(standalone(facts))
-        .zip(inherit)
-        .map(|((root, alone), inherit)| {
+        .zip(inherit.iter().zip(&stepped))
+        .map(|((root, alone), (inherit, stepped))| {
             let manifest = repository.join(root.manifest.as_str());
             root_workspace(
                 &manifest,
-                probe.filter(|_| *inherit),
+                probe.filter(|_| *stepped),
                 step,
                 *inherit,
                 alone,
