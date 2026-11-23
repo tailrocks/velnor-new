@@ -3,12 +3,11 @@
 
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
-use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
-use velnor_ci::tools_local::{Outcome, message};
+use velnor_ci::tools_local::Outcome;
 
 use crate::io::Repo;
 use crate::tools_heal::{KEY, leftovers, poisoned_store, save, save_as};
@@ -56,28 +55,6 @@ fn a_stale_read_only_leftover_with_a_random_name_is_swept_by_the_next_save() {
 }
 
 #[test]
-fn a_stale_legacy_random_leftover_is_kept_while_another_save_runs() {
-    let (_repo, job, store) = poisoned_store("tools-heal-legacy-held");
-    let tools = store.join("tools");
-    let lock = tools.join(format!(".lock-{OTHER}"));
-    let leftover = tools.join(".staging-retired-0123456789abcdef");
-    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::create_dir(&leftover).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(leftover.join("rustc"), "in use").unwrap_or_else(|e| unreachable!("{e}"));
-    aged(&leftover, Duration::from_hours(2));
-    let healed = save(&store, &job.home, true);
-    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
-    assert!(
-        leftover.join("rustc").is_file(),
-        "a legacy retired tree was removed while another save runs"
-    );
-    fs::remove_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let healed = save(&store, &job.home, true);
-    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
-    assert_eq!(leftovers(&store), [KEY], "the legacy leftover stays");
-}
-
-#[test]
 fn pruning_removes_an_old_entry_holding_a_read_only_directory() {
     let job = job("tools-heal-prune-read-only");
     let store = job.root.join("store");
@@ -102,33 +79,6 @@ fn pruning_removes_an_old_entry_holding_a_read_only_directory() {
         leftovers(&store),
         ["velnor-tools-second", "velnor-tools-third"],
         "the oldest entry stays"
-    );
-}
-
-#[test]
-fn a_prune_candidate_whose_save_is_running_is_not_removed() {
-    let job = job("tools-heal-prune-held");
-    let store = job.root.join("store");
-    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
-    let first = save_as(&store, &job.home, "velnor-tools-first", false);
-    assert!(matches!(first, Outcome::Saved { .. }), "{first:?}");
-    aged(
-        &store.join("tools/velnor-tools-first"),
-        Duration::from_hours(3),
-    );
-    let second = save_as(&store, &job.home, "velnor-tools-second", false);
-    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
-    aged(
-        &store.join("tools/velnor-tools-second"),
-        Duration::from_hours(2),
-    );
-    let lock = store.join("tools/.lock-velnor-tools-first");
-    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let third = save_as(&store, &job.home, "velnor-tools-third", false);
-    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    assert!(
-        store.join("tools/velnor-tools-first").is_dir(),
-        "the prune removed an entry whose save is still running"
     );
 }
 
@@ -231,116 +181,6 @@ fn a_failed_copy_leaves_no_staging_tree_behind_even_when_it_holds_a_read_only_di
         leftovers(&store),
         Vec::<String>::new(),
         "a staging tree stays"
-    );
-}
-
-fn two_aged_entries(job: &Job, store: &Path) -> PathBuf {
-    let first = save_as(store, &job.home, "velnor-tools-first", false);
-    assert!(matches!(first, Outcome::Saved { .. }), "{first:?}");
-    aged(
-        &store.join("tools/velnor-tools-first"),
-        Duration::from_hours(3),
-    );
-    let second = save_as(store, &job.home, "velnor-tools-second", false);
-    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
-    aged(
-        &store.join("tools/velnor-tools-second"),
-        Duration::from_hours(2),
-    );
-    store.join("tools/velnor-tools-first")
-}
-
-#[test]
-fn a_prune_candidate_whose_lock_is_released_is_removed_by_the_next_save() {
-    let job = job("tools-heal-prune-released");
-    let store = job.root.join("store");
-    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
-    let first = two_aged_entries(&job, &store);
-    let lock = store.join("tools/.lock-velnor-tools-first");
-    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let third = save_as(&store, &job.home, "velnor-tools-third", false);
-    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    assert!(first.is_dir(), "a locked prune candidate was removed");
-    fs::remove_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let fourth = save_as(&store, &job.home, "velnor-tools-fourth", false);
-    assert!(matches!(fourth, Outcome::Saved { .. }), "{fourth:?}");
-    assert!(!first.exists(), "a released prune candidate was kept");
-}
-
-#[test]
-fn a_prune_candidate_replaced_while_its_lock_was_held_is_kept() {
-    let job = job("tools-heal-prune-replaced");
-    let store = job.root.join("store");
-    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
-    let first = two_aged_entries(&job, &store);
-    let modified = fs::metadata(&first)
-        .and_then(|metadata| metadata.modified())
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let lock = store.join("tools/.lock-velnor-tools-first");
-    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let parked = store.join("parked");
-    let replacement = first.clone();
-    let replace = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(300));
-        fs::rename(&replacement, &parked)?;
-        fs::create_dir(&replacement)?;
-        fs::File::open(&replacement)?.set_modified(modified)?;
-        fs::remove_dir(&lock)
-    });
-    let third = save_as(&store, &job.home, "velnor-tools-third", false);
-    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    replace
-        .join()
-        .unwrap_or_else(|_| unreachable!("the replacing thread panicked"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(first.is_dir(), "the prune removed a replacement entry");
-}
-
-#[test]
-fn a_save_does_not_wait_for_a_prune_candidate_whose_lock_is_held() {
-    let job = job("tools-heal-prune-no-wait");
-    let store = job.root.join("store");
-    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
-    let first = two_aged_entries(&job, &store);
-    let lock = store.join("tools/.lock-velnor-tools-first");
-    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let started = Instant::now();
-    let third = save_as(&store, &job.home, "velnor-tools-third", false);
-    let elapsed = started.elapsed();
-    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    assert!(
-        elapsed < Duration::from_secs(5),
-        "the save waited {elapsed:?} for a prune candidate whose lock is held"
-    );
-    assert!(first.is_dir(), "the locked prune candidate was removed");
-}
-
-#[test]
-fn a_prune_candidate_that_cannot_be_locked_is_kept_and_reported() {
-    let job = job("tools-heal-prune-unlockable");
-    let store = job.root.join("store");
-    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
-    let name = "k".repeat(250);
-    let candidate = store.join("tools").join(&name);
-    fs::create_dir_all(&candidate).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(candidate.join("rustc"), "old binary").unwrap_or_else(|e| unreachable!("{e}"));
-    aged(&candidate, Duration::from_hours(3));
-    let second = save_as(&store, &job.home, "velnor-tools-second", false);
-    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
-    aged(
-        &store.join("tools/velnor-tools-second"),
-        Duration::from_hours(2),
-    );
-    let third = save_as(&store, &job.home, "velnor-tools-third", false);
-    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    assert!(
-        candidate.join("rustc").is_file(),
-        "the unlockable entry was removed"
-    );
-    let text = message(&third, "node");
-    assert!(
-        text.contains("::warning::") && text.contains(&name),
-        "the unlockable entry was not reported: {text}"
     );
 }
 

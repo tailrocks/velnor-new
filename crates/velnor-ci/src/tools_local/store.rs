@@ -164,27 +164,6 @@ fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
     Some(held)
 }
 
-fn legacy(name: &str) -> bool {
-    name.strip_prefix(STAGING_PREFIX)
-        .and_then(|rest| rest.strip_prefix(RETIRED_PREFIX))
-        .is_some_and(|suffix| {
-            suffix.len() == 16 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
-        })
-}
-
-fn another_save_running(tools: &Path, current: &str) -> bool {
-    let own = format!("{LOCK_PREFIX}{current}");
-    fs::read_dir(tools)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .any(|entry| {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            name.starts_with(LOCK_PREFIX) && name != own && !stale(&entry.path())
-        })
-}
-
 fn sweep(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
@@ -200,12 +179,7 @@ fn sweep(tools: &Path, current: &str) {
         {
             continue;
         }
-        let _held = if legacy(&name) {
-            if another_save_running(tools, current) {
-                continue;
-            }
-            Vec::new()
-        } else if leftover {
+        let _held = if leftover {
             match hold_owners(tools, &name, current) {
                 Some(held) => held,
                 None => continue,
@@ -230,7 +204,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     if fs::create_dir_all(&tools).is_err() {
         return Outcome::Failed("cannot create the tools directory");
     }
-    let lock = match claim(&tools, inputs.key) {
+    let _lock = match claim(&tools, inputs.key) {
         Claim::Won(lock) => lock,
         Claim::Held => return Outcome::Busy,
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
@@ -279,7 +253,6 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    drop(lock);
     let kept = prune(&tools, inputs.key);
     if replaced {
         Outcome::Healed { to: entry, kept }
@@ -292,39 +265,21 @@ fn prune(tools: &Path, current: &str) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
-    let mut older: Vec<(SystemTime, u64, PathBuf)> = entries
+    let mut older: Vec<(SystemTime, PathBuf)> = entries
         .flatten()
         .filter(|entry| {
             let name = entry.file_name();
             name != current && !name.to_string_lossy().starts_with('.')
         })
-        .filter_map(|entry| {
-            let metadata = entry.metadata().ok()?;
-            Some((metadata.modified().ok()?, metadata.ino(), entry.path()))
-        })
+        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     older
         .into_iter()
         .skip(KEEP_KEYS - 1)
-        .filter_map(|(modified, ino, path)| prune_candidate(tools, &path, ino, modified))
+        .filter(|(_, path)| remove_tree(path).is_err())
+        .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
         .collect()
-}
-
-fn prune_candidate(tools: &Path, path: &Path, ino: u64, modified: SystemTime) -> Option<String> {
-    let key = path.file_name().unwrap_or_default().to_string_lossy();
-    let _lock = match claim(tools, &key) {
-        Claim::Won(lock) => lock,
-        Claim::Held => return None,
-        Claim::Broken => return Some(plain(&key)),
-    };
-    let unchanged = fs::symlink_metadata(path).is_ok_and(|metadata| {
-        metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
-    });
-    if !unchanged {
-        return None;
-    }
-    remove_tree(path).err().map(|_| plain(&key))
 }
 
 fn plain(name: &str) -> String {
