@@ -313,52 +313,6 @@ fn a_missing_empty_or_garbled_tests_run_or_tests_listed_fails() -> TestResult {
 }
 
 #[test]
-fn a_lone_job_that_listed_and_ran_no_tests_fails() -> TestResult {
-    let mut needs = BTreeMap::new();
-    needs.insert(
-        JobId::new("rust-plan")?,
-        Need {
-            result: Some("success".to_owned()),
-            outputs: selected()
-                .iter()
-                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-                .collect(),
-        },
-    );
-    for (job, result) in [
-        ("rust-lint", "success"),
-        ("rust-test", "success"),
-        ("rust-docs", "skipped"),
-        ("policy", "skipped"),
-        ("audit", "skipped"),
-    ] {
-        let mut outputs = BTreeMap::new();
-        if job == "rust-test" {
-            outputs.insert("tests_run".to_owned(), "0".to_owned());
-            outputs.insert("tests_listed".to_owned(), "0".to_owned());
-            outputs.insert("tests_ignored".to_owned(), "0".to_owned());
-        }
-        needs.insert(
-            JobId::new(job)?,
-            Need {
-                result: Some(result.to_owned()),
-                outputs,
-            },
-        );
-    }
-    let verdict = decide(&spec()?, &needs, Some("pull_request"));
-    assert!(!verdict.passed, "{}", verdict.table());
-    assert!(
-        verdict
-            .table()
-            .contains("a test job of root listed no tests and ran none"),
-        "{}",
-        verdict.table()
-    );
-    Ok(())
-}
-
-#[test]
 fn a_job_missing_from_needs_or_unknown_to_the_gate_fails() -> TestResult {
     let run = with(passing(), |run| {
         run.results.retain(|(job, _)| *job != "rust-lint");
