@@ -240,9 +240,9 @@ All 17 reviewed source heads and 9 foundation branches are verified and preserve
 | #77 | `codex/freshness-evidence-20261005` | `9788a5e1c1303da05e9d26aa96043785b2f970a1` | `origin/recovery/pr-77-9788a5e1c1` | VERIFIED |
 | #65 | `fix/generator-release-provenance` | `a54e34b01b` | `origin/recovery/pr-65-a54e34b01b` | VERIFIED |
 | #56 | `fix/hosted-qualification-dispatch` | `7f4b24afdf` | `origin/recovery/pr-56-7f4b24afdf` | VERIFIED |
-| #38 | `codex/chainargos-cache-foundation` | `b08bc12250` | `origin/recovery/pr-38-b08bc12250` | VERIFIED |
+| #38 | `codex/example-org-cache-foundation` | `b08bc12250` | `origin/recovery/pr-38-b08bc12250` | VERIFIED |
 | #30 | `codex/mbx-released-action-isolation` | `fe0064cbb8` | `origin/recovery/pr-30-fe0064cbb8` | VERIFIED |
-| #29 | `codex/chainargos-mbx-cache-repair` | `4ad1e34a1e` | `origin/recovery/pr-29-4ad1e34a1e` | VERIFIED |
+| #29 | `codex/example-org-mbx-cache-repair` | `4ad1e34a1e` | `origin/recovery/pr-29-4ad1e34a1e` | VERIFIED |
 | #28 | `codex/velnor-goal-integration` | `38a6cf7a1d` | `origin/recovery/pr-28-38a6cf7a1d` | VERIFIED |
 | #25 | `tar-absolute` | `f17e2e182f` | `origin/recovery/pr-25-f17e2e182f` | VERIFIED |
 | #13 | `qualification-dispatch` | `73bfa1c4b9` | `origin/recovery/pr-13-73bfa1c4b9` | VERIFIED |

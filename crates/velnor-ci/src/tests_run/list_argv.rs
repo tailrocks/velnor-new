@@ -214,3 +214,66 @@ fn a_partitioned_run_lists_the_same_partition() {
         ]))
     );
 }
+
+#[test]
+fn an_archive_run_lists_without_writing_to_the_tree_it_runs_from() {
+    let run = argv(&[
+        "cargo-nextest",
+        "nextest",
+        "run",
+        "--archive-file",
+        "nextest-archive.tar.zst",
+        "--extract-to",
+        ".",
+        "--extract-overwrite",
+        "--workspace-remap",
+        ".",
+        "--test-threads",
+        "2",
+        "--no-fail-fast",
+        "-E",
+        "all()",
+    ]);
+
+    assert_eq!(
+        list_argv(&run),
+        Some(argv(&[
+            "cargo-nextest",
+            "nextest",
+            "list",
+            "--archive-file",
+            "nextest-archive.tar.zst",
+            "--workspace-remap",
+            ".",
+            "-E",
+            "all()",
+            "--message-format",
+            "json",
+        ]))
+    );
+}
+
+#[test]
+fn an_archive_run_with_the_equals_spelling_lists_without_extract_options() {
+    let run = argv(&[
+        "cargo",
+        "nextest",
+        "run",
+        "--archive-file=a.tar.zst",
+        "--extract-to=/work/tree",
+        "--extract-overwrite",
+        "--no-fail-fast",
+    ]);
+
+    assert_eq!(
+        list_argv(&run),
+        Some(argv(&[
+            "cargo",
+            "nextest",
+            "list",
+            "--archive-file=a.tar.zst",
+            "--message-format",
+            "json",
+        ]))
+    );
+}

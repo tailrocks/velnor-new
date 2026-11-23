@@ -41,9 +41,9 @@ fn a_push_workflow_the_old_name_scan_missed_must_be_named_in_after() -> TestResu
     ];
     for (text, expected) in cases {
         let shown = String::from_utf8_lossy(text);
-        let name = missing_name(text, "\"Rust CI\"")?;
+        let name = missing_name(text, "\"CI\"")?;
         assert_eq!(name.as_deref(), Some(expected), "{shown}");
-        let after = format!("\"Rust CI\", {expected:?}");
+        let after = format!("\"CI\", {expected:?}");
         assert_eq!(missing_name(text, &after)?, None, "{shown}");
     }
     Ok(())
@@ -51,7 +51,7 @@ fn a_push_workflow_the_old_name_scan_missed_must_be_named_in_after() -> TestResu
 
 #[test]
 fn a_workflow_without_a_name_key_is_not_a_push_workflow_unless_it_pushes() -> TestResult {
-    assert_eq!(missing_name(b"on: pull_request\n", "\"Rust CI\"")?, None);
+    assert_eq!(missing_name(b"on: pull_request\n", "\"CI\"")?, None);
     Ok(())
 }
 
@@ -61,7 +61,7 @@ fn nested_push_templates_do_not_become_required_release_workflows() -> TestResul
     const NESTED: &str = ".github/workflows/templates/push.yaml";
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some(&format!("after = [\"Rust CI\", {DIRECT:?}]\n")),
+        Some(&format!("after = [\"CI\", {DIRECT:?}]\n")),
     )?;
     view.files
         .insert(RepoPath::new(DIRECT)?, b"on: push\n".to_vec());
@@ -77,7 +77,7 @@ fn nested_push_templates_do_not_become_required_release_workflows() -> TestResul
         tree.at(&["on", "workflow_run", "workflows"])
             .ok_or("no workflow_run workflows")?
             .texts(),
-        ["Rust CI", DIRECT]
+        ["CI", DIRECT]
     );
     Ok(())
 }
@@ -92,13 +92,10 @@ fn alias_dense_workflows_preserve_release_dependency_names_and_events() -> TestR
         }
         let expected = if event == "push" { Some("Extra") } else { None };
         assert_eq!(
-            missing_name(text.as_bytes(), "\"Rust CI\"")?.as_deref(),
+            missing_name(text.as_bytes(), "\"CI\"")?.as_deref(),
             expected
         );
-        assert_eq!(
-            missing_name(text.as_bytes(), "\"Rust CI\", \"Extra\"")?,
-            None
-        );
+        assert_eq!(missing_name(text.as_bytes(), "\"CI\", \"Extra\"")?, None);
     }
     Ok(())
 }
@@ -119,11 +116,11 @@ fn workflows_beyond_input_or_expansion_bounds_stay_conservative() -> TestResult 
     assert!(expanded.len() < 500_000);
     for text in [oversized, expanded] {
         assert_eq!(
-            missing_name(text.as_bytes(), "\"Rust CI\"")?.as_deref(),
+            missing_name(text.as_bytes(), "\"CI\"")?.as_deref(),
             Some(PATH)
         );
         assert_eq!(
-            missing_name(text.as_bytes(), &format!("\"Rust CI\", {PATH:?}"))?,
+            missing_name(text.as_bytes(), &format!("\"CI\", {PATH:?}"))?,
             None
         );
     }

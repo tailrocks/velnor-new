@@ -112,7 +112,7 @@ alone (`19 s` plus `26 s` [M]) consumes 53% of v3's `~85 s` push-to-merge estima
   not share the Linux page cache. Reading two clones consumed `2 x 14.29 GB` of RAM and evicted the
   warm base snapshot from `10.0 GB` down to `4.9 GB`. That forces a `24 GiB` budget per sandbox and
   caps each 96-thread, `125.5 GiB` worker at four build slots (§9). Those 20 cluster slots must
-  serve three organisations (`tailrocks`, `ChainArgos`, `jackin`, 160 max runners today, §B.3.2),
+  serve three organisations (`tailrocks`, `example-org`, `jackin`, 160 max runners today, §B.3.2),
   twin witnesses, cold A1 audits, batch product builds, and queue speculation. When real compiles
   and links read rlibs (unlike P2's metadata-only `0`-crate check), page-cache eviction degrades
   warm builds into `10.6 GiB` NVMe reads.

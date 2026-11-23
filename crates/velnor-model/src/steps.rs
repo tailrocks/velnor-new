@@ -121,6 +121,7 @@ pub enum StepKind {
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
         manifests: Vec<RepoPath>,
@@ -140,6 +141,7 @@ pub enum StepKind {
     },
     MbxPin,
     MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
@@ -147,6 +149,7 @@ pub enum StepKind {
         name: String,
         run: String,
         before_build: bool,
+        offline_after_private_fetch: bool,
     },
     GeneratorCheck,
     InstallGenerator(HelperRelease),
@@ -162,15 +165,22 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        saved_keys: bool,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
     CheckMetrics {
         needs_max_bytes: usize,
         trusted_api: bool,
+    },
+    Ansible {
+        name: String,
+        run: String,
     },
     Budget {
         last: usize,
@@ -239,6 +249,7 @@ impl StepKind {
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
+            | Self::MbxOutDirs
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)
@@ -257,7 +268,8 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::MergeQueueCheck { .. } => false,
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
         }
     }
 
@@ -270,7 +282,10 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
+                | Self::ToolsLocal(
+                    ToolsLocalVerb::AnchorSave | ToolsLocalVerb::AnchorSaveAttempt,
+                    _
+                )
         )
     }
 }
@@ -290,15 +305,18 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    RecordSavedKey,
     AnchorReset,
     AnchorRestore,
     AnchorFind,
+    AnchorFindAttempt,
     AnchorRead,
     Verify,
     VerifyNamed,
     VerifyNamedAnchor,
     Record,
     AnchorSave,
+    AnchorSaveAttempt,
 }
 
 impl ToolsLocalVerb {
@@ -327,6 +345,7 @@ pub enum VerifiedSave {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub saved_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

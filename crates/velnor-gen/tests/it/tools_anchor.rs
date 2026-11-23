@@ -6,18 +6,16 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
-const HELPER: &str = "0.1.110";
-const PLAN: &str = "rust-plan";
+pub(crate) const HELPER: &str = "0.1.110";
+pub(crate) const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
-const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
-const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
-const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
+pub(crate) const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
-const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
-const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
+pub(crate) const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
+pub(crate) const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
 const TOOLS_KEY: &str = "velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
 
-fn render(
+pub(crate) fn render(
     manifests: &[&str],
     config: &str,
     helper: &str,
@@ -27,15 +25,15 @@ fn render(
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?)
 }
 
-fn steps(job: &Value) -> Vec<Value> {
+pub(crate) fn steps(job: &Value) -> Vec<Value> {
     job["steps"].as_array().cloned().unwrap_or_default()
 }
 
-fn text(value: &Value, field: &str) -> String {
+pub(crate) fn text(value: &Value, field: &str) -> String {
     value[field].as_str().unwrap_or_default().to_owned()
 }
 
-fn jobs(yaml: &Value) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
+pub(crate) fn jobs(yaml: &Value) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
     Ok(yaml["jobs"]
         .as_object()
         .ok_or("jobs missing")?
@@ -48,7 +46,7 @@ fn named<'a>(steps: &'a [Value], name: &str) -> Option<&'a Value> {
     steps.iter().find(|step| step["name"] == name)
 }
 
-fn position(steps: &[Value], pick: impl Fn(&Value) -> bool) -> Option<usize> {
+pub(crate) fn position(steps: &[Value], pick: impl Fn(&Value) -> bool) -> Option<usize> {
     steps.iter().position(pick)
 }
 
@@ -56,7 +54,7 @@ fn restores_tools(step: &Value) -> bool {
     step["name"] == "Restore the tools cache" || text(step, "run").contains("tools-local restore")
 }
 
-fn verifies(step: &Value) -> bool {
+pub(crate) fn verifies(step: &Value) -> bool {
     text(step, "run").ends_with("tools-verify check")
 }
 
@@ -277,34 +275,6 @@ fn a_job_without_a_plan_job_reads_the_anchor_itself() -> TestResult {
         checked += 1;
     }
     assert_eq!(checked, 1);
-    Ok(())
-}
-
-#[test]
-fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestResult {
-    for config in STORES.iter().copied() {
-        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.111")?;
-        let mut verified = 0;
-        for (id, job) in jobs(&yaml)? {
-            if id == PLAN {
-                assert_eq!(
-                    job["outputs"]["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
-                    "{config:?}"
-                );
-                continue;
-            }
-            let steps = steps(&job);
-            let Some(verify) = position(&steps, verifies) else {
-                continue;
-            };
-            verified += 1;
-            assert_eq!(
-                steps[verify]["env"]["VELNOR_ANCHOR_CACHE_KEY"], PLAN_ANCHOR_KEY,
-                "{config:?} {id}"
-            );
-        }
-        assert!(verified >= 1, "{config:?}");
-    }
     Ok(())
 }
 

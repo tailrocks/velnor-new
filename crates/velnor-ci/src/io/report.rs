@@ -5,7 +5,7 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, restore_notices, waste};
 use crate::report_caches::{CachePlan, observe_caches};
 use crate::telemetry::{INVOCATIONS, Invocation};
 use serde_json::Value;
@@ -194,10 +194,21 @@ fn cache_metrics(
                 super::report_waste::entry_before_job(cache, &listing, &readable_refs(), start);
         }
         let saving = cache.save != SaveOutcome::NotAttempted;
+        if saving && cache.saved_key.as_deref() == Some("") {
+            cache.bytes = None;
+            cache.save = SaveOutcome::Failed;
+            metrics
+                .diagnostics
+                .push("Saved cache key unavailable".to_owned());
+            continue;
+        }
         let key = if saving {
-            &cache.requested_key
+            cache
+                .saved_key
+                .as_deref()
+                .unwrap_or(cache.requested_key.as_str())
         } else if let Some(key) = &cache.matched_key {
-            key
+            key.as_str()
         } else {
             continue;
         };
@@ -307,7 +318,11 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
             &format!("## {}\n\n{}", lane.lane, lane.summary()),
         )?;
     }
-    check(&lanes)
+    let verdict = check(&lanes);
+    if verdict.is_err() {
+        print!("{}", restore_notices(&lanes));
+    }
+    verdict
 }
 fn find_metrics(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), CiError> {
     if !directory.exists() {

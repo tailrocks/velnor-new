@@ -12,7 +12,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 use super::super::units::{UnitFile, profile};
 use super::Audit;
 use super::freshness::Cause;
-use crate::coverage::{Fingerprint, RunGap, Unit, UnitKind};
+use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
 impl Audit<'_> {
@@ -171,7 +171,11 @@ impl Audit<'_> {
                 .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
-            let mut gap = (!known.is_empty() && scripts.is_empty()).then_some(RunGap::Older);
+            let mut gap = if known.is_empty() {
+                Some(RunGap::Uncompiled)
+            } else {
+                scripts.is_empty().then_some(RunGap::Older)
+            };
             let mut current = false;
             for source in scripts {
                 let mut ran = false;
@@ -236,7 +240,17 @@ impl Audit<'_> {
         std::mem::swap(&mut self.freshness, &mut self.diagnostic);
         let all = self.changed_inputs(base, paths, built, output, true, usize::MAX);
         std::mem::swap(&mut self.freshness, &mut self.diagnostic);
-        let more = all.map_or(0, |all| all.len().saturating_sub(1));
+        let more = all.map_or(MoreInputs::default(), |all| {
+            all.iter()
+                .skip(1)
+                .fold(MoreInputs::default(), |mut more, (_, cause)| {
+                    match cause {
+                        Cause::Changed => more.changed += 1,
+                        Cause::Unproven => more.unproven += 1,
+                    }
+                    more
+                })
+        });
         match cause {
             Cause::Changed => RunGap::Stale { input: first, more },
             Cause::Unproven => RunGap::Unproven { input: first, more },

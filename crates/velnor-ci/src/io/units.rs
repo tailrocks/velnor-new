@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -16,6 +17,8 @@ mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
+#[cfg(test)]
+mod limit_tests;
 mod separation;
 mod workspace;
 
@@ -74,24 +77,21 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
 }
 
 fn directory_limit() -> Result<usize, CiError> {
-    limit_from(
-        std::env::var(MAX_TARGET_DIRECTORIES_VARIABLE)
-            .ok()
-            .as_deref(),
-    )
+    limit_from(std::env::var_os(MAX_TARGET_DIRECTORIES_VARIABLE).as_deref())
 }
 
-fn limit_from(value: Option<&str>) -> Result<usize, CiError> {
+fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
     let Some(value) = value.filter(|value| !value.is_empty()) else {
         return Ok(MAX_TARGET_DIRECTORIES);
     };
     value
-        .parse::<usize>()
-        .ok()
+        .to_str()
+        .and_then(|value| value.parse::<usize>().ok())
         .filter(|limit| (1..=TARGET_DIRECTORIES_CEILING).contains(limit))
         .ok_or_else(|| {
             CiError::new(format!(
-                "{MAX_TARGET_DIRECTORIES_VARIABLE} must be a number from 1 to {TARGET_DIRECTORIES_CEILING}, not {value:?}"
+                "{MAX_TARGET_DIRECTORIES_VARIABLE} must be a number from 1 to {TARGET_DIRECTORIES_CEILING}, not \"{}\"",
+                value.display()
             ))
         })
 }
@@ -142,10 +142,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                     )));
                 }
                 if directories == limit {
-                    return Err(CiError::new(format!(
-                        "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
-                        path.display()
-                    )));
+                    return Err(directory_limit_exceeded(&path, limit));
                 }
                 directories += 1;
                 pending.push((path, depth + 1));
@@ -162,6 +159,19 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
         }
     }
     Ok((found, built))
+}
+
+fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
+    if limit >= TARGET_DIRECTORIES_CEILING {
+        return CiError::new(format!(
+            "target directory traversal exceeds {limit} directories at {}; reduce or split the target tree",
+            path.display()
+        ));
+    }
+    CiError::new(format!(
+        "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
+        path.display()
+    ))
 }
 
 /// A file in the `out` folder of a unit that ran a build script. That folder is the script's

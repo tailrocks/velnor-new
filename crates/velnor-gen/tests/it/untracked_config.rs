@@ -49,7 +49,7 @@ fn an_untracked_config_is_refused_by_generate_and_check_and_names_the_file() -> 
             assert!(stderr.contains(path), "{command} {path}: {stderr}");
             assert!(stderr.contains(&format!("git add {path}")), "{stderr}");
             assert!(
-                !repo.0.join(".github/workflows/rust-ci.yml").exists(),
+                !repo.0.join(".github/workflows/ci.yml").exists(),
                 "{command} {path} wrote workflows before refusing"
             );
         }

@@ -3,10 +3,14 @@
 
 mod evidence;
 mod handle;
+mod held;
+mod latest;
+mod resolve;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{Budget, scan, unresolved_link};
+pub(super) use latest::newest;
+pub(super) use walk::{Budget, scan};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,6 +28,12 @@ use crate::error::CiError;
 
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+
+#[derive(Default)]
+pub(super) struct Scan {
+    pub(super) entries: Entries,
+    pub(super) identities: BTreeMap<PathBuf, handle::Stamp>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
@@ -56,7 +66,6 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
         .collect()
 }
 
-/// A path the audit cannot resolve (a symbolic link loop, or an unreadable directory).
 pub(super) fn unresolved(path: &Path, error: &io::Error) -> CiError {
     CiError::new(format!("cannot resolve {}: {error}", path.display()))
 }
@@ -217,10 +226,6 @@ thread_local! {
 
 const PARSED_LIMIT: usize = 8;
 
-/// Loads the inventory a build output's receipt names. The receipt, the output
-/// and the inventory bytes are verified on every call exactly as before; only
-/// the JSON parse is shared, keyed by the verified content digest, so one
-/// inventory serving hundreds of outputs is parsed once per process.
 pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
@@ -249,5 +254,7 @@ pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
     Ok(parsed)
 }
 
+#[cfg(test)]
+mod revisit;
 #[cfg(test)]
 mod tests;

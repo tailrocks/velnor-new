@@ -2,7 +2,7 @@
 
 The Rust generator reads top-level keys from `.velnor/release.toml`.
 By default, `roots = ["."]` lists Cargo roots with `release-plz.toml` files and
-`after = ["Rust CI"]` lists workflow names and must include every push workflow.
+`after = ["CI"]` lists workflow names and must include every push workflow.
 
 `pr_only_checks = ["DCO"]` explicitly exempts names from release push checks;
 it defaults to `[]` and requires pinned `velnor-ci` 0.1.82 or newer. Each name

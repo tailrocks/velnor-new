@@ -28,7 +28,7 @@ fn succeeded(metrics: Metrics) -> Outcome {
 #[test]
 fn a_missing_velnor_ci_is_a_warning_and_the_successful_run_still_passes() {
     let empty = temp_dir("velnor-ci-missing-path");
-    let collected = Command::new("velnor-ci").env("PATH", &empty).output();
+    let collected = Command::new("velnor-ci").env("PATH", empty.path()).output();
     let path = empty.join("metrics/1.json");
     let outcomes = [succeeded(metrics_of(
         Path::new("velnor-ci"),

@@ -58,7 +58,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/bitcoin-grpc-server",
+   "repository": "example-org/example-repo-8",
    "audited_source_sha": "cd0a5bfb92538c230d1762b0ab7fafb52282fc33",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 6506789758,
@@ -82,7 +82,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/bitcoin-processor-rust",
+   "repository": "example-org/example-repo-11",
    "audited_source_sha": "d9115d1d42c881b23e6a5dd2f0dcd2dab5f3babd",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3579123515,
@@ -106,7 +106,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/blockchain-explorer",
+   "repository": "example-org/example-repo-3",
    "audited_source_sha": "4b9fc98f29705541d74e181dcc52c717c21e6075",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3595935131,
@@ -130,7 +130,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/eth-grpc-server",
+   "repository": "example-org/example-repo-4",
    "audited_source_sha": "4b97aa1a0cf8c15f7a2ab75435c7c6da270b2ea6",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3787676853,
@@ -154,7 +154,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/eth-processor-rust",
+   "repository": "example-org/example-repo-12",
    "audited_source_sha": "c08aa7d5232e43466fcfd4fa6929ef7dec7bb76c",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3582319132,
@@ -178,7 +178,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/tron-grpc-server",
+   "repository": "example-org/example-repo-6",
    "audited_source_sha": "9143caa0321469ca6627a9feb638e20da714dcb5",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3785514312,
@@ -202,7 +202,7 @@
    "fitted": null
   },
   {
-   "repository": "ChainArgos/tron-processor-rust",
+   "repository": "example-org/example-repo-7",
    "audited_source_sha": "0e2a1050b34284530047a49d9a65fff333cecaed",
    "generator": "0.1.41",
    "stored_inventory_bytes_measured": 3583640071,

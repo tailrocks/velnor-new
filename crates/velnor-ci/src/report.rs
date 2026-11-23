@@ -15,9 +15,12 @@ pub struct Cache {
     pub family: String,
     pub root: Option<String>,
     pub restore_step: String,
-    pub save_step: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_step: Option<String>,
     #[serde(default)]
     pub requested_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_key: Option<String>,
     pub matched_key: Option<String>,
     pub hit: Hit,
     pub bytes: Option<u64>,
@@ -108,7 +111,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace && event.restored != Some(false))
+            if (same_lock && !event.workspace && event.restored == Some(true))
                 || (warm
                     && event.workspace
                     && (event.unchanged
@@ -118,8 +121,11 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                             .all(|dependency| !compiled.contains(dependency.as_str()))))
             {
                 violations.push(format!(
-                    "{}: {} v{} compiled despite usable restored inputs",
-                    invocation.root, event.package, event.version
+                    "{}: {} v{} compiled despite usable restored inputs{}",
+                    invocation.root,
+                    event.package,
+                    event.version,
+                    crate::restored_units::cargo_reason(event)
                 ));
             }
         }
@@ -144,12 +150,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .caches
             .iter()
             .filter(|cache| cache.save == SaveOutcome::Failed)
-            .map(|cache| {
-                format!(
-                    "{} cache save failed: {}",
-                    cache.family, cache.requested_key
-                )
-            }),
+            .map(|cache| format!("{} cache save failed: {}", cache.family, save_key(cache))),
     );
     violations.extend(crate::waste_evidence::waste(metrics));
     violations
@@ -174,7 +175,6 @@ fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut identities = BTreeSet::new();
     let mut violations = Vec::new();
-    let mut notices = Vec::new();
     for lane in lanes {
         validate_evidence(lane)?;
         if !identities.insert(&lane.lane) {
@@ -191,24 +191,38 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         }
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
-        notices.extend(crate::restored_units::base_gaps(lane));
     }
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
     if violations.is_empty() {
-        let mut text = format!("Cache: {} lanes checked, no waste\n", lanes.len());
-        notices.sort();
-        notices.dedup();
-        for notice in notices {
-            text.push_str("::notice::");
-            text.push_str(&notice);
-            text.push('\n');
-        }
-        Ok(text)
+        Ok(format!(
+            "Cache: {} lanes checked, no waste\n{}",
+            lanes.len(),
+            restore_notices(lanes)
+        ))
     } else {
         Err(CiError::new(violations.join("\n")))
     }
+}
+
+#[must_use]
+pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
+    let mut notices: Vec<(&'static str, String)> = Vec::new();
+    for lane in lanes {
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| ("notice", gap)),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
+    }
+    notices.sort();
+    notices.dedup();
+    notices
+        .iter()
+        .map(|(level, notice)| crate::escape::command_line(level, notice))
+        .collect()
 }
 
 fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
@@ -347,6 +361,14 @@ impl LaneMetrics {
     }
 }
 
+fn save_key(cache: &Cache) -> &str {
+    cache
+        .saved_key
+        .as_deref()
+        .filter(|key| !key.is_empty())
+        .unwrap_or(&cache.requested_key)
+}
+
 fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     if let Some(cache) = lane
         .caches
@@ -355,7 +377,8 @@ fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     {
         return Err(CiError::new(format!(
             "cannot verify cache save for lane {}: {}",
-            lane.lane, cache.requested_key
+            lane.lane,
+            save_key(cache)
         )));
     }
     if !lane.verification_errors.is_empty() {

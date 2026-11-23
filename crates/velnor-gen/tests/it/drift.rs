@@ -27,8 +27,8 @@ fn generated() -> String {
 
 #[test]
 fn check_reports_each_owned_file_that_generate_would_write_or_remove() -> TestResult {
-    let workflow = RepoPath::new(".github/workflows/rust-ci.yml")?;
-    let other = RepoPath::new(".github/workflows/ci.yml")?;
+    let workflow = RepoPath::new(".github/workflows/ci.yml")?;
+    let other = RepoPath::new(".github/workflows/hand.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let disk = |content: Option<&str>| {
         let mut files = BTreeMap::from([(other.clone(), b"name: CI\n".to_vec())]);
@@ -69,7 +69,7 @@ fn disk(path: &RepoPath, text: &str) -> BTreeMap<RepoPath, Vec<u8>> {
 
 #[test]
 fn a_file_the_other_generator_marked_is_never_overwritten() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     for hand_written in [
         ENGINE,
@@ -101,7 +101,7 @@ fn a_marked_file_velnor_gen_does_not_write_is_stale_whatever_its_name() -> TestR
 
 #[test]
 fn the_engines_marked_file_is_left_alone() -> TestResult {
-    let other = path(".github/workflows/ci.yml")?;
+    let other = path(".github/workflows/repository-checks.yml")?;
     {
         assert_eq!(
             drift(&BTreeMap::new(), &disk(&other, ENGINE), &none()),
@@ -126,7 +126,7 @@ fn an_unmarked_file_is_drift_unless_external_workflows_lists_it() -> TestResult 
 
 #[test]
 fn a_forged_header_is_not_a_velnor_gen_file_and_check_reports_it() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let forged = generated().replace("Rust CI", "Evil");
     {
@@ -170,7 +170,7 @@ fn a_copied_marker_on_a_hand_written_workflow_is_refused_never_stale() -> TestRe
 
 #[test]
 fn a_header_without_a_digest_is_forged_whether_or_not_the_path_is_expected() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let release = path(".github/workflows/release.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     for (file, header) in [(&workflow, HEADER), (&release, RELEASE_HEADER)] {
@@ -191,7 +191,7 @@ fn a_header_without_a_digest_is_forged_whether_or_not_the_path_is_expected() -> 
 
 #[test]
 fn a_crlf_checkout_of_a_sealed_file_is_still_owned_and_not_drift() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let crlf = generated().replace('\n', "\r\n");
     assert_eq!(owner_of(crlf.as_bytes()), Owner::VelnorGen);
@@ -255,6 +255,7 @@ fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
         files: read_files(root, &wanted_files(&tracked))?,
         tracked_paths: tracked,
         symlinks,
+        gitlinks: BTreeSet::default(),
         rust_metadata: BTreeMap::new(),
     };
     add_manifests(&mut view, |paths| read_files(root, paths))?;
@@ -285,7 +286,7 @@ fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates(
         .collect();
     let on_disk = read_files(&root, &committed)?;
     assert!(
-        on_disk.contains_key(&RepoPath::new(".github/workflows/rust-ci.yml")?),
+        on_disk.contains_key(&RepoPath::new(".github/workflows/ci.yml")?),
         "the committed Rust CI workflow was not read"
     );
     let engine = view

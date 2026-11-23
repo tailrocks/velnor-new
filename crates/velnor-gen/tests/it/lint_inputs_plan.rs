@@ -58,7 +58,6 @@ fn a_pull_request_that_changes_no_input_skips_the_lint() -> TestResult {
         EventKind::PullRequest,
         Some(&["src/lib.rs", "README.md"])
     )?);
-    assert!(!hk(EventKind::PullRequest, Some(&[]))?);
     assert!(!hk(
         EventKind::PullRequest,
         Some(&["a/hk.pkl", "toolsmith/x"])
@@ -79,7 +78,7 @@ fn a_pull_request_that_changes_an_input_runs_the_lint() -> TestResult {
 
 #[test]
 fn the_workflow_and_the_config_that_generate_the_lint_always_run_it() -> TestResult {
-    for path in [".github/workflows/rust-ci.yml", ".velnor/rust-ci.toml"] {
+    for path in [".github/workflows/ci.yml", ".velnor/rust-ci.toml"] {
         assert!(hk(EventKind::PullRequest, Some(&[path]))?, "{path}");
     }
     Ok(())
@@ -273,5 +272,11 @@ fn a_file_named_like_the_prefix_of_a_trailing_glob_is_not_a_tracked_input() -> T
         &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true]);
+    Ok(())
+}
+
+#[test]
+fn an_empty_change_list_on_a_pull_request_runs_the_lint() -> TestResult {
+    assert!(hk(EventKind::PullRequest, Some(&[]))?);
     Ok(())
 }

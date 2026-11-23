@@ -1,0 +1,162 @@
+# Regenerate after a listed file changes (from the repo root; it rewrites this file, so re-add these header lines): kingfisher scan . --git-history none --confidence low --no-validate --redact --no-update-check --skip-regex '^m-[0-9a-f]{16}$' --exclude '**/.git/**' --exclude '.kingfisher-baseline.yml' --exclude '.kingfisher-worktree-baseline.yml' --exclude '**/crates/velnor-ci/tests/it/cache_credential_scrub.rs' --exclude '**/crates/velnor-ci/tests/it/cache_private_repo.rs' --exclude '**/crates/velnor-ci/tests/it/public_probe.rs' --exclude '**/crates/velnor-ci/tests/it/audit/selection.rs' --exclude '**/velnor-gen/tests/it/detect_private.rs' --manage-baseline --baseline-file .kingfisher-worktree-baseline.yml
+version: 2
+fingerprint_algorithm: kingfisher-v1
+repositories:
+- id: git://github.com/tailrocks/velnor-new
+  findings:
+  - path: .velnor/runner.lock
+    fingerprint: '5508753565254821617'
+    rule_id: betterleaks.generic-api-key
+    line: 73
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json
+    fingerprint: '5172405124854439214'
+    rule_id: betterleaks.generic-api-key
+    line: 176
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/implemented/freshness-evidence-2026-10-08.md
+    fingerprint: '11437976419260931659'
+    rule_id: betterleaks.generic-api-key
+    line: 74
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '15512092777248505225'
+    rule_id: betterleaks.generic-api-key
+    line: 16
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '17107050566352024854'
+    rule_id: betterleaks.generic-api-key
+    line: 19
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '9756024602969920824'
+    rule_id: betterleaks.generic-api-key
+    line: 27
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '9707670083911395256'
+    rule_id: betterleaks.generic-api-key
+    line: 38
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '11149314828514248564'
+    rule_id: betterleaks.generic-api-key
+    line: 69
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/uv-0.12.23-qualification-evidence.json
+    fingerprint: '9655465945892217680'
+    rule_id: betterleaks.generic-api-key
+    line: 11
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs
+    fingerprint: '6383438514258643608'
+    rule_id: betterleaks.generic-credential-uri
+    line: 39
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs
+    fingerprint: '3381399161728242451'
+    rule_id: betterleaks.generic-credential-uri
+    line: 169
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs
+    fingerprint: '2822880025986270369'
+    rule_id: betterleaks.generic-credential-uri
+    line: 183
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs
+    fingerprint: '9136242989894752560'
+    rule_id: betterleaks.generic-credential-uri
+    line: 204
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs
+    fingerprint: '8355065594223667205'
+    rule_id: betterleaks.generic-credential-uri
+    line: 209
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_crates.rs
+    fingerprint: '16429486823029227446'
+    rule_id: betterleaks.generic-credential-uri
+    line: 37
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_crates.rs
+    fingerprint: '1480760057295248060'
+    rule_id: betterleaks.generic-credential-uri
+    line: 47
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_crates.rs
+    fingerprint: '852615653858915008'
+    rule_id: betterleaks.generic-credential-uri
+    line: 52
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_crates.rs
+    fingerprint: '5720931808009310287'
+    rule_id: betterleaks.generic-credential-uri
+    line: 57
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_hardening.rs
+    fingerprint: '11747371089963222560'
+    rule_id: betterleaks.generic-credential-uri
+    line: 96
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_hardening.rs
+    fingerprint: '10336501834681868579'
+    rule_id: betterleaks.generic-credential-uri
+    line: 116
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/cache_credential_scrub_hardening.rs
+    fingerprint: '8203555034450338240'
+    rule_id: betterleaks.generic-credential-uri
+    line: 195
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '15247354568402731947'
+    rule_id: betterleaks.generic-api-key
+    line: 30
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '370147777111129869'
+    rule_id: betterleaks.generic-api-key
+    line: 41
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: docs/reviews/ci-performance-owned-source-publication.json
+    fingerprint: '6645391425323717985'
+    rule_id: betterleaks.generic-api-key
+    line: 114
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem
+    fingerprint: '9193807089587352606'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem
+    fingerprint: '10431730342191956913'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-11-21T00:00:00+00:00
+    last_updated_at: 2026-11-21T00:00:00+00:00

@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    DenyChecks, DenyLane, InputOwner, PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
-    RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig, RustRoot,
-    WORKFLOWS_CONFIG_PATH,
+    DenyChecks, DenyLane, InputOwner, PackageName, PolicyTools, RELEASE_CONFIG_PATH,
+    RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig,
+    RustRoot, ToolPins, WORKFLOWS_CONFIG_PATH,
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
@@ -72,6 +72,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         tracked
             .iter()
             .filter(|path| is_workflow_file(path))
+            .cloned(),
+    )
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| crate::ansible::is_layout_file(path))
             .cloned(),
     )
     .collect()
@@ -144,13 +150,6 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     crate::groups::check(view, &config, &rust_roots)?;
     crate::groups::check_shape(&config)?;
-    crate::config_test_lane::check(&config, &rust_roots)?;
-    crate::config_root_timeouts::check(&config, &rust_roots)?;
-    crate::config_check_configurations::check(view, &config, &rust_roots)?;
-    let toolchain = toolchain(&view.files)?;
-    let tools = crate::config_lint::pinned_tools(view, &config)?;
-    check_setup_files(view, &rust_roots)?;
-    check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -159,6 +158,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    crate::config_test_lane::check(&config, &rust_roots)?;
+    crate::config_root_timeouts::check(&config, &rust_roots)?;
+    crate::config_check_configurations::check(view, &config, &rust_roots, helper.as_ref())?;
+    let toolchain = toolchain(&view.files)?;
+    let tools = if rust_roots.is_empty() && config.lint.is_empty() {
+        ToolPins {
+            configs: Vec::new(),
+            locked_file: false,
+            tools: BTreeMap::new(),
+        }
+    } else {
+        crate::config_lint::pinned_tools(view, &config)?
+    };
+    check_setup_files(view, &rust_roots)?;
+    check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     crate::groups::check_helper(&config, helper.as_ref())?;
     refuse_locked_credentials(view, &config, &rust_roots)?;
     crate::public_advice::check(view, &config, &rust_roots)?;
@@ -174,6 +188,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .and_then(|policy| policy.deny_checks.as_deref())
         .map_or(DenyChecks::ALL, DenyChecks::of);
     let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
+    refuse_gate_without_lane(&config, policy)?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
@@ -198,6 +213,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         inputs_lock_identified,
         unowned,
     })
+}
+
+fn refuse_gate_without_lane(config: &RustCiConfig, policy: PolicyTools) -> Result<(), DetectError> {
+    if config
+        .policy
+        .as_ref()
+        .is_some_and(|table| table.gate_on_plan)
+        && !(policy.deny || policy.machete)
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::PolicyGateWithoutLane,
+        ));
+    }
+    Ok(())
 }
 
 fn repository_identity(view: &RepoView, config: &RustCiConfig) -> Result<String, DetectError> {

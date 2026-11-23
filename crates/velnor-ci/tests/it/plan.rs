@@ -163,6 +163,77 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
     assert!(!starred.contains("glob = "), "{starred}");
     assert!(!starred.contains("\"scripts/a*b\""), "{starred}");
+
+    let questioned = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::from([path("scripts/a?b")]),
+        &BTreeMap::new(),
+    );
+    assert!(
+        questioned.contains("use a glob of a folder above it that ends in /**"),
+        "{questioned}"
+    );
+    assert!(!questioned.contains("glob = "), "{questioned}");
+}
+
+#[test]
+fn a_root_level_unknown_path_with_a_wildcard_gets_no_rule_that_shadows_root_files() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    for name in ["build*.sh", "build?.sh", "b[a]d.sh"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(!text.contains("use a glob of a folder above"), "{text}");
+        assert!(text.contains("rename it"), "{text}");
+    }
+}
+
+#[test]
+fn an_unknown_path_with_a_question_mark_or_a_bracket_gets_no_config_line_that_would_not_load() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    for name in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(!text.contains(&format!("\"{name}\"")), "{text}");
+    }
+}
+
+#[test]
+fn an_unknown_root_level_path_with_a_glob_character_gets_no_folder_glob_advice() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    for name in ["build?.sh", "build*.sh", "b[u]ild.sh"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("use a glob of a folder above"), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(text.contains("rename"), "{text}");
+    }
 }
 
 #[test]

@@ -6,8 +6,8 @@ use std::error::Error;
 
 use velnor_model::{
     BuildRecord, CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions,
-    Platform, PrRun, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
-    When, WorkflowPlan,
+    Platform, PrRun, PullRequestType, RunnerLabel, SetupOrder, Sha256, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{
     MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
@@ -96,6 +96,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
+            anchor_key_output: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
             mbx_stats: velnor_model::MbxStats::Summary,
@@ -112,9 +113,11 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     skip_when_cold: false,
                     private_repo: false,
                     hosted_only: false,
+                    any_gate: Vec::new(),
                     pr: PrRun::Always,
                     gate: None,
                     reads: None,
+                    setup_order: SetupOrder::Unordered,
                 })
                 .collect(),
         }],

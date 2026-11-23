@@ -1,6 +1,14 @@
 # Migrating from velnor-actions to velnor-gen
 
-This page is for a project that runs Rust CI on the old velnor-actions engine and moves it to `velnor-gen`. The new generator writes one workflow, `.github/workflows/rust-ci.yml`, from `.velnor/rust-ci.toml`. The settings are in [`rust-ci.md`](rust-ci.md) and [`generator/CONFIG.md`](../generator/CONFIG.md).
+This page is for a project that moves from the old velnor-actions engine to `velnor-gen`. The generator writes one workflow, `.github/workflows/ci.yml`, named `CI`, from `.velnor/rust-ci.toml`. That file is the CI configuration for the stacks the repository has. Its presence does not mean the repository is Rust, and it does not by itself add a Rust job. The settings are in [`rust-ci.md`](rust-ci.md) and [`generator/CONFIG.md`](../generator/CONFIG.md).
+
+A repository that is not Rust still gets that one workflow. `velnor-gen generate` does not refuse a tree with no `Cargo.toml`, and it does not ask you to add an empty Cargo package, an anchor package, or a dummy test. A job is emitted only for a tool the tree has:
+
+- Rust fmt, clippy, test, mbx, and cache steps, plus `rust-cache-trim.yml` when the delta cache needs it, only when a real Cargo workspace or package is present.
+- An Ansible job when playbooks are present. The infrastructure layout is `ansible-configs/*.yml` (not `requirements.yaml`), `ansible-configs/requirements.txt`, and `ansible-configs/requirements.yaml`. The job syntax-checks those playbooks, runs ansible-lint, and installs Ansible from the repository's hashed requirements.
+- jactionlint, a mise task, and a declared check stay jobs in the same `CI` workflow when that tool's inputs exist.
+
+A Rust repository and an Ansible repository can use the same runner. A tree with both gets both jobs. Do not add a second workflow per tool. Release, cache trim, and workflows declared in `.velnor/workflows.toml` stay their own files.
 
 Most failed migrations failed before the generator ran: on the mise layout, on a file Git does not track, or on a dependency the generator cannot fetch. Check the prerequisites first.
 
@@ -8,7 +16,7 @@ Most failed migrations failed before the generator ran: on the mise layout, on a
 
 ### The mise and mbx layout
 
-This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx with no `[wrappers.cargo]`. Generation accepts this native layout. The explicit layout, `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }` next to the same option and pin, is also accepted. Without the shim env the wrapper breaks `cargo -V` and `cargo --list`, so generation refuses it. velnor-ci [0.1.109](https://github.com/tailrocks/velnor-new/releases/tag/tools-v0.1.109) is released, and generation requires one of these two layouts (#2108).
+This layout is for a repository that has a Cargo workspace or package. A repository with no `Cargo.toml` does not install a Rust toolchain, mbx, or nextest, and it does not need this layout to generate. For a Cargo repository, `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx with no `[wrappers.cargo]`. Generation accepts this native layout. The explicit layout, `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }` next to the same option and pin, is also accepted. Without the shim env the wrapper breaks `cargo -V` and `cargo --list`, so generation refuses it. velnor-ci [0.1.109](https://github.com/tailrocks/velnor-new/releases/tag/tools-v0.1.109) is released, and generation requires one of these two layouts (#2108).
 
 ```toml
 min_version = "<mise version>"
@@ -45,7 +53,7 @@ mise exec -- cargo build
 
 ### Committed lock files
 
-Commit `Cargo.lock`. Generation refuses a checkout where it is not committed (`Cargo.lock is not committed`). Create `mise.lock` with `mise lock` and commit it too; generation refuses a missing one (`mise.lock is required`). Both must be tracked by Git, not only present on disk.
+When the repository has a Cargo workspace or package, commit `Cargo.lock`. Generation refuses that checkout when the lock is not committed (`Cargo.lock is not committed`). Create `mise.lock` with `mise lock` and commit it too; generation refuses a missing one (`mise.lock is required`). Both must be tracked by Git, not only present on disk. A repository with no `Cargo.toml` has neither requirement.
 
 ### Tracked files
 
@@ -90,7 +98,7 @@ The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/
    velnor-gen --root . generate
    ```
 
-   Stage every path that `generate` writes or changes, not only the workflow. Run `git status` and add each generated path. The list includes `.github/workflows/rust-ci.yml`, `.velnor/rust-metadata.json` and `.github/workflows/rust-cache-trim.yml`. The cache-trim workflow appears when the helper enables PR delta caching with default target directories and public dependencies. Release and declared-workflow settings write more files. A clean checkout without these files fails `check`.
+   Stage every path that `generate` writes or changes, not only the workflow. Run `git status` and add each generated path. The list includes `.github/workflows/ci.yml`, `.velnor/rust-metadata.json` and `.github/workflows/rust-cache-trim.yml`. The workflow name in `ci.yml` is `CI`. The cache-trim workflow appears when a Rust repository's helper enables PR delta caching with default target directories and public dependencies. A repository with no Cargo workspace does not get the Rust job, the Rust toolchain, mbx, nextest, or the cache-trim workflow. Release and declared-workflow settings write more files. A clean checkout without the files `generate` writes fails `check`.
 
 6. Check that the output is current. `check` exits 1 when a generated file is out of date or missing:
 

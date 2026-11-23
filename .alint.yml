@@ -7,10 +7,8 @@
 #
 # `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
 # lockfiles, no-tracked-artifacts), deduped: the review example repeats
-# the GHA bundle. Verified on the pinned alint 0.22.1 (`alint
-# validate-config` loads 55 bundled rules; `alint check
-# --fail-on-warning` is green). Re-verify every bundle/level change with
-# the pinned binary: `alint validate-config` plus `alint check`.
+# the GHA bundle. Re-verify every bundle/level change with the pinned
+# binary: `alint validate-config` plus `alint check --fail-on-warning`.
 # Rust edition 2024 is NOT a literal `toml_path_equals` rule here: every
 # member declares `edition.workspace = true`, so literal equality on
 # `$.package.edition` would reject all seven manifests. Adoption §4
@@ -179,6 +177,7 @@ rules:
       exclude:
         - "scripts/generator-release/**"
         - "scripts/test-native-hk-fmt.sh"
+        - "scripts/test-secret-scan-config.sh"
     pattern: 'ci-helper/crates|generator/crates|local/crates|crates/velnor-runner/|crates/test_support'
     level: error
     message: "Crates live in crates/velnor-* under the root workspace; use the new path"
@@ -229,29 +228,20 @@ rules:
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
 
-  - id: no-doctests
-    kind: file_content_forbidden
-    paths:
-      include:
-        - "crates/**/src/**/*.rs"
-    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
-    level: error
-    message: "Doctests are off by decision (Cargo `doctest = false`). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
-
-  - id: no-doctests-block-scanner
+  - id: no-doctests-scanner
     kind: file_exists
     paths:
-      - scripts/no-doctests-block.py
+      - scripts/no-doctests.py
     level: error
-    message: "The block doc scanner is required: the no-doctests-block rule runs scripts/no-doctests-block.py, so a missing scanner must fail the lint instead of passing."
+    message: "The doc scanner is required: the no-doctests rule runs scripts/no-doctests.py, so a missing scanner must fail the lint instead of passing."
 
-  - id: no-doctests-block
+  - id: no-doctests
     kind: command
     paths:
       include:
-        - "scripts/no-doctests-block.py"
+        - "scripts/no-doctests.py"
     command:
       - python3
-      - scripts/no-doctests-block.py
+      - scripts/no-doctests.py
     level: error
-    message: "Doctests are off by decision (Cargo `doctest = false`). A block doc comment (`/** */` or `/*! */`) must not hold a doc fence (``` or ~~~), including one after a nested `/* */`. The check reads Rust tokens, so string literals are not doc comments. Do not add one; a decision is needed first."
+    message: "Doctests are off by decision (Cargo `doctest = false`). A doc comment (`///`, `//!`, `/** */` or `/*! */`) or a `#[doc]` attribute must not hold a doc fence (``` or ~~~) at the start of a line, an indented doc code block, or an `include_str!` include. The check reads Rust tokens, so string literals are not doc comments and an inline run of backticks is not a fence. Do not add one; a decision is needed first."

@@ -10,7 +10,7 @@ use crate::facts::{TestResult, path};
 use crate::pipeline::workflow;
 use crate::private_sources::{SECTION, private_repo};
 
-const GIT_LOCK: &str = "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#0123456789abcdef\"\n";
+pub(crate) const GIT_LOCK: &str = "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#0123456789abcdef\"\n";
 const VERDICT: &str = "steps.private_repo.outputs.private == ''true''";
 const TRUSTED_PULL_REQUEST: &str = "github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, ''[bot]'') && !endsWith(github.event.pull_request.user.login, ''[bot]'')";
 const SAVING_NOTE: &str = "only while GitHub reports this repository private";
@@ -41,7 +41,7 @@ fn text_and_notes(repo: &RepoView) -> Result<(String, Vec<String>), Box<dyn std:
     crate::facts::lock_pinned_tools(&mut locked)?;
     let (mut files, notes) = expected_with_notes(&locked)?;
     let text = files
-        .remove(&path(".github/workflows/rust-ci.yml")?)
+        .remove(&path(".github/workflows/ci.yml")?)
         .ok_or("no workflow")?;
     Ok((text, notes))
 }

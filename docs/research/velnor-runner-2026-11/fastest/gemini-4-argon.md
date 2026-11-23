@@ -77,7 +77,7 @@ Three structural gaps separate the design's `35 s` PR verdict estimate from the 
   At 2.44 merge-queue arrivals per hour (`~58` merges per day `[M]`, `V6`), organic traffic needs 25 to 50 days to reach 3,000 comparisons per root.
   Generating them via lab replays (`delivery-plan.md` `§4.2`, `3,000` cold builds per root) dumps hundreds of slot-hours onto a 5-node cluster already running at `92 to 95%` CPU (`evidence.md` `§B.2.1` `[M]`).
 - **Likelihood.** **High (85%)** that either graduation slips well past Day 7.5 to 10 or cold replay batches contend with foreground PRs and `A1` audits.
-- **Proof or refutation measurement.** Measure sustained cold-replay throughput (clean comparisons per hour) on the 5 workers under normal multi-org load (`tailrocks`, `ChainArgos`, `jackin`) with `cpu.idle` cgroups active, verifying that 3,000 comparisons per root finish within 72 hours while foreground slot wait stays `≤ 2 s` P90.
+- **Proof or refutation measurement.** Measure sustained cold-replay throughput (clean comparisons per hour) on the 5 workers under normal multi-org load (`tailrocks`, `example-org`, `jackin`) with `cpu.idle` cgroups active, verifying that 3,000 comparisons per root finish within 72 hours while foreground slot wait stays `≤ 2 s` P90.
 
 ### 4. XFS reflink clones duplicate 14.29 GB of Linux page cache per active sandbox
 - **Evidence.** Cluster experiment `S12` (`mbx-cache-cluster.md` `§E1d` `[M]`) proved that XFS reflink clones do not share page cache.

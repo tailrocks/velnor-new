@@ -1,19 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `velnor-ci plan --mode ci --request` for `pull_request`, fork and local requests against what
-//! the legacy `plan-v1` op did for the same change. `data/plan_diff/<case>/` holds the request,
-//! `expected_outputs` recorded from the engine on a real commit pair (or a real commit with an
-//! uncommitted change), and `snapshot/`, the reduced repository the helper plans here: files
-//! equal at both commits in `common/`, the others in `base-only/` and `head-only/`.
-//! Every file under `snapshot/` and `local/` carries a `.fixture` suffix that the test strips.
-//! `record.sh` re-records a case.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use crate::plan_diff_repo::{collect_files, repository, repository_with};
 
 pub(crate) fn data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/plan_diff")
@@ -21,29 +13,6 @@ pub(crate) fn data() -> PathBuf {
 
 pub(crate) fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
-}
-
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args([
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "core.hooksPath=/dev/null",
-        ])
-        .args(args)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -62,67 +31,8 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
-        if entry.path().is_dir() {
-            collect_files(&entry.path(), root, found);
-        } else if let Ok(relative) = entry.path().strip_prefix(root) {
-            found.push(relative.to_path_buf());
-        }
-    }
-}
-
-/// The case's repository: a base commit and a head commit for a `pull_request` or fork,
-/// one commit for a local run. Returns the repository and the commits' ids.
-fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
-    repository_with(case, event, name, "")
-}
-
-pub(crate) fn repository_with(
-    case: &Path,
-    event: &str,
-    name: &str,
-    config_tail: &str,
-) -> (PathBuf, String, String) {
-    let repo = fresh_dir("velnor-ci-plan-diff", name);
-    git(&repo, &["init", "-q", "-b", "main"]);
-    let snapshot = case.join("snapshot");
-    copy_tree(&snapshot.join("common"), &repo);
-    if !config_tail.is_empty() {
-        let config = repo.join(".velnor/config.toml");
-        fs::write(&config, read(&config) + config_tail).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    copy_tree(&snapshot.join("base-only"), &repo);
-    git(&repo, &["add", "-A"]);
-    git(&repo, &["commit", "-q", "-m", "base", "--allow-empty"]);
-    let base = git(&repo, &["rev-parse", "HEAD"]);
-    if event != "local" {
-        let base_only = snapshot.join("base-only");
-        let mut stale = Vec::new();
-        collect_files(&base_only, &base_only, &mut stale);
-        for file in stale {
-            let path = file
-                .to_string_lossy()
-                .trim_end_matches(".fixture")
-                .to_owned();
-            fs::remove_file(repo.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        copy_tree(&snapshot.join("head-only"), &repo);
-        git(&repo, &["add", "-A"]);
-        git(&repo, &["commit", "-q", "-m", "head"]);
-    }
-    let head = git(&repo, &["rev-parse", "HEAD"]);
-    (repo, base, head)
-}
-
-/// Where a run's request and outputs go: beside the repository, which they must not dirty.
-pub(crate) fn aside(repo: &Path) -> PathBuf {
-    let dir = repo.with_extension("io");
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    dir
+pub(crate) fn aside(repo: &Path) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::new(repo.with_extension("io"))
 }
 
 pub(crate) fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
@@ -183,9 +93,10 @@ fn run_case(case: &Path) -> (String, String) {
     if event == "local" {
         apply_local(case, &repo);
     }
-    let file = aside(&repo).join("plan-request.json");
+    let io = aside(&repo);
+    let file = io.join("plan-request.json");
     fs::write(&file, bind(&request, &base, &head)).unwrap_or_else(|e| unreachable!("{e}"));
-    let outputs = aside(&repo).join("outputs");
+    let outputs = io.join("outputs");
     let output = plan(&repo, &file, &outputs);
     assert!(
         output.status.success(),
@@ -193,8 +104,6 @@ fn run_case(case: &Path) -> (String, String) {
         String::from_utf8_lossy(&output.stderr)
     );
     let written = read(&outputs);
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
     (
         written,
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -246,16 +155,18 @@ fn a_workflow_change_runs_every_job() {
     assert!(stderr.contains("global_config_changed"), "{stderr}");
 }
 
-fn prepared(name: &str) -> (PathBuf, String) {
+fn prepared(name: &str) -> (velnor_test_support::ScratchDir, String) {
     let case = data().join("pr-one-crate");
     let (repo, base, head) = repository(&case, "pull_request", name);
     (repo, bind(&read(&case.join("request.json")), &base, &head))
 }
 
-fn planned(request: &str, repo: &Path) -> Output {
-    let file = aside(repo).join("plan-request.json");
+fn planned(request: &str, repo: &Path) -> (Output, velnor_test_support::ScratchDir) {
+    let io = aside(repo);
+    let file = io.join("plan-request.json");
     fs::write(&file, request).unwrap_or_else(|e| unreachable!("{e}"));
-    plan(repo, &file, &aside(repo).join("outputs"))
+    let output = plan(repo, &file, &io.join("outputs"));
+    (output, io)
 }
 
 #[test]
@@ -264,16 +175,14 @@ fn a_request_without_lane_routes_is_refused() {
     let mut value: serde_json::Value =
         serde_json::from_str(&request).unwrap_or_else(|e| unreachable!("{e}"));
     value["lane_inventory"] = serde_json::Value::Null;
-    let output = planned(&value.to_string(), &repo);
+    let (output, io) = planned(&value.to_string(), &repo);
     assert!(!output.status.success());
-    assert!(!aside(&repo).join("outputs").exists());
+    assert!(!io.join("outputs").exists());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("diff_selection_needs_lane_inventory"),
         "{stderr}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -282,42 +191,49 @@ fn a_checkout_that_is_not_the_head_is_refused() {
     let mut value: serde_json::Value =
         serde_json::from_str(&request).unwrap_or_else(|e| unreachable!("{e}"));
     value["head"] = "0".repeat(40).into();
-    let output = planned(&value.to_string(), &repo);
+    let (output, _io) = planned(&value.to_string(), &repo);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("checkout_head_mismatch"), "{stderr}");
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
 fn an_untracked_file_runs_every_job() {
     let (repo, request) = prepared("untracked");
     fs::write(repo.join("stray.txt"), "x").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = planned(&request, &repo);
+    let (output, io) = planned(&request, &repo);
     assert!(output.status.success());
-    assert!(read(&aside(&repo).join("outputs")).contains("\nnot_affected_jobs=\n"));
+    assert!(read(&io.join("outputs")).contains("\nnot_affected_jobs=\n"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("untracked_files:all_changed"));
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
-fn planned_with_check(name: &str, id: &str) -> (PathBuf, Output) {
-    let case = data().join("pr-one-crate");
+fn check_tail(id: &str) -> String {
     let quoted = serde_json::Value::from(id).to_string();
-    let tail = format!(
+    format!(
         "\n[[checks]]\nid = {quoted}\ninputs = [\"zzz-never\"]\nselection = \"declared_inputs\"\n"
-    );
-    let (repo, base, head) = repository_with(&case, "pull_request", name, &tail);
+    )
+}
+
+fn planned_with_check(
+    name: &str,
+    id: &str,
+) -> (
+    velnor_test_support::ScratchDir,
+    Output,
+    velnor_test_support::ScratchDir,
+) {
+    let case = data().join("pr-one-crate");
+    let (repo, base, head) = repository_with(&case, "pull_request", name, &check_tail(id));
     let request = bind(&read(&case.join("request.json")), &base, &head);
-    let output = planned(&request, &repo);
-    (repo, output)
+    let (output, io) = planned(&request, &repo);
+    (repo, output, io)
 }
 
 #[test]
 fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
-    let (repo, output) = planned_with_check("injected-id", "x\nqualification_cache_write=true");
-    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    let (_repo, output, io) =
+        planned_with_check("injected-id", "x\nqualification_cache_write=true");
+    let written = fs::read_to_string(io.join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
     assert!(
         !written
@@ -331,40 +247,41 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
         "{stderr}"
     );
     assert!(!stderr.contains("x\nqualification"), "{stderr}");
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
 fn a_check_id_outside_the_identifier_alphabet_is_refused() {
+    let case = data().join("pr-one-crate");
+    let (repo, base, head) = repository(&case, "pull_request", "odd-id");
+    let request = bind(&read(&case.join("request.json")), &base, &head);
+    let config = repo.join(".velnor/config.toml");
+    let checked_out = read(&config);
     for id in ["", "a b", "a,b", "a/b", "é"] {
-        let (repo, output) = planned_with_check("odd-id", id);
+        fs::write(&config, checked_out.clone() + &check_tail(id))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let (output, _io) = planned(&request, &repo);
         assert!(!output.status.success(), "{id:?}");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
             stderr.contains("diff_selection_not_supported:check_id"),
             "{stderr}"
         );
-        fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }
 
 #[test]
 fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
-    let (repo, output) = planned_with_check("good-id", "jactionlint-linux_x64.1");
+    let (_repo, output, io) = planned_with_check("good-id", "jactionlint-linux_x64.1");
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let written = read(&aside(&repo).join("outputs"));
+    let written = read(&io.join("outputs"));
     assert!(
         written.contains(",check-jactionlint-linux_x64.1,"),
         "{written}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -382,13 +299,11 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
     }) {
         route["job_id"] = "rust-x\nqualification_cache_write=true".into();
     }
-    let output = planned(&value.to_string(), &repo);
-    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    let (output, io) = planned(&value.to_string(), &repo);
+    let written = fs::read_to_string(io.join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
     assert!(
         !written.contains("qualification_cache_write=true"),
         "{written}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
