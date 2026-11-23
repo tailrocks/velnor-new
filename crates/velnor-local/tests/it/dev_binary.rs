@@ -10,8 +10,8 @@ use velnor_local::timeout::TimeoutScale;
 use crate::local_ci::{ELF_ARM64, binary, parsed};
 use crate::support::temp_dir;
 
-const SAMPLE: &str = "../../generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml";
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const SAMPLE: &str = "../../generator/samples/helper-lock/expected/.github/workflows/ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const LINUX_ARM64: &str = "runner.arch == ''ARM64'' && ''";
 const REFUSAL: &str = "velnor-ci integrity check failed";
 
@@ -36,7 +36,7 @@ fn git(repo: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn checkout(name: &str) -> PathBuf {
+fn checkout(name: &str) -> velnor_test_support::ScratchDir {
     let repo = temp_dir(name);
     git(&repo, &["init", "-q", "-b", "main"]);
     std::fs::create_dir_all(repo.join(".github/workflows")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -97,7 +97,7 @@ fn launch(workflow: &str, pin: &str, helper: &Path) -> Output {
         .args(["-c", &launcher(workflow), "velnor-ci"])
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("VELNOR_HELPER", helper)
         .env("VELNOR_HELPER_SHA256", pin)
         .env("VELNOR_HELPER_MKTEMP", "/usr/bin/mktemp")
@@ -117,7 +117,8 @@ fn refused(output: &Output) -> bool {
 #[tokio::test]
 async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
     let repo = checkout("dev-binary-accepted");
-    let file = binary(&temp_dir("dev-binary-file"), &ELF_ARM64);
+    let file_dir = temp_dir("dev-binary-file");
+    let file = binary(&file_dir, &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
     pin_workflows(&args, &repo, "t", TimeoutScale::default())
@@ -137,7 +138,8 @@ async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
 #[tokio::test]
 async fn without_the_flag_a_local_binary_is_still_refused_and_the_pin_is_untouched() {
     let repo = checkout("dev-binary-refused");
-    let file = binary(&temp_dir("dev-binary-file-2"), &ELF_ARM64);
+    let file_dir = temp_dir("dev-binary-file-2");
+    let file = binary(&file_dir, &ELF_ARM64);
     let args = parsed(&repo, "plain", &[]);
     pin_workflows(&args, &repo, "t", TimeoutScale::default())
         .await
@@ -154,8 +156,10 @@ async fn without_the_flag_a_local_binary_is_still_refused_and_the_pin_is_untouch
 async fn the_flag_changes_only_the_linux_arm64_digest_and_the_check_still_refuses_any_other_binary()
 {
     let repo = checkout("dev-binary-only-pin");
-    let file = binary(&temp_dir("dev-binary-file-3"), &ELF_ARM64);
-    let other = binary(&temp_dir("dev-binary-other"), b"another build");
+    let file_dir = temp_dir("dev-binary-file-3");
+    let file = binary(&file_dir, &ELF_ARM64);
+    let other_dir = temp_dir("dev-binary-other");
+    let other = binary(&other_dir, b"another build");
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
     pin_workflows(&args, &repo, "t", TimeoutScale::default())
@@ -176,8 +180,10 @@ async fn the_flag_changes_only_the_linux_arm64_digest_and_the_check_still_refuse
 #[tokio::test]
 async fn a_file_that_is_not_a_linux_arm64_binary_is_refused_and_pair_mode_pins_like_plain() {
     let repo = checkout("dev-binary-bad");
-    let good = binary(&temp_dir("dev-binary-file-4"), &ELF_ARM64);
-    let text = binary(&temp_dir("dev-binary-text"), b"#!/bin/sh\n");
+    let good_dir = temp_dir("dev-binary-file-4");
+    let good = binary(&good_dir, &ELF_ARM64);
+    let text_dir = temp_dir("dev-binary-text");
+    let text = binary(&text_dir, b"#!/bin/sh\n");
     let flag = text.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
     assert!(
@@ -203,7 +209,8 @@ async fn a_file_that_is_not_a_linux_arm64_binary_is_refused_and_pair_mode_pins_l
 async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_switches_to_it() {
     let repo = checkout("dev-binary-branch");
     git(&repo, &["branch", "feature"]);
-    let file = binary(&temp_dir("dev-binary-file-5"), &ELF_ARM64);
+    let file_dir = temp_dir("dev-binary-file-5");
+    let file = binary(&file_dir, &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
     let pin = pin_workflows(&args, &repo, "t", TimeoutScale::default())
@@ -235,14 +242,15 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     assert_eq!(git(&repo, &["status", "--porcelain"]), "");
 }
 
-fn outside(name: &str) -> PathBuf {
+fn outside(name: &str) -> velnor_test_support::ScratchDir {
     let dir = temp_dir(name);
-    std::fs::write(dir.join("rust-ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(dir.join("ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
 async fn refusal(repo: &Path, name: &str) -> String {
-    let file = binary(&temp_dir(name), &ELF_ARM64);
+    let file_dir = temp_dir(name);
+    let file = binary(&file_dir, &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(repo, "plain", &["--velnor-ci-binary", &flag]);
     match pin_workflows(&args, repo, "t", TimeoutScale::default()).await {
@@ -268,7 +276,7 @@ fn link(target: &Path, at: &Path) {
 async fn a_symlinked_workflow_file_is_refused_and_its_target_outside_the_copy_is_left_alone() {
     let repo = checkout("dev-binary-link-file");
     let elsewhere = outside("dev-binary-victim-file");
-    let victim = elsewhere.join("rust-ci.yml");
+    let victim = elsewhere.join("ci.yml");
     let at = repo.join(".github/workflows/linked.yml");
     link(&victim, &at);
     let message = refusal(&repo, "dev-binary-link-file-bin").await;
@@ -285,7 +293,7 @@ async fn a_symlinked_workflows_directory_is_refused_and_its_target_is_left_alone
     link(&elsewhere, &at);
     let message = refusal(&repo, "dev-binary-link-workflows-bin").await;
     assert!(message.contains(&at.display().to_string()), "{message}");
-    unchanged(&elsewhere.join("rust-ci.yml"));
+    unchanged(&elsewhere.join("ci.yml"));
 }
 
 #[tokio::test]
@@ -293,7 +301,7 @@ async fn a_symlinked_github_directory_is_refused_and_its_target_is_left_alone() 
     let repo = checkout("dev-binary-link-github");
     let elsewhere = temp_dir("dev-binary-victim-github");
     std::fs::create_dir_all(elsewhere.join("workflows")).unwrap_or_else(|e| unreachable!("{e}"));
-    let victim = elsewhere.join("workflows/rust-ci.yml");
+    let victim = elsewhere.join("workflows/ci.yml");
     std::fs::write(&victim, sample()).unwrap_or_else(|e| unreachable!("{e}"));
     let at = repo.join(".github");
     std::fs::remove_dir_all(&at).unwrap_or_else(|e| unreachable!("{e}"));

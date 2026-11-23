@@ -58,7 +58,7 @@ printf '%s\\n' '{json}'\nexit 0"
         name: &str,
         command: &[String],
         archive: Option<u64>,
-    ) -> (Output, String, PathBuf) {
+    ) -> (Output, String, velnor_test_support::ScratchDir) {
         let temp = scratch(name);
         archive_in(&temp);
         if let Some(size) = archive {
@@ -98,8 +98,8 @@ printf '%s\\n' '{json}'\nexit 0"
             .arg("run")
             .arg("--")
             .args(command)
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", &outputs)
             .env("PATH", path);
         if let Some(tmpdir) = &self.tmpdir {
@@ -213,7 +213,7 @@ fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
     assert!(output.status.success(), "{output:?}");
     assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
     let value = extract_to(&list_args(&temp)).unwrap_or_default();
-    assert!(Path::new(&value).starts_with(&temp), "{value}");
+    assert!(Path::new(&value).starts_with(temp.path()), "{value}");
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
         "{stderr}"
     );
     assert!(stderr.contains("bytes free"), "{stderr}");
-    let leftovers = fs::read_dir(&temp)
+    let leftovers = fs::read_dir(temp.path())
         .unwrap_or_else(|e| unreachable!("{e}"))
         .filter_map(Result::ok)
         .filter(|entry| {

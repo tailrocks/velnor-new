@@ -103,7 +103,7 @@ fn plain_mode_refuses_a_size_flag_and_names_it() {
         .args(["up", "--runner", "plain", "--home-size", "3g", "--dir"])
         .arg(dir.join("state"))
         .arg("--repo")
-        .arg(&dir)
+        .arg(dir.path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let text = String::from_utf8_lossy(&output.stderr);

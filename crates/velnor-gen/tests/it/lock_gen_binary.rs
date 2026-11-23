@@ -100,7 +100,7 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     assert_eq!(
         error,
         format!(
-            "[velnor-gen-binary] linux-x64 digest is {} but the release lists {GEN_BINARY_X64}",
+            "[velnor-gen-binary] linux-x64 digest is {} but the release lists {GEN_BINARY_X64}; re-pin with `velnor-gen pin-helper 0.1.111` or later",
             "0".repeat(64)
         )
     );

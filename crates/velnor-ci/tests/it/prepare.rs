@@ -11,13 +11,13 @@ pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 pub(crate) fn scratch_root(name: &str) -> PathBuf {
-    crate::scratch_path("velnor-ci-prepare", name)
+    crate::scratch_name("velnor-ci-prepare", name)
 }
 
-pub(crate) fn scratch(name: &str) -> PathBuf {
-    let dir = scratch_root(name);
+pub(crate) fn scratch(name: &str) -> velnor_test_support::ScratchDir {
+    let dir = velnor_test_support::ScratchDir::adopt(scratch_root(name));
     if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     }
     fs::create_dir_all(dir.join("checkout")).unwrap_or_else(|e| unreachable!("{e}"));
     let git = Command::new("git")
@@ -122,6 +122,7 @@ pub(crate) struct Run {
     pub outputs: String,
     pub cargo_config: String,
     pub velnor_config: String,
+    pub owned: Option<velnor_test_support::ScratchDir>,
 }
 
 fn replace_text(path: &Path, body: &str) {
@@ -249,11 +250,15 @@ pub(crate) fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         outputs: read(&outputs),
         cargo_config: read(&cargo_home.join("config.toml")),
         velnor_config: read(&dir.join(".cargo/config.toml")),
+        owned: None,
     }
 }
 
 pub(crate) fn prepare(name: &str, setup: &Setup) -> Run {
-    prepare_in(&scratch(name), setup)
+    let dir = scratch(name);
+    let mut run = prepare_in(&dir, setup);
+    run.owned = Some(dir);
+    run
 }
 
 pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> Run {

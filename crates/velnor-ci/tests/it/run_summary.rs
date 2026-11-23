@@ -5,17 +5,17 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 const RATIO: &str = "echo '     Summary [   0.077s] 63/109 tests run: 62 passed, 1 failed, 0 skipped' >&2\nexit 100";
 const NEXTEST: &[&str] = &["cargo-nextest", "nextest", "run"];
 
-fn scratch(name: &str) -> PathBuf {
+fn scratch(name: &str) -> velnor_test_support::ScratchDir {
     let dir = crate::scratch_path("velnor-ci-sum", name);
-    fs::remove_dir_all(&dir).ok();
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(dir.path()).ok();
+    fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
@@ -67,7 +67,8 @@ fn doctests_in(temp: &Path, body: &str) -> Output {
 }
 
 fn doctests(name: &str, body: &str) -> Output {
-    doctests_in(&scratch(name), body)
+    let dir = scratch(name);
+    doctests_in(&dir, body)
 }
 
 #[test]

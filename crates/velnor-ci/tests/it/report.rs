@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_ci::report::{LaneMetrics, check, waste};
+use velnor_ci::report::{LaneMetrics, check, restore_notices, waste};
 use velnor_ci::telemetry::configuration;
 
 mod fallback;
@@ -36,6 +36,9 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
                 value["caches"][0]["usable_same_lock"] = json!(false);
             }
             "other-lock" => value["caches"][0]["usable_same_lock"] = json!(false),
+            "dependency" => {
+                value["invocations"][0]["compilations"][0]["restored"] = json!(true);
+            }
             "workspace" | "changed" | "dependency-compiled" => {
                 value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
                 value["invocations"][0]["compilations"][0]["unchanged"] = json!(case != "changed");

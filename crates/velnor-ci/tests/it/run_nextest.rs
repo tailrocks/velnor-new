@@ -6,7 +6,7 @@
 use crate::run::scratch;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Output;
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
@@ -82,7 +82,7 @@ pub(crate) fn run_with_output(
     run: &str,
     list_json: &str,
     command: &[&str],
-) -> (Output, String, PathBuf) {
+) -> (Output, String, velnor_test_support::ScratchDir) {
     let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
     (output, written, temp)
 }
@@ -105,7 +105,12 @@ pub(crate) fn execute_nextest(
     list_json: &str,
     command: &[&str],
     grace_ms: Option<&str>,
-) -> (Output, String, PathBuf, std::time::Duration) {
+) -> (
+    Output,
+    String,
+    velnor_test_support::ScratchDir,
+    std::time::Duration,
+) {
     let started = std::time::Instant::now();
     let temp = scratch(name);
     archive_in(&temp);
@@ -122,8 +127,8 @@ pub(crate) fn execute_nextest(
         .arg("run")
         .arg("--")
         .args(command)
-        .current_dir(&temp)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path);
     if let Some(grace_ms) = grace_ms {

@@ -9,7 +9,7 @@ use crate::fixture::{TestResult, edit, files, plz_edited, refusal};
 #[test]
 fn valid_files_without_velnor_config_use_the_defaults() -> TestResult {
     let plan = ReleasePlan::read(&files())?;
-    assert_eq!(plan.after, ["Rust CI"]);
+    assert_eq!(plan.after, ["CI"]);
     assert_eq!(plan.roots.len(), 1);
     assert_eq!(plan.roots[0].root, ".");
     assert_eq!(plan.roots[0].pr_branch_prefix, "release-plz-");
