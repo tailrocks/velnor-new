@@ -14,6 +14,7 @@ use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
+const RETIRED_PREFIX: &str = "retired-";
 const LOCK_PREFIX: &str = ".lock-";
 const STALE_AFTER: Duration = Duration::from_hours(1);
 const COPY: &str = "/bin/cp";
@@ -137,18 +138,56 @@ fn claim(tools: &Path, key: &str) -> Claim {
     Claim::Held
 }
 
-fn sweep(tools: &Path) {
+fn owners(name: &str) -> Vec<&str> {
+    let rest = name.strip_prefix(STAGING_PREFIX).unwrap_or(name);
+    let mut keys = Vec::new();
+    if let Some(key) = rest.strip_prefix(RETIRED_PREFIX) {
+        keys.push(key);
+    }
+    if let Some((key, suffix)) = rest.rsplit_once('-')
+        && suffix.len() == 16
+        && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        keys.push(key);
+    }
+    keys
+}
+
+fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
+    let mut held = Vec::new();
+    for key in owners(name).into_iter().filter(|key| *key != current) {
+        match claim(tools, key) {
+            Claim::Won(lock) => held.push(lock),
+            Claim::Held | Claim::Broken => return None,
+        }
+    }
+    Some(held)
+}
+
+fn sweep(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
-    for entry in entries.flatten() {
+    let entries: Vec<_> = entries.flatten().collect();
+    for entry in entries {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if (name.starts_with(STAGING_PREFIX) || name.starts_with(LOCK_PREFIX))
-            && stale(&entry.path())
+        let leftover = name.starts_with(STAGING_PREFIX);
+        if !(leftover || name.starts_with(LOCK_PREFIX))
+            || entry.file_type().is_ok_and(|kind| kind.is_file())
+            || !stale(&entry.path())
         {
-            fs::remove_dir_all(entry.path()).ok();
+            continue;
         }
+        let _held = if leftover {
+            match hold_owners(tools, &name, current) {
+                Some(held) => held,
+                None => continue,
+            }
+        } else {
+            Vec::new()
+        };
+        remove_tree(&entry.path()).ok();
     }
 }
 
@@ -170,7 +209,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
         Claim::Held => return Outcome::Busy,
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
-    sweep(&tools);
+    sweep(&tools, inputs.key);
     if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
@@ -185,10 +224,10 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
             .all(|path| copy_tree(&inputs.home.join(path), &staging.join(slot(path))))
         && fs::File::create(staging.join(MARKER)).is_ok();
     if !copied {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    let retired = tools.join(format!("{STAGING_PREFIX}{RETIRED_PREFIX}{}", inputs.key));
     if fs::remove_dir_all(&retired).is_err()
         && fs::symlink_metadata(&retired).is_ok_and(|metadata| metadata.is_dir())
     {
@@ -197,14 +236,14 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     let present = fs::symlink_metadata(&entry).is_ok();
     let replaced = present && fs::rename(&entry, &retired).is_ok();
     if inputs.replace && present && !replaced {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("the poisoned entry could not be retired");
     }
     if fs::rename(&staging, &entry).is_err() {
         if replaced {
             fs::rename(&retired, &entry).ok();
         }
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return if !inputs.replace && complete(&entry, owner) {
             Outcome::AlreadySaved
         } else {
@@ -214,17 +253,17 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    prune(&tools, inputs.key);
+    let kept = prune(&tools, inputs.key);
     if replaced {
-        Outcome::Healed { to: entry }
+        Outcome::Healed { to: entry, kept }
     } else {
-        Outcome::Saved { to: entry }
+        Outcome::Saved { to: entry, kept }
     }
 }
 
-fn prune(tools: &Path, current: &str) {
+fn prune(tools: &Path, current: &str) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
-        return;
+        return Vec::new();
     };
     let mut older: Vec<(SystemTime, PathBuf)> = entries
         .flatten()
@@ -235,7 +274,22 @@ fn prune(tools: &Path, current: &str) {
         .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    for (_, path) in older.into_iter().skip(KEEP_KEYS - 1) {
-        fs::remove_dir_all(path).ok();
-    }
+    older
+        .into_iter()
+        .skip(KEEP_KEYS - 1)
+        .filter(|(_, path)| remove_tree(path).is_err())
+        .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
+        .collect()
+}
+
+fn plain(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
