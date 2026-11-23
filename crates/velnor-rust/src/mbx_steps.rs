@@ -8,7 +8,7 @@ use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 534aa8684b
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
-const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
+pub(crate) const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.111 via 351e1f2a59
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
 const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
@@ -43,7 +43,9 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     for job in jobs {
         if !compiles(job) {
             if compiling_only {
-                job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                if !prepares_cargo(job) {
+                    job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                }
                 if facts.config.mbx.routed() {
                     insert(job, &[StepKind::MbxPrivate], After::Helper);
                 }
@@ -107,6 +109,12 @@ fn is_shared_store_step(kind: &StepKind) -> bool {
         kind,
         StepKind::MbxStore | StepKind::MbxSeed | StepKind::MbxOutDirs
     )
+}
+
+fn prepares_cargo(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Prepare(_)))
 }
 
 fn compiles(job: &Job) -> bool {
