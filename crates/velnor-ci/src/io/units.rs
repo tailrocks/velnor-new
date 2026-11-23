@@ -4,7 +4,6 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Deserialize;
 use velnor_rust::NESTED_ROOTS_FOLDER;
@@ -19,12 +18,14 @@ mod fill;
 mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
+mod metadata;
 mod separation;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
+pub(super) use metadata::{MetadataInvocation, own_workspace, workspace};
 pub(super) use separation::apart;
-pub(super) use workspace::{unchecked_unit_files, unit_files_apart};
+pub(super) use workspace::{Roots, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -299,66 +300,4 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
-}
-
-pub(super) struct MetadataInvocation<'a> {
-    pub(super) executable: &'a str,
-    pub(super) arguments: &'a [String],
-    pub(super) directory: &'a Path,
-}
-
-pub(super) fn workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, false)
-}
-
-pub(super) fn own_workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, true)
-}
-
-fn metadata(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-    own_target: bool,
-) -> Result<Workspace, CiError> {
-    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
-    if let Some(invocation) = invocation {
-        command
-            .args(invocation.arguments)
-            .current_dir(invocation.directory);
-    } else {
-        command.current_dir(manifest.parent().unwrap_or(manifest));
-    }
-    if own_target {
-        command
-            .env_remove("CARGO_TARGET_DIR")
-            .env_remove("CARGO_BUILD_BUILD_DIR");
-    }
-    let output = command
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-        ])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    let workspace: Workspace = serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))?;
-    build_dir::refuse(&workspace, &output.stdout)?;
-    Ok(workspace)
 }

@@ -75,7 +75,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
     let inherit = audit_inheriting(&facts, &checkout.root, directory, options)?;
-    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
+    let workspaces = workspaces(&facts, &checkout.root, directory, None, &inherit)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
     let chosen = selected(&facts, &shared, options.root.as_deref())?;
