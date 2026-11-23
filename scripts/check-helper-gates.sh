@@ -142,6 +142,7 @@ scan() {
   function const_item(s) {
     if (s !~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?(const|static)[ \t]+(mut[ \t]+)?[A-Za-z_]/) return 0
     if (s ~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?const[ \t]+(fn|unsafe|async|extern)[ \t(]/) return 0
+    if (s !~ /\([ \t]*u64[ \t]*,[ \t]*u64[ \t]*,[ \t]*u64[ \t]*\)/) return 0
     return versions(s, cprobe) > 0
   }
   function marker(line, out,    m) {
