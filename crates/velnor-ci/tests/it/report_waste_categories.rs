@@ -128,60 +128,6 @@ fn an_empty_mbx_session_that_compiled_only_path_units_is_not_waste() {
     }
 }
 
-fn compilation(package: &str, restored: Option<bool>) -> Value {
-    let mut value = json!({"package":package,"version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]});
-    if let Some(known) = restored {
-        value["restored"] = json!(known);
-    }
-    value
-}
-
-#[test]
-fn an_empty_mbx_session_over_units_missing_from_the_restored_base_is_not_waste() {
-    let mut other = artifact("target/debug/deps/libtokio-abc.rlib");
-    other["package_id"] = json!("registry+https://example.invalid/index#tokio@1.0.0");
-    for (name, artifacts, compilations, expected) in [
-        (
-            "one new package",
-            json!([artifact("target/debug/deps/libserde-abc.rlib")]),
-            json!([compilation("serde", Some(false))]),
-            false,
-        ),
-        (
-            "a unit the base held",
-            json!([artifact("target/debug/deps/libserde-abc.rlib")]),
-            json!([compilation("serde", Some(true))]),
-            true,
-        ),
-        (
-            "no base information",
-            json!([artifact("target/debug/deps/libserde-abc.rlib")]),
-            json!([compilation("serde", None)]),
-            true,
-        ),
-        (
-            "a new package and a unit the base held",
-            json!([artifact("target/debug/deps/libserde-abc.rlib"), other]),
-            json!([
-                compilation("serde", Some(false)),
-                compilation("tokio", Some(true))
-            ]),
-            true,
-        ),
-    ] {
-        let mut value = quiet();
-        value["invocations"][0]["artifacts"] = artifacts;
-        value["invocations"][0]["compilations"] = compilations;
-        value["mbx"] = mbx(true, &[(0, 1, 0)]);
-        let found = waste(&metrics(value));
-        assert_eq!(
-            found.iter().any(|line| line.contains("MBX object cache")),
-            expected,
-            "{name}: {found:?}"
-        );
-    }
-}
-
 #[test]
 fn a_toolchain_install_on_an_exact_tools_hit_is_waste() {
     for (hit, installs, expected) in [

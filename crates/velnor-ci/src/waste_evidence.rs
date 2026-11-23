@@ -157,12 +157,6 @@ pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
 
 fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
     metrics.invocations.iter().any(|invocation| {
-        let absent_from_base: BTreeSet<(&str, &str)> = invocation
-            .compilations
-            .iter()
-            .filter(|compilation| compilation.restored == Some(false))
-            .map(|compilation| (compilation.package.as_str(), compilation.version.as_str()))
-            .collect();
         invocation.artifacts.iter().any(|artifact| {
             !artifact.fresh
                 && crate::cargo_package::PackageIdentity::parse(&artifact.package_id).is_some_and(
@@ -170,7 +164,6 @@ fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
                         package
                             .source
                             .is_some_and(|source| source.starts_with("registry+"))
-                            && !absent_from_base.contains(&(package.name, package.version))
                     },
                 )
         })
