@@ -4,7 +4,7 @@
 use velnor_model::{HelperCommand, Job, MbxRemote, MbxStats, MbxStore, RepoFacts, Step, StepKind};
 
 use crate::mbx_pin::{MBX_PIN_HELPER, MBX_TOOL, exact_release};
-use crate::plan::{MBX_STORE_OUT_DIR_HELPER, step};
+use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 534aa8684b
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
@@ -57,14 +57,9 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             } else {
                 vec![StepKind::MbxRemote { from_pin }]
             };
-            let store_writes = job.steps.iter().any(|step| step.kind == StepKind::MbxStore)
-                && facts
-                    .helper
-                    .as_ref()
-                    .is_some_and(|helper| helper.version().at_least(MBX_STORE_OUT_DIR_HELPER));
             insert(
                 job,
-                &with_out_dirs(remote_steps, out_dirs_in_target && !store_writes),
+                &with_out_dirs(remote_steps, out_dirs_in_target),
                 After::Tools,
             );
         }
@@ -108,7 +103,10 @@ enum After {
 }
 
 fn is_shared_store_step(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::MbxStore | StepKind::MbxSeed)
+    matches!(
+        kind,
+        StepKind::MbxStore | StepKind::MbxSeed | StepKind::MbxOutDirs
+    )
 }
 
 fn compiles(job: &Job) -> bool {

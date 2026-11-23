@@ -5,9 +5,7 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
-use velnor_ci::mbx_store::{
-    Inputs, KEEP_OUT_DIR, Outcome, env_lines, message, select, trusted_event,
-};
+use velnor_ci::mbx_store::{Inputs, Outcome, env_lines, message, select, trusted_event};
 
 use crate::io::Repo;
 
@@ -80,7 +78,7 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
         assert_eq!(
             env_lines(&outcome).expect("env lines"),
             format!(
-                "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\nMBX_SHARE_OUT_DIR=0\n",
+                "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n",
                 shared.display(),
                 host.root.join("temp/velnor-mbx-shims").display()
             ),
@@ -111,7 +109,7 @@ fn a_pull_request_never_gets_the_shared_directory() {
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor-mbx-shims").exists());
 }
 
@@ -125,7 +123,7 @@ fn a_merge_group_never_gets_the_shared_directory() {
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
 }
 
 #[test]
@@ -140,14 +138,11 @@ fn a_stale_probe_file_does_not_block_the_shared_directory() {
 }
 
 #[test]
-fn no_offered_directory_appends_only_the_out_dir_setting() {
+fn no_offered_directory_changes_nothing() {
     let host = host("mbx-store-none");
     let outcome = run(&host, "push", "refs/heads/main", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(
-        env_lines(&outcome).expect("env lines"),
-        "MBX_SHARE_OUT_DIR=0\n"
-    );
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
 }
 
 #[test]
@@ -184,10 +179,7 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
             "{}",
             dir.display()
         );
-        assert_eq!(
-            env_lines(&outcome).expect("env lines"),
-            "MBX_SHARE_OUT_DIR=0\n"
-        );
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
         assert!(message(&outcome).starts_with("::warning::VELNOR_MBX_SHARED_DIR ignored"));
     }
     assert!(!root.join("temp/velnor-mbx-shims").exists());
@@ -240,7 +232,7 @@ fn a_store_or_shims_directory_with_a_line_break_cannot_add_an_environment_variab
     };
     assert_eq!(
         env_lines(&clean).as_deref().ok(),
-        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\nMBX_SHARE_OUT_DIR=0\n")
+        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\n")
     );
     for (dir, shims) in [
         ("/runner/mbx\nGITHUB_PATH=/evil", "/runner/shims"),

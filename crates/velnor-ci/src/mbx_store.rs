@@ -11,7 +11,6 @@ use crate::escape::file_value;
 
 pub const SHARED_DIR_ENV: &str = "VELNOR_MBX_SHARED_DIR";
 pub const SHIMS_DIR_NAME: &str = "velnor-mbx-shims";
-pub const KEEP_OUT_DIR: &str = "MBX_SHARE_OUT_DIR=0\n";
 
 #[derive(Debug, Clone, Copy)]
 pub struct Inputs<'a> {
@@ -169,11 +168,11 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
 pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
     Ok(match outcome {
         Outcome::Shared { dir, shims } => format!(
-            "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}",
+            "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n",
             file_value(&dir.display().to_string())?,
             file_value(&shims.display().to_string())?
         ),
-        _ => KEEP_OUT_DIR.to_owned(),
+        _ => String::new(),
     })
 }
 
