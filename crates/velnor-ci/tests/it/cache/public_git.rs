@@ -16,7 +16,6 @@ use crate::io::Repo as Checkout;
 pub(super) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(super) const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
 pub(super) const TOKEN: &str = "ghs_job_token_must_not_leave";
-pub(super) const UNREACHABLE_API: &str = "http://127.0.0.1:1";
 
 pub(super) struct Reply {
     pub(super) delay: Duration,
@@ -49,6 +48,18 @@ pub(super) fn clean_tree() -> Reply {
         200,
         r#"{"sha":"0","tree":[{"path":"Cargo.toml","type":"blob"}],"truncated":false}"#.to_owned(),
     )
+}
+
+pub(super) fn hang_up() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+    let url = format!(
+        "http://{}",
+        listener
+            .local_addr()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+    );
+    thread::spawn(move || listener.incoming().for_each(drop));
+    url
 }
 
 pub(super) fn serve(reply: Reply) -> Mock {
@@ -305,9 +316,9 @@ fn a_redirect_to_another_repository_is_not_followed() {
 }
 
 #[test]
-fn an_unreachable_api_is_not_cacheable() {
+fn an_api_that_hangs_up_is_not_cacheable() {
     let sources = [("dep", git("acme/shared-lib", SHA))];
-    let (output, written) = decide(&sources, UNREACHABLE_API);
+    let (output, written) = decide(&sources, &hang_up());
     refused(&output, &written);
 }
 
