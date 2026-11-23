@@ -7,10 +7,12 @@ use velnor_model::{
     Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
 };
 
+use crate::detect_checks::generator_root;
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
-use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
+use crate::plan::{CHECKOUT_DEPTH, job, mbx, quick, step};
+use crate::plan_tools::{mirror_step, tools_install, tools_restore};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
@@ -52,7 +54,7 @@ pub(crate) fn tool_install(facts: &RepoFacts, lint: &LintJob) -> ToolInstall {
         LintKind::MiseTask { tools, .. } => {
             ToolInstall::These(tools.iter().map(|tool| resolved(facts, tool)).collect())
         }
-        LintKind::GeneratedCheck => ToolInstall::These(generated_check_tools(facts)),
+        LintKind::GeneratedCheck { .. } => ToolInstall::These(generated_check_tools(facts)),
     }
 }
 
@@ -75,7 +77,7 @@ fn jactionlint_tools(facts: &RepoFacts) -> Vec<String> {
 }
 
 fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
-    if matches!(lint.kind, LintKind::GeneratedCheck) {
+    if matches!(lint.kind, LintKind::GeneratedCheck { .. }) {
         return Vec::new();
     }
     match tool_install(facts, lint) {
@@ -103,7 +105,7 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
         .chain(probe.iter().cloned().map(LintCommand::Probe))
         .collect(),
         LintKind::MiseTask { task, .. } => vec![LintCommand::MiseTask(task.clone())],
-        LintKind::GeneratedCheck => Vec::new(),
+        LintKind::GeneratedCheck { .. } => Vec::new(),
     }
 }
 
@@ -115,25 +117,51 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
         .collect()
 }
 
-fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
-    let tools = generated_check_tools(facts);
-    let steps = std::iter::once(step(StepKind::Checkout {
+fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
+    let root = from_source
+        .then(|| generator_root(&facts.rust_roots))
+        .flatten();
+    let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
-    }))
-    .chain((!tools.is_empty()).then(|| {
-        step(StepKind::InstallTools {
-            only: Some(tools.join(" ")),
+    })];
+    if root.is_some() {
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::InstallHelper(release.clone()))),
+        );
+        steps.extend(mbx(facts, None));
+        steps.extend(mirror_step(facts));
+        steps.extend(tools_restore(facts, None));
+        steps.extend(tools_install(facts));
+        if !facts.tools.tools.is_empty() {
+            steps.extend(mirror_step(facts));
+        }
+    } else {
+        let tools = generated_check_tools(facts);
+        if !tools.is_empty() {
+            steps.push(step(StepKind::InstallTools {
+                only: Some(tools.join(" ")),
+            }));
+        }
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::InstallGenerator(release.clone()))),
+        );
+    }
+    steps.push(Step {
+        directory: root.and_then(|root| root.manifest.parent()),
+        target_dir: root
+            .filter(|root| root.manifest.parent().is_some())
+            .map(|root| root.target_dir.clone()),
+        ..step(StepKind::GeneratorCheck {
+            from_source: root.is_some(),
         })
-    }))
-    .chain(
-        facts
-            .helper
-            .iter()
-            .map(|release| step(StepKind::InstallGenerator(release.clone()))),
-    )
-    .chain([step(StepKind::GeneratorCheck)])
-    .collect();
+    });
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
@@ -154,8 +182,8 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
 }
 
 fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
-    if lint.kind == LintKind::GeneratedCheck {
-        return generated_check_job(facts, lint);
+    if let LintKind::GeneratedCheck { from_source } = lint.kind {
+        return generated_check_job(facts, lint, from_source);
     }
     let planned = lint.planned();
     let mut steps = vec![step(StepKind::Checkout {

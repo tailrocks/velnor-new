@@ -24,6 +24,7 @@ impl Capture {
         self.observations.artifacts.extend(batch.artifacts);
         self.observations.build_scripts.extend(batch.build_scripts);
         self.observations.progress.extend(batch.progress);
+        self.observations.dirty.extend(batch.dirty);
         self.observations.tests.extend(batch.tests);
         self.observations.rejected += batch.rejected;
         self.counts = counts.or_else(|| self.counts.take());

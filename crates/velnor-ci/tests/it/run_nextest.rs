@@ -6,7 +6,7 @@
 use crate::run::scratch;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
@@ -79,7 +79,7 @@ pub(crate) fn run_with_output(
     run: &str,
     list_json: &str,
     command: &[&str],
-) -> (Output, String, PathBuf) {
+) -> (Output, String, velnor_test_support::ScratchDir) {
     let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
     (output, written, temp)
 }
@@ -99,7 +99,12 @@ pub(crate) fn execute_nextest(
     list_json: &str,
     command: &[&str],
     grace_ms: Option<&str>,
-) -> (Output, String, PathBuf, std::time::Duration) {
+) -> (
+    Output,
+    String,
+    velnor_test_support::ScratchDir,
+    std::time::Duration,
+) {
     let started = std::time::Instant::now();
     let temp = scratch(name);
     fake_nextest(&temp, run, list_json);
@@ -115,7 +120,7 @@ pub(crate) fn execute_nextest(
         .arg("run")
         .arg("--")
         .args(command)
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path);
     if let Some(grace_ms) = grace_ms {
@@ -190,7 +195,7 @@ fn run_reports_a_run_without_tests_as_zero() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package={}\n"
     );
 }
 

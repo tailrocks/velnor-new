@@ -178,7 +178,7 @@ fn plain_containers_refuse_policy_because_they_have_no_job_start_check() {
         .args(["up", "--runner", "plain", "--dir"])
         .arg(dir.join("state"))
         .arg("--repo")
-        .arg(&dir)
+        .arg(dir.path())
         .arg("--policy")
         .arg(&file)
         .output()

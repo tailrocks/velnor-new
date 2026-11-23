@@ -214,6 +214,13 @@ The tests verify the receipt, fixture source, and library before use.
   scan for every workspace, with a 180-second timeout per workspace, and the
   local deny-policy checks.
 
+### 7. Private Names: `python3 scripts/private-names-guard.py`
+
+- **Purpose**: Keeps private downstream organization and repository names out of tracked files.
+- **Authority**: `scripts/private-names-guard.py` alone decides whether a private name is present. It reads the bytes of every tracked path, file and symlink target, independent of file type, extension case or structure, and compares them with the salted digests in `scripts/private-names-hashes.txt`. Matching is case-insensitive and also runs on the URL-decoded, `\uXXXX`-unescaped, `\/`-unescaped and HTML-unescaped text, after Unicode NFKC normalization with zero-width characters and combining marks removed. It matches a name inside identifiers, an `org/repo` pair with spaces around the slash or a `.git` suffix, and a name written with spaces, tabs, hyphens, underscores, dots or nothing between its letters and words, such as `Title Case Spaced`, `hyphen-form`, `under_score` or `dot.form`. A private name that is also an ordinary phrase therefore flags that phrase; reword the prose.
+- **Exemption**: `scripts/private-names-guard.py` skips exactly two paths (`EXEMPT_PATHS`). `docs/hard-decisions.md` is skipped because the owner's question about that document is recorded there and only the owner may change it. `.velnor/runner.lock` is skipped because it is a hashed input of the job-image candidate and must stay byte-identical. Each exemption is by exact path; a copy of either file under any other path is scanned. Changing either file requires owner approval.
+- **Changed files**: A pull request scans only the files it changes. A push, a schedule and any change to the guard or its digest list scan the whole tree.
+
 ---
 
 ## Runner Crates (`crates/velnor-runner-*`)

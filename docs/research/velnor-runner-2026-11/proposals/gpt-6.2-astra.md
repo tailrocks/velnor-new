@@ -269,7 +269,7 @@ Prewarm private DinD only for the pool that needs it. A completed PR’s process
 **Trust is a scheduling constraint.** Separate org groups, credentials, namespaces, quotas, service accounts and cache read/write domains.
 Enforce allowed repositories/workflows and trusted refs at the controller and server group. Anyone who can alter a PR’s YAML can request a label.
 Use a clean, nonprivileged control pool for the released planner, required gates and evidence signing. Keep privileged release/publish and macOS platform lanes in their approved environments.
-Run arbitrary PR code without the cluster service account, host paths, outer Docker socket, App credential, signing ability or control-plane network access. Give only the declared GitHub job permissions.
+Run arbitrary PR code without the service account of the cluster, host paths, outer Docker socket, App credential, signing ability or control-plane network access. Give only the declared GitHub job permissions.
 For external PRs use a verified VM/Kata/Firecracker boundary or a separate disposable host/pool with public-safe inputs. Continue using an isolated hosted runner if that facility is unavailable.
 The owner-approved privileged DinD transition needs dedicated tainted nodes and a private daemon per job. A taint keeps workloads apart for scheduling. Separate hosts/VMs and enforced admission supply the security boundary between mutually untrusted tenants. `docs/goals.md:43`, `audit/kubernetes-runtime.md:331`
 

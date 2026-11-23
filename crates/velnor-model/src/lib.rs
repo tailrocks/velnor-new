@@ -67,7 +67,7 @@ pub use mbx_config::{
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_UNITS, CI_AUTO_LABEL, CI_RUN_LABEL,
-    CargoCommand, Concurrency, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
+    CargoCommand, Concurrency, EMPTY_PACKAGE_MAP, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
     MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun,
     PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,

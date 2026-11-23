@@ -354,3 +354,44 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
     }
     Ok(())
 }
+
+const ACTIVE: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+
+#[test]
+fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it() -> TestResult {
+    let gated = "needs.rust-root.result != 'skipped' || needs.rust-tools.result != 'skipped' || needs.rust-trim.result != 'skipped'";
+    let ungated = format!("${{{{ {ACTIVE} && (!cancelled()) }}}}");
+    let producers = format!("${{{{ {ACTIVE} && (!cancelled() && ({gated})) }}}}");
+    for (version, blocks, expected) in [
+        ("0.1.111", false, &ungated),
+        ("0.1.112", false, &producers),
+        ("0.1.112", true, &ungated),
+    ] {
+        let config = format!("cache_check_blocks = {blocks}\n");
+        let view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+        let mut facts = detect(&view)?;
+        let helper = facts.helper.as_ref().ok_or("helper")?;
+        facts.helper = Some(HelperRelease::new(
+            HelperVersion::new(version)?,
+            helper.action().clone(),
+            helper.digests().clone(),
+        )?);
+        let plan = plan(&facts);
+        let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
+        let parsed: serde_json::Value = serde_saphyr::from_str(
+            &crate::archive::plain_invocations(rendered.values().next().ok_or("workflow")?),
+        )?;
+        let cache = &parsed["jobs"]["cache"];
+        assert_eq!(
+            cache["needs"],
+            serde_json::json!(["rust-root", "rust-tools", "rust-trim"]),
+            "{version} {blocks}"
+        );
+        assert_eq!(
+            cache["if"].as_str(),
+            Some(expected.as_str()),
+            "{version} {blocks}"
+        );
+    }
+    Ok(())
+}

@@ -40,3 +40,12 @@ fn compat_is_stable_and_follows_rustflags_and_the_debuginfo_setting() {
         ("", "")
     );
 }
+
+#[test]
+fn the_mbx_out_dir_setting_changes_the_compat_digest() {
+    let json = reported("1.99.1", Some("0.9.151"));
+    let plain = prepare("out-dir", &Setup::new(json.clone()));
+    let mut kept = Setup::new(json);
+    kept.env.push(("MBX_SHARE_OUT_DIR", "0"));
+    assert_ne!(digest(&plain), digest(&prepare("out-dir", &kept)));
+}

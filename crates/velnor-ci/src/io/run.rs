@@ -300,6 +300,7 @@ fn collect(
             .progress
             .get_or_insert_with(Vec::new)
             .extend(captured.observations.progress);
+        invocation.dirty.extend(captured.observations.dirty);
         invocation.tests.extend(captured.observations.tests);
         invocation.rejected += captured.observations.rejected;
     }

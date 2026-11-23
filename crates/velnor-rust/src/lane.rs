@@ -268,7 +268,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
-    steps.extend(mbx(facts, policy_gate.clone()));
+    steps.extend(mbx(facts, policy_gate.as_ref()));
     steps.extend(mirror_step(facts).map(|step| Step {
         gate: policy_gate.clone(),
         ..step
