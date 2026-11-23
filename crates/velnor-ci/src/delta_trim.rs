@@ -5,6 +5,7 @@ use crate::error::CiError;
 use crate::github::{GitHubWrite, Repo};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
+use velnor_model::WORKFLOW_PATH;
 
 #[derive(Deserialize)]
 struct Identity {
@@ -64,8 +65,14 @@ fn decode<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, CiError> {
 
 pub fn trim_deltas(github: &dyn GitHubWrite, repo: &Repo, run_id: u64) -> Result<String, CiError> {
     let identity: Identity = decode(&github.get(&format!("/repos/{repo}"))?)?;
+    let workflow_path = WORKFLOW_PATH;
+    let workflow_file = workflow_path
+        .as_str()
+        .rsplit('/')
+        .next()
+        .unwrap_or(workflow_path.as_str());
     let workflow: Identity =
-        decode(&github.get(&format!("/repos/{repo}/actions/workflows/rust-ci.yml"))?)?;
+        decode(&github.get(&format!("/repos/{repo}/actions/workflows/{workflow_file}"))?)?;
     let run: Run = decode(&github.get(&format!("/repos/{repo}/actions/runs/{run_id}"))?)?;
     if run.id != run_id
         || run.status != "completed"
@@ -78,7 +85,7 @@ pub fn trim_deltas(github: &dyn GitHubWrite, repo: &Repo, run_id: u64) -> Result
         || run.pull_requests.len() > 1
     {
         return Err(CiError::new(
-            "cleanup requires a completed, unambiguous same-repository Rust CI PR run",
+            "cleanup requires a completed, unambiguous same-repository CI PR run",
         ));
     }
     let number = match run.pull_requests.as_slice() {

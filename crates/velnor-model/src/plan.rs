@@ -118,6 +118,7 @@ pub struct Job {
     pub reports_ignored: bool,
     pub build_record: BuildRecord,
     pub chained_saves: bool,
+    pub anchor_key_output: bool,
     pub mbx_stats: crate::MbxStats,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
@@ -172,6 +173,7 @@ pub enum When {
     NotCancelled,
     NotCancelledPostMerge,
     Finalizer,
+    FinalizerAfterProducer,
     Always,
     Scheduled,
     ScheduledOrPush,

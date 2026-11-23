@@ -42,7 +42,7 @@ async fn down_needs_no_ps_or_kill_on_path() {
                 "supervisor_down::down_needs_no_ps_or_kill_on_path",
             ])
             .env_clear()
-            .env("PATH", &empty)
+            .env("PATH", empty.path())
             .env(WITHOUT_PATH, "1")
             .status()
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -50,7 +50,7 @@ async fn down_needs_no_ps_or_kill_on_path() {
         return;
     }
     let dir = temp_dir("supervisor-no-ps");
-    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let canonical = std::fs::canonicalize(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let binary = "/opt/velnor/bin/velnor-local";
     let child = Command::new("/usr/bin/yes")
         .arg0(binary)

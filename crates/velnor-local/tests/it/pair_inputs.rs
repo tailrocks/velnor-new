@@ -48,7 +48,7 @@ async fn a_failed_jit_write_leaves_no_staged_credentials_behind() {
     let path = dir.join("jit");
     std::fs::create_dir(&path).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(write_private(&path, "secret").await.is_err());
-    let names: Vec<_> = std::fs::read_dir(&dir)
+    let names: Vec<_> = std::fs::read_dir(dir.path())
         .unwrap_or_else(|e| unreachable!("{e}"))
         .flatten()
         .map(|entry| entry.file_name())

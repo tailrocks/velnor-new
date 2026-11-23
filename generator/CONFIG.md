@@ -134,7 +134,7 @@ Mise-managed Cargo retains its configured command wrappers, including MBX, and t
 
 Writing the configuration only above the checkout misses temporary directories. Writing it only in Cargo's home misses a changed home. A configuration at `/.cargo/config.toml` would reach unrelated directories but needs filesystem-root access and changes unrelated jobs. The wrapper uses a per-job configuration instead.
 
-This repository selects its scale-set runner and names its mirror in this configuration. Its hand-maintained `ci.yml` is separate from the generator and does not consume this setting. Running a generated Rust workflow requires the compatible helper release.
+This repository selects its scale-set runner and names its mirror in this configuration. The generated workflow `.github/workflows/ci.yml` consumes this setting. The hand-maintained `.github/workflows/repository-checks.yml` does not. Running a generated Rust workflow requires the compatible helper release.
 
 ## Optional private dependencies
 
@@ -283,6 +283,7 @@ phase = "build"
 - The step has the gate of the cargo steps it precedes, so a run that selects nothing for the root skips it.
 - Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
 - The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
+- From `velnor-ci` 0.1.112, a filtered `[[test_lane]]` guard step does not run after a failed test-phase `[[test_setup]]` step of its root. A `[[check_configurations]]` step does not run after a failed `phase = "build"` step; that wait is not version-gated and applies at every pin. A `phase = "build"` step gates every later cargo step, including lane guards, clippy and doc, at every pin. Clippy and doc steps do not wait for a test-phase setup, because they do not read its output.
 
 ## Checking feature configurations
 
@@ -511,16 +512,18 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 
 ## Checking the helper lock
 
-`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose `[velnor-gen]` entry disagrees with itself or with the running binary. Each message starts with the field it names: `version:`, `commit:` or `[velnor-gen] <platform>`. A `[velnor-gen]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
+`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose entry for the running `velnor-gen` disagrees with the lock's own version and commit, or with the running executable. That entry is `[velnor-gen]` for a raw-binary release and `[velnor-gen-binary]` for an archive release from 0.1.111 on. Each message starts with the field it names: `version:`, `commit:`, `[velnor-gen] <platform>` or `[velnor-gen-binary] <platform>`. A `[velnor-gen]` or `[velnor-gen-binary]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
 
 - The `version` and `commit` must be well-formed (a numeric `MAJOR.MINOR.PATCH` and 40 lowercase hex digits).
-- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the lock's digest for its platform, when that platform is listed.
+- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the digest that the lock lists for its platform, when that platform is listed. For an archive release from 0.1.111 on that digest is `[velnor-gen-binary]`, because `[velnor-gen]` lists the archives that the install step checks and an archive digest is not the digest of the binary. The archive releases from 0.1.94 to 0.1.110 list no `[velnor-gen-binary]`, so their executable digest is not compared.
 - A running release build of the lock's version but another commit is refused: the lock names the wrong commit.
 - A local build stamps no commit (`unknown`). Its bytes are not the published binary, so nothing about it is compared, and a newer or older release that the lock does not pin is not compared either.
 
+A release that publishes archives (0.1.94 and later) lists `[velnor-gen]` with the archive digests and `[velnor-ci-binary]`. From 0.1.111 it also lists `[velnor-gen-binary]`, the digests of the `velnor-gen` executable inside each archive, and a lock without it is refused. A release that publishes raw binaries (before 0.1.94) lists `[velnor-gen]` only and refuses `[velnor-gen-binary]`. A lock for an archive release before 0.1.111 that lists `[velnor-gen-binary]` is refused too.
+
 Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
 
-`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` with the platform). It needs the network and fails without it, so it is not run by default.
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` or `[velnor-gen-binary]` with the platform). A differing or missing `[velnor-gen-binary]` also names `velnor-gen pin-helper 0.1.111` or later as the command that re-pins the lock. It needs the network and fails without it, so it is not run by default.
 
 ## Test groups
 
@@ -607,7 +610,7 @@ Every tool a lint entry needs is checked at generation. The tool must be pinned 
 
 ### Skipping a lint on an unrelated pull request
 
-A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it. A tracked symlink that an input, one of these files or a folder on their path reaches also runs the lint on every pull request, because the change list names the target and not the link; a changed path that is a folder on the path to an input (a deleted symlink to a folder) runs it too. A lint the plan leaves out is listed in the step summary and in `velnor-ci plan --explain` with its reason.
+A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it. A tracked symlink that an input, one of these files or a folder on their path reaches also runs the lint on every pull request, because the change list names the target and not the link; a changed path that is a folder on the path to an input (a deleted symlink to a folder) runs it too. A lint the plan leaves out is listed in the step summary and in `velnor-ci plan --explain` with its reason.
 
 Narrow `inputs` on a tool that checks the whole tree (`alint`, `jactionlint`) skip the pull requests that change files the tool checks, so declare broad globs for such a tool or leave `inputs` unset. Declare every local override file the tool reads as well (for example `hk.local.pkl` next to `hk.pkl`): the plan only knows the globs and the files listed above.
 
@@ -757,7 +760,7 @@ A check job checks out the verified commit without persisting credentials, and r
 
 ## Declared workflows
 
-`.velnor/workflows.toml` makes the generator write one workflow file, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is the only place that declares extra workflows: the `[[workflow]]` table of the earlier `fast/1290-source-preview` draft in `rust-ci.toml` is gone, and the reusable-workflow section that stood here is replaced by this one. The file is off when it is absent, and then the generated files are byte-identical to the output without it. `file` is lower case letters, digits and dashes; `rust-ci` and `release` belong to other outputs and are refused. A workflow sets `permissions: {}` at the top, and each job lists only the scopes it names. The samples `reusable-workflows`, `declared-workflow` and `declared-workflows` use every key below.
+`.velnor/workflows.toml` makes the generator write one workflow file, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is the only place that declares extra workflows: the `[[workflow]]` table of the earlier `fast/1290-source-preview` draft in `rust-ci.toml` is gone, and the reusable-workflow section that stood here is replaced by this one. The file is off when it is absent, and then the generated files are byte-identical to the output without it. `file` is lower case letters, digits and dashes; `ci` and `release` belong to other outputs and are refused. A workflow sets `permissions: {}` at the top, and each job lists only the scopes it names. The samples `reusable-workflows`, `declared-workflow` and `declared-workflows` use every key below.
 
 ```toml
 [[workflow]]
@@ -903,7 +906,7 @@ A `[[workflow.case]]` is one qualification case that runs on a hosted runner and
 
 ### Later
 
-A `workflow_run` name is checked for form only, not against the workflows that exist: the generator reads the names of declared workflows from this file and does not read the `name:` of a hand-written file or of `rust-ci` (which is configurable), so a name that matches nothing is a workflow that never starts.
+A `workflow_run` name is checked for form only, not against the workflows that exist: the generator reads the names of declared workflows from this file and does not read the `name:` of a hand-written file or of the CI workflow (that name is `CI`), so a name that matches nothing is a workflow that never starts.
 
 ## CI on a pull request only on request
 
@@ -954,7 +957,7 @@ These top-level keys of `.velnor/release.toml` sit beside `[[binaries]]`, `[[che
 The `release-pr` job's `permissions:` shows `contents: read`, but it mints a GitHub App token with `contents` and `pull-requests` write for release-plz, gated to default-branch pushes and `environment: release`.
 
 - `roots` is the list of Cargo root folders that the release reads. It is `["."]` by default. Each root is a relative folder with no leading `/` or `-` and no empty, `.` or `..` part. `"."` alone is the repository root. An expression is refused.
-- `after` is the list of workflow names that the release follows with `workflow_run`. It is `["Rust CI"]` by default. The list may not be empty or hold a blank name, and a name that no workflow has is an error.
+- `after` is the list of workflow names that the release follows with `workflow_run`. It is `["CI"]` by default. The list may not be empty or hold a blank name, and a name that no workflow has is an error.
 - `pr_only_checks` is a list of required checks that run only on pull requests. The release gate does not wait for them on the tagged commit. Each name must be a required check of the default branch, and each name is listed once; blank and repeated names are refused. It is refused together with `family_required_checks = false`.
 
 ## Release binaries and their Cargo profile
