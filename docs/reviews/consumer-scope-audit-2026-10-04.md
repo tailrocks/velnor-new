@@ -73,7 +73,7 @@ CI has no relative local action callers. example-org/example-repo-2 invokes its 
 - One GitHub GraphQL snapshot resolved canonical full names and collected each default branch SHA/time, .velnor config/manifest blobs, CI blob/workflow names, privacy, and every current open PR head. Repository contents were accessible for all 46.
 - Cohort reports inspected exact default trees and relevant open-PR heads/diffs. Searches used bounded git grep/rg over fetched files, not GitHub code search alone. Supplemental A-cohort clones matched all ten API heads and were searched with fixed strings.
 - Positive caller classification distinguishes docs/product/test text from staged executable workflows and from runtime invocation. Current plan artifacts are staged in all CI files; log-level runtime evidence is claimed only for the runs recorded in the cohort findings.
-- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. example-org-b findings came from the separate gpt-6.1-sol/medium lane.
+- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
 
 ## Bounded reference search
 
@@ -106,14 +106,14 @@ Limits: snapshot covers current default heads and open PR heads in the CSV plus 
 
 | # | Scope name → canonical | Current main SHA | Status and positive evidence | Owner/checkpoint |
 |---:|---|---|---|---|
-| 1 | example-org/example-repo | 0aa821a088e1bacf3d4d85a4c9faaa67faa85132 | NO-CHANGE (source); HOLD (#1108 validator); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #1108 task validator binds legacy generated workflow/state paths. | example-org-b owner; migrate #1108 validator before adoption. |
-| 2 | example-org/example-repo | 2e7119b9c668ca7a9c55218b20049885299d198f | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 3 | example-org/example-repo | cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 4 | example-org/example-repo | 59e538704b8c119f3b6668cea0154909a6158ff6 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 5 | example-org/example-repo | 587a0d1a8eef96108c9d9d530bdaa13df91edd2b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 6 | example-org/example-repo | a01b342162bc56cdf1e8bbaab793e73d31c1d621 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 7 | example-org/example-repo | b43a2314c6b58906d52828115d3b3973026f6a2a | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 8 | example-org/example-repo | 2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 1 | jackin-project/jackin | 0aa821a088e1bacf3d4d85a4c9faaa67faa85132 | NO-CHANGE (source); HOLD (#1108 validator); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #1108 task validator binds legacy generated workflow/state paths. | Jackin owner; migrate #1108 validator before adoption. |
+| 2 | jackin-project/jackin-agent-smith | 2e7119b9c668ca7a9c55218b20049885299d198f | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 3 | jackin-project/homebrew-tap | cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 4 | jackin-project/jackin-role-action | 59e538704b8c119f3b6668cea0154909a6158ff6 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 5 | jackin-project/jackin-sentinel | 587a0d1a8eef96108c9d9d530bdaa13df91edd2b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 6 | jackin-project/jackin-dev | a01b342162bc56cdf1e8bbaab793e73d31c1d621 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 7 | jackin-project/jackin-github-terraform | b43a2314c6b58906d52828115d3b3973026f6a2a | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 8 | jackin-project/jackin-the-architect | 2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 9 | tailrocks/github-terraform | 667eae4d8ecedde5153eb486fefe07a9d00cc3ad | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no; unrelated Tofu lock/install mismatch 1.12.5 vs 1.13.1. | Repo owner; resolve unrelated Tofu pin drift separately. |
 | 10 | tailrocks/termpane | 7cf2f9981ef9a3f7c8fc295a7501a261fba955a8 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; separate generated release.yml dispatches release-plz. | Termpane owner; preserve release and stock MBX paths. |
 | 11 | tailrocks/tui-snap → tailrocks/tuiscotti | a47c9aaefb34e4c00026f99d8a8dd7ee5916b274 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no; old scope alias resolves to tailrocks/tuiscotti. | Repo owner; exact-artifact regeneration and deterministic parity. |

@@ -13,138 +13,138 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/generator-prior",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json"
     },
     {
       "number": 1,
       "wave": "A",
-      "repository": "example-org/example-repo-8",
+      "repository": "jackin-project/jackin",
       "observed_source_sha": "0aa821a088e1bacf3d4d85a4c9faaa67faa85132",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 2,
       "wave": "A",
-      "repository": "example-org/example-repo-9",
+      "repository": "jackin-project/jackin-agent-smith",
       "observed_source_sha": "2e7119b9c668ca7a9c55218b20049885299d198f",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 3,
       "wave": "A",
-      "repository": "example-org/example-repo-10",
+      "repository": "jackin-project/homebrew-tap",
       "observed_source_sha": "cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 4,
       "wave": "A",
-      "repository": "example-org/example-repo-11",
+      "repository": "jackin-project/jackin-role-action",
       "observed_source_sha": "59e538704b8c119f3b6668cea0154909a6158ff6",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 5,
       "wave": "A",
-      "repository": "example-org/example-repo-12",
+      "repository": "jackin-project/jackin-sentinel",
       "observed_source_sha": "587a0d1a8eef96108c9d9d530bdaa13df91edd2b",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 6,
       "wave": "A",
-      "repository": "example-org/example-repo-13",
+      "repository": "jackin-project/jackin-dev",
       "observed_source_sha": "a01b342162bc56cdf1e8bbaab793e73d31c1d621",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 7,
       "wave": "A",
-      "repository": "example-org/example-repo-14",
+      "repository": "jackin-project/jackin-github-terraform",
       "observed_source_sha": "b43a2314c6b58906d52828115d3b3973026f6a2a",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
     {
       "number": 8,
       "wave": "A",
-      "repository": "example-org/example-repo-15",
+      "repository": "jackin-project/jackin-the-architect",
       "observed_source_sha": "2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-a",
+        "<local-path>/collections/baseline-wave-a",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-a-20261004/rows.json"
     },
@@ -157,10 +157,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -173,10 +173,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -189,10 +189,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -205,10 +205,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -221,10 +221,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -237,10 +237,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -253,10 +253,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -269,10 +269,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -285,10 +285,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -301,10 +301,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -317,10 +317,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -333,10 +333,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -349,10 +349,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -365,10 +365,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -381,10 +381,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -397,10 +397,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -413,10 +413,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/report.json"
     },
@@ -429,10 +429,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -445,10 +445,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -461,10 +461,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -477,10 +477,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -493,10 +493,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -509,10 +509,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -525,10 +525,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -541,10 +541,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -557,10 +557,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -573,10 +573,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -589,10 +589,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -605,10 +605,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -621,10 +621,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -637,10 +637,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -653,10 +653,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -669,10 +669,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-wave-b",
+        "<local-path>/collections/baseline-wave-b",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
     },
@@ -685,10 +685,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/baseline-wave-c",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json"
     },
@@ -701,10 +701,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/baseline-wave-c",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json",
       "unavailable_executed_job_log": {
@@ -724,10 +724,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/baseline-wave-c",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json"
     },
@@ -740,10 +740,10 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/baseline-wave-c",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json"
     },
@@ -756,14 +756,14 @@
       "performance_status": "INCOMPLETE",
       "waiver_applied": false,
       "durable_evidence_roots": [
-        "<local-path>",
-        "<local-path>",
-        "<local-path>",
-        "<local-path>"
+        "<local-path>/collections/scope",
+        "<local-path>/collections/refresh-c-generator",
+        "<local-path>/collections/baseline-wave-c",
+        "<local-path>/collections/runtime"
       ],
       "source_packet_original_path": "<tmp>/velnor-audit-gap-c-generator-20261004/rows.json"
     }
   ],
-  "independent_copy_receipt_path": "<local-path>",
+  "independent_copy_receipt_path": "<local-path>/verification/independent-copy-verification.json",
   "independent_copy_receipt_sha256": "f4b4d6b8a045243d34b8c189bf32978e5228969dc2a453b84bc8da9815fe9822"
 }
