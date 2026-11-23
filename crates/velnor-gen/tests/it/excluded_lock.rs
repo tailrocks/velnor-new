@@ -29,7 +29,7 @@ fn with_step(
     step: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn Error>> {
     let text = format!(
-        "[[workflow]]\nfile = \"ci\"\nname = \"CI\"\n\n[[workflow.job]]\nid = \"schema\"\n\n[[workflow.job.step]]\nname = \"Schema\"\n{step}\n"
+        "[[workflow]]\nfile = \"checks\"\nname = \"CI\"\n\n[[workflow.job]]\nid = \"schema\"\n\n[[workflow.job.step]]\nname = \"Schema\"\n{step}\n"
     );
     view.files
         .insert(RepoPath::new(".velnor/workflows.toml")?, text.into_bytes());

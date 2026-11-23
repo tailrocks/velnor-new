@@ -87,7 +87,7 @@ pub(crate) fn recorded(list: &str) -> FakeGitHub {
     let repo = lab();
     let mut fake = FakeGitHub::default();
     fake.respond(repo_path(&repo), REPO);
-    fake.respond(workflow_runs_path(&repo, "rust-ci.yml", 1), list);
+    fake.respond(workflow_runs_path(&repo, "ci.yml", 1), list);
     for &(id, run, jobs) in RUNS {
         fake.respond(run_path(&repo, id), run);
         fake.respond(jobs_path(&repo, id, 1, 1), jobs);

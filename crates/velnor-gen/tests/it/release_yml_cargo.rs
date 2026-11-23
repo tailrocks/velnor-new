@@ -83,7 +83,7 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
 fn an_after_name_that_no_workflow_has_is_refused_when_rendering() {
     let rendered = render(
         &[crate::release_fixture::APP],
-        Some("after = [\"Rust CI\", \"Linter\"]\n"),
+        Some("after = [\"CI\", \"Linter\"]\n"),
     );
     assert!(
         rendered
@@ -121,7 +121,7 @@ fn a_workflow_name_with_filter_characters_is_escaped_in_the_trigger() -> TestRes
 
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some("after = [\"Rust CI\", \"Build+Test\", \"checks[linux]\"]\n"),
+        Some("after = [\"CI\", \"Build+Test\", \"checks[linux]\"]\n"),
     )?;
     for (file, name) in [("build", "Build+Test"), ("checks", "checks[linux]")] {
         view.files.insert(
@@ -137,7 +137,7 @@ fn a_workflow_name_with_filter_characters_is_escaped_in_the_trigger() -> TestRes
         tree.at(&["on", "workflow_run", "workflows"])
             .ok_or("no workflows")?
             .texts(),
-        ["Rust CI", "Build\\+Test", "checks\\[linux\\]"]
+        ["CI", "Build\\+Test", "checks\\[linux\\]"]
     );
     Ok(())
 }
@@ -149,7 +149,7 @@ fn an_after_name_of_a_generator_owned_workflow_that_generation_retires_is_refuse
 
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some("after = [\"Rust CI\", \"Old Gen\"]\n"),
+        Some("after = [\"CI\", \"Old Gen\"]\n"),
     )?;
     view.files.insert(
         RepoPath::new(".github/workflows/old.yml")?,
@@ -226,7 +226,7 @@ fn the_generated_release_workflow_cannot_be_an_after_workflow() -> TestResult {
 
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some("after = [\"Rust CI\", \"Release\"]\n"),
+        Some("after = [\"CI\", \"Release\"]\n"),
     )?;
     let _ = RepoPath::new("release.yml")?;
     view.files.insert(
@@ -249,7 +249,7 @@ fn a_workflow_name_with_a_trailing_yaml_comment_or_quotes_is_the_plain_name() ->
 
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some("after = [\"Rust CI\", \"Qualification\", \"Checks\"]\n"),
+        Some("after = [\"CI\", \"Qualification\", \"Checks\"]\n"),
     )?;
     for (file, text) in [
         ("q", "name: Qualification # required\non: push\n"),
@@ -270,7 +270,7 @@ fn workflow_names_are_read_as_yaml_scalars() -> TestResult {
     use velnor_model::RepoPath;
 
     let names = [
-        "Rust CI",
+        "CI",
         "Bob's CI",
         "Say \"hi\" \\ \u{e9}",
         "Checks # not a comment",
@@ -322,7 +322,7 @@ fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() -> TestRe
     ] {
         let mut view = crate::release_fixture::release_view(
             &[crate::release_fixture::APP],
-            Some("after = [\"Rust CI\"]\n"),
+            Some("after = [\"CI\"]\n"),
         )?;
         view.files.insert(
             RepoPath::new(".github/workflows/extra.yml")?,

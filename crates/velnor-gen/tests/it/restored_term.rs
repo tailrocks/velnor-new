@@ -96,7 +96,7 @@ fn the_rule_flags_a_condition_that_reads_a_missing_step() {
 
 #[test]
 fn the_policy_lane_runs_its_policy_steps_without_a_restore_term() -> TestResult {
-    let path = samples().join("policy-lane/expected/.github/workflows/rust-ci.yml");
+    let path = samples().join("policy-lane/expected/.github/workflows/ci.yml");
     let text = fs::read_to_string(path)?;
     let (_, lines) = jobs(&text)
         .into_iter()

@@ -38,7 +38,7 @@ them. Example output is illustrative: its numbers are not measurements.
 | Mirrors | per worker and per site | Git mirror on every worker; crates mirror and image registry mirror per site |
 | Official runner image | kept | Used as the reference, and when you choose the official executor |
 
-ARC is removed for velnor-new at the final milestone (day 6.5). ChainArgos and jackin keep their
+ARC is removed for velnor-new at the final milestone (day 6.5). example-org and jackin keep their
 ARC scale sets.
 
 ### 1.2 On a Mac with Docker
