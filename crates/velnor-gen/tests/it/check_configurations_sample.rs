@@ -13,7 +13,7 @@ use crate::yaml_tree::document;
 const RELEASED: &str = "0.1.111";
 const NEXT: &str = "0.1.112";
 const STEP: &str = "velnor-ci check-configurations";
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 
 struct Job {
     ids: Vec<String>,

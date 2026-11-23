@@ -132,7 +132,7 @@ fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> Result
 
 #[test]
 fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
-    let repo = fixture("mbx-reports-nested")?;
+    let repo = fixture("sock-nest")?;
     let socket = repo.root().join("cache-agent.sock");
     let _daemon = std::os::unix::net::UnixListener::bind(&socket)?;
     cargo_with(

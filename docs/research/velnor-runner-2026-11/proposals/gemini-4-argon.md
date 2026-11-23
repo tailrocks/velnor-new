@@ -161,7 +161,7 @@ Applying **Principle: Redesign from First Principles** and **Principle: Foundati
                                           v
 +-----------------------------------------------------------------------------------+
 | velnor-host (Rust Controller on k3s control-plane or dedicated Deployment)        |
-| - velnor-runner-github: multi-org Scale Set sessions (tailrocks, ChainArgos, etc) |
+| - velnor-runner-github: multi-org Scale Set sessions (tailrocks, example-org, etc) |
 | - velnor-runner-core: WorkerState machine, CleanupProof, TrustClass admission     |
 | - Turso embedded SQLite journal (linear schema check #1333, UID ownership proofs) |
 | - Cache-Affinity Scheduler: maps (repo, workspace_root, trust_scope) -> warm node |
@@ -282,7 +282,7 @@ In ARC today, pods carry no affinity hints (`evidence.md:558`), scattering jobs 
 
 1. **Derive `cache_group` and `trust_pool` at job offer time:** From the scale-set `JobAvailable` message fields `(ownerName, repositoryName, jobDisplayName, eventName, workflowRunId)` (`actions/scaleset/types.go:21-57`, `evidence.md:1181`), `velnor-host` computes `cache_group` (e.g. `tailrocks/velnor-new/rust-root`) and `trust_pool` (`trusted-main`, `trusted-pr`, or `untrusted-fork`).
 2. **Rendezvous hashing + Turso-journaled MRU slot table:**
-   - Each `cache_group` maps via Rendezvous hashing to a primary site (e.g. DE nodes `velnor-240` and `velnor-105` plus FI node `velnor-241` for `tailrocks`; FI nodes `velnor-5` and `velnor-190` for `ChainArgos` and `jackin-project`, with automatic overflow).
+   - Each `cache_group` maps via Rendezvous hashing to a primary site (e.g. DE nodes `velnor-240` and `velnor-105` plus FI node `velnor-241` for `tailrocks`; FI nodes `velnor-5` and `velnor-190` for `example-org` and `jackin-project`, with automatic overflow).
    - **Rule 1 (Warm Idle Slot):** Pick the `Idle` slot on any node in the primary site that most recently built the exact `cache_group`.
    - **Rule 2 (Same-Site Free Slot + XFS Reflink Clone):** If all warm slots for `cache_group` are busy (concurrent PRs), pick an `Idle` slot on the same node (or same site) with free CPU headroom (`allocated_cpu + job_cpu <= 88` of 96 cores). `velnor-node-agent` initializes the slot by `cp --reflink=always -a` from the node's committed base snapshot (~0.5 s on XFS) and pulls any missing objects from the same-site L2 `mbx-cache` server over LAN (~2 to 4 s), never crossing the 35 ms DE-to-FI WireGuard link.
    - **Rule 3 (Cross-Site Overflow):** If the primary site exceeds 85% CPU allocation, place the job on the secondary site, whose L2 `mbx-cache` server receives asynchronous background replication from the primary site.
@@ -414,7 +414,7 @@ Today pods request `cpu: 2, memory: 4Gi` with `limits: { memory: 32Gi }` and **n
 
 - Add topology labels to every node: `topology.kubernetes.io/zone=de` and `velnor.io/storage-tier=large` on `velnor-240` (50 TB) and `velnor-105` (34.6 TB); `topology.kubernetes.io/zone=fi` and `velnor.io/storage-tier=standard` on `velnor-241`, `velnor-5`, and `velnor-190` (3.8 TB each).
 - Deploy one L2 `mbx-cache` + `gha_cache` server in DE (`velnor-240`) and one in FI (`velnor-241`) behind a Service with `trafficDistribution: PreferSameZone`. Pods never pull cache blobs across the 35 ms DE-to-FI WireGuard link; the two L2 servers replicate committed `main` blobs asynchronously in the background.
-- Give `tailrocks` repos primary cache affinity to `velnor-240`, `velnor-105` (DE), and `velnor-241` (FI) (18 heavy 16-core slots), and give `ChainArgos` and `jackin-project` primary affinity to `velnor-5` and `velnor-190` (FI, 12 heavy 16-core slots), with automatic overflow to any idle node when a site exceeds 85% utilization.
+- Give `tailrocks` repos primary cache affinity to `velnor-240`, `velnor-105` (DE), and `velnor-241` (FI) (18 heavy 16-core slots), and give `example-org` and `jackin-project` primary affinity to `velnor-5` and `velnor-190` (FI, 12 heavy 16-core slots), with automatic overflow to any idle node when a site exceeds 85% utilization.
 
 ### 4. Isolation of untrusted PRs
 

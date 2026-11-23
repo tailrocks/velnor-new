@@ -179,6 +179,10 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+    Ansible {
+        name: String,
+        run: String,
+    },
     Budget {
         last: usize,
     },
@@ -273,7 +277,8 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::MergeQueueCheck { .. } => false,
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
         }
     }
 
