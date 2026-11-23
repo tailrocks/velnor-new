@@ -190,8 +190,9 @@ pub(super) fn resolve(
                         parent
                     }
                     None => {
-                        handle::still_at(&path, current.as_fd())?;
-                        open_directory(current.as_fd(), Path::new(".."), false)?
+                        let parent = open_directory(current.as_fd(), Path::new(".."), false)?;
+                        handle::is_parent_of(&path, parent.as_fd())?;
+                        parent
                     }
                 };
                 (reach.opened)();
