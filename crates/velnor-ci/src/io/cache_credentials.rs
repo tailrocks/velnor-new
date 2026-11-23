@@ -273,7 +273,7 @@ fn is_repository_in_refs(
         return Ok(false);
     }
     Ok(has_object_store(listed, budget)?
-        || (has_entry(listed, CONFIG, false) && !is_object_id(&directory.join(CONFIG))))
+        || (has_entry(listed, CONFIG, false) && !is_ref_value(&directory.join(CONFIG))))
 }
 
 fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool, String> {
@@ -295,10 +295,12 @@ fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool,
     Ok(has_entry(&inner, OBJECT_INFO, true) && has_entry(&inner, OBJECT_PACK, true))
 }
 
-fn is_object_id(path: &Path) -> bool {
+fn is_ref_value(path: &Path) -> bool {
     read_small(path).is_some_and(|text| {
-        let id = text.trim_end();
-        matches!(id.len(), 40 | 64) && id.bytes().all(|each| each.is_ascii_hexdigit())
+        let value = text.trim_end();
+        value.starts_with("ref:")
+            || (matches!(value.len(), 40 | 64)
+                && value.bytes().all(|each| each.is_ascii_hexdigit()))
     })
 }
 

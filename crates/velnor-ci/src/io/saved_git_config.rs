@@ -102,15 +102,7 @@ fn plain_entry(section: &str, entry: &str) -> bool {
 }
 
 pub(super) fn names_credential(text: &str) -> bool {
-    variants(text).is_none_or(|variants| {
-        variants
-            .iter()
-            .any(|text| names_in(text) || names_without_quotes(text))
-    })
-}
-
-fn names_without_quotes(text: &str) -> bool {
-    text.contains(['"', '\'']) && names_in(&text.replace(['"', '\''], ""))
+    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text)))
 }
 
 fn names_in(text: &str) -> bool {
@@ -129,8 +121,12 @@ fn variants(text: &str) -> Option<Vec<String>> {
     for _ in 0..=MAX_UNESCAPE_PASSES {
         let mut next = Vec::new();
         for current in &frontier {
-            for form in [false, true] {
-                let decoded = unescape_once(current, form);
+            let joined = current.replace(['"', '\''], "");
+            let derived = [false, true]
+                .map(|form| unescape_once(current, form))
+                .into_iter()
+                .chain(Some(joined).filter(|joined| joined != current));
+            for decoded in derived {
                 if !seen.contains(&decoded) {
                     seen.push(decoded.clone());
                     next.push(decoded);

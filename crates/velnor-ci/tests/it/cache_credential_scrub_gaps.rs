@@ -228,6 +228,16 @@ fn a_credential_split_by_shell_quotes_in_a_config_comment_stops_the_sources_save
             CONFIG,
             &commented(&split_token),
         ),
+        (
+            "config-percent-triplet-split-by-quotes",
+            CONFIG,
+            &commented(&TOKEN.replacen("ghp_", "%6\"\"7hp_", 1)),
+        ),
+        (
+            "config-quotes-between-two-escapes",
+            CONFIG,
+            &commented(&TOKEN.replace('_', "%5\"\"F")),
+        ),
     ]);
 }
 
