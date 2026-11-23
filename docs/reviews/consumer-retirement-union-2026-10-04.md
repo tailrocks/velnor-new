@@ -17,7 +17,7 @@ open PR heads moved since the prior packet:
   `codex/credential-routing-recovery-20260930`: `60f7d661d14af7ebdfbdf21bd48f5c5eebb28888`
   → `3a28c199f17da335ecd9abd8dd67ebf1aecc0421`; API `updatedAt`
   `2026-10-04T04:14:24Z`.
-- `ChainArgos/java-monorepo` PR #2085, branch `n1-qualification`:
+- `example-org/example-repo-2` PR #2085, branch `n1-qualification`:
   `baa78037a99c89cde1b9c2201be68e80c9755f67` →
   `7cbe1db11ccabb463053a93a8a08d33bda418b29`; API `updatedAt`
   `2026-10-04T05:01:14Z`.
@@ -59,8 +59,8 @@ deterministic parity. The current 0.1.0 consumer pins below are historical
 consumer state, not evidence that this 0.1.1 packet exists.
 
 Three recorded owner holds remain: Velnor-actions-fixture disposition and
-retired hosted triggers; ChainArgos/java-monorepo PR #2085 qualification; and
-ChainArgos/jackin-agent-brown PR #241 rollout/runner/cache qualification.
+retired hosted triggers; example-org/example-repo-2 PR #2085 qualification; and
+example-org/example-repo-9 PR #241 rollout/runner/cache qualification.
 Jackin PR #1108's validator checkpoint also remains as separately recorded.
 No consumer repository or remote GitHub API/data was mutated.
 
@@ -72,7 +72,7 @@ The 46-consumer scope source remains open PR #12 at head `c694d8029eb880db639fa8
 
 GitHub resolved every name. All 46 default branches are `main`; all 46 default heads and all 40 open PR heads were fetched and scanned. Final API metadata at about 03:11 UTC matched all 86 scanned full SHAs. No repository or PR head was inaccessible. The only name resolution is historical `tailrocks/tui-snap` → canonical `tailrocks/tuiscotti`, same repository ID `1358764452` (confirmed through both API names).
 
-The original 02:27 CSV recorded jackin-project/jackin PR #1111 at `e426186cc8b7fe3387b8ac8891c7d3b08b0fc0b1`. During the 03:11 refresh, that head advanced to `60f7d661d14af7ebdfbdf21bd48f5c5eebb28888`; that head was fetched and scanned, and the 03:11 metadata check matched it. The later 07:42 snapshot advanced Jackin #1111 to `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` and ChainArgos/java-monorepo #2085 to `7cbe1db11ccabb463053a93a8a08d33bda418b29`. Both refreshed CSVs record those current heads; all other existing scope-audit fields remain from their stated earlier snapshots.
+The original 02:27 CSV recorded jackin-project/jackin PR #1111 at `e426186cc8b7fe3387b8ac8891c7d3b08b0fc0b1`. During the 03:11 refresh, that head advanced to `60f7d661d14af7ebdfbdf21bd48f5c5eebb28888`; that head was fetched and scanned, and the 03:11 metadata check matched it. The later 07:42 snapshot advanced Jackin #1111 to `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` and example-org/example-repo-2 #2085 to `7cbe1db11ccabb463053a93a8a08d33bda418b29`. Both refreshed CSVs record those current heads; all other existing scope-audit fields remain from their stated earlier snapshots.
 
 ## Search set
 
@@ -99,8 +99,8 @@ The generic repository/action path expression was `(uses:[[:space:]]*|https?://g
 ## Results and classification
 
 - All 86 refs in the 07:42 GraphQL snapshot were accessible and match their scanned SHAs: 84 unchanged trees retain the prior scans, and the two moved PR trees were rescanned at 07:53. All nine `owned-source/*` refs, all 18 listed SHAs (including the three excluded MBX ancestry SHAs), and the broad `owned-source/` literal had zero matches in the exact-pattern scans. `tailrocks/velnor-new@` also had zero matches. This is a bounded current-head result, not a claim about repositories or refs outside this union.
-- Generic `tailrocks/velnor-new` hits are the expected upstream documentation and immutable release-asset paths. Every default CI workflow stages a Velnor asset URL: 45 use release tag `v0.1.0`; ChainArgos/java-monorepo uses `generator-d40868152f7fe0106e3ede858a411f502f00810f`. The matching `.velnor/release-manifest.json` entries are declarative metadata. `.github/AGENTS.md` mentions are documentation. None is an owned-source branch reference.
-- Fifteen default CI workflows stage the stock public MBX action `jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3`: jackin-project/jackin; tailrocks/termpane, parallax, parallax-telemetry-playground, velnor, velnor-actions-fixture, holla, tracing-request-level, pg-bigdecimal, ruxel, schemalane, tablerock, cloudflare-tofu; ChainArgos/java-monorepo and cloudflare-tofu. This is executable workflow evidence for the stock action; it is not evidence of custom owned-snapshot cache behavior. H7 still requires artifact-bound runtime/resource qualification.
+- Generic `tailrocks/velnor-new` hits are the expected upstream documentation and immutable release-asset paths. Every default CI workflow stages a Velnor asset URL: 45 use release tag `v0.1.0`; example-org/example-repo-2 uses `generator-d40868152f7fe0106e3ede858a411f502f00810f`. The matching `.velnor/release-manifest.json` entries are declarative metadata. `.github/AGENTS.md` mentions are documentation. None is an owned-source branch reference.
+- Fifteen default CI workflows stage the stock public MBX action `jdx/mr-boxington-action@9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3`: jackin-project/jackin; tailrocks/termpane, parallax, parallax-telemetry-playground, velnor, velnor-actions-fixture, holla, tracing-request-level, pg-bigdecimal, ruxel, schemalane, tablerock, cloudflare-tofu; example-org/example-repo-2 and cloudflare-tofu. This is executable workflow evidence for the stock action; it is not evidence of custom owned-snapshot cache behavior. H7 still requires artifact-bound runtime/resource qualification.
 - Other `uses:` results are pinned public setup/cache actions or Velnor generator/source/test fixture text. The scan classifies them by file and path in the CSV. Static references do not establish a runtime invocation. This addendum gathered no new workflow-run logs.
 - These bounded ref searches found no positive retired-ref dependency; that result alone does not establish migration readiness or adoption. Existing rollout, task-contract, runtime, and MBX qualification holds remain as recorded in the earlier audit; owner checkpoint remains 2026-10-11 UTC.
 
@@ -124,7 +124,7 @@ these moved PRs; they are not current-head counts. Those results are not zero.
 | Repository and ref | Snapshot SHA | Text files | Binary files | Retirement-needle matches (29) |
 |---|---|---:|---:|---:|
 | `jackin-project/jackin` PR #1111 | `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` | 2,519 | 116 | 0 |
-| `ChainArgos/java-monorepo` PR #2085 | `7cbe1db11ccabb463053a93a8a08d33bda418b29` | 7,007 | 5,939 | 0 |
+| `example-org/example-repo-2` PR #2085 | `7cbe1db11ccabb463053a93a8a08d33bda418b29` | 7,007 | 5,939 | 0 |
 
 The file counts describe the full-tree inventory for these two snapshots.
 The zero result is bounded to the 29 retirement needles. Generic URL/path and

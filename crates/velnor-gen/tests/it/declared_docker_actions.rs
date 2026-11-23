@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::declared_fixture::{TestResult, refusal, rendered_text, workflow};
+use crate::declared_fixture::{DECLARED_FILE, TestResult, refusal, rendered_text, workflow};
 
 const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
 const READ: &str = "permissions = { contents = \"read\" }";
@@ -41,7 +41,7 @@ fn the_declared_docker_and_app_token_names_render_at_their_pinned_commits() -> T
         ),
     ];
     for (name, with, pinned) in cases {
-        let text = rendered_text(&steps_of(name, with), "ci")?;
+        let text = rendered_text(&steps_of(name, with), DECLARED_FILE)?;
         assert!(
             text.contains(&format!("uses: {pinned}")),
             "{name} must render at {pinned}: {text}"

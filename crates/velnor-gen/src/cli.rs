@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-gen",
-    about = "Generate the Rust CI workflow of a repository"
+    about = "Generate the CI workflow of a repository"
 )]
 pub struct Cli {
     #[arg(

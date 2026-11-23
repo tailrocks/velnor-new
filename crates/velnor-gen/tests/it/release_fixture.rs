@@ -211,7 +211,7 @@ pub(crate) fn app() -> Result<(String, Node), Box<dyn Error>> {
 pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
     render(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )
 }
 

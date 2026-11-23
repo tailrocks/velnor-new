@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 
 use super::super::latest::{Hooks, newest_with};
-use super::descriptors::deep_tree;
+use super::descriptors::{chain_child, deep_tree};
 use super::walk::HELD_HANDLES;
 use super::*;
 
@@ -143,10 +143,11 @@ fn a_child_restamped_after_its_parent_was_evicted_is_refused_from_a_retained_anc
 fn a_child_removed_before_it_is_reopened_from_a_retained_ancestor_is_skipped() {
     let vanished = RefCell::new(Vec::new());
     let (entries, hit) = disturbed("vanished", &|parent, _, opened| {
+        let chain = chain_child(parent);
         let mut gone = Vec::new();
         for entry in fs::read_dir(parent).unwrap_or_else(|e| unreachable!("{e}")) {
             let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
-            if path.ends_with("c") || opened.contains(&path) {
+            if path.file_name() == chain.as_deref() || opened.contains(&path) {
                 continue;
             }
             fs::remove_dir(&path).unwrap_or_else(|e| unreachable!("{e}"));
@@ -192,9 +193,10 @@ fn a_child_swapped_for_a_link_after_its_parent_was_evicted_is_recorded_as_a_link
                 if steps >= parent.components().count() || swapped.borrow().is_some() {
                     return;
                 }
+                let chain = chain_child(parent);
                 for entry in fs::read_dir(parent).unwrap_or_else(|e| unreachable!("{e}")) {
                     let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
-                    if path.ends_with("c") || opened.borrow().contains(&path) {
+                    if path.file_name() == chain.as_deref() || opened.borrow().contains(&path) {
                         continue;
                     }
                     fs::remove_dir(&path).unwrap_or_else(|e| unreachable!("{e}"));

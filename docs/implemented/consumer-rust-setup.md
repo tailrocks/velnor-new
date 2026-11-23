@@ -222,7 +222,7 @@ debug = false                # no debuginfo for dependencies
 # share every dependency unit.
 ```
 
-Measured on three ChainArgos workspaces (build, then tests, then clippy, from
+Measured on three example-org workspaces (build, then tests, then clippy, from
 an empty target): 26-43% smaller than Cargo's defaults with a `debug = 0`
 test profile, and 49-60% smaller than what the old mise tasks produced. A
 `[profile.test]` that differs from `dev` keeps two copies of every

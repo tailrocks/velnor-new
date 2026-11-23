@@ -71,7 +71,7 @@ fn a_job_concurrency_renders_on_a_step_job_and_on_a_call_job() -> TestResult {
         Some("true")
     );
     assert!(tree.get("concurrency").is_none());
-    let call = "[[workflow]]\nfile = \"leaf\"\nname = \"Leaf\"\n\n[[workflow.job]]\nid = \"build\"\n\n[[workflow.job.step]]\nname = \"Build\"\nrun = \"echo ok\"\n\n[[workflow]]\nfile = \"ci\"\nname = \"CI\"\n\n[workflow.on.push]\nbranches = [\"main\"]\n\n[[workflow.job]]\nid = \"release\"\nuses = \"leaf\"\nconcurrency = { group = \"release-${{ github.ref }}\" }\n";
+    let call = "[[workflow]]\nfile = \"leaf\"\nname = \"Leaf\"\n\n[[workflow.job]]\nid = \"build\"\n\n[[workflow.job.step]]\nname = \"Build\"\nrun = \"echo ok\"\n\n[[workflow]]\nfile = \"checks\"\nname = \"CI\"\n\n[workflow.on.push]\nbranches = [\"main\"]\n\n[[workflow.job]]\nid = \"release\"\nuses = \"leaf\"\nconcurrency = { group = \"release-${{ github.ref }}\" }\n";
     let tree = rendered(call)?;
     let release = job(&tree, "release")?;
     assert_eq!(

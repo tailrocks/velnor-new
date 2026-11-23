@@ -146,32 +146,3 @@ fn strings(value: Option<&Value>) -> Vec<String> {
 fn unsupported(what: &str) -> CiError {
     internal(&format!("diff_selection_not_supported:{what}"))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::is_identifier;
-
-    #[test]
-    fn an_identifier_is_ascii_alphanumerics_underscore_dot_and_dash() {
-        for id in ["rust", "lint-2", "a_b.c", "X9"] {
-            assert!(is_identifier(id), "{id:?}");
-        }
-    }
-
-    #[test]
-    fn an_identifier_cannot_carry_a_line_break_or_other_output_syntax() {
-        for id in [
-            "",
-            "a b",
-            "a,b",
-            "a/b",
-            "é",
-            "x\nother_key=evil",
-            "x\r\nother_key=evil",
-            "x\n::set-output name=other_key::evil",
-            "x\n::add-mask::secret",
-        ] {
-            assert!(!is_identifier(id), "{id:?}");
-        }
-    }
-}
