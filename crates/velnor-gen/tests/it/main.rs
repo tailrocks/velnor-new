@@ -276,6 +276,7 @@ mod report;
 mod report_not_generated;
 mod report_one_helper_pin;
 mod required_gate;
+mod required_gate_empty;
 mod required_gate_ignored;
 mod required_gate_lanes;
 mod required_job;
