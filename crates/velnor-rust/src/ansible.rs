@@ -129,10 +129,34 @@ fn is_play(bytes: &[u8]) -> bool {
     let Ok(text) = std::str::from_utf8(bytes) else {
         return false;
     };
-    text.lines().any(|line| {
-        let line = line.trim();
-        line.starts_with("- hosts:") || line.starts_with("- import_playbook:")
-    })
+    let mut play = false;
+    let mut key_indent = None;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if trimmed == "---" || trimmed == "..." {
+            key_indent = None;
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        if indent == 0 && (trimmed == "-" || trimmed.starts_with("- ")) {
+            let inline = trimmed.strip_prefix("- ").unwrap_or("");
+            play |= play_key(inline);
+            key_indent = Some(2);
+            continue;
+        }
+        if key_indent == Some(indent) && play_key(trimmed) {
+            play = true;
+        }
+    }
+    play
+}
+
+fn play_key(text: &str) -> bool {
+    let text = text.trim_start();
+    text.starts_with("hosts:") || text.starts_with("import_playbook:")
 }
 
 fn hashed(bytes: &[u8]) -> Result<(), DetectError> {

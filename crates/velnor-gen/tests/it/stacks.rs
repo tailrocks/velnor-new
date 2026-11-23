@@ -61,7 +61,7 @@ fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-fn ansible_repository() -> Result<RepoView, Box<dyn Error>> {
+fn ansible_repository(playbook: &str, playbook_path: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut view = RepoView::default();
     let core = "0123456789abcdef".repeat(4);
     let lint = "fedcba9876543210".repeat(4);
@@ -78,11 +78,7 @@ fn ansible_repository() -> Result<RepoView, Box<dyn Error>> {
         "ansible-configs/requirements.yaml",
         b"collections: []\n",
     )?;
-    put(
-        &mut view,
-        "ansible-configs/site.yml",
-        b"---\n- hosts: all\n  tasks: []\n",
-    )?;
+    put(&mut view, playbook_path, playbook.as_bytes())?;
     assert!(
         view.tracked_paths
             .iter()
@@ -95,7 +91,11 @@ fn ansible_repository() -> Result<RepoView, Box<dyn Error>> {
 
 #[test]
 fn an_ansible_repository_without_cargo_writes_one_ci_workflow_and_no_rust_job() -> TestResult {
-    let files = expected_with_notes(&ansible_repository()?)?.0;
+    let files = expected_with_notes(&ansible_repository(
+        "---\n- hosts: all\n  tasks: []\n",
+        "ansible-configs/site.yml",
+    )?)?
+    .0;
     let workflow = files
         .get(&WORKFLOW_PATH)
         .ok_or("generate did not write .github/workflows/ci.yml")?;
@@ -122,6 +122,52 @@ fn an_ansible_repository_without_cargo_writes_one_ci_workflow_and_no_rust_job() 
         .map(RepoPath::as_str)
         .collect();
     assert_eq!(workflows, vec![WORKFLOW_PATH.as_str()]);
+    Ok(())
+}
+
+#[test]
+fn a_play_whose_hosts_key_follows_its_name_gets_an_ansible_job() -> TestResult {
+    let files = expected_with_notes(&ansible_repository(
+        "---\n- name: Configure infrastructure\n  hosts: all\n  tasks: []\n",
+        "ansible-configs/site.yml",
+    )?)?
+    .0;
+    let workflow = files
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?;
+    assert!(
+        workflow.lines().any(|line| line == "name: CI"),
+        "{workflow}"
+    );
+    assert!(
+        workflow.lines().any(|line| line == "  ansible:"),
+        "{workflow}"
+    );
+    assert!(
+        workflow.contains("--syntax-check ansible-configs/site.yml"),
+        "{workflow}"
+    );
+    assert!(workflow.contains("ansiblelint"), "{workflow}");
+    assert!(workflow.contains("--require-hashes"), "{workflow}");
+    assert!(!mentions_rust_tooling(workflow), "{workflow}");
+    Ok(())
+}
+
+#[test]
+fn a_yaml_list_without_hosts_or_import_playbook_gets_no_ansible_job() -> TestResult {
+    let files = expected_with_notes(&ansible_repository(
+        "---\n- name: notes\n  tasks: []\n",
+        "ansible-configs/notes.yml",
+    )?)?
+    .0;
+    let workflow = files
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?;
+    assert!(
+        !workflow.lines().any(|line| line == "  ansible:"),
+        "{workflow}"
+    );
+    assert!(!mentions_rust_tooling(workflow), "{workflow}");
     Ok(())
 }
 
