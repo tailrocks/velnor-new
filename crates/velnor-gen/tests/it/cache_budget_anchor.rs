@@ -188,3 +188,33 @@ fn run_attempt_anchor_keys_are_classified_and_age_out_with_the_per_run_keys() {
     ];
     assert_eq!(plan(&entries, u64::MAX), [1, 2]);
 }
+
+#[test]
+fn only_canonical_anchor_suffixes_are_classified() {
+    let lock = "a".repeat(64);
+    let key = |lock: &str, suffix: &str| {
+        format!("velnor-tools-anchor-Linux-X64-mise2026.11.10-{lock}{suffix}")
+    };
+    for canonical in ["-7-x", "-7-2-x", "-7-rust-plan", "-7-2-_job-1"] {
+        assert_eq!(
+            cache_family(&key(&lock, canonical)),
+            CacheFamily::ToolsAnchor,
+            "{canonical}"
+        );
+    }
+    for suffix in ["-7-x/y", "-7-2-3x", "-7-2-3-j", "-7-x y", "-7-2-", "-7--x"] {
+        assert_eq!(
+            cache_family(&key(&lock, suffix)),
+            CacheFamily::Unknown,
+            "{suffix}"
+        );
+    }
+    assert_eq!(
+        cache_family(&key(&"A".repeat(64), "-7-x")),
+        CacheFamily::Unknown
+    );
+    assert_eq!(
+        cache_family(&key(&"A".repeat(64), "")),
+        CacheFamily::Unknown
+    );
+}

@@ -42,3 +42,27 @@ fn an_attached_chdir_value_drops_one_optional_equals_sign() {
         );
     }
 }
+
+#[test]
+fn a_chdir_global_option_moves_every_subcommand_that_builds() {
+    for subcommand in ["run", "r", "bench", "rustc"] {
+        assert_eq!(
+            location(
+                &format!("cargo -Z unstable-options -C sub {subcommand}"),
+                "/repo"
+            ),
+            PathBuf::from("/repo/sub"),
+            "{subcommand}",
+        );
+        assert_eq!(
+            location(
+                &format!(
+                    "cargo -Z unstable-options -C sub {subcommand} --manifest-path nested/Cargo.toml"
+                ),
+                "/repo"
+            ),
+            PathBuf::from("/repo/sub/nested"),
+            "{subcommand}",
+        );
+    }
+}

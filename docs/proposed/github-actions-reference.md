@@ -823,3 +823,10 @@ or network access. Admission checks the same-run producer identity, artifact
 digest, source locks, size and expiry. An unavailable metadata response takes
 the generator release qualifier's existing source-fetch fallback. The mandatory
 warm qualification fails if it cannot fetch or admit the source artifact.
+
+## Lowercase hexadecimal `hashFiles` digests
+
+The runner's [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
+prints `result.digest('hex')`, which is lowercase hexadecimal. Cache maintenance
+classifies a tools anchor key only when its lock hash is lowercase, so a runner
+implementation that emitted another casing would leave its anchors unclassified.

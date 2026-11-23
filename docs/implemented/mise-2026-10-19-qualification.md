@@ -41,15 +41,15 @@ Their native `test-members` selections both returned no tests and exit status
 0 through the guarded Cargo path; this records the empty selection result and
 does not claim a per-child process guard. Freshness, `Alint`, shell syntax,
 ShellCheck, and exact native generation reproduction passed. The generation
-idempotence log at `/tmp/pr391-integrated-generate-idempotence.log` is empty.
+idempotence log at `<tmp>/pr391-integrated-generate-idempotence.log` is empty.
 
 The native HK formatter fixture also passed its real-tool red/green check. With
 the prior wrapper configuration at `69e60c6`, real rustfmt changed files and
-the write guard rejected the fix (`/tmp/pr391-native-hk-red-real-wrapper.log`).
+the write guard rejected the fix (`<tmp>/pr391-native-hk-red-real-wrapper.log`).
 With the native HK configuration, HK 2.8.0, Mise 2026.10.19, and rustfmt
 1.99.1 formatted root and nested workspace sources, passed the real check,
 rejected invalid nested Rust, and preserved the staged tree
-(`/tmp/pr391-native-hk-green-final.log`). The fixture uses process-local trust
+(`<tmp>/pr391-native-hk-green-final.log`). The fixture uses process-local trust
 for its temporary copy of the repository Mise configuration and offline
 controls; it does not use fake Cargo or guard tools.
 
@@ -60,8 +60,8 @@ repository before running tools. The Cargo builtins now share a small admission
 prefix that preserves this boundary without dispatching Cargo operations or
 rejecting successful formatter writes. The same real-HK fixture accepts a
 symlink manifest without this prefix
-(`/tmp/pr391-native-hk-admission-red-physical.log`) and rejects it explicitly
-with the prefix (`/tmp/pr391-native-hk-admission-green-physical.log`). Both
+(`<tmp>/pr391-native-hk-admission-red-physical.log`) and rejects it explicitly
+with the prefix (`<tmp>/pr391-native-hk-admission-green-physical.log`). Both
 workspace sources and the staged tree remain unchanged during the rejection.
 This is manifest admission, not a sandbox for trusted executable HK config.
 

@@ -30,7 +30,7 @@ before implementation and confirmed the observed red/green behavior.
 
 The controlled red omitted only manifest emission while retaining the v2
 contract. The public renderer rejected its incomplete inventory in
-`/tmp/sdk55-aligned-public-red.log`. Restoring the exact renderer bytes passed
-the scenario in `/tmp/sdk55-aligned-public-green.log`. Generated CI registers
+`<tmp>/sdk55-aligned-public-red.log`. Restoring the exact renderer bytes passed
+the scenario in `<tmp>/sdk55-aligned-public-green.log`. Generated CI registers
 the orchestrator's real Nextest task with `--no-tests fail`; local execution
 alone is not a claim that hosted CI or SDK publication has completed.

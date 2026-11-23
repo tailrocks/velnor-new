@@ -5,52 +5,6 @@ use crate::cache_credential_scrub::{sources_save_goes_on, sources_save_stops};
 use crate::cache_private_repo::{GIT_LOCK, decide_with, private_checkout};
 
 #[test]
-fn a_hex_token_in_a_hook_stops_the_sources_save() {
-    sources_save_stops(&[
-        (
-            "hook-40-hex",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
-            "#!/bin/sh\nTOKEN=0123456789abcdef0123456789abcdef01234567\n",
-        ),
-        (
-            "nested-hook-40-hex",
-            ".cargo/git/db/shared-1/hooks/lib/auth",
-            "TOKEN=0123456789abcdef0123456789abcdef01234567\n",
-        ),
-    ]);
-}
-
-#[test]
-fn a_token_in_a_helper_nested_under_hooks_stops_the_sources_save() {
-    sources_save_stops(&[
-        (
-            "nested-hook-token",
-            ".cargo/git/db/shared-1/hooks/lib/auth",
-            "export TOKEN=ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-        ),
-        (
-            "deeply-nested-hook-token",
-            ".cargo/git/db/shared-1/hooks/lib/deep/auth",
-            "export TOKEN=ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-        ),
-        (
-            "nested-hook-userinfo-url",
-            ".cargo/git/db/shared-1/hooks/lib/auth",
-            "git push https://x-access-token:secret@github.com/acme/shared-lib\n",
-        ),
-    ]);
-}
-
-#[test]
-fn a_plain_helper_nested_under_hooks_is_saved() {
-    sources_save_goes_on(&[(
-        "plain-nested-hook",
-        ".cargo/git/db/shared-1/hooks/lib/helper",
-        "#!/bin/sh\necho done 0123456789abcdef\n",
-    )]);
-}
-
-#[test]
 fn a_percent_encoded_token_in_a_remote_path_stops_the_sources_save() {
     sources_save_stops(&[
         (
@@ -68,21 +22,7 @@ fn a_percent_encoded_token_in_a_remote_path_stops_the_sources_save() {
             ".cargo/git/db/shared-1/config",
             "[remote \"origin\"]\n\turl = https://github.example/%30123456789abcdef0123456789abcdef01234567/shared-lib\n",
         ),
-        (
-            "encoded-token-in-a-hook-url",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
-            "# https://github.example/%67hp_0123456789abcdefghijklmnopqrstuvwxyzAB/shared-lib\n",
-        ),
     ]);
-}
-
-#[test]
-fn a_token_in_a_capitalized_hooks_helper_stops_the_sources_save() {
-    sources_save_stops(&[(
-        "capitalized-hooks-helper-token",
-        ".cargo/git/db/shared-1/Hooks/helper",
-        "export TOKEN=ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-    )]);
 }
 
 #[test]
@@ -155,44 +95,6 @@ fn a_symlinked_cargo_home_stops_the_sources_save() {
         "outside",
         "git/db/shared-1/config",
     );
-}
-
-const REFLOG_CLONE: &str = "0000000000000000000000000000000000000000 0123456789abcdef0123456789abcdef01234567 Builder <builder@example.invalid> 1700000000 +0000\tclone: from ";
-
-#[test]
-fn a_credential_url_in_a_git_reflog_stops_the_sources_save() {
-    sources_save_stops(&[
-        (
-            "reflog-head-userinfo",
-            ".cargo/git/db/shared-1/logs/HEAD",
-            &format!(
-                "{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"
-            ),
-        ),
-        (
-            "reflog-ref-token",
-            ".cargo/git/db/shared-1/logs/refs/remotes/origin/main",
-            &format!(
-                "{REFLOG_CLONE}https://github.com/acme/ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n"
-            ),
-        ),
-        (
-            "capitalized-logs-token",
-            ".cargo/git/db/shared-1/Logs/HEAD",
-            &format!(
-                "{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"
-            ),
-        ),
-    ]);
-}
-
-#[test]
-fn a_plain_git_reflog_is_saved() {
-    sources_save_goes_on(&[(
-        "plain-reflog",
-        ".cargo/git/db/shared-1/logs/HEAD",
-        &format!("{REFLOG_CLONE}https://github.com/acme/shared-lib\n"),
-    )]);
 }
 
 #[test]

@@ -361,6 +361,18 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
     )
 }
 
+pub(crate) fn cache_purge_private() -> RenderedStep {
+    RenderedStep {
+        name: "Delete the private-base caches unless the repository is private".to_owned(),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci cache purge-private --if-public".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {
     let env = vec![(
         "GITHUB_TOKEN".to_owned(),
