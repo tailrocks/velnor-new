@@ -30,7 +30,7 @@ Cargo test binary per case file. Doctests are off: every lib sets
 Enforcement is by rustdoc itself: `scripts/check-no-doctests.sh` runs
 `cargo doc --workspace --no-deps --lib --bins --examples` with
 `RUSTDOCFLAGS="--test --test-args --list"` for all features, no default
-features and the default features, so rustdoc lists the doctests without
+features and (when a member declares a `default` feature) the default features, so rustdoc lists the doctests without
 compiling the workspace again (rustdoc lists the doctests of crates that set
 `doctest = false` too), and fails when rustdoc lists any doctest. Every fence
 form that rustdoc recognizes in a library, binary or example of the host target

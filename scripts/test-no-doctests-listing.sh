@@ -7,6 +7,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/no-doctests-listing.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
 fails=0
+default_feature='default = ["on"]\n'
 fence='```'
 check() {
   local name="$1" expect="$2" lib="$3" dir="$work/$1"
@@ -14,7 +15,7 @@ check() {
   mkdir -p "$dir/fx/src"
   cp "$repo/rust-toolchain.toml" "$dir/rust-toolchain.toml"
   printf '[workspace]\nmembers = ["fx"]\nresolver = "3"\n' > "$dir/Cargo.toml"
-  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n\n[features]\ndefault = ["on"]\non = []\ngated = []\n' > "$dir/fx/Cargo.toml"
+  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n\n[features]\n%bon = []\ngated = []\n' "$default_feature" > "$dir/fx/Cargo.toml"
   printf '%b' "$lib" > "$dir/fx/src/lib.rs"
   printf '%s\nlet x = 1;\n%s\n' "$fence" "$fence" > "$dir/fx/src/fence.md"
   while [ "$#" -ge 2 ]; do
@@ -33,7 +34,11 @@ check() {
   else
     got=broken
   fi
-  if [ "$got" != "$expect" ]; then
+  if [ "$got" = pass ] && [ -n "${passes:-}" ] && ! printf '%s\n' "$out" | grep -q "(${passes} feature passes)"; then
+    echo "FAIL $name: expected ${passes} feature passes"
+    printf '%s\n' "$out"
+    fails=$((fails + 1))
+  elif [ "$got" != "$expect" ]; then
     echo "FAIL $name: expected $expect, got $got"
     printf '%s\n' "$out"
     fails=$((fails + 1))
@@ -66,5 +71,8 @@ check plain_block_fence pass '/* ```\n * not a doc\n */\nfn f() {}\n'
 check build_warning     pass 'pub fn f() {}\n' build.rs 'fn main() { println!("cargo:warning=this is not a doctest: test"); }\n'
 check discovery_failure broken 'fn f( {\n'
 check string_fence      pass 'fn f() { let s = "```"; let _ = s; }\n'
+passes=3 check three_passes_with_a_default_feature pass 'pub fn f() {}\n'
+default_feature='' passes=2 check two_passes_without_a_default_feature pass 'pub fn f() {}\n'
+default_feature='' check no_default_feature_fence fail '#[cfg(feature = "on")]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 
 exit "$fails"

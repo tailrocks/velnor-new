@@ -12,8 +12,14 @@ fi
 diagnostics="$(mktemp)"
 trap 'rm -f "$diagnostics"' EXIT
 
+passes=(--all-features --no-default-features)
+metadata="$(cargo metadata --no-deps --format-version 1 ${locked[@]+"${locked[@]}"})"
+if printf '%s' "$metadata" | grep -Eq '"features":\{([^{}]*,)?"default":'; then
+  passes+=(default)
+fi
+
 doctests=""
-for features in --all-features --no-default-features default; do
+for features in "${passes[@]}"; do
   selection=()
   if [ "$features" != default ]; then
     selection=("$features")
@@ -35,4 +41,4 @@ if [ -n "$doctests" ]; then
   echo "no-doctests: rustdoc lists the doctests above. Doctests are off by decision (docs/proposed/rust-test-policy.md); remove the doc fence or indented code block." >&2
   exit 1
 fi
-echo "no-doctests: rustdoc lists no doctests"
+echo "no-doctests: rustdoc lists no doctests (${#passes[@]} feature passes)"
