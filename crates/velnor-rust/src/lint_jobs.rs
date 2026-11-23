@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use velnor_model::{
     Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
 };
@@ -37,27 +39,51 @@ fn resolved(facts: &RepoFacts, name: &str) -> String {
         .to_owned()
 }
 
-fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
-    let only = |names: Vec<String>| {
-        vec![step(StepKind::InstallTools {
-            only: Some(names.join(" ")),
-        })]
-    };
+pub(crate) enum ToolInstall {
+    All,
+    These(Vec<String>),
+}
+
+pub(crate) fn tool_install(facts: &RepoFacts, lint: &LintJob) -> ToolInstall {
     match &lint.kind {
-        LintKind::Jactionlint { .. } => {
-            let mut tools = vec![resolved(facts, JACTIONLINT)];
-            tools.extend(available(facts, SHELLCHECK).then(|| resolved(facts, SHELLCHECK)));
-            tools.extend(available(facts, NODE).then(|| resolved(facts, NODE)));
-            only(tools)
-        }
-        LintKind::Alint { .. } => only(vec![resolved(facts, ALINT)]),
-        LintKind::MiseTask { tools, .. } if tools.is_empty() => {
-            vec![step(StepKind::InstallMise)]
-        }
+        LintKind::MiseTask { tools, .. } if tools.is_empty() => ToolInstall::All,
+        LintKind::Jactionlint { .. } => ToolInstall::These(jactionlint_tools(facts)),
+        LintKind::Alint { .. } => ToolInstall::These(vec![resolved(facts, ALINT)]),
         LintKind::MiseTask { tools, .. } => {
-            only(tools.iter().map(|tool| resolved(facts, tool)).collect())
+            ToolInstall::These(tools.iter().map(|tool| resolved(facts, tool)).collect())
         }
-        LintKind::GeneratedCheck => Vec::new(),
+        LintKind::GeneratedCheck => ToolInstall::These(generated_check_tools(facts)),
+    }
+}
+
+pub(crate) fn lint_only_tools(facts: &RepoFacts) -> Option<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    for lint in &facts.config.lint {
+        match tool_install(facts, lint) {
+            ToolInstall::All => return None,
+            ToolInstall::These(tools) => names.extend(tools),
+        }
+    }
+    Some(names)
+}
+
+fn jactionlint_tools(facts: &RepoFacts) -> Vec<String> {
+    let mut tools = vec![resolved(facts, JACTIONLINT)];
+    tools.extend(available(facts, SHELLCHECK).then(|| resolved(facts, SHELLCHECK)));
+    tools.extend(available(facts, NODE).then(|| resolved(facts, NODE)));
+    tools
+}
+
+fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
+    if matches!(lint.kind, LintKind::GeneratedCheck) {
+        return Vec::new();
+    }
+    match tool_install(facts, lint) {
+        ToolInstall::All => vec![step(StepKind::InstallMise)],
+        ToolInstall::These(names) if names.is_empty() => Vec::new(),
+        ToolInstall::These(names) => vec![step(StepKind::InstallTools {
+            only: Some(names.join(" ")),
+        })],
     }
 }
 

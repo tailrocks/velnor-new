@@ -54,14 +54,19 @@ fn a_repository_with_no_cargo_toml_receives_no_rust_job() -> TestResult {
     Ok(())
 }
 
-fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
+pub(crate) fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
     let path = RepoPath::new(path)?;
     view.tracked_paths.insert(path.clone());
     view.files.insert(path, bytes.to_vec());
     Ok(())
 }
 
-fn ansible_repository(playbook: &str, playbook_path: &str) -> Result<RepoView, Box<dyn Error>> {
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible\" PATH=\"$RUNNER_TEMP/ansible/bin:$PATH\"";
+
+pub(crate) fn ansible_repository(
+    playbook: &str,
+    playbook_path: &str,
+) -> Result<RepoView, Box<dyn Error>> {
     let mut view = RepoView::default();
     let core = "0123456789abcdef".repeat(4);
     let lint = "fedcba9876543210".repeat(4);
@@ -87,6 +92,22 @@ fn ansible_repository(playbook: &str, playbook_path: &str) -> Result<RepoView, B
         "the ansible fixture contains a Cargo.toml"
     );
     Ok(view)
+}
+
+fn runs(workflow: &str, id: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let tree = crate::yaml_tree::document(workflow)?;
+    let job = tree
+        .get("jobs")
+        .and_then(|jobs| jobs.get(id))
+        .ok_or_else(|| format!("no {id} job"))?;
+    Ok(crate::lint_lane::runs(job))
+}
+
+fn command<'a>(runs: &'a [String], marker: &str) -> Result<&'a str, Box<dyn Error>> {
+    runs.iter()
+        .find(|run| run.contains(marker))
+        .map(String::as_str)
+        .ok_or_else(|| format!("no {marker} step").into())
 }
 
 #[test]
@@ -116,6 +137,27 @@ fn an_ansible_repository_without_cargo_writes_one_ci_workflow_and_no_rust_job() 
     );
     assert!(workflow.contains("ansible-configs/site.yml"), "{workflow}");
     assert!(!mentions_rust_tooling(workflow), "{workflow}");
+    assert!(!workflow.contains("GITHUB_ENV"), "{workflow}");
+    assert!(!workflow.contains("actions/cache"), "{workflow}");
+    assert!(!workflow.contains("paths:"), "{workflow}");
+    assert!(!workflow.contains("rust-plan"), "{workflow}");
+    assert!(!workflow.contains("velnor-ci gate"), "{workflow}");
+    assert!(!workflow.contains("hashFiles"), "{workflow}");
+    let steps = runs(workflow, "ansible")?;
+    let pip = command(&steps, "pip install")?;
+    assert!(!pip.contains("PATH="), "{pip}");
+    let galaxy = command(&steps, "ansible.cli.galaxy")?;
+    assert_eq!(
+        galaxy,
+        format!(
+            "{PREFIX} python3 -m ansible.cli.galaxy collection install -r ansible-configs/requirements.yaml"
+        )
+    );
+    let syntax = command(&steps, "--syntax-check")?;
+    assert!(syntax.starts_with(PREFIX), "{syntax}");
+    assert!(syntax.contains("'ansible-configs/site.yml'"), "{syntax}");
+    let lint = command(&steps, "ansiblelint")?;
+    assert!(lint.starts_with(PREFIX), "{lint}");
     let workflows: Vec<_> = files
         .keys()
         .filter(|path| path.as_str().starts_with(".github/workflows/"))
@@ -143,9 +185,15 @@ fn a_play_whose_hosts_key_follows_its_name_gets_an_ansible_job() -> TestResult {
         workflow.lines().any(|line| line == "  ansible:"),
         "{workflow}"
     );
+    let steps = runs(workflow, "ansible")?;
+    let syntax = command(&steps, "--syntax-check")?;
     assert!(
-        workflow.contains("--syntax-check ansible-configs/site.yml"),
-        "{workflow}"
+        syntax.contains("--syntax-check 'ansible-configs/site.yml'"),
+        "{syntax}"
+    );
+    assert!(
+        !syntax.contains("--syntax-check ansible-configs/site.yml"),
+        "{syntax}"
     );
     assert!(workflow.contains("ansiblelint"), "{workflow}");
     assert!(workflow.contains("--require-hashes"), "{workflow}");
@@ -160,14 +208,70 @@ fn a_yaml_list_without_hosts_or_import_playbook_gets_no_ansible_job() -> TestRes
         "ansible-configs/notes.yml",
     )?)?
     .0;
+    assert!(
+        !files.contains_key(&WORKFLOW_PATH),
+        "a list that is not a play still wrote ci.yml"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_dash_on_its_own_line_uses_the_following_key_indent() -> TestResult {
+    let path = "ansible-configs/site.yml";
+    let files = expected_with_notes(&ansible_repository(
+        "-\n    hosts: all\n    tasks: []\n",
+        path,
+    )?)?
+    .0;
     let workflow = files
         .get(&WORKFLOW_PATH)
         .ok_or("generate did not write .github/workflows/ci.yml")?;
     assert!(
-        !workflow.lines().any(|line| line == "  ansible:"),
+        workflow.lines().any(|line| line == "  ansible:"),
         "{workflow}"
     );
-    assert!(!mentions_rust_tooling(workflow), "{workflow}");
+    let steps = runs(workflow, "ansible")?;
+    let syntax = command(&steps, "--syntax-check")?;
+    assert!(
+        syntax.contains(&format!("--syntax-check '{path}'")),
+        "{syntax}"
+    );
+    let nested = expected_with_notes(&ansible_repository(
+        "---\n- name: notes\n  vars:\n    hosts: all\n  tasks: []\n",
+        "ansible-configs/notes.yml",
+    )?)?
+    .0;
+    assert!(
+        !nested.contains_key(&WORKFLOW_PATH),
+        "hosts nested under vars still wrote ci.yml"
+    );
+    Ok(())
+}
+
+#[test]
+fn playbook_paths_are_bash_single_quoted() -> TestResult {
+    let mut view = ansible_repository("---\n- hosts: all\n", "ansible-configs/my site.yml")?;
+    put(
+        &mut view,
+        "ansible-configs/o'reilly.yml",
+        b"---\n- hosts: all\n",
+    )?;
+    let workflow = expected_with_notes(&view)?
+        .0
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?
+        .clone();
+    let syntax = runs(&workflow, "ansible")?
+        .into_iter()
+        .filter(|run| run.contains("--syntax-check"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(syntax.contains("'ansible-configs/my site.yml'"), "{syntax}");
+    assert!(
+        syntax.contains("'ansible-configs/o'\\''reilly.yml'"),
+        "{syntax}"
+    );
+    assert!(!syntax.contains("o'reilly.yml"), "{syntax}");
     Ok(())
 }
 

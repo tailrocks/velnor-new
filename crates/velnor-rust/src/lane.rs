@@ -224,6 +224,17 @@ pub(crate) fn expose_read_outputs(jobs: &mut [Job], source: &JobId) {
     }
 }
 
+pub(crate) fn present_plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
+    let mut steps = head(facts, PLAN_DEPTH, None);
+    steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    Job {
+        plan_outputs: outputs,
+        pr: crate::plan::quick(facts),
+        steps,
+        ..job(facts, PLAN_JOB)
+    }
+}
+
 pub(crate) fn plan_job(
     facts: &RepoFacts,
     outputs: Vec<(RootSlug, GateNeed)>,
