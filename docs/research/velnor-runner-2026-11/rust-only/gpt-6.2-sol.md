@@ -571,7 +571,7 @@ The irreducible terms are proof of changed inputs, exact-SHA and queue validatio
 ## 10. Critique of v2
 
 Keep N57–N64 where they express the owner's Rust, protocol, oracle and archive choices. Keep the coordinator, required group plan and XFS.
-The changes below follow v2's section order. [Architecture](../../../proposed/velnor-runner-architecture.md) · [Decision log](../decisions.md) · [Review](../design-feedback-comparison.md)
+The changes below follow v2's section order. [Decision log](../decisions.md) · [Review](../design-feedback-comparison.md)
 
 | V2 section | Gap and decision |
 |---|---|
