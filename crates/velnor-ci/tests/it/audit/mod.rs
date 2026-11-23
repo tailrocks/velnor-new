@@ -23,9 +23,14 @@ mod migration;
 mod nested_roots;
 mod new_layout;
 mod optional;
+mod own_units;
 mod partial;
+mod path_dependency_fixture;
 mod per_root;
+mod plain_build;
 mod reads;
+mod relative_build_dir;
+mod script_dep_info;
 mod selection;
 mod separate_build;
 mod stale_run;
@@ -36,6 +41,9 @@ use std::fs;
 use std::process::{Command, Output};
 
 use crate::io::Repo;
+
+use own_units::{OWN_UNITS, own_units, own_units_in};
+pub(super) use path_dependency_fixture::{path_dependency_units, path_dependency_units_in};
 
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
@@ -130,116 +138,6 @@ pub(super) fn workspace_below_the_root() -> Repo {
     repo
 }
 
-pub(super) fn own_units(repo: &Repo, target: &str, left_out: &[&str]) {
-    own_units_in(repo, target, target, left_out);
-}
-
-const OWN_UNITS: &[(&str, bool, &str, &str, &str)] = &[
-    (
-        "app",
-        false,
-        "deps/app-f000000000000001.d",
-        "app/src/lib.rs",
-        "app-f000000000000001/lib-app",
-    ),
-    (
-        "app",
-        false,
-        "deps/app-f000000000000009.d",
-        "app/src/lib.rs",
-        "app-f000000000000009/test-lib-app",
-    ),
-    (
-        "app-it",
-        false,
-        "deps/it-f000000000000002.d",
-        "app/tests/it.rs",
-        "app-f000000000000002/test-integration-test-it",
-    ),
-    (
-        "app-build",
-        true,
-        "build/app-f000000000000003/build_script_build-f000000000000003.d",
-        "app/build.rs",
-        "",
-    ),
-    (
-        "app-build",
-        false,
-        "build/app-f000000000000004/output",
-        "",
-        "",
-    ),
-    (
-        "lib",
-        false,
-        "deps/lib-f000000000000005.d",
-        "lib/src/lib.rs",
-        "lib-f000000000000005/lib-lib",
-    ),
-    (
-        "lib",
-        false,
-        "deps/lib-f00000000000000a.d",
-        "lib/src/lib.rs",
-        "lib-f00000000000000a/test-lib-lib",
-    ),
-    (
-        "lib-it",
-        false,
-        "deps/it-f000000000000006.d",
-        "lib/tests/it.rs",
-        "lib-f000000000000006/test-integration-test-it",
-    ),
-    (
-        "lib-build",
-        true,
-        "build/lib-f000000000000007/build_script_build-f000000000000007.d",
-        "lib/build.rs",
-        "",
-    ),
-    (
-        "lib-build",
-        false,
-        "build/lib-f000000000000008/output",
-        "",
-        "",
-    ),
-    (
-        "macros",
-        true,
-        "deps/macros-f00000000000000b.d",
-        "macros/src/lib.rs",
-        "macros-f00000000000000b/lib-macros",
-    ),
-    (
-        "macros",
-        true,
-        "deps/macros-f00000000000000c.d",
-        "macros/src/lib.rs",
-        "macros-f00000000000000c/test-lib-macros",
-    ),
-];
-
-pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&str]) {
-    placed(repo, target);
-    for &(key, on_host, file, text, fingerprint) in OWN_UNITS {
-        if left_out.contains(&key) {
-            continue;
-        }
-        let directory = if on_host { host } else { target };
-        let text = if text.is_empty() {
-            String::new()
-        } else {
-            format!("out.d: {text}\n")
-        };
-        unit(repo, &format!("{directory}/{file}"), &text);
-        if !fingerprint.is_empty() {
-            unit(repo, &format!("{directory}/.fingerprint/{fingerprint}"), "");
-        }
-    }
-}
-
 pub(super) fn root_package_with_path_dependencies() -> Repo {
     let repo = Repo::new("audit-owners");
     unit(&repo, ".gitignore", "target/\n");
@@ -294,109 +192,4 @@ pub(super) fn root_package_with_path_dependencies() -> Repo {
         .unwrap_or_else(|e| unreachable!("{e}"));
     repo.git(&["add", "--all"]);
     repo
-}
-
-pub(super) fn path_dependency_units(repo: &Repo) {
-    path_dependency_units_in(repo, "target/debug");
-}
-
-pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
-    placed(repo, target);
-    for (file, text, fingerprint) in [
-        (
-            "deps/top-0000000000000001.d",
-            "src/lib.rs shared/link.txt",
-            "top-0000000000000001/lib-top",
-        ),
-        (
-            "deps/other-0000000000000005.d",
-            "other/src/lib.rs",
-            "other-0000000000000005/lib-other",
-        ),
-        (
-            "deps/other-000000000000000c.d",
-            "other/src/lib.rs",
-            "other-000000000000000c/test-lib-other",
-        ),
-        (
-            "deps/top-000000000000000d.d",
-            "src/lib.rs",
-            "top-000000000000000d/test-lib-top",
-        ),
-        (
-            "deps/qa-0000000000000002.d",
-            "qa.rs data/qa.txt",
-            "top-0000000000000002/test-integration-test-qa",
-        ),
-        (
-            "deps/mid-0000000000000003.d",
-            "vendor/mid/src/lib.rs vendor/mid/src/../../../NOTICE",
-            "mid-0000000000000003/lib-mid",
-        ),
-        (
-            "build/mid-0000000000000006/build_script_build-0000000000000006.d",
-            "vendor/mid/build.rs",
-            "mid-0000000000000006/build-script-build-script-build",
-        ),
-        (
-            "deps/leaf-0000000000000007.d",
-            "vendor/leaf/src/lib.rs",
-            "leaf-0000000000000007/lib-leaf",
-        ),
-        (
-            "build/leaf-0000000000000008/build_script_build-0000000000000008.d",
-            "vendor/leaf/build.rs",
-            "leaf-0000000000000008/build-script-build-script-build",
-        ),
-        (
-            "deps/ext-000000000000000a.d",
-            "ext.rs data/ext.txt",
-            "top-000000000000000a/test-integration-test-ext",
-        ),
-        (
-            "deps/ext-000000000000000b.d",
-            "ext.rs data/ext.txt",
-            "other-000000000000000b/test-integration-test-ext",
-        ),
-    ] {
-        unit(
-            repo,
-            &format!("{target}/{file}"),
-            &format!("out.d: {text}\n"),
-        );
-        if !fingerprint.is_empty() {
-            unit(repo, &format!("{target}/.fingerprint/{fingerprint}"), "");
-        }
-    }
-    unit(
-        repo,
-        &format!("{target}/build/mid-0000000000000004/output"),
-        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/build/leaf-0000000000000009/output"),
-        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
-    );
-    prepare_path_dependency_outputs(repo, target);
-}
-
-fn prepare_path_dependency_outputs(repo: &Repo, target: &str) {
-    unit(
-        repo,
-        &format!("{target}/deps/side-000000000000000e.d"),
-        "out.d: vendor/side/src/lib.rs\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/.fingerprint/side-000000000000000e/lib-side"),
-        "",
-    );
-    let target_directory = repo.root().join("target");
-    for output in [
-        format!("{target}/build/mid-0000000000000004/output"),
-        format!("{target}/build/leaf-0000000000000009/output"),
-    ] {
-        inventory::build(repo, &output, Some(&target_directory));
-    }
 }
