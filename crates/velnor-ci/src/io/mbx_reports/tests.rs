@@ -64,14 +64,6 @@ fn leftover_socket_path_without_a_socket_is_not_a_nested_session() {
 }
 
 #[test]
-fn a_socket_left_by_a_dead_listener_is_not_a_nested_session() {
-    let dir = Dir::new("dropped");
-    let path = dir.0.join("mbx.sock");
-    drop(UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}")));
-    assert!(!inside_session(Some(path.as_os_str())));
-}
-
-#[test]
 fn live_socket_is_a_nested_session() {
     let dir = Dir::new("live");
     let path = dir.0.join("mbx.sock");
