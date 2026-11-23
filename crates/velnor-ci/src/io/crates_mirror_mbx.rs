@@ -142,8 +142,19 @@ pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
 fn leading(args: &[OsString]) -> Option<Leading<'_>> {
     let mut directory = None;
     let mut script = false;
-    let mut seen = args.iter().enumerate().take_while(|(_, arg)| *arg != "--");
+    let mut seen = args.iter().enumerate();
     while let Some((index, arg)) = seen.next() {
+        if arg == "--" {
+            let subcommand = match seen.next() {
+                Some((index, arg)) => Some((index, arg.to_str()?)),
+                None => None,
+            };
+            return Some(Leading {
+                directory,
+                script,
+                subcommand,
+            });
+        }
         let arg = arg.to_str()?;
         if arg.starts_with('+') {
             continue;
@@ -207,7 +218,11 @@ fn leading(args: &[OsString]) -> Option<Leading<'_>> {
 }
 
 pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let start = match leading(args).and_then(|leading| leading.subcommand) {
+        Some((index, _)) if index > 0 && args[index - 1] == "--" => index,
+        _ => 0,
+    };
+    let mut args = args[start..].iter().take_while(|arg| *arg != "--");
     while let Some(arg) = args.next() {
         if arg == long || (shorthand && arg == "-m") {
             return args.next().cloned();
@@ -215,17 +230,24 @@ pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Op
         let Some(arg) = arg.to_str() else {
             continue;
         };
+        if shorthand
+            && !arg.starts_with("--")
+            && let Some(cluster) = arg.strip_prefix('-')
+            && let Some(offset) = cluster.find(['m', 'p', 'F', 'j', 'Z', 'C'])
+            && cluster[offset..].starts_with('m')
+        {
+            let value = &cluster[offset + 1..];
+            return if value.is_empty() {
+                args.next().cloned()
+            } else {
+                Some(value.strip_prefix('=').unwrap_or(value).into())
+            };
+        }
         if let Some(value) = arg
             .strip_prefix(long)
             .and_then(|rest| rest.strip_prefix('='))
         {
             return Some(value.into());
-        }
-        if shorthand
-            && !arg.starts_with("--")
-            && let Some(value) = arg.strip_prefix("-m")
-        {
-            return Some(value.strip_prefix('=').unwrap_or(value).into());
         }
     }
     None
