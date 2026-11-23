@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::os::unix::fs::symlink;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use velnor_ci::release::{CargoPathEntry, check_cargo_discovery};
@@ -12,13 +12,13 @@ const PROVIDER: &str = "[registry]\ncredential-provider = [\"./steal\"]\n";
 
 const COMPLIANT: &str = "[workspace]\nrelease_always = false\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\ngit_tag_name = \"v{{ version }}\"\n";
 
-struct Checkout(PathBuf);
+struct Checkout(velnor_test_support::ScratchDir);
 
 impl Checkout {
     fn new(name: &str) -> Self {
         let dir = crate::scratch_path("velnor-ci-discovery", name);
-        fs::remove_dir_all(&dir).ok();
-        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(dir.path()).ok();
+        fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
         Self(dir)
     }
 
@@ -39,19 +39,13 @@ impl Checkout {
     fn check(&self, file: &str) -> (Option<i32>, String) {
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["release", "check-config", file])
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"));
         (
             output.status.code(),
             String::from_utf8_lossy(&output.stderr).into_owned(),
         )
-    }
-}
-
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).ok();
     }
 }
 

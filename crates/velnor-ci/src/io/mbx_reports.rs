@@ -30,8 +30,17 @@ fn inside_session() -> bool {
         .is_some_and(|socket| is_socket(Path::new(&socket)))
 }
 
+fn starts_velnor_ci(argv: &[String]) -> bool {
+    argv.first()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "velnor-ci")
+}
+
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
+    if !starts_velnor_ci(argv) {
+        command.env_remove(SWITCH);
+    }
     if !enabled() || !reports_session(argv) || inside_session() {
         return;
     }

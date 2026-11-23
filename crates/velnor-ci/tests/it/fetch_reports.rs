@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{Cursor, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 
 use serde_json::{Value, json};
@@ -69,7 +69,7 @@ fn expected_names(plan: &str) -> BTreeSet<String> {
         .collect()
 }
 
-fn run_dir(label: &str, plan: Option<&str>) -> PathBuf {
+fn run_dir(label: &str, plan: Option<&str>) -> velnor_test_support::ScratchDir {
     let dir = fresh_dir("velnor-ci-fetch-reports", label);
     if let Some(plan) = plan {
         fs::write(dir.join("plan.json"), plan).unwrap_or_else(|e| unreachable!("{e}"));
