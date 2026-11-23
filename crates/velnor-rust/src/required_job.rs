@@ -67,6 +67,8 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
+        | When::FullAuditOrPullRequest
+        | When::FullAuditOrPushOrPullRequest
         | When::PullRequest
         | When::SaveDelta
         | When::SaveDeltaDecided

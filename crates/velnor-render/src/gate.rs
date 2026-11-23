@@ -207,6 +207,11 @@ pub(crate) fn condition(
             parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
         },
         When::FullAuditOrPush => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')".to_owned()),
+        When::FullAuditOrPullRequest => {
+            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
+            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'{expired})"));
+        }
+        When::FullAuditOrPushOrPullRequest => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'pull_request')".to_owned()),
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());

@@ -3,6 +3,7 @@
 
 mod app_key;
 mod archive;
+mod audit_on_pull_request;
 mod auto_shape_note;
 mod base_cache_rules;
 mod base_cache_visibility;
