@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, FullRun, GateNeed, Job, JobId, PermissionScope,
-    Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug,
-    SelectionName, Step, StepKind, Triggers, When,
+    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, Concurrency, FullRun, GateNeed, Job, JobId,
+    PermissionScope, Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts,
+    RootSlug, SelectionName, Step, StepKind, Triggers, WORKFLOW_NAME, When, WorkflowPlan,
 };
 
 use crate::lane::PLAN_JOB;
@@ -133,6 +133,22 @@ pub(crate) fn triggers(facts: &RepoFacts) -> Triggers {
         merge_group: true,
         schedule: schedule(facts),
         workflow_dispatch: true,
+    }
+}
+
+pub(crate) fn workflow(facts: &RepoFacts, jobs: Vec<Job>) -> WorkflowPlan {
+    WorkflowPlan {
+        name: WORKFLOW_NAME.to_owned(),
+        triggers: triggers(facts),
+        concurrency: match facts.config.pr_ci {
+            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
+            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
+        },
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
+        hosted_runners: facts.config.hosted_runners.clone(),
+        trusted_runners: facts.config.trusted_runners.clone(),
+        jobs,
     }
 }
 

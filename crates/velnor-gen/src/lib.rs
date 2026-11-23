@@ -21,7 +21,6 @@ pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, 
 pub use drifts::{Drift, drift};
 pub use error::{ExternalWorkflowError, GenerateError};
 pub use external::external_skips;
-use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use tag::check_tag;
@@ -31,9 +30,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
-use velnor_rust::{
-    METADATA_PATH, check_mbx, check_tools, detect, metadata_file, source_roots_over_limit,
-};
+use velnor_rust::{METADATA_PATH, detect, metadata_file, source_roots_over_limit};
 
 use crate::plan_render::plan_and_render;
 
@@ -87,28 +84,31 @@ pub fn expected_with_notes(
     if let Some(finding) = excluded.iter().find(|finding| finding.refusal) {
         return Err(GenerateError::ExcludedLockRun(finding.clone()));
     }
-    let helper = check_helper(&facts)?;
-    key_gates::check_config_keys(view, helper.version())?;
-    check_tools(&facts)?;
-    check_mbx(&facts, &view.files)?;
+    let helper = helper_gate::pinned_helper(view, &facts)?;
+    helper_gate::check_stack_tools(view, &facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper, &plan)?;
-    files.extend(reusable);
-    if plan
-        .jobs
-        .iter()
-        .flat_map(|job| &job.steps)
-        .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
-        && let Some(cleanup) =
-            velnor_render::delta_cleanup(helper, &plan.name, &cleanup_runner(&plan))
-    {
-        files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
-    }
-    let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
-    files.extend(release);
+    let (reusable_notes, release_notes) = if let Some(helper) = helper {
+        let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper, &plan)?;
+        files.extend(reusable);
+        if plan
+            .jobs
+            .iter()
+            .flat_map(|job| &job.steps)
+            .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
+            && let Some(cleanup) =
+                velnor_render::delta_cleanup(helper, &plan.name, &cleanup_runner(&plan))
+        {
+            files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
+        }
+        let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
+        files.extend(release);
+        (reusable_notes, release_notes)
+    } else {
+        (Vec::new(), Vec::new())
+    };
     let mut notes = advice::expected_notes(&facts);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);

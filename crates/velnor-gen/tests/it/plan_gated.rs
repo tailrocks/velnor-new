@@ -173,7 +173,7 @@ fn a_docs_only_pull_request_skips_the_generated_check() -> TestResult {
 #[test]
 fn a_pull_request_that_touches_a_generator_input_runs_the_generated_check() -> TestResult {
     for path in [
-        ".github/workflows/rust-ci.yml",
+        ".github/workflows/ci.yml",
         ".github/workflows/release.yml",
         ".github/PULL_REQUEST_TEMPLATE.md",
         ".velnor/rust-ci.toml",

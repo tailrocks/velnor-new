@@ -105,7 +105,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
                 }))
                 .chain(test_outputs(job, &tests))
                 .chain(merge_group_output(job))
-                .chain(crate::tools_steps::anchor_outputs(&job.steps))
+                .chain(crate::tools_steps::anchor_outputs(job))
                 .chain(lane_outputs(&job.steps))
                 .chain(crate::base_steps::public::job_output(&job.steps))
                 .collect(),
@@ -350,7 +350,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(..) => crate::helper_steps::node_step(kind),
-        StepKind::TestSetup { name, run, .. } => RenderedStep {
+        StepKind::TestSetup { name, run, .. } | StepKind::Ansible { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
             ..RenderedStep::default()

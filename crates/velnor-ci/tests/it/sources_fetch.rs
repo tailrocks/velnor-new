@@ -11,7 +11,7 @@ use std::process::{Command, Output};
 use crate::run::scratch;
 
 struct Fixture {
-    temp: PathBuf,
+    temp: velnor_test_support::ScratchDir,
     work: PathBuf,
     bin: PathBuf,
 }
@@ -53,7 +53,7 @@ impl Fixture {
             .args(roots)
             .current_dir(&self.work)
             .env("PATH", path)
-            .env("RUNNER_TEMP", &self.temp)
+            .env("RUNNER_TEMP", self.temp.path())
             .env("FAKE_CARGO_CALLS", self.calls_path())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"))
@@ -238,7 +238,7 @@ fn only_cargo_is_started_and_nothing_else_reaches_the_network() {
         .current_dir(&work)
         .env_clear()
         .env("PATH", &bin)
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("FAKE_PROGRAMS", &programs)
         .env("FAKE_FAIL", &marker);
     for key in [

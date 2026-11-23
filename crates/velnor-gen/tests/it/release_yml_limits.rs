@@ -226,7 +226,7 @@ fn a_release_workflow_grown_past_the_github_file_size_limit_by_its_after_list_is
         .collect();
     let roots = [APP];
     let config = format!(
-        "roots = [\".\"]\nafter = [\"Rust CI\", {}]\n[[binaries]]\npackage = \"app\"\n",
+        "roots = [\".\"]\nafter = [\"CI\", {}]\n[[binaries]]\npackage = \"app\"\n",
         names
             .iter()
             .map(|name| format!("\"{name}\""))

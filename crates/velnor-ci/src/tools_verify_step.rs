@@ -9,7 +9,9 @@ use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
 use crate::tools_discard;
-use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
+use crate::tools_verify::{
+    Anchor, Discard, MALFORMED_ANCHOR, Recording, Verb, Verdict, check, read, record,
+};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
@@ -126,6 +128,7 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
 fn outputs(verdict: &Verdict) -> String {
     match verdict {
         Verdict::Anchored(digest) => format!("anchor={digest}\n"),
+        Verdict::Unanchored(Discard::BadAnchor) => format!("anchor={MALFORMED_ANCHOR}\n"),
         Verdict::Unanchored(_) => "anchor=\n".to_owned(),
         Verdict::Verified => "verified=true\n".to_owned(),
         Verdict::NothingRestored | Verdict::Discarded(_) => "verified=false\n".to_owned(),

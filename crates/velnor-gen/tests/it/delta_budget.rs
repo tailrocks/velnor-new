@@ -6,7 +6,7 @@ use crate::pipeline::{view, with_deltas};
 use velnor_gen::expected_with_notes;
 use velnor_model::RepoPath;
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 
 fn long_named_roots(count: usize) -> Vec<String> {
     (0..count)

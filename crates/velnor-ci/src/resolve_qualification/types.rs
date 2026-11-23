@@ -12,7 +12,7 @@ pub(super) const RECEIPT_FILENAME: &str = "qualification-cache-receipt.json";
 pub(super) const MAX_RECEIPT_BYTES: usize = 524_288;
 pub(super) const MAX_DEPTH: usize = 4;
 pub(super) const MAX_LANES: usize = 256;
-pub(super) const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
+pub(super) const CI_WORKFLOW_PATH: &str = ".github/workflows/repository-checks.yml";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

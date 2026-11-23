@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{CacheKey, RepoFacts, RepoPath, RepoView, StepKind, WorkflowPlan};
 use velnor_render::{MAX_WORKFLOW_BYTES, Rule, RuleViolation, render};
-use velnor_rust::{check_required_check, plan, plan_without_deltas};
+use velnor_rust::{attach_ansible, check_required_check, plan, plan_without_deltas};
 
 use crate::GenerateError;
 use crate::delta_cache;
@@ -16,7 +16,8 @@ pub(crate) fn plan_and_render(
     view: &RepoView,
     facts: &RepoFacts,
 ) -> Result<RenderedPlan, GenerateError> {
-    let full = plan(facts);
+    let mut full = plan(facts);
+    attach_ansible(view, facts, &mut full).map_err(GenerateError::Detect)?;
     delta_cache::validate_staging(view, &full)?;
     check_required_check(facts, &full)?;
     let violations = match render(&full) {
@@ -30,7 +31,8 @@ pub(crate) fn plan_and_render(
     if !has_deltas(&full) {
         return Err(GenerateError::Rules(with_roots(violations, roots)));
     }
-    let reduced = plan_without_deltas(facts);
+    let mut reduced = plan_without_deltas(facts);
+    attach_ansible(view, facts, &mut reduced).map_err(GenerateError::Detect)?;
     delta_cache::validate_staging(view, &reduced)?;
     check_required_check(facts, &reduced)?;
     let files = render(&reduced)
