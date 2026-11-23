@@ -19,7 +19,7 @@ pub(super) struct Printed {
 pub(in crate::io) fn unchecked_unit_files(
     target: &Path,
 ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    Ok(scan(target, directory_limit()?, None)?.found)
+    Ok(scan(target, directory_limit()?, None)?.0)
 }
 
 pub(in crate::io) fn build_unit_files(
@@ -55,10 +55,8 @@ struct Apart {
 
 fn apart(target: &Path, build: &Path) -> Result<Apart, CiError> {
     let limit = directory_limit()?;
-    let target_scan = scan(target, limit, inside(target, build))?;
-    let build_scan = scan(build, limit, inside(build, target))?;
-    let (in_target, target_built) = (target_scan.found, target_scan.built);
-    let (mut found, build_built) = (build_scan.found, build_scan.built);
+    let (in_target, target_built) = scan(target, limit, inside(target, build))?;
+    let (mut found, build_built) = scan(build, limit, inside(build, target))?;
     found.extend(
         in_target
             .into_iter()

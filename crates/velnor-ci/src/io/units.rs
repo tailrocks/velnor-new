@@ -19,10 +19,6 @@ mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
 mod metadata;
-#[cfg(test)]
-mod owner_tests;
-#[cfg(test)]
-mod profile_tests;
 mod separation;
 mod workspace;
 
@@ -102,25 +98,15 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let Scanned {
-        found,
-        built,
-        orphan,
-    } = scan(target, limit, None)?;
+    let (found, built) = scan(target, limit, None)?;
     built::refuse_without_units(target, built, &found)?;
-    built::refuse_orphan(orphan.as_deref())?;
     Ok(found)
 }
 
-struct Scanned {
-    found: Vec<(UnitFile, PathBuf)>,
-    built: bool,
-    orphan: Option<PathBuf>,
-}
+type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
 
 fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
-    let mut outputs = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
     let mut built = false;
@@ -145,7 +131,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
             if kind.is_dir() && skip == Some(path.as_path()) {
                 continue;
             }
-            if kind.is_dir() && (depth == 0 || entry.file_name() != "incremental") {
+            if kind.is_dir() && entry.file_name() != "incremental" {
                 if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
                     // The build folders of the Cargo roots below this one, each audited as its own root.
                     continue;
@@ -170,19 +156,10 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
-                if !generated(&path) && !built::bookkeeping(&path) {
-                    outputs.push(path);
-                }
             }
         }
     }
-    let owners = built::Owners::new(&found, &outputs);
-    let orphan = outputs.iter().find(|output| !owners.owns(output)).cloned();
-    Ok(Scanned {
-        found,
-        built,
-        orphan,
-    })
+    Ok((found, built))
 }
 
 fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
@@ -201,9 +178,10 @@ fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
 /// A file in the `out` folder of a unit that ran a build script. That folder is the script's
 /// `OUT_DIR`, so a `.d` file there is generated content, not dep-info.
 fn generated(file: &Path) -> bool {
-    file.parent()
-        .filter(|out| out.ends_with("out"))
-        .is_some_and(built::run_started)
+    let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
+        return false;
+    };
+    out.parent().is_some_and(|unit| unit.join("run").is_dir())
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -230,14 +208,12 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
     let unit = folders.last().and_then(|folder| split(folder));
     let parent = folders.len().checked_sub(2).map(|at| folders[at]);
     match (parent, unit) {
-        (Some(".fingerprint"), Some((package, hash))) if !built::artifact(OsStr::new(name)) => {
-            Some(UnitFile::Fingerprint {
-                configuration: configuration(2)?,
-                package: package.to_owned(),
-                hash: hash.to_owned(),
-                name: (*name).to_owned(),
-            })
-        }
+        (Some(".fingerprint"), Some((package, hash))) => Some(UnitFile::Fingerprint {
+            configuration: configuration(2)?,
+            package: package.to_owned(),
+            hash: hash.to_owned(),
+            name: (*name).to_owned(),
+        }),
         (Some("build"), Some((package, hash))) if *name == "output" => {
             Some(UnitFile::BuildOutput {
                 configuration: configuration(2)?,
@@ -256,16 +232,13 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
         _ => {
             let stem = name.strip_suffix(".d")?;
             let hash = split(stem).map(|(_, hash)| hash.to_owned());
-            let placed = folders.len() > 1
-                && folders
-                    .last()
-                    .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
-            (hash.is_some() || (placed && folders.last() == Some(&"deps"))).then(|| {
-                UnitFile::DepInfo {
-                    configuration: configuration(1).filter(|_| placed),
-                    hash,
-                    stem: stem.to_owned(),
-                }
+            let placed = folders
+                .last()
+                .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
+            (hash.is_some() || folders.last() == Some(&"deps")).then(|| UnitFile::DepInfo {
+                configuration: configuration(1).filter(|_| placed),
+                hash,
+                stem: stem.to_owned(),
             })
         }
     }
@@ -284,7 +257,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
     let configuration = configuration.join("/");
     let (package, hash) = ((*package).to_owned(), (*hash).to_owned());
     match (*kind, name) {
-        ("fingerprint", _) if !built::artifact(OsStr::new(name)) => Some(UnitFile::Fingerprint {
+        ("fingerprint", _) => Some(UnitFile::Fingerprint {
             configuration,
             package,
             hash,
