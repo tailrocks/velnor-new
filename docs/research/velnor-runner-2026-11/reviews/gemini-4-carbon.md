@@ -68,10 +68,10 @@ nine `mbx` variants in issue `#585` and dropped `mbx` in `velnor-gen`.
   4-byte byte length over inherited local OS anonymous pipes (`spawnclient`). `velnor-dispatch` cannot pipe across nodes without a local
   `velnor-node` pipe shim, first-`renewjob` gate (actions-runner/src/Runner.Listener/JobDispatcher.cs:395-406), and UTF-16LE encoder.
 - **`mbx-cache` OIDC authorization (proposal-G.md:311).** Both [velnor-new/.github/workflows/ci.yml:35-40](../../../../.github/workflows/ci.yml#L35-L40) and
-  [velnor-new/generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml:18-19](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L18-L19) forbid `id-token: write` on build jobs (enforced by
+  velnor-new/generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml:18-19 forbid `id-token: write` on build jobs (enforced by
   velnor-new/generator/crates/velnor-gen/tests/it/release_yml_security.rs:55), so CI jobs cannot mint GitHub OIDC tokens.
 - **`velnor-gen` job count, cache driver, hit-rate formula, debuginfo, and `runs-on` (proposal-G.md:269, lines 301, 336, 363, and 368).**
-  [rust-ci.yml:174-195](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L174-L195) emits 10 jobs (not 7) and uses plain Cargo `target/` caching with zero `mbx` steps. `velnor-gen` already defaults
+  rust-ci.yml:174-195 emits 10 jobs (not 7) and uses plain Cargo `target/` caching with zero `mbx` steps. `velnor-gen` already defaults
   `ci_debuginfo` to `LineTablesOnly` (velnor-new/generator/crates/velnor-model/src/repo.rs:332) and renders a static string `runs-on`
   ([velnor-new/generator/crates/velnor-render/src/workflow.rs:67](../../../../crates/velnor-render/src/workflow.rs#L67)) with no fork-routing expression. Even if `mbx` ran over warm `target/` directories, Cargo
   skips `rustc` on ~445 Fresh crates, driving `hits / (hits + misses + not looked up)` toward 0% when caching works best while also omitting
@@ -169,7 +169,7 @@ layers over a mutable lowerdir, repeating the registrar `flock` bottleneck docum
 - **Missed `StateCompat` mismatch and stale Blaze and generator facts (proposal-E.md:352-356, lines 138, 418 to 429, and 601).** Even the 6
   `generator` and 4 `ci-helper` seals that succeeded had 0 of 3,636 scale-set restores because `ci.yml:707` hashes `ImageOS`, `$RUNNER_TEMP`,
   and `$GITHUB_WORKSPACE` into `compat` (`#1305` comment `6980735625`), so replacing the tip check alone still yields 0% restores. Blaze had
-  releases through `v0.20261105.4` (tested and rejected in `#652`), not `v0.20261027.0`, and `velnor-gen` ([rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml)) already
+  releases through `v0.20261105.4` (tested and rejected in `#652`), not `v0.20261027.0`, and `velnor-gen` (rust-ci.yml:1631-1668) already
   retired `ledger-cli` and `Required verdict`.
 
 ### 3. Missed bottlenecks or risks
@@ -223,7 +223,7 @@ missing `#585`'s proof that `mbx` loses to plain Cargo `target/` snapshots.
    actions-runner/src/Sdk/RSWebApi/RunServiceHttpClient.cs:106-107), which `Runner.cs:756-764` logs and skips. Calling `acquirejob` once on
    `velnor-lab` and booting `run.sh` with the JIT token settles this immediately.
 2. **Controller-native `Plan` and `verdict` in Phase 2 while `velnor-runner-proto` waits until optional Phase 4 (proposal-F.md:200, lines 150, 301, 429, and 439).**
-   In [rust-ci.yml:27-90](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L27-L90), `rust-plan` is an in-workflow job whose 25 outputs (`needs.rust-plan.outputs.*`) gate every workspace job in
+   In rust-ci.yml:27-90, `rust-plan` is an in-workflow job whose 25 outputs (`needs.rust-plan.outputs.*`) gate every workspace job in
    GitHub's server-side DAG. Only `POST {run_service_url}/completejob` (RunServiceHttpClient.cs:123-146) can populate `needs.rust-plan.outputs.*`,
    and that client lives in Phase 4's unbuilt `velnor-runner-proto`. Checking how `needs.rust-plan.outputs` could be populated via the Scale
    Set admin API alone settles this.
@@ -262,7 +262,7 @@ missing `#585`'s proof that `mbx` loses to plain Cargo `target/` snapshots.
   jobs to 2 compiler processes (contradicting its own line 47 observation of 88-core bursts), velnor-new/crates/velnor-actions-contract/src/config/preview_policy.rs:57-88
   and resources.rs:135-155 only validate optional `build_jobs` and `default_shards` caps and emit no Cargo or nextest thread flags.
 - **Conflating legacy `ci.yml` ledgers with `velnor-gen`'s `rust-ci.yml`, default linker error, and inventory misattribution (proposal-F.md:200, lines 130, 270, 390, and 401).**
-  [rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml) has no per-job signed ledgers, no `Required verdict` job (only `Required`), and zero `mbx` steps. Rust 1.99.1 on
+  rust-ci.yml:1631-1668 has no per-job signed ledgers, no `Required verdict` job (only `Required`), and zero `mbx` steps. Rust 1.99.1 on
   `x86_64-unknown-linux-gnu` already defaults to `rust-lld` (not GNU `ld`), and the `2x3.84 TB + 3x15 TB` disk strings come from
   velnor-runners/README.md:26-31, not `inventory.md` (`3.5T`, `14T`).
 
@@ -307,7 +307,7 @@ runtime-read fixtures, samples, or scripts changed.
 - **Compiler cache engine (`mbx` in G, E, and F vs plain Cargo CoW `target/`).** All three bet on `mbx` while conflicting on storage layout
   (one shared node store plus `overlayfs` in G, API-only store under ARC in E, per-slot `mbx_store.rs` layout in F). **The repo's own evidence
   refutes all three on `mbx`.** mbx_store.rs:6-13 refutes G's shared `MBX_CACHE_DIR`, HTTP mechanics refute E's CoW claim, and `#585`
-  (`comment 6856187529`) plus [rust-ci.yml:174-195](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L174-L195) prove plain Cargo over XFS reflinked `target/` (`cp --reflink=always` plus
+  (`comment 6856187529`) plus rust-ci.yml:174-195 prove plain Cargo over XFS reflinked `target/` (`cp --reflink=always` plus
   `velnor-ci inputs restore`) compiles **0 crates** on warm runs where every `mbx` mode recompiles 10 to 68.
 - **Cluster recovery state (157k-LOC Turso journal in E and F vs zero journal in G).** Proposals E and F import a 52-migration Mac-Docker
   monolith with ~60 open bugs and `>540 s` tests, whereas Proposal G's zero-journal agent cannot call `completejob` after a restart

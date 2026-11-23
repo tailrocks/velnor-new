@@ -275,7 +275,7 @@ rules:
   - id: no-local-temp-paths
     kind: file_content_forbidden
     paths:
-      include: ["**/*.md", "**/*.json", "**/*.txt", "**/*.log"]
+      include: ["**/*.md", "**/*.json", "**/*.txt", "**/*.log", "docs/**/*"]
       exclude:
         - ".alint.yml"
         - "docs/implemented/evidence/freshness-2026-10-24/alint-0.20.0-to-0.20.1-compare.json"

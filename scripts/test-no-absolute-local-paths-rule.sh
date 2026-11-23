@@ -157,6 +157,9 @@ check temp_json_var_folders fail "{\"path\":\"\\/va""r\\/folders\\/8p\\/T\\/x\"}
 check temp_json_example    pass "{\"path\":\"\\${tmp}\\/example\\/out.log\"}" json
 check temp_json_bare_tmp   pass "{\"path\":\"\\${tmp}\\/foo\"}" json
 check temp_json_repo       pass "{\"path\":\"docs\\/implemented\\/a.md\"}" json
+check temp_stderr_in_docs  fail "wrote ${tmp}/a-b/x" stderr
+check temp_body_in_docs    fail "open ${priv}/sdk57-refresh.AbC/out" body
+check temp_stderr_example  pass "use ${tmp}/example/file for the sample" stderr
 
 if [ "$fails" -ne 0 ]; then
   echo "no-local-temp-paths fixtures: $fails failing"
