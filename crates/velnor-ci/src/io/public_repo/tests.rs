@@ -147,13 +147,13 @@ fn a_host_other_than_the_github_api_gets_no_token_from_check() {
 
 #[test]
 fn a_failed_connection_does_not_echo_the_token() {
-    let closed = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
-    let url = format!(
-        "http://{}/repos/acme/shared-lib",
-        closed.local_addr().unwrap_or_else(|e| unreachable!("{e}"))
-    );
-    drop(closed);
-    let error = get(&url, Some(TOKEN), deadline()).err().unwrap_or_default();
+    let error = get(
+        "http://127.0.0.1:1/repos/acme/shared-lib",
+        Some(TOKEN),
+        deadline(),
+    )
+    .err()
+    .unwrap_or_default();
     assert!(error.starts_with("lookup failed"), "{error}");
     assert!(!error.contains(TOKEN), "{error}");
 }
