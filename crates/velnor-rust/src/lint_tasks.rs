@@ -11,7 +11,7 @@ use crate::lint_error::LintFault;
 use crate::lint_tools::{Lookup, lookup};
 use crate::toml_file::table;
 
-const TASK_FOLDERS: &[&str] = &[
+pub(crate) const TASK_FOLDERS: &[&str] = &[
     "mise-tasks/",
     ".mise-tasks/",
     "mise/tasks/",
@@ -53,8 +53,7 @@ fn declared(value: &Value) -> Declared {
         tools: entry
             .get("tools")
             .and_then(Value::as_table)
-            .map(|tools| tools.keys().cloned().collect())
-            .unwrap_or_default(),
+            .map_or_default(|tools| tools.keys().cloned().collect()),
         depends: ["depends", "depends_post"]
             .iter()
             .flat_map(|key| words(entry.get(*key)))

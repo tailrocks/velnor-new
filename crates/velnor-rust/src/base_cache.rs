@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step,
-    StepKind, TrimFamily, When,
+    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
+    RootSlug, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -40,6 +40,10 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
+// helper-gate: first in tools-v0.1.111 via 193adc8c56
+const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
+const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
+const PRIVATE_PURGE_HELPER: (u64, u64, u64) = (0, 1, 112);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -58,7 +62,75 @@ pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
 }
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
-    facts.private_sources.is_none() && has_saving_helper(facts)
+    has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
+}
+
+fn has_private_base_helper(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+}
+
+pub(crate) fn private_base(facts: &RepoFacts) -> bool {
+    facts.private_sources.is_some() && facts.private_base_caches && has_private_base_helper(facts)
+}
+
+pub(crate) fn base_scope(facts: &RepoFacts) -> BaseScope {
+    let prefixed = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(PRIVATE_PREFIX_HELPER));
+    if private_base(facts) && prefixed {
+        BaseScope::PrivateRepo
+    } else {
+        BaseScope::Shared
+    }
+}
+
+fn private_verdict(facts: &RepoFacts) -> PrivateVerdict {
+    if private_base(facts) {
+        PrivateVerdict::Checked
+    } else if has_private_base_helper(facts) {
+        PrivateVerdict::Cleared
+    } else {
+        PrivateVerdict::Unset
+    }
+}
+
+pub(crate) fn private_only(facts: &RepoFacts, step: Step) -> Step {
+    Step {
+        private_repo: private_base(facts),
+        ..step
+    }
+}
+
+pub(crate) fn privacy_check(facts: &RepoFacts) -> Vec<Step> {
+    if private_base(facts) {
+        vec![
+            step(StepKind::RepositoryPrivacy),
+            step(StepKind::PrivateCheck { cached: Vec::new() }),
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
+pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
+    (facts.config.public_sources.is_some() && writes_base(facts)).then(|| Step {
+        when: When::SavingRun,
+        ..step(StepKind::PublicSources {
+            manifests: facts
+                .rust_roots
+                .iter()
+                .map(|root| root.manifest.clone())
+                .collect(),
+            selected: crate::units::units(facts)
+                .iter()
+                .map(|unit| unit.gate.clone())
+                .collect(),
+        })
+    })
 }
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
@@ -182,6 +254,7 @@ pub(crate) fn save_steps(
         job: job.clone(),
         root: cache_root.clone(),
         host: Host,
+        scope: base_scope(facts),
     };
     let mut steps = vec![
         Step {
@@ -204,6 +277,12 @@ pub(crate) fn save_steps(
                 archive,
                 cli: inputs_cli(facts),
                 budget_bytes: facts.config.cache_budget_bytes,
+                verdicts: facts
+                    .config
+                    .public_sources
+                    .as_ref()
+                    .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
+                private: private_verdict(facts),
             })
         },
         Step {
@@ -219,11 +298,13 @@ pub(crate) fn save_steps(
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
                 lane: cache_root,
+                scope: base_scope(facts),
             }))
         });
     }
     steps
         .into_iter()
+        .map(|saved| private_only(facts, saved))
         .map(|saved| Step {
             gate: lane.steps(),
             ..saved
@@ -251,11 +332,19 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         })
     });
     let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
+    let purge = release
+        .version()
+        .at_least(PRIVATE_PURGE_HELPER)
+        .then(|| Step {
+            when: When::Finalizer,
+            ..step(StepKind::CachePurgePrivate)
+        });
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
         .chain(verifies)
         .chain(result)
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
+        .chain(purge)
         .collect();
     Some(Job {
         name: Some("Cache maintenance".to_owned()),

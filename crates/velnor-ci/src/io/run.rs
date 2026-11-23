@@ -20,6 +20,7 @@ use super::append_outputs;
 use super::early_list::EarlyList;
 use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
+use crate::escape::stderr_line;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
 use crate::tests_run::{TestCounts, apply_runnable, built, output_lines, runs_nextest};
@@ -79,7 +80,7 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
     match execute(args) {
         Ok(code) => ExitCode::from(code),
         Err((code, message)) => {
-            eprintln!("velnor-ci: {message}");
+            eprintln!("{}", stderr_line(&message));
             ExitCode::from(code)
         }
     }
@@ -169,12 +170,15 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         if code == 0 {
             return Err((2, error.to_string()));
         }
-        eprintln!("velnor-ci: {error}");
+        eprintln!("{}", stderr_line(&error.to_string()));
     }
     match lost {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {
-            eprintln!("velnor-ci: cannot write {}: {error}", path.display());
+            eprintln!(
+                "{}",
+                stderr_line(&format!("cannot write {}: {error}", path.display()))
+            );
             Ok(u8::try_from(code).unwrap_or(1))
         }
         None => Ok(u8::try_from(code).unwrap_or(1)),
@@ -224,6 +228,7 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    super::mbx_reports::assign(&mut command, argv);
     if runs_nextest(argv) {
         for name in STEP_FILE_VARIABLES.iter().copied() {
             command.env_remove(name);
@@ -295,6 +300,7 @@ fn collect(
             .progress
             .get_or_insert_with(Vec::new)
             .extend(captured.observations.progress);
+        invocation.dirty.extend(captured.observations.dirty);
         invocation.tests.extend(captured.observations.tests);
         invocation.rejected += captured.observations.rejected;
     }

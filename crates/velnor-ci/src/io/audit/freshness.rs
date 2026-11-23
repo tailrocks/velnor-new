@@ -11,13 +11,20 @@ use velnor_rust::{Located, locate};
 
 use super::super::units::Workspace;
 use super::Audit;
-use super::inventory::{self, Entries, Kind};
+use super::inventory::{self, Budget, Entries};
 use crate::error::CiError;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Cause {
+    Changed,
+    Unproven,
+}
 
 pub(super) struct Freshness {
     targets: BTreeSet<PathBuf>,
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
-    remaining: usize,
+    budget: Budget,
+    max_directory_entries: usize,
 }
 
 impl Freshness {
@@ -35,8 +42,18 @@ impl Freshness {
         Ok(Self {
             targets,
             directories: BTreeMap::new(),
-            remaining: max_directory_entries,
+            budget: Budget::new(max_directory_entries),
+            max_directory_entries,
         })
+    }
+
+    pub(super) fn scratch(&self) -> Self {
+        Self {
+            targets: self.targets.clone(),
+            directories: BTreeMap::new(),
+            budget: Budget::new(self.max_directory_entries),
+            max_directory_entries: self.max_directory_entries,
+        }
     }
 
     fn changed(
@@ -53,9 +70,9 @@ impl Freshness {
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
-            let scanned = inventory::scan(&root, targets, &mut self.remaining)?;
-            let entries = inventory::view(&scanned, &root, targets)?;
-            let Some(newest) = newest_file(&entries)? else {
+            let scanned = inventory::scan(&root, targets, &mut self.budget)?;
+            let entries = inventory::view(&scanned.entries, &root, targets)?;
+            let Some(newest) = inventory::newest(&scanned, &entries)? else {
                 return Ok(true);
             };
             self.directories.insert(key.clone(), (newest, entries));
@@ -68,15 +85,15 @@ impl Freshness {
 }
 
 impl Audit<'_> {
-    pub(super) fn changed_since(
+    pub(super) fn changed_inputs(
         &mut self,
         base: &Path,
         paths: &[String],
         built: SystemTime,
         output: &Path,
         declared: bool,
-    ) -> Result<bool, CiError> {
-        // A cross-target cache without a prior receipt cannot prove its inputs and remains stale.
+        limit: usize,
+    ) -> Result<Vec<(String, Cause)>, CiError> {
         let saved = inventory::load(output)
             .ok()
             .filter(|saved| self.freshness.targets.is_subset(&saved.targets));
@@ -84,18 +101,27 @@ impl Audit<'_> {
             || self.freshness.targets.clone(),
             |saved| saved.targets.clone(),
         );
+        let mut changed = Vec::new();
         for raw in paths {
-            let path = base.join(raw);
-            if declared
-                && !saved
-                    .as_ref()
-                    .and_then(|saved| saved.state(&path))
-                    .zip(inventory::state(&path).ok())
-                    .is_some_and(|(before, current)| before == current)
-            {
-                return Ok(true);
+            if changed.len() == limit {
+                break;
             }
-            let changed = match fs::metadata(&path) {
+            let path = base.join(raw);
+            if declared {
+                let before = saved.as_ref().and_then(|saved| saved.state(&path));
+                match (before, inventory::state(&path).ok()) {
+                    (Some(before), Some(current)) if before == current => {}
+                    (Some(_), Some(_)) => {
+                        changed.push((raw.clone(), Cause::Changed));
+                        continue;
+                    }
+                    _ => {
+                        changed.push((raw.clone(), Cause::Unproven));
+                        continue;
+                    }
+                }
+            }
+            let stale = match fs::metadata(&path) {
                 Ok(metadata)
                     if metadata.is_dir() && self.excluded_tracked_inputs(&path, &targets)? =>
                 {
@@ -118,11 +144,11 @@ impl Audit<'_> {
                 }
                 Err(error) => return Err(failed(&path, &error)),
             };
-            if changed {
-                return Ok(true);
+            if stale {
+                changed.push((raw.clone(), Cause::Changed));
             }
         }
-        Ok(false)
+        Ok(changed)
     }
 
     fn excluded_tracked_inputs(
@@ -141,45 +167,6 @@ impl Audit<'_> {
     }
 }
 
-/// The newest modification time of the files in a scanned snapshot. `None` means
-/// a listed entry has vanished since the scan, so the snapshot no longer matches
-/// the tree and the inputs are stale.
-fn newest_file(entries: &Entries) -> io::Result<Option<SystemTime>> {
-    let mut newest = SystemTime::UNIX_EPOCH;
-    for (directory, children) in entries {
-        for (name, kind) in children {
-            let path = directory.join(name);
-            let Some(metadata) = stat(&path, kind)? else {
-                return Ok(None);
-            };
-            if !metadata.is_dir() {
-                newest = newest.max(metadata.modified()?);
-            }
-        }
-    }
-    Ok(Some(newest))
-}
-
-/// Stats a scanned entry. `None` means it vanished after the scan. Any other
-/// error is still an error.
-fn stat(path: &Path, kind: &Kind) -> io::Result<Option<fs::Metadata>> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata),
-        Err(error)
-            if inventory::unresolved_link(&error)
-                && matches!(kind, Kind::Link { resolved: None, .. }) =>
-        {
-            fs::symlink_metadata(path)
-        }
-        Err(error) => Err(error),
-    };
-    match metadata {
-        Ok(metadata) => Ok(Some(metadata)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
 fn failed(path: &Path, error: &io::Error) -> CiError {
     CiError::new(format!(
         "cannot establish input freshness for {}: {error}",
@@ -194,7 +181,7 @@ mod tests {
 
     use super::*;
 
-    fn snapshot(name: &str) -> (PathBuf, Entries) {
+    fn snapshot(name: &str) -> (PathBuf, inventory::Scan) {
         let root =
             std::env::temp_dir().join(format!("velnor-freshness-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -206,26 +193,74 @@ mod tests {
                 .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        let mut remaining = usize::MAX;
-        let entries = inventory::scan(&root, &BTreeSet::new(), &mut remaining)
+        let mut budget = Budget::new(usize::MAX);
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
             .unwrap_or_else(|e| unreachable!("{e}"));
-        (root, entries)
+        (root, scan)
     }
 
     #[test]
     fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
-        let (root, entries) = snapshot("control");
-        let newest = newest_file(&entries);
+        let (root, scan) = snapshot("control");
+        let newest = inventory::newest(&scan, &scan.entries);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(matches!(newest, Ok(Some(_))), "{newest:?}");
     }
 
     #[test]
     fn an_entry_removed_after_the_scan_is_reported_as_vanished_not_as_an_error() {
-        let (root, entries) = snapshot("vanished");
+        let (root, scan) = snapshot("vanished");
         fs::remove_file(root.join("gone.txt")).unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = newest_file(&entries);
+        let newest = inventory::newest(&scan, &scan.entries);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(matches!(newest, Ok(None)), "{newest:?}");
+    }
+
+    fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let directory = root.join("d");
+        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        for path in [directory.join("f"), directory.clone(), root.clone()] {
+            fs::File::open(&path)
+                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let mut budget = Budget::new(usize::MAX);
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        (root, scan)
+    }
+
+    #[test]
+    fn a_file_created_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("created");
+        fs::write(root.join("d").join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = inventory::newest(&scan, &scan.entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(newest, Ok(None)),
+            "a file created after the walk was missed: {newest:?}"
+        );
+    }
+
+    #[test]
+    fn a_directory_rewritten_with_the_same_names_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("rewritten");
+        let directory = root.join("d");
+        fs::remove_file(directory.join("f")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(directory.join("f"))
+            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = inventory::newest(&scan, &scan.entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(newest, Ok(None)),
+            "a directory rewritten after the walk was accepted as the walked one: {newest:?}"
+        );
     }
 }

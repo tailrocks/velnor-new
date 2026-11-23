@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use velnor_model::CACHE_KEY_MAX_UNITS;
+
 use crate::pinned_actions::{
     ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
     GITHUB_SCRIPT, MR_BOXINGTON,
@@ -14,7 +16,7 @@ mod model;
 pub use check::check_rules;
 pub use model::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedWorkflow, Value,
+    RenderedStep, RenderedTrusted, RenderedWorkflow, Value,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
@@ -45,7 +47,6 @@ pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 pub const MAX_WORKFLOW_BYTES: usize = 500_000;
-pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
 pub const MAX_ENV_CHARACTERS: usize = 100_000;
 
 const FORBIDDEN_WORDS: &[&str] = &["if", "for", "while", "case", "coproc"];
@@ -75,6 +76,7 @@ pub enum Rule {
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
+    SourceRootsEnvCollision(String),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
     DistFileCollision(String),
@@ -133,11 +135,12 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_)
+            | Rule::SourceRootsEnvCollision(_)
             | Rule::OutputNameCollision(_)
             | Rule::DistFileCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
-                "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
+                "a cache key can be {length} UTF-16 code units long at run time, and actions/cache allows at most {CACHE_KEY_MAX_UNITS}; shorten the job id or the root directory name"
             ),
             Rule::EnvTooLong(length) => write!(
                 f,

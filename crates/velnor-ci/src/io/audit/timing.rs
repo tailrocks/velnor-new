@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Opt-in phase timing for `velnor-ci inputs build`, written to stderr only
-//! when `VELNOR_AUDIT_TIMING=1`. It never changes any audit decision.
-
 use std::cell::Cell;
 use std::time::Instant;
 

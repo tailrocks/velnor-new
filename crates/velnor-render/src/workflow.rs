@@ -3,12 +3,12 @@
 
 use crate::rules::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, Value,
+    RenderedStep, RenderedTrusted, Value,
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT,
+    Job, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TRUSTED_EVENT, WorkflowPlan,
 };
 
 /// True for every event except a pull request from a fork.
@@ -93,6 +93,9 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
             "timeout-minutes",
             Yaml::Int(u64::from(job.timeout_minutes)),
         ));
+        if job.continue_on_error {
+            items.push(entry("continue-on-error", Yaml::Bool(true)));
+        }
         if !job.env.is_empty() {
             items.push(entry("env", values(&job.env, false)));
         }
@@ -226,18 +229,48 @@ fn launches_helper(step: &RenderedStep) -> bool {
         .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
 }
 
+pub(crate) fn fork_runner(job: &Job, plan: &WorkflowPlan) -> Option<String> {
+    (!plan.hosted_runners.contains(&job.runs_on)).then(|| plan.fork_runner.to_string())
+}
+
+pub(crate) fn trusted_runner(job: &Job, plan: &WorkflowPlan) -> Option<RenderedTrusted> {
+    plan.trusted_runners
+        .for_runner(&job.runs_on)
+        .map(|trusted| RenderedTrusted {
+            label: trusted.to_string(),
+            replaces: job.runs_on.to_string(),
+        })
+}
+
 fn runs_on(job: &RenderedJob) -> Yaml {
     let primary = match &job.runs_on_axis {
         Some(axis) => format!("matrix.{axis}"),
         None => literal(&job.runs_on),
     };
-    match (&job.fork_runner, &job.runs_on_axis) {
-        (Some(fork), _) => Yaml::Expr(format!(
-            "${{{{ {SAME_REPOSITORY} && {primary} || {} }}}}",
-            literal(fork)
-        )),
-        (None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
-        (None, None) => text(&job.runs_on),
+    let fenced = match &job.fork_runner {
+        Some(fork) => format!("{SAME_REPOSITORY} && {primary} || {}", literal(fork)),
+        None => primary.clone(),
+    };
+    match (&job.trusted_runner, &job.fork_runner, &job.runs_on_axis) {
+        (Some(trusted), fork, axis) => {
+            let label = literal(&trusted.label);
+            let pick = match axis {
+                Some(_) => format!(
+                    "{TRUSTED_EVENT} && {primary} == {} && {label}",
+                    literal(&trusted.replaces)
+                ),
+                None => format!("{TRUSTED_EVENT} && {label}"),
+            };
+            let rest = if fork.is_some() {
+                format!("({fenced})")
+            } else {
+                fenced
+            };
+            Yaml::Expr(format!("${{{{ {pick} || {rest} }}}}"))
+        }
+        (None, Some(_), _) => Yaml::Expr(format!("${{{{ {fenced} }}}}")),
+        (None, None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
+        (None, None, None) => text(&job.runs_on),
     }
 }
 
@@ -292,6 +325,8 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     if let Some(run) = &step.run {
         let value = if run.contains('\n') {
             Yaml::Block(run.clone())
+        } else if step.share_run {
+            Yaml::Shared(Box::new(text(run)))
         } else {
             text(run)
         };

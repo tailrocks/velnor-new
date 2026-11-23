@@ -27,7 +27,7 @@ You are one of eight independent panel members. You answered the original brief 
   - mbx vs reflinked snapshots on this Mac: `~/.cache/ci-ambition/panel/v2/experiments/mbx-cache-mac.md`;
   - the same comparison on the real cluster (fixed checkout path, XFS reflink, mbx-cache server, a lockfile change, page cache): `~/.cache/ci-ambition/panel/v2/experiments/mbx-cache-cluster.md`;
   - blaze on velnor-new: `~/.cache/ci-ambition/panel/v2/experiments/blaze.md`.
-- **Code, read-only:** `~/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{velnor-legacy,actions-runner,arc,mr-boxington-cache,blaze}`. The official runner's source is the reference for protocol and semantics: cite `path:line`.
+- **Code, read-only:** `<home>/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{velnor-legacy,actions-runner,arc,mr-boxington-cache,blaze}`. The official runner's source is the reference for protocol and semantics: cite `path:line`.
 
 ## What to design (be concrete: components, data flow, numbers)
 

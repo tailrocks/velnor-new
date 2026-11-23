@@ -1,0 +1,77 @@
+{
+  "version": 5,
+  "session_duration_ns": 709491375,
+  "wrapper_phases_ns": {
+    "compiler": 297988042,
+    "flight_wait": 1066000,
+    "key": 36498166,
+    "lookup": 179793,
+    "permit_wait": 1814292,
+    "predict": 2580667,
+    "startup": 156207,
+    "store": 13575583,
+    "unattributed": 158992666
+  },
+  "lookups": 0,
+  "hits": 0,
+  "misses": 0,
+  "unconsulted": 2,
+  "incremental_compilations": 0,
+  "compiler_invocations_avoided": 0,
+  "estimated_compiler_duration_avoided_ns": 0,
+  "compiler": {
+    "unconsulted": {
+      "invocations": 2,
+      "duration_ns": 268720292
+    }
+  },
+  "slow_compilations": [
+    {
+      "crate_name": "hello",
+      "duration_ns": 168560792
+    },
+    {
+      "crate_name": "itoa",
+      "duration_ns": 100159500
+    }
+  ],
+  "verifications": 0,
+  "divergences": 0,
+  "prefetched_actions": 0,
+  "predictions_loaded": 0,
+  "prefetch_runs": 0,
+  "bypasses": {
+    "compiler-query": 2,
+    "standard-input": 1
+  },
+  "downloaded_bytes": 0,
+  "uploaded_bytes": 0,
+  "background_uploads": 0,
+  "background_upload_failures": 0,
+  "remote_blob_pack_uploads": 0,
+  "remote_blob_pack_upload_blobs": 0,
+  "upload_drain_duration_ns": 0,
+  "stored_bytes": 693718,
+  "restored_output_files": 0,
+  "restored_output_bytes": 0,
+  "reflinked_output_files": 0,
+  "reflinked_output_bytes": 0,
+  "hardlinked_output_files": 0,
+  "hardlinked_output_bytes": 0,
+  "copied_output_files": 0,
+  "copied_output_bytes": 0,
+  "reused_output_files": 0,
+  "reused_output_bytes": 0,
+  "remote_failures": 0,
+  "remote_manifest_lookups": 0,
+  "remote_action_lookups": 0,
+  "remote_blob_requests": 0,
+  "remote_blob_pack_requests": 0,
+  "remote_blob_pack_blobs": 0,
+  "remote_manifest_lookup_duration_ns": 0,
+  "remote_action_lookup_duration_ns": 0,
+  "remote_blob_transfer_duration_ns": 0,
+  "local_cas_write_duration_ns": 8040000,
+  "prefetch_duration_ns": 0,
+  "materialization_duration_ns": 0
+}

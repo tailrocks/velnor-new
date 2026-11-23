@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::Platform;
+use velnor_model::{Platform, WORKFLOW_NAME};
 
 use crate::asset_name;
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
@@ -37,6 +37,7 @@ pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) optional_platforms: Vec<Platform>,
     pub(crate) bins: Vec<ExtraBin>,
     pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
@@ -67,6 +68,8 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    #[serde(default)]
+    optional_platforms: Vec<String>,
     format: Option<BinaryFormat>,
     target: Option<Libc>,
     #[serde(default)]
@@ -136,7 +139,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             checks: Vec::new(),
         },
     };
-    let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    let after = raw.after.unwrap_or_else(|| vec![WORKFLOW_NAME.to_owned()]);
     refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
     for (index, name) in raw.pr_only_checks.iter().enumerate() {
         let problem = if name.trim().is_empty() {
@@ -269,6 +272,34 @@ fn platforms(package: &str, names: Option<Vec<String>>) -> Result<Vec<Platform>,
     }
 }
 
+fn optional_platforms(
+    package: &str,
+    names: Vec<String>,
+    platforms: &[Platform],
+) -> Result<Vec<Platform>, ReleaseError> {
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let optional = self::platforms(package, Some(names))?;
+    if let Some(platform) = optional
+        .iter()
+        .find(|platform| !platforms.contains(platform))
+    {
+        return Err(FamilyError::OptionalPlatformNotBuilt {
+            package: package.to_owned(),
+            platform: platform.file_suffix(),
+        }
+        .into());
+    }
+    if platforms.iter().all(|platform| optional.contains(platform)) {
+        return Err(FamilyError::EveryPlatformOptional {
+            package: package.to_owned(),
+        }
+        .into());
+    }
+    Ok(optional)
+}
+
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
     refuse_expressions("binaries.package", &[&raw.package])?;
     let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
@@ -289,6 +320,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         });
     }
     let platforms = platforms(&raw.package, raw.platforms)?;
+    let optional_platforms = optional_platforms(&raw.package, raw.optional_platforms, &platforms)?;
     let format = raw.format.unwrap_or(BinaryFormat::Archive);
     let libc = raw.target.unwrap_or(match format {
         BinaryFormat::Archive => Libc::Musl,
@@ -331,6 +363,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         package: raw.package,
         bin,
         platforms,
+        optional_platforms,
         bins,
         include,
         format,

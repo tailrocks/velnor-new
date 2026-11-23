@@ -6,7 +6,7 @@ use velnor_local::io::env::Environment;
 use crate::fake_docker::FakeDocker;
 use crate::support::{Harness, MAIN, PULL_2, temp_dir};
 
-fn seeded(name: &str) -> std::path::PathBuf {
+fn seeded(name: &str) -> velnor_test_support::ScratchDir {
     let dir = temp_dir(name);
     for (path, text) in [
         (

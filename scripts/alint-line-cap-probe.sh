@@ -16,6 +16,9 @@ trap cleanup EXIT
 
 cd "$ROOT" || exit 1
 
+python3 -m unittest scripts/test_private_names_guard.py scripts/test_private_names_spellings.py || exit 1
+python3 scripts/private-names-guard.py || exit 1
+
 for lines in 401 400; do
   rm -f "$PROBE"
   seq 1 "$lines" | sed 's/.*/const L_&: u32 = &;/' > "$PROBE" || exit 1
@@ -32,5 +35,8 @@ for lines in 401 400; do
     exit 1
   fi
 done
+
+bash scripts/test-no-doctests-rule.sh || exit 1
+bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 
 rm -f "$PROBE"

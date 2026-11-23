@@ -24,7 +24,6 @@ pub enum DetectError {
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
-    NoRustRoot,
     JobIdTaken(String),
     UnhostedOrigin,
 }
@@ -37,6 +36,10 @@ pub enum Reason {
     MissingTable(&'static str),
     MissingKey(&'static str),
     InvalidValue {
+        key: &'static str,
+        value: String,
+    },
+    UnsupportedGlob {
         key: &'static str,
         value: String,
     },
@@ -61,7 +64,12 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownCheckConfigurationsRoot(String),
     UnknownRootTimeoutRoot(String),
+    GeneratorPackage {
+        found: usize,
+    },
+    GeneratorHostTuple(String),
     Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {
@@ -91,6 +99,13 @@ pub enum Reason {
     TestGroupFilter(String),
     TestGroupRestoreWithoutCargo(String),
     TestGroupsWithPrivateSources,
+    PartitionsWithoutNextest(String),
+    TestGroupArtifact {
+        key: &'static str,
+        value: String,
+        fix: String,
+    },
+    ArtifactNameTaken(String),
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
@@ -103,8 +118,12 @@ pub enum Reason {
     HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
+    PolicyDenyWithoutConfig,
+    PolicyGateWithoutLane,
     HelperBox(RepoPath),
     MbxRemotePrivate(String),
+    PublicSourceOverlap(String),
+    PublicSourcesUnused(String),
     MbxOffConflict(&'static str),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
@@ -170,7 +189,6 @@ impl fmt::Display for DetectError {
                 f,
                 "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
-            Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
             Self::UnhostedOrigin => f.write_str(
                 "origin must identify a hosted repository to place a hashed full_run schedule; point origin at a hosted URL, or set full_run to \"off\" or a cron expression",
             ),

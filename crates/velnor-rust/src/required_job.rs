@@ -41,6 +41,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
                 )
                 .collect(),
             GateNeed::Policy => vec![JobCondition::Policy],
+            GateNeed::Lint => vec![JobCondition::Lint(gate.slug.clone())],
             _ => Vec::new(),
         })
         .collect();
@@ -62,6 +63,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::NotCancelled
         | When::NotCancelledPostMerge
         | When::Finalizer
+        | When::FinalizerAfterProducer
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
@@ -72,6 +74,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::BaseExpired
         | When::SavingRun
         | When::Always
+        | When::Failure
         | When::CacheDebug
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal

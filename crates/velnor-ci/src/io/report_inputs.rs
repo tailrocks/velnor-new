@@ -48,6 +48,7 @@ fn collect_root(
     let target = checkout.join(root.target_dir.as_str());
     let saved = read_snapshot(&target.join(snapshot_file(&prefix)))?;
     let saved_witness = read_witness(&target.join(witness_file(&prefix)))?;
+    let (manifest, restored_units) = super::restored_units::read(&target, &prefix);
     let usable = saved.is_some();
     let feeds = |path: &str| link_inputs::feeds(facts, root, path);
     let unverifiable_links = current.links.iter().any(|link| feeds(&link.path))
@@ -82,6 +83,8 @@ fn collect_root(
             root_path: &root_path,
             unchanged: &unchanged,
             saved_witness: saved_witness.as_deref(),
+            restored_units: restored_units.as_ref(),
+            manifest,
         },
     )
 }
@@ -95,6 +98,8 @@ struct RootInputs<'a> {
     root_path: &'a Path,
     unchanged: &'a BTreeSet<String>,
     saved_witness: Option<&'a str>,
+    restored_units: Option<&'a crate::restored_units::RestoredUnits>,
+    manifest: crate::restored_units::Manifest,
     symlink_lock: bool,
     unverifiable_links: bool,
 }
@@ -142,6 +147,11 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
         );
         metrics.verification_errors.extend(errors);
         invocation.compilations = compilations;
+        if let Some(restored) = inputs.restored_units {
+            crate::restored_units::classify(invocation, restored);
+        }
+        invocation.restored_manifest = Some(inputs.manifest);
+        crate::restored_units::attach_dirty(invocation);
         let target = inputs.checkout.join(inputs.root.target_dir.as_str());
         let warm = warm
             && invocation

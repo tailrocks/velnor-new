@@ -38,11 +38,48 @@ impl ConfigFile {
 pub struct KeyGate {
     pub file: ConfigFile,
     pub key: &'static str,
+    pub value: Option<&'static str>,
     pub first: (u64, u64, u64),
+    pub filled: bool,
 }
 
 const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
-    KeyGate { file, key, first }
+    KeyGate {
+        file,
+        key,
+        value: None,
+        first,
+        filled: false,
+    }
+}
+
+const fn gate_filled(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
+    KeyGate {
+        file,
+        key,
+        value: None,
+        first,
+        filled: true,
+    }
+}
+
+const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
+    gate(file, key, first)
+}
+
+const fn gate_value(
+    file: ConfigFile,
+    key: &'static str,
+    value: &'static str,
+    first: (u64, u64, u64),
+) -> KeyGate {
+    KeyGate {
+        file,
+        key,
+        value: Some(value),
+        first,
+        filled: false,
+    }
 }
 
 /// Every row, `rust-ci.toml` first.
@@ -50,13 +87,26 @@ pub fn key_gates() -> impl Iterator<Item = &'static KeyGate> {
     rust_ci::RUST_CI.iter().chain(release::RELEASE)
 }
 
-fn written(value: &toml::Value, segments: &[&str]) -> bool {
+fn filled(value: &toml::Value, segments: &[&str]) -> bool {
     match (value, segments.split_first()) {
-        (_, None) => true,
+        (toml::Value::Array(items), None) => !items.is_empty(),
+        (toml::Value::Array(items), _) => items.iter().any(|item| filled(item, segments)),
         (toml::Value::Table(table), Some((head, rest))) => {
-            table.get(*head).is_some_and(|inner| written(inner, rest))
+            table.get(*head).is_some_and(|inner| filled(inner, rest))
         }
-        (toml::Value::Array(items), _) => items.iter().any(|item| written(item, segments)),
+        _ => false,
+    }
+}
+
+fn written(value: &toml::Value, segments: &[&str], expected: Option<&str>) -> bool {
+    match (value, segments.split_first()) {
+        (_, None) => expected.is_none_or(|wanted| value.as_str() == Some(wanted)),
+        (toml::Value::Table(table), Some((head, rest))) => table
+            .get(*head)
+            .is_some_and(|inner| written(inner, rest, expected)),
+        (toml::Value::Array(items), _) => {
+            items.iter().any(|item| written(item, segments, expected))
+        }
         _ => false,
     }
 }
@@ -80,7 +130,10 @@ fn newest(view: &RepoView, skip: impl Fn(&KeyGate) -> bool) -> Option<&'static K
         let root = toml::Value::Table(table);
         for row in key_gates().filter(|row| row.file == file && !skip(row)) {
             let segments: Vec<&str> = row.key.split('.').collect();
-            if written(&root, &segments) && newest.is_none_or(|best| row.first > best.first) {
+            if written(&root, &segments, row.value)
+                && (!row.filled || filled(&root, &segments))
+                && newest.is_none_or(|best| row.first > best.first)
+            {
                 newest = Some(row);
             }
         }
@@ -100,6 +153,7 @@ pub fn check_config_keys(view: &RepoView, pinned: &HelperVersion) -> Result<(), 
         Some(row) => Err(GenerateError::ConfigKeyHelperTooOld {
             file: row.file.path().to_string(),
             key: row.key,
+            value: row.value,
             first: row.first,
             pinned: pinned.clone(),
         }),

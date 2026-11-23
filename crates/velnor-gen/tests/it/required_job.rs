@@ -145,7 +145,7 @@ fn built_from_source() -> Result<String, Box<dyn std::error::Error>> {
     let view = load(&samples().join("helper-source"))?;
     let mut files = expected_files(&view)?;
     files
-        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .remove(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or_else(|| "no workflow".into())
 }
 
@@ -241,6 +241,19 @@ fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> 
     let message = violation.to_string();
     assert!(message.contains("500000 bytes"));
     assert!(message.contains("reduce the workflow size"));
+    assert!(message.contains(".github/workflows/ci.yml"), "{message}");
+    assert!(message.contains("60 Cargo roots"), "{message}");
+    assert!(
+        message.contains(&format!(
+            "is {} bytes",
+            match violation.rule {
+                velnor_render::Rule::WorkflowTooLarge(bytes) => bytes,
+                _ => 0,
+            }
+        )),
+        "{message}"
+    );
+    assert!(message.contains("the largest are"), "{message}");
     Ok(())
 }
 

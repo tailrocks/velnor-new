@@ -54,9 +54,9 @@ pub(super) fn standalone(facts: &RepoFacts) -> Vec<bool> {
 
 pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
     let mut directories = Vec::new();
-    for workspace in workspaces {
-        if !directories.contains(&workspace.target_directory) {
-            directories.push(workspace.target_directory.clone());
+    for directory in workspaces.iter().flat_map(Workspace::directories) {
+        if !directories.contains(&directory) {
+            directories.push(directory);
         }
     }
     directories
@@ -65,49 +65,36 @@ pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
 pub(super) fn root_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    step: &Path,
     inherit: bool,
     alone: bool,
     groups: &[PathBuf],
 ) -> Result<Workspace, CiError> {
     if !inherit {
-        return own_workspace(manifest, invocation);
+        return own_workspace(manifest, invocation, step);
     }
-    let found = workspace(manifest, invocation)?;
+    let found = workspace(manifest, invocation, step)?;
     let target = resolve(&found.target_directory)
         .map_err(|error| unresolved(&found.target_directory, &error))?;
     if alone {
         for group in groups {
             let directory = resolve(group).map_err(|error| unresolved(group, &error))?;
             if directory == target {
-                return own_workspace(manifest, invocation);
+                return own_workspace(manifest, invocation, step);
             }
         }
     }
     Ok(found)
 }
 
-/// Which Cargo roots read the ambient `CARGO_TARGET_DIR`, for a command or
-/// audit that runs at `location`. Every grouped root reads it, since its group
-/// shares one target directory. A standalone root reads it only when it holds
-/// `location`: the environment belongs to the step that runs there, and a
-/// second standalone root reading it would report the same target as the first
-/// and be refused by `apart`. With no holder, every standalone root reads it.
-pub(super) fn inheriting(
-    facts: &RepoFacts,
-    repository: &Path,
-    location: Option<&Path>,
-) -> Result<Vec<bool>, CiError> {
-    let standalone = standalone(facts);
-    let Some(location) = location else {
-        return Ok(vec![false; standalone.len()]);
-    };
+fn holder(facts: &RepoFacts, repository: &Path, location: &Path) -> Result<Option<usize>, CiError> {
     let location = resolve(location).map_err(|error| unresolved(location, &error))?;
     let mut directories = Vec::new();
     for root in &facts.rust_roots {
         let manifest = repository.join(root.manifest.as_str());
         directories.push(resolve(&manifest).map_err(|error| unresolved(&manifest, &error))?);
     }
-    let holder = directories
+    Ok(directories
         .iter()
         .enumerate()
         .filter_map(|(index, directory)| {
@@ -117,7 +104,19 @@ pub(super) fn inheriting(
                 .then(|| (directory.components().count(), index))
         })
         .max_by_key(|(depth, _)| *depth)
-        .map(|(_, index)| index);
+        .map(|(_, index)| index))
+}
+
+pub(super) fn inheriting(
+    facts: &RepoFacts,
+    repository: &Path,
+    location: Option<&Path>,
+) -> Result<Vec<bool>, CiError> {
+    let standalone = standalone(facts);
+    let Some(location) = location else {
+        return Ok(vec![false; standalone.len()]);
+    };
+    let holder = holder(facts, repository, location)?;
     Ok(standalone
         .into_iter()
         .enumerate()
@@ -125,8 +124,29 @@ pub(super) fn inheriting(
         .collect())
 }
 
-/// `inputs audit` reads the target of the root `--root` names, or of the
-/// directory it runs in when no root is named.
+pub(super) fn stepped(
+    facts: &RepoFacts,
+    repository: &Path,
+    location: &Path,
+    inherit: &[bool],
+) -> Result<Vec<bool>, CiError> {
+    let holder = holder(facts, repository, location)?;
+    let groups = shared_groups(facts);
+    Ok(inherit
+        .iter()
+        .enumerate()
+        .map(|(index, inherit)| {
+            *inherit
+                && holder.is_none_or(|holder| {
+                    holder == index
+                        || groups
+                            .iter()
+                            .any(|group| group.contains(&holder) && group.contains(&index))
+                })
+        })
+        .collect())
+}
+
 pub(super) fn audit_inheriting(
     facts: &RepoFacts,
     repository: &Path,
@@ -147,17 +167,31 @@ pub(super) fn audit_inheriting(
 pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
+    step: &Path,
+    probe: Option<(&MetadataInvocation<'_>, &Path)>,
     inherit: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
+    let stepped = match probe {
+        Some((_, location)) => stepped(facts, repository, location, inherit)?,
+        None => vec![false; inherit.len()],
+    };
+    let probe = probe.map(|(probe, _)| probe);
     facts
         .rust_roots
         .iter()
         .zip(standalone(facts))
-        .zip(inherit)
-        .map(|((root, alone), inherit)| {
+        .zip(inherit.iter().zip(&stepped))
+        .map(|((root, alone), (inherit, stepped))| {
             let manifest = repository.join(root.manifest.as_str());
-            root_workspace(&manifest, None, *inherit, alone, &groups)
+            root_workspace(
+                &manifest,
+                probe.filter(|_| *stepped),
+                step,
+                *inherit,
+                alone,
+                &groups,
+            )
         })
         .collect()
 }

@@ -3,11 +3,32 @@
 
 use std::collections::BTreeMap;
 
-use crate::plan::{job, step};
+use crate::audit_job::AUDIT_JOB;
+use crate::plan::{HELPER_JOB, job, step};
+use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
-    Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
-    PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
+    Access, CI_RUN_LABEL, CacheKey, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi,
+    PrRun, PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
+
+// helper-gate: first in tools-v0.1.111 via 2c70d48ddc
+const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+const CACHE_AFTER_PRODUCER_HELPER: (u64, u64, u64) = (0, 1, 112);
+const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(gate))
+}
+
+fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
+    let refused = facts.private_sources.is_some()
+        && helper_at_least(facts, NOT_GENERATED_HELPER)
+        && !crate::base_cache::writes_base(facts);
+    refused.then_some("private dependencies")
+}
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
@@ -19,25 +40,34 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                         .is_ok_and(|version| version.at_least((0, 9, 123)))
                 })
         });
+    let not_generated = not_generated(facts);
+    let optional_saves = helper_at_least(facts, REPORT_FIELDS_HELPER);
+    let saved_keys = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_SAVED_KEY_HELPER));
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::CacheSave(_)));
-        if !job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-            && !saves
-        {
+        if !job.steps.iter().any(|step| step.kind.runs_cargo()) && !saves {
             continue;
         }
-        attach_metrics(job, nextest_artifacts);
+        let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
+        attach_metrics(job, nextest_artifacts, saved_keys, reason, optional_saves);
         producers.push(&*job);
     }
     producers.extend(maintenance);
-    let needs = producers.iter().map(|job| job.id.clone()).collect();
+    let needs: Vec<JobId> = producers.iter().map(|job| job.id.clone()).collect();
+    let after_producer =
+        !facts.config.cache_check_blocks && helper_at_least(facts, CACHE_AFTER_PRODUCER_HELPER);
+    let when = if after_producer {
+        When::FinalizerAfterProducer
+    } else {
+        When::Finalizer
+    };
     let needs_max_bytes = crate::required_size::needs_max_bytes(facts, producers);
     let mut steps: Vec<_> = facts
         .helper
@@ -54,7 +84,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     let mut cache = Job {
         name: Some("Cache".to_owned()),
         needs,
-        when: When::Finalizer,
+        when,
         pr: crate::plan::quick(facts),
         steps,
         ..job(facts, JobId::from_static("cache"))
@@ -66,8 +96,14 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     cache
 }
 
-fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
-    let caches = job
+fn attach_metrics(
+    job: &mut Job,
+    nextest_artifacts: bool,
+    saved_keys: bool,
+    not_generated: Option<&'static str>,
+    optional_saves: bool,
+) {
+    let caches: Vec<CacheKey> = job
         .steps
         .iter()
         .filter_map(|step| match &step.kind {
@@ -75,21 +111,46 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
             _ => None,
         })
         .collect();
+    let saved: Vec<_> = job
+        .steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::CacheSave(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect();
+    let saves_cache = saved.iter().any(|key| key.family() != "tools");
+    let saved = if optional_saves {
+        saved
+    } else {
+        caches.clone()
+    };
+    let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
+    let unsuppressed: Vec<CacheKey> = caches
+        .iter()
+        .filter(|key| job.id == HELPER_JOB && matches!(key, CacheKey::Target { .. }))
+        .cloned()
+        .collect();
     let has = |verb| {
         job.steps
             .iter()
-            .any(|step| step.kind == StepKind::ToolsLocal(verb))
+            .any(|step| matches!(&step.kind, StepKind::ToolsLocal(found, _) if *found == verb))
     };
     let node_tools = ToolsTelemetry {
         restore: has(ToolsLocalVerb::RecordRestore),
         save: has(ToolsLocalVerb::RecordSave),
+        saved_key: has(ToolsLocalVerb::RecordSavedKey),
     };
     job.steps.extend(
         [
             StepKind::ReportCaches {
                 caches,
+                saved,
                 nextest_artifacts,
                 node_tools,
+                saved_keys,
+                not_generated,
+                unsuppressed,
             },
             StepKind::UploadMetrics,
         ]

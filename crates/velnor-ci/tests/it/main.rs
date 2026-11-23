@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod app_token;
+mod artifact_stage;
+mod artifact_stage_paths;
 mod audit;
 mod base_expiry;
 mod bench_compare;
@@ -12,13 +15,27 @@ mod budget_schedule;
 mod budget_window;
 mod cache;
 mod cache_budget;
+mod cache_credential_scrub;
+mod cache_credential_scrub_ancestry;
+mod cache_credential_scrub_cargo;
+mod cache_credential_scrub_crates;
+mod cache_credential_scrub_gaps;
+mod cache_credential_scrub_hardening;
+mod cache_credential_scrub_modules;
+mod cache_credential_scrub_submodules;
+mod cache_credential_scrub_tokens;
+mod cache_credential_scrub_trees;
 mod cache_flow;
+mod cache_private_repo;
 mod cache_prune;
 mod cache_prune_fresh;
 mod cache_prune_layout;
+mod cache_purge;
 mod cache_retention_flow;
 mod io_cold_foreign;
 mod io_gate;
+mod run_escape;
+mod runtime_gitlink;
 
 mod cache_safety;
 mod cache_upload;
@@ -39,6 +56,7 @@ mod delta_availability;
 mod delta_baseline;
 mod delta_binding;
 mod delta_cap;
+mod delta_escape;
 mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;
@@ -49,9 +67,13 @@ mod delta_tree;
 mod delta_trim;
 mod event;
 mod fetch;
+mod fetch_git_home;
+mod fetch_git_links;
 mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
+mod fetch_unpinned;
+mod fresh_dir_sweep;
 mod gate;
 mod group_runs;
 mod helper_commands;
@@ -71,12 +93,14 @@ mod io_plan_docs;
 mod io_plan_forged;
 mod io_plan_groups;
 mod io_plan_helper_pin;
+mod io_plan_lint;
 mod io_plan_policy;
 mod io_plan_summary;
 mod io_policy;
 mod io_raw_paths;
 mod io_release;
 mod io_report;
+mod io_report_saves;
 mod io_report_slowest;
 mod io_report_sparse;
 mod io_required;
@@ -86,6 +110,7 @@ mod io_restore_cargo;
 mod io_restore_cold_cargo;
 mod io_restore_links;
 mod io_restore_symlinks;
+mod io_restored_symlink;
 mod io_restored_targets;
 mod io_scope_cache;
 mod io_scope_cache_paths;
@@ -94,18 +119,23 @@ mod io_shared_targets;
 mod io_snapshot_storage;
 mod io_stderr;
 mod io_target_case;
+mod io_target_link_roots;
 mod lane_guard;
 mod lane_guard_generated;
 mod logscan;
+mod mbx_out_dirs;
 mod mbx_seed;
+mod mbx_seed_env;
 mod mbx_seed_order;
 mod mbx_store;
 mod merge_group_skip;
 mod merge_queue;
 mod mise_pin;
+mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
+mod plan_diff_repo;
 mod plan_git;
 mod plan_main;
 mod plan_main_groups;
@@ -125,6 +155,7 @@ mod prepare_targets;
 mod preview_helpers;
 mod private_check;
 mod private_queue;
+mod public_probe;
 mod qualification_compare;
 mod release_align;
 mod release_assets;
@@ -141,11 +172,13 @@ mod release_preflight_args;
 mod release_publish;
 mod release_publish_assetless;
 mod release_publish_guards;
+mod release_publish_optional;
 mod release_published;
 mod release_record;
 mod release_record_rerun;
 mod release_recover;
 mod release_tag_patterns;
+mod release_verify_listed;
 mod report;
 mod report_accounting;
 mod report_split_host_units;
@@ -156,6 +189,7 @@ mod resolve_cases;
 mod resolve_cases_receipts;
 mod resolve_qualification;
 mod resolve_run;
+mod resolve_template;
 mod resolve_wire;
 mod resolve_world;
 mod rulesets;
@@ -166,6 +200,7 @@ mod run_env;
 mod run_evidence;
 mod run_group;
 mod run_nextest;
+mod run_nextest_archive;
 mod run_nextest_built;
 mod run_nextest_list;
 mod run_nextest_output;
@@ -188,19 +223,31 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod toolchain;
+mod tools_digest;
+mod tools_heal;
+mod tools_heal_leftovers;
+mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
+mod tools_verify_anchor;
 mod tools_verify_bounds;
+mod tools_verify_notice;
+mod trusted_event_parity;
 mod trusted_roots;
 mod unit_test_targets;
 mod unowned;
 mod version;
 mod write_request;
 
-pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+pub(crate) fn scratch_name(prefix: &str, name: &str) -> std::path::PathBuf {
     let owner = std::thread::current()
         .name()
         .unwrap_or("main")
         .replace("::", "-");
     std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(scratch_name(prefix, name))
 }

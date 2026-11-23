@@ -1,10 +1,10 @@
 rust build guard: allowed; checked 1 filesystem(s)
-   Compiling velnor-actions-actionlint v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-actionlint)
-   Compiling velnor-actions-mise v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-mise)
-   Compiling velnor-archive-guard v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-archive-guard)
-   Compiling velnor-actions-workflow-renderer v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-workflow-renderer)
-   Compiling velnor-actions-orchestrator v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-orchestrator)
-   Compiling velnor-actions-cli v0.1.57 (/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/crates/velnor-actions-cli)
+   Compiling velnor-actions-actionlint v0.1.57 (crates/velnor-actions-actionlint)
+   Compiling velnor-actions-mise v0.1.57 (crates/velnor-actions-mise)
+   Compiling velnor-archive-guard v0.1.57 (crates/velnor-archive-guard)
+   Compiling velnor-actions-workflow-renderer v0.1.57 (crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.57 (crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.57 (crates/velnor-actions-cli)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 23.62s
 info: using target runner `mbx-test-runner aarch64-apple-darwin` defined by environment variable `CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER`
 ────────────

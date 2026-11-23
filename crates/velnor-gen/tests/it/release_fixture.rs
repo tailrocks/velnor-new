@@ -211,7 +211,7 @@ pub(crate) fn app() -> Result<(String, Node), Box<dyn Error>> {
 pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
     render(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )
 }
 
@@ -238,16 +238,13 @@ pub(crate) fn uses(step: &Node) -> Option<&str> {
 }
 
 pub(crate) fn conjuncts(job: &Node) -> BTreeSet<String> {
-    job.get("if")
-        .and_then(Node::text)
-        .map(|text| {
-            text.trim_start_matches("${{ ")
-                .trim_end_matches(" }}")
-                .split(" && ")
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    job.get("if").and_then(Node::text).map_or_default(|text| {
+        text.trim_start_matches("${{ ")
+            .trim_end_matches(" }}")
+            .split(" && ")
+            .map(str::to_owned)
+            .collect()
+    })
 }
 
 pub(crate) fn app_steps(job: &Node) -> Vec<&Node> {

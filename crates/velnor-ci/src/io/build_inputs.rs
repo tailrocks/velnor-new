@@ -13,7 +13,9 @@ use velnor_rust::{
 };
 
 use crate::error::CiError;
+use crate::escape::command_line;
 
+const BUILD_DIRECTORY_VARIABLE: &str = "CARGO_BUILD_BUILD_DIR";
 const OS_RELEASE: &str = "/etc/os-release";
 const OS_RELEASE_OVERRIDE: &str = "VELNOR_OS_RELEASE";
 
@@ -34,12 +36,37 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     let tracked = tracked_among(root, &files);
     let targets = check_runtime_configs(&roots, &files, &tracked, &recorded_dirs)
         .map_err(|e| CiError::new(e.to_string()))?;
+    refuse_build_directory(root, &targets)?;
     for target in targets {
         super::delta_paths::untracked(&root.join(target.as_str()), "target")?;
     }
     let inside = repo_profile(&files).map_err(|e| CiError::new(e.to_string()))?;
     let outside = external_config_profile(&external_configs(root)?).map_err(CiError::new)?;
     Ok(format!("{inside}{outside}"))
+}
+
+fn refuse_build_directory(root: &Path, targets: &BTreeSet<RepoPath>) -> Result<(), CiError> {
+    let Some(value) = std::env::var_os(BUILD_DIRECTORY_VARIABLE).filter(|value| !value.is_empty())
+    else {
+        return Ok(());
+    };
+    let resolved = |path: &Path| {
+        velnor_rust::resolve(path)
+            .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", path.display())))
+    };
+    let expanded = value
+        .to_string_lossy()
+        .replace("{workspace-root}", &root.to_string_lossy());
+    let build = resolved(&root.join(expanded))?;
+    if let Some(target) = targets.iter().next().filter(|_| targets.len() == 1)
+        && resolved(&root.join(target.as_str()))? == build
+    {
+        return Ok(());
+    }
+    Err(CiError::new(format!(
+        "{BUILD_DIRECTORY_VARIABLE} puts the build directory at {}, outside the target directory the target cache covers: unset it (`build.build-dir` is refused the same way), or set it to the target directory",
+        build.display()
+    )))
 }
 
 fn external_configs(root: &Path) -> Result<Vec<(String, Vec<u8>)>, CiError> {
@@ -171,7 +198,10 @@ pub(super) fn image_or_cold() -> (String, String) {
                     unique("GITHUB_RUN_ATTEMPT"),
                     unique("GITHUB_JOB"),
                 ),
-                format!("::warning::{error}; this run is cold and restores no shared cache\n"),
+                command_line(
+                    "warning",
+                    &format!("{error}; this run is cold and restores no shared cache"),
+                ),
             )
         }
     }

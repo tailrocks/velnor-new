@@ -21,16 +21,17 @@ pub enum GenerateError {
     NoReleaseConfig,
     ReleaseToolchainPath,
     HelperNotPinned,
+    GeneratorNotLocked(HelperVersion),
     HelperTooOld(HelperVersion),
     ConfigKeyHelperTooOld {
         file: String,
         key: &'static str,
+        value: Option<&'static str>,
         first: (u64, u64, u64),
         pinned: HelperVersion,
     },
     RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
-    PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetModesHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
@@ -63,6 +64,7 @@ impl fmt::Display for GenerateError {
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
+            Self::GeneratorNotLocked(v) => write!(f, "{}", generator_not_locked(v)),
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
@@ -72,9 +74,10 @@ impl fmt::Display for GenerateError {
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
-            Self::ConfigKeyHelperTooOld { file, key, first: (major, minor, patch), pinned } => write!(
+            Self::ConfigKeyHelperTooOld { file, key, value, first: (major, minor, patch), pinned } => write!(
                 f,
-                "velnor-ci {pinned} does not accept the `{key}` key of {file}; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`, or remove the key"
+                "velnor-ci {pinned} does not accept the `{}` key of {file}; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`, or remove the key",
+                key_text(key, *value)
             ),
             Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
             Self::TooManySourceRoots(roots) => write!(
@@ -83,10 +86,6 @@ impl fmt::Display for GenerateError {
             ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
             Self::BudgetModesHelperTooOld(v) => write!(f, "{}", modes_too_old(v)),
-            Self::PrOnlyChecksHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
-            ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.103 or later with `velnor-gen pin-helper 0.1.103`"
@@ -126,6 +125,19 @@ impl From<DetectError> for GenerateError {
     fn from(error: DetectError) -> Self {
         Self::Detect(error)
     }
+}
+
+fn key_text(key: &str, value: Option<&str>) -> String {
+    match value {
+        Some(value) => format!("{key} = \"{value}\""),
+        None => key.to_owned(),
+    }
+}
+
+fn generator_not_locked(version: &HelperVersion) -> String {
+    format!(
+        "the generated-check lint installs the pinned velnor-gen archive, but .velnor/rust-ci.lock pins velnor-ci {version} without archive digests; repin with `velnor-gen pin-helper <version>` to a release that ships archives"
+    )
 }
 
 fn incompatible_helper(version: &HelperVersion) -> String {

@@ -115,7 +115,7 @@ fn a_plan_without_a_usable_sides_list_is_an_error_but_an_absent_side_is_zero_pai
     assert_eq!(pair_states(r#"{"sides":[]}"#, ""), Ok(Vec::new()));
 }
 
-fn state(name: &str, pid: &str) -> std::path::PathBuf {
+fn state(name: &str, pid: &str) -> velnor_test_support::ScratchDir {
     let dir = crate::support::temp_dir(name);
     let write = |path: &str, text: &str| {
         let file = dir.join(path);

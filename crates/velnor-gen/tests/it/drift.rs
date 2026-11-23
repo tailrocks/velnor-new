@@ -3,10 +3,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::fs;
+use std::path::Path;
 
+use velnor_gen::io::{add_manifests, read_files};
 use velnor_gen::{Drift, drift};
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
 use velnor_render::{Owner, RELEASE_HEADER, VELNOR_GEN_MARKER, owner_of, seal};
+use velnor_rust::{METADATA_PATH, build_script_sources, recorded_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -23,8 +27,8 @@ fn generated() -> String {
 
 #[test]
 fn check_reports_each_owned_file_that_generate_would_write_or_remove() -> TestResult {
-    let workflow = RepoPath::new(".github/workflows/rust-ci.yml")?;
-    let other = RepoPath::new(".github/workflows/ci.yml")?;
+    let workflow = RepoPath::new(".github/workflows/ci.yml")?;
+    let other = RepoPath::new(".github/workflows/hand.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let disk = |content: Option<&str>| {
         let mut files = BTreeMap::from([(other.clone(), b"name: CI\n".to_vec())]);
@@ -65,7 +69,7 @@ fn disk(path: &RepoPath, text: &str) -> BTreeMap<RepoPath, Vec<u8>> {
 
 #[test]
 fn a_file_the_other_generator_marked_is_never_overwritten() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     for hand_written in [
         ENGINE,
@@ -97,7 +101,7 @@ fn a_marked_file_velnor_gen_does_not_write_is_stale_whatever_its_name() -> TestR
 
 #[test]
 fn the_engines_marked_file_is_left_alone() -> TestResult {
-    let other = path(".github/workflows/ci.yml")?;
+    let other = path(".github/workflows/repository-checks.yml")?;
     {
         assert_eq!(
             drift(&BTreeMap::new(), &disk(&other, ENGINE), &none()),
@@ -122,7 +126,7 @@ fn an_unmarked_file_is_drift_unless_external_workflows_lists_it() -> TestResult 
 
 #[test]
 fn a_forged_header_is_not_a_velnor_gen_file_and_check_reports_it() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let forged = generated().replace("Rust CI", "Evil");
     {
@@ -166,7 +170,7 @@ fn a_copied_marker_on_a_hand_written_workflow_is_refused_never_stale() -> TestRe
 
 #[test]
 fn a_header_without_a_digest_is_forged_whether_or_not_the_path_is_expected() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let release = path(".github/workflows/release.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     for (file, header) in [(&workflow, HEADER), (&release, RELEASE_HEADER)] {
@@ -187,7 +191,7 @@ fn a_header_without_a_digest_is_forged_whether_or_not_the_path_is_expected() -> 
 
 #[test]
 fn a_crlf_checkout_of_a_sealed_file_is_still_owned_and_not_drift() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
+    let workflow = path(".github/workflows/ci.yml")?;
     let expected = BTreeMap::from([(workflow.clone(), generated())]);
     let crlf = generated().replace('\n', "\r\n");
     assert_eq!(owner_of(crlf.as_bytes()), Owner::VelnorGen);
@@ -202,15 +206,98 @@ fn a_crlf_checkout_of_a_sealed_file_is_still_owned_and_not_drift() -> TestResult
 }
 
 #[test]
-fn every_workflow_velnor_gen_writes_is_sealed_so_check_finds_no_drift() -> TestResult {
+fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResult {
     let repo = crate::base_save::pinned("0.1.102", "")?;
     let expected = velnor_gen::expected_files(&repo)?;
     assert!(expected.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
-    let on_disk: BTreeMap<RepoPath, Vec<u8>> = expected
+    for (file, text) in &expected {
+        assert_eq!(owner_of(text.as_bytes()), Owner::VelnorGen, "{file}");
+    }
+    Ok(())
+}
+
+const UNTRACKED_DIRECTORIES: [&str; 3] = [".git", "target", "node_modules"];
+
+fn walk(
+    root: &Path,
+    directory: &Path,
+    tracked: &mut BTreeSet<RepoPath>,
+    symlinks: &mut BTreeSet<RepoPath>,
+) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let name = entry.file_name();
+        let name = name.to_str().ok_or("a repository file name is not UTF-8")?;
+        if UNTRACKED_DIRECTORIES.contains(&name) {
+            continue;
+        }
+        if kind.is_dir() {
+            walk(root, &entry.path(), tracked, symlinks)?;
+            continue;
+        }
+        let relative = entry.path().strip_prefix(root)?.to_path_buf();
+        let path = RepoPath::new(relative.to_str().ok_or("a repository path is not UTF-8")?)?;
+        if kind.is_symlink() {
+            symlinks.insert(path.clone());
+        }
+        tracked.insert(path);
+    }
+    Ok(())
+}
+
+fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
+    let mut tracked = BTreeSet::new();
+    let mut symlinks = BTreeSet::new();
+    walk(root, root, &mut tracked, &mut symlinks)?;
+    let mut view = RepoView {
+        repository: RepositoryIdentity::Named("tailrocks/velnor-new".to_owned()),
+        files: read_files(root, &wanted_files(&tracked))?,
+        tracked_paths: tracked,
+        symlinks,
+        gitlinks: BTreeSet::default(),
+        rust_metadata: BTreeMap::new(),
+    };
+    add_manifests(&mut view, |paths| read_files(root, paths))?;
+    let recorded = read_files(root, &[METADATA_PATH])?;
+    view.rust_metadata = recorded_metadata(&view, recorded.get(&METADATA_PATH).map(Vec::as_slice))?;
+    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
+    view.files.extend(read_files(root, &roots)?);
+    for source in build_script_sources(&view) {
+        view.files.extend(read_files(root, &[source])?);
+    }
+    Ok(view)
+}
+
+#[test]
+fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates() -> TestResult {
+    let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
+    let view = committed_view(&root)?;
+    let expected = velnor_gen::generated_files(&view)?;
+    let committed: Vec<RepoPath> = view
+        .tracked_paths
         .iter()
-        .map(|(file, text)| (file.clone(), text.as_bytes().to_vec()))
+        .filter(|path| {
+            path.as_str().starts_with(".github/workflows/")
+                && matches!(path.as_str().rsplit('.').next(), Some("yml" | "yaml"))
+        })
+        .chain(std::iter::once(&METADATA_PATH))
+        .cloned()
         .collect();
-    assert_eq!(drift(&expected, &on_disk, &none()), vec![]);
+    let on_disk = read_files(&root, &committed)?;
+    assert!(
+        on_disk.contains_key(&RepoPath::new(".github/workflows/ci.yml")?),
+        "the committed Rust CI workflow was not read"
+    );
+    let engine = view
+        .tracked_paths
+        .contains(&RepoPath::new(".velnor/config.toml")?);
+    let drifts: Vec<String> = drift(&expected, &on_disk, &none())
+        .into_iter()
+        .filter(|drift| !(engine && matches!(drift, Drift::Unmarked(_))))
+        .map(|drift| drift.to_string())
+        .collect();
+    assert_eq!(drifts, Vec::<String>::new());
     Ok(())
 }
 

@@ -39,7 +39,7 @@ fn mode(path: &Path) -> u32 {
 #[tokio::test]
 async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authority() {
     let dir = temp_dir("supervisor-lookalike");
-    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let canonical = std::fs::canonicalize(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let mut decoy: Child = Command::new("/bin/sh")
         .args(["-c", "read line", "supervise", "--dir"])
         .arg(&canonical)
@@ -67,7 +67,7 @@ async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authorit
 #[tokio::test]
 async fn down_stops_the_authority_recorded_at_start_by_its_exact_command() {
     let dir = temp_dir("supervisor-standin");
-    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let canonical = std::fs::canonicalize(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let binary = "/opt/velnor/bin/velnor-local";
     let child = Command::new("/usr/bin/yes")
         .arg0(binary)
@@ -148,7 +148,7 @@ async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
     let alive = live.try_wait().ok().is_none_or(|status| status.is_none());
     live.kill().ok();
     live.wait().ok();
-    let message = down.err().map(|e| e.to_string()).unwrap_or_default();
+    let message = down.err().map_or_default(|e| e.to_string());
     assert!(alive, "down stopped a process without a binary record");
     assert!(
         message.contains(&format!("stop process {pid}")),

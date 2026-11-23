@@ -30,7 +30,7 @@ fn source_helper(version: &str) -> Result<RepoView, Box<dyn std::error::Error>> 
 pub(crate) fn text_of(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     let (mut files, _) = expected_with_notes(view)?;
     files
-        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .remove(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or_else(|| "no workflow".into())
 }
 
@@ -91,7 +91,7 @@ fn saves_nothing(source: &str, view: &RepoView) -> TestResult {
     let (text, notes) = {
         let (mut files, notes) = expected_with_notes(view)?;
         let text = files
-            .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+            .remove(&RepoPath::new(".github/workflows/ci.yml")?)
             .ok_or("no workflow")?;
         (text, notes)
     };
@@ -271,7 +271,7 @@ pub(crate) fn rooted_at(
 fn still_saves(view: &RepoView) -> TestResult {
     let (mut files, notes) = expected_with_notes(view)?;
     let text = files
-        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .remove(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or("no workflow")?;
     assert!(text.contains("Save the target cache"), "{text}");
     assert!(

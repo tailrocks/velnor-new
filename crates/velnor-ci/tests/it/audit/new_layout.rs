@@ -18,7 +18,7 @@ fn split(folder: &str) -> (&str, &str) {
         .unwrap_or_else(|| unreachable!("{folder}"))
 }
 
-fn own_units_1100(repo: &Repo, target: &str, left_out: &[&str]) {
+pub(super) fn own_units_1100(repo: &Repo, target: &str, left_out: &[&str]) {
     placed(repo, target);
     for (key, _, file, text, fingerprint) in OWN_UNITS {
         if left_out.contains(key) {

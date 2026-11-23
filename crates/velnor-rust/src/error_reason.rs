@@ -30,6 +30,14 @@ impl Reason {
                 f,
                 "inputs names {package}, which is not a package of this repository"
             ),
+            Self::GeneratorHostTuple(version) => write!(
+                f,
+                "from_source builds velnor-gen with --target host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
+            Self::GeneratorPackage { found } => write!(
+                f,
+                "from_source builds velnor-gen from this repository, so exactly one Cargo workspace member must be named velnor-gen; found {found}"
+            ),
             Self::AmbiguousNextestHarness(entry) => write!(
                 f,
                 "nextest_harnesses names {entry}, which more than one test target declares"
@@ -56,6 +64,12 @@ impl Reason {
 
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PolicyDenyWithoutConfig => f.write_str(
+                "[policy] deny = true needs a cargo-deny config (deny.toml, .deny.toml, .cargo/deny.toml or .config/deny.toml) that the lane can read; add one, or remove deny = true",
+            ),
+            Self::PolicyGateWithoutLane => f.write_str(
+                "[policy] gate_on_plan = true needs a policy lane to plan for: a cargo-deny config with cargo-deny pinned, or cargo-machete pinned in mise.toml; enable one, or remove gate_on_plan",
+            ),
             Self::UnpinnedTool(tool) => write!(
                 f,
                 "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
@@ -74,6 +88,14 @@ impl Reason {
             Self::MbxOffConflict(key) => write!(
                 f,
                 "cache.mbx = false turns mbx off, but {key} needs it; remove one of them"
+            ),
+            Self::PublicSourceOverlap(repository) => write!(
+                f,
+                "{repository} is listed in both [private_sources] and [public_sources]; a repository is private or public, so remove it from one of them"
+            ),
+            Self::PublicSourcesUnused(repositories) => write!(
+                f,
+                "[public_sources].git lists {repositories}, which no Cargo.lock locks as a git dependency pinned to a full commit on github.com; remove it"
             ),
             _ => Ok(()),
         }
@@ -144,6 +166,10 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::UnsupportedGlob { key, value } => write!(
+                f,
+                "{key} entry {value:?} uses ?, [ or ]; only * and ** are supported in a glob"
+            ),
             Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,
@@ -162,10 +188,13 @@ impl fmt::Display for Reason {
             | Self::UntrackedManifest
             | Self::LockLine(_)
             | Self::UnknownLockedPackage(_)
-            | Self::UnknownRoot(_) => self.fmt_inputs(f),
+            | Self::UnknownRoot(_) | Self::GeneratorPackage { .. } | Self::GeneratorHostTuple(_) => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)
+            | Self::PartitionsWithoutNextest(_)
+            | Self::TestGroupArtifact { .. }
+            | Self::ArtifactNameTaken(_)
             | Self::TestGroupRestoreWithoutCargo(_)
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
@@ -175,6 +204,10 @@ impl fmt::Display for Reason {
             Self::UnknownRootTimeoutRoot(root) => write!(
                 f,
                 "root_timeouts names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::UnknownCheckConfigurationsRoot(root) => write!(
+                f,
+                "check_configurations names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
@@ -192,9 +225,13 @@ impl fmt::Display for Reason {
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
             Self::UnpinnedTool(_)
+            | Self::PolicyDenyWithoutConfig
+            | Self::PolicyGateWithoutLane
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)
+            | Self::PublicSourceOverlap(_)
+            | Self::PublicSourcesUnused(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)

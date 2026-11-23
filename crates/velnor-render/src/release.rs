@@ -21,7 +21,7 @@ use crate::release_steps::{
     release_plz_step, shell_word, variables,
 };
 use crate::rules::{
-    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow,
     RuleViolation, Value, check_rules,
 };
 use crate::steps::install_helper;
@@ -68,7 +68,12 @@ pub fn render_release(
     });
     jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
-    let rendered = RenderedWorkflow { jobs };
+    let jobs = jobs
+        .into_iter()
+        .map(|job| crate::mise_digest::pin_to_runner_platform(job, Some(helper)));
+    let rendered = RenderedWorkflow {
+        jobs: jobs.collect(),
+    };
     check_rules(&rendered)?;
     let workflow = [
         entry("name", text("Release")),
@@ -104,11 +109,10 @@ pub fn render_release(
     ];
     let file = crate::seal(RELEASE_HEADER, &emit(&workflow));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![crate::rule_messages::size_report::too_large(
+            RELEASE_WORKFLOW_PATH.as_str(),
+            &file,
+        )]);
     }
     Ok(BTreeMap::from([(RELEASE_WORKFLOW_PATH, file)]))
 }

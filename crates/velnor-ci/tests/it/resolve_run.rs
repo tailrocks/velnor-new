@@ -73,7 +73,7 @@ fn sanitize(route: &str) -> String {
 /// Lay the world out under a fresh directory: the repository, `$RUNNER_TEMP` with the request,
 /// the event payload.
 struct Laid {
-    root: PathBuf,
+    root: velnor_test_support::ScratchDir,
     repo: PathBuf,
     temp: PathBuf,
     payload: PathBuf,
@@ -216,19 +216,17 @@ fn answer(
 pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
+    let template = world.template_repo();
     let (api, log) = serve(world);
-    if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
-    }
     let mut command = Command::new(bin);
     command
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            template.as_path()
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
@@ -245,16 +243,14 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         command.arg("--request").arg(&laid.request);
     }
     let output = timed(&mut command);
-    let outcome = Outcome {
+    Outcome {
         error: error_of(&output),
         requests: log
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone(),
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
 }
 
 /// The legacy engine in the same world. The legacy preparation wants an installed release; the
@@ -263,7 +259,7 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-request.json");
     if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
+        copy_repo(world, &laid.repo);
     }
     let bin_dir = laid.root.join("bin");
     let api_dir = laid.root.join("api");
@@ -295,11 +291,11 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     command
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()))
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            laid.repo.as_path()
         })
         .env("RUNNER_TEMP", &laid.temp)
         .env("VELNOR_INTERNAL_OP", "resolve-qualification-v1")
@@ -314,15 +310,12 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     }
     let output = timed(&mut command);
     let requests = fs::read_to_string(api_dir.join("requests.log"))
-        .map(|text| text.lines().map(str::to_owned).collect())
-        .unwrap_or_default();
-    let outcome = Outcome {
+        .map_or_default(|text| text.lines().map(str::to_owned).collect());
+    Outcome {
         error: error_of(&output),
         requests,
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
 }
 
 #[test]

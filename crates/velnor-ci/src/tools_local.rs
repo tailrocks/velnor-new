@@ -10,17 +10,21 @@ use crate::error::CiError;
 use crate::mbx_seed::SEED_DIR_ENV;
 use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
 
+mod clear;
 mod store;
+use clear::clear_home;
 use store::{restore, save};
 
 pub const TOOLS_DIR: &str = "tools";
 pub const HOME_PATHS: &[&str] = &[".local/share/mise", ".rustup"];
 pub const KEEP_KEYS: usize = 2;
+const UNREADABLE_HOME: &str = "HOME cannot be read";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Verb {
     Restore,
     Save,
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -33,7 +37,7 @@ pub struct Inputs<'a> {
     pub shared_dir: Option<&'a str>,
     pub seed_dir: Option<&'a str>,
     pub home: &'a Path,
-    pub owner: u32,
+    pub replace: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,11 +47,13 @@ pub enum Outcome {
     Miss,
     Restored { from: PathBuf },
     Rejected(&'static str),
-    Saved { to: PathBuf },
+    Saved { to: PathBuf, kept: Vec<String> },
+    Healed { to: PathBuf, kept: Vec<String> },
     AlreadySaved,
     Busy,
     Failed(&'static str),
     Untrusted,
+    Cleared,
 }
 
 impl Outcome {
@@ -69,21 +75,29 @@ pub fn valid_key(key: &str) -> bool {
 
 #[must_use]
 pub fn run(inputs: &Inputs<'_>) -> Outcome {
-    if !valid_key(inputs.key) {
+    if inputs.verb != Verb::Clear && !valid_key(inputs.key) {
         return Outcome::BadKey;
     }
     let trusted = trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch);
     match inputs.verb {
-        Verb::Restore => {
-            let dir = if trusted {
-                inputs.shared_dir
-            } else {
-                inputs.seed_dir
-            };
-            restore(inputs, dir, !trusted)
-        }
+        Verb::Restore => match home_owner(inputs.home) {
+            Ok(owner) => {
+                let dir = if trusted {
+                    inputs.shared_dir
+                } else {
+                    inputs.seed_dir
+                };
+                restore(inputs, dir, !trusted, owner)
+            }
+            Err(_) => Outcome::Rejected(UNREADABLE_HOME),
+        },
         Verb::Save if !trusted => Outcome::Untrusted,
-        Verb::Save => save(inputs),
+        Verb::Save => home_owner(inputs.home).map_or(Outcome::Failed(UNREADABLE_HOME), |owner| {
+            save(inputs, owner)
+        }),
+        Verb::Clear => {
+            clear_home(inputs.home).map_or_else(Outcome::Rejected, |()| Outcome::Cleared)
+        }
     }
 }
 
@@ -123,7 +137,21 @@ fn this_node() -> String {
 
 #[must_use]
 pub fn message(outcome: &Outcome, node: &str) -> String {
-    format!("{} node={node}\n", describe(outcome))
+    let warnings = kept(outcome).iter().map(|name| {
+        format!(
+            "::warning::node-local tools store kept {name}; it could not be pruned node={node}\n"
+        )
+    });
+    std::iter::once(format!("{} node={node}\n", describe(outcome)))
+        .chain(warnings)
+        .collect()
+}
+
+fn kept(outcome: &Outcome) -> &[String] {
+    match outcome {
+        Outcome::Saved { kept, .. } | Outcome::Healed { kept, .. } => kept,
+        _ => &[],
+    }
 }
 
 fn describe(outcome: &Outcome) -> String {
@@ -142,9 +170,13 @@ fn describe(outcome: &Outcome) -> String {
         Outcome::Rejected(reason) => {
             format!("::warning::node-local tools store ignored ({reason})")
         }
-        Outcome::Saved { to } => {
+        Outcome::Saved { to, .. } => {
             format!("velnor: tools saved to the node store {}", to.display())
         }
+        Outcome::Healed { to, .. } => format!(
+            "velnor: replaced the node store entry the tools check discarded {}",
+            to.display()
+        ),
         Outcome::AlreadySaved => "velnor: the node store already holds this key".to_owned(),
         Outcome::Busy => "velnor: another job is saving this key to the node store".to_owned(),
         Outcome::Failed(reason) => {
@@ -153,10 +185,26 @@ fn describe(outcome: &Outcome) -> String {
         Outcome::Untrusted => {
             "velnor: tools are saved to the node store on trusted events only".to_owned()
         }
+        Outcome::Cleared => {
+            "velnor: cleared the tool directories under HOME so that a restore starts empty"
+                .to_owned()
+        }
     }
 }
 
-pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
+fn home_owner(home: &Path) -> Result<u32, std::io::Error> {
+    let home: PathBuf = home.components().collect();
+    fs::metadata(&home)
+        .or_else(|_| fs::symlink_metadata(&home))
+        .map(|metadata| metadata.uid())
+}
+
+pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
+    let key = match (verb, key) {
+        (Verb::Clear, key) => key.unwrap_or_default(),
+        (_, Some(key)) => key,
+        (_, None) => return Err(CiError::new("pass --key")),
+    };
     let var = |name: &str| std::env::var(name).ok();
     let home = PathBuf::from(var("HOME").ok_or_else(|| CiError::new("set HOME"))?);
     let default_branch = var("GITHUB_EVENT_PATH")
@@ -164,6 +212,7 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
+    let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
     let outcome = run(&Inputs {
         verb,
@@ -174,9 +223,10 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),
         home: &home,
-        owner: fs::metadata(&home)
-            .map(|metadata| metadata.uid())
-            .map_err(|error| CiError::new(format!("cannot stat {}: {error}", home.display())))?,
+        replace: verb == Verb::Save
+            && runner_temp
+                .as_deref()
+                .is_some_and(crate::tools_discard::pending),
     });
     if verb == Verb::Restore
         && let Some(file) = var("GITHUB_OUTPUT")
@@ -187,6 +237,12 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
             .open(&file)
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
+    }
+    if verb == Verb::Save
+        && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. })
+        && let Some(dir) = runner_temp.as_deref()
+    {
+        crate::tools_discard::clear(dir);
     }
     finish(verb, &outcome, &node)
 }

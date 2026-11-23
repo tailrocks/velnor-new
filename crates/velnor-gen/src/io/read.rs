@@ -22,6 +22,7 @@ fn view_from(
     root: &Path,
     tracked_paths: BTreeSet<RepoPath>,
     symlinks: BTreeSet<RepoPath>,
+    gitlinks: BTreeSet<RepoPath>,
 ) -> Result<RepoView, Error> {
     let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
         .into_iter()
@@ -32,27 +33,29 @@ fn view_from(
         files: read_files(root, &wanted)?,
         tracked_paths,
         symlinks,
+        gitlinks,
         rust_metadata: BTreeMap::new(),
     })
 }
 
 pub(super) fn read_tracked(root: &Path) -> Result<RepoView, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_from(root, tracked_paths, symlinks)
+    let (tracked_paths, symlinks, gitlinks) = tracked(root)?;
+    view_from(root, tracked_paths, symlinks, gitlinks)
 }
 
 pub(super) fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_of(root, tracked_paths, symlinks, keep_metadata)
+    let (tracked_paths, symlinks, gitlinks) = tracked(root)?;
+    view_of(root, tracked_paths, symlinks, gitlinks, keep_metadata)
 }
 
 pub fn view_of(
     root: &Path,
     tracked_paths: BTreeSet<RepoPath>,
     symlinks: BTreeSet<RepoPath>,
+    gitlinks: BTreeSet<RepoPath>,
     keep_metadata: bool,
 ) -> Result<Recorded, Error> {
-    let mut view = view_from(root, tracked_paths, symlinks)?;
+    let mut view = view_from(root, tracked_paths, symlinks, gitlinks)?;
     let mut recorded = BTreeMap::new();
     let roots = metadata_roots(&view).map_err(Error::Detect)?;
     for manifest in roots {

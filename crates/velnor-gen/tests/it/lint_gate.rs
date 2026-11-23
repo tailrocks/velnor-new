@@ -11,7 +11,7 @@ use crate::facts::TestResult;
 use crate::lint_lane::{IDS, LINT, rendered, repo, runs};
 use crate::pipeline::workflow;
 
-fn spec(text: &str) -> Result<VerdictSpec, String> {
+pub(crate) fn spec(text: &str) -> Result<VerdictSpec, String> {
     let line = text
         .split("GATE_SPEC: '")
         .nth(1)
@@ -29,7 +29,7 @@ fn spec(text: &str) -> Result<VerdictSpec, String> {
     VerdictSpec::parse(&plan, &after("--job"), &after("--tests"))
 }
 
-fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(crate) fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let document = crate::yaml_tree::document(text)?;
     Ok(document["jobs"]["required"]["needs"]
         .as_array()
@@ -39,7 +39,7 @@ fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         .collect())
 }
 
-fn verdict(
+pub(crate) fn verdict(
     text: &str,
     result_of: impl Fn(&str) -> Option<&'static str>,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {
@@ -175,7 +175,7 @@ fn a_lint_workflow_obeys_rule_nine_and_adds_no_action_to_the_fixed_list() -> Tes
 
 #[test]
 fn lint_config_that_could_smuggle_shell_or_name_nothing_is_rejected() -> TestResult {
-    let cases: [(String, &str); 13] = [
+    let cases: [(String, &str); 14] = [
         ("[[lint]]\nkind = 'unknown'\n".to_owned(), "lint.kind"),
         (
             "[[lint]]\nkind = 'mise-task'\ntask = 'a; rm -rf x'\n".to_owned(),
@@ -199,6 +199,10 @@ fn lint_config_that_could_smuggle_shell_or_name_nothing_is_rejected() -> TestRes
             "lint.config",
         ),
         ("[[lint]]\nkind = 'alint'\n".to_owned(), "lint.config"),
+        (
+            "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ntools = ['python']\n".to_owned(),
+            "does not take the key tools",
+        ),
         (
             "[[lint]]\nkind = 'jactionlint'\ntask = 'x'\n".to_owned(),
             "does not take the key task",

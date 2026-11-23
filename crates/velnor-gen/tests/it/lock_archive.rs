@@ -8,6 +8,8 @@ use velnor_rust::{binary_sums_url, lists_binary_sums, pin_lock, release_version}
 use crate::lock::{COMMIT_FILE, SUMS, locked};
 use crate::pipeline::workflow;
 
+const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CI_ARCHIVES: &[(&str, &str, &str)] = &[
@@ -46,7 +48,7 @@ const CI_BINARIES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-const ARCHIVE_SUMS: &str = "\
+pub(crate) const ARCHIVE_SUMS: &str = "\
 0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
 4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d  BINARY-SHA256SUMS
 b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_64-unknown-linux-musl.tar.gz
@@ -57,15 +59,46 @@ b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_
 d8a670bd3cbbcec7a282121cbd37d7d52e1ee17793c7c453d5d7ff345ca7318c  velnor-gen-aarch64-apple-darwin.tar.gz
 ";
 
-const BINARY_SUMS: &str = "\
+pub(crate) const BINARY_SUMS: &str = "\
 9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
 6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
 a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
 ";
 
-fn archive_lock() -> Result<String, Box<dyn Error>> {
+pub(crate) const GENERATOR_BINARY_SUMS: &str = "\
+9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
+6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
+a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
+24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df  velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen
+8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543  velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen
+5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e  velnor-gen-aarch64-apple-darwin.tar.gz/velnor-gen
+";
+
+const GENERATOR_BINARY_SUMS_DIGEST: &str =
+    "69033b9cdde1860652f3d64fdb4f3757cafc0b666d50ad1ba409dda6b078ddaf";
+
+pub(crate) fn generator_sums() -> String {
+    ARCHIVE_SUMS.replace(
+        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        GENERATOR_BINARY_SUMS_DIGEST,
+    )
+}
+
+pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
+    archive_lock_at("0.1.81")
+}
+
+pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
+    if release_version(version)?.at_least(GENERATOR_BINARY_RELEASE) {
+        return Ok(pin_lock(
+            version,
+            COMMIT_FILE,
+            &generator_sums(),
+            Some(GENERATOR_BINARY_SUMS),
+        )?);
+    }
     Ok(pin_lock(
-        "0.1.81",
+        version,
         COMMIT_FILE,
         ARCHIVE_SUMS,
         Some(BINARY_SUMS),
@@ -78,8 +111,7 @@ fn a_new_lock_records_the_archive_digests_and_the_binary_digests() -> TestResult
     let table = |name: &str| -> Vec<String> {
         lock.split("\n\n")
             .find(|part| part.starts_with(&format!("[{name}]")))
-            .map(|part| part.lines().skip(1).map(str::to_owned).collect())
-            .unwrap_or_default()
+            .map_or_default(|part| part.lines().skip(1).map(str::to_owned).collect())
     };
     assert_eq!(
         table("velnor-ci"),
@@ -176,6 +208,33 @@ fn a_linux_only_archive_release_is_pinned() -> TestResult {
         lock.contains("linux-x64") && !lock.contains("d8a670bd"),
         "{lock}"
     );
+    Ok(())
+}
+
+#[test]
+fn an_optional_macos_release_lists_its_files_last_and_pins_the_same_lock() -> TestResult {
+    let macos_last = |text: &str| -> String {
+        let (macos, rest): (Vec<&str>, Vec<&str>) = text
+            .lines()
+            .filter(|line| !line.ends_with("SUMS") && !line.ends_with("COMMIT"))
+            .partition(|line| line.contains("apple-darwin"));
+        let kept = text
+            .lines()
+            .filter(|line| line.ends_with("SUMS") || line.ends_with("COMMIT"));
+        rest.into_iter()
+            .chain(kept)
+            .chain(macos)
+            .flat_map(|line| [line, "\n"])
+            .collect()
+    };
+    let lock = pin_lock(
+        "0.1.81",
+        COMMIT_FILE,
+        &macos_last(ARCHIVE_SUMS),
+        Some(&macos_last(BINARY_SUMS)),
+    )?;
+    assert_eq!(lock, archive_lock()?);
+    assert!(lock.contains("macos-arm64"), "{lock}");
     Ok(())
 }
 

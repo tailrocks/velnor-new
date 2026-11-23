@@ -3,13 +3,6 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# Qualification mode `stable-sources`: the producer, warm and cold jobs of
-# qualification.yml run `bash qualification/stable-sources.sh <phase>` for
-# every step that the old engine wrote as an inline script. velnor-gen
-# refuses a multi-line `run`, a `shell` key and a job `env`, so each script
-# moved here, one phase per step. A phase keeps the commands and the order of
-# the engine step it replaces.
-#
 # Phases, in job order:
 #   verify-source        the checked-out commit is the workflow commit
 #   resolve-tools        VELNOR_TOOL_* from the project's tool files (scrubbed shell)

@@ -12,9 +12,9 @@ const ANCHOR_HIT: &str = "${{ steps.toolsanchor.outputs.cache-hit }}";
 const ON_DEFAULT: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const TRUSTED_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
-const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
+pub(crate) const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
 
-fn repo_for(
+pub(crate) fn repo_for(
     config: &str,
     helper: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
@@ -28,9 +28,9 @@ fn repo_for(
     Ok(repo)
 }
 
-type Steps = Vec<(String, Vec<serde_json::Value>)>;
+pub(crate) type Steps = Vec<(String, Vec<serde_json::Value>)>;
 
-fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
+pub(crate) fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
     let yaml: serde_json::Value = crate::yaml_tree::document(text)?;
     let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
     Ok(jobs
@@ -42,7 +42,7 @@ fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
         .collect())
 }
 
-fn text(step: &serde_json::Value, field: &str) -> String {
+pub(crate) fn text(step: &serde_json::Value, field: &str) -> String {
     step[field].as_str().unwrap_or_default().to_owned()
 }
 
@@ -107,6 +107,65 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
             verified_jobs += 1;
         }
         assert_ne!(verified_jobs, 0, "{config:?}");
+    }
+    Ok(())
+}
+
+fn verify_key_env(
+    config: &str,
+    helper: &str,
+    name: &str,
+) -> Result<Vec<Option<String>>, Box<dyn std::error::Error>> {
+    let mut keys = Vec::new();
+    for (_id, steps) in jobs_of(&workflow(&repo_for(config, helper)?)?)? {
+        let Some(verify) = steps.iter().find(|step| text(step, "run").ends_with(CHECK)) else {
+            continue;
+        };
+        keys.push(verify["env"][name].as_str().map(str::to_owned));
+    }
+    Ok(keys)
+}
+
+#[test]
+fn the_verify_step_names_the_restored_cache_entry_only_from_helper_0_1_110() -> TestResult {
+    const RESTORED_KEY: &str = "${{ steps.tools.outputs.cache-matched-key }}";
+    for config in STORES {
+        let released = verify_key_env(config, "0.1.109", "VELNOR_TOOLS_CACHE_KEY")?;
+        assert_ne!(released.len(), 0, "{config:?}: no verify step at 0.1.109");
+        assert!(
+            released.iter().all(Option::is_none),
+            "{config:?}: {released:?}"
+        );
+
+        let named = verify_key_env(config, "0.1.110", "VELNOR_TOOLS_CACHE_KEY")?;
+        assert_eq!(named.len(), released.len(), "{config:?}");
+        assert!(
+            named
+                .iter()
+                .all(|key| key == &Some(RESTORED_KEY.to_owned())),
+            "{config:?}: {named:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111() -> TestResult {
+    const ANCHOR_KEY: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
+    const PLAN_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
+    for config in STORES {
+        let before = verify_key_env(config, "0.1.110", "VELNOR_ANCHOR_CACHE_KEY")?;
+        assert_ne!(before.len(), 0, "{config:?}: no verify step at 0.1.110");
+        assert!(before.iter().all(Option::is_none), "{config:?}: {before:?}");
+
+        let named = verify_key_env(config, "0.1.111", "VELNOR_ANCHOR_CACHE_KEY")?;
+        assert_eq!(named.len(), before.len(), "{config:?}");
+        assert!(
+            named.iter().all(|key| {
+                key == &Some(ANCHOR_KEY.to_owned()) || key == &Some(PLAN_KEY.to_owned())
+            }),
+            "{config:?}: {named:?}"
+        );
     }
     Ok(())
 }

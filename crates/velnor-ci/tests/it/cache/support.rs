@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::net::TcpListener;
 use std::process::{Command, Output};
+use std::thread;
 
 use crate::io::Repo as Checkout;
 
@@ -34,11 +37,21 @@ pub(super) fn decide(repo: &Checkout, log: Option<&str>) -> (Output, String) {
         ])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let written = fs::read_to_string(&outputs).unwrap_or_default();
     (output, written)
+}
+
+pub(super) fn hang_up() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    thread::spawn(move || listener.incoming().for_each(drop));
+    format!("http://{address}")
 }
 
 pub(super) fn seed(repo: &Checkout) {
@@ -66,14 +79,23 @@ pub(super) fn aged(name: &str, born: &str) -> Checkout {
 }
 
 pub(super) fn decide_within(repo: &Checkout, budget: &str) -> (Output, String) {
+    decide_target_within(repo, "target", budget)
+}
+
+pub(super) fn decide_target_within(
+    repo: &Checkout,
+    target: &str,
+    budget: impl AsRef<OsStr>,
+) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
     let outputs = repo.root().join("github-output");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["cache", "decide", "--target-dir", "target"])
+        .args(["cache", "decide", "--target-dir", target])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .env("VELNOR_CACHE_BUDGET_BYTES", budget)
         .current_dir(repo.root())
         .output()

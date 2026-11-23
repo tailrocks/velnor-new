@@ -18,6 +18,11 @@ pub fn snapshot_file(prefix: &str) -> String {
 }
 
 #[must_use]
+pub fn restored_units_file(prefix: &str) -> String {
+    prefixed(".velnor/restored-units", prefix)
+}
+
+#[must_use]
 pub fn witness_file(prefix: &str) -> String {
     prefixed(".velnor/restored-inputs-witness", prefix)
 }

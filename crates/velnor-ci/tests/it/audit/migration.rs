@@ -21,7 +21,7 @@ enum InputDirectory {
 
 fn cargo_project(input: InputDirectory) -> Repo {
     let repo = Repo::new("audit-build-migration");
-    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write("mise.toml", &crate::toolchain::mise_rust_pin());
     repo.write(
         "rust/Cargo.toml",
         "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
@@ -59,7 +59,7 @@ fn cargo_project(input: InputDirectory) -> Repo {
     repo
 }
 
-fn build(repo: &Repo, wrapped: bool) -> Output {
+pub(super) fn build(repo: &Repo, wrapped: bool) -> Output {
     let mut command = if wrapped {
         let mut command = command(env!("CARGO_BIN_EXE_velnor-ci"));
         command.args(["inputs", "build", "--", "cargo"]);
@@ -174,11 +174,11 @@ fn pinned_nextest_problem(data_dir: Option<&std::path::Path>) -> Option<String> 
 
 #[test]
 fn nextest_discovery_names_the_missing_pin_before_running() {
-    let data_dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join("nextest-discovery-empty-mise-data");
-    fs::create_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
-    let problem = pinned_nextest_problem(Some(&data_dir));
-    fs::remove_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let data_dir = velnor_test_support::ScratchDir::new(
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join("nextest-discovery-empty-mise-data"),
+    );
+    let problem = pinned_nextest_problem(Some(data_dir.path()));
     let problem = problem.expect("an empty mise data directory has no pinned cargo-nextest");
     assert!(problem.contains("mise.toml"), "{problem}");
     assert!(problem.contains("`mise install`"), "{problem}");
@@ -228,24 +228,28 @@ fn records_execution() {
     assert_fresh(&repo, "");
 }
 
-fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
-    fs::read_dir(repo.root().join("rust/target/debug/build"))
+pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
+    fs::read_dir(repo.root().join("rust/target/debug/build").join(package))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(&format!("{package}-"))
-                && entry.path().join("output").is_file()
+        .map(|hash| {
+            hash.unwrap_or_else(|e| unreachable!("{e}"))
+                .path()
+                .join("run/stdout")
         })
+        .find(|output| output.is_file())
         .unwrap_or_else(|| unreachable!("missing {package} output"))
-        .path()
-        .join("output")
 }
 
-#[test]
-fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+pub(super) fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
+    command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("rust"))
+        .args(["inputs", "build", "--"])
+        .args(cargo)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(super) fn app_and_lib_project() -> Repo {
     let repo = cargo_project(InputDirectory::Shared);
     repo.write("rust/Cargo.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n");
     repo.write(
@@ -265,6 +269,15 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
 "#,
     );
     repo.write("rust/Cargo.lock", "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"lib\"\nversion = \"0.1.0\"\n");
+    repo
+}
+
+pub(super) const APP_SELECTION: [&str; 6] =
+    ["cargo", "build", "-p", "app", "--all-targets", "--offline"];
+
+#[test]
+fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+    let repo = app_and_lib_project();
     let plain = build(&repo, false);
     assert!(plain.status.success(), "{plain:?}");
     let app = package_output(&repo, "app");
@@ -279,23 +292,7 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
     };
     let before_app = identity(&app);
     let before_lib = identity(&lib);
-    let partial = || {
-        command(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root().join("rust"))
-            .args([
-                "inputs",
-                "build",
-                "--",
-                "cargo",
-                "build",
-                "-p",
-                "app",
-                "--all-targets",
-                "--offline",
-            ])
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    };
+    let partial = || wrapped_build(&repo, &APP_SELECTION);
     let refused = partial();
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(
@@ -344,7 +341,7 @@ fn compiler_discovery_with(prefix: &[&str]) {
 
 #[test]
 fn a_cargo_toolchain_override_keeps_compiler_discovery_enabled() {
-    compiler_discovery_with(&["+1.99.1"]);
+    compiler_discovery_with(&[format!("+{}", crate::toolchain::pinned_channel()).as_str()]);
 }
 
 #[test]

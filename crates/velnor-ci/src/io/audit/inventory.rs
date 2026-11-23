@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod evidence;
+mod handle;
+mod held;
+mod latest;
+mod resolve;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{scan, unresolved_link};
+pub(super) use latest::newest;
+pub(super) use walk::{Budget, scan};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,9 +26,14 @@ use velnor_rust::{normalize, sha256_hex};
 use super::super::units::Workspace;
 use crate::error::CiError;
 
-pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+
+#[derive(Default)]
+pub(super) struct Scan {
+    pub(super) entries: Entries,
+    pub(super) identities: BTreeMap<PathBuf, handle::Stamp>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
@@ -48,16 +58,14 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
     workspaces
         .iter()
         .flat_map(|workspace| {
-            [
-                workspace.workspace_root.join("target"),
-                workspace.target_directory.clone(),
-            ]
+            let mut excluded = vec![workspace.root.join("target")];
+            excluded.extend(workspace.directories());
+            excluded
         })
         .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
 }
 
-/// A path the audit cannot resolve (a symbolic link loop, or an unreadable directory).
 pub(super) fn unresolved(path: &Path, error: &io::Error) -> CiError {
     CiError::new(format!("cannot resolve {}: {error}", path.display()))
 }
@@ -218,10 +226,6 @@ thread_local! {
 
 const PARSED_LIMIT: usize = 8;
 
-/// Loads the inventory a build output's receipt names. The receipt, the output
-/// and the inventory bytes are verified on every call exactly as before; only
-/// the JSON parse is shared, keyed by the verified content digest, so one
-/// inventory serving hundreds of outputs is parsed once per process.
 pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
@@ -251,42 +255,6 @@ pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::{fs, thread};
-
-    use super::*;
-
-    // Racing test: a churn thread creates and removes entries while `scan` lists
-    // the same directory, so some entries are listed and then gone before their
-    // stat. Every scan must still succeed.
-    #[test]
-    fn an_entry_removed_during_the_walk_is_not_an_error() {
-        let root = std::env::temp_dir().join(format!("velnor-scan-vanish-{}", std::process::id()));
-        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        let names: Vec<PathBuf> = (0..64)
-            .map(|index| root.join(format!("entry-{index}")))
-            .collect();
-        let stop = AtomicBool::new(false);
-        let failure = thread::scope(|scope| {
-            scope.spawn(|| {
-                while !stop.load(Ordering::Relaxed) {
-                    for name in &names {
-                        let _ = fs::write(name, b"");
-                        let _ = fs::remove_file(name);
-                    }
-                }
-            });
-            let mut remaining = usize::MAX;
-            let failure =
-                (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut remaining).err());
-            stop.store(true, Ordering::Relaxed);
-            failure
-        });
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(
-            failure.is_none(),
-            "scan failed on a vanished entry: {failure:?}"
-        );
-    }
-}
+mod revisit;
+#[cfg(test)]
+mod tests;

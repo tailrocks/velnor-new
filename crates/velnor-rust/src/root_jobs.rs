@@ -153,12 +153,16 @@ impl RootJobs<'_> {
             .is_some_and(|helper| helper.version().at_least(BUILT_RECORD_HELPER))
     }
 
-    fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
-        let mut steps = if self.unit.grouped {
-            steps
+    fn lane_job(&self, id: JobId, steps: Vec<Step>, checks: bool) -> Job {
+        let grouped = self.unit.grouped;
+        let mut steps = if grouped {
+            self.members.iter().fold(steps, |steps, member| {
+                crate::test_setup::before_builds(self.facts, &member.root, steps)
+            })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
+        steps = crate::test_setup::place_checks(self.facts, &self.members, grouped, checks, steps);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
@@ -211,7 +215,7 @@ impl RootJobs<'_> {
 
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
         if self.unit.grouped {
-            crate::test_setup::inserted(self.facts, &member.root, &member.lane, steps)
+            crate::test_setup::before_tests(self.facts, &member.root, &member.lane, steps)
         } else {
             steps
         }
@@ -317,7 +321,7 @@ impl RootJobs<'_> {
         }
         self.inline_lanes_timeout(Job {
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(job_id, steps)
+            ..self.lane_job(job_id, steps, true)
         })
     }
 
@@ -332,17 +336,17 @@ impl RootJobs<'_> {
         for member in &self.members {
             steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
+        for member in &self.members {
+            steps.extend(self.cargo(member, check_alone(&member.root)));
+        }
         if tests.is_empty() {
             steps.extend(self.audit());
         }
         steps.extend(self.saves(&lint_id, None, tests.is_empty()));
-        for member in &self.members {
-            steps.extend(self.cargo(member, check_alone(&member.root)));
-        }
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(lint_id, steps)
+            ..self.lane_job(lint_id, steps, true)
         }];
         if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
@@ -382,7 +386,7 @@ impl RootJobs<'_> {
             if !saving {
                 steps.extend(saves);
             }
-            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps)));
+            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps, true)));
         }
         jobs
     }

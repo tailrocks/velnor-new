@@ -19,12 +19,13 @@ mod listener;
 use cache::{archives, keys, mode};
 
 fn stub_over(harness: &Harness, name: &str) -> Stub {
-    Stub::new(
-        &temp_dir(&format!("{name}-repo")),
-        &temp_dir(&format!("{name}-state")),
-        harness.dir(),
-    )
-    .control()
+    let (repo, state) = (
+        temp_dir(&format!("{name}-repo")),
+        temp_dir(&format!("{name}-state")),
+    );
+    Stub::new(&repo, &state, harness.dir())
+        .keeping(vec![repo, state])
+        .control()
 }
 
 async fn job_cache_request_preserves_archives(name: &str, method: &str) {
@@ -32,11 +33,11 @@ async fn job_cache_request_preserves_archives(name: &str, method: &str) {
     harness.register(2).await;
     let saved = harness.save(MAIN, "tools", b"1234").await;
     harness.save(PULL_2, "pr-tools", b"5678").await;
-    let stub = Stub::new(
-        &temp_dir(&format!("{name}-repo")),
-        &temp_dir(&format!("{name}-state")),
-        harness.dir(),
+    let (repo, state) = (
+        temp_dir(&format!("{name}-repo")),
+        temp_dir(&format!("{name}-state")),
     );
+    let stub = Stub::new(&repo, &state, harness.dir()).keeping(vec![repo, state]);
     let before = archives(&harness);
     let id = saved["entry_id"].as_str().unwrap_or_default();
     let path = if method == "GET" {
@@ -155,7 +156,8 @@ async fn open_pull_requests_come_from_the_state_file_and_page_with_a_link_header
     ]);
     std::fs::write(state.join("pulls.json"), pulls.to_string())
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let stub = Stub::new(&temp_dir("api-pulls-repo"), &state, harness.dir());
+    let repo = temp_dir("api-pulls-repo");
+    let stub = Stub::new(&repo, &state, harness.dir()).keeping(vec![repo, state]);
     let path = "/repos/tailrocks/velnor-lab/pulls";
 
     let open = stub.get(&format!("{path}?state=open")).await.json();
@@ -367,12 +369,13 @@ async fn an_unreadable_index_is_an_error_not_a_stale_answer() {
 async fn pull_request_state_that_cannot_be_read_is_a_server_error() {
     let harness = Harness::new("api-nopulls", LIMIT).await;
     let state = temp_dir("api-nopulls-state");
-    let stub = Stub::new(&temp_dir("api-nopulls-repo"), &state, harness.dir());
+    let pulls_file = state.join("pulls.json");
+    let repo = temp_dir("api-nopulls-repo");
+    let stub = Stub::new(&repo, &state, harness.dir()).keeping(vec![repo, state]);
     let path = "/repos/tailrocks/velnor-lab/pulls";
 
     let missing = stub.get(path).await;
-    std::fs::write(state.join("pulls.json"), "{\"number\": 1")
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(&pulls_file, "{\"number\": 1").unwrap_or_else(|e| unreachable!("{e}"));
     let malformed = stub.get(path).await;
     let files = stub.get(&format!("{path}/1/files")).await;
 

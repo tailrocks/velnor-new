@@ -1,0 +1,292 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use serde_json::Value;
+use velnor_gen::{GenerateError, expected_files};
+use velnor_model::{JobId, RepoPath, RepoView, VerdictSpec};
+use velnor_rust::{CONFIG_PATH, DetectError, Need, Reason, decide, detect};
+
+use crate::facts::TestResult;
+use crate::lint_lane::{LINT, MISE};
+use crate::pipeline::{pin_helper, view, workflow};
+
+pub(crate) const DECLARED: &str = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ninputs = ['hk.pkl', 'mise.toml', 'tools/**']\n\n[[lint]]\nkind = 'jactionlint'\nconfig = '.github/jactionlint.yaml'\n";
+const OUTPUT: &str = "needs.rust-plan.outputs.lint_hk == 'run'";
+
+pub(crate) fn repo(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut repo = view(roots, Some(config.as_bytes()))?;
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
+    crate::facts::lock_pinned_tools(&mut repo)?;
+    Ok(repo)
+}
+
+fn jobs(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    Ok(crate::yaml_tree::document(text)?["jobs"].clone())
+}
+
+fn multi() -> Result<String, Box<dyn std::error::Error>> {
+    workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], DECLARED)?)
+}
+
+fn single() -> Result<String, Box<dyn std::error::Error>> {
+    workflow(&repo(&["Cargo.toml"], DECLARED)?)
+}
+
+fn spec(text: &str) -> Result<VerdictSpec, String> {
+    let line = text
+        .split("GATE_SPEC: '")
+        .nth(1)
+        .and_then(|rest| rest.split('\'').next())
+        .ok_or("no gate spec")?;
+    let words: Vec<&str> = line.split(' ').collect();
+    let after = |flag: &str| -> Vec<String> {
+        words
+            .windows(2)
+            .filter(|pair| pair[0] == flag)
+            .map(|pair| pair[1].to_owned())
+            .collect()
+    };
+    let plan = after("--plan").pop().ok_or("no plan")?;
+    VerdictSpec::parse(&plan, &after("--job"), &after("--tests"))
+}
+
+fn judged(
+    text: &str,
+    hk_output: &str,
+    hk_result: &str,
+) -> Result<(bool, String), Box<dyn std::error::Error>> {
+    let spec = spec(text)?;
+    let plan_outputs = jobs(text)?["rust-plan"]["outputs"].clone();
+    let mut needs = BTreeMap::new();
+    for job in &spec.jobs {
+        let result = match job.id.as_str() {
+            "lint-hk" => hk_result,
+            id if id.starts_with("lint-") => "success",
+            _ if job.when.is_empty() => "success",
+            _ => "skipped",
+        };
+        needs.insert(
+            job.id.clone(),
+            Need {
+                result: Some(result.to_owned()),
+                outputs: BTreeMap::new(),
+            },
+        );
+    }
+    let outputs = plan_outputs
+        .as_object()
+        .ok_or("no plan outputs")?
+        .keys()
+        .map(|key| {
+            let value = match key.as_str() {
+                "lint_hk" => hk_output,
+                key if key.ends_with("_mode") => "none",
+                _ => "skip",
+            };
+            (key.clone(), value.to_owned())
+        })
+        .collect();
+    needs.insert(
+        JobId::new("rust-plan")?,
+        Need {
+            result: Some("success".to_owned()),
+            outputs,
+        },
+    );
+    let verdict = decide(&spec, &needs, Some("pull_request"));
+    Ok((verdict.passed, verdict.table()))
+}
+
+#[test]
+fn a_lint_with_inputs_waits_for_the_plan_and_runs_only_when_the_plan_says_run() -> TestResult {
+    let all = jobs(&multi()?)?;
+    let job = &all["lint-hk"];
+    assert_eq!(job["needs"], serde_json::json!(["rust-plan"]), "{job}");
+    let condition = job["if"].as_str().ok_or("no job condition")?;
+    assert!(condition.contains(OUTPUT), "{condition}");
+    let plan = all["rust-plan"]["outputs"]
+        .as_object()
+        .ok_or("no plan outputs")?;
+    assert!(plan.contains_key("lint_hk"), "{plan:?}");
+    assert!(!plan.contains_key("lint_jactionlint"), "{plan:?}");
+    Ok(())
+}
+
+#[test]
+fn a_lint_without_inputs_renders_exactly_as_before() -> TestResult {
+    let all = jobs(&multi()?)?;
+    let job = &all["lint-jactionlint"];
+    assert!(job["needs"].is_null(), "{job}");
+    assert!(
+        !job["if"].as_str().unwrap_or_default().contains("lint_"),
+        "{job}"
+    );
+    let plain = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], LINT)?)?;
+    assert!(!plain.contains("lint_"), "no lint output without inputs");
+    assert!(
+        !plain.contains("=lint:"),
+        "no lint condition without inputs"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_required_gate_treats_a_lint_the_plan_skipped_as_passing() -> TestResult {
+    let text = multi()?;
+    let spec = spec(&text)?;
+    let hk = spec
+        .jobs
+        .iter()
+        .find(|job| job.id.as_str() == "lint-hk")
+        .ok_or("the gate spec lacks lint-hk")?;
+    assert_eq!(hk.when.len(), 1, "{hk:?}");
+    let other = spec
+        .jobs
+        .iter()
+        .find(|job| job.id.as_str() == "lint-jactionlint")
+        .ok_or("the gate spec lacks lint-jactionlint")?;
+    assert!(other.when.is_empty(), "{other:?}");
+
+    let (green, table) = judged(&text, "skip", "skipped")?;
+    assert!(green, "{table}");
+    let (green, table) = judged(&text, "run", "success")?;
+    assert!(green, "{table}");
+    for (output, result) in [
+        ("run", "skipped"),
+        ("run", "failure"),
+        ("skip", "failure"),
+        ("skip", "cancelled"),
+    ] {
+        let (green, table) = judged(&text, output, result)?;
+        assert!(!green, "{output} {result}: {table}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_single_root_workflow_with_lint_inputs_gets_a_plan_job_and_gates_the_lint_job() -> TestResult {
+    let all = jobs(&single()?)?;
+    assert!(all["rust-plan"].is_object(), "no plan job");
+    let job = &all["lint-hk"];
+    assert_eq!(job["needs"], serde_json::json!(["rust-plan"]), "{job}");
+    assert!(
+        job["if"]
+            .as_str()
+            .is_some_and(|condition| condition.contains(OUTPUT)),
+        "{job}"
+    );
+    let plain = jobs(&workflow(&repo(&["Cargo.toml"], LINT)?)?)?;
+    assert!(plain["rust-plan"].is_null(), "no plan job without inputs");
+    Ok(())
+}
+
+#[test]
+fn a_lint_job_keeps_unique_step_ids_with_the_merge_group_skip() -> TestResult {
+    let config = format!("[ci]\nskip_push_after_merge_group = true\n\n{DECLARED}");
+    let mut repo = repo(&["Cargo.toml"], &config)?;
+    pin_helper(&mut repo, "0.1.111")?;
+    let all = jobs(&workflow(&repo)?)?;
+    for id in ["lint-hk", "lint-jactionlint"] {
+        let ids: Vec<&str> = all[id]["steps"]
+            .as_array()
+            .ok_or("no steps")?
+            .iter()
+            .filter_map(|step| step["id"].as_str())
+            .collect();
+        let unique: BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(ids.len(), unique.len(), "{id}: {ids:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_helper_older_than_the_key_is_refused_with_the_gate_error() -> TestResult {
+    let mut repo = repo(&["Cargo.toml"], DECLARED)?;
+    for helper in ["0.1.109", "0.1.110"] {
+        pin_helper(&mut repo, helper)?;
+        let error = expected_files(&repo).err();
+        assert!(
+            matches!(
+                error,
+                Some(GenerateError::ConfigKeyHelperTooOld {
+                    key: "lint.inputs",
+                    first: (0, 1, 111),
+                    ..
+                })
+            ),
+            "{helper}: {error:?}"
+        );
+    }
+    pin_helper(&mut repo, "0.1.111")?;
+    assert!(expected_files(&repo).is_ok());
+    Ok(())
+}
+
+#[test]
+fn lint_inputs_that_name_nothing_or_collide_are_rejected() -> TestResult {
+    let cases = [
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = []\n",
+            "lint.inputs",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['a/**/b']\n",
+            "lint.inputs",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['a*b']\n",
+            "lint.inputs",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\nid = 'a-b'\ninputs = ['x']\n\n[[lint]]\nkind = 'jactionlint'\nid = 'a_b'\ninputs = ['y']\n",
+            "a_b",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h?.pkl', 'mise.toml']\n",
+            "cfg/h?.pkl",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h[k].pkl']\n",
+            "cfg/h[k].pkl",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h]k.pkl']\n",
+            "cfg/h]k.pkl",
+        ),
+    ];
+    for (config, needle) in cases {
+        let text = format!(
+            "{}",
+            detect(&repo(&["Cargo.toml"], config)?)
+                .err()
+                .ok_or(config)?
+        );
+        assert!(text.contains(needle), "{config}: {text}");
+        if needle.contains(['?', '[', ']']) {
+            assert!(text.contains("only * and ** are supported"), "{text}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused() -> TestResult {
+    assert_eq!(
+        detect(&repo(
+            &["Cargo.toml"],
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h?.pkl']\n",
+        )?)
+        .map(|_| ()),
+        Err(DetectError::Invalid {
+            path: CONFIG_PATH,
+            reason: Reason::UnsupportedGlob {
+                key: "lint.inputs",
+                value: "cfg/h?.pkl".to_owned(),
+            },
+        })
+    );
+    Ok(())
+}
