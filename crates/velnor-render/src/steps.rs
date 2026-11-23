@@ -186,7 +186,6 @@ struct Around<'a> {
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
-    /// The gate of the lane's privacy lookup: the report reads the lane's own plan mode from it.
     privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
 }

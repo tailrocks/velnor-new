@@ -18,9 +18,6 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
-/// Whether the plan selected no crate for this lane. `lane_modes` is the lane's own plan mode
-/// output, one word per root the lane covers, as the generated report step passes it; without it
-/// (a workflow from an older generator) only the root workspace's mode is known.
 fn no_crate_selected(steps: &Value, lane_modes: Option<&str>) -> bool {
     if let Some(modes) = lane_modes {
         let mut modes = modes.split_whitespace().peekable();

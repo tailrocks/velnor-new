@@ -5,8 +5,6 @@ use velnor_model::{Gate, GateNeed};
 
 use crate::gate::{Setup, output, plan_read, plan_source};
 
-/// The plan mode of every root the gate covers, as one expression, so that a step that cannot
-/// evaluate the lane's `if` can still tell an unselected lane from a failed one.
 pub(crate) fn plan_modes(gate: &Gate, setup: Setup) -> String {
     let source = plan_source(&gate.from);
     let reads: Vec<String> = gate
