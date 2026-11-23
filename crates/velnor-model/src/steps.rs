@@ -89,6 +89,7 @@ pub enum StepKind {
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
+    CachePurgePrivate,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -240,6 +241,7 @@ impl StepKind {
             | Self::DeltaApply(_)
             | Self::DeltaStage(_, _)
             | Self::CacheBudget(_)
+            | Self::CachePurgePrivate
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
