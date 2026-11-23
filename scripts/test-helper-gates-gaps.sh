@@ -11,7 +11,7 @@ for f in gate-const-unmarked gate-const-pub-in gate-string-marker; do
     exit 1
   fi
 done
-for f in gate-const-marked gate-const-fn gate-const-block gate-macro-tuple gate-pattern-tuple; do
+for f in gate-const-marked gate-const-fn gate-const-block gate-const-string gate-macro-tuple gate-pattern-tuple; do
   bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110
 done
 
