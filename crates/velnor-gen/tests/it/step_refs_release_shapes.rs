@@ -17,6 +17,7 @@ use crate::step_refs_sweep::pinned;
 
 const BINARY: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\n";
 const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n";
+const VERSIONED_BINARIES: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nasset_name = \"app-{{ version }}-{{ platform }}\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\nasset_name = \"tools-{{ version }}-{{ platform }}\"\n";
 const FAMILY_BINARIES: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n";
 
 struct Release {
@@ -200,6 +201,19 @@ fn family_shapes() -> Vec<Family> {
             "attested family",
             &["family_trigger", "checksums_file", "commit_file", "attest"],
             attested,
+        ),
+        family(
+            "attested versioned family",
+            &[
+                "family_trigger",
+                "checksums_file",
+                "commit_file",
+                "attest",
+                "binaries.asset_name",
+            ],
+            format!(
+                "{FAMILY}{tag_push}checksums_file = \"BINARY-SHA256SUMS\"\ncommit_file = true\nattest = true\n{VERSIONED_BINARIES}"
+            ),
         ),
         family(
             "optional platforms",
