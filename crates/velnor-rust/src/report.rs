@@ -60,10 +60,11 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     }
     producers.extend(maintenance);
     let needs: Vec<JobId> = producers.iter().map(|job| job.id.clone()).collect();
-    let after_producer = facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(CACHE_AFTER_PRODUCER_HELPER));
+    let after_producer = !facts.config.cache_check_blocks
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(CACHE_AFTER_PRODUCER_HELPER));
     let when = if after_producer {
         When::FinalizerAfterProducer
     } else {

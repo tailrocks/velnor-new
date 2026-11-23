@@ -360,14 +360,15 @@ const ACTIVE: &str = "(github.event_name != 'pull_request' || (startsWith(github
 #[test]
 fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it() -> TestResult {
     let gated = "needs.rust-root.result != 'skipped' || needs.rust-tools.result != 'skipped' || needs.rust-trim.result != 'skipped'";
-    for (version, expected) in [
-        ("0.1.111", format!("${{{{ {ACTIVE} && (!cancelled()) }}}}")),
-        (
-            "0.1.112",
-            format!("${{{{ {ACTIVE} && (!cancelled() && ({gated})) }}}}"),
-        ),
+    let ungated = format!("${{{{ {ACTIVE} && (!cancelled()) }}}}");
+    let producers = format!("${{{{ {ACTIVE} && (!cancelled() && ({gated})) }}}}");
+    for (version, blocks, expected) in [
+        ("0.1.111", false, &ungated),
+        ("0.1.112", false, &producers),
+        ("0.1.112", true, &ungated),
     ] {
-        let view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+        let config = format!("cache_check_blocks = {blocks}\n");
+        let view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
         let mut facts = detect(&view)?;
         let helper = facts.helper.as_ref().ok_or("helper")?;
         facts.helper = Some(HelperRelease::new(
@@ -384,9 +385,13 @@ fn the_cache_job_waits_for_a_producer_to_run_only_from_the_helper_that_reads_it(
         assert_eq!(
             cache["needs"],
             serde_json::json!(["rust-root", "rust-tools", "rust-trim"]),
-            "{version}"
+            "{version} {blocks}"
         );
-        assert_eq!(cache["if"].as_str(), Some(expected.as_str()), "{version}");
+        assert_eq!(
+            cache["if"].as_str(),
+            Some(expected.as_str()),
+            "{version} {blocks}"
+        );
     }
     Ok(())
 }
