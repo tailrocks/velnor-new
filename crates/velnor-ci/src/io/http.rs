@@ -255,7 +255,7 @@ pub(super) fn trusted_api(api: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, BufReader, Write};
-    use std::net::{TcpListener, TcpStream};
+    use std::net::TcpListener;
     use std::thread;
 
     use super::*;
@@ -311,17 +311,16 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_connection_is_transient() {
+    fn a_dropped_connection_is_transient() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
-        let client = TcpStream::connect(listener.local_addr().expect("addr")).expect("connect");
-        let nobody_listens = client.local_addr().expect("addr");
+        let address = listener.local_addr().expect("addr");
+        thread::spawn(move || listener.incoming().for_each(drop));
         let api = HttpGitHub::new(
-            format!("http://{nobody_listens}"),
+            format!("http://{address}"),
             "t".to_owned(),
             Duration::from_secs(5),
         );
         let error = api.get("/x").expect_err("failure");
-        assert!(error.to_string().contains("refused"), "{error}");
         assert!(error.is_transient(), "{error}");
     }
 }
