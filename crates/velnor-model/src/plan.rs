@@ -173,6 +173,7 @@ pub enum When {
     NotCancelled,
     NotCancelledPostMerge,
     Finalizer,
+    FinalizerAfterProducer,
     Always,
     Scheduled,
     ScheduledOrPush,

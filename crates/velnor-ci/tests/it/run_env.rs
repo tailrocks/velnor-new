@@ -88,3 +88,61 @@ fn run_leaves_the_step_file_variables_to_commands_that_are_not_nextest() {
     let seen = fs::read_to_string(temp.join("child-env")).unwrap_or_default();
     assert_eq!(leaked(&seen), STEP_FILES.to_vec(), "{seen}");
 }
+
+fn fake_cargo(temp: &Path) {
+    let program = temp.join("cargo");
+    fs::write(
+        &program,
+        "#!/bin/sh\nprintf '%s' \"${CARGO_LOG-unset}\" > \"$RUNNER_TEMP/cargo-log\"\necho '   0.024s  INFO prepare_target{force=false package_id=gen v0.1.0 (/work/gen) target=\"gen\"}: cargo::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(MissingFile { path: \"/store/x.rs\" }))' >&2\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn cargo_log_seen(temp: &Path, command: &[&str], preset: Option<&str>) -> String {
+    fs::remove_file(temp.join("velnor-invocations.jsonl")).ok();
+    let path = format!(
+        "{}:{}",
+        temp.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let mut run = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    run.arg("run")
+        .arg("--")
+        .args(command)
+        .env("RUNNER_TEMP", temp)
+        .env("PATH", path)
+        .env_remove("CARGO_LOG");
+    if let Some(preset) = preset {
+        run.env("CARGO_LOG", preset);
+    }
+    assert!(
+        run.output()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .status
+            .success()
+    );
+    fs::read_to_string(temp.join("cargo-log")).unwrap_or_default()
+}
+
+#[test]
+fn cargos_dirty_reason_is_recorded_under_the_callers_fingerprint_log_and_none_is_injected() {
+    let temp = scratch("run-env-fingerprint-log");
+    fake_cargo(&temp);
+    let filter = "cargo::compiler::fingerprint=info";
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "build", "--locked"], Some(filter)),
+        filter
+    );
+    let records = fs::read_to_string(temp.join("velnor-invocations.jsonl")).unwrap_or_default();
+    assert!(
+        records.contains(
+            r#""dirty":[{"package":"gen","version":"0.1.0","reason":"FsStatusOutdated(StaleItem(MissingFile { path: \"/store/x.rs\" }))"}]"#
+        ),
+        "{records}"
+    );
+    for command in [&["cargo", "check"][..], &["cargo", "test"][..]] {
+        assert_eq!(cargo_log_seen(&temp, command, None), "unset", "{command:?}");
+    }
+}
