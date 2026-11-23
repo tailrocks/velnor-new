@@ -100,12 +100,7 @@ fn fake_cargo(temp: &Path) {
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
-fn cargo_log_seen(
-    temp: &Path,
-    command: &[&str],
-    preset: Option<&str>,
-    cache_debug: Option<&str>,
-) -> String {
+fn cargo_log_seen(temp: &Path, command: &[&str], preset: Option<&str>) -> String {
     fs::remove_file(temp.join("velnor-invocations.jsonl")).ok();
     let path = format!(
         "{}:{}",
@@ -118,13 +113,9 @@ fn cargo_log_seen(
         .args(command)
         .env("RUNNER_TEMP", temp)
         .env("PATH", path)
-        .env_remove("CARGO_LOG")
-        .env_remove("VELNOR_CACHE_DEBUG");
+        .env_remove("CARGO_LOG");
     if let Some(preset) = preset {
         run.env("CARGO_LOG", preset);
-    }
-    if let Some(cache_debug) = cache_debug {
-        run.env("VELNOR_CACHE_DEBUG", cache_debug);
     }
     assert!(
         run.output()
@@ -136,16 +127,14 @@ fn cargo_log_seen(
 }
 
 #[test]
-fn a_cargo_build_command_runs_with_the_fingerprint_log_and_records_cargos_dirty_reason() {
+fn cargos_dirty_reason_is_recorded_under_the_callers_fingerprint_log_and_none_is_injected() {
     let temp = scratch("run-env-fingerprint-log");
     fake_cargo(&temp);
-    for subcommand in ["check", "c", "clippy", "build", "b", "doc", "d"] {
-        assert_eq!(
-            cargo_log_seen(&temp, &["cargo", subcommand, "--locked"], None, Some("1")),
-            "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info",
-            "{subcommand}"
-        );
-    }
+    let filter = "cargo::compiler::fingerprint=info";
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "build", "--locked"], Some(filter)),
+        filter
+    );
     let records = fs::read_to_string(temp.join("velnor-invocations.jsonl")).unwrap_or_default();
     assert!(
         records.contains(
@@ -153,49 +142,7 @@ fn a_cargo_build_command_runs_with_the_fingerprint_log_and_records_cargos_dirty_
         ),
         "{records}"
     );
-}
-
-#[test]
-fn an_empty_cargo_log_counts_as_unset_for_a_cargo_build_command() {
-    let temp = scratch("run-env-empty-cargo-log");
-    fake_cargo(&temp);
-    assert_eq!(
-        cargo_log_seen(&temp, &["cargo", "check", "--locked"], Some(""), Some("1")),
-        "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info"
-    );
-}
-
-#[test]
-fn the_fingerprint_log_is_kept_off_commands_that_run_tests_and_never_overrides_the_caller() {
-    let temp = scratch("run-env-fingerprint-log-off");
-    fake_cargo(&temp);
-    for command in [
-        &["cargo", "test"][..],
-        &["cargo", "run"][..],
-        &["cargo", "nextest", "run"][..],
-    ] {
-        assert_eq!(
-            cargo_log_seen(&temp, command, None, Some("1")),
-            "unset",
-            "{command:?}"
-        );
+    for command in [&["cargo", "check"][..], &["cargo", "test"][..]] {
+        assert_eq!(cargo_log_seen(&temp, command, None), "unset", "{command:?}");
     }
-    assert_eq!(
-        cargo_log_seen(&temp, &["cargo", "check"], Some("warn"), Some("1")),
-        "warn"
-    );
-}
-
-#[test]
-fn the_fingerprint_log_stays_off_unless_cache_debug_is_on() {
-    let temp = scratch("run-env-fingerprint-log-opt-in");
-    fake_cargo(&temp);
-    assert_eq!(
-        cargo_log_seen(&temp, &["cargo", "check", "--locked"], None, None),
-        "unset"
-    );
-    assert_eq!(
-        cargo_log_seen(&temp, &["cargo", "check", "--locked"], None, Some("0")),
-        "unset"
-    );
 }

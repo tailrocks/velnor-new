@@ -136,15 +136,13 @@ invocation in `ci-metrics.json` carries `restored_manifest` (`present`,
 `absent` or `unreadable`). A dependency compile whose restore status is
 unknown, because that record is absent or unreadable, is not waste. The check
 prints it as `::warning::` naming the manifest state, or as `::notice::` when
-the manifest is present but no unit matched. Fingerprint tracing is opt-in:
-only when `VELNOR_CACHE_DEBUG` is `1` (generated workflows expose it through
-`cache_debug = true`, see `generator/CONFIG.md`), a `velnor-ci run` of
-`cargo check`, `clippy`, `build` or `doc` sets `CARGO_LOG` to
-`cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info`,
-unless `CARGO_LOG` is already set to a non-empty value. Without the opt-in no
-`dirty:` reason is recorded. With it, the report keeps cargo's `dirty:` reason
-as `dirty` on the compilation. The reason is appended to the waste and notice
-lines as `(cargo: <reason>)`.
+the manifest is present but no unit matched. When a cargo step runs with
+`CARGO_LOG` set to cargo's fingerprint log (`cache_debug = true` and the
+repository variable `VELNOR_CACHE_DEBUG` set to `1`, see `generator/CONFIG.md`),
+the report keeps cargo's `dirty:` reason, from either fingerprint namespace
+(`cargo::compiler::fingerprint` or `cargo::core::compiler::fingerprint`), as
+`dirty` on the compilation and appends it to the waste and notice lines as
+`(cargo: <reason>)`. Without it no `dirty:` reason is recorded.
 
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 
@@ -155,8 +153,7 @@ restored. `inputs restore` records those units as `missing-input` in
 `.velnor/restored-units-*.tsv`, and the check reports them as a base gap that
 names the reason, not as waste. Cargo marks such a unit dirty, and the usual
 cause is mbx keeping build-script output in an `out-dirs` store the job did not
-have; the generated `Keep mbx build-script outputs in target` step prevents it (the
-helper's `mbx-store` does the same from 0.1.112 in a shared-store job).
+have; the generated `Keep mbx build-script outputs in target` step prevents it.
 Files under `registry/src` and `git/checkouts` do not count: Cargo unpacks them
 again, and the Sources cache does not hold them. A path that is a dangling
 symbolic link counts as missing.
