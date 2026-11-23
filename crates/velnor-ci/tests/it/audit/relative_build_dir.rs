@@ -4,7 +4,8 @@
 use std::path::Path;
 use std::process::Output;
 
-use super::{velnor_ci, workspace_below_the_root};
+use super::separate_build::two_standalone_roots;
+use super::{unit, velnor_ci, workspace_below_the_root};
 
 fn audit_from_rust(root: &Path, value: &str) -> Output {
     velnor_ci()
@@ -51,4 +52,23 @@ fn a_relative_build_directory_is_audited_where_cargo_dash_c_writes_it() {
         !String::from_utf8_lossy(&relative.stdout).contains("from 0 unit files"),
         "{relative:?}"
     );
+}
+
+#[test]
+fn a_standalone_root_is_probed_from_its_own_directory_not_the_step_that_has_a_target_config() {
+    let repo = two_standalone_roots();
+    unit(
+        &repo,
+        "web/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../shared\"\n",
+    );
+    repo.git(&["add", "--all"]);
+    let built = velnor_ci()
+        .current_dir(repo.root().join("web"))
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{stderr}");
+    assert!(!stderr.contains("cannot be told apart"), "{stderr}");
 }

@@ -22,26 +22,42 @@ pub(in crate::io) fn unchecked_unit_files(
     Ok(scan(target, directory_limit()?, None)?.0)
 }
 
-pub(in crate::io) fn build_unit_files(
-    workspaces: &[Workspace],
-    directory: &Path,
-) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let touching: Vec<&Workspace> = workspaces
-        .iter()
-        .filter(|workspace| {
-            same(&workspace.target_directory, directory)
-                || same(&workspace.build_directory, directory)
-        })
-        .collect();
-    let plain = !touching.is_empty()
-        && touching.iter().all(|workspace| {
-            same(&workspace.target_directory, directory)
-                && same(&workspace.build_directory, directory)
-        });
-    if plain {
-        return unit_files(directory);
+pub(in crate::io) struct Roots {
+    resolved: Vec<[PathBuf; 2]>,
+}
+
+impl Roots {
+    pub(in crate::io) fn new(workspaces: &[Workspace]) -> Self {
+        Self {
+            resolved: workspaces
+                .iter()
+                .map(|workspace| {
+                    [&workspace.target_directory, &workspace.build_directory]
+                        .map(|directory| physical(directory.clone()))
+                })
+                .collect(),
+        }
     }
-    unchecked_unit_files(directory)
+
+    pub(in crate::io) fn unit_files(
+        &self,
+        directory: &Path,
+    ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+        let wanted = physical(directory.to_path_buf());
+        let touching: Vec<&[PathBuf; 2]> = self
+            .resolved
+            .iter()
+            .filter(|resolved| resolved.contains(&wanted))
+            .collect();
+        let plain = !touching.is_empty()
+            && touching
+                .iter()
+                .all(|resolved| resolved.iter().all(|path| *path == wanted));
+        if plain {
+            return unit_files(directory);
+        }
+        unchecked_unit_files(directory)
+    }
 }
 
 fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
@@ -121,7 +137,7 @@ impl Workspace {
         workspaces: &[Workspace],
     ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
         if same(&self.target_directory, &self.build_directory) {
-            return build_unit_files(workspaces, &self.build_directory);
+            return Roots::new(workspaces).unit_files(&self.build_directory);
         }
         Ok(apart(&self.target_directory, &self.build_directory)?.found)
     }

@@ -24,7 +24,7 @@ struct Printed {
 pub(super) fn refuse_template(build: &Path) -> Result<(), CiError> {
     if build.to_string_lossy().contains('{') {
         return Err(CiError::new(format!(
-            "CARGO_BUILD_BUILD_DIR={} uses a cargo path template; set a plain absolute path instead",
+            "CARGO_BUILD_BUILD_DIR={} uses a cargo path template; set a plain path instead",
             build.display()
         )));
     }

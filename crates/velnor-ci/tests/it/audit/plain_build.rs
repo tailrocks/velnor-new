@@ -152,7 +152,7 @@ fn a_templated_build_directory_is_refused_by_inputs_build_and_audit() {
         let stderr = String::from_utf8_lossy(&refused.stderr);
         assert!(
             stderr.contains(
-                "CARGO_BUILD_BUILD_DIR={workspace-root}/target uses a cargo path template; set a plain absolute path instead"
+                "CARGO_BUILD_BUILD_DIR={workspace-root}/target uses a cargo path template; set a plain path instead"
             ),
             "{stderr}"
         );

@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::Path;
 
-use super::workspace::build_unit_files;
+use super::workspace::Roots;
 use super::{UnitFile, Workspace, unit_file, unit_files_within};
 
 const LIB: &str = "debug/build/dep/5c64b2dee9af80ce";
@@ -216,8 +216,8 @@ fn a_shared_target_is_scanned_strictly_only_when_every_workspace_using_it_is_pla
     let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
     let plain = sharing(&root, &root);
     let apart = sharing(&root, &root.join("build"));
-    let alone = build_unit_files(std::slice::from_ref(&plain), &root);
-    let mixed = build_unit_files(&[apart, plain], &root);
+    let alone = Roots::new(std::slice::from_ref(&plain)).unit_files(&root);
+    let mixed = Roots::new(&[apart, plain]).unit_files(&root);
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     let message = alone
         .expect_err("a plain target that holds outputs and no unit must be refused")

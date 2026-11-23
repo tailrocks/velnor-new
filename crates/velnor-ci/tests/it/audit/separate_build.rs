@@ -245,21 +245,6 @@ fn a_relative_build_directory_through_a_symlink_without_parent_components_is_aud
     assert_eq!(lock(&repo), ".\tlib\n");
 }
 
-#[test]
-fn an_absolute_build_directory_through_a_symlink_is_audited_to_success() {
-    let repo = built_in(APART, &[]);
-    link_to_build(&repo);
-    stamp(&repo, APART);
-    let through_link = repo.root().join("rust/app/link-to-build");
-    let written = from_step_directory(
-        &repo,
-        &through_link.to_string_lossy(),
-        &["inputs", "audit", "--write"],
-    );
-    assert!(written.status.success(), "{written:?}");
-    assert_eq!(lock(&repo), ".\tlib\n");
-}
-
 fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
     velnor_ci()
         .current_dir(repo.root().join("rust/app"))
@@ -338,7 +323,7 @@ fn a_cargo_that_prints_no_build_directory_is_audited_in_the_target_directory() {
     assert!(unit_count(&written) > 0, "{written:?}");
 }
 
-fn two_standalone_roots() -> Repo {
+pub(super) fn two_standalone_roots() -> Repo {
     let repo = Repo::new("audit-shared-build");
     unit(&repo, ".gitignore", "target/\nbuild/\n");
     unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());

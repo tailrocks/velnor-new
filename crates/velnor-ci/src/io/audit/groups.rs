@@ -160,7 +160,14 @@ pub(super) fn workspaces(
         .zip(inherit)
         .map(|((root, alone), inherit)| {
             let manifest = repository.join(root.manifest.as_str());
-            root_workspace(&manifest, probe, step, *inherit, alone, &groups)
+            root_workspace(
+                &manifest,
+                probe.filter(|_| *inherit),
+                step,
+                *inherit,
+                alone,
+                &groups,
+            )
         })
         .collect()
 }
