@@ -21,6 +21,14 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "dbt contract proposal: the placeholder service credential, in this one document only"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/proposed/dbt-contract\.md$''']
+regexTarget = "secret"
+regexes = ['''^example-org$''']
+
+[[allowlists]]
 description = "test fixture: fake key in the mise env policy test"
 targetRules = ["generic-api-key"]
 condition = "AND"

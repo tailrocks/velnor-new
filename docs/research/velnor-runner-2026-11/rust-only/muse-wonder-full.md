@@ -752,7 +752,7 @@ decides it. Until then, 480 threads serve concurrent requests, not one suite.
 
 The cluster is five EPYC workers at 96 threads and about 125 GiB each, 480 threads in total,
 across DE and FI with 35 ms between sites over WireGuard [M, §B.0, §B.5]. Three orgs share it:
-tailrocks (max 60 runners), ChainArgos (60) and jackin (40) [M, §B.3.2]. Worker CPU sampled at 92
+tailrocks (max 60 runners), example-org (60) and jackin (40) [M, §B.3.2]. Worker CPU sampled at 92
 to 95% on 2026-11-18 [M, §B.2.1]. That load is duplicate work. Section 2b removes most of it
 before any scheduler tuning matters.
 
@@ -783,7 +783,7 @@ waiting grows to about 19 times service time, so the merge path never queues beh
 Priorities: merge and gate first, then PR work for every org at equal priority inside per-org
 quotas, then batch (builder, speculation, audits, scheduled runs). Only batch is preempted. The
 wait clock starts at eligibility. Target: eligible-to-start p90 ≤ 2 s for merge and gate work [T].
-ChainArgos and jackin keep guaranteed quotas and separate namespaces and stores. Nothing crosses
+example-org and jackin keep guaranteed quotas and separate namespaces and stores. Nothing crosses
 an organisation. They keep ARC until `velnor-new`'s cutover has soaked for four weeks, then move.
 
 **Placement.** Every node is warm for `main`, so placement rarely decides warmth. Per obligation

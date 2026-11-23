@@ -1,4 +1,4 @@
-after = ["CI", "Rust CI"]
+after = ["CI"]
 family_tag = "tools-v{{ version }}"
 
 [[binaries]]

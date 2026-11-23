@@ -156,16 +156,18 @@ pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
 }
 
 fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
-    metrics
-        .invocations
-        .iter()
-        .flat_map(|invocation| &invocation.artifacts)
-        .any(|artifact| {
+    metrics.invocations.iter().any(|invocation| {
+        invocation.artifacts.iter().any(|artifact| {
             !artifact.fresh
-                && crate::cargo_package::PackageIdentity::parse(&artifact.package_id)
-                    .and_then(|package| package.source)
-                    .is_some_and(|source| source.starts_with("registry+"))
+                && crate::cargo_package::PackageIdentity::parse(&artifact.package_id).is_some_and(
+                    |package| {
+                        package
+                            .source
+                            .is_some_and(|source| source.starts_with("registry+"))
+                    },
+                )
         })
+    })
 }
 
 #[must_use]

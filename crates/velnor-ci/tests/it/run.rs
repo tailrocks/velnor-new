@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 use velnor_test_support::{real_cargo, real_cargo_str};
 
-pub(crate) fn scratch(name: &str) -> PathBuf {
+pub(crate) fn scratch(name: &str) -> velnor_test_support::ScratchDir {
     let dir = crate::scratch_path("velnor-ci-run", name);
     if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
@@ -106,8 +106,10 @@ fn run_names_a_program_it_cannot_start_and_exits_127() {
 
 #[test]
 fn run_does_not_start_the_command_when_the_log_cannot_be_written() {
-    let temp = scratch("unwritable").join("missing-folder");
-    let marker = scratch("unwritable-marker").join("started");
+    let base = scratch("unwritable");
+    let temp = base.join("missing-folder");
+    let marker_dir = scratch("unwritable-marker");
+    let marker = marker_dir.join("started");
     let output = run(&temp, &["touch", marker.to_string_lossy().as_ref()]);
     assert_eq!(output.status.code(), Some(2));
     assert!(!marker.exists());
@@ -176,7 +178,8 @@ fn run_logs_the_program_and_the_argument_count_but_never_the_arguments() {
 
 #[test]
 fn run_fails_without_starting_the_command_when_runner_temp_is_unset() {
-    let marker = scratch("no-temp").join("started");
+    let marker_dir = scratch("no-temp");
+    let marker = marker_dir.join("started");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "touch"])
         .arg(&marker)
@@ -192,7 +195,8 @@ fn run_fails_without_starting_the_command_when_runner_temp_is_unset() {
 #[test]
 fn run_refuses_a_log_that_is_a_symlink_and_leaves_its_target_alone() {
     let temp = scratch("symlink");
-    let target = scratch("symlink-target").join("victim");
+    let target_dir = scratch("symlink-target");
+    let target = target_dir.join("victim");
     fs::write(&target, "kept").unwrap_or_else(|e| unreachable!("{e}"));
     std::os::unix::fs::symlink(&target, temp.join("velnor-run.log"))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -212,7 +216,7 @@ fn run_fails_when_the_log_cannot_take_the_output() {
             "trap '' XFSZ; ulimit -f 1; exec {} run -- sh -c 'yes x | head -c 100000'",
             env!("CARGO_BIN_EXE_velnor-ci")
         ))
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(output.status.code(), Some(2), "{output:?}");
@@ -274,7 +278,7 @@ fn run_waits_for_all_open_pipes_within_one_shared_grace_period() {
         .arg("run")
         .arg("--")
         .args(["sh", "-c", &script])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         // The witnesses scan CARGO_HOME after the command exits; an empty one keeps
         // that scan (of the developer's cache) out of the grace being measured.
         .env("CARGO_HOME", temp.join("cargo-home"))

@@ -49,7 +49,7 @@ fn the_action_declares_exactly_the_inputs_the_generated_install_step_passes() ->
     assert!(action.contains("using: composite"));
 
     let workflow = fs::read_to_string(
-        root.join("generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml"),
+        root.join("generator/samples/helper-lock/expected/.github/workflows/ci.yml"),
     )?;
     let step: String = workflow
         .lines()

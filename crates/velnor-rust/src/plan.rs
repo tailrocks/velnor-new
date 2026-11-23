@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
-    Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
-    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
-    TargetName, Toolchain, When, WorkflowPlan,
+    Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Gate, HelperCommand, Host, Job, JobId,
+    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, TargetName,
+    Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -18,7 +18,7 @@ use crate::lane::{
     used_group_outputs, used_outputs,
 };
 use crate::mbx_steps::MBX_OUT_DIR_HELPER;
-use crate::plan_budget::{draft_guard, expose_selection, triggers};
+use crate::plan_budget::{draft_guard, expose_selection, workflow};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::{lane_jobs, root_jobs};
@@ -51,6 +51,9 @@ pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
 }
 
 fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
+    if facts.rust_roots.is_empty() {
+        return workflow(facts, crate::lint_jobs::lint_jobs(facts));
+    }
     let units = units(facts);
     let suffixed = units.len() > 1;
     let decisions = decisions(facts, &units);
@@ -99,19 +102,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     apply_extensions(facts, &mut jobs, single);
     crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
-    WorkflowPlan {
-        name: "Rust CI".to_owned(),
-        triggers: triggers(facts),
-        concurrency: match facts.config.pr_ci {
-            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
-            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
-        },
-        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
-        fork_runner: facts.config.fork_runner.clone(),
-        hosted_runners: facts.config.hosted_runners.clone(),
-        trusted_runners: facts.config.trusted_runners.clone(),
-        jobs,
-    }
+    workflow(facts, jobs)
 }
 
 fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
@@ -153,7 +144,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
         }))
     });
     let mut steps = crate::test_setup::before_builds(facts, root, steps);
-    crate::test_setup::gate_job(&mut steps);
+    crate::test_setup::gate_job(facts, &mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
@@ -175,7 +166,7 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
 
 /// The shared-store steps. A job that plans runs them after the plan, so a
 /// run that selects nothing never seeds: `seed_gate` is the job's selection.
-pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
+pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
@@ -189,7 +180,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
     let store = Step {
-        gate: seed_gate.clone().filter(|_| selected_store),
+        gate: seed_gate.cloned().filter(|_| selected_store),
         ..step(StepKind::MbxStore)
     };
     let seed = facts
@@ -197,7 +188,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
         .then(|| Step {
-            gate: seed_gate,
+            gate: seed_gate.cloned(),
             ..step(StepKind::MbxSeed)
         });
     [Some(store), out_dirs, seed]
@@ -264,7 +255,7 @@ pub(crate) fn setup_units(
                 ..step
             }),
     );
-    steps.extend(mbx(facts, lane.steps()));
+    steps.extend(mbx(facts, lane.steps().as_ref()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
         .chain(tools_restore(facts, lane.plan.as_ref()))
