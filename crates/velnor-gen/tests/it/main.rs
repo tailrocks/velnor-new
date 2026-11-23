@@ -202,6 +202,7 @@ mod pr_ci_sim;
 mod private_base_budget;
 mod private_base_caches;
 mod private_base_order;
+mod private_base_plan_mode;
 mod private_base_prefix;
 mod private_base_shadowed_config;
 mod private_base_token_order;

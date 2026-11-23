@@ -18,13 +18,14 @@ use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_modes, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_read, plan_source,
+    sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
 use crate::install_steps::{install_generator_step, install_mise, install_tools};
 use crate::permission_pairs;
+use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
