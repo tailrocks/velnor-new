@@ -22,13 +22,13 @@ SYMLINK_MODE = "120000"
 GITLINK_MODE = "160000"
 TRIM = b".-_"
 GIT_SUFFIX = b".git"
-ENCODED = re.compile(rb"%[0-9a-f]{2}|\\u[0-9a-f]{4}|\\x[0-9a-f]{2}|&#?[a-z0-9]+;|[\x80-\xff]")
-ESCAPE = re.compile(r"\\u([0-9a-f]{4})|\\x([0-9a-f]{2})")
+ENCODED = re.compile(rb"%[0-9a-f]{2}|\\u[0-9a-f]{4}|\\x[0-9a-f]{2}|\\/|&#?[a-z0-9]+;|[\x80-\xff]")
+ESCAPE = re.compile(r"\\u([0-9a-f]{4})|\\x([0-9a-f]{2})|(\\/)")
 BLANKS = re.compile(rb"[ \t\r\f\v]+")
 NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
 MAX_PERCENT_ROUNDS = 4
-EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md"})
+EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock"})
 
 
 def sha(candidate):
@@ -45,7 +45,10 @@ def digest(word):
 
 def normalize(name):
     name = name.lower()
-    return name if "/" in name else re.sub(r"[^a-z0-9]+", "", name)
+    if "/" in name:
+        first, _slash, second = name.partition("/")
+        return join(first.encode(), second.encode()).decode()
+    return re.sub(r"[^a-z0-9]+", "", name)
 
 
 def entry(name):
@@ -166,7 +169,7 @@ def fold(text):
 
 def decode_line(line):
     text = unpercent(line).decode("utf-8", "replace")
-    text = ESCAPE.sub(lambda found: chr(int(found.group(1) or found.group(2), 16)), text)
+    text = ESCAPE.sub(lambda found: "/" if found.group(3) else chr(int(found.group(1) or found.group(2), 16)), text)
     text = html.unescape(text).encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
     return NON_ASCII.sub(lambda run: fold(run.group()), text).casefold().encode().translate(None, b"\r\n")
 

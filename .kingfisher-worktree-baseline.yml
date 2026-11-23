@@ -5,7 +5,7 @@ repositories:
 - id: git://github.com/tailrocks/velnor-new
   findings:
   - path: .velnor/runner.lock
-    fingerprint: '13627819009948060677'
+    fingerprint: '5508753565254821617'
     rule_id: betterleaks.generic-api-key
     line: 73
     first_seen_at: 2026-11-21T00:00:00+00:00

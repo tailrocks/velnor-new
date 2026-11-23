@@ -339,6 +339,22 @@ class ExemptionTests(unittest.TestCase):
             self.assertEqual(len(guard.scan(root, planted("zzplanted"))), 2)
 
 
+    def test_the_runner_lock_is_exempt_by_exact_path_only(self):
+        tmp, root = repository(
+            {".velnor/runner.lock": "zzplanted\n", ".velnor/runner.lock.bak": "zzplanted\n", "x/.velnor/runner.lock": "zzplanted\n"}
+        )
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), [".velnor/runner.lock.bak:1", "x/.velnor/runner.lock:1"])
+
+
+class PairEntryTests(unittest.TestCase):
+    def test_a_pair_whose_repository_starts_with_punctuation_or_ends_in_git_is_matched(self):
+        for name in ("zzorg/.zzrepo", "zzorg/_zzrepo", "zzorg/zzrepo.git", "ZzOrg/-ZzRepo"):
+            with self.subTest(name=name):
+                matcher = guard.Matcher(planted(name))
+                self.assertEqual(len(matcher.flagged_lines(f"see https://github.com/{name}\n".encode())), 1)
+
+
 class LongTokenTests(unittest.TestCase):
     def test_one_long_token_is_scanned_without_materializing_its_windows(self):
         token = "".join(random.Random(1).choices("abcdefghijklmnopqrstuvwxyz0123456789", k=100_000)).encode()
