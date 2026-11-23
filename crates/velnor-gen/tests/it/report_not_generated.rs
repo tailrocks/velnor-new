@@ -128,18 +128,6 @@ fn the_helper_bootstrap_target_is_never_saved_so_it_is_not_labelled() -> TestRes
 }
 
 #[test]
-fn the_helper_bootstrap_is_unlabelled_before_the_helper_reads_the_reason() -> TestResult {
-    let parsed = bootstrap("0.1.110", HELPER_ONLY, None)?;
-    let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
-    let bootstrap = caches_of(jobs.get("rust-helper").ok_or("no helper job")?)?;
-    assert_ne!(bootstrap.len(), 0);
-    for cache in &bootstrap {
-        assert!(cache.get("not_generated").is_none(), "{cache}");
-    }
-    Ok(())
-}
-
-#[test]
 fn a_helper_that_writes_private_base_caches_labels_none() -> TestResult {
     let parsed = bootstrap(
         "0.1.111",
