@@ -60,10 +60,12 @@ records a stable `*:all_changed` or `*:selecting_all` warning:
 - a tracked symlink owned by a package that escapes the repository, dangles, or
   loops (`symlink_unbounded:<path>:<reason>:all_changed`);
 - any changed path no rule below claims (`unclassified_files:all_changed`);
-- a Git older than 2.42 (`git_too_old:all_changed`): the planner reads base
-  manifests with NUL-framed `git cat-file -Z --batch`, so paths that contain a
-  line feed are read exactly. Git 2.42 is the minimum for precise selection;
-  an older Git runs every job and plans no less.
+- a Git older than 2.42 when the plan must read base manifests
+  (`git_too_old:all_changed`): the planner reads them with NUL-framed
+  `git cat-file -Z --batch`, so paths that contain a line feed are read
+  exactly. Git 2.42 is the minimum for that read. A change that needs no base
+  manifest, such as one that only touches configured non-inputs, stays precise
+  on an older Git.
 
 A change to a **declared tool version** selects everything
 (`project_tool_config_changed:all_changed`): generated CI runs the versions
