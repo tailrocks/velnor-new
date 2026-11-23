@@ -10,7 +10,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::public_declared::{declare, repositories};
-use super::support::{COMPILED, seed};
+use super::support::{COMPILED, hang_up, seed};
 use crate::io::Repo as Checkout;
 
 pub(super) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -48,18 +48,6 @@ pub(super) fn clean_tree() -> Reply {
         200,
         r#"{"sha":"0","tree":[{"path":"Cargo.toml","type":"blob"}],"truncated":false}"#.to_owned(),
     )
-}
-
-pub(super) fn hang_up() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
-    let url = format!(
-        "http://{}",
-        listener
-            .local_addr()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    );
-    thread::spawn(move || listener.incoming().for_each(drop));
-    url
 }
 
 pub(super) fn serve(reply: Reply) -> Mock {

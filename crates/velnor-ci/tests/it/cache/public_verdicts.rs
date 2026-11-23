@@ -6,9 +6,9 @@ use std::process::{Command, Output};
 
 use super::public_declared::{declare, repositories};
 use super::public_git::{
-    OTHER_SHA, SHA, TOKEN, decide_with, git, hang_up, lock, public, refused, reply, serve,
+    OTHER_SHA, SHA, TOKEN, decide_with, git, lock, public, refused, reply, serve,
 };
-use super::support::seed;
+use super::support::{hang_up, seed};
 use crate::io::Repo as Checkout;
 
 const VERDICTS: &str = "VELNOR_PUBLIC_VERDICTS";
