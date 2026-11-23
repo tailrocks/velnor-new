@@ -121,12 +121,14 @@ scan() {
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
   function versions(line, out,    rest, n, v, off, before, after) {
     n = 0
-    gsub(/"[^"\\]*"/, "\"\"", line)
+    gsub(/"([^"\\]|\\.)*"/, "\"\"", line)
     rest = line
     off = 0
     while (match(rest, /\(0, ?1, ?[0-9]+\)|0\.1\.[0-9]+/)) {
       v = substr(rest, RSTART, RLENGTH)
-      before = (off + RSTART > 1) ? substr(line, off + RSTART - 1, 1) : ""
+      before = substr(line, 1, off + RSTART - 1)
+      sub(/[ \t]+$/, "", before)
+      before = substr(before, length(before), 1)
       after = substr(rest, RSTART + RLENGTH)
       off += RSTART + RLENGTH - 1
       rest = after
