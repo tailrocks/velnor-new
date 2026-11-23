@@ -30,11 +30,10 @@ fn generator_members(rust_roots: &[RustRoot]) -> usize {
         .count()
 }
 
-pub(crate) fn generator_manifest(rust_roots: &[RustRoot]) -> Option<RepoPath> {
+pub(crate) fn generator_root(rust_roots: &[RustRoot]) -> Option<&RustRoot> {
     rust_roots
         .iter()
         .find(|root| root.members.iter().any(is_generator))
-        .map(|root| root.manifest.clone())
 }
 
 pub(crate) fn check_packages(

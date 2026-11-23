@@ -208,3 +208,46 @@ fn from_source_wires_the_shared_mbx_store_before_the_tools_install() -> TestResu
     assert!(at("Private mbx store").is_none(), "{names:?}");
     Ok(())
 }
+
+#[test]
+fn from_source_keeps_the_date_of_a_host_qualified_nightly() -> TestResult {
+    for (version, refused) in [
+        ("nightly-2025-01-01-x86_64-unknown-linux-gnu", true),
+        ("nightly-2025-01-01-aarch64-unknown-linux-gnu", true),
+        ("nightly-2025-10-01-x86_64-unknown-linux-gnu", false),
+        ("nightly-2025-10-01-aarch64-unknown-linux-gnu", false),
+    ] {
+        let mut repo = locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?;
+        repo.files.insert(
+            RepoPath::new("mise.toml")?,
+            MISE.replace("1.99.1", version).into_bytes(),
+        );
+        let text = format!("{:?}", workflow(&repo).err());
+        assert_eq!(
+            text.contains("GeneratorHostTuple"),
+            refused,
+            "{version}: {text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_nested_generator_builds_into_its_detected_target_directory() -> TestResult {
+    let roots = [
+        ("Cargo.toml", "velnor-ci-app"),
+        ("tools/gen/Cargo.toml", "velnor-gen"),
+    ];
+    let repo =
+        crate::generated_check_source::packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
+    let job = job(&workflow(&repo)?)?;
+    let target = check_step(&job)["env"]["CARGO_TARGET_DIR"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(
+        target.contains("target/velnor-roots/") && !target.contains("tools/gen"),
+        "{target}: {job}"
+    );
+    Ok(())
+}

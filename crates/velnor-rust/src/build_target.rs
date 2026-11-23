@@ -46,23 +46,26 @@ pub(crate) fn check_host_tuple_version(
     Ok(())
 }
 
+fn names_host(host: &str) -> bool {
+    host.contains('_') || host.starts_with("aarch64-")
+}
+
 pub(crate) fn supports_host_tuple(version: &str) -> bool {
+    if let Some(rest) = version.strip_prefix("nightly-")
+        && rest.starts_with(|first: char| first.is_ascii_digit())
+    {
+        let (date, host) = rest.split_at_checked(10).unwrap_or((rest, ""));
+        return (host.is_empty() || host.strip_prefix('-').is_some_and(names_host))
+            && valid_nightly_date(date)
+            && date >= "2025-09-26";
+    }
     let channel = match version.split_once('-') {
-        Some((channel @ ("stable" | "beta" | "nightly"), host))
-            if host.contains('_') || host.starts_with("aarch64-") =>
-        {
-            channel
-        }
+        Some((channel @ ("stable" | "beta" | "nightly"), host)) if names_host(host) => channel,
         _ => version,
     };
     match channel {
         "stable" | "beta" | "nightly" => true,
-        _ => {
-            if let Some(date) = channel.strip_prefix("nightly-") {
-                return valid_nightly_date(date) && date >= "2025-09-26";
-            }
-            release_channel(channel).is_some_and(|(major, minor)| (major, minor) >= (1, 91))
-        }
+        _ => release_channel(channel).is_some_and(|(major, minor)| (major, minor) >= (1, 91)),
     }
 }
 

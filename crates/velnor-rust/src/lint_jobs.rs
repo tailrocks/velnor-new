@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, RepoPath,
-    Step, StepKind,
+    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
 };
 
-use crate::detect_checks::generator_manifest;
+use crate::detect_checks::generator_root;
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
@@ -93,14 +92,14 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
 }
 
 fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
-    let manifest = from_source
-        .then(|| generator_manifest(&facts.rust_roots))
+    let root = from_source
+        .then(|| generator_root(&facts.rust_roots))
         .flatten();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
     })];
-    if manifest.is_some() {
+    if root.is_some() {
         steps.extend(
             facts
                 .helper
@@ -129,9 +128,12 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
         );
     }
     steps.push(Step {
-        directory: manifest.as_ref().and_then(RepoPath::parent),
+        directory: root.and_then(|root| root.manifest.parent()),
+        target_dir: root
+            .filter(|root| root.manifest.parent().is_some())
+            .map(|root| root.target_dir.clone()),
         ..step(StepKind::GeneratorCheck {
-            from_source: manifest.is_some(),
+            from_source: root.is_some(),
         })
     });
     Job {
