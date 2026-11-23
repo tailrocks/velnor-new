@@ -179,7 +179,7 @@ scan() {
     markC_now = has ? mk["commit"] : ""
     delete mk
     if (has && versions(stripped, probe) == 0) next
-    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && stripped !~ /^[ \t]*(pub(\([a-z:]+\))?[ \t]+)?(const|static)[ \t]/) next
+    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && (stripped !~ /^[ \t]*(pub(\([^)]*\))?[ \t]+)?(const|static)[ \t]/ || stripped ~ /^[ \t]*(pub(\([^)]*\))?[ \t]+)?const[ \t]+(fn|unsafe|async|extern)[ \t(]/)) next
     added[++count] = file SUBSEP stripped
     markN[count] = markN_now
     markC[count] = markC_now

@@ -5,13 +5,13 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-helper-gates.sh"
 fixtures="$root/scripts/fixtures"
 
-for f in gate-const-unmarked gate-string-marker; do
+for f in gate-const-unmarked gate-const-pub-in gate-string-marker; do
   if bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110; then
     echo "the check accepted $f.diff" >&2
     exit 1
   fi
 done
-for f in gate-const-marked gate-macro-tuple gate-pattern-tuple; do
+for f in gate-const-marked gate-const-fn gate-macro-tuple gate-pattern-tuple; do
   bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110
 done
 
