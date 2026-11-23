@@ -9,7 +9,7 @@ use std::thread;
 
 use velnor_gen::GenerateError;
 use velnor_model::RepoPath;
-use velnor_render::DELTA_CLEANUP_PATH;
+use velnor_render::{DELTA_CLEANUP_HELPER, DELTA_CLEANUP_PATH};
 
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
@@ -18,8 +18,6 @@ use crate::private_base_caches::GIT_LOCK;
 use crate::private_sources::SECTION;
 use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
 use crate::step_refs_sweep::{ROOTS, Sweep, gate_patch, gate_patches, generated, pinned};
-
-const DELTA_CLEANUP_HELPER: u64 = 102;
 
 const TEST_GROUP: &str =
     "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n";
@@ -158,7 +156,7 @@ impl Shape for RustCi {
             Err(error) => return Err(error),
         };
         if self.cleanup
-            && effective >= DELTA_CLEANUP_HELPER
+            && effective >= DELTA_CLEANUP_HELPER.2
             && !files.contains_key(&DELTA_CLEANUP_PATH)
         {
             return Err(format!(
