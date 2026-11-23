@@ -109,7 +109,7 @@ set Δ is larger, and `main` moved 42–71 merges a day on 11-16 to 11-18 [mine]
 *Measure:* the distribution of witness-2 minus witness-1 compile time over 300 replayed diffs.
 
 **5. Every compile number comes from an idle cluster.** The mbx experiment ran on nodes at 0–15% CPU.
-On 2026-11-18 workers sat at 92–95% CPU [M], shared with ChainArgos and jackin. Each fully read clone
+On 2026-11-18 workers sat at 92–95% CPU [M], shared with example-org and jackin. Each fully read clone
 holds its own 14.29 GB of page cache [M], which caps a node at six build sandboxes. Two witnesses per new
 key, A1, speculation and canaries double or triple CPU per key. At 95% utilisation, waiting is about
 19× the service time (N38). Only one 16-CPU merge slot per site is reserved. *Likelihood:* medium-high for
@@ -188,7 +188,7 @@ gate estimate is ≈ 6 / 18 min [E], slower than a strong conventional baseline 
 | B3 | Label-to-`success` on at least 200 matched heads per class, peak and quiet, with intervals (N40). | Helper and generator class P50 ≤ 90 s, P90 ≤ 4 min; the runner and whole-tree cohorts reported beside it, never folded in. |
 | B4 | **The baseline arms**, all run on the same replayed heads: (a) today's CI; (b) a strong conventional setup on the same cluster (warm reflink target per root, crates mirror, tool image, gate jobs on the cluster, auto-merge, the same test fixes); (c) a hosted fast-runner arm with persistent cache volumes, if the owner allows one; (d) Velnor. | Velnor at least 2× faster than the best other arm at both P50 and P90 on push-to-merge net of GitHub's share. Below that, the word is "faster", not "fastest". |
 | B5 | Planted-failure campaign on every fast path: 100 failing edits, covering the Q16 older-mtime edit, an undeclared build-script input, a new sibling file outside a contract, a clock-shifted test, a stale generation, and a flaky test at p = 0.05–0.2. | 100% red, or detected at the measured (1−p)² rate. No arm counts as "faster" until it passes the same campaign. |
-| B6 | Load replay of the 2026-11-18 arrival trace on the shared cluster, ChainArgos and jackin included. | Verdict P90 under load ≤ 1.5× the quiet P90; merge-path wait P90 ≤ 10 s (the design's own trigger). |
+| B6 | Load replay of the 2026-11-18 arrival trace on the shared cluster, example-org and jackin included. | Verdict P90 under load ≤ 1.5× the quiet P90; merge-path wait P90 ≤ 10 s (the design's own trigger). |
 | B7 | Paired Native vs Official runs on release and image jobs: same backend, tool store and generation. | A published per-job-type difference (decision 20 requires it). Unless it is large, the "fastest" claim moves from the runner to the verifier. |
 
 If B1–B6 pass, a supportable claim for this repository is: *"push-to-merge within about 1 minute of

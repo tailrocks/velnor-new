@@ -41,7 +41,7 @@ fn contents(files: &[(&str, String)]) -> BTreeMap<RepoPath, String> {
 }
 
 const RELEASE: &str = ".github/workflows/release.yml";
-const RUST_CI: &str = ".github/workflows/rust-ci.yml";
+const RUST_CI: &str = ".github/workflows/ci.yml";
 const CACHE_TRIM: &str = ".github/workflows/rust-cache-trim.yml";
 const HAND_WRITTEN: &str = ".github/workflows/lint.yml";
 

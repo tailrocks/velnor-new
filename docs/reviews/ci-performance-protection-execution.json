@@ -22,7 +22,7 @@
     }
   },
   "private_receipts": {
-    "directory": "/Users/donbeave/.codex-chainargos2/evidence/ci-performance/protection-execution-20261003",
+    "directory": "/Users/donbeave/.codex-example-org2/evidence/ci-performance/protection-execution-20261003",
     "status": "execution-status.json",
     "status_sha256": "1a606d2116246229756be3287fe2d5ef3ac814465d774c4a05b106abfbef1fd1",
     "immutable_put_sha256": "dbe640dea217b2b6c10b525ea17aa32ca6c714d8435f0a84600dd5e9335b16ed",
