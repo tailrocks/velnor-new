@@ -367,10 +367,24 @@ mod tests {
         }
     }
 
+    fn save_key(step: &crate::rules::RenderedStep) -> String {
+        step.with
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                ("key", crate::rules::Value::Expr(key)) => Some(key.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
     #[test]
-    fn a_recorded_anchor_saves_by_the_run_key_and_the_attempt_key_differs() {
+    fn a_recorded_anchor_saves_by_the_run_key_or_the_run_attempt_key_as_asked() {
         let run = tools_local_step(ToolsLocalVerb::AnchorSave, &ToolsAnchor::Recorded);
         let attempt = tools_local_step(ToolsLocalVerb::AnchorSaveAttempt, &ToolsAnchor::Recorded);
-        assert_ne!(run, attempt);
+        assert!(save_key(&run).ends_with("-${{ github.run_id }}-${{ github.job }}"));
+        assert!(
+            save_key(&attempt)
+                .ends_with("-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}")
+        );
     }
 }
