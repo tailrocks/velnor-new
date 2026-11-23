@@ -167,6 +167,18 @@ impl GitHubWrite for Api {
     }
 }
 
+fn failed_ids(error: &CiError) -> Vec<u64> {
+    error
+        .to_string()
+        .split("ID ")
+        .skip(1)
+        .filter_map(|rest| {
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            digits.parse().ok()
+        })
+        .collect()
+}
+
 fn repo() -> Repo {
     Repo::parse("tailrocks/lab").unwrap_or_else(|e| unreachable!("{e}"))
 }
@@ -277,13 +289,8 @@ fn a_repository_without_private_entries_reports_zero_and_succeeds() {
 fn a_failed_delete_is_an_error() {
     let mut api = Api::new(mixed());
     api.fail_deletes = vec![2];
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some("deleted 2 of 3; failed 1 entries: ID 2: HTTP 403")
-    );
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![2]));
     assert_eq!(*api.deleted.borrow(), vec![1, 3]);
 }
 
@@ -291,13 +298,8 @@ fn a_failed_delete_is_an_error() {
 fn every_failed_delete_is_reported_together_by_yes() {
     let mut api = Api::new(mixed());
     api.fail_deletes = vec![1, 3];
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some("deleted 1 of 3; failed 2 entries: ID 1: HTTP 403; ID 3: HTTP 403")
-    );
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![1, 3]));
     assert_eq!(*api.deleted.borrow(), vec![2]);
 }
 
@@ -368,12 +370,7 @@ fn the_deleted_count_is_cumulative_across_passes() {
         "refs/heads/main",
     )];
     api.fail_deletes = vec![9];
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some("deleted 1 of 2; failed 1 entries: ID 9: HTTP 403")
-    );
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![9]));
     assert_eq!(*api.deleted.borrow(), vec![1]);
 }

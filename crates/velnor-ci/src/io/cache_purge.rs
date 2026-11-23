@@ -133,6 +133,9 @@ fn sweep(
     mut pending: Vec<Entry>,
     report: &str,
 ) -> Result<String, CiError> {
+    if pending.is_empty() {
+        return Ok(format!("{report}deleted 0 entries\n"));
+    }
     let mut deleted = 0;
     let mut seen = 0;
     for _ in 0..PURGE_PASSES {

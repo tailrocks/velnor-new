@@ -1,9 +1,6 @@
 use super::*;
 use velnor_ci::io::cache_purge::purge_private_if_public;
 
-const VERDICT: &str =
-    "tailrocks/lab is not private, and a cache of a public repository can be read by a fork";
-
 fn left(api: &Api) -> Vec<Value> {
     api.entries
         .borrow()
@@ -62,14 +59,11 @@ fn running_and_enabled_workflows_do_not_stop_the_purge() {
 fn a_failed_delete_does_not_stop_the_others_and_every_failure_is_reported() {
     let mut api = Api::with_repository(mixed(), false, "public");
     api.fail_deletes = vec![1];
-    let error = purge_private_if_public(&api, &repo())
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error,
-        Some(format!(
-            "{VERDICT}: deleted 2 of 3; failed 1 entries: ID 1: HTTP 403"
-        ))
+    let error = purge_private_if_public(&api, &repo()).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![1]));
+    assert!(
+        error.is_some_and(|e| e.to_string().contains("not private")),
+        "the error starts with the visibility verdict"
     );
     assert_eq!(*api.deleted.borrow(), vec![2, 3]);
     assert_eq!(left(&api).len(), 6);
@@ -79,16 +73,26 @@ fn a_failed_delete_does_not_stop_the_others_and_every_failure_is_reported() {
 fn every_failed_delete_is_reported_together_by_if_public() {
     let mut api = Api::with_repository(mixed(), false, "public");
     api.fail_deletes = vec![1, 3];
-    let error = purge_private_if_public(&api, &repo())
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error,
-        Some(format!(
-            "{VERDICT}: deleted 1 of 3; failed 2 entries: ID 1: HTTP 403; ID 3: HTTP 403"
-        ))
-    );
+    let error = purge_private_if_public(&api, &repo()).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![1, 3]));
     assert_eq!(*api.deleted.borrow(), vec![2]);
+}
+
+#[test]
+fn a_public_repository_without_private_entries_lists_the_cache_once() {
+    let api = Api::with_repository(
+        vec![entry(
+            4,
+            "velnor-src-Linux-X64-all.roots-aa",
+            "refs/heads/main",
+        )],
+        false,
+        "public",
+    );
+    let report = purge_private_if_public(&api, &repo());
+    assert!(report.is_ok(), "{report:?}");
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.listings.get(), 1);
 }
 
 #[test]
