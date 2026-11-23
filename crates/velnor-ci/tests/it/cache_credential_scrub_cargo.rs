@@ -5,8 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use velnor_test_support::real_cargo;
-
 use crate::cache_private_repo::{GIT_LOCK, decide_with, private_checkout};
 use crate::io::Repo;
 
@@ -31,8 +29,17 @@ fn git(directory: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn toolchain_cargo() -> PathBuf {
+    let output = Command::new("rustc")
+        .args(["--print", "sysroot"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    Path::new(String::from_utf8_lossy(&output.stdout).trim()).join("bin/cargo")
+}
+
 fn cargo(directory: &Path, home: &Path, target: &Path, offline: bool, args: &[&str]) -> Output {
-    let mut command = Command::new(real_cargo());
+    let mut command = Command::new(toolchain_cargo());
     command
         .current_dir(directory)
         .args(args)
