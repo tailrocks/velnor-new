@@ -1,200 +1,259 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
-use velnor_model::{RepoPath, WORKFLOWS_CONFIG_PATH};
-use velnor_rust::CONFIG_PATH;
+use velnor_gen::GenerateError;
+use velnor_model::RepoPath;
+use velnor_render::DELTA_CLEANUP_PATH;
 
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::pipeline::view;
+use crate::private_base_caches::GIT_LOCK;
 use crate::private_sources::SECTION;
 use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
-use crate::release_family_fixture;
-use crate::release_fixture::{APP, release_view};
-use crate::release_unguarded::expected_release;
-use crate::step_refs_sweep::{
-    Case, Sweep, gate_patch, gate_patches, generated, pinned, rust_ci_sweep,
-};
+use crate::step_refs_sweep::{ROOTS, Sweep, gate_patch, gate_patches, generated, pinned};
 
-const DECLARED: &str = "[[workflow]]\nfile = \"declared\"\nname = \"Declared\"\n\n[[workflow.job]]\nid = \"check\"\n\n[[workflow.job.step]]\nid = \"warm\"\nname = \"Warm the cache\"\nrun = \"echo ok\"\n\n[[workflow.job.step]]\nname = \"Use the warm step\"\nrun = \"echo $WARM\"\nenv = { WARM = \"${{ steps.warm.outputs.ready }}\" }\n";
+const DELTA_CLEANUP_HELPER: u64 = 102;
 
-const FAMILY_KEYS: [&str; 5] = [
-    "roots",
-    "family_tag",
-    "binaries.package",
-    "binaries.smoke",
-    "binaries.platforms",
-];
+const TEST_GROUP: &str =
+    "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n";
+const RELEASE_ASSETS: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
 
-fn family_first() -> Result<u64, Box<dyn Error>> {
+pub(crate) type Keys = &'static [&'static str];
+
+pub(crate) fn first_patch(keys: Keys) -> Result<u64, Box<dyn Error>> {
     let mut first = 0;
-    for key in FAMILY_KEYS {
+    for key in keys {
         first = first.max(gate_patch(key)?);
     }
     Ok(first)
 }
 
-#[test]
-fn every_steps_reference_in_a_declared_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let mut sweep = Sweep::default();
-    for patch in gate_patches()? {
-        let mut repo = release_view(&[], None)?;
-        repo.files
-            .insert(WORKFLOWS_CONFIG_PATH, DECLARED.as_bytes().to_vec());
-        let effective = pinned(&mut repo, patch)?;
-        sweep.add(
-            &format!("0.1.{effective}, declared"),
-            &generated(&mut repo)?,
-        )?;
-    }
-    sweep.finish();
-    Ok(())
+pub(crate) type Rendered = (u64, BTreeMap<RepoPath, String>);
+
+pub(crate) trait Shape: Sync {
+    fn label(&self) -> &'static str;
+    fn keys(&self) -> Keys;
+    fn render(&self, patch: u64) -> Result<Option<Rendered>, Box<dyn Error>>;
 }
 
-const MERGE_GROUP_MINIMUM: u64 = 103;
-
-const TAG_PUSH: &str = "family_trigger = \"tag_push\"\ncommit_file = true\n";
-
-#[test]
-fn every_steps_reference_in_a_family_release_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let newest = *gate_patches()?
-        .last()
-        .ok_or("the gate scan found no helper")?;
-    let tag_push = family_first()?
-        .max(gate_patch("family_trigger")?)
-        .max(gate_patch("commit_file")?);
-    let mut sweep = Sweep::default();
-    for (first, config, label) in [
-        (
-            family_first()?,
-            release_family_fixture::tools_like(""),
-            "family",
-        ),
-        (
-            tag_push,
-            release_family_fixture::tools_like(TAG_PUSH),
-            "tag-push family",
-        ),
-    ] {
-        for patch in first..=newest {
-            let helper = format!("0.1.{patch}");
-            let (text, _) = release_family_fixture::generate(&helper, &config)?;
-            let files = BTreeMap::from([(RepoPath::new(".github/workflows/family.yml")?, text)]);
-            sweep.add(&format!("{helper}, {label}"), &files)?;
-        }
-    }
-    sweep.finish();
-    Ok(())
-}
-
-#[test]
-fn every_steps_reference_in_a_public_sources_job_names_a_step_of_its_own_job() -> TestResult {
-    let public_sources = gate_patch("public_sources")?;
-    let lock = format!(
-        "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"dep0\"\nversion = \"1.0.0\"\nsource = \"git+{SOURCE}?rev=v1#{SHA}\"\n"
-    );
-    rust_ci_sweep(&[Case {
-        from: public_sources,
-        config: Some(PUBLIC_SOURCES),
-        files: &[
-            ("Cargo.lock", lock.as_str()),
-            ("tools/Cargo.lock", lock.as_str()),
-        ],
-    }])
-}
-
-const PARALLEL_LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\njob = 'parallel'\n";
-
-#[test]
-fn every_steps_reference_in_a_workspace_group_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: gate_patch("workspace_groups")?,
-        config: Some("[[workspace_groups]]\nname = 'pair'\nroots = ['.', 'tools']\n"),
-        files: &[],
-    }])
-}
-
-#[test]
-fn every_steps_reference_in_a_merge_group_skip_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: MERGE_GROUP_MINIMUM,
-        config: Some("[ci]\nskip_push_after_merge_group = true\n"),
-        files: &[],
-    }])
-}
-
-#[test]
-fn every_steps_reference_in_a_private_release_binary_job_names_a_step_of_its_own_job() -> TestResult
-{
-    let private = gate_patch("private_sources")?;
-    let mut sweep = Sweep::default();
-    for patch in gate_patches()?
-        .into_iter()
-        .filter(|patch| *patch >= private)
-    {
-        let mut repo = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
-        repo.files.insert(
-            CONFIG_PATH,
-            format!("full_run = \"off\"\n{SECTION}").into_bytes(),
+pub(crate) fn sweep_shapes<S: Shape>(shapes: &[S]) -> TestResult {
+    let patches = gate_patches()?;
+    let mut work = Vec::new();
+    for (index, shape) in shapes.iter().enumerate() {
+        let first = first_patch(shape.keys())?;
+        work.extend(
+            patches
+                .iter()
+                .filter(|patch| **patch >= first)
+                .map(|patch| (index, *patch)),
         );
-        let effective = pinned(&mut repo, patch)?;
-        sweep.add(
-            &format!("0.1.{effective}, private release binary"),
-            &expected_release(&repo)?,
-        )?;
+    }
+    let seen = Mutex::new(HashSet::new());
+    let next = AtomicUsize::new(0);
+    let workers = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(4);
+    let results: Vec<Result<Sweep, String>> = thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut sweep = Sweep::default();
+                    while let Some(&(index, patch)) = work.get(next.fetch_add(1, Ordering::Relaxed))
+                    {
+                        let shape = &shapes[index];
+                        let rendered = shape.render(patch).map_err(|error| error.to_string())?;
+                        let Some((effective, files)) = rendered else {
+                            continue;
+                        };
+                        let fresh = seen
+                            .lock()
+                            .map_err(|_| "the render set is poisoned".to_owned())?
+                            .insert((index, effective));
+                        if fresh {
+                            sweep
+                                .add(&format!("0.1.{effective}, {}", shape.label()), &files)
+                                .map_err(|error| error.to_string())?;
+                        }
+                    }
+                    Ok(sweep)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err("a sweep worker panicked".to_owned()))
+            })
+            .collect()
+    });
+    let mut sweep = Sweep::default();
+    for result in results {
+        sweep.absorb(result?);
     }
     sweep.finish();
     Ok(())
 }
 
-#[test]
-fn every_steps_reference_in_a_lint_test_shape_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: 0,
-        config: Some("shape = 'lint-test'\n"),
-        files: &[],
-    }])
+struct RustCi {
+    label: &'static str,
+    keys: Keys,
+    config: Option<String>,
+    files: Vec<(&'static str, String)>,
+    cleanup: bool,
 }
 
-#[test]
-fn every_steps_reference_in_a_parallel_test_lane_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: gate_patch("test_lane.job")?,
-        config: Some(PARALLEL_LANE),
-        files: &[],
-    }])
+fn rust_ci(label: &'static str, keys: Keys, config: Option<String>) -> RustCi {
+    RustCi {
+        label,
+        keys,
+        config,
+        files: Vec::new(),
+        cleanup: false,
+    }
 }
 
-#[test]
-fn every_steps_reference_in_an_mbx_remote_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: gate_patch("cache.mbx_remote")?,
-        config: Some("[cache]\nmbx_remote = \"github-actions\"\n"),
-        files: &[],
-    }])
+impl RustCi {
+    fn with(mut self, path: &'static str, text: impl Into<String>) -> Self {
+        self.files.push((path, text.into()));
+        self
+    }
 }
 
-#[test]
-fn every_steps_reference_in_a_dependency_policy_job_names_a_step_of_its_own_job() -> TestResult {
-    let policy = gate_patch("policy.deny")?;
-    let mut sweep = Sweep::default();
-    for patch in gate_patches()?.into_iter().filter(|patch| *patch >= policy) {
-        let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
-        for (path, text) in [
-            ("deny.toml", ""),
-            ("mise.toml", DENY_MISE),
-            (".velnor/rust-ci.toml", "[policy]\ndeny = true\n"),
-        ] {
-            let path = RepoPath::new(path)?;
+impl Shape for RustCi {
+    fn label(&self) -> &'static str {
+        self.label
+    }
+
+    fn keys(&self) -> Keys {
+        self.keys
+    }
+
+    fn render(&self, pin: u64) -> Result<Option<Rendered>, Box<dyn Error>> {
+        let mut repo = view(ROOTS, self.config.as_deref().map(str::as_bytes))?;
+        for (name, text) in &self.files {
+            let path = RepoPath::new(*name)?;
             repo.tracked_paths.insert(path.clone());
             repo.files.insert(path, text.as_bytes().to_vec());
         }
-        let effective = pinned(&mut repo, patch)?;
-        sweep.add(&format!("0.1.{effective}, deny"), &generated(&mut repo)?)?;
+        let effective = pinned(&mut repo, pin)?;
+        let files = match generated(&mut repo) {
+            Ok(files) => files,
+            Err(error)
+                if matches!(
+                    error.downcast_ref::<GenerateError>(),
+                    Some(GenerateError::MergeGroupHelperTooOld(_))
+                ) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
+        if self.cleanup
+            && effective >= DELTA_CLEANUP_HELPER
+            && !files.contains_key(&DELTA_CLEANUP_PATH)
+        {
+            return Err(format!(
+                "0.1.{effective}, {}: no cache-cleanup workflow was rendered",
+                self.label
+            )
+            .into());
+        }
+        Ok(Some((effective, files)))
     }
-    sweep.finish();
-    Ok(())
+}
+
+fn public_lock() -> String {
+    format!(
+        "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"dep0\"\nversion = \"1.0.0\"\nsource = \"git+{SOURCE}?rev=v1#{SHA}\"\n"
+    )
+}
+
+fn rust_ci_shapes() -> Vec<RustCi> {
+    let shape = |label, keys, extra: &str| rust_ci(label, keys, Some(extra.to_owned()));
+    vec![
+        RustCi {
+            cleanup: true,
+            ..rust_ci("default", &[], None)
+        },
+        shape(
+            "artifacts",
+            &["test_groups.artifacts"],
+            &format!(
+                "{TEST_GROUP}needs = ['cargo']\nartifacts = [{{ name = 'shell-failures', paths = ['junit.xml'], when = 'failure' }}]\n"
+            ),
+        ),
+        shape(
+            "partitions",
+            &["test_groups.partitions"],
+            "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\npartitions = 2\n",
+        ),
+        shape(
+            "restore_cache",
+            &["test_groups.restore_cache"],
+            &format!("{TEST_GROUP}needs = ['cargo']\nrestore_cache = true\n"),
+        ),
+        shape(
+            "hosted",
+            &["test_groups.hosted"],
+            &format!("{TEST_GROUP}runner = 'ubuntu-26.04'\nhosted = true\n"),
+        ),
+        shape(
+            "no_tests",
+            &["test_groups.no_tests"],
+            &format!("{TEST_GROUP}no_tests = 'warn'\n"),
+        ),
+        shape(
+            "workspace group",
+            &["workspace_groups"],
+            "[[workspace_groups]]\nname = 'pair'\nroots = ['.', 'tools']\n",
+        ),
+        shape(
+            "parallel test lane",
+            &["test_lane.job"],
+            "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\njob = 'parallel'\n",
+        ),
+        shape("lint-test", &["shape"], "shape = 'lint-test'\n"),
+        shape(
+            "mbx remote",
+            &["cache.mbx_remote"],
+            "[cache]\nmbx_remote = \"github-actions\"\n",
+        ),
+        shape(
+            "merge-group skip",
+            &["ci.skip_push_after_merge_group"],
+            "[ci]\nskip_push_after_merge_group = true\n",
+        ),
+        shape(
+            "private release assets",
+            &["private_sources", "release_assets"],
+            &format!("{SECTION}{RELEASE_ASSETS}"),
+        ),
+        shape("private base caches", &["private_sources"], SECTION)
+            .with("Cargo.lock", GIT_LOCK)
+            .with("tools/Cargo.lock", GIT_LOCK),
+        shape("public sources", &["public_sources"], PUBLIC_SOURCES)
+            .with("Cargo.lock", public_lock())
+            .with("tools/Cargo.lock", public_lock()),
+        shape(
+            "dependency policy",
+            &["policy.deny"],
+            "[policy]\ndeny = true\n",
+        )
+        .with("deny.toml", "")
+        .with("mise.toml", DENY_MISE),
+    ]
+}
+
+#[test]
+fn every_steps_reference_in_a_rust_ci_shape_names_a_step_of_its_own_job() -> TestResult {
+    sweep_shapes(&rust_ci_shapes())
 }
