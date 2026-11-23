@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     DenyChecks, DenyLane, InputOwner, PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
-    RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig, RustRoot,
+    RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, ToolPins,
     WORKFLOWS_CONFIG_PATH,
 };
 
@@ -72,6 +72,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         tracked
             .iter()
             .filter(|path| is_workflow_file(path))
+            .cloned(),
+    )
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| crate::ansible::is_layout_file(path))
             .cloned(),
     )
     .collect()
@@ -156,7 +162,15 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     crate::config_root_timeouts::check(&config, &rust_roots)?;
     crate::config_check_configurations::check(view, &config, &rust_roots, helper.as_ref())?;
     let toolchain = toolchain(&view.files)?;
-    let tools = crate::config_lint::pinned_tools(view, &config)?;
+    let tools = if rust_roots.is_empty() && config.lint.is_empty() {
+        ToolPins {
+            configs: Vec::new(),
+            locked_file: false,
+            tools: BTreeMap::new(),
+        }
+    } else {
+        crate::config_lint::pinned_tools(view, &config)?
+    };
     check_setup_files(view, &rust_roots)?;
     check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     crate::groups::check_helper(&config, helper.as_ref())?;

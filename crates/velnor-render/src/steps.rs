@@ -373,5 +373,10 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             ..RenderedStep::default()
         },
         StepKind::Budget { last } => budget_step(*last),
+        StepKind::Ansible { name, run } => RenderedStep {
+            name: name.clone(),
+            run: Some(run.clone()),
+            ..RenderedStep::default()
+        },
     }
 }

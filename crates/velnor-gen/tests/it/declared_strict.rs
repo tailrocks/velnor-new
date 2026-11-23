@@ -41,7 +41,7 @@ fn a_chain_of_ten_reusable_workflows_is_accepted_and_eleven_is_refused() -> Test
 
 fn shared(caller_job: &str, caller_workflow: &str, callee: &str) -> String {
     format!(
-        "[[workflow]]\nfile = \"leaf\"\nname = \"Leaf\"\n{callee}\n\n[[workflow.job]]\nid = \"build\"\n\n[[workflow.job.step]]\nname = \"Build\"\nrun = \"echo ok\"\n\n[[workflow]]\nfile = \"ci\"\nname = \"CI\"\n{caller_workflow}\n{PUSH}\n[[workflow.job]]\nid = \"release\"\nuses = \"leaf\"\n{caller_job}\n"
+        "[[workflow]]\nfile = \"leaf\"\nname = \"Leaf\"\n{callee}\n\n[[workflow.job]]\nid = \"build\"\n\n[[workflow.job.step]]\nname = \"Build\"\nrun = \"echo ok\"\n\n[[workflow]]\nfile = \"checks\"\nname = \"CI\"\n{caller_workflow}\n{PUSH}\n[[workflow.job]]\nid = \"release\"\nuses = \"leaf\"\n{caller_job}\n"
     )
 }
 

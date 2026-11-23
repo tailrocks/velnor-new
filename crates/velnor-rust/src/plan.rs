@@ -7,7 +7,7 @@ use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
     Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
-    TargetName, Toolchain, When, WorkflowPlan,
+    TargetName, Toolchain, WORKFLOW_NAME, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -51,6 +51,9 @@ pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
 }
 
 fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
+    if facts.rust_roots.is_empty() {
+        return planned(facts, crate::lint_jobs::lint_jobs(facts));
+    }
     let units = units(facts);
     let suffixed = units.len() > 1;
     let decisions = decisions(facts, &units);
@@ -99,8 +102,12 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     apply_extensions(facts, &mut jobs, single);
     crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
+    planned(facts, jobs)
+}
+
+fn planned(facts: &RepoFacts, jobs: Vec<Job>) -> WorkflowPlan {
     WorkflowPlan {
-        name: "Rust CI".to_owned(),
+        name: WORKFLOW_NAME.to_owned(),
         triggers: triggers(facts),
         concurrency: match facts.config.pr_ci {
             PrCi::Always => Concurrency::CancelOlderPullRequestRuns,

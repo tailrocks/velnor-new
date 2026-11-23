@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 use velnor_gen::expected_with_notes;
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, WORKFLOW_PATH};
 
 use crate::facts::TestResult;
 use crate::private_sources::{SECTION, private_repo};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
-const RENDERED_DIGEST: &str = "bad491e3ef2b60cbc8744ccf0cc5d1c0962e09490f15b199209d1696ce8027f6";
+const RENDERED_DIGEST: &str = "1d4af09a6b61f249b7a314eb2b0bf09b83d9afee34633114a57e276f103412ba";
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 fn assets() -> String {
@@ -78,6 +78,16 @@ fn the_warning_changes_neither_the_rendered_files_nor_the_generation() -> TestRe
     let repo = private_repo(ROOTS, SECTION, "0.1.110")?;
     let (files, notes) = expected_with_notes(&repo)?;
     assert_eq!(minted_notes(&notes).len(), 1, "{notes:?}");
+    let workflow = files
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?;
+    assert!(
+        workflow.lines().any(|line| line == "name: CI"),
+        "{workflow}"
+    );
+    for step in ["cargo-fmt", "cargo-clippy", "cargo-nextest", "mbx"] {
+        assert!(workflow.contains(step), "{step} missing from {workflow}");
+    }
     assert_eq!(rendered_digest(&files), RENDERED_DIGEST);
     Ok(())
 }
