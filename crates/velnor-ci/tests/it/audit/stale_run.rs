@@ -3,7 +3,6 @@
 
 use std::collections::BTreeSet;
 use std::process::Output;
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::migration::outputs::run_outputs;
@@ -63,25 +62,29 @@ fn library_with_asset_input() -> Repo {
     repo
 }
 
+fn run_finished(repo: &Repo, hash: &str) -> SystemTime {
+    fs::metadata(
+        repo.root()
+            .join(format!("{DEBUG}/build/lib/{hash}/run/stdout")),
+    )
+    .and_then(|metadata| metadata.modified())
+    .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
 #[test]
-fn an_input_changed_between_two_steps_names_the_input_and_the_stale_unit() {
+fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
     let repo = library_with_asset_input();
     let clippy = build_step(&repo, &["clippy", "--workspace", "--all-targets"]);
     assert!(clippy.status.success(), "{clippy:?}");
     let before = lib_runs(&repo);
     assert_eq!(before.len(), 1, "{before:?}");
+    let stale = before.iter().next().unwrap_or_else(|| unreachable!());
 
     repo.write_unstaged("rust/lib/asset.txt", "second\n");
-    repo.set_mtime(
-        "rust/lib/asset.txt",
-        SystemTime::now() + Duration::from_secs(1),
-    );
-    thread::sleep(Duration::from_secs(1));
     let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
     assert!(build.status.success(), "{build:?}");
     let after = lib_runs(&repo);
     assert_eq!(after.len(), 2, "{after:?}");
-    let stale = before.iter().next().unwrap_or_else(|| unreachable!());
     let current = after
         .difference(&before)
         .next()
@@ -131,7 +134,7 @@ const ENTRY_LIMIT: &str = "8";
 fn fan_out_repo() -> Repo {
     let repo = Repo::new("stale-gaps");
     repo.write_all(&[
-        ("mise.toml", "[tools]\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         ("rust/Cargo.lock", "version = 4\n"),
     ]);
     let members: Vec<String> = (1..=FAN_OUT).map(|i| format!("\"lib{i}\"")).collect();
@@ -171,10 +174,32 @@ fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
     let repo = fan_out_repo();
     let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
     assert!(build.status.success(), "{build:?}");
-    thread::sleep(Duration::from_secs(1));
+    let ran = fs::read_dir(repo.root().join(DEBUG).join("build"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flat_map(|package| {
+            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
+                .unwrap_or_else(|e| unreachable!("{e}"))
+                .map(|run| {
+                    run.unwrap_or_else(|e| unreachable!("{e}"))
+                        .path()
+                        .join("run/stdout")
+                })
+        })
+        .filter_map(|stdout| {
+            fs::metadata(stdout)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+        })
+        .max()
+        .unwrap_or_else(|| unreachable!());
     for i in 1..=FAN_OUT {
         repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "second\n");
+        repo.set_mtime(
+            &format!("rust/lib{i}/asset.txt"),
+            ran + Duration::from_secs(2),
+        );
         repo.write_unstaged(&format!("shared/d{i}/new"), "");
+        repo.set_mtime(&format!("shared/d{i}/new"), ran + Duration::from_secs(2));
     }
     let output = velnor_ci()
         .env(VARIABLE, ENTRY_LIMIT)
@@ -220,19 +245,67 @@ fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest()
     assert!(clippy.status.success(), "{clippy:?}");
     let before = lib_runs(&repo);
     assert_eq!(before.len(), 1, "{before:?}");
+    let ran = run_finished(
+        &repo,
+        before.iter().next().unwrap_or_else(|| unreachable!()),
+    );
 
     for input in ["a.txt", "b.txt", "c.txt"] {
         repo.write_unstaged(&format!("rust/lib/{input}"), "second\n");
-        repo.set_mtime(
-            &format!("rust/lib/{input}"),
-            SystemTime::now() + Duration::from_secs(100),
-        );
+        repo.set_mtime(&format!("rust/lib/{input}"), ran + Duration::from_secs(100));
     }
-    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
-    assert!(build.status.success(), "{build:?}");
     refused_with(
         &audit(&repo, &["--write"]),
         &["output stale: input a.txt changed after it ran, and 2 more (unit "],
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn a_run_with_unreadable_and_changed_inputs_counts_each_cause_separately() {
+    let repo = Repo::new("stale-run-mixed");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
+        ),
+        ("rust/Cargo.lock", "version = 4\n"),
+        (
+            "rust/lib/Cargo.toml",
+            "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+        ),
+        ("rust/lib/src/lib.rs", "pub fn value() -> u32 { 1 }\n"),
+        (
+            "rust/lib/build.rs",
+            "fn main() {\n    println!(\"cargo:rerun-if-changed=a.txt\");\n    println!(\"cargo:rerun-if-changed=b.txt\");\n    println!(\"cargo:rerun-if-changed=c.txt\");\n}\n",
+        ),
+        ("rust/lib/a.txt", "first\n"),
+        ("rust/lib/b.txt", "first\n"),
+        ("rust/lib/c.txt", "first\n"),
+    ]);
+    let clippy = build_step(&repo, &["clippy", "--workspace", "--all-targets"]);
+    assert!(clippy.status.success(), "{clippy:?}");
+    let before = lib_runs(&repo);
+    assert_eq!(before.len(), 1, "{before:?}");
+    let ran = run_finished(
+        &repo,
+        before.iter().next().unwrap_or_else(|| unreachable!()),
+    );
+
+    for input in ["a.txt", "b.txt"] {
+        let path = repo.root().join("rust/lib").join(input);
+        fs::remove_file(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        std::os::unix::fs::symlink(input, &path).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    repo.write_unstaged("rust/lib/c.txt", "second\n");
+    repo.set_mtime("rust/lib/c.txt", ran + Duration::from_secs(100));
+
+    refused_with(
+        &audit(&repo, &["--write"]),
+        &[
+            "output not proven current: freshness could not be proven for input a.txt, and 1 more unproven, 1 more changed (unit ",
+        ],
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }

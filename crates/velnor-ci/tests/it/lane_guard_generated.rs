@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const HELPER_LOCK: &str =
     include_str!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const LAUNCHER: &str = ". \"$VELNOR_EXEC\" run -- ";
 const MISE: &str = include_str!("../../../../generator/samples/helper-lock/view/mise.toml");
 const MISE_LOCK: &str = include_str!("../../../../generator/samples/helper-lock/view/mise.lock");

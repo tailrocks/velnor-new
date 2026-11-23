@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::declared_fixture::{TestResult, refusal, rendered_text, workflow};
+use crate::declared_fixture::{DECLARED_FILE, TestResult, refusal, rendered_text, workflow};
 
 const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
 
@@ -30,7 +30,7 @@ fn local(extra: &str) -> String {
 #[test]
 fn an_allowed_local_action_renders_with_the_self_repository_note() -> TestResult {
     for path in ALLOWED {
-        let text = rendered_text(&local(&format!("uses = \"{path}\"")), "ci")?;
+        let text = rendered_text(&local(&format!("uses = \"{path}\"")), DECLARED_FILE)?;
         assert!(
             text.contains(&format!(
                 "uses: '{path}'  # zizmor: ignore[self-repository]\n"
