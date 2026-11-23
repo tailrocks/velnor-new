@@ -20,7 +20,7 @@ use crate::release_unguarded::expected_release;
 use crate::step_refs::{Callees, Scan, dangling_refs, scan_workflow};
 use crate::test_groups::{DATABASE, SHELL};
 
-const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
+pub(crate) const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
@@ -45,7 +45,7 @@ fn patches_in(text: &str) -> Vec<u64> {
         .collect()
 }
 
-fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
+pub(crate) fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
     for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -66,7 +66,7 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
+pub(crate) fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
     velnor_gen::key_gates()
         .find(|gate| gate.key == key && gate.value.is_none())
         .map(|gate| gate.first.2)
@@ -118,7 +118,7 @@ fn callees_of(files: &BTreeMap<RepoPath, String>) -> Result<Callees, Box<dyn Err
     Ok(callees)
 }
 
-fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
+pub(crate) fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
     lock_pinned_tools(repo)?;
     Ok(velnor_gen::expected_with_notes(repo)?.0)
 }
@@ -189,7 +189,7 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     Ok(())
 }
 
-fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
+pub(crate) fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
     let required = velnor_gen::required_helper(repo).map_or(0, |(_, _, patch)| patch);
     let effective = patch.max(required);
     pin_helper(repo, &format!("0.1.{effective}"))?;
@@ -197,13 +197,13 @@ fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
 }
 
 #[derive(Default)]
-struct Sweep {
+pub(crate) struct Sweep {
     scan: Scan,
     problems: Vec<String>,
 }
 
 impl Sweep {
-    fn add(&mut self, label: &str, files: &BTreeMap<RepoPath, String>) -> TestResult {
+    pub(crate) fn add(&mut self, label: &str, files: &BTreeMap<RepoPath, String>) -> TestResult {
         let callees = callees_of(files)?;
         for (_, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
             scan_workflow(&crate::yaml_tree::document(text)?, &callees, &mut self.scan);
@@ -217,7 +217,12 @@ impl Sweep {
         Ok(())
     }
 
-    fn finish(self) {
+    pub(crate) fn absorb(&mut self, other: Self) {
+        self.scan.refs += other.scan.refs;
+        self.problems.extend(other.problems);
+    }
+
+    pub(crate) fn finish(self) {
         assert!(self.problems.is_empty(), "{:#?}", self.problems);
         assert_ne!(self.scan.refs, 0, "no steps reference was checked");
     }

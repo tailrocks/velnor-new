@@ -339,7 +339,7 @@ under ~4 minutes for an affected PR is arithmetic, not engineering.
 - **The looped-test diagnosis** — one `#[test]` iterating 40 (or 6) serial
   cases sets the step duration — with the fix list in §5.5 (split cases,
   parallelise the 12 `threads-required = "num-test-threads"` golden tests
-  [verified in `~/Projects/tailrocks/velnor-new/.config/nextest.toml`],
+  [verified in `<home>/Projects/tailrocks/velnor-new/.config/nextest.toml`],
   fix `-j2`). This is the highest-value code finding in the panel; D
   independently confirms the single-case-equals-step medians.
 - **Placement-after-assignment as the architectural question.** C is the

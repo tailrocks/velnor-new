@@ -183,7 +183,7 @@ fn the_lane_job_reports_its_test_counts_and_reads_zero_when_no_package_is_select
     );
     assert_eq!(
         outputs["tests_by_package"],
-        "${{ steps.test.outputs.tests_by_package }}"
+        "${{ steps.test.outputs.tests_by_package || '{}' }}"
     );
     let test = filtered[LANE_ID]["steps"]
         .as_array()
