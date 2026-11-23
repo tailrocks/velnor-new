@@ -17,12 +17,12 @@ const OBJECTS: &[(&str, &str, &str)] = &[
     (
         "trigger",
         "jit_dispatch_claim_time_guard",
-        "CREATE TRIGGER jit_dispatch_claim_time_guard BEFORE INSERT ON jit_dispatch_claim_times WHEN NEW.commit_observed_at!=unixepoch()+1 OR NOT EXISTS(SELECT 1 FROM connection_runner_jits jit WHERE jit.intent_id=NEW.intent_id) BEGIN SELECT RAISE(ABORT,'The JIT commit observation must use the current clock.'); END",
+        "CREATE TRIGGER jit_dispatch_claim_time_guard BEFORE INSERT ON jit_dispatch_claim_times WHEN NEW.commit_observed_at NOT BETWEEN unixepoch() AND unixepoch()+1 OR NOT EXISTS(SELECT 1 FROM connection_runner_jits jit WHERE jit.intent_id=NEW.intent_id) BEGIN SELECT RAISE(ABORT,'The JIT commit observation must use the current clock.'); END",
     ),
     (
         "trigger",
         "jit_dispatch_claim_time_no_update",
-        "CREATE TRIGGER jit_dispatch_claim_time_no_update BEFORE UPDATE ON jit_dispatch_claim_times WHEN OLD.commit_observed_at IS NOT NULL OR NEW.commit_observed_at IS NULL OR NEW.commit_observed_at!=unixepoch()+1 OR NEW.intent_id!=OLD.intent_id BEGIN SELECT RAISE(ABORT,'JIT dispatch claim times are immutable.'); END",
+        "CREATE TRIGGER jit_dispatch_claim_time_no_update BEFORE UPDATE ON jit_dispatch_claim_times WHEN OLD.commit_observed_at IS NOT NULL OR NEW.commit_observed_at IS NULL OR NEW.commit_observed_at NOT BETWEEN unixepoch() AND unixepoch()+1 OR NEW.intent_id!=OLD.intent_id BEGIN SELECT RAISE(ABORT,'JIT dispatch claim times are immutable.'); END",
     ),
     (
         "trigger",
@@ -83,7 +83,21 @@ pub(super) async fn migrate(conn: &turso::Connection) -> Result<(), HostError> {
     validate(conn).await
 }
 
+pub(super) fn clock_guards() -> Vec<(String, String)> {
+    OBJECTS
+        .iter()
+        .filter(|(_, name, _)| {
+            matches!(
+                *name,
+                "jit_dispatch_claim_time_guard" | "jit_dispatch_claim_time_no_update"
+            )
+        })
+        .map(|&(_, name, sql)| (name.to_owned(), sql.to_owned()))
+        .collect()
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    let version = super::journal_version(conn).await?;
     for &(kind, name, expected) in OBJECTS.iter().chain(std::iter::once(&(
         "trigger",
         "jit_interrupted_remote_absence_guard",
@@ -103,9 +117,12 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
             .ok_or(HostError::Journal)?
             .get(0)
             .map_err(|_| HostError::Journal)?;
-        if super::sql_normalization::normalize(&actual)
-            != super::sql_normalization::normalize(expected)
-        {
+        if !super::clock_tick::matches(
+            version,
+            &actual,
+            expected,
+            super::sql_normalization::normalize,
+        ) {
             return Err(HostError::Journal);
         }
     }

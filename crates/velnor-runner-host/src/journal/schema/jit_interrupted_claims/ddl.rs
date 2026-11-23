@@ -63,7 +63,12 @@ pub(super) fn objects() -> Vec<(&'static str, String, String)> {
     objects.push(("view", "physical_attempt_jit_recovery_sources".to_owned(), format!("CREATE VIEW physical_attempt_jit_recovery_sources AS SELECT {COLUMNS},'conflict' AS source_kind FROM physical_attempt_jit_conflict_receipts UNION ALL SELECT {COLUMNS},'interrupted' AS source_kind FROM physical_attempt_jit_interrupted_claims")));
     let matches = COLUMNS
         .split(',')
-        .map(|column| format!("candidate.{column}=NEW.{column}"))
+        .map(|column| match column {
+            "created_at" => {
+                "NEW.created_at BETWEEN candidate.created_at-1 AND candidate.created_at".to_owned()
+            }
+            _ => format!("candidate.{column}=NEW.{column}"),
+        })
         .collect::<Vec<_>>()
         .join(" AND ");
     let guard = format!(
