@@ -103,12 +103,16 @@ fn a_credential_in_a_public_source_cache_stops_the_sources_save() {
         (
             "public-git-credentials",
             ".cargo/git/db/shared-1/.git-credentials",
-            "https://x-access-token:ghs_secret@github.com\n",
+            concat!("https://x-access-token:", "ghs_secret", "@github.com\n"),
         ),
         (
             "public-git-config",
             ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n",
+            concat!(
+                "[remote \"origin\"]\n\turl = https://x-access-token:",
+                "ghs_secret",
+                "@github.com/acme/shared-lib\n"
+            ),
         ),
     ] {
         let repo = private_checkout(&format!("decide-{label}"), "version = 4\n");
