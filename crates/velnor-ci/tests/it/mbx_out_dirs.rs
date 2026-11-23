@@ -21,6 +21,10 @@ impl Scratch {
     fn new(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let root =
             std::env::temp_dir().join(format!("velnor-mbx-out-dirs-{}-{name}", std::process::id()));
+        Self::at(root)
+    }
+
+    fn at(root: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         remove_tree(&root).ok();
         fs::create_dir_all(&root)?;
         let root = fs::canonicalize(root)?;
@@ -57,8 +61,44 @@ fn trusted_with(root: &Path) -> std::ffi::OsString {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        remove_tree(&self.0).ok();
+        if !velnor_test_support::keeping() {
+            remove_tree(&self.0).ok();
+        }
     }
+}
+
+const PROBE_ENV: &str = "VELNOR_MBX_KEEP_PROBE";
+
+#[test]
+fn a_scratch_tree_survives_its_guard_when_the_keep_flag_is_set() -> TestResult {
+    let probe = std::env::temp_dir().join(format!("velnor-mbx-keep-probe-{}", std::process::id()));
+    remove_tree(&probe).ok();
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "mbx_out_dirs::a_scratch_tree_is_written_for_the_keep_probe",
+            "--nocapture",
+        ])
+        .env(PROBE_ENV, &probe)
+        .env("VELNOR_KEEP_TEST_DIRS", "1")
+        .status()?;
+    let kept = probe.join("mise.toml").is_file();
+    remove_tree(&probe).ok();
+    assert!(status.success(), "probe child failed: {status}");
+    assert!(
+        kept,
+        "the scratch tree must survive its guard when VELNOR_KEEP_TEST_DIRS=1"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_scratch_tree_is_written_for_the_keep_probe() -> TestResult {
+    let Some(probe) = std::env::var_os(PROBE_ENV) else {
+        return Ok(());
+    };
+    Scratch::at(PathBuf::from(probe))?;
+    Ok(())
 }
 
 fn remove_tree(path: &Path) -> std::io::Result<()> {
