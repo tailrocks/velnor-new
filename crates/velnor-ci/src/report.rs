@@ -111,7 +111,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace && event.restored != Some(false))
+            if (same_lock && !event.workspace && event.restored == Some(true))
                 || (warm
                     && event.workspace
                     && (event.unchanged
@@ -121,8 +121,11 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                             .all(|dependency| !compiled.contains(dependency.as_str()))))
             {
                 violations.push(format!(
-                    "{}: {} v{} compiled despite usable restored inputs",
-                    invocation.root, event.package, event.version
+                    "{}: {} v{} compiled despite usable restored inputs{}",
+                    invocation.root,
+                    event.package,
+                    event.version,
+                    crate::restored_units::cargo_reason(event)
                 ));
             }
         }
@@ -203,20 +206,22 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     }
 }
 
+#[must_use]
 pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
-    let mut notices: Vec<String> = lanes
-        .iter()
-        .flat_map(crate::restored_units::base_gaps)
-        .collect();
+    let mut notices: Vec<(&'static str, String)> = Vec::new();
+    for lane in lanes {
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| ("notice", gap)),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
+    }
     notices.sort();
     notices.dedup();
-    notice_lines(&notices)
-}
-
-fn notice_lines(notices: &[String]) -> String {
     notices
         .iter()
-        .map(|notice| crate::escape::command_line("notice", notice))
+        .map(|(level, notice)| crate::escape::command_line(level, notice))
         .collect()
 }
 

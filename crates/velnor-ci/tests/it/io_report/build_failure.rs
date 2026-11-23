@@ -14,7 +14,7 @@ fn serde_artifact() -> Value {
         "manifest_path":"/registry/serde-1.0.200/Cargo.toml",
         "target":{"name":"serde","kind":["lib"],"crate_types":["lib"],"src_path":"/registry/serde-1.0.200/src/lib.rs"},
         "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
-        "features":[],"filenames":["target/debug/deps/libserde-hash.rmeta"],"fresh":false
+        "features":[],"filenames":["target/debug/deps/libserde-0123456789abcdef.rmeta"],"fresh":false
     })
 }
 
@@ -66,6 +66,10 @@ fn run_lane(
 ) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
     let repo = super::fixture(name)?;
     if restore {
+        repo.write(
+            "target/debug/.fingerprint/serde-0123456789abcdef/lib-serde",
+            "{}\n",
+        );
         repo.git(&["add", "."]);
         assert!(super::cli(&repo, &["inputs", "save"]).status.success());
         assert!(super::cli(&repo, &["inputs", "restore"]).status.success());
