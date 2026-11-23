@@ -18,7 +18,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{MetadataInvocation, Roots, Workspace, apart, unchecked_unit_files};
+use super::super::units::{MetadataInvocation, Roots, Workspace, apart};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -328,7 +328,12 @@ impl Builder<'_> {
         let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
         let roots = Roots::new(&self.workspaces);
-        for (directory, started) in self.directories.iter().zip(started) {
+        let scanned = self
+            .directories
+            .iter()
+            .map(|directory| roots.scan(directory, status.success()))
+            .collect::<Result<Vec<_>, _>>()?;
+        for ((directory, started), units) in self.directories.iter().zip(started).zip(scanned) {
             let store = directory.join(inventory::STORE);
             let saved = store.join(format!("{digest}.json"));
             if complete && status.success() {
@@ -336,11 +341,6 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            let units = if status.success() {
-                roots.unit_files(directory)?
-            } else {
-                unchecked_unit_files(directory)?
-            };
             for (unit, file) in units {
                 if !output(&unit) {
                     continue;

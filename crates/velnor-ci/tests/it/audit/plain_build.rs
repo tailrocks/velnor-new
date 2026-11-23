@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
+use std::path::Path;
+
 use super::new_layout::own_units_1100;
+use super::separate_build::two_standalone_roots;
 use super::{unit, velnor_ci, workspace_below_the_root};
 
 #[test]
@@ -186,4 +190,40 @@ fn a_cargo_configuration_under_the_changed_directory_decides_the_target_the_buil
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
     assert!(repo.root().join("rust/elsewhere/debug").is_dir());
+}
+
+#[test]
+fn a_build_refused_for_an_unknown_layout_in_a_later_target_saves_nothing_for_an_earlier_one() {
+    let repo = two_standalone_roots();
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "sh",
+            "-c",
+            "mkdir -p web/target/debug && : > web/target/debug/libx.rlib",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("unknown cargo layout?"),
+        "{refused:?}"
+    );
+    let saved: Vec<_> = fs::read_dir(repo.root().join("tools/b/target/.velnor-input-inventories"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            Path::new(&name).extension().is_some_and(|e| e == "json")
+                && !name.starts_with("failed-")
+        })
+        .collect();
+    assert!(
+        saved.is_empty(),
+        "an inventory was saved before the later directory was refused: {saved:?}"
+    );
 }

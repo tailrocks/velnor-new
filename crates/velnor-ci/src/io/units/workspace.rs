@@ -39,6 +39,18 @@ impl Roots {
         }
     }
 
+    pub(in crate::io) fn scan(
+        &self,
+        directory: &Path,
+        checked: bool,
+    ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+        if checked {
+            self.unit_files(directory)
+        } else {
+            unchecked_unit_files(directory)
+        }
+    }
+
     pub(in crate::io) fn unit_files(
         &self,
         directory: &Path,
