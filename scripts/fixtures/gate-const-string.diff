@@ -1,5 +1,0 @@
-diff --git a/crates/velnor-gen/src/docs.rs b/crates/velnor-gen/src/docs.rs
---- a/crates/velnor-gen/src/docs.rs
-+++ b/crates/velnor-gen/src/docs.rs
-@@ -0,0 +1 @@
-+const EXAMPLE: &str = "requires release 0.1.110";

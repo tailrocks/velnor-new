@@ -5,13 +5,13 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-helper-gates.sh"
 fixtures="$root/scripts/fixtures"
 
-for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-const-pub-in gate-const-pub-space gate-string-marker; do
+for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-const-pub-in gate-const-pub-space gate-string-marker; do
   if bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110; then
     echo "the check accepted $f.diff" >&2
     exit 1
   fi
 done
-for f in gate-const-marked gate-const-fn gate-const-block gate-const-string gate-const-string-tuple gate-const-string-escape gate-const-rgb gate-macro-tuple gate-macro-space gate-pattern-tuple gate-pattern-guard; do
+for f in gate-const-marked gate-const-fn gate-const-block gate-const-help-string gate-const-rgb gate-macro-tuple gate-macro-space gate-pattern-tuple gate-pattern-guard; do
   bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110
 done
 

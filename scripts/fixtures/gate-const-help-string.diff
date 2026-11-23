@@ -2,4 +2,4 @@ diff --git a/crates/velnor-gen/src/docs.rs b/crates/velnor-gen/src/docs.rs
 --- a/crates/velnor-gen/src/docs.rs
 +++ b/crates/velnor-gen/src/docs.rs
 @@ -0,0 +1 @@
-+const EXAMPLE: &str = "the RGB value is (0, 1, 110)";
++const HELP: &str = "pin velnor-ci 0.1.110 or later";

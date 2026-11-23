@@ -1,0 +1,9 @@
+diff --git a/generator/old dir/gates.rs b/crates/velnor-gen/src/gates.rs
+similarity index 51%
+rename from generator/old dir/gates.rs
+rename to crates/velnor-gen/src/gates.rs
+--- a/generator/old dir/gates.rs
++++ b/crates/velnor-gen/src/gates.rs
+@@ -1 +1,2 @@
+ gate(RustCi, "budget", (0, 1, 110)),
++gate(RustCi, "lint", (0, 1, 110)),
