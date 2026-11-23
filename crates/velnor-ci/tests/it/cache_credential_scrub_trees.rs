@@ -78,41 +78,6 @@ fn a_ref_namespace_holding_a_head_ref_is_not_a_module_and_is_saved() {
 }
 
 #[test]
-fn a_symbolic_ref_named_config_does_not_make_its_namespace_a_repository() {
-    let root = format!("{DATABASE}/modules/x");
-    let decided = decided(
-        "symbolic-config-ref",
-        &repository(
-            &root,
-            &[
-                ("refs/notes/HEAD", SHA),
-                ("refs/notes/config", "ref: refs/heads/main\n"),
-                ("refs/notes/hooks/main", SHA),
-            ],
-        ),
-    );
-    assert_eq!(decided.written, SAVED);
-    assert!(
-        decided
-            .home
-            .join(&root)
-            .join("refs/notes/hooks/main")
-            .is_file()
-    );
-}
-
-#[test]
-fn a_config_that_starts_like_a_symbolic_ref_is_still_scanned_in_a_planted_repository() {
-    let root = format!("{DATABASE}/refs/notes/planted");
-    let config = format!("ref: refs/heads/main\n{TOKEN_REMOTE}");
-    let stopped = decided(
-        "symbolic-first-line-config",
-        &repository(&root, &[("config", &config)]),
-    );
-    assert_eq!(stopped.written, REFUSED);
-}
-
-#[test]
 fn a_git_directory_planted_in_a_refs_tree_is_still_scanned() {
     for place in [
         "refs/heads/planted",

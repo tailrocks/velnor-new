@@ -96,3 +96,51 @@ fn a_directory_with_a_head_but_neither_config_nor_objects_is_not_a_repository() 
     assert!(vendor.join("refs/heads/topic/hooks/main").is_file());
     assert!(vendor.join("refs/remotes/origin/hooks/main").is_file());
 }
+
+const SYMBOLIC_TARGET: &str = concat!(
+    "ref: refs/heads/",
+    "ghp_",
+    "0123456789abcdefghijklmnopqrstuvwxyzAB\n"
+);
+
+fn namespace_with_config_ref(label: &str, config_ref: &str) -> (String, crate::io::Repo) {
+    let mut files = repository("modules/x", BARE);
+    files.extend(
+        [
+            ("modules/x/refs/notes/HEAD", SHA),
+            ("modules/x/refs/notes/config", config_ref),
+            ("modules/x/refs/notes/hooks/main", SHA),
+        ]
+        .map(|(path, content)| (path.to_owned(), content.to_owned())),
+    );
+    decided(label, &files)
+}
+
+#[test]
+fn a_symbolic_ref_named_config_does_not_make_its_namespace_a_repository() {
+    let (written, repo) =
+        namespace_with_config_ref("symbolic-config-ref", "ref: refs/heads/main\n");
+    assert_eq!(written, "save=true\nsources=true\n");
+    let hooks = repo
+        .root()
+        .join("home")
+        .join(DATABASE)
+        .join("modules/x/refs/notes/hooks/main");
+    assert!(hooks.is_file());
+}
+
+#[test]
+fn a_symbolic_ref_naming_a_credential_stops_the_sources_save() {
+    let (written, _repo) = namespace_with_config_ref("symbolic-credential-target", SYMBOLIC_TARGET);
+    assert_eq!(written, "save=true\nsources=false\n");
+}
+
+#[test]
+fn a_config_that_starts_like_a_symbolic_ref_is_still_scanned_in_a_planted_repository() {
+    let config = format!("ref: refs/heads/main\n{TOKEN_REMOTE}");
+    let (written, _repo) = decided(
+        "symbolic-first-line-config",
+        &repository("refs/notes/planted", &config),
+    );
+    assert_eq!(written, "save=true\nsources=false\n");
+}

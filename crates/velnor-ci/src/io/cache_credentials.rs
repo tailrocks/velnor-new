@@ -299,7 +299,8 @@ fn is_ref_value(path: &Path) -> bool {
     read_small(path).is_some_and(|text| {
         let value = text.trim_end();
         !value.contains(['\n', '\r'])
-            && (value.starts_with("ref:")
+            && ((value.starts_with("ref:")
+                && !crate::io::saved_git_config::names_credential(value))
                 || (matches!(value.len(), 40 | 64)
                     && value.bytes().all(|each| each.is_ascii_hexdigit())))
     })
