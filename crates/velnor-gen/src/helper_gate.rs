@@ -87,7 +87,7 @@ fn require_generator_digests(
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }));
     if wanted && release.generator_digests().is_none() {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     }
@@ -134,7 +134,7 @@ fn needs_pinned_helper(view: &RepoView, facts: &RepoFacts) -> bool {
             .config
             .lint
             .iter()
-            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck))
+            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }))
 }
 
 fn needs_lint_tools(facts: &RepoFacts) -> bool {
