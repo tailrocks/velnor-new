@@ -18,6 +18,12 @@ const SYNTAX_PREFIX: &str =
     "PYTHONPATH=\"$RUNNER_TEMP/ansible\" python3 -m ansible.cli.playbook --syntax-check";
 const RUN_LIMIT: usize = 2000;
 
+fn yaml_name(name: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"))
+}
+
 pub(crate) fn is_layout_file(path: &RepoPath) -> bool {
     let Some(name) = path.as_str().strip_prefix(LAYOUT) else {
         return false;
@@ -26,8 +32,7 @@ pub(crate) fn is_layout_file(path: &RepoPath) -> bool {
         && (name == "requirements.txt"
             || name == "requirements.yaml"
             || name == "requirements.yml"
-            || name.ends_with(".yml")
-            || name.ends_with(".yaml"))
+            || yaml_name(name))
 }
 
 pub fn attach_ansible(
@@ -100,7 +105,7 @@ fn playbooks(view: &RepoView) -> Result<Option<Vec<RepoPath>>, DetectError> {
         if name.contains('/') || name == "requirements.yaml" || name == "requirements.yml" {
             continue;
         }
-        if !name.ends_with(".yml") && !name.ends_with(".yaml") {
+        if !yaml_name(name) {
             continue;
         }
         let Some(bytes) = view.files.get(path) else {
