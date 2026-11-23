@@ -13,6 +13,7 @@ use velnor_model::{
 
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+const CACHE_AFTER_PRODUCER_HELPER: (u64, u64, u64) = (0, 1, 112);
 const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
@@ -64,7 +65,14 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         producers.push(&*job);
     }
     producers.extend(maintenance);
-    let needs = producers.iter().map(|job| job.id.clone()).collect();
+    let needs: Vec<JobId> = producers.iter().map(|job| job.id.clone()).collect();
+    let after_producer =
+        !facts.config.cache_check_blocks && helper_at_least(facts, CACHE_AFTER_PRODUCER_HELPER);
+    let when = if after_producer {
+        When::FinalizerAfterProducer
+    } else {
+        When::Finalizer
+    };
     let needs_max_bytes = crate::required_size::needs_max_bytes(facts, producers);
     let mut steps: Vec<_> = facts
         .helper
@@ -81,7 +89,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     let mut cache = Job {
         name: Some("Cache".to_owned()),
         needs,
-        when: When::Finalizer,
+        when,
         pr: crate::plan::quick(facts),
         steps,
         ..job(facts, JobId::from_static("cache"))

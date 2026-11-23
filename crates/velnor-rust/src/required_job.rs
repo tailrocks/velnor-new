@@ -63,6 +63,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::NotCancelled
         | When::NotCancelledPostMerge
         | When::Finalizer
+        | When::FinalizerAfterProducer
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
