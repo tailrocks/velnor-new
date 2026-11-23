@@ -31,7 +31,7 @@ sha2 = { workspace = true }
 sigstore-verify = { version = "=0.16.0", default-features = false, features = ["aws-lc-rs", "native-tls"] }
 tokio = { workspace = true, features = ["fs"] }
 tough = { version = "=0.24.0", default-features = false }
-url = { version = "=2.5.8" }
+url = { version = "=2.5.9" }
 x509-cert = { version = "=0.2.5" }
 
 [dev-dependencies]

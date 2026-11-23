@@ -23,7 +23,7 @@ pub(crate) fn document(
         Some(entry("on", triggers(&plan.triggers))),
         Some(entry("permissions", permissions(&plan.permissions))),
         Some(entry("concurrency", concurrency(plan.concurrency))),
-        Some(entry("env", env::workflow_env(roots))),
+        Some(entry("env", env::workflow_env(plan, roots))),
         helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
         Some(entry(
             "jobs",

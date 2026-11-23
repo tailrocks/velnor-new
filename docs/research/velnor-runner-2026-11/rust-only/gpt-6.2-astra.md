@@ -318,7 +318,7 @@ For PRs, move any bookkeeping-only commit assertions into a cheap signed head bi
 ## 7. Scheduling and the cluster
 
 The five workers supply 480 logical threads and about 627.5 GiB total RAM. The 20-thread control-plane node stays out of the build pool. The inventory places two workers in Germany and three in Finland, with direct documentation for one node at each site. Validate topology labels before scheduling.
-On November 18 some workers reached 92–95% CPU and one pod used 83.7 cores despite requesting two. Worker memory limits sum to 281–306% of capacity. The tailrocks, ChainArgos and jackin scale sets have ceilings of 60, 60 and 40 runners. A runner count cannot express spare compiler capacity. See `evidence.md:437–449,502–548`.
+On November 18 some workers reached 92–95% CPU and one pod used 83.7 cores despite requesting two. Worker memory limits sum to 281–306% of capacity. The tailrocks, example-org and jackin scale sets have ceilings of 60, 60 and 40 runners. A runner count cannot express spare compiler capacity. See `evidence.md:437–449,502–548`.
 
 **Capacity plan, initial E settings**
 
@@ -326,7 +326,7 @@ On November 18 some workers reached 92–95% CPU and one pod used 83.7 cores des
 |---|---:|---|
 | Kernel, kubelet, network and node agent | 4 threads and 8 GiB per worker | Reserve cgroups/cpusets. Keep another 4 GiB per worker as eviction headroom. |
 | Schedulable total | 5 × 92 = 460 threads, about 567.5 GiB | Count live memory, page-cache pressure, I/O and ephemeral storage as well as requests. |
-| Tenant floors under contention | Tailrocks 160 threads, ChainArgos 100, jackin 80, 120 elastic | Starting allocations only. Agree floors with tenant owners. Lend idle shares using work-conserving weighted scheduling. |
+| Tenant floors under contention | Tailrocks 160 threads, example-org 100, jackin 80, 120 elastic | Starting allocations only. Agree floors with tenant owners. Lend idle shares using work-conserving weighted scheduling. |
 | Tailrocks queue/gate reserve | Per site one 16-thread builder plus 2 control threads, 36 of its 160 | Keep capacity immediately reclaimable from batch. Ordinary PRs cannot occupy the last required slot. |
 | Build/test classes | Start with 16 threads/24 GiB build, 4/6 GiB test, 1/1 GiB control | Admit on actual available memory. Tune by job profile. Use one Cargo jobserver per allocation, cap test processes separately. |
 

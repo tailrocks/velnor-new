@@ -57,10 +57,10 @@ fn scan_within_the_budget(name: &str, build: impl FnOnce(&Path)) -> io::Result<E
 #[test]
 fn a_deep_tree_with_pending_siblings_is_walked_within_a_small_descriptor_budget() {
     confined(|| {
-        let entries = scan_within_the_budget("deep-budget", |root| deep_tree(root, 160, 4))
-            .unwrap_or_else(|e| {
-                panic!("walk needed more than {DESCRIPTOR_BUDGET} descriptors: {e}")
-            });
+        let entries = scan_within_the_budget("deep-budget", |root| {
+            deep_tree(root, 160, 4);
+        })
+        .unwrap_or_else(|e| panic!("walk needed more than {DESCRIPTOR_BUDGET} descriptors: {e}"));
         assert_eq!(entries.len(), 1 + 160 * 5, "{}", entries.len());
     });
 }
