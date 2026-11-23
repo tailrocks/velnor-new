@@ -312,6 +312,31 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
     }
 }
 
+/// The plan mode of every root the gate covers, as one expression, so that a step that cannot
+/// evaluate the lane's `if` can still tell an unselected lane from a failed one.
+pub(crate) fn plan_modes(gate: &Gate, setup: Setup) -> String {
+    let source = plan_source(&gate.from);
+    let reads: Vec<String> = gate
+        .roots()
+        .map(|slug| plan_read(&source, &output(slug, GateNeed::Selected), setup))
+        .collect();
+    match reads.as_slice() {
+        [only] => format!("${{{{ {only} }}}}"),
+        _ => {
+            let holes: Vec<String> = (0..reads.len()).map(|at| format!("{{{at}}}")).collect();
+            format!(
+                "${{{{ format('{}', {}) }}}}",
+                holes.join(" "),
+                reads
+                    .iter()
+                    .map(|read| format!("({read})"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
+}
+
 pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {

@@ -95,7 +95,10 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         verification_errors: invocation_errors,
         mbx: crate::waste_evidence::MbxEvidence::default(),
         toolchain_installs: Vec::new(),
-        privacy_unavailable: crate::report_caches::privacy_unavailable(&steps),
+        privacy_unavailable: crate::report_caches::privacy_unavailable(
+            &steps,
+            std::env::var("VELNOR_REPORT_PLAN_MODE").ok().as_deref(),
+        ),
         violations: Vec::new(),
     };
     metrics.invocations.retain(|invocation| {

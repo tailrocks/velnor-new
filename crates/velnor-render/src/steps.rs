@@ -18,8 +18,8 @@ use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_read, plan_source,
-    sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_modes, plan_read,
+    plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
@@ -145,6 +145,11 @@ fn job_steps(
                     saved_after: gate.required(),
                     chained: job.chained_saves,
                     job_name: job.name.as_deref(),
+                    privacy_gate: job
+                        .steps
+                        .iter()
+                        .find(|step| step.kind == StepKind::RepositoryPrivacy)
+                        .and_then(|step| step.gate.as_ref().or(job.gate.as_ref())),
                     after_setup: after_setup(step, setups),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
@@ -180,6 +185,8 @@ struct Around<'a> {
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
+    /// The gate of the lane's privacy lookup: the report reads the lane's own plan mode from it.
+    privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
 }
 
@@ -224,6 +231,14 @@ fn rendered_steps(
             body.env.push((
                 "VELNOR_REPORT_JOB_NAME".to_owned(),
                 Value::Text(name.to_owned()),
+            ));
+        }
+        if matches!(step.kind, StepKind::ReportCaches { .. })
+            && let Some(gate) = around.privacy_gate
+        {
+            body.env.push((
+                "VELNOR_REPORT_PLAN_MODE".to_owned(),
+                Value::Expr(plan_modes(gate, setup)),
             ));
         }
         let extra = extra_conditions(step, setup, &around.after_setup);
