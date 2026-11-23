@@ -214,14 +214,12 @@ pub fn setup() -> Result<String, CiError> {
         runner_temp: &runner_temp,
     });
     let lines = env_lines(&outcome)?;
-    if !lines.is_empty() {
-        let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
-        fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(lines.as_bytes()))
-            .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
-    }
+    let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
+    fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&file)
+        .and_then(|mut handle| handle.write_all(lines.as_bytes()))
+        .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     Ok(message(&outcome))
 }

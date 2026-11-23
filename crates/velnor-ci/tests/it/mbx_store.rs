@@ -253,3 +253,29 @@ fn a_store_or_shims_directory_with_a_line_break_cannot_add_an_environment_variab
         assert!(env_lines(&outcome).is_err(), "{dir:?} {shims:?}");
     }
 }
+
+#[test]
+fn the_command_appends_the_out_dir_setting_to_github_env_whatever_the_event() {
+    for (name, event, git_ref) in [
+        ("mbx-store-env-push", "push", "refs/heads/main"),
+        ("mbx-store-env-pr", "pull_request", "refs/pull/1/merge"),
+    ] {
+        let host = host(name);
+        let env_file = host.root.join("github-env");
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .arg("mbx-store")
+            .env_clear()
+            .env("RUNNER_TEMP", host.root.join("temp"))
+            .env("GITHUB_ENV", &env_file)
+            .env("GITHUB_EVENT_NAME", event)
+            .env("GITHUB_REF", git_ref)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{name}: {output:?}");
+        assert_eq!(
+            fs::read_to_string(&env_file).unwrap_or_default(),
+            KEEP_OUT_DIR,
+            "{name}"
+        );
+    }
+}
