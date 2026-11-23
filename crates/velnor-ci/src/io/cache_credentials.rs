@@ -49,10 +49,16 @@ enum Context {
 }
 
 impl Context {
-    fn entering(self, name: &str, parent_is_git_directory: bool, databases: bool) -> Self {
+    fn entering(
+        self,
+        name: &str,
+        exact_refs: bool,
+        parent_is_git_directory: bool,
+        databases: bool,
+    ) -> Self {
         if databases || name == GIT_DIRECTORY {
             Self::Declared
-        } else if parent_is_git_directory && name == REFS {
+        } else if parent_is_git_directory && exact_refs {
             Self::Refs
         } else if parent_is_git_directory && (name == HOOKS || name == LOGS) {
             Self::Prunable
@@ -223,7 +229,8 @@ fn walk(
                 return Some(found);
             }
         } else if kind.is_dir() {
-            let entering = context.entering(&name, is_git_directory, databases);
+            let exact_refs = entry.file_name() == REFS;
+            let entering = context.entering(&name, exact_refs, is_git_directory, databases);
             let identity = if entering == Context::Prunable {
                 match entry.metadata() {
                     Ok(metadata) => Some(Identity::of(&metadata)),

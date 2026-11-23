@@ -29,25 +29,35 @@ fn repository(root: &str, config: &str) -> Vec<(String, String)> {
     ]
 }
 
+fn nested_configs_stop_the_sources_save(roots: &[(&str, &str)]) {
+    for (label, root) in roots {
+        let (written, _repo) = decided(label, &repository(root, TOKEN_REMOTE));
+        assert_eq!(written, "save=true\nsources=false\n", "{label}");
+    }
+}
+
 #[test]
-fn a_credential_in_the_config_of_any_nested_repository_stops_the_sources_save() {
-    for (label, root) in [
+fn a_credential_in_the_config_of_a_module_named_like_a_git_directory_stops_the_sources_save() {
+    nested_configs_stop_the_sources_save(&[
         ("module-named-refs", "modules/refs"),
         ("module-path-ending-in-refs", "modules/vendor/refs"),
         ("module-path-through-refs", "modules/refs/vendor"),
         ("module-named-objects", "modules/objects"),
         ("module-path-through-objects", "modules/objects/vendor"),
-        ("nested-module", "modules/vendor/modules/deep"),
         ("segment-after-refs", "modules/vendor/refs/x"),
+    ]);
+}
+
+#[test]
+fn a_credential_in_the_config_of_any_nested_repository_stops_the_sources_save() {
+    nested_configs_stop_the_sources_save(&[
+        ("nested-module", "modules/vendor/modules/deep"),
         ("segments-after-refs", "modules/vendor/refs/x/y/z"),
         ("segment-after-objects", "modules/objects/x"),
         ("three-level-nested-module", "modules/a/modules/b/modules/c"),
         ("linked-worktree-module", "worktrees/w1/modules/vendor"),
         ("nested-dot-git", "vendor/.git"),
-    ] {
-        let (written, _repo) = decided(label, &repository(root, TOKEN_REMOTE));
-        assert_eq!(written, "save=true\nsources=false\n", "{label}");
-    }
+    ]);
 }
 
 #[test]
@@ -142,5 +152,13 @@ fn a_config_that_starts_like_a_symbolic_ref_is_still_scanned_in_a_planted_reposi
         "symbolic-first-line-config",
         &repository("refs/notes/planted", &config),
     );
+    assert_eq!(written, "save=true\nsources=false\n");
+}
+
+#[test]
+fn a_directory_named_refs_in_another_case_is_scanned_like_any_other() {
+    let mut files = repository("modules/x", BARE);
+    files.push(("modules/x/Refs/config".to_owned(), TOKEN_REMOTE.to_owned()));
+    let (written, _repo) = decided("refs-in-another-case", &files);
     assert_eq!(written, "save=true\nsources=false\n");
 }
