@@ -20,7 +20,7 @@ fn saves_base_caches(configs: &[(&str, &[u8])]) -> Result<bool, Box<dyn std::err
     crate::facts::lock_pinned_tools(&mut repo)?;
     let (mut files, _) = expected_with_notes(&repo)?;
     let text = files
-        .remove(&path(".github/workflows/rust-ci.yml")?)
+        .remove(&path(".github/workflows/ci.yml")?)
         .ok_or("no workflow")?;
     Ok(text.contains("Save the target cache"))
 }
