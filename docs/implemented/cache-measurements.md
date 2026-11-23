@@ -236,7 +236,7 @@ This is a small end-to-end action and cache round-trip probe. The writer
 samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
 The reader prints those same lines. `tee` writes each MBX stats JSON to
 the step log and a file. `jq -e` reads the file. It still does not qualify the
-affected ChainArgos workload.
+affected example-org workload.
 A failing stats producer also fails the probe even if `tee` writes valid JSON:
 both reader steps enable `pipefail` explicitly because the hosted default shell
 does not.

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 fn scan_racing(
     name: &str,
     before_open: &dyn Fn(&Path) -> io::Result<()>,
@@ -254,10 +256,16 @@ fn a_directory_removed_after_it_is_opened_is_dropped_from_the_inventory() {
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
+static ROOT_SWAP_SCRATCH_ID: AtomicUsize = AtomicUsize::new(0);
+
 fn scan_with_root_replaced_after_it_is_opened(replace: fn(&Path, &Path)) -> io::Result<Entries> {
+    let scratch_id = ROOT_SWAP_SCRATCH_ID.fetch_add(1, Ordering::Relaxed);
     let base = fs::canonicalize(std::env::temp_dir())
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-root-swap-{}", std::process::id()));
+        .join(format!(
+            "velnor-scan-root-swap-{}-{scratch_id}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&base);
     let root = base.join("root");
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -299,6 +307,18 @@ fn a_root_replaced_by_a_file_while_it_is_listed_fails_the_scan() {
     });
     assert!(
         matches!(&entries, Err(error) if error.to_string().contains("was replaced while it was listed")),
+        "{entries:?}"
+    );
+}
+
+#[test]
+fn a_root_replaced_by_a_directory_while_it_is_listed_fails_the_scan() {
+    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
+        fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir(root).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("was replaced by another directory while it was listed")),
         "{entries:?}"
     );
 }

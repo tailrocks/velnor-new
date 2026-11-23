@@ -1,5 +1,5 @@
 roots = ["."]
-after = ["CI", "Qualification", "Rust CI"]
+after = ["CI", "Qualification"]
 
 [[binaries]]
 package = "app"

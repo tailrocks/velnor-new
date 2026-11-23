@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::declared_fixture::{JOB, TestResult, job, refusal, rendered_file, workflow};
+use crate::declared_fixture::{
+    DECLARED_FILE, JOB, TestResult, job, refusal, rendered_file, workflow,
+};
 use crate::trusted_events::{Event, FORK_RUNNER, NORMAL, TRUSTED, events, runs_on};
 use crate::yaml_tree::Node;
 
@@ -107,7 +109,7 @@ fn a_plain_self_hosted_workflow_routes_each_job_by_event() -> TestResult {
         JOB,
     );
     check(
-        &expression(&config, "ci", "check")?,
+        &expression(&config, DECLARED_FILE, "check")?,
         "velnor-box",
         &[],
         |_| false,
@@ -124,10 +126,13 @@ fn a_job_on_another_self_hosted_runner_or_a_hosted_one_keeps_its_label() -> Test
         ON,
         &jobs,
     );
-    let other = expression(&config, "ci", "other")?;
+    let other = expression(&config, DECLARED_FILE, "other")?;
     assert!(!other.contains(POOL), "{other}");
-    assert_eq!(expression(&config, "ci", "hosted")?, "ubuntu-24.04");
-    assert!(expression(&config, "ci", "check")?.contains(POOL));
+    assert_eq!(
+        expression(&config, DECLARED_FILE, "hosted")?,
+        "ubuntu-24.04"
+    );
+    assert!(expression(&config, DECLARED_FILE, "check")?.contains(POOL));
     Ok(())
 }
 
@@ -139,7 +144,7 @@ fn a_matrix_axis_swaps_only_the_scale_set_value() -> TestResult {
         ON,
         jobs,
     );
-    let text = expression(&config, "ci", "build")?;
+    let text = expression(&config, DECLARED_FILE, "build")?;
     check(&text, "velnor-box", &[("runner", "velnor-box")], |_| false)?;
     for (event, _) in events() {
         assert_eq!(
@@ -241,7 +246,7 @@ fn a_trusted_workflow_cannot_check_out_a_ref_that_a_step_or_job_computed() -> Te
         assert!(message.contains("trusted_runner"), "{with}: {message}");
     }
     for with in ["ref = \"main\"", "ref = \"${{ github.sha }}\""] {
-        rendered_file(&workflow(&header, ON, &checkout_job(with)), "ci")?;
+        rendered_file(&workflow(&header, ON, &checkout_job(with)), DECLARED_FILE)?;
     }
     Ok(())
 }

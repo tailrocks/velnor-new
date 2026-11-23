@@ -41,7 +41,7 @@ fn text_and_notes(repo: &RepoView) -> Result<(String, Vec<String>), Box<dyn std:
     crate::facts::lock_pinned_tools(&mut locked)?;
     let (mut files, notes) = expected_with_notes(&locked)?;
     let text = files
-        .remove(&path(".github/workflows/rust-ci.yml")?)
+        .remove(&path(".github/workflows/ci.yml")?)
         .ok_or("no workflow")?;
     Ok((text, notes))
 }
