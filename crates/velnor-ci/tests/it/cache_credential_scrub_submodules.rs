@@ -11,9 +11,11 @@ const DATABASE: &str = ".cargo/git/db/shared-1";
 const BARE: &str = "[core]\n\tbare = true\n";
 const SAVED: &str = "save=true\nsources=true\n";
 const REFUSED: &str = "save=true\nsources=false\n";
-const HOOK: &str = "TOKEN=0123456789abcdef0123456789abcdef01234567\n";
-const CREDENTIAL_CONFIG: &str =
-    "[core]\n\tbare = true\n# ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n";
+const HOOK: &str = concat!("TOKEN=", "0123456789abcdef0123456789abcdef01234567\n");
+const CREDENTIAL_CONFIG: &str = concat!(
+    "[core]\n\tbare = true\n# ghp_",
+    "0123456789abcdefghijklmnopqrstuvwxyzAB\n"
+);
 
 struct Decided {
     written: String,

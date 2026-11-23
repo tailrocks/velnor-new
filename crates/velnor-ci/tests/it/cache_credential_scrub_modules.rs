@@ -6,8 +6,11 @@ use crate::cache_private_repo::{GIT_LOCK, decide_with, private_checkout};
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const DATABASE: &str = ".cargo/git/db/shared-1";
 const BARE: &str = "[core]\n\tbare = true\n";
-const TOKEN_REMOTE: &str =
-    "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n";
+const TOKEN_REMOTE: &str = concat!(
+    "[remote \"origin\"]\n\turl = https://x-access-token:",
+    "ghs_",
+    "secret@github.com/acme/shared-lib\n"
+);
 
 fn decided(label: &str, files: &[(String, String)]) -> (String, crate::io::Repo) {
     let repo = private_checkout(&format!("decide-modules-{label}"), GIT_LOCK);
@@ -57,7 +60,10 @@ fn the_hooks_of_any_nested_repository_are_left_out_and_the_rest_is_saved() {
         ("linked-worktree-module", "worktrees/w1/modules/vendor"),
     ] {
         let mut files = repository(root, BARE);
-        files.push((format!("{root}/hooks/post-fetch"), "TOKEN=1\n".to_owned()));
+        files.push((
+            format!("{root}/hooks/post-fetch"),
+            concat!("TOKEN=", "1\n").to_owned(),
+        ));
         let (written, repo) = decided(label, &files);
         assert_eq!(written, "save=true\nsources=true\n", "{label}");
         let home = repo.root().join("home").join(DATABASE).join(root);

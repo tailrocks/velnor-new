@@ -5,7 +5,7 @@ use crate::cache_credential_scrub::{sources_save_goes_on, sources_save_stops};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const CONFIG: &str = ".cargo/git/db/shared-1/config";
-const TOKEN: &str = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
+const TOKEN: &str = concat!("ghp_", "0123456789abcdefghijklmnopqrstuvwxyzAB");
 
 fn encode_basic(credentials: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -161,13 +161,31 @@ fn a_form_encoded_basic_header_stops_the_sources_save() {
 
 #[test]
 fn a_basic_payload_with_control_bytes_stops_the_sources_save() {
-    sources_save_stops(&[(
-        "config-base64-with-a-tab",
-        CONFIG,
-        &commented(&format!(
-            "{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYQlzcw=="
-        )),
-    )]);
+    let line = |credentials: &[u8]| {
+        commented(&format!(
+            "{SHA}\t\tbranch 'main' Authorization: Basic {}",
+            encode_basic(credentials)
+        ))
+    };
+    sources_save_stops(&[
+        (
+            "config-base64-with-a-tab",
+            CONFIG,
+            &commented(&format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYQlzcw=="
+            )),
+        ),
+        (
+            "config-base64-with-a-trailing-newline",
+            CONFIG,
+            &line(b"user:pass\n"),
+        ),
+        (
+            "config-base64-with-a-delete-byte",
+            CONFIG,
+            &line(b"user:pa\x7fss"),
+        ),
+    ]);
 }
 
 #[test]

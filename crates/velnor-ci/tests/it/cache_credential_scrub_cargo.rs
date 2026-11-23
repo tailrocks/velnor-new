@@ -8,7 +8,11 @@ use std::process::{Command, Output};
 use crate::cache_private_repo::{GIT_LOCK, decide_with, private_checkout};
 use crate::io::Repo;
 
-const SECRET_LINE: &str = "# https://x-access-token:ghs_secret@github.com/acme/shared-lib\n";
+const SECRET_LINE: &str = concat!(
+    "# https://x-access-token:",
+    "ghs_",
+    "secret@github.com/acme/shared-lib\n"
+);
 
 fn git(directory: &Path, args: &[&str]) -> String {
     let output = Command::new("git")

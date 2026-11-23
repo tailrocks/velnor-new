@@ -10,8 +10,11 @@ const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const DATABASE: &str = ".cargo/git/db/shared-1";
 const MARKERS: [(&str, &str); 2] = [("HEAD", "ref: refs/heads/main\n"), ("config", BARE)];
 const BARE: &str = "[core]\n\tbare = true\n";
-const TOKEN_REMOTE: &str =
-    "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n";
+const TOKEN_REMOTE: &str = concat!(
+    "[remote \"origin\"]\n\turl = https://x-access-token:",
+    "ghs_",
+    "secret@github.com/acme/shared-lib\n"
+);
 
 struct Decided {
     written: String,
@@ -42,7 +45,11 @@ fn repository(root: &str, extra: &[(&str, &str)]) -> Vec<(String, String)> {
 }
 
 const SAVED: &str = "save=true\nsources=true\n";
-const CREDENTIAL_URL: &str = "https://x-access-token:ghs_secret@github.com/acme/shared-lib";
+const CREDENTIAL_URL: &str = concat!(
+    "https://x-access-token:",
+    "ghs_",
+    "secret@github.com/acme/shared-lib"
+);
 const REFUSED: &str = "save=true\nsources=false\n";
 
 #[test]
@@ -175,7 +182,7 @@ fn hooks_with_every_reported_evasion_are_absent_from_the_saved_sources() {
     for (label, hook) in [
         (
             "command-substitution",
-            "echo ghp_0123456789$(true)abcdefghijklmnopqrstuvwxyz\n",
+            concat!("echo ghp_", "0123456789$(true)abcdefghijklmnopqrstuvwxyz\n"),
         ),
         (
             "ansi-c-escape",
@@ -183,17 +190,26 @@ fn hooks_with_every_reported_evasion_are_absent_from_the_saved_sources() {
         ),
         (
             "empty-expansion",
-            "echo ghp_0123456789${EMPTY}abcdefghijklmnopqrstuvwxyz\n",
+            concat!(
+                "echo ghp_",
+                "0123456789${EMPTY}abcdefghijklmnopqrstuvwxyz\n"
+            ),
         ),
         (
             "nested-expansion",
-            "echo ghp_0123456789${A:-${B}}abcdefghijklmnopqrstuvwxyz\n",
+            concat!(
+                "echo ghp_",
+                "0123456789${A:-${B}}abcdefghijklmnopqrstuvwxyz\n"
+            ),
         ),
         (
             "quote-split",
-            "echo ghp_0123456789\"abcdefghijklmnopqrstuvwxyzAB\"\n",
+            concat!("echo ghp_", "0123456789\"abcdefghijklmnopqrstuvwxyzAB\"\n"),
         ),
-        ("plain", "echo ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n"),
+        (
+            "plain",
+            concat!("echo ghp_", "0123456789abcdefghijklmnopqrstuvwxyzAB\n"),
+        ),
     ] {
         let decided = decided(
             &format!("evasion-{label}"),

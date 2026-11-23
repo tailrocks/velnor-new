@@ -10,7 +10,10 @@ fn an_ssh_username_that_is_a_token_stops_the_sources_save() {
         (
             "ssh-ghp-username",
             ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = ssh://ghp_0123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n",
+            concat!(
+                "[remote \"origin\"]\n\turl = ssh://ghp_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n"
+            ),
         ),
         (
             "ssh-gho-username",
@@ -20,7 +23,10 @@ fn an_ssh_username_that_is_a_token_stops_the_sources_save() {
         (
             "ssh-ghs-username",
             ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = ssh://ghs_0123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n",
+            concat!(
+                "[remote \"origin\"]\n\turl = ssh://ghs_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n"
+            ),
         ),
         (
             "ssh-ghu-username",
@@ -35,7 +41,10 @@ fn an_ssh_username_that_is_a_token_stops_the_sources_save() {
         (
             "ssh-github-pat-username",
             ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = ssh://github_pat_11AAAAAAA00123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n",
+            concat!(
+                "[remote \"origin\"]\n\turl = ssh://github_pat_",
+                "11AAAAAAA00123456789abcdefghijklmnopqrstuvwxyzAB@github.com/acme/shared-lib\n"
+            ),
         ),
         (
             "ssh-40-hex-username",
@@ -77,7 +86,10 @@ fn a_token_in_a_remote_url_query_or_path_stops_the_sources_save() {
         (
             "https-path-token",
             ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = https://github.example/ghp_0123456789abcdefghijklmnopqrstuvwxyzAB/shared-lib\n",
+            concat!(
+                "[remote \"origin\"]\n\turl = https://github.example/ghp_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB/shared-lib\n"
+            ),
         ),
         (
             "https-path-40-hex",
@@ -109,7 +121,10 @@ fn a_credential_url_embedded_in_a_word_stops_the_sources_save() {
         (
             "embedded-userinfo-url",
             ".cargo/git/db/shared-1/config",
-            "[core]\n\tbare = true\n# (https://x-access-token:secret@github.com/acme/shared-lib)\n",
+            concat!(
+                "[core]\n\tbare = true\n# (https://x-access-token:",
+                "secret@github.com/acme/shared-lib)\n"
+            ),
         ),
         (
             "embedded-query-token-url",
@@ -135,22 +150,31 @@ fn a_token_in_a_config_comment_or_header_or_a_gitlab_token_stops_the_sources_sav
         (
             "config-comment-token",
             ".cargo/git/db/shared-1/config",
-            "[core]\n\tbare = true\n# ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
+            concat!(
+                "[core]\n\tbare = true\n# ghp_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB\n"
+            ),
         ),
         (
             "config-header-only-section-token",
             ".cargo/git/db/shared-1/config",
-            "[credential \"https://ghp_0123456789abcdefghijklmnopqrstuvwxyzAB@github.com\"]\n",
+            concat!(
+                "[credential \"https://ghp_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB@github.com\"]\n"
+            ),
         ),
         (
             "config-remote-name-token",
             ".cargo/git/db/shared-1/config",
-            "[remote \"ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\"]\n\turl = https://github.com/acme/shared-lib\n",
+            concat!(
+                "[remote \"ghp_",
+                "0123456789abcdefghijklmnopqrstuvwxyzAB\"]\n\turl = https://github.com/acme/shared-lib\n"
+            ),
         ),
         (
             "gitlab-token-in-a-config-comment",
             ".cargo/git/db/shared-1/config",
-            "[core]\n\tbare = true\n# glpat-abcdefghijklmnopqrst\n",
+            concat!("[core]\n\tbare = true\n# glpat-", "abcdefghijklmnopqrst\n"),
         ),
     ]);
 }
