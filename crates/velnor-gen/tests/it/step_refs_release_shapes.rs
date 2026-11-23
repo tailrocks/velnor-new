@@ -194,7 +194,7 @@ fn family_shapes() -> Vec<Family> {
         family(
             "family required checks",
             &["family_trigger", "family_required_checks"],
-            format!("{FAMILY}{tag_push}family_required_checks = true\n{FAMILY_BINARIES}"),
+            format!("{FAMILY}{tag_push}family_required_checks = false\n{FAMILY_BINARIES}"),
         ),
         family(
             "attested family",
