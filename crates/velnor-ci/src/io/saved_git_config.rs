@@ -102,7 +102,11 @@ fn plain_entry(section: &str, entry: &str) -> bool {
 }
 
 pub(super) fn names_credential(text: &str) -> bool {
-    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text)))
+    variants(text).is_none_or(|variants| {
+        variants
+            .iter()
+            .any(|text| names_in(text) || names_in(&text.replace(['"', '\''], "")))
+    })
 }
 
 fn names_in(text: &str) -> bool {

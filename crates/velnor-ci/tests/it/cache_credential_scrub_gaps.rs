@@ -208,6 +208,30 @@ fn a_double_quoted_basic_payload_stops_the_sources_save() {
 }
 
 #[test]
+fn a_credential_split_by_shell_quotes_in_a_config_comment_stops_the_sources_save() {
+    let basic = encode_basic(b"user:pass");
+    let (head, tail) = basic.split_at(4);
+    let split_token = TOKEN.replacen("0123456789", "01234\"\"56789", 1);
+    sources_save_stops(&[
+        (
+            "config-basic-split-by-double-quotes",
+            CONFIG,
+            &commented(&format!("Authorization: Basic {head}\"\"{tail}")),
+        ),
+        (
+            "config-basic-split-by-single-quotes",
+            CONFIG,
+            &commented(&format!("Authorization: Basic {head}''{tail}")),
+        ),
+        (
+            "config-token-split-by-quotes",
+            CONFIG,
+            &commented(&split_token),
+        ),
+    ]);
+}
+
+#[test]
 fn a_form_encoded_basic_payload_with_an_encoded_plus_stops_the_sources_save() {
     let line = |text: &str| commented(&format!("{SHA}\t\tbranch 'main' {text}"));
     sources_save_stops(&[
