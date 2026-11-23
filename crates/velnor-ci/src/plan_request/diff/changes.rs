@@ -78,9 +78,7 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
         .wait_with_output()
         .map_err(|error| error.to_string())?;
     if !output.status.success() {
-        if output.status.code() == Some(GIT_USAGE_ERROR)
-            && String::from_utf8_lossy(&output.stderr).contains("unknown switch")
-        {
+        if output.status.code() == Some(GIT_USAGE_ERROR) {
             return Err("git_too_old".to_owned());
         }
         return Err(format!(

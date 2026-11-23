@@ -132,7 +132,7 @@ fn tools_without_nul_framing() -> PathBuf {
         .unwrap_or_else(|| unreachable!("git on PATH"));
     let dir = crate::support::fresh_dir("velnor-ci-old-git", "bin");
     let script = format!(
-        "#!/bin/sh\ncase \" $* \" in\n  *\" cat-file -Z \"*)\n    echo \"error: unknown switch \\`Z'\" >&2\n    exit 129\n    ;;\nesac\nexec '{}' \"$@\"\n",
+        "#!/bin/sh\ncase \" $* \" in\n  *\" cat-file -Z \"*)\n    echo \"erreur : option inconnue \\`Z'\" >&2\n    exit 129\n    ;;\nesac\nexec '{}' \"$@\"\n",
         real.display()
     );
     let fake = dir.join("git");
@@ -152,5 +152,5 @@ fn a_git_without_nul_framed_cat_file_runs_every_job_with_a_stable_reason() {
     assert!(output.status.success(), "{stderr}");
     assert!(written.contains("\nnot_affected_jobs=\n"), "{written}");
     assert!(stderr.contains("git_too_old:all_changed"), "{stderr}");
-    assert!(!stderr.contains("unknown switch"), "{stderr}");
+    assert!(!stderr.contains("option inconnue"), "{stderr}");
 }
