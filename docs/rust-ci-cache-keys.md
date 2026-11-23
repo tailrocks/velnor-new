@@ -129,6 +129,21 @@ include it in Required's dependencies and verdict specification, set this in
 cache_check_blocks = true
 ```
 
+A dependency compile counts as compiled despite restored inputs only when the
+restore proved the base held the unit (`restored: true`). `inputs restore`
+records the units of the restored target in `.velnor/restored-units-*.tsv`, and each
+invocation in `ci-metrics.json` carries `restored_manifest` (`present`,
+`absent` or `unreadable`). A dependency compile whose restore status is
+unknown, because that record is absent or unreadable, is not waste. The check
+prints it as `::warning::` naming the manifest state, or as `::notice::` when
+the manifest is present but no unit matched. When a cargo step runs with
+`CARGO_LOG` set to cargo's fingerprint log (`cache_debug = true` and the
+repository variable `VELNOR_CACHE_DEBUG` set to `1`, see `generator/CONFIG.md`),
+the report keeps cargo's `dirty:` reason, from either fingerprint namespace
+(`cargo::compiler::fingerprint` or `cargo::core::compiler::fingerprint`), as
+`dirty` on the compilation and appends it to the waste and notice lines as
+`(cargo: <reason>)`. Without it no `dirty:` reason is recorded.
+
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 
 Only `velnor-ci` reads `VELNOR_MBX_REPORTS`, and `velnor-ci` passes it only to a command that is `velnor-ci` itself. Cargo, cargo-nextest and every build script, test and doctest they start run without it, so a `velnor-ci` that a project's test starts gives its Cargo command no report path and adds no session to the job.

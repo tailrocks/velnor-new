@@ -3,12 +3,13 @@
 
 use std::collections::BTreeSet;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use super::units::{UnitFile, unit_files};
 use crate::error::CiError;
 use crate::inputs::restored_units_file;
-use crate::restored_units::{Fingerprint, RestoredUnits};
+use crate::restored_units::{Fingerprint, Manifest, RestoredUnits};
 
 const DEP_INFO_LIMIT: u64 = 4 * 1024 * 1024;
 
@@ -107,7 +108,13 @@ pub(super) fn record(
         .map_err(|e| CiError::new(format!("cannot record restored units: {e}")))
 }
 
-pub(super) fn read(target: &Path, prefix: &str) -> Option<RestoredUnits> {
-    let text = fs::read_to_string(target.join(restored_units_file(prefix))).ok()?;
-    crate::restored_units::decode(&text)
+pub(super) fn read(target: &Path, prefix: &str) -> (Manifest, Option<RestoredUnits>) {
+    match fs::read_to_string(target.join(restored_units_file(prefix))) {
+        Ok(text) => match crate::restored_units::decode(&text) {
+            Some(units) => (Manifest::Present, Some(units)),
+            None => (Manifest::Unreadable, None),
+        },
+        Err(error) if error.kind() == ErrorKind::NotFound => (Manifest::Absent, None),
+        Err(_) => (Manifest::Unreadable, None),
+    }
 }
