@@ -14,13 +14,18 @@ use velnor_model::{
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
 const CACHE_AFTER_PRODUCER_HELPER: (u64, u64, u64) = (0, 1, 112);
+const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(gate))
+}
 
 fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
     let refused = facts.private_sources.is_some()
-        && facts
-            .helper
-            .as_ref()
-            .is_some_and(|helper| helper.version().at_least(NOT_GENERATED_HELPER))
+        && helper_at_least(facts, NOT_GENERATED_HELPER)
         && !crate::base_cache::writes_base(facts);
     refused.then_some("private dependencies")
 }
@@ -36,6 +41,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                 })
         });
     let not_generated = not_generated(facts);
+    let optional_saves = helper_at_least(facts, REPORT_FIELDS_HELPER);
     let saved_keys = facts
         .helper
         .as_ref()
@@ -55,16 +61,13 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
             continue;
         }
         let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
-        attach_metrics(job, nextest_artifacts, saved_keys, reason);
+        attach_metrics(job, nextest_artifacts, saved_keys, reason, optional_saves);
         producers.push(&*job);
     }
     producers.extend(maintenance);
     let needs: Vec<JobId> = producers.iter().map(|job| job.id.clone()).collect();
-    let after_producer = !facts.config.cache_check_blocks
-        && facts
-            .helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least(CACHE_AFTER_PRODUCER_HELPER));
+    let after_producer =
+        !facts.config.cache_check_blocks && helper_at_least(facts, CACHE_AFTER_PRODUCER_HELPER);
     let when = if after_producer {
         When::FinalizerAfterProducer
     } else {
@@ -103,6 +106,7 @@ fn attach_metrics(
     nextest_artifacts: bool,
     saved_keys: bool,
     not_generated: Option<&'static str>,
+    optional_saves: bool,
 ) {
     let caches: Vec<CacheKey> = job
         .steps
@@ -112,10 +116,20 @@ fn attach_metrics(
             _ => None,
         })
         .collect();
-    let saves_cache = job
+    let saved: Vec<_> = job
         .steps
         .iter()
-        .any(|step| matches!(&step.kind, StepKind::CacheSave(key) if key.family() != "tools"));
+        .filter_map(|step| match &step.kind {
+            StepKind::CacheSave(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect();
+    let saves_cache = saved.iter().any(|key| key.family() != "tools");
+    let saved = if optional_saves {
+        saved
+    } else {
+        caches.clone()
+    };
     let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
     let unsuppressed: Vec<CacheKey> = caches
         .iter()
@@ -136,6 +150,7 @@ fn attach_metrics(
         [
             StepKind::ReportCaches {
                 caches,
+                saved,
                 nextest_artifacts,
                 node_tools,
                 saved_keys,

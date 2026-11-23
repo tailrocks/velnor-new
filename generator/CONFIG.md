@@ -511,16 +511,18 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 
 ## Checking the helper lock
 
-`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose `[velnor-gen]` entry disagrees with itself or with the running binary. Each message starts with the field it names: `version:`, `commit:` or `[velnor-gen] <platform>`. A `[velnor-gen]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
+`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose entry for the running `velnor-gen` disagrees with the lock's own version and commit, or with the running executable. That entry is `[velnor-gen]` for a raw-binary release and `[velnor-gen-binary]` for an archive release from 0.1.111 on. Each message starts with the field it names: `version:`, `commit:`, `[velnor-gen] <platform>` or `[velnor-gen-binary] <platform>`. A `[velnor-gen]` or `[velnor-gen-binary]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
 
 - The `version` and `commit` must be well-formed (a numeric `MAJOR.MINOR.PATCH` and 40 lowercase hex digits).
-- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the lock's digest for its platform, when that platform is listed.
+- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the digest that the lock lists for its platform, when that platform is listed. For an archive release from 0.1.111 on that digest is `[velnor-gen-binary]`, because `[velnor-gen]` lists the archives that the install step checks and an archive digest is not the digest of the binary. The archive releases from 0.1.94 to 0.1.110 list no `[velnor-gen-binary]`, so their executable digest is not compared.
 - A running release build of the lock's version but another commit is refused: the lock names the wrong commit.
 - A local build stamps no commit (`unknown`). Its bytes are not the published binary, so nothing about it is compared, and a newer or older release that the lock does not pin is not compared either.
 
+A release that publishes archives (0.1.94 and later) lists `[velnor-gen]` with the archive digests and `[velnor-ci-binary]`. From 0.1.111 it also lists `[velnor-gen-binary]`, the digests of the `velnor-gen` executable inside each archive, and a lock without it is refused. A release that publishes raw binaries (before 0.1.94) lists `[velnor-gen]` only and refuses `[velnor-gen-binary]`. A lock for an archive release before 0.1.111 that lists `[velnor-gen-binary]` is refused too.
+
 Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
 
-`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` with the platform). It needs the network and fails without it, so it is not run by default.
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` or `[velnor-gen-binary]` with the platform). A differing or missing `[velnor-gen-binary]` also names `velnor-gen pin-helper 0.1.111` or later as the command that re-pins the lock. It needs the network and fails without it, so it is not run by default.
 
 ## Test groups
 
