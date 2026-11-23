@@ -283,6 +283,7 @@ phase = "build"
 - The step has the gate of the cargo steps it precedes, so a run that selects nothing for the root skips it.
 - Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
 - The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
+- From `velnor-ci` 0.1.112, a filtered `[[test_lane]]` guard step does not run after a failed test-phase `[[test_setup]]` step of its root. A `[[check_configurations]]` step does not run after a failed `phase = "build"` step; that wait is not version-gated and applies at every pin. A `phase = "build"` step gates every later cargo step, including lane guards, clippy and doc, at every pin. Clippy and doc steps do not wait for a test-phase setup, because they do not read its output.
 
 ## Checking feature configurations
 

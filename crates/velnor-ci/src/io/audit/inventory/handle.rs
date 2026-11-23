@@ -180,6 +180,16 @@ fn identity(directory: impl AsFd) -> io::Result<Identity> {
     Ok((stat.st_dev, stat.st_ino))
 }
 
+pub(super) fn is_parent_of(path: &Path, parent: BorrowedFd<'_>) -> io::Result<()> {
+    let moved = || changed(io::ErrorKind::Other, path);
+    let lexical = resolve::open_path(path.parent().unwrap_or(path), false).map_err(|_| moved())?;
+    if stamp(&lexical)? == stamp(parent)? {
+        Ok(())
+    } else {
+        Err(moved())
+    }
+}
+
 pub(super) fn stamp(directory: impl AsFd) -> io::Result<Stamp> {
     fstat(directory)
         .map(|stat| Stamp::of(&stat))

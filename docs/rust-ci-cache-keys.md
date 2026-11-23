@@ -131,6 +131,8 @@ cache_check_blocks = true
 
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 
+Only `velnor-ci` reads `VELNOR_MBX_REPORTS`, and `velnor-ci` passes it only to a command that is `velnor-ci` itself. Cargo, cargo-nextest and every build script, test and doctest they start run without it, so a `velnor-ci` that a project's test starts gives its Cargo command no report path and adds no session to the job.
+
 A registry or git dependency that compiled although its unit was restored is
 not waste when the unit's dep-info (the `.d` file under `deps/` or `out/`) lists
 an absolute file outside `target/` that did not exist when the base was

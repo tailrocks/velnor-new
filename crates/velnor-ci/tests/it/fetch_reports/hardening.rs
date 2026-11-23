@@ -147,7 +147,8 @@ fn a_plan_json_that_is_a_fifo_fails_instead_of_blocking() {
 #[test]
 fn a_plan_json_that_is_a_symbolic_link_is_refused() {
     let served = serve(routes(&recorded(), ARCHIVE));
-    let real = run_dir("symlink-target", Some(PLAN)).join("plan.json");
+    let target_dir = run_dir("symlink-target", Some(PLAN));
+    let real = target_dir.join("plan.json");
     let dir = run_dir("symlink", None);
     symlink(&real, dir.join("plan.json")).unwrap_or_else(|e| unreachable!("{e}"));
     let output = fetch_within(&served, &dir, &[]);

@@ -49,7 +49,7 @@ fn run_does_not_need_a_step_output_file() {
         .arg("run")
         .arg("--")
         .args(NEXTEST_RUN)
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env_remove("GITHUB_OUTPUT")
         .env("PATH", path)
         .output()
