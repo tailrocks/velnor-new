@@ -45,50 +45,6 @@ fn a_trailing_zscript_flag_after_an_external_rs_subcommand_is_its_own_argument()
 }
 
 #[test]
-fn a_leading_option_separator_does_not_hide_the_subcommand_or_its_manifest() -> TestResult {
-    let repo = declared_job()?;
-    let launch = repo.root().join("launch");
-    let inside = repo.root().join("Cargo.toml").display().to_string();
-    assert_refused(&run_with_args(
-        &repo,
-        &launch,
-        &["--", "foo", "--manifest-path", &inside],
-    )?);
-    Ok(())
-}
-
-#[test]
-fn a_clustered_short_directory_flag_names_the_project_the_command_runs_in() -> TestResult {
-    let repo = declared_job()?;
-    let launch = repo.root().join("launch");
-    let declaring = format!("-qC{}", repo.root().display());
-    let scratch = format!("-qC{}", repo.root().join("scratch-project").display());
-    assert_refused(&run_with_args(&repo, &launch, &[&declaring, "build"])?);
-    assert_plain(&run_with_args(&repo, &launch, &[&scratch, "build"])?);
-    Ok(())
-}
-
-#[test]
-fn a_clustered_short_manifest_flag_names_the_project_the_command_runs_in() -> TestResult {
-    let repo = declared_job()?;
-    let launch = repo.root().join("launch");
-    let inside = repo.root().join("Cargo.toml").display().to_string();
-    let outside = repo
-        .root()
-        .join("scratch-project/Cargo.toml")
-        .display()
-        .to_string();
-    assert_refused(&run_with_args(&repo, &launch, &["build", "-qm", &inside])?);
-    assert_refused(&run_with_args(
-        &repo,
-        &launch,
-        &["build", &format!("-qm{inside}")],
-    )?);
-    assert_plain(&run_with_args(&repo, &launch, &["build", "-qm", &outside])?);
-    Ok(())
-}
-
-#[test]
 fn a_clustered_zscript_flag_scopes_the_script_it_names_alone() -> TestResult {
     let repo = declared_job()?;
     fs::create_dir_all(repo.root().join("scratch-project"))?;

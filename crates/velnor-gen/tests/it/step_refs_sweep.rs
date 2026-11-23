@@ -270,7 +270,7 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
         (&[APP, TOOLS], TWO_BINARIES),
         (
             &[APP, TOOLS],
-            "roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n",
+            "roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n",
         ),
     ];
     let mut sweep = Sweep::default();
@@ -299,12 +299,11 @@ fn a_needs_output_of_an_outputless_local_reusable_workflow_is_dangling() -> Test
         "on:\n  workflow_call: {}\njobs: {}\n".to_owned(),
     );
     files.insert(
-        RepoPath::new(".github/workflows/rust-ci.yml")?,
+        RepoPath::new(".github/workflows/ci.yml")?,
         "on: push\njobs:\n  release:\n    uses: ./.github/workflows/release.yml\n  deploy:\n    needs: [release]\n    steps:\n      - run: echo ${{ needs.release.outputs.nope }}\n".to_owned(),
     );
     let callees = callees_of(&files)?;
-    let caller =
-        crate::yaml_tree::document(&files[&RepoPath::new(".github/workflows/rust-ci.yml")?])?;
+    let caller = crate::yaml_tree::document(&files[&RepoPath::new(".github/workflows/ci.yml")?])?;
     assert_eq!(dangling_refs(&caller, &callees).1.len(), 1);
     Ok(())
 }
