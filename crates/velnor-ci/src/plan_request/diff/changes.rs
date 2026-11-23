@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use super::Event;
 
 const NON_UTF8: &str = "non_utf8_path";
+const GIT_USAGE_ERROR: i32 = 129;
 const SHORT_SHA_MIN: usize = 7;
 const FULL_SHA: usize = 64;
 const PROJECT_TOOL_FILES: &[&str] = &[".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
@@ -57,13 +58,10 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     if specs.is_empty() {
         return Ok(Vec::new());
     }
-    if specs.iter().any(|spec| spec.contains('\n')) {
-        return Err("unsafe_object_path".to_owned());
-    }
     let mut child = Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["cat-file", "--batch"])
+        .args(["cat-file", "-Z", "--batch"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -73,22 +71,25 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     let mut input = String::new();
     for spec in specs {
         input.push_str(spec);
-        input.push('\n');
+        input.push('\0');
     }
     let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
     let output = child
         .wait_with_output()
         .map_err(|error| error.to_string())?;
-    writer
-        .join()
-        .map_err(|_| "git_stdin_failed".to_owned())?
-        .map_err(|error| error.to_string())?;
     if !output.status.success() {
+        if output.status.code() == Some(GIT_USAGE_ERROR) {
+            return Err("git_too_old".to_owned());
+        }
         return Err(format!(
             "git cat-file failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
+    writer
+        .join()
+        .map_err(|_| "git_stdin_failed".to_owned())?
+        .map_err(|error| error.to_string())?;
     split_blobs(&output.stdout, specs)
 }
 
@@ -98,7 +99,7 @@ fn split_blobs(mut rest: &[u8], specs: &[String]) -> Result<Vec<Vec<u8>>, String
         let missing = || format!("missing_object:{spec}");
         let end = rest
             .iter()
-            .position(|byte| *byte == b'\n')
+            .position(|byte| *byte == 0)
             .ok_or_else(missing)?;
         let header = String::from_utf8_lossy(&rest[..end]).into_owned();
         let mut fields = header.rsplitn(3, ' ');
