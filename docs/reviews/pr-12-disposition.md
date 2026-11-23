@@ -201,7 +201,7 @@ owners.
   [Linux x64](https://api.github.com/repos/jdx/mise/releases/assets/607914627)
   remains `31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a`.
 - MBX hosted writer/reader, cache-version/path reuse, cancellation, corrupt
-  import, parallel writer, ChainArgos workload peak bytes/inodes, and disk
+  import, parallel writer, example-org workload peak bytes/inodes, and disk
   pressure remain `PARTIAL`.
 - Earlier 2026-10-04 R13 snapshot: Adopted R13 requires an explicit same-repository PR cache opt-in
   in a separate PR namespace while forks remain read-only and trusted production keys remain push-only.
@@ -221,7 +221,7 @@ owners.
   Action SHA resolution or authorize deletion.
 - Consumer migration and six-ref retirement remain `TEMPORARY-HOLD`. The
   audited 46-default + relevant-PR union found no snapshot SHAs and recorded
-  three owner holds; 45 workflows still use 0.1.0 and ChainArgos generator
+  three owner holds; 45 workflows still use 0.1.0 and example-org generator
   migration remains held. Recheck live consumers, preserve action-SHA history,
   complete owner checkpoints, then run a separate exact-ref deletion review.
   Do not delete the three out-of-scope MBX refs.

@@ -7,9 +7,12 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
-use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath, RunnerLabel};
+use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath, RunnerLabel, WORKFLOW_PATH};
 
 pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
+
+// helper-gate: first in tools-v0.1.102 via d56256c182
+pub const DELTA_CLEANUP_HELPER: (u64, u64, u64) = (0, 1, 102);
 
 #[must_use]
 pub fn delta_cleanup(
@@ -17,13 +20,15 @@ pub fn delta_cleanup(
     workflow: &str,
     runner: &RunnerLabel,
 ) -> Option<String> {
-    // helper-gate: first in tools-v0.1.102 via d56256c182
-    if !helper.version().at_least((0, 1, 102)) {
+    if !helper.version().at_least(DELTA_CLEANUP_HELPER) {
         return None;
     }
     let job = RenderedJob {
         id: "rust-trim".to_owned(),
-        condition: Some("${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/rust-ci.yml' && github.event.workflow_run.head_repository.id == github.event.repository.id }}".to_owned()),
+        condition: Some(format!(
+            "${{{{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '{path}' && github.event.workflow_run.head_repository.id == github.event.repository.id }}}}",
+            path = WORKFLOW_PATH.as_str(),
+        )),
         // The job only runs for same-repository pull requests, so the repository's own
         // runner is safe here and a private repository pays for no hosted minutes.
         runs_on: runner.as_str().to_owned(),

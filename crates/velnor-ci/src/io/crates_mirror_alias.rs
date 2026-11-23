@@ -7,10 +7,57 @@ use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
 
-use super::crates_mirror_mbx::{option_value, subcommand};
+use super::crates_mirror_mbx::{direct_target, subcommand};
 
 const DEPTH: usize = 8;
-const CONFIGS: &[&str] = &["config.toml", "config"];
+const CONFIGS: &[&str] = &["config", "config.toml"];
+const BUILTINS: &[&str] = &[
+    "add",
+    "b",
+    "bench",
+    "build",
+    "c",
+    "check",
+    "clean",
+    "config",
+    "d",
+    "doc",
+    "fetch",
+    "fix",
+    "generate-lockfile",
+    "help",
+    "info",
+    "init",
+    "install",
+    "locate-project",
+    "login",
+    "logout",
+    "metadata",
+    "new",
+    "owner",
+    "package",
+    "pkgid",
+    "publish",
+    "r",
+    "read-manifest",
+    "remove",
+    "report",
+    "rm",
+    "run",
+    "rustc",
+    "rustdoc",
+    "search",
+    "t",
+    "test",
+    "tree",
+    "uninstall",
+    "update",
+    "vendor",
+    "verify-project",
+    "version",
+    "yank",
+];
+const ALIASABLE_BUILTINS: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
 
 enum Alias {
     Found(Vec<OsString>),
@@ -18,26 +65,25 @@ enum Alias {
     Unknown,
 }
 
-pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option<Vec<OsString>> {
+pub(super) fn expand(work: &Path, args: &[OsString]) -> Option<Vec<OsString>> {
     let mut args = args.to_vec();
     for _ in 0..DEPTH {
         let Some((index, name)) = subcommand(&args) else {
             return Some(args);
         };
-        if builtin.contains(&name) || name == "install" {
+        let name = name.to_owned();
+        if BUILTINS.contains(&name.as_str()) && !ALIASABLE_BUILTINS.contains(&name.as_str()) {
             return Some(args);
         }
-        let name = name.to_owned();
+        if direct_target(&name) {
+            return matches!(lookup(work, &args, &name), Alias::Absent).then_some(args);
+        }
         match lookup(work, &args, &name) {
             Alias::Found(words) => {
                 args.splice(index..=index, words);
             }
             Alias::Absent => return Some(args),
-            Alias::Unknown => {
-                return option_value(&args, "--manifest-path", true)
-                    .is_none()
-                    .then_some(args);
-            }
+            Alias::Unknown => return None,
         }
     }
     None
@@ -47,7 +93,10 @@ fn lookup(work: &Path, args: &[OsString], name: &str) -> Alias {
     if command_line_may_define_aliases(args) {
         return Alias::Unknown;
     }
-    let variable = format!("CARGO_ALIAS_{}", name.to_uppercase().replace('-', "_"));
+    let variable = format!(
+        "CARGO_ALIAS_{}",
+        name.to_uppercase().replace(['-', '.'], "_")
+    );
     if let Some(value) = std::env::var_os(&variable) {
         return match value.to_str() {
             Some(text) => words(text),
@@ -55,23 +104,33 @@ fn lookup(work: &Path, args: &[OsString], name: &str) -> Alias {
         };
     }
     for directory in config_directories(work) {
-        for config in CONFIGS {
-            match std::fs::read_to_string(directory.join(config)) {
-                Ok(text) => match from_config(&text, name) {
-                    Alias::Absent => {}
-                    found => return found,
-                },
-                Err(error)
-                    if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
-                Err(_) => return Alias::Unknown,
-            }
+        match config_text(&directory) {
+            Ok(Some(text)) => match from_config(&text, name) {
+                Alias::Absent => {}
+                found => return found,
+            },
+            Ok(None) => {}
+            Err(_) => return Alias::Unknown,
         }
     }
     Alias::Absent
 }
 
+fn config_text(directory: &Path) -> std::io::Result<Option<String>> {
+    for config in CONFIGS {
+        match std::fs::read_to_string(directory.join(config)) {
+            Ok(text) => return Ok(Some(text)),
+            Err(error)
+                if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(None)
+}
+
 fn command_line_may_define_aliases(args: &[OsString]) -> bool {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args[..end].iter();
     while let Some(arg) = args.next() {
         if arg == "--config" {
             let value = args.next().and_then(|value| value.to_str());
@@ -96,8 +155,8 @@ fn config_directories(work: &Path) -> Vec<PathBuf> {
         .collect();
     let home = std::env::var_os("CARGO_HOME")
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+        .map(|value| work.join(value))
+        .or_else(|| std::env::var_os("HOME").map(|home| work.join(home).join(".cargo")));
     directories.extend(home);
     directories
 }

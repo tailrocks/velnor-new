@@ -98,7 +98,7 @@ fn a_failed_recording_keeps_every_existing_sample_file_unchanged() -> TestResult
         ("cargo-metadata/root.json", "metadata\n"),
         ("manifests.txt", "old/Cargo.toml\n"),
         ("symlinks.txt", "old-link\n"),
-        ("expected/.github/workflows/rust-ci.yml", "expected\n"),
+        ("expected/.github/workflows/ci.yml", "expected\n"),
     ];
     for (path, text) in kept {
         write(&sample.join(path), text)?;

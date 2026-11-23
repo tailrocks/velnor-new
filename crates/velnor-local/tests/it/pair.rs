@@ -243,7 +243,7 @@ async fn concurrent_jit_writes_to_one_path_all_succeed() {
             .unwrap_or_default()
             .starts_with("jit-")
     );
-    let names = std::fs::read_dir(&dir).map_or(0, Iterator::count);
+    let names = std::fs::read_dir(dir.path()).map_or(0, Iterator::count);
     assert_eq!(names, 1);
 }
 
@@ -313,8 +313,10 @@ async fn build_refuses_a_checkout_whose_images_would_not_match_head() {
     git(&["commit", "-q", "-m", "x"]);
     std::fs::write(root.join("crates/velnor-runner-host/lib.rs"), "b")
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let refused =
-        velnor_local::io::pair::build(velnor_local::cli::BuildArgs { root: root.clone() }).await;
+    let refused = velnor_local::io::pair::build(velnor_local::cli::BuildArgs {
+        root: root.to_path_buf(),
+    })
+    .await;
     let message = refused.err().map_or_default(|e| e.to_string());
     assert!(
         message.contains("crates/velnor-runner-host/lib.rs"),

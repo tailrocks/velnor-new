@@ -151,7 +151,9 @@ pub enum StepKind {
         before_build: bool,
         offline_after_private_fetch: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        from_source: bool,
+    },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
@@ -165,6 +167,7 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         saved_keys: bool,
@@ -177,6 +180,10 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+    Ansible {
+        name: String,
+        run: String,
+    },
     Budget {
         last: usize,
     },
@@ -187,6 +194,14 @@ pub enum StepKind {
 }
 
 impl StepKind {
+    #[must_use]
+    pub const fn runs_cargo(&self) -> bool {
+        matches!(
+            self,
+            Self::Cargo(_) | Self::GeneratorCheck { from_source: true }
+        )
+    }
+
     #[must_use]
     pub const fn feeds_build(&self) -> bool {
         matches!(
@@ -263,7 +278,8 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::MergeQueueCheck { .. } => false,
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
         }
     }
 

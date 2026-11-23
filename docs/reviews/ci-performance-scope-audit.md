@@ -6,7 +6,7 @@ Observed 2026-10-03 through authenticated GitHub REST calls. Inventory/access ev
 
 `scope.json` and `repositories.txt` were absent in the checkout. Targeted searches covered repository/project roots, migrations, prior Velnor evidence/scan/work roots, plus immediate Projects/Downloads/Desktop inventories. Reconstructed both from the 47-row CSV and independently cross-checked every ordered consumer against the goal. No repository added, dropped, or renamed. Independent verifier confirmed counts and equality: generator 1; Wave A 8; Wave B 33; Wave C 5.
 
-All 47 repositories are accessible, nonarchived, and currently use `main`. There are 43 public and four private repositories. The original Brown 404 is resolved: `example-org/example-repo` is private and accessible to the authenticated account. Its migration is PR #243, merged 2026-10-02T15:29:29Z, head `9b85ac956fc917df97198dd6df67f844d41d0c84`.
+All 47 repositories are accessible, nonarchived, and currently use `main`. There are 43 public and four private repositories. The original Brown 404 is resolved: `example-org/example-repo-9` is private and accessible to the authenticated account. Its migration is PR #243, merged 2026-10-02T15:29:29Z, head `9b85ac956fc917df97198dd6df67f844d41d0c84`.
 
 ## Evidence boundary
 
@@ -64,11 +64,11 @@ Every row remains `INCOMPLETE`: no cold/warm/third-run measurement or resulting 
 | 39 | B | `tailrocks/tailrocks-open-source-skills` | public | `3e51bc5c91949f361ed926d8f760bcb16edef111` | [2](https://github.com/tailrocks/tailrocks-open-source-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 40 | B | `tailrocks/tailrocks-macos-skills` | public | `eb0be5522fe0c1c9c74d41ee354446a011b10c74` | [2](https://github.com/tailrocks/tailrocks-macos-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 41 | B | `tailrocks/tailrocks-code-quality-skills` | public | `e63a82f28b688a7fada418e615aa9ec0eeec4c04` | [2](https://github.com/tailrocks/tailrocks-code-quality-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
-| 42 | C | `example-org/example-repo` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 (link withheld: private organization) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
-| 43 | C | `example-org/example-repo` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | 2081 (private repository pull request, link withheld) | `.github/ci/project.toml`; `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
-| 44 | C | `example-org/example-repo` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 45 | C | `example-org/example-repo` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 46 | C | `example-org/example-repo` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | 14 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
+| 42 | C | `example-org/example-repo-1` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
+| 43 | C | `example-org/example-repo-2` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | 2081 | `.github/ci/project.toml`; `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
+| 44 | C | `example-org/example-repo-9` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 | patches downloaded; review pending | INCOMPLETE |
+| 45 | C | `example-org/example-repo-10` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 | patches downloaded; review pending | INCOMPLETE |
+| 46 | C | `example-org/example-repo-5` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | 14 | patches downloaded; review pending | INCOMPLETE |
 
 ## Remaining audit work
 

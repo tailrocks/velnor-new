@@ -9,7 +9,7 @@ heads and 40 open PR heads) for the same ordered set of 46 consumer
 repositories; every ref was accessible and its API SHA matched the scanned
 SHA. Only two open PR heads moved since the earlier packet: Jackin #1111 is
 now `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` (updated
-`2026-10-04T04:14:24Z`) and example-org/example-repo #2085 is now
+`2026-10-04T04:14:24Z`) and example-org/example-repo-2 #2085 is now
 `7cbe1db11ccabb463053a93a8a08d33bda418b29` (updated
 `2026-10-04T05:01:14Z`). Their refs are refreshed in the companion CSV;
 all other refs, rows, order, and owner checkpoints are preserved.
@@ -20,7 +20,7 @@ excluded SHAs, `owned-source/`, and `tailrocks/velnor-new@`. The full 31-needle
 R1 set also includes two generic Velnor URL literals, which match expected
 documentation, workflow, and manifest files. The union CSV's generic-path
 counts/classifications for the moved PR rows retain their prior-snapshot
-provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. Java monorepo
+provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. example-repo-2
 inventory: 7,007 text and 5,939 binary files. Binary counts are inventory
 evidence; they do not imply semantic text coverage of binary contents. See
 [the retirement-union refresh](consumer-retirement-union-2026-10-04.md) for
@@ -40,8 +40,8 @@ and digests; source-bound asset attestations; and a byte-identical published
 manifest committed by each consumer at
 `.velnor/release-manifest.json`, followed by exact-artifact regeneration and
 deterministic parity. Three owner holds remain: Velnor-actions-fixture
-disposition/retired hosted triggers; example-org/example-repo #2085
-qualification; and example-org/example-repo #241 rollout and
+disposition/retired hosted triggers; example-org/example-repo-2 #2085
+qualification; and example-org/example-repo-9 #241 rollout and
 runner/cache qualification. Jackin #1108 remains a separate validator
 checkpoint. No consumer repository or remote GitHub API/data was mutated.
 
@@ -55,17 +55,17 @@ Scope has 47 rows including generator and 46 consumers. Its ordered consumer nam
 
 GitHub metadata resolved all 46 repositories. Every default branch is main; all current configs, manifests, and CI workflow files were accessible. Four private example-org repos were readable. The only canonicalization is tailrocks/tui-snap to tailrocks/tuiscotti (repository id 1358764452). No repository was inaccessible.
 
-The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for example-org-b #1111 and example-org/example-repo #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
+The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for Jackin #1111 and example-org/example-repo-2 #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
 
 ## Current consumer state
 
-Forty-five manifests pin Velnor Actions 0.1.0 from source c57c700459bbe1549fe7eedcb7d8689585c38986. example-org/example-repo alone pins d40868152f7fe0106e3ede858a411f502f00810f with distinct platform digests. No current manifest points to the separate generator-47815c83b9eeadbaf84b741918fffa7ea550da89 release URL; that artifact is old-source evidence, not the consumer target.
+Forty-five manifests pin Velnor Actions 0.1.0 from source c57c700459bbe1549fe7eedcb7d8689585c38986. example-org/example-repo-2 alone pins d40868152f7fe0106e3ede858a411f502f00810f with distinct platform digests. No current manifest points to the separate generator-47815c83b9eeadbaf84b741918fffa7ea550da89 release URL; that artifact is old-source evidence, not the consumer target.
 
 All 46 current ci.yml files stage Velnor acquisition, generation/plan-v1, and velnor-plan artifact publication. This is staged executable evidence; runtime observations are stated only where checked. No velnor-compare or retired owned-source custom behavior was found in the bounded audit.
 
-Fifteen current CI workflows stage the stock MBX action: example-org/example-repo, tailrocks/termpane, tailrocks/velnor, tailrocks/parallax, tailrocks/parallax-telemetry-playground, tailrocks/velnor-actions-fixture, tailrocks/holla, tailrocks/tracing-request-level, tailrocks/pg-bigdecimal, tailrocks/ruxel, tailrocks/schemalane, tailrocks/tablerock, tailrocks/cloudflare-tofu, example-org/example-repo, example-org/example-repo These generic action paths must be preserved or explicitly migrated; no owned-snapshot cache behavior was found.
+Fifteen current CI workflows stage the stock MBX action: jackin-project/jackin, tailrocks/termpane, tailrocks/velnor, tailrocks/parallax, tailrocks/parallax-telemetry-playground, tailrocks/velnor-actions-fixture, tailrocks/holla, tailrocks/tracing-request-level, tailrocks/pg-bigdecimal, tailrocks/ruxel, tailrocks/schemalane, tailrocks/tablerock, tailrocks/cloudflare-tofu, example-org/example-repo-2, example-org/example-repo-10. These generic action paths must be preserved or explicitly migrated; no owned-snapshot cache behavior was found.
 
-CI has no relative local action callers. example-org/example-repo invokes its project scripts/Cargo.toml package example-org-scripts for MBX build/clippy/nextest/doc; this is not a retired Velnor Phase D/Appendix B script. Its extra manual qualification.yml uses local qualification test composites. Termpane also has a Velnor-generated release.yml with workflow_dispatch/release-plz.
+CI has no relative local action callers. example-org/example-repo-2 invokes its project scripts/Cargo.toml package example-org-scripts for MBX build/clippy/nextest/doc; this is not a retired Velnor Phase D/Appendix B script. Its extra manual qualification.yml uses local qualification test composites. Termpane also has a Velnor-generated release.yml with workflow_dispatch/release-plz.
 
 ## Probe method
 
@@ -147,11 +147,11 @@ Limits: snapshot covers current default heads and open PR heads in the CSV plus 
 | 39 | tailrocks/tailrocks-open-source-skills | 3e51bc5c91949f361ed926d8f760bcb16edef111 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 40 | tailrocks/tailrocks-macos-skills | eb0be5522fe0c1c9c74d41ee354446a011b10c74 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 41 | tailrocks/tailrocks-code-quality-skills | e63a82f28b688a7fada418e615aa9ec0eeec4c04 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 42 | example-org/example-repo | 0881638712a837bdcb90b3cd811a8a9be3aa8d83 | NO-CHANGE (source); HOLD (fleet usage); staged Velnor plan-v1; stock MBX no; fleet MBX host-env deployment unknown. | Fleet owner; prove host-env deployment. |
-| 43 | example-org/example-repo | 0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0 | HOLD (MBX qualification); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #2085 cache qualification; CI uses project scripts/Cargo.toml; manual qualification has local test composites. | example-org cache owner; complete #2085 qualification. |
-| 44 | example-org/example-repo | 6b2ac2277103a22b9ae155bc92415ca5ddf05f95 | HOLD (staged rollout); staged Velnor plan-v1; stock MBX no; #241 staged three-provider rollout; plan run did not complete full workflow. | Brown owner; complete #241 rollout and runner/cache qualification. |
-| 45 | example-org/example-repo | cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; current stock MBX runtime. | example-org Cloudflare owner; preserve stock MBX path. |
-| 46 | example-org/example-repo | c8d47ea87a611251f965555dafbd8015f29f303b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 42 | example-org/example-repo-1 | 0881638712a837bdcb90b3cd811a8a9be3aa8d83 | NO-CHANGE (source); HOLD (fleet usage); staged Velnor plan-v1; stock MBX no; fleet MBX host-env deployment unknown. | Fleet owner; prove host-env deployment. |
+| 43 | example-org/example-repo-2 | 0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0 | HOLD (MBX qualification); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #2085 cache qualification; CI uses project scripts/Cargo.toml; manual qualification has local test composites. | example-org cache owner; complete #2085 qualification. |
+| 44 | example-org/example-repo-9 | 6b2ac2277103a22b9ae155bc92415ca5ddf05f95 | HOLD (staged rollout); staged Velnor plan-v1; stock MBX no; #241 staged three-provider rollout; plan run did not complete full workflow. | Brown owner; complete #241 rollout and runner/cache qualification. |
+| 45 | example-org/example-repo-10 | cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; current stock MBX runtime. | example-org Cloudflare owner; preserve stock MBX path. |
+| 46 | example-org/example-repo-5 | c8d47ea87a611251f965555dafbd8015f29f303b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 
 ## Open holds and blocked probes
 

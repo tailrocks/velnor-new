@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 installer="$root/scripts/install-secret-scanners.sh"
-workflow="$root/.github/workflows/ci.yml"
+workflow="$root/.github/workflows/repository-checks.yml"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 job=$(awk '/^  secret-scan:/ {on=1; print; next} on && /^  [A-Za-z0-9_-]+:/ {on=0} on {print}' "$workflow")

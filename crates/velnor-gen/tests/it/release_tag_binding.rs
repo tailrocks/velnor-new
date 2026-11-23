@@ -15,7 +15,7 @@ type Step = (String, Vec<String>);
 fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
@@ -90,7 +90,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
     let view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )?;
     let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)

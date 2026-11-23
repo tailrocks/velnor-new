@@ -4,7 +4,7 @@ Status: append-only correction to the private run-audit packet. This erratum pre
 
 ## Frozen evidence boundary
 
-Evidence root: `<home>/<private-evidence-root>/evidence/velnor-pr12/recovery-20261004/`. Original packet directory: `current-main-47815-ci-audit/`. Its `SHA256SUMS` has 252 entries, all verified; the directory contains 253 regular files including that manifest. Manifest SHA-256: `31a91f2c76889cad4a8ce8588bee5e6c183ba3ced31196bf25cc2a6a51e1b416`.
+Evidence root: `~/.codex-example-org2/evidence/velnor-pr12/recovery-20261004/`. Original packet directory: `current-main-47815-ci-audit/`. Its `SHA256SUMS` has 252 entries, all verified; the directory contains 253 regular files including that manifest. Manifest SHA-256: `31a91f2c76889cad4a8ce8588bee5e6c183ba3ced31196bf25cc2a6a51e1b416`.
 
 Independent review receipt: `current-main-47815-ci-audit-independent-review.md` under the evidence root above; SHA-256 `f5a6406a1fbb5d1602b23e7a48bae8d33532021910c9f01d3314da61b09a5f3a`. It is outside the frozen packet manifest. The receipt checked all 252 entries and verified the mappings below from the captured job logs and ZIP.
 

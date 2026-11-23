@@ -571,8 +571,8 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
   L2 cache hits stay on `<0.5 ms` Hetzner site LANs instead of crossing the `35 ms` DE-to-FI WireGuard
   link.
 - **Untrusted PRs and multi-org isolation.** The cluster serves `tailrocks`, `example-org` (15 private
-  repos), and `example-org`
-  (state/RESULT.md:84-89).
+  repos), and `jackin-project`
+  ([state/RESULT.md:84-89](file://<local-path>)).
   Fork PRs run strictly inside **KVM microVMs** (`/dev/kvm` AMD-V hardware isolation, separate guest
   kernel, `automountServiceAccountToken: false`, `NetworkPolicy` dropping `10.42.0.0/16`,
   `10.43.0.0/16`, `169.254.169.254`, and `5.9.55.237:6443`, read-only `dm-snapshot` public cache seed,
@@ -580,7 +580,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
   `#1332`'s hosted gate twin (plus `all_external_contributors` approval).
 - **What buying more servers would buy.** Today's 480 EPYC threads easily absorb `velnor-new`
   (`~96 to 120` peak threads for `40 s` per heavy run) with >70% headroom for `example-org` and
-  `example-org`, so **more worker servers buy 0 s of single-PR latency today**. Buying **two small
+  `jackin-project`, so **more worker servers buy 0 s of single-PR latency today**. Buying **two small
   Hetzner nodes (~10 EUR/mo each)** buys **3-node etcd HA for `velnor-237`** (currently a single point
   of failure, README.md:12);
   additional EPYC workers only pay off once concurrent multi-org demand regularly exceeds ~25
@@ -864,4 +864,4 @@ standalone measurable win on `velnor-new`.
    untrusted pool now?
 5. **Control-plane HA (`velnor-237`).** Once the zero-spend research constraint ends, do you approve
    adding two small Hetzner instances (~20 EUR/mo total) to turn `velnor-237` (`5.9.55.237`) into a
-   3-node HA k3s control plane for `tailrocks`, `example-org`, and `example-org`?
+   3-node HA k3s control plane for `tailrocks`, `example-org`, and `jackin-project`?

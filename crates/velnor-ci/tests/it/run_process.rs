@@ -50,7 +50,7 @@ fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_writ
     );
     let output = Command::new("sh")
         .args(["-c", &script])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(output.status.code(), Some(7), "{output:?}");
@@ -85,7 +85,7 @@ fn forwards(signal: &str, code: i32) {
     );
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", &script])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .stdout(Stdio::piped())
         .process_group(0)
         .spawn()
@@ -124,7 +124,7 @@ fn forwards(signal: &str, code: i32) {
 mod tests_run {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::process::{Command, Output};
     use std::time::{Duration, SystemTime};
 
@@ -144,7 +144,11 @@ mod tests_run {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
 
-    fn run_with_output(name: &str, script: &str, command: &[&str]) -> (Output, String, PathBuf) {
+    fn run_with_output(
+        name: &str,
+        script: &str,
+        command: &[&str],
+    ) -> (Output, String, velnor_test_support::ScratchDir) {
         let (output, written, temp, _) = execute_nextest(name, script, command, None);
         (output, written, temp)
     }
@@ -154,7 +158,7 @@ mod tests_run {
         script: &str,
         command: &[&str],
         grace_ms: Option<&str>,
-    ) -> (Output, String, PathBuf, SystemTime) {
+    ) -> (Output, String, velnor_test_support::ScratchDir, SystemTime) {
         let temp = scratch(name);
         fake_nextest(&temp, script);
         let outputs = temp.join("github-output");
@@ -171,7 +175,7 @@ mod tests_run {
             .arg("run")
             .arg("--")
             .args(command)
-            .env("RUNNER_TEMP", &temp)
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", &outputs)
             .env("CARGO_HOME", &cargo_home)
             .env("PATH", path);
@@ -336,7 +340,7 @@ exit 0";
             .arg("run")
             .arg("--")
             .args(NEXTEST_RUN)
-            .env("RUNNER_TEMP", &temp)
+            .env("RUNNER_TEMP", temp.path())
             .env_remove("GITHUB_OUTPUT")
             .env("PATH", path)
             .output()

@@ -5,7 +5,7 @@
  "evidence_sources": [
   "<local-workspace>/evidence/jobs.json (504 job records)",
   "<local-workspace>/evidence/pipelines.json (39 selected executions)",
-  "<local-workspace>/evidence/example-org-b.json",
+  "<local-workspace>/evidence/jackin-current-observations.json",
   "<local-workspace>/evidence/example-org-job-observations.json",
   "<local-workspace>/EVIDENCE.md (2026-10-25 narrative measurements)"
  ],
@@ -14,14 +14,14 @@
   "jackin_preview_40182853202": "14 jobs, 11 executed logs, 3 skips; 3,243 visible crate-download records; origin bytes and per-dependency compiler executions unknown.",
   "velnor_ci_pair": "36 ordinary Rust consumers, all missing compiled bundle; seeds reject displayed 4.0 GiB and 5.2 GiB exports.",
   "velnor_product_release_40185476122": "27 jobs, 2,934 visible crate-download records (1,957 in four deliberate clean-qualification jobs); fails in Homebrew macOS qualification; 3 skips.",
-  "private_fleet": "45 Rust consumer/seed jobs, all missing compiled bundle; 59 source probes hit with downloaded=0; seven seeds reject exports 953.8 MiB-3.3 GiB (displayed raw sizes, not stored bytes).",
+  "example_org_fleet": "45 Rust consumer/seed jobs, all missing compiled bundle; 59 source probes hit with downloaded=0; seven seeds reject exports 953.8 MiB-3.3 GiB (displayed raw sizes, not stored bytes).",
   "original_jackin_runs": "Preview 40076991878: 11 jobs, 3,159 visible crate-download records. Runs 40078359402/40078628319/40078851667: 40 jobs each; repeated Cargo progress cannot establish compiler-process counts."
  },
  "run_count": 39,
  "job_record_count": 504,
  "runs": [
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "run_id": 39512990012,
    "event": "push",
    "workflow_name": "Velnor Publish",
@@ -49,7 +49,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "run_id": 39884632686,
    "event": "pull_request",
    "workflow_name": "CI",
@@ -77,7 +77,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "run_id": 39885224739,
    "event": "push",
    "workflow_name": "Cache prune",
@@ -104,7 +104,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-1",
+   "repository": "example-org/example-repo-8",
    "run_id": 39885224758,
    "event": "push",
    "workflow_name": "CI",
@@ -131,7 +131,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-2",
+   "repository": "example-org/example-repo-11",
    "run_id": 39883761013,
    "event": "pull_request",
    "workflow_name": "CI",
@@ -159,7 +159,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-2",
+   "repository": "example-org/example-repo-11",
    "run_id": 39885044479,
    "event": "push",
    "workflow_name": "Cache prune",
@@ -186,7 +186,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-2",
+   "repository": "example-org/example-repo-11",
    "run_id": 39885044506,
    "event": "push",
    "workflow_name": "CI",
@@ -377,7 +377,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-5",
+   "repository": "example-org/example-repo-12",
    "run_id": 39883770173,
    "event": "pull_request",
    "workflow_name": "CI",
@@ -405,7 +405,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-5",
+   "repository": "example-org/example-repo-12",
    "run_id": 39885149301,
    "event": "push",
    "workflow_name": "Cache prune",
@@ -432,7 +432,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-5",
+   "repository": "example-org/example-repo-12",
    "run_id": 39885149307,
    "event": "push",
    "workflow_name": "CI",
@@ -623,7 +623,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40076991878,
    "event": "workflow_run",
    "workflow_name": null,
@@ -647,7 +647,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40078359402,
    "event": "pull_request",
    "workflow_name": null,
@@ -671,7 +671,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40078628319,
    "event": "pull_request",
    "workflow_name": null,
@@ -695,7 +695,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40078851667,
    "event": "push",
    "workflow_name": null,
@@ -719,7 +719,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40168639046,
    "event": "schedule",
    "workflow_name": "Stable tap reconciliation",
@@ -747,7 +747,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40170178415,
    "event": "schedule",
    "workflow_name": "Preview tap reconciliation",
@@ -775,7 +775,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40175310710,
    "event": "push",
    "workflow_name": "CI",
@@ -802,7 +802,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40178992378,
    "event": "pull_request",
    "workflow_name": "CI",
@@ -830,7 +830,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40181913019,
    "event": "push",
    "workflow_name": "Cache prune",
@@ -857,7 +857,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40181913046,
    "event": "push",
    "workflow_name": "CI",
@@ -884,7 +884,7 @@
    "compiler_unknown_reason": "Eligible compiler process ledgers pending (hidden observations; successful check_runtime suppresses child output)."
   },
   {
-   "repository": "example-org/example-repo-8",
+   "repository": "jackin-project/jackin",
    "run_id": 40182853202,
    "event": "workflow_run",
    "workflow_name": "Rust binary preview",

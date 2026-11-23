@@ -37,7 +37,7 @@ PR verdict ends when the exact-head `Required` concludes. Track first actionable
 [M] means a supplied or cited measurement, [E] an estimate with assumptions, and [S] source behavior.
 `repo/` points to `<home>/Projects/tailrocks/velnor-new` at `d6be276a6ce9`. Live evidence used earlier revisions including `95de9b704b`.
 `refs/` and `evidence/` resolve under `~/.cache/ci-ambition`. Runner source is v2.338.0 at `7afce9e`. §5 identifies the newer oracle.
-[Evidence](../evidence.md) · [Design v2](../../../proposed/velnor-runner-architecture.md) · [Decisions](../decisions.md)
+[Evidence](../evidence.md) · [Decisions](../decisions.md)
 
 ### One final labeled push
 
@@ -424,7 +424,7 @@ Observed CPU reached 92–95% despite little scale-set backlog. ARC requests of 
 | Gate and actual merge group | Reserve two warm gate slots and a link-capable pool per site to start [E]. Reserve an independent start for PR replacements. |
 | Labeled PR and preflight | Fair share per repo/PR, age boost and keyed join. Preflight borrows spare resources. |
 | Release, audit, speculation and warmers | Budget by deadline and borrow slack. Yield at task boundaries. Charge wasted work, bytes and retained state. |
-| ChainArgos and jackin | Keep separate Apps, runner groups, stores and quotas. Guarantee measured memory/CPU floors and let peers borrow idle capacity. |
+| example-org and jackin | Keep separate Apps, runner groups, stores and quotas. Guarantee measured memory/CPU floors and let peers borrow idle capacity. |
 
 Aim for zero local waiting and zero cold setup within the qualified envelope. Target total eligible-to-start p50 ≤0.5 s, p90 ≤2 s and p99 ≤10 s [E].
 Measure GitHub offer and actual cold restart separately. Bake images/tools and pre-open sessions to keep JIT and image pull off the warm path.
@@ -571,7 +571,7 @@ The irreducible terms are proof of changed inputs, exact-SHA and queue validatio
 ## 10. Critique of v2
 
 Keep N57–N64 where they express the owner's Rust, protocol, oracle and archive choices. Keep the coordinator, required group plan and XFS.
-The changes below follow v2's section order. [Architecture](../../../proposed/velnor-runner-architecture.md) · [Decision log](../decisions.md) · [Review](../design-feedback-comparison.md)
+The changes below follow v2's section order. [Decision log](../decisions.md) · [Review](../design-feedback-comparison.md)
 
 | V2 section | Gap and decision |
 |---|---|

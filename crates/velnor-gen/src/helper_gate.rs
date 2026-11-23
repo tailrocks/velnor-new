@@ -3,10 +3,12 @@
 
 use velnor_model::{
     BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, Platform,
-    PushAfterMergeGroup, RepoFacts,
+    PushAfterMergeGroup, RELEASE_CONFIG_PATH, RepoFacts, RepoView, WORKFLOWS_CONFIG_PATH,
 };
 
-use velnor_rust::{INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER};
+use velnor_rust::{
+    INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER, check_lint_tools, check_mbx, check_tools,
+};
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
@@ -85,7 +87,7 @@ fn require_generator_digests(
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }));
     if wanted && release.generator_digests().is_none() {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     }
@@ -98,6 +100,50 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
     } else {
         Err(GenerateError::IncompatibleHelper(version.clone()))
     }
+}
+
+pub(crate) fn pinned_helper<'a>(
+    view: &RepoView,
+    facts: &'a RepoFacts,
+) -> Result<Option<&'a HelperRelease>, GenerateError> {
+    if !facts.rust_roots.is_empty() || facts.helper.is_some() || needs_pinned_helper(view, facts) {
+        let helper = check_helper(facts)?;
+        crate::key_gates::check_config_keys(view, helper.version())?;
+        return Ok(Some(helper));
+    }
+    if crate::key_gates::required_helper(view).is_some() {
+        return Err(GenerateError::HelperNotPinned);
+    }
+    Ok(None)
+}
+
+pub(crate) fn check_stack_tools(view: &RepoView, facts: &RepoFacts) -> Result<(), GenerateError> {
+    if !facts.rust_roots.is_empty() {
+        check_tools(facts)?;
+        check_mbx(facts, &view.files)?;
+    } else if needs_lint_tools(facts) {
+        check_lint_tools(facts)?;
+    }
+    Ok(())
+}
+
+fn needs_pinned_helper(view: &RepoView, facts: &RepoFacts) -> bool {
+    view.files.contains_key(&WORKFLOWS_CONFIG_PATH)
+        || view.files.contains_key(&RELEASE_CONFIG_PATH)
+        || facts
+            .config
+            .lint
+            .iter()
+            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }))
+}
+
+fn needs_lint_tools(facts: &RepoFacts) -> bool {
+    facts.config.lint.iter().any(|lint| {
+        matches!(
+            lint.kind,
+            LintKind::Jactionlint { .. } | LintKind::Alint { .. } | LintKind::MiseTask { .. }
+        )
+    })
 }
 
 pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {

@@ -27,7 +27,7 @@ pub(crate) fn unique_id() -> String {
     )
 }
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const CONFIG: &str = ".velnor/rust-ci.toml";
 
 pub(crate) struct Scratch(PathBuf);
@@ -140,7 +140,7 @@ fn generate_never_writes_or_removes_through_a_symbolic_link() -> TestResult {
         &[Drift::Missing(workflow()?)],
     );
     assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
-    assert!(!directory_link.outside().join("rust-ci.yml").exists());
+    assert!(!directory_link.outside().join("ci.yml").exists());
     Ok(())
 }
 
@@ -312,7 +312,7 @@ fn a_leftover_or_planted_temporary_file_never_redirects_the_write() -> TestResul
     let scratch = Scratch::new("temporary")?;
     let target = scratch.outside().join("victim.yml");
     write(&target, "theirs\n")?;
-    scratch.link(".github/workflows/.rust-ci.yml.velnor-gen", &target)?;
+    scratch.link(".github/workflows/.ci.yml.velnor-gen", &target)?;
     apply(
         &scratch.repo(),
         &expected()?,
@@ -327,6 +327,6 @@ fn a_leftover_or_planted_temporary_file_never_redirects_the_write() -> TestResul
         .map(|entry| entry.map(|entry| entry.file_name()))
         .collect::<Result<Vec<_>, _>>()?;
     left.sort();
-    assert_eq!(left, vec!["rust-ci.yml"]);
+    assert_eq!(left, vec!["ci.yml"]);
     Ok(())
 }

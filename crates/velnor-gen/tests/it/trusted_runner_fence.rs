@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::declared_fixture::{TestResult, refusal, rendered_file, workflow};
+use crate::declared_fixture::{DECLARED_FILE, TestResult, refusal, rendered_file, workflow};
 use crate::pipeline::{pin_helper, view, workflow as rust_workflow};
 
 const POOL: &str = "velnor-box-trusted";
@@ -66,7 +66,7 @@ fn a_static_checkout_stays_accepted() -> TestResult {
         "ref = \"${{ github.sha }}\"",
         "fetch-depth = \"0\"",
     ] {
-        rendered_file(&workflow(HEADER, ON, &checkout_job(with)), "ci")?;
+        rendered_file(&workflow(HEADER, ON, &checkout_job(with)), DECLARED_FILE)?;
     }
     Ok(())
 }
@@ -189,7 +189,7 @@ fn a_static_docker_build_stays_accepted() -> TestResult {
         "file = \"Dockerfile\"\nbuild-args = \"VERSION=1\"",
         "context = \".\"\nbuild-contexts = \"base=docker-image://alpine:3.20\"",
     ] {
-        rendered_file(&workflow(HEADER, ON, &docker_job(with)), "ci")?;
+        rendered_file(&workflow(HEADER, ON, &docker_job(with)), DECLARED_FILE)?;
     }
     Ok(())
 }
@@ -203,7 +203,7 @@ fn a_docker_build_in_an_untrusted_workflow_keeps_its_inputs() -> TestResult {
             on,
             &docker_job("context = \"${{ inputs.target }}\""),
         ),
-        "ci",
+        DECLARED_FILE,
     )?;
     Ok(())
 }
