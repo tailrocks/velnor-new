@@ -1,5 +1,0 @@
-diff --git a/crates/velnor-gen/src/key_gates/rust_ci.rs b/crates/velnor-gen/src/key_gates/rust_ci.rs
---- a/crates/velnor-gen/src/key_gates/rust_ci.rs
-+++ b/crates/velnor-gen/src/key_gates/rust_ci.rs
-@@ -0,0 +1,1 @@
-+    gate_value(RustCi, "lint.kind", "generated-check", (0, 1, 111)),

@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-gen/src/colors.rs b/crates/velnor-gen/src/colors.rs
+--- a/crates/velnor-gen/src/colors.rs
++++ b/crates/velnor-gen/src/colors.rs
+@@ -0,0 +1 @@
++const GATE_COLOR: Color = rgb!(0, 1, 110);

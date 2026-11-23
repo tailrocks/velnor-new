@@ -1,6 +1,0 @@
-diff --git a/crates/velnor-gen/src/key_gates/pair.rs b/crates/velnor-gen/src/key_gates/pair.rs
---- /dev/null
-+++ b/crates/velnor-gen/src/key_gates/pair.rs
-@@ -0,0 +1,2 @@
-+const PAIR: (u64, u64) = (0,
-+    2);

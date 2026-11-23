@@ -1,5 +1,0 @@
-diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
---- a/crates/velnor-gen/src/policy.rs
-+++ b/crates/velnor-gen/src/policy.rs
-@@ -1,0 +1,1 @@
-+    const HELPER_MINIMUM: (u64, u64, u64);

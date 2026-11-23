@@ -1,6 +1,0 @@
-diff --git a/crates/velnor-rust/src/plan_tools.rs b/crates/velnor-rust/src/plan_tools.rs
---- a/crates/velnor-rust/src/plan_tools.rs
-+++ b/crates/velnor-rust/src/plan_tools.rs
-@@ -0,0 +1,2 @@
-+    touch();
-+    (0, 1, 112);

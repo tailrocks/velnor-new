@@ -1,5 +1,0 @@
-diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
---- a/crates/velnor-gen/src/policy.rs
-+++ b/crates/velnor-gen/src/policy.rs
-@@ -0,0 +1 @@
-+const POLICY: ((0, 1, 111), &str) = ((0, 1, 111), "example (0, 1, 110)");

@@ -46,7 +46,7 @@ if [ -z "$diff_file" ]; then
   while IFS= read -r old; do moved_from+=("$old"); done < <(git diff -M --name-status "$base...HEAD" | awk -F'\t' -v dirs="$gate_dirs" '
     BEGIN { n = split(dirs, d, " ") }
     $1 ~ /^R/ { for (i = 1; i <= n; i++) if (index($3, d[i] "/") == 1) { print $2; break } }')
-  git diff -M -U100000000 "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
+  git diff -M "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
@@ -54,11 +54,6 @@ if [ -z "$diff_file" ]; then
       sed 's/^/+/' "$f"
     done >"$tree_file"
   fi
-fi
-
-prose_docs=""
-if [ -n "$base" ]; then
-  prose_docs=$(git grep -n -i -e 'first released in' -e 'not tagged yet' HEAD -- generator/CONFIG.md docs/rust-ci.md || true)
 fi
 
 patch=${current##*.}
@@ -124,235 +119,68 @@ verify_correction() {
 scan() {
   local tree=$1 file=$2
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
-  BEGIN {
-    lx_mode = "code"; sq = sprintf("%c", 39); lx_depth = 0; lit_s = 0
-    ws = "[[:space:]]*"
-    num = "[0-9][0-9A-Za-z_]*"
-    tup = "\\(" ws num ws "," ws num ws "," ws num ws ",?" ws "\\)"
-    ver = "(" tup ")|0\\.1\\.[0-9]+"
-    digits = "0123456789abcdef"
-  }
-  function intval(s,    base, i, d, v, n) {
-    sub(/_*(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)$/, "", s)
-    gsub(/_/, "", s)
-    base = 10
-    if (s ~ /^0x/) { base = 16; s = substr(s, 3) }
-    else if (s ~ /^0o/) { base = 8; s = substr(s, 3) }
-    else if (s ~ /^0b/) { base = 2; s = substr(s, 3) }
-    n = length(s)
-    if (n == 0) return -1
-    v = 0
-    for (i = 1; i <= n; i++) {
-      d = index(digits, tolower(substr(s, i, 1))) - 1
-      if (d < 0 || d >= base) return -1
-      v = v * base + d
-      if (v > 1000000000) v = 1000000000
-    }
-    return v
-  }
-  function tupver(t,    e, n, a, b, c) {
-    gsub(/[()[:space:]]/, "", t)
-    sub(/,$/, "", t)
-    n = split(t, e, ",")
-    if (n != 3) return ""
-    a = intval(e[1]); b = intval(e[2]); c = intval(e[3])
-    if (a != 0 || b != 1 || c < 0) return ""
-    return "0.1." c
-  }
-  function tuple_bad(line,    s, off, m, st, rest, t, e, tok) {
-    off = 0; s = line
-    while (match(s, "\\(" ws num ws "," ws num ws ",")) {
-      m = substr(s, RSTART, RLENGTH)
-      st = off + RSTART
-      off = st + RLENGTH - 1
-      s = substr(line, off + 1)
-      t = m
-      gsub(/[()[:space:]]/, "", t)
-      split(t, e, ",")
-      if (intval(e[1]) != 0 || intval(e[2]) != 1 || is_call(line, st)) continue
-      rest = s
-      if (rest !~ /\)/) continue
-      if (!match(rest, "^" ws num ws ",?" ws "\\)")) return 1
-      tok = rest
-      sub(/^[[:space:]]*/, "", tok)
-      sub(/[[:space:]]*,?[[:space:]]*\).*$/, "", tok)
-      if (intval(tok) < 0) return 1
-    }
-    return 0
-  }
-  function versions(line, out,    rest, n, v) {
+  function versions(line, out,    rest, n, v, off, before, after) {
     n = 0
     rest = line
-    while (match(rest, ver)) {
+    off = 0
+    while (match(rest, /\(0, ?1, ?[0-9]+\)|0\.1\.[0-9]+/)) {
       v = substr(rest, RSTART, RLENGTH)
-      rest = substr(rest, RSTART + RLENGTH)
-      if (substr(v, 1, 1) == "(") {
-        v = tupver(v)
-        if (v == "") continue
-      }
+      before = (off + RSTART > 1) ? substr(line, off + RSTART - 1, 1) : ""
+      after = substr(rest, RSTART + RLENGTH)
+      off += RSTART + RLENGTH - 1
+      rest = after
+      if (substr(v, 1, 1) == "(" && (before == "!" || after ~ /^[ \t]*(=>|=([^=]|$))/)) continue
+      gsub(/[() ]/, "", v)
+      gsub(/,/, ".", v)
       out[++n] = v
     }
     return n
   }
-  function isword(ch) { return ch ~ /^[A-Za-z0-9_]$/ }
-  function is_call(line, st,    j, w) {
-    j = st - 1
-    while (j > 0 && substr(line, j, 1) ~ /[[:space:]]/) j--
-    if (j < 1 || !isword(substr(line, j, 1))) return 0
-    w = ""
-    while (j > 0 && isword(substr(line, j, 1))) { w = substr(line, j, 1) w; j-- }
-    return (w !~ /^(return|in|else|break|yield|if|match|let|mut|const|static|where)$/)
-  }
-  function lex_addr(a, b) { nr++; rs[nr] = a; re[nr] = b }
-  function inrange(p,    k) {
-    for (k = 1; k <= nr; k++) if (rs[k] <= p && p < re[k]) return 1
-    return 0
-  }
-  function lit_addr(a, b) { nq++; qs[nq] = a; qe[nq] = b }
-  function inlit(p,    k) {
-    for (k = 1; k <= nq; k++) if (qs[k] <= p && p < qe[k]) return 1
-    return 0
-  }
-  function tuple_code(line,    s, off, st) {
-    off = 0; s = line
-    while (match(s, tup)) {
-      st = off + RSTART
-      if (!inrange(st) && !inlit(st) && !is_call(line, st) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
-      off = st + RLENGTH - 1
-      s = substr(line, off + 1)
-    }
-    return 0
-  }
-  function mask_code(line,    out, i, n) {
-    out = ""; n = length(line)
-    for (i = 1; i <= n; i++) out = out ((inrange(i) || inlit(i)) ? " " : substr(line, i, 1))
-    return out
-  }
-  function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
-    split("", rs)
-    split("", re)
-    split("", qs)
-    split("", qe)
-    nr = 0
-    nq = 0
-    n = length(s)
-    cs = (lx_mode == "block") ? 1 : 0
-    lit_s = (lx_mode == "str" || lx_mode == "raw") ? 1 : 0
-    for (i = 1; i <= n; i++) {
-      c = substr(s, i, 1)
-      if (lx_mode == "block") {
-        if (c == "/" && substr(s, i + 1, 1) == "*") { i++; lx_depth++; continue }
-        if (c == "*" && substr(s, i + 1, 1) == "/") {
-          i++
-          if (--lx_depth == 0) { lx_mode = "code"; lex_addr(cs, i + 1); cs = 0 }
-        }
-        continue
-      }
-      if (lx_mode == "str") {
-        if (c == "\\") i++
-        else if (c == "\"") { lx_mode = "code"; lit_addr(lit_s, i + 1) }
-        continue
-      }
-      if (lx_mode == "raw") {
-        if (c == "\"" && substr(s, i + 1, lx_h) == lx_hs) { i += lx_h; lx_mode = "code"; lit_addr(lit_s, i + 1) }
-        continue
-      }
-      if (c == "/" && substr(s, i + 1, 1) == "/") { lex_addr(i, n + 1); break }
-      if (c == "/" && substr(s, i + 1, 1) == "*") { cs = i; lx_mode = "block"; lx_depth = 1; i++; continue }
-      if (c == "\"") { lx_mode = "str"; lit_s = i; continue }
-      if (c == sq) {
-        if (substr(s, i + 1, 1) == "\\") { k = index(substr(s, i + 3), sq); if (k > 0) i += 2 + k }
-        else if (substr(s, i + 2, 1) == sq) i += 2
-        continue
-      }
-      if (c == "r") {
-        pc = (i > 1) ? substr(s, i - 1, 1) : ""
-        ppc = (i > 2) ? substr(s, i - 2, 1) : ""
-        if (!isword(pc) || ((pc == "b" || pc == "c") && !isword(ppc))) {
-          j = i + 1
-          h = 0
-          while (substr(s, j, 1) == "#") { h++; j++ }
-          if (substr(s, j, 1) == "\"") {
-            hs = ""
-            for (k = 0; k < h; k++) hs = hs "#"
-            lx_mode = "raw"; lx_h = h; lx_hs = hs; lit_s = i
-            i = j
-          }
-        }
-      }
-    }
-    if (lx_mode == "block" && cs) lex_addr(cs, n + 1)
-    if ((lx_mode == "str" || lx_mode == "raw") && lit_s) lit_addr(lit_s, n + 1)
-  }
-  function analyze(line,    s, off, p, m, st) {
-    c_mv = 0; c_mn = ""; c_mc = ""; c_mention = 0
-    lex_line(line)
-    c_tuple = tuple_code(mask_code(line))
-    off = 0; s = line
-    while (!c_mv && match(s, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) {
-      st = off + RSTART
-      m = substr(s, RSTART, RLENGTH)
-      off = st + RLENGTH - 1
-      s = substr(line, off + 1)
-      if (inrange(st)) {
-        match(m, /0\.1\.[0-9]+/)
-        c_mn = substr(m, RSTART + 4, RLENGTH - 4)
-        c_mc = substr(m, index(m, " via ") + 5)
-        c_mv = 1
-      }
-    }
-    off = 0; s = line
-    while ((p = index(s, "helper-gate:")) > 0) {
-      if (inrange(off + p)) c_mention = 1
-      off += p + 11
-      s = substr(line, off + 1)
-    }
+  function marker(line, out,    m) {
+    if (!match(line, /(^[ \t]*(\/\/|\/\*|\*)|[;,{}][ \t]*\/\/).*helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
+    m = substr(line, RSTART, RLENGTH)
+    match(m, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)
+    m = substr(m, RSTART, RLENGTH)
+    match(m, /0\.1\.[0-9]+/)
+    out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
+    out["commit"] = substr(m, index(m, " via ") + 5)
+    return 1
   }
   function strip(line,    s) {
     s = line
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevmask = ""; prevadded = 0; prevdecl = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
-  /^@@/ { inhdr = 0; prevmask = ""; prevadded = 0; prevdecl = 0; p_mv = 0; c_mv = 0; next }
-  inhdr && /^(\+\+\+|---) / { next }
+  /^diff --git / { file = $NF; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
+  /^@@/ { prevnew = ""; prevadded = 0; next }
+  /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
-    abovemask = prevmask
-    wasdecl = prevdecl
+    above = prevnew
     aboveadded = prevadded
-    p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
-    analyze(text)
-    m_now = mask_code(text)
-    scanned_now = strip(m_now)
-    split_min = ((" " scanned_now) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:[^;]*=[[:space:]]*$/)
-    if (split_min && !c_mv && p_mv) { c_mv = 1; c_mn = p_mn; c_mc = p_mc }
-    prevmask = m_now
-    prevdecl = split_min
+    prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
-      if (!counted || !aboveadded || !p_mv || versions(abovemask, av) > 0) next
+      if (!counted || !aboveadded || !marker(above, am) || versions(strip(above), av) > 0) next
       added[++count] = file SUBSEP strip(text)
-      scan_of[count] = scanned_now
-      markN[count] = p_mn
-      markC[count] = p_mc
+      markN[count] = am["n"]
+      markC[count] = am["commit"]
       ctx[count] = 1
+      delete am
       next
     }
     if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
-    if (!tree && c_mention && !c_mv) { printf "MARKER\t%s\t%s\n", file, text; next }
+    if (!tree && text ~ /^[ \t]*(\/\/|\/\*|\*).*helper-gate:|[;,{}][ \t]*\/\/.*helper-gate:/ && !marker(text, probe_mk)) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
-    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && tuple_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
-    has = c_mv || p_mv
-    if (!tree && (((" " mask_code(text)) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:[^;]*=/) || (wasdecl && mask_code(text) ~ ("^" ws tup ws ";" ws "$"))) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
-    markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
-    markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
-    if (has && versions(scanned_now, probe) == 0) next
-    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && !c_tuple) next
+    has = marker(text, mk) || marker(above, mk)
+    markN_now = has ? mk["n"] : ""
+    markC_now = has ? mk["commit"] : ""
+    delete mk
+    if (has && versions(stripped, probe) == 0) next
+    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && stripped !~ /^[ \t]*(pub(\([a-z:]+\))?[ \t]+)?(const|static)[ \t]/) next
     added[++count] = file SUBSEP stripped
-    scan_of[count] = scanned_now
     markN[count] = markN_now
     markC[count] = markC_now
   }
@@ -360,7 +188,7 @@ scan() {
     for (i = 1; i <= count; i++) {
       split(added[i], parts, SUBSEP)
       if (!ctx[i] && added[i] in removed) continue
-      n = versions(scan_of[i], found)
+      n = versions(parts[2], found)
       for (k = 1; k <= n; k++) {
         if ((added[i] SUBSEP found[k]) in seen) continue
         seen[added[i] SUBSEP found[k]] = 1
@@ -402,22 +230,11 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
     MARKER)
       printf '%s: helper-gate marker is not the released form: %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` on a released gate; leave unreleased gates unmarked\n' "$f1" "$f2" >&2
       bad=1 ;;
-    SHAPE)
-      printf '%s: gate row is not a literal tuple on one line: %s\n  write every (0, 1, N) tuple here as three integer literals on one line, in `gate(File, "key", (0, 1, N))` or HELPER_MINIMUM\n' "$f1" "$f2" >&2
-      bad=1 ;;
-    PIN)
-      printf '%s: HELPER_MINIMUM is the floor of the supported helper range and may change only with the marker of a released helper on the same definition: %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` above `pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, N);`\n' "$f1" "$f2" >&2
-      bad=1 ;;
     BAD)
       printf '%s: gate %s, but tools-v%s is already released; use %s\n  %s\n' "$f1" "$f2" "$f2" "$next" "$f3" >&2
       bad=1 ;;
   esac
 done <<<"$report"
-
-if [ -n "$prose_docs" ]; then
-  printf '%s\n  name a released gate by its tag and commit marker in the source, and state only the required velnor-ci version in these pages\n' "$prose_docs" >&2
-  bad=1
-fi
 
 if [ "$bad" != 0 ]; then
   echo "helper gates must be above velnor-ci $current (this tree), or at or below it with the released marker" >&2

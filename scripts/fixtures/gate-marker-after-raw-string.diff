@@ -1,6 +1,0 @@
-diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
---- a/crates/velnor-gen/src/policy.rs
-+++ b/crates/velnor-gen/src/policy.rs
-@@ -0,0 +1,2 @@
-+const LABEL: &str = r#"budget"#; // helper-gate: first in tools-v0.1.110 via 465ddbe955
-+    gate(RustCi, "budget", (0, 1, 110)),

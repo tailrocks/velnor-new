@@ -144,6 +144,7 @@ jobs:
             echo "the check let a lowered head version hide a released gate" >&2
             exit 1
           fi
+          bash scripts/test-helper-gates-gaps.sh
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}

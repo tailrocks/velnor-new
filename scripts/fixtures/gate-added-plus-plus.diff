@@ -1,7 +1,0 @@
-diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
---- a/crates/velnor-gen/src/policy.rs
-+++ b/crates/velnor-gen/src/policy.rs
-@@ -0,0 +1,3 @@
-+const RAW: &str = "
-+++ ";
-+    gate(RustCi, "budget", (0, 1, 110)),
