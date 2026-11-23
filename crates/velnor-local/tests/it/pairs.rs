@@ -116,7 +116,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
     assert!(env.name.starts_with("velnor-local-"), "{}", env.name);
     assert_eq!(env.network(Side::Untrusted), format!("{}-fork", env.name));
     let args = EnvironmentArgs {
-        dir: dir.clone(),
+        dir: dir.to_path_buf(),
         fork_runners: 1,
         velnor_host: Some(HOST_BINARY.into()),
         ..EnvironmentArgs::default()

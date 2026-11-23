@@ -28,7 +28,7 @@ fn fast_import_commits(repo: &TempRepo, count: usize) -> String {
         .concat();
     let mut child = Command::new("git")
         .arg("-C")
-        .arg(&repo.dir)
+        .arg(repo.dir.path())
         .args(["fast-import", "--quiet"])
         .stdin(Stdio::piped())
         .spawn()
@@ -240,12 +240,23 @@ async fn a_directory_listing_stops_at_1000_entries() {
     assert_eq!(listing.as_array().map(Vec::len), Some(1000));
 }
 
+struct RemoveFiles(Vec<std::path::PathBuf>);
+
+impl Drop for RemoveFiles {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            std::fs::remove_file(path).ok();
+        }
+    }
+}
+
 #[tokio::test]
 async fn a_revision_that_looks_like_an_option_or_a_path_that_climbs_out_is_not_found() {
     let c = changed("io-hostile");
     let outside = c.repo.dir.with_extension("outside");
     std::fs::write(&outside, "secret\n").unwrap_or_else(|e| unreachable!("{e}"));
     let written = c.repo.dir.with_extension("written");
+    let _siblings = RemoveFiles(vec![outside.clone(), written.clone()]);
     let option = format!("--output={}", written.display());
     let stub = c
         .repo

@@ -45,8 +45,9 @@ fn repos_with_the_same_name_in_one_run_do_not_share_a_folder() {
 
 #[test]
 fn a_folder_left_by_an_earlier_run_is_not_removed_by_a_new_repo() {
-    let leftover =
-        Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{}-audit", std::process::id())));
+    let leftover = Repo(velnor_test_support::ScratchDir::adopt(
+        std::env::temp_dir().join(format!("velnor-ci-inputs-{}-audit", std::process::id())),
+    ));
     fs::create_dir_all(leftover.root()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(leftover.root().join("marker.txt"), "left behind\n")
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -155,7 +156,7 @@ fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
     );
 }
 
-pub(crate) struct Repo(PathBuf);
+pub(crate) struct Repo(velnor_test_support::ScratchDir);
 
 impl Repo {
     pub(crate) fn empty(name: &str) -> Self {
@@ -164,19 +165,19 @@ impl Repo {
 
     pub(crate) fn new(name: &str) -> Self {
         let repo = Self::empty(name);
-        repo.git(&["init", "--quiet"]);
+        repo.git(&["init", "--quiet", "--object-format=sha1"]);
         repo.write_unstaged(".gitignore", "/target/\n");
         repo
     }
 
     pub(crate) fn new_under(parent: &Path, name: &str) -> Self {
-        let repo = Self(fresh_dir_in(
+        let repo = Self(velnor_test_support::ScratchDir::adopt(fresh_dir_in(
             parent,
             &AtomicU64::new(0),
             "velnor-ci-inputs",
             name,
-        ));
-        repo.git(&["init", "--quiet"]);
+        )));
+        repo.git(&["init", "--quiet", "--object-format=sha1"]);
         repo.write_unstaged(".gitignore", "/target/\n");
         repo
     }
@@ -190,7 +191,7 @@ impl Repo {
     pub(crate) fn git(&self, args: &[&str]) {
         let status = Command::new("git")
             .arg("-C")
-            .arg(&self.0)
+            .arg(self.0.path())
             .args(args)
             .status()
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -274,12 +275,6 @@ fn copy_tree(from: &Path, to: &Path) {
         } else {
             fs::copy(entry.path(), &target).unwrap_or_else(|e| unreachable!("{e}"));
         }
-    }
-}
-
-impl Drop for Repo {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(&self.0);
     }
 }
 

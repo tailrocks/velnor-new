@@ -106,9 +106,7 @@ pub(crate) fn context_in_mode(
             "github.ref" => text(event.git_ref),
             "github.repository" => text("owner/repo"),
             "github.run_id" => text("99"),
-            "github.workflow_ref" => {
-                text("owner/repo/.github/workflows/rust-ci.yml@refs/pull/7/merge")
-            }
+            "github.workflow_ref" => text("owner/repo/.github/workflows/ci.yml@refs/pull/7/merge"),
             "github.event.pull_request.number" => pull.map_or(Value::Null, |_| text("7")),
             "github.event.action" => pull.map_or(Value::Null, |pull| text(pull.action)),
             "github.event.changes.base" => pull

@@ -86,12 +86,6 @@ pub(super) fn root_workspace(
     Ok(found)
 }
 
-/// Which Cargo roots read the ambient `CARGO_TARGET_DIR`, for a command or
-/// audit that runs at `location`. Every grouped root reads it, since its group
-/// shares one target directory. A standalone root reads it only when it holds
-/// `location`: the environment belongs to the step that runs there, and a
-/// second standalone root reading it would report the same target as the first
-/// and be refused by `apart`. With no holder, every standalone root reads it.
 pub(super) fn inheriting(
     facts: &RepoFacts,
     repository: &Path,
@@ -125,8 +119,6 @@ pub(super) fn inheriting(
         .collect())
 }
 
-/// `inputs audit` reads the target of the root `--root` names, or of the
-/// directory it runs in when no root is named.
 pub(super) fn audit_inheriting(
     facts: &RepoFacts,
     repository: &Path,

@@ -342,14 +342,19 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
 mod api;
 mod build_failure;
 mod evidence;
+mod failing_check;
 mod mbx_reports;
+mod mbx_reports_budget;
 mod mbx_reports_followups;
 mod mbx_reports_sessions;
 mod policy;
 mod provenance;
+mod saved_key;
+mod saved_key_failure;
 mod target_identity;
 mod waste;
 mod waste_mbx;
+mod waste_mbx_cut;
 mod wrapped;
 
 pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {

@@ -20,7 +20,7 @@ rust = { version = "1.100.0", profile = "minimal", components = [
 mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
 bun = "1.4.5"
 hk = "2.13.0"
-cargo-binstall = "1.27.0"
+cargo-binstall = "1.28.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
 # and hk's check-only jactionlint step runs the same binaries locally.
@@ -28,7 +28,7 @@ jactionlint = "2.6.0"
 shellcheck = "0.11.0"
 minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 # Repository policy (.alint.yml): the generated Alint job installs this pin.
-"github:asamarts/alint" = "0.22.1"
+"github:asamarts/alint" = "v0.23.0"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
 node = "26.13.1"
 # Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.

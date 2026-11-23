@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
 use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -71,7 +72,7 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 
 #[test]
 fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
-    let repo = fixture("mbx-reports-orphan-socket")?;
+    let repo = fixture("sock-orphan")?;
     let orphan = repo.root().join("orphan.sock");
     drop(UnixListener::bind(&orphan)?);
     cargo_with(
@@ -89,7 +90,7 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 
 #[test]
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
-    let repo = fixture("mbx-reports-stuck-listener")?;
+    let repo = fixture("sock-stuck")?;
     let stuck = repo.root().join("stuck.sock");
     let listener = UnixListener::bind(&stuck)?;
     let mut command = cargo_command(
@@ -137,7 +138,7 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
     assert_eq!(
         session,
         json!({
-            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4,
+            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4, "bypassed": 5,
             "bypasses": {"compiler-query": 2, "unsupported-flag": 5},
             "compiler": {
                 "miss": {"invocations": 1, "duration_ns": 900},
@@ -182,11 +183,12 @@ fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
 
 #[test]
 fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
-    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":"2","unsupported-flag":{"count":5},"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
     assert_eq!(
         parse(newer),
         Ok(Some(MbxSession {
-            bypasses: BTreeMap::from([("other".to_owned(), 1)]),
+            bypasses: BTreeMap::from([("compiler-query".to_owned(), 2), ("other".to_owned(), 1)]),
+            bypassed: 1,
             compiler: BTreeMap::from([(
                 "miss".to_owned(),
                 MbxCompilerWork {
@@ -196,6 +198,16 @@ fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read
             )]),
             ..session(1, 0, 0)
         }))
+    );
+    let non_numeric = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":"2","other":1}}"#;
+    assert!(
+        parse(non_numeric).is_err(),
+        "a string bypass count must not be zero"
+    );
+    let object = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"unsupported-flag":{"count":5}}}"#;
+    assert!(
+        parse(object).is_err(),
+        "an object bypass count must not be zero"
     );
 }
 
@@ -236,6 +248,7 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
         parse(bypassed),
         Ok(Some(MbxSession {
             bypasses: BTreeMap::from([("compiler-query".to_owned(), 1), ("other".to_owned(), 1)]),
+            bypassed: 1,
             ..session(0, 0, 0)
         }))
     );
@@ -254,6 +267,13 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
 }
 
 #[test]
+fn a_version_five_report_with_only_incremental_compilations_yields_a_session() {
+    let incremental =
+        br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
+    assert_eq!(parse(incremental), Ok(Some(session(0, 0, 15))));
+}
+
+#[test]
 fn a_verification_only_report_is_a_session() {
     let verified = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
     assert_eq!(
@@ -263,4 +283,66 @@ fn a_verification_only_report_is_a_session() {
             ..session(0, 0, 0)
         }))
     );
+}
+
+const WORKSPACE_CARGO: &str = "#!/bin/sh\nif [ \"$1\" = metadata ]; then printf '{\"packages\":[],\"workspace_root\":\"%s\",\"target_directory\":\"%s/target\"}' \"$PWD\" \"$PWD\"; exit 0; fi\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const TEST_STARTING_VELNOR_CI: &str =
+    "#!/bin/sh\nexec \"$VELNOR_CI\" inputs build -- cargo build\n";
+
+fn executable(path: &std::path::Path, script: &str) -> ResultTest {
+    fs::create_dir_all(path.parent().ok_or("parent")?)?;
+    fs::write(path, script)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+    Ok(())
+}
+
+fn job_step(repo: &super::Repo, command: &[&str], report: &str) -> ResultTest {
+    let path = format!(
+        "{}:{}",
+        repo.root().join("bin").display(),
+        std::env::var("PATH")?
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--"])
+        .args(command)
+        .current_dir(repo.root())
+        .env("PATH", path)
+        .env("RUNNER_TEMP", repo.root())
+        .env(SWITCH, "true")
+        .env("VELNOR_CI", env!("CARGO_BIN_EXE_velnor-ci"))
+        .env("FAKE_MBX_REPORT", report)
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("MBX_STATS_REPORT")
+        .env_remove("MBX_SOCKET")
+        .output()?;
+    assert!(output.status.success(), "{command:?}: {output:?}");
+    Ok(())
+}
+
+#[test]
+fn a_velnor_ci_that_the_projects_tests_start_adds_no_session_to_the_job() -> ResultTest {
+    let repo = fixture("mbx-reports-test-processes")?;
+    let runner = repo.root().join("test-runner");
+    executable(&repo.root().join("bin/cargo"), WORKSPACE_CARGO)?;
+    executable(&runner.join("cargo-nextest"), TEST_STARTING_VELNOR_CI)?;
+    executable(&runner.join("cargo"), TEST_STARTING_VELNOR_CI)?;
+    let wrapper = [env!("CARGO_BIN_EXE_velnor-ci"), "inputs", "build", "--"];
+    let nextest = runner.join("cargo-nextest");
+    let doctests = runner.join("cargo");
+    job_step(
+        &repo,
+        &[&wrapper[..], &["cargo", "build"]].concat(),
+        &report_json(5, 3, 0, 0),
+    )?;
+    let nextest = [nextest.to_str().ok_or("path")?, "nextest", "run"];
+    job_step(&repo, &[&wrapper[..], &nextest].concat(), "")?;
+    job_step(
+        &repo,
+        &[doctests.to_str().ok_or("path")?, "test", "--doc"],
+        "",
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(3, 0, 0)], "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
 }

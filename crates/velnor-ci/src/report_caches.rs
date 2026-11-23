@@ -11,7 +11,10 @@ pub(crate) struct CachePlan {
     family: String,
     root: Option<String>,
     restore_step: String,
-    save_step: String,
+    #[serde(default)]
+    save_step: Option<String>,
+    #[serde(default)]
+    save_key_step: Option<String>,
     #[serde(default)]
     not_generated: Option<String>,
 }
@@ -33,21 +36,31 @@ pub(crate) fn observe_caches(
                 errors.push(format!("{}: {error}", plan.restore_step));
             }
             let (requested_key, matched_key, hit) = evidence.unwrap_or_default();
-            let save = if saving {
-                match steps[&plan.save_step]["outcome"].as_str() {
+            let save = match plan.save_step.as_deref() {
+                Some(step) if saving => match steps[step]["outcome"].as_str() {
                     Some("failure" | "cancelled") => SaveOutcome::Failed,
                     Some("success") => SaveOutcome::Unknown,
                     _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
+                },
+                _ => SaveOutcome::NotAttempted,
             };
+            let saved_key = plan
+                .save_key_step
+                .as_ref()
+                .filter(|_| save != SaveOutcome::NotAttempted)
+                .map(|id| {
+                    steps[id]["outputs"]["key"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned()
+                });
             Cache {
                 family: plan.family,
                 root: plan.root,
                 restore_step: plan.restore_step,
                 save_step: plan.save_step,
                 requested_key,
+                saved_key,
                 matched_key,
                 hit: hit.unwrap_or(Hit::Miss),
                 bytes: None,
@@ -115,7 +128,8 @@ mod tests {
             family: "sources".to_owned(),
             root: None,
             restore_step: "restore".to_owned(),
-            save_step: "save".to_owned(),
+            save_step: Some("save".to_owned()),
+            save_key_step: None,
             not_generated: None,
         }];
         let steps = json!({

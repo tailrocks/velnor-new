@@ -19,7 +19,7 @@ use crate::support::fresh_dir;
 
 mod optional;
 
-struct Dir(PathBuf);
+struct Dir(velnor_test_support::ScratchDir);
 
 impl Dir {
     fn new(name: &str) -> Self {
@@ -30,12 +30,6 @@ impl Dir {
         let path = self.0.join(name);
         fs::write(&path, text).unwrap_or_else(|e| unreachable!("{e}"));
         path
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -134,12 +128,13 @@ fn publish(api: &Path, dir: &Dir) -> Output {
 
 #[test]
 fn a_folder_named_by_pid_alone_is_not_removed_by_a_new_dir() {
-    let leftover =
-        Dir(std::env::temp_dir().join(format!("velnor-ci-release-{}-publish", std::process::id())));
-    fs::create_dir_all(&leftover.0).unwrap_or_else(|e| unreachable!("{e}"));
+    let leftover = Dir(velnor_test_support::ScratchDir::adopt(
+        std::env::temp_dir().join(format!("velnor-ci-release-{}-publish", std::process::id())),
+    ));
+    fs::create_dir_all(leftover.0.path()).unwrap_or_else(|e| unreachable!("{e}"));
     leftover.write("marker.txt", "left behind\n");
     let dir = Dir::new("publish");
-    assert_ne!(dir.0, leftover.0);
+    assert_ne!(dir.0.path(), leftover.0.path());
     assert!(leftover.0.join("marker.txt").is_file());
 }
 

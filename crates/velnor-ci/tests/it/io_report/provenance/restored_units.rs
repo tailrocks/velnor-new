@@ -3,6 +3,9 @@
 
 use super::*;
 use velnor_ci::inputs::restored_units_file;
+use velnor_ci::restored_units::Manifest;
+
+mod missing_input;
 
 const HELD: &str = "0123456789abcdef";
 const HELD_NEW_LAYOUT: &str = "fedcba9876543210";
@@ -48,6 +51,10 @@ fn a_registry_unit_is_waste_only_when_the_restored_base_held_it_in_either_layout
         let repo = base(&format!("report-restored-units-{layout}"), layout)?;
         let rebuilt = registry_artifact(&repo, held)?;
         let metrics = observation(&repo, &[], &[rebuilt])?;
+        assert_eq!(
+            metrics.invocations[0].restored_manifest,
+            Some(Manifest::Present)
+        );
         assert_eq!(metrics.invocations[0].compilations[0].restored, Some(true));
         assert!(
             metrics
@@ -67,25 +74,50 @@ fn a_registry_unit_is_waste_only_when_the_restored_base_held_it_in_either_layout
 }
 
 #[test]
-fn a_restore_that_left_no_record_keeps_every_dependency_compile_waste()
+fn a_restore_that_left_no_record_is_unknown_not_waste_and_says_so()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = base("report-restored-units-absent", "old")?;
     fs::remove_file(repo.root().join("target").join(restored_units_file("")))?;
     let missing = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[missing])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Absent)
+    );
+    assert_eq!(metrics.violations, [] as [String; 0]);
+    let report = check(&repo);
+    assert!(report.status.success(), "{report:?}");
     assert!(
-        metrics
-            .violations
-            .iter()
-            .any(|line| line.contains("serde v1.0.0")),
-        "{metrics:?}"
+        String::from_utf8_lossy(&report.stdout).contains(
+            "::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0"
+        ),
+        "{report:?}"
     );
     Ok(())
 }
 
 #[test]
-fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
+fn a_record_that_cannot_be_decoded_is_unreadable_not_absent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = base("report-restored-units-garbage", "old")?;
+    fs::write(
+        repo.root().join("target").join(restored_units_file("")),
+        "not a record\n",
+    )?;
+    let missing = registry_artifact(&repo, GAP)?;
+    let metrics = observation(&repo, &[], &[missing])?;
+    assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Unreadable)
+    );
+    assert_eq!(metrics.violations, [] as [String; 0]);
+    Ok(())
+}
+
+#[test]
+fn a_restore_whose_scan_fails_clears_the_older_record_so_no_unit_is_claimed_as_held()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = base("report-restored-units-stale", "old")?;
     let record = repo.root().join("target").join(restored_units_file(""));
@@ -108,265 +140,89 @@ fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
     let gap = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[gap])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);
-    assert!(
-        metrics
-            .violations
-            .iter()
-            .any(|line| line.contains("serde v1.0.0")),
-        "{metrics:?}"
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Absent)
     );
+    assert_eq!(metrics.violations, [] as [String; 0]);
     Ok(())
 }
 
-const MISSING_INPUT: &str = "00000000bad00001";
-const KEPT_INPUT: &str = "00000000bad00002";
-const IN_TARGET: &str = "00000000bad00003";
-
-fn dep_info_unit(repo: &Repo, hash: &str, input: &str) {
-    repo.write(
-        &format!("target/debug/.fingerprint/serde-{hash}/lib-serde"),
-        "{}\n",
-    );
-    repo.write(
-        &format!("target/debug/deps/serde-{hash}.d"),
-        &format!("target/debug/deps/libserde-{hash}.rmeta: src/lib.rs {input}\n"),
-    );
-}
-
-fn restored_record(repo: &Repo) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(fs::read_to_string(
-        repo.root().join("target").join(restored_units_file("")),
-    )?)
-}
-
 #[test]
-fn a_unit_whose_dep_info_names_a_missing_file_outside_target_is_a_base_gap_not_waste()
+fn cargos_dirty_reason_reaches_the_compilation_it_explains()
 -> Result<(), Box<dyn std::error::Error>> {
-    let repo = fixture("report-restored-units-missing-input")?;
-    let outside = repo.root().join("kept/private.rs");
-    repo.write("kept/private.rs", "pub fn v() {}\n");
-    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", repo.root().display());
-    dep_info_unit(&repo, MISSING_INPUT, &missing);
-    dep_info_unit(&repo, KEPT_INPUT, &outside.display().to_string());
-    let inside = format!(
-        "{}/target/debug/build/serde/out/x.rs",
-        repo.root().display()
+    let repo = base("report-restored-units-dirty", "old")?;
+    let missing = registry_artifact(&repo, GAP)?;
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let metrics = observation_with(
+        &repo,
+        &[],
+        &[missing],
+        json!([
+            {"package":"serde","version":"1.0.0","reason":"FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })"},
+            {"package":"serde","version":"1.0.0","reason":reason},
+            {"package":"other","version":"2.0.0","reason":"ignored"}
+        ]),
+    )?;
+    assert_eq!(
+        metrics.invocations[0].compilations[0].dirty.as_deref(),
+        Some(reason)
     );
-    dep_info_unit(&repo, IN_TARGET, &inside);
-    restore(&repo);
-    let record = restored_record(&repo)?;
-    let lines: Vec<&str> = record.lines().collect();
-    assert!(
-        lines.contains(&format!("missing-input {MISSING_INPUT}").as_str()),
-        "{record}"
-    );
-    assert!(!lines.contains(&MISSING_INPUT), "{record}");
-    for held in [KEPT_INPUT, IN_TARGET] {
-        assert!(lines.contains(&held), "{held}: {record}");
-    }
-
-    let gap = observation(&repo, &[], &[registry_artifact(&repo, MISSING_INPUT)?])?;
-    let compilation = &gap.invocations[0].compilations[0];
-    assert_eq!(compilation.restored, Some(false), "{gap:?}");
-    assert!(compilation.missing_input, "{gap:?}");
-    assert_eq!(gap.violations, [] as [String; 0]);
-
-    for held in [KEPT_INPUT, IN_TARGET] {
-        let metrics = observation(&repo, &[], &[registry_artifact(&repo, held)?])?;
-        assert_eq!(metrics.invocations[0].compilations[0].restored, Some(true));
-        assert!(
-            metrics
-                .violations
-                .iter()
-                .any(|line| line.contains("serde v1.0.0")),
-            "{held}: {metrics:?}"
-        );
-    }
     Ok(())
 }
 
-const REGISTRY_SOURCE: &str = "00000000bad00004";
-const GIT_CHECKOUT: &str = "00000000bad00005";
-const DANGLING: &str = "00000000bad00006";
-
 #[test]
-fn sources_cargo_unpacks_again_do_not_make_a_unit_a_base_gap()
+fn a_dirty_reason_is_not_attached_when_two_compilations_share_the_name_and_version()
 -> Result<(), Box<dyn std::error::Error>> {
-    let repo = fixture("report-restored-units-unpacked-sources")?;
-    let root = repo.root().display().to_string();
-    dep_info_unit(
+    let repo = base("report-restored-units-dirty-ambiguous", "old")?;
+    let registry = registry_artifact(&repo, GAP)?;
+    let mut git = artifact(
         &repo,
-        REGISTRY_SOURCE,
-        &format!(
-            "{root}/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
-        ),
-    );
-    dep_info_unit(
-        &repo,
-        GIT_CHECKOUT,
-        &format!("{root}/home/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
-    );
-    restore(&repo);
-    let record = restored_record(&repo)?;
-    let lines: Vec<&str> = record.lines().collect();
-    for held in [REGISTRY_SOURCE, GIT_CHECKOUT] {
-        assert!(lines.contains(&held), "{held}: {record}");
-    }
-    assert!(!record.contains("missing-input"), "{record}");
-    Ok(())
-}
-
-#[test]
-fn a_dep_info_input_that_is_a_dangling_symlink_is_missing() -> Result<(), Box<dyn std::error::Error>>
-{
-    let repo = fixture("report-restored-units-dangling")?;
-    let link = repo.root().join("kept/link.rs");
-    fs::create_dir_all(repo.root().join("kept"))?;
-    std::os::unix::fs::symlink(repo.root().join("kept/gone.rs"), &link)?;
-    dep_info_unit(&repo, DANGLING, &link.display().to_string());
-    restore(&repo);
-    let record = restored_record(&repo)?;
-    assert!(
-        record
-            .lines()
-            .any(|line| line == format!("missing-input {DANGLING}")),
-        "{record}"
-    );
-    Ok(())
-}
-
-const SERDE_GAP: &str = "00000000bad00007";
-const WRAPPER: &str = "00000000bad00008";
-const UNRELATED: &str = "00000000bad00009";
-
-fn registry_unit(
-    repo: &Repo,
-    package: &str,
-    hash: &str,
-) -> Result<Value, Box<dyn std::error::Error>> {
-    let mut value = artifact(
-        repo,
-        package,
+        "serde",
         "lib",
-        &format!("target/debug/deps/lib{package}-{hash}.rmeta"),
+        &format!("target/debug/deps/libserde-{HELD}.rmeta"),
         false,
         false,
     )?;
-    value["package_id"] = json!(format!(
-        "registry+https://github.com/rust-lang/crates.io-index#{package}@1.0.0"
-    ));
-    Ok(value)
-}
-
-#[test]
-fn a_restored_dependent_forced_to_rebuild_by_a_missing_input_gap_is_a_gap_not_waste()
--> Result<(), Box<dyn std::error::Error>> {
-    let repo = fixture("report-restored-units-cascade")?;
-    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", repo.root().display());
-    dep_info_unit(&repo, SERDE_GAP, &missing);
-    repo.write(
-        &format!("target/debug/.fingerprint/wrapper-{WRAPPER}/lib-wrapper"),
-        r#"{"deps":[[0,"serde",false,7621611783511691194]]}"#,
-    );
-    repo.write(
-        &format!("target/debug/.fingerprint/unrelated-{UNRELATED}/lib-unrelated"),
-        r#"{"deps":[]}"#,
-    );
-    restore(&repo);
-    let record = restored_record(&repo)?;
-    let lines: Vec<&str> = record.lines().collect();
-    assert!(
-        lines.contains(&format!("missing-input {SERDE_GAP}").as_str()),
-        "{record}"
-    );
-    assert!(
-        lines.contains(&format!("missing-input {WRAPPER}").as_str()),
-        "{record}"
-    );
-    assert!(lines.contains(&UNRELATED), "{record}");
-
-    let metrics = observation(
+    git["package_id"] = json!("git+https://example.invalid/serde#serde@1.0.0");
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let metrics = observation_with(
         &repo,
         &[],
-        &[
-            registry_unit(&repo, "serde", SERDE_GAP)?,
-            registry_unit(&repo, "wrapper", WRAPPER)?,
-            registry_unit(&repo, "unrelated", UNRELATED)?,
-        ],
+        &[registry, git],
+        json!([{"package":"serde","version":"1.0.0","reason":reason}]),
     )?;
-    let compilation = |package: &str| {
-        metrics.invocations[0]
-            .compilations
-            .iter()
-            .find(|event| event.package == package)
-            .unwrap_or_else(|| unreachable!("{package}: {metrics:?}"))
-    };
-    let wrapper = compilation("wrapper");
-    assert_eq!(wrapper.restored, Some(false), "{metrics:?}");
-    assert!(wrapper.missing_input, "{metrics:?}");
-    assert_eq!(compilation("unrelated").restored, Some(true), "{metrics:?}");
-    assert!(
-        metrics
-            .violations
-            .iter()
-            .all(|line| !line.contains("wrapper")),
-        "{metrics:?}"
-    );
-    assert!(
-        metrics
-            .violations
-            .iter()
-            .any(|line| line.contains("unrelated v1.0.0")),
-        "{metrics:?}"
-    );
+    assert_eq!(metrics.invocations[0].compilations.len(), 2);
+    for compilation in &metrics.invocations[0].compilations {
+        assert_eq!(compilation.dirty, None);
+    }
     Ok(())
 }
 
-const BUILD_SCRIPT_SIBLING: &str = "00000000bad0000a";
-
 #[test]
-fn a_build_script_sibling_of_the_same_package_does_not_hide_a_missing_input_gap()
+fn a_base_gap_names_cargos_dirty_reason_and_stays_bare_without_one()
 -> Result<(), Box<dyn std::error::Error>> {
-    let repo = fixture("report-restored-units-build-script-sibling")?;
-    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", repo.root().display());
-    dep_info_unit(&repo, SERDE_GAP, &missing);
-    repo.write(
-        &format!("target/debug/.fingerprint/serde-{BUILD_SCRIPT_SIBLING}/run-build-script-build-script-build.json"),
-        "{}\n",
-    );
-    repo.write(
-        &format!("target/debug/.fingerprint/wrapper-{WRAPPER}/lib-wrapper"),
-        r#"{"deps":[[0,"serde",false,7621611783511691194]]}"#,
-    );
-    restore(&repo);
-    let record = restored_record(&repo)?;
-    let lines: Vec<&str> = record.lines().collect();
-    assert!(
-        lines.contains(&format!("missing-input {WRAPPER}").as_str()),
-        "{record}"
-    );
-
-    let metrics = observation(
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let repo = base("report-restored-units-base-gap-reason", "old")?;
+    let gap = registry_artifact(&repo, GAP)?;
+    let with_reason = observation_with(
         &repo,
         &[],
-        &[
-            registry_unit(&repo, "serde", SERDE_GAP)?,
-            registry_unit(&repo, "wrapper", WRAPPER)?,
-        ],
+        std::slice::from_ref(&gap),
+        json!([{"package":"serde","version":"1.0.0","reason":reason}]),
     )?;
-    let wrapper = metrics.invocations[0]
-        .compilations
-        .iter()
-        .find(|event| event.package == "wrapper")
-        .unwrap_or_else(|| unreachable!("wrapper: {metrics:?}"));
-    assert_eq!(wrapper.restored, Some(false), "{metrics:?}");
-    assert!(wrapper.missing_input, "{metrics:?}");
+    let gaps = velnor_ci::restored_units::base_gaps(&with_reason);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
     assert!(
-        metrics
-            .violations
-            .iter()
-            .all(|line| !line.contains("wrapper")),
-        "{metrics:?}"
+        gaps[0].ends_with(&format!("serde v1.0.0 (cargo: {reason})")),
+        "{gaps:?}"
     );
+
+    let repo = base("report-restored-units-base-gap-bare", "old")?;
+    let gap = registry_artifact(&repo, GAP)?;
+    let bare = observation(&repo, &[], &[gap])?;
+    let gaps = velnor_ci::restored_units::base_gaps(&bare);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert!(gaps[0].ends_with(": serde v1.0.0"), "{gaps:?}");
     Ok(())
 }

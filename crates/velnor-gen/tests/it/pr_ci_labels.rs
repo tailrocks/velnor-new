@@ -139,7 +139,7 @@ fn every_generated_workflow_that_verifies_a_pull_request_also_runs_on_the_merge_
             .iter()
             .map(|(path, _)| path.as_str())
             .collect::<Vec<_>>(),
-        [".github/workflows/rust-ci.yml"],
+        [".github/workflows/ci.yml"],
         "a new verifying workflow needs a label-mode merge_group check: {:?}",
         files.iter().map(|(path, _)| path).collect::<Vec<_>>()
     );
