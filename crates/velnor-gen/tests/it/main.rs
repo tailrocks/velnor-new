@@ -315,6 +315,8 @@ mod sparse_checkout;
 mod sparse_suggestion;
 mod stacks;
 mod step_refs;
+mod step_refs_release_shapes;
+mod step_refs_shapes;
 mod step_refs_sweep;
 mod step_refs_tests;
 mod step_target_dir;
