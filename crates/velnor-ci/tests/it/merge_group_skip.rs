@@ -8,7 +8,7 @@ use velnor_ci::merge_group::{Context, skip_push};
 use crate::support::{FakeGitHub, repo};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const WORKFLOW_REF: &str = "tailrocks/velnor-new/.github/workflows/rust-ci.yml@refs/heads/main";
+const WORKFLOW_REF: &str = "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main";
 
 fn context() -> Context {
     Context {
@@ -56,7 +56,7 @@ fn runs(entries: &[(&str, &str, &str, &str)]) -> String {
 
 fn fake(body: &str) -> FakeGitHub {
     let mut fake = FakeGitHub::default();
-    fake.respond(merge_group_runs_path(&repo(), "rust-ci.yml", SHA), body);
+    fake.respond(merge_group_runs_path(&repo(), "ci.yml", SHA), body);
     fake
 }
 
@@ -96,7 +96,7 @@ fn any_failure_to_find_out_runs_everything() {
         assert!(!skip_push(github, &context()).skip);
     }
     let mut missing = FakeGitHub::default();
-    missing.missing(merge_group_runs_path(&repo(), "rust-ci.yml", SHA));
+    missing.missing(merge_group_runs_path(&repo(), "ci.yml", SHA));
     assert!(!skip_push(&missing, &context()).skip);
 }
 
@@ -110,9 +110,9 @@ fn only_a_push_with_a_readable_context_asks_the_api() {
         |c: &mut Context| c.sha = "main".to_owned(),
         |c: &mut Context| c.sha = String::new(),
         |c: &mut Context| c.repository = "not a repository".to_owned(),
-        |c: &mut Context| c.workflow_ref = "rust-ci.yml".to_owned(),
+        |c: &mut Context| c.workflow_ref = "ci.yml".to_owned(),
         |c: &mut Context| {
-            c.workflow_ref = "other/repo/.github/workflows/rust-ci.yml@refs/heads/main".to_owned();
+            c.workflow_ref = "other/repo/.github/workflows/ci.yml@refs/heads/main".to_owned();
         },
     ] {
         let mut context = context();

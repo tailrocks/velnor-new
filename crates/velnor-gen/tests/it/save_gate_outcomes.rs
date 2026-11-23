@@ -291,7 +291,7 @@ fn a_build_that_did_not_finish_saves_nothing_and_is_not_audited() -> TestResult 
 
 const GROUPS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../generator/samples/workspace-groups/expected/.github/workflows/rust-ci.yml"
+    "/../../generator/samples/workspace-groups/expected/.github/workflows/ci.yml"
 );
 
 fn groups(

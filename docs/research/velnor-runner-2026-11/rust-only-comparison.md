@@ -267,15 +267,15 @@ All nine reject blaze (0 of 5 workspaces build, missed clippy `deny`, ignores th
 
 | Model | Placement and warm pools | Isolation | Both sites and other orgs |
 |---|---|---|---|
-| Claude Opus 5.5 | Min predicted finish; twin on another node; last 3 generations warm per node; cpu.weight/cpu.idle classes | userns, cgroup v2, seccomp, XFS quotas; rootless dockerd experiment | Per-site control; receipts replicate async (wait <=1 s); ChainArgos/jackin keep ARC |
+| Claude Opus 5.5 | Min predicted finish; twin on another node; last 3 generations warm per node; cpu.weight/cpu.idle classes | userns, cgroup v2, seccomp, XFS quotas; rootless dockerd experiment | Per-site control; receipts replicate async (wait <=1 s); example-org/example-repo-13 keep ARC |
 | Claude Fable 5.2 | Cells made ahead; exclusive complex-aligned cpusets; two verified generation replicas per site | Cells with quota, seccomp; docker class on tainted nodes | PR pinned to a site by number; receipts replicate about 2 s; others stay on ARC with weights |
 | GPT-6.2-Astra | Ready sandboxes and idle JIT identities; tenant floors 160/100/80 + 120 elastic | Namespaces; rootless OCI or private VM; arm64 guest | One fenced operation index, single write leader; both sites serve local reads |
 | GPT-6.2-Sol | 2-4 JIT sessions per site; slot classes 24/10/4 GiB; 4 threads and 12 GiB reserved | Namespaces; rootless services or warm VMs | Third-site ledger witness; says single k3s cannot survive site loss |
-| Muse Wonder | Single-use pods; reserved 16-CPU slot per site; merge > gate > PR priority | Pods with seccomp, no token; 2 tainted docker nodes | Request stays in one site; ChainArgos/jackin migrate after 4-week soak |
+| Muse Wonder | Single-use pods; reserved 16-CPU slot per site; merge > gate > PR priority | Pods with seccomp, no token; 2 tainted docker nodes | Request stays in one site; example-org/example-repo-13 migrate after 4-week soak |
 | Muse Wonder Full | Agent-carved sandboxes (pods fallback); 4 build slots of 16 CPU/24 GiB per worker | Netns loopback-only for tests; docker class | Own dispatcher/ledger per site; receipts are hints across sites |
 | Gemini 4 Neon | Native sandboxes, up to 6 per worker sharing overlay page cache; lone job 48-64 threads | Namespaces; docker on velnor-105 and velnor-190 | Independent per-site services; 3-server k3s; per-org floors and disk caps |
 | Gemini 4 Carbon | Namespace sandboxes (30 ms), CCD-aligned 24 threads; jobserver burst | Landlock, seccomp; Firecracker microVM for Docker suites | Per-site autonomy; 3-node k3s etcd; ARC deleted phase 1 |
-| Gemini 4 Argon | 2 pre-created sandboxes per worker; 4 slots x 22 CPUs; reserved slot per site | Namespaces, loopback-only netns; docker class | FI 288 and DE 192 threads, site stickiness; ChainArgos/jackin keep 30% share |
+| Gemini 4 Argon | 2 pre-created sandboxes per worker; 4 slots x 22 CPUs; reserved slot per site | Namespaces, loopback-only netns; docker class | FI 288 and DE 192 threads, site stickiness; example-org/example-repo-13 keep 30% share |
 
 ### (l) Confidence extras: double runs and cold audits
 

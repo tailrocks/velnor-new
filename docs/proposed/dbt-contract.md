@@ -1,14 +1,14 @@
 # dbt contract (dbt-fusion stack)
 
-Status: implemented except for the items under "Not yet implemented". Source design: the ChainArgos split stacks design
+Status: implemented except for the items under "Not yet implemented". Source design: the example-org split stacks design
 (section 6.1). Decision: the `dbt-fusion` version grammar of HD-4a, adopted per
 the split brief; owner may revisit. This page states what exists today and
 what each remaining piece must satisfy; it does not claim the stack is
 complete.
 
-## Consumer shape (`ChainArgos/chainargos-dbt`)
+## Consumer shape (`example-org/example-repo-20`)
 
-- Project directory `chainargos-dbt/` (holds `dbt_project.yml`, `profiles.yml`,
+- Project directory `example-repo-20/` (holds `dbt_project.yml`, `profiles.yml`,
   `packages.yml`, `package-lock.yml`, `models/`, `macros/`), repository-root
   `mise.toml` declaring `dbt-fusion = "2.0.0-preview.219"` (aqua backend) and a
   `mise.lock` with per-platform URLs.
@@ -24,9 +24,9 @@ complete.
 
 ```toml
 [stacks.dbt]
-projects = ["chainargos-dbt"]        # required, sorted, unique; "." is the repository root
+projects = ["example-repo-20"]        # required, sorted, unique; "." is the repository root
 services = ["postgres"]              # closed catalog; needed by compile
-env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "chainargos", DBT_PASSWORD = "chainargos", DBT_DBNAME = "chainargos" }
+env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "example-org", DBT_PASSWORD = "example-org", DBT_DBNAME = "example-org" }
 checks = ["parse", "compile"]        # closed; default ["parse"]; "compile" requires a service
 timeout_minutes = 10                 # 1..=360; default workflow.crate_timeout_minutes
 ```
@@ -47,7 +47,7 @@ is a fixed non-secret placeholder for a service container and is never a
 credential. With `services = ["postgres"]`, `DBT_PORT`,
 `DBT_USER`, `DBT_PASSWORD` and `DBT_DBNAME`, when present, must equal what the
 catalog service publishes (host port `40000`, user, password and database
-`chainargos`); a different value fails generation with
+`example-org`); a different value fails generation with
 `dbt_env_service_mismatch:<key>`.
 
 ## Implemented: `velnor-actions-dbt`
