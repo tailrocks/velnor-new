@@ -298,9 +298,10 @@ fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool,
 fn is_ref_value(path: &Path) -> bool {
     read_small(path).is_some_and(|text| {
         let value = text.trim_end();
-        value.starts_with("ref:")
-            || (matches!(value.len(), 40 | 64)
-                && value.bytes().all(|each| each.is_ascii_hexdigit()))
+        !value.contains(['\n', '\r'])
+            && (value.starts_with("ref:")
+                || (matches!(value.len(), 40 | 64)
+                    && value.bytes().all(|each| each.is_ascii_hexdigit())))
     })
 }
 

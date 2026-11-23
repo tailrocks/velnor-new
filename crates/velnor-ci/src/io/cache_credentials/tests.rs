@@ -123,7 +123,7 @@ fn a_pruned_directory_replaced_by_another_directory_is_left_alone() {
     let hooks = database.join("hooks");
     tree(&hooks, 1);
     let expected = identity(&hooks);
-    fs::remove_dir_all(&hooks).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::rename(&hooks, root.join("kept")).unwrap_or_else(|e| unreachable!("{e}"));
     tree(&hooks, 4);
     let found = remove_tree(&hooks, expected, 0, &mut 1_000);
     let left = fs::read_dir(&hooks).map_or(0, Iterator::count);
