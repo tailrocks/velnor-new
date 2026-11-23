@@ -138,7 +138,8 @@ restored. `inputs restore` records those units as `missing-input` in
 `.velnor/restored-units-*.tsv`, and the check reports them as a base gap that
 names the reason, not as waste. Cargo marks such a unit dirty, and the usual
 cause is mbx keeping build-script output in an `out-dirs` store the job did not
-have; the generated `Keep mbx build-script outputs in target` step prevents it.
+have; the generated `Keep mbx build-script outputs in target` step prevents it (the
+helper's `mbx-store` does the same from 0.1.112 in a shared-store job).
 Files under `registry/src` and `git/checkouts` do not count: Cargo unpacks them
 again, and the Sources cache does not hold them. A path that is a dangling
 symbolic link counts as missing.

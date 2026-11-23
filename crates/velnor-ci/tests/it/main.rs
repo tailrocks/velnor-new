@@ -117,6 +117,7 @@ mod io_target_link_roots;
 mod lane_guard;
 mod lane_guard_generated;
 mod logscan;
+mod mbx_help;
 mod mbx_out_dirs;
 mod mbx_seed;
 mod mbx_seed_env;
