@@ -320,21 +320,16 @@ pub(crate) fn plan_modes(gate: &Gate, setup: Setup) -> String {
         .roots()
         .map(|slug| plan_read(&source, &output(slug, GateNeed::Selected), setup))
         .collect();
-    match reads.as_slice() {
-        [only] => format!("${{{{ {only} }}}}"),
-        _ => {
-            let holes: Vec<String> = (0..reads.len()).map(|at| format!("{{{at}}}")).collect();
-            format!(
-                "${{{{ format('{}', {}) }}}}",
-                holes.join(" "),
-                reads
-                    .iter()
-                    .map(|read| format!("({read})"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        }
+    if let [only] = reads.as_slice() {
+        return format!("${{{{ {only} }}}}");
     }
+    let holes: Vec<String> = (0..reads.len()).map(|at| format!("{{{at}}}")).collect();
+    let args: Vec<String> = reads.iter().map(|read| format!("({read})")).collect();
+    format!(
+        "${{{{ format('{}', {}) }}}}",
+        holes.join(" "),
+        args.join(", ")
+    )
 }
 
 pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
