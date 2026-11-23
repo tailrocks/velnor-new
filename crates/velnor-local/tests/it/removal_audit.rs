@@ -112,7 +112,6 @@ async fn environment_down_audits_exact_ids_and_keeps_other_environments() -> io:
     if !gone_volume {
         (&docker).docker(&["volume", "rm", &volume]).await?;
     }
-    std::fs::remove_dir_all(&dir)?;
     assert_eq!(outcome?, [0, 1, 1]);
     assert!(kept && gone_network && gone_volume);
     let records = records?;
@@ -174,7 +173,6 @@ async fn environment_down_preserves_confirmed_removals_after_failure_and_appends
     for id in &ids {
         (&docker).docker(&["network", "rm", id]).await.ok();
     }
-    std::fs::remove_dir_all(&dir)?;
     assert!(failed.is_err_and(|error| error.to_string().contains("injected")));
     assert_eq!(removed.len(), 1);
     assert!(gone);
@@ -210,7 +208,6 @@ async fn environment_down_refuses_to_delete_without_a_writable_audit() -> io::Re
     if kept {
         (&docker).docker(&["volume", "rm", &volume]).await?;
     }
-    std::fs::remove_dir_all(&dir)?;
     assert!(failed.is_err());
     assert!(kept);
     Ok(())
@@ -244,7 +241,6 @@ async fn environment_down_recovers_interrupted_audit_and_preserves_complete_reco
         if !gone {
             (&docker).docker(&["volume", "rm", &volume]).await?;
         }
-        std::fs::remove_dir_all(&dir)?;
         assert_eq!(outcome?, [0, 1, 0]);
         assert!(gone);
         assert_eq!(retried?, [0, 0, 0]);
@@ -290,7 +286,6 @@ async fn environment_down_preserves_corrupt_complete_history_and_refuses_deletio
     if kept {
         (&docker).docker(&["volume", "rm", &volume]).await?;
     }
-    std::fs::remove_dir_all(&dir)?;
     assert!(failed.is_err());
     assert!(kept);
     assert_eq!(after, bytes);

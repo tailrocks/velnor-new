@@ -129,6 +129,13 @@ fn a_phase_without_a_predecessor_asks_only_for_the_repository_and_its_branch() {
     }
 }
 
+#[test]
+fn the_worlds_built_together_share_one_template_repository() {
+    let first = World::new("warm");
+    let second = World::new("third");
+    assert_eq!(first.template_repo(), second.template_repo());
+}
+
 fn helper_error(world: &mut World) -> String {
     run_helper(world, BIN).error
 }
