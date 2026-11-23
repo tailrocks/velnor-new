@@ -374,25 +374,4 @@ mod tests {
             "the resolver followed an ancestor whose stamp changed"
         );
     }
-
-    #[test]
-    fn a_start_moved_after_it_is_opened_is_refused_not_followed_to_its_new_parent() {
-        let base = base("start-moved");
-        let start = base.join("p1/start");
-        fs::create_dir_all(&start).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::write(base.join("marker"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-        let held = open_path(&start, false).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::rename(&start, base.join("moved")).unwrap_or_else(|e| unreachable!("{e}"));
-        let resolved = resolve(
-            held.as_fd(),
-            &start,
-            Path::new("../marker"),
-            Reach::default(),
-        );
-        fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-        let changed = resolved
-            .err()
-            .is_some_and(|error| error.to_string().contains("changed"));
-        assert!(changed, "followed a start that moved to another parent");
-    }
 }

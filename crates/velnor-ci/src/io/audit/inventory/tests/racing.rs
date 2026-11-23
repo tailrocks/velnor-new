@@ -322,3 +322,41 @@ fn a_root_replaced_by_a_directory_while_it_is_listed_fails_the_scan() {
         "{entries:?}"
     );
 }
+
+#[test]
+fn a_start_moved_while_a_link_climbs_out_of_it_fails_the_scan() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-start-moved-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let root = base.join("root");
+    fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(base.join("elsewhere")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(base.join("marker"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../../marker", root.join("sub/link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let moved = std::cell::Cell::new(false);
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            opened: &|| {
+                if !moved.replace(true) {
+                    fs::rename(&root, base.join("elsewhere/root"))
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        result
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.to_string().contains("changed")),
+        "a start moved under a climbing link must fail the scan: {result:?}"
+    );
+}
