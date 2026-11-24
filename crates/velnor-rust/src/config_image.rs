@@ -38,6 +38,8 @@ pub(crate) struct RawImage {
     attestations: Option<bool>,
     #[serde(default)]
     pr_only_checks: Vec<String>,
+    #[serde(default)]
+    release_actors: Vec<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     registry: Vec<RawRegistry>,
@@ -109,6 +111,7 @@ fn image(raw: RawImage) -> Result<ImageConfig, Reason> {
         pr_build: pr_build(raw.pr_build.as_deref())?,
         attestations: raw.attestations.unwrap_or(true),
         pr_only_checks: pr_only_checks(&raw.pr_only_checks)?,
+        release_actors: crate::config_image_actors::parse(&raw.release_actors)?,
         timeout_minutes: timeout(raw.timeout_minutes)?,
         registries: registries(raw.registry)?,
         name: raw.name,

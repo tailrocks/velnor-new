@@ -70,6 +70,7 @@ pub(crate) struct Events<'a> {
     pub(crate) repository: &'a str,
     pub(crate) branch: &'a str,
     pub(crate) skip_drafts: bool,
+    pub(crate) bots: bool,
 }
 
 impl Events<'_> {
@@ -93,11 +94,25 @@ impl Events<'_> {
         } else {
             ""
         };
-        format!("{}{draft}", Self::pull_request_base())
+        let bots = if self.bots {
+            ""
+        } else {
+            " && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')"
+        };
+        format!(
+            "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository{bots} && (github.event.action != 'edited' || github.event.changes.base != null){draft}"
+        )
     }
 
-    fn pull_request_base() -> &'static str {
-        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]') && (github.event.action != 'edited' || github.event.changes.base != null)"
+    pub(crate) fn merge_group(&self) -> String {
+        format!(
+            "github.event_name == 'merge_group' && github.repository == '{}'",
+            self.repository
+        )
+    }
+
+    pub(crate) fn checked(&self) -> String {
+        format!("({}) || ({})", self.pull_request(), self.merge_group())
     }
 }
 
@@ -105,7 +120,7 @@ fn admin_position(job: &RenderedJob) -> Option<usize> {
     if job.id == EXEMPTIONS_JOB {
         Some(1)
     } else if job.id.ends_with("-authority") {
-        Some(2)
+        Some(3)
     } else {
         None
     }
@@ -118,6 +133,7 @@ pub fn render_image(
         repository: workflow.repository,
         branch: workflow.branch,
         skip_drafts: workflow.skip_draft_pull_requests,
+        bots: workflow.private.is_none(),
     };
     let mut jobs: Vec<RenderedJob> = Vec::new();
     if !workflow.pr_only_checks().is_empty() {
@@ -235,6 +251,13 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
             pull_request.push(entry("paths", names(&pr_paths(&reaching))));
         }
         events.push(entry("pull_request", Yaml::Map(pull_request)));
+        events.push(entry(
+            "merge_group",
+            Yaml::Map(vec![entry(
+                "types",
+                names(&["checks_requested".to_owned()]),
+            )]),
+        ));
     }
     events.push(entry(
         "push",

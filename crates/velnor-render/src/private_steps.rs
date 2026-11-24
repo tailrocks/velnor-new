@@ -153,6 +153,14 @@ pub(crate) fn release_phase(
     ]
 }
 
+pub(crate) fn queued_phase(
+    sources: &PrivateSources,
+    manifest: &str,
+    mint: TokenMint,
+) -> [RenderedStep; 3] {
+    [check(), token(sources, mint), fetch_step::one(manifest)]
+}
+
 pub(crate) fn check() -> RenderedStep {
     RenderedStep {
         id: Some(CHECK_STEP.to_owned()),

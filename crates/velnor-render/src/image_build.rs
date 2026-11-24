@@ -13,7 +13,7 @@ use crate::image::{
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
-use crate::private_steps::{release_mint, release_phase};
+use crate::private_steps::{queued_phase, release_mint};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
 use crate::rules::{RenderedJob, RenderedStep, Value};
@@ -74,17 +74,25 @@ pub(crate) fn build_job(
     let image = build.image;
     let reached = match image.pr_build {
         ImagePrBuild::Off => events.branch_push(),
-        _ => format!("({}) || ({})", events.branch_push(), events.pull_request()),
+        _ => format!("({}) || ({})", events.branch_push(), events.checked()),
     };
     RenderedJob {
         id: job_id(image, "build"),
         condition: Some(expression(&reached)),
-        permissions: permissions(&[("contents", "read")]),
+        permissions: permissions(&build_scopes(workflow)),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: image.timeout_minutes,
         steps: build_steps(workflow, build),
         ..RenderedJob::default()
     }
+}
+
+fn build_scopes(workflow: &ImageWorkflow<'_>) -> Vec<(&'static str, &'static str)> {
+    let mut scopes = vec![("contents", "read")];
+    if workflow.private.is_some() {
+        scopes.push(("pull-requests", "read"));
+    }
+    scopes
 }
 
 fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<RenderedStep> {
@@ -97,7 +105,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
     }
     steps.extend(workflow.mirror.map(mirror_step));
     if let Some(sources) = workflow.private {
-        steps.extend(release_phase(
+        steps.extend(queued_phase(
             sources,
             &join(build.root, "Cargo.toml"),
             release_mint(workflow.helper),

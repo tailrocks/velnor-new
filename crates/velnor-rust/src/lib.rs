@@ -28,6 +28,7 @@ mod config_glob;
 mod config_helper;
 mod config_hosting;
 mod config_image;
+mod config_image_actors;
 mod config_keys;
 mod config_lint;
 mod config_mirror;

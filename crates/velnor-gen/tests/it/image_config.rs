@@ -85,6 +85,16 @@ fn each_refused_value_names_its_key() -> TestResult {
             "pr_only_checks = [\"DCO\", \"DCO\"]",
             "image.pr_only_checks",
         ),
+        ("release_actors = [\"-ann\"]", "image.release_actors"),
+        ("release_actors = [\"a b\"]", "image.release_actors"),
+        (
+            "release_actors = [\"ann\", \"Ann\"]",
+            "image.release_actors",
+        ),
+        (
+            "release_actors = [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\"]",
+            "image.release_actors",
+        ),
     ];
     for (line, key) in cases {
         let overridden: Vec<&str> = line

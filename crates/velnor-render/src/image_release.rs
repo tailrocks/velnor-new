@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_model::ImageConfig;
+
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{job_id, setup_buildx};
 use crate::image_gate::{gate_scopes, gate_step};
 use crate::image_publish::{login, registry_scopes};
 use crate::install_steps::install_helper;
 use crate::release_binaries::command;
-use crate::release_steps::{expression, variables};
+use crate::release_steps::{expression, shell_word, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
 const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
@@ -51,6 +53,7 @@ pub(crate) fn authority_job(
                     format!("[[ \"$REF_NAME\" =~ {strict} ]]"),
                 )
             },
+            authorize(image),
             gate_step(
                 if pr_only.is_empty() {
                     0
@@ -74,33 +77,56 @@ pub(crate) fn authority_job(
     }
 }
 
+fn authorize(image: &ImageConfig) -> RenderedStep {
+    let mut run = String::from(
+        "velnor-ci image authorize --repo \"$REPOSITORY\" --tag \"$REF_NAME\" --actor \"$ACTOR\"",
+    );
+    for actor in &image.release_actors {
+        run.push_str(&format!(" --release-actor={}", shell_word(actor)));
+    }
+    RenderedStep {
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("REF_NAME", "${{ github.ref_name }}"),
+            ("ACTOR", "${{ github.actor }}"),
+        ]),
+        ..command(
+            "Check that a trusted actor or a protected tag ruleset authorizes the release"
+                .to_owned(),
+            run,
+        )
+    }
+}
+
 pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
     let image = build.image;
-    let mut steps = vec![setup_buildx()];
+    let mut steps = vec![install_helper(workflow.helper), setup_buildx()];
     steps.extend(image.registries.iter().map(login));
-    for registry in &image.registries {
-        steps.push(RenderedStep {
-            env: vec![
-                ("IMAGE".to_owned(), Value::Text(registry.reference())),
-                (
-                    "VERSION".to_owned(),
-                    Value::Expr(format!(
-                        "${{{{ needs.{}.outputs.version }}}}",
-                        job_id(image, "authority")
-                    )),
-                ),
-                (
-                    "COMMIT".to_owned(),
-                    Value::Expr("${{ github.sha }}".to_owned()),
-                ),
-            ],
-            ..command(
-                format!("Promote the pushed digest in {}", registry.host.name()),
-                "docker buildx imagetools create --tag \"$IMAGE:$VERSION\" \"$IMAGE:sha-$COMMIT\""
-                    .to_owned(),
-            )
-        });
-    }
+    let images: String = image
+        .registries
+        .iter()
+        .map(|registry| format!(" --image={}", shell_word(&registry.reference())))
+        .collect();
+    steps.push(RenderedStep {
+        env: vec![
+            (
+                "VERSION".to_owned(),
+                Value::Expr(format!(
+                    "${{{{ needs.{}.outputs.version }}}}",
+                    job_id(image, "authority")
+                )),
+            ),
+            (
+                "COMMIT".to_owned(),
+                Value::Expr("${{ github.sha }}".to_owned()),
+            ),
+        ],
+        ..command(
+            "Promote the pushed digest unless the version already names another".to_owned(),
+            format!("velnor-ci image promote --version \"$VERSION\" --commit \"$COMMIT\"{images}"),
+        )
+    });
     RenderedJob {
         id: job_id(image, "promote"),
         needs: vec![job_id(image, "authority")],

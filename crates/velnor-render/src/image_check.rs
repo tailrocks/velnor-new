@@ -46,7 +46,7 @@ pub(crate) fn check_job(
     Some(RenderedJob {
         id: job_id(image, "check"),
         needs: vec![job_id(image, "build")],
-        condition: Some(expression(&events.pull_request())),
+        condition: Some(expression(&events.checked())),
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: CHECK_TIMEOUT_MINUTES,

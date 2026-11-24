@@ -3,7 +3,10 @@
 
 use std::path::PathBuf;
 
-use crate::cli_image::{ImageGateArgs, ImagePreflightArgs, ImageStageArgs, ImageSysrootArgs};
+use crate::cli_image::{
+    ImageAuthorizeArgs, ImageGateArgs, ImagePreflightArgs, ImagePromoteArgs, ImageStageArgs,
+    ImageSysrootArgs,
+};
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
@@ -219,6 +222,14 @@ pub enum ImageCommand {
         about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private, and write sha_exists=true or false to $GITHUB_OUTPUT for the tag. Never prints a credential"
     )]
     Preflight(ImagePreflightArgs),
+    #[command(
+        about = "Refuse a release tag that no trusted authority created: exit 0 only when --actor is one of the --release-actor logins, or an active tag ruleset (own, organization or enterprise) forbids creating, updating and deleting the tag. Reads GITHUB_TOKEN, which needs only the default read access"
+    )]
+    Authorize(ImageAuthorizeArgs),
+    #[command(
+        about = "Tag sha-<commit> as <version> in every --image, after checking all of them: exit 1 when sha-<commit> is missing or when <version> already names a different digest, and create nothing then. A version that already names the same digest is left alone. Uses the docker login of the job"
+    )]
+    Promote(ImagePromoteArgs),
     #[command(
         about = "Download the Debian packages named in the sysroot lock, check each sha256, unpack them with dpkg-deb into --out, keep only the shared OpenSSL libraries and the merged headers, and append X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR and X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR to $GITHUB_ENV"
     )]
