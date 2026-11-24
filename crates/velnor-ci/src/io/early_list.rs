@@ -254,7 +254,16 @@ fn try_list(
             stderr: output.stderr,
         });
     }
-    runnable_matches(&output.stdout).ok_or_else(|| Failure::new("it printed no usable listing"))
+    accepted(&environment.supervisor, &output.stdout)
+}
+
+fn accepted(supervisor: &Supervisor, stdout: &[u8]) -> Result<Listing, Failure> {
+    let listing =
+        runnable_matches(stdout).ok_or_else(|| Failure::new("it printed no usable listing"))?;
+    match supervisor.reason() {
+        Some(reason) => Err(Failure::new(reason)),
+        None => Ok(listing),
+    }
 }
 
 fn extraction_directory(
