@@ -19,7 +19,7 @@ pub enum CacheCommand {
     )]
     PrivateRepo,
     #[command(
-        about = "Look up each commit-pinned github.com git dependency of the checkout Cargo.lock files once, with the job GITHUB_TOKEN (sent only to https://api.github.com, never redirected), and write the step output verdicts={\"owner/name\":true} for the lanes of this run; a failed lookup is recorded as false and never fails the step"
+        about = "Look up each commit-pinned github.com git dependency of the checkout Cargo.lock files once, with the job GITHUB_TOKEN (sent only to https://api.github.com, never redirected), and write the step output verdicts={\"owner/name\":true} for the lanes of this run; a failed or unproven lookup is recorded as false and does not fail the step, but an answer that says the repository is private (404 or private: true) fails it, naming the repository, within a 10-second budget"
     )]
     PublicSources(PublicSourcesArgs),
     #[command(
@@ -98,7 +98,7 @@ pub struct DecideArgs {
 pub struct PublicSourcesArgs {
     #[arg(long, hide = true, default_value = "https://api.github.com")]
     pub public_probe_api: String,
-    #[arg(long, hide = true, default_value_t = crate::public_probe::DEFAULT_TOTAL_SECONDS)]
+    #[arg(long, hide = true, default_value_t = crate::public_probe::EARLY_PROBE_SECONDS)]
     pub public_probe_seconds: u64,
     #[arg(
         long,
