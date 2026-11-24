@@ -308,6 +308,14 @@ install_member() {
 . "$_velnor_tar_here/tar-extract-plan.sh"
 
 extract_fast() {
+  local i
+  if [ "$no_recursion" -eq 1 ]; then
+    for i in "${!mem_name[@]}"; do
+      if [ "${mem_wanted[$i]}" -eq 1 ] && [ "${mem_type[$i]}" = 5 ]; then
+        die "unsupported option --no-recursion with directory member ${mem_name[$i]}"
+      fi
+    done
+  fi
   if [ -n "$files_from" ]; then
     run_listed
   else
@@ -384,7 +392,7 @@ extract_shared_external() {
   local meta
   meta="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
   mkdir -p -- "$shared_base"
-  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar -xf - -C "$shared_base" || fail_shared_extract "$meta"
+  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar "${extract_flags[@]}" -xf - -C "$shared_base" || fail_shared_extract "$meta"
 use strict;
 use warnings;
 use bytes;

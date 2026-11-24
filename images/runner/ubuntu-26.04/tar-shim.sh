@@ -11,6 +11,8 @@ chdir=""
 files_from=""
 gzip=0
 zstd=0
+no_same_owner=0
+no_recursion=0
 program=""
 absolute=0
 posix=0
@@ -54,10 +56,19 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --zstd)
       zstd=1
       ;;
+    --gzip)
+      gzip=1
+      ;;
+    --no-same-owner)
+      no_same_owner=1
+      ;;
+    --no-recursion)
+      no_recursion=1
+      ;;
     --posix)
       posix=1
       ;;
-    --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+    --delay-directory-restore | --force-local | --no-same-permissions | --numeric-owner | --overwrite)
       die "unsupported option $arg"
       ;;
     --version)
@@ -88,13 +99,19 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --use-compress-program=*)
       program="${arg#--use-compress-program=}"
       ;;
-    -C)
+    -C | --directory)
       need
       chdir="${args[$i]}"
       ;;
-    -f)
+    --directory=*)
+      chdir="${arg#--directory=}"
+      ;;
+    -f | --file)
       need
       archive="${args[$i]}"
+      ;;
+    --file=*)
+      archive="${arg#--file=}"
       ;;
     -z)
       gzip=1
@@ -173,6 +190,16 @@ done
 if [ -z "$mode" ]; then
   die "missing c, x, or t"
 fi
+if [ "$no_same_owner" -eq 1 ] && [ "$mode" != x ]; then
+  die "unsupported option --no-same-owner"
+fi
+if [ "$no_recursion" -eq 1 ] && [ "$mode" = c ]; then
+  die "unsupported option --no-recursion"
+fi
+extract_flags=()
+if [ "$no_same_owner" -eq 1 ]; then
+  extract_flags+=(-o)
+fi
 
 files=()
 if [ -n "$files_from" ]; then
@@ -202,7 +229,7 @@ if [ "${#files[@]}" -gt 0 ]; then
   done
 fi
 
-bb=(busybox tar "$mode")
+bb=(busybox tar "$mode" "${extract_flags[@]}")
 if [ "$gzip" -eq 1 ]; then
   bb+=(-z)
 fi

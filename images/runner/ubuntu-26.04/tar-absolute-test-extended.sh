@@ -265,3 +265,62 @@ case_unicode() {
   bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" || return 1
   grep -qx 'uni-ok' "$root/dest/café.txt" || return 1
 }
+
+case_gnu_long_options() {
+  local root="$work/long-options" listing
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/out" "$root/out-eq"
+  printf bin >"$root/src/velnor-ci"
+  tar.gnu -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  listing="$(env -u TAR_OPTIONS bash "$shim" --list --gzip --file "$root/a.tgz")" || return 1
+  [ "$listing" = velnor-ci ] || return 1
+  env -u TAR_OPTIONS bash "$shim" --extract --gzip --no-same-owner --no-recursion \
+    --file "$root/a.tgz" --directory "$root/out" velnor-ci || return 1
+  [ "$(cat "$root/out/velnor-ci")" = bin ] || return 1
+  bash "$shim" --extract --gzip --file="$root/a.tgz" --directory="$root/out-eq" velnor-ci || return 1
+  [ "$(cat "$root/out-eq/velnor-ci")" = bin ] || return 1
+}
+
+case_no_same_owner_extract() {
+  local root="$work/owner" uid
+  [ "$(id -u)" -eq 0 ] || return 0
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/kept" "$root/mine"
+  printf bin >"$root/src/velnor-ci"
+  tar.gnu --owner=1234 --group=1234 -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  bash "$shim" -xzf "$root/a.tgz" -C "$root/kept" || return 1
+  uid="$(stat -c %u "$root/kept/velnor-ci")"
+  [ "$uid" = 1234 ] || return 1
+  bash "$shim" --no-same-owner -xzf "$root/a.tgz" -C "$root/mine" || return 1
+  uid="$(stat -c %u "$root/mine/velnor-ci")"
+  [ "$uid" = 0 ] || return 1
+}
+
+case_no_recursion_extract() {
+  local root="$work/no-recursion" err status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/src/velnor-ci" "$root/out"
+  printf child >"$root/src/velnor-ci/child"
+  tar.gnu -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  err="$root/err"
+  run_shim "$err" -xzf "$root/a.tgz" --no-recursion -C "$root/out" velnor-ci/ || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- '--no-recursion' "$err" || return 1
+  [ -z "$(find "$root/out" -mindepth 1 -print -quit)" ] || return 1
+}
+
+case_no_recursion_create() {
+  local root="$work/no-recursion-create" err status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/src"
+  printf x >"$root/src/f"
+  err="$root/err"
+  run_shim "$err" --no-recursion -cf "$root/out.tar" -C "$root/src" f || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- '--no-recursion' "$err" || return 1
+}
+
+run_case gnu-long-options case_gnu_long_options
+run_case no-same-owner-extract case_no_same_owner_extract
+run_case no-recursion-directory-refused case_no_recursion_extract
+run_case no-recursion-create-refused case_no_recursion_create
