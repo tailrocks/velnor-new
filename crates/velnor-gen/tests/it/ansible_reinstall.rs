@@ -72,7 +72,7 @@ fn each_tool_is_installed_once_into_its_own_directory_that_the_imports_put_first
         1,
         "{steps:?}"
     );
-    let filter = position(&steps, "ansible-lint==(?:")?;
+    let filter = position(&steps, "ansible-lint==[^")?;
     assert!(
         steps[filter].contains("ansible-configs/requirements.txt"),
         "{}",

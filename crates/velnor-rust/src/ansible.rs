@@ -19,7 +19,7 @@ pub use select::ansible_runs;
 pub(super) const LAYOUT: &str = "ansible-configs/";
 const REQUIREMENTS_TXT: RepoPath = RepoPath::from_static("ansible-configs/requirements.txt");
 const REQUIREMENTS_YAML: RepoPath = RepoPath::from_static("ansible-configs/requirements.yaml");
-const OTHER_PINS: &str = "python3 -c 'open(__import__(\"os\").environ[\"RUNNER_TEMP\"] + \"/ansible-requirements.txt\", \"w\").write(__import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-core==(?:[^\\n]*\\\\\\n)*[^\\n]*\\n?\", \"\", __import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-lint==(?:[^\\n]*\\\\\\n)*[^\\n]*\\n?\", \"\", open(\"ansible-configs/requirements.txt\").read())))'";
+const OTHER_PINS: &str = "python3 -c 'open(__import__(\"os\").environ[\"RUNNER_TEMP\"] + \"/ansible-requirements.txt\", \"w\").write(__import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-core==[^\\n]*\\n?\", \"\", __import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-lint==[^\\n]*\\n?\", \"\", __import__(\"re\").sub(r\"\\\\[ \\t]*\\r?\\n\", \" \", open(\"ansible-configs/requirements.txt\").read()))))'";
 const INSTALL_OTHERS: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-requirements.txt\"";
 const INSTALL_TOOLS: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible-tools\" -r \"$RUNNER_TEMP/ansible-tools.txt\"";
 const HOOKS: &str = "python3 -c '(lambda d: (d.mkdir(parents=True, exist_ok=True), (d/\"sitecustomize.py\").write_text(\"\"), (d/\"usercustomize.py\").write_text(\"\")))(__import__(\"pathlib\").Path(__import__(\"os\").environ[\"RUNNER_TEMP\"])/\"ansible-clean\")'";
