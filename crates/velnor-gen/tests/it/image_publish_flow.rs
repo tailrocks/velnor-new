@@ -207,7 +207,7 @@ fn pr_only_checks_reach_the_gate_and_the_authority_and_widen_their_token_to_chec
         assert!(
             gate["run"]
                 .as_str()
-                .is_some_and(|run| run.ends_with("--pr-only-check=DCO")),
+                .is_some_and(|run| run.contains(" --pr-only-check=DCO")),
             "{id}"
         );
     }

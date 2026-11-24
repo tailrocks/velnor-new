@@ -26,6 +26,7 @@ mod helper_integrity;
 mod helper_steps;
 mod image;
 mod image_build;
+mod image_changes;
 mod image_check;
 mod image_gate;
 mod image_publish;

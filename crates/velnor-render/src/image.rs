@@ -5,10 +5,12 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     CratesMirror, HelperRelease, ImageConfig, ImagePrBuild, PrivateSources, RepoPath, RunnerLabel,
+    Step,
 };
 
 use crate::helper_integrity::{defaults, secure_with};
 use crate::image_build::build_job;
+use crate::image_changes::changes_job;
 use crate::image_check::check_job;
 use crate::image_gate::{EXEMPTIONS_JOB, admin_token, exemptions_job, gate_job};
 use crate::image_publish::publish_job;
@@ -49,6 +51,7 @@ pub struct ImageWorkflow<'a> {
     pub runner: &'a RunnerLabel,
     pub private: Option<&'a PrivateSources>,
     pub mirror: Option<&'a CratesMirror>,
+    pub sources: Vec<Step>,
     pub mbx: ImageMbx,
     pub skip_draft_pull_requests: bool,
 }
@@ -124,6 +127,7 @@ pub fn render_image(
         jobs.push(exemptions_job(workflow, &events));
     }
     jobs.push(gate_job(workflow, &events));
+    jobs.extend(changes_job(workflow, &events));
     for build in &workflow.images {
         jobs.push(build_job(workflow, build, &events));
         jobs.extend(check_job(workflow, build, &events));
@@ -256,6 +260,14 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
 }
 
 fn pr_paths(builds: &[&ImageBuild<'_>]) -> Vec<String> {
+    let mut paths: Vec<String> = builds.iter().flat_map(|build| image_paths(build)).collect();
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+pub(crate) fn image_paths(build: &ImageBuild<'_>) -> Vec<String> {
+    let image = build.image;
     let mut paths = vec![
         IMAGE_WORKFLOW_PATH.to_string(),
         "mise.toml".to_owned(),
@@ -267,22 +279,22 @@ fn pr_paths(builds: &[&ImageBuild<'_>]) -> Vec<String> {
         "**/.cargo/**".to_owned(),
         "**/rust-toolchain*".to_owned(),
         ".dockerignore".to_owned(),
+        image.dockerfile.clone(),
+        format!("{}.dockerignore", image.dockerfile),
+        if build.root == "." {
+            "**/*.rs".to_owned()
+        } else {
+            format!("{}/**", build.root)
+        },
     ];
-    for build in builds {
-        let image = build.image;
-        paths.push(image.dockerfile.clone());
-        paths.push(format!("{}.dockerignore", image.dockerfile));
-        if image.context != "." {
-            paths.push(format!("{}/.dockerignore", image.context));
-        }
-        for input in &image.inputs {
-            paths.extend([input.clone(), format!("{input}/**")]);
-        }
-        if image.openssl == velnor_model::ImageOpenssl::Sysroot {
-            paths.push(IMAGE_SYSROOT_LOCK.to_owned());
-        }
+    if image.context != "." {
+        paths.push(format!("{}/.dockerignore", image.context));
     }
-    paths.sort();
-    paths.dedup();
+    for input in &image.inputs {
+        paths.extend([input.clone(), format!("{input}/**")]);
+    }
+    if image.openssl == velnor_model::ImageOpenssl::Sysroot {
+        paths.push(IMAGE_SYSROOT_LOCK.to_owned());
+    }
     paths
 }

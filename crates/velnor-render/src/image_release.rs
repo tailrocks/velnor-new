@@ -3,7 +3,7 @@
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{job_id, setup_buildx};
-use crate::image_gate::{gate_scopes, gate_step};
+use crate::image_gate::{GATE_JOB, GateOptions, gate_scopes, gate_step};
 use crate::image_publish::{login, registry_scopes};
 use crate::install_steps::install_helper;
 use crate::release_binaries::command;
@@ -37,11 +37,7 @@ pub(crate) fn authority_job(
             format!("${{{{ steps.{VERSION_STEP}.outputs.version }}}}"),
         )],
         runs_on: workflow.runner.to_string(),
-        timeout_minutes: if pr_only.is_empty() {
-            PROMOTE_TIMEOUT_MINUTES
-        } else {
-            AUTHORITY_WAIT_MINUTES
-        },
+        timeout_minutes: AUTHORITY_WAIT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),
             RenderedStep {
@@ -51,16 +47,14 @@ pub(crate) fn authority_job(
                     format!("[[ \"$REF_NAME\" =~ {strict} ]]"),
                 )
             },
-            gate_step(
-                if pr_only.is_empty() {
-                    0
-                } else {
-                    AUTHORITY_WAIT_SECONDS
-                },
-                false,
-                &pr_only,
-                !pr_only.is_empty(),
-            ),
+            gate_step(&GateOptions {
+                wait: AUTHORITY_WAIT_SECONDS,
+                tip: false,
+                pr_only: &pr_only,
+                verify: !pr_only.is_empty(),
+                ignore: &[GATE_JOB.to_owned()],
+                published: Some(&job_id(image, "publish")),
+            }),
             RenderedStep {
                 id: Some(VERSION_STEP.to_owned()),
                 env: ref_name(),

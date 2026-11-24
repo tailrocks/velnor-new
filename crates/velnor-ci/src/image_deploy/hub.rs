@@ -103,12 +103,17 @@ pub fn preflight(
             "VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN must both be set",
         ));
     }
+    let (namespace, name) = repository.split_once('/').ok_or_else(|| {
+        CiError::new(format!(
+            "Docker Hub repository {repository} is not namespace/name"
+        ))
+    })?;
     let bearer = format!("Bearer {}", token(transport, base, username, secret)?);
     let authorized = || vec![("Authorization", bearer.clone())];
     let (status, bytes) = send(
         transport,
         "GET",
-        format!("{base}/v2/repositories/{repository}/"),
+        format!("{base}/v2/namespaces/{namespace}/repositories/{name}"),
         authorized(),
         Body::Empty,
     )?;
@@ -136,7 +141,7 @@ pub fn preflight(
     let (status, _) = send(
         transport,
         "GET",
-        format!("{base}/v2/repositories/{repository}/tags/{tag}/"),
+        format!("{base}/v2/namespaces/{namespace}/repositories/{name}/tags/{tag}"),
         authorized(),
         Body::Empty,
     )?;

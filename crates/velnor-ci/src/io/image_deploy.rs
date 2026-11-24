@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -9,10 +10,13 @@ use std::time::{Duration, Instant};
 
 use super::{api_url, append_outputs, http, image_candidate, read_limited, token};
 use crate::cli::ImageCommand;
-use crate::cli_image::{GateOnly, ImageGateArgs, ImagePreflightArgs, ImageStageArgs, OpensslMode};
+use crate::cli_image::{
+    GateOnly, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs, ImageStageArgs, OpensslMode,
+};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
+use crate::image_deploy::changes::select;
 use crate::image_deploy::gate::{
     Clock, Request, Wait, exemptions_only, tip_only, wait_for_required,
 };
@@ -30,6 +34,7 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Publish(args) => image_candidate::publish::publish(&args),
         ImageCommand::Stage(args) => stage(&args),
         ImageCommand::Gate(args) => gate(&args),
+        ImageCommand::Changes(args) => changes(&args),
         ImageCommand::Preflight(args) => hub_preflight(&args),
         ImageCommand::Sysroot(args) => sysroot::unpack(&args),
     }
@@ -160,12 +165,38 @@ fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
                 run_id,
                 pr_only_checks: &args.pr_only_checks,
                 verify_exemptions: args.verify_exemptions,
+                ignore_jobs: &args.ignore_jobs,
+                require_published: args.require_published.as_deref(),
             },
             &clock,
         )?
     };
     append_outputs(&format!("ready={}\n", outcome.ready))?;
     Ok(outcome.report)
+}
+
+fn changes(args: &ImageChangesArgs) -> Result<String, CiError> {
+    let repo = Repo::parse(&args.repo)?;
+    let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
+    let pairs: Vec<(String, String)> = args
+        .matches
+        .iter()
+        .map(|entry| (entry.image.clone(), entry.glob.clone()))
+        .collect();
+    let number = match args.pull_request.as_deref() {
+        None | Some("") => None,
+        Some(text) => Some(
+            text.parse::<u64>()
+                .map_err(|_| CiError::new(format!("--pull-request {text} is not a number")))?,
+        ),
+    };
+    let selection = select(&github, &repo, &args.event, number, &pairs)?;
+    let mut outputs = String::new();
+    for (name, selected) in &selection.images {
+        let _ = writeln!(outputs, "{name}={selected}");
+    }
+    append_outputs(&outputs)?;
+    Ok(selection.report)
 }
 
 fn variable(name: &str) -> Result<String, CiError> {

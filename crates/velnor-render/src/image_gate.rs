@@ -29,17 +29,41 @@ pub(crate) fn gate_scopes(pr_only: &[String]) -> Vec<(String, String)> {
     permissions(&scopes)
 }
 
-pub(crate) fn gate_step(wait: u32, tip: bool, pr_only: &[String], verify: bool) -> RenderedStep {
-    let mut flags = if tip {
+pub(crate) struct GateOptions<'a> {
+    pub(crate) wait: u32,
+    pub(crate) tip: bool,
+    pub(crate) pr_only: &'a [String],
+    pub(crate) verify: bool,
+    pub(crate) ignore: &'a [String],
+    pub(crate) published: Option<&'a str>,
+}
+
+pub(crate) fn gate_step(options: &GateOptions<'_>) -> RenderedStep {
+    let GateOptions {
+        wait,
+        tip,
+        pr_only,
+        verify,
+        ignore,
+        published,
+    } = options;
+    let wait = *wait;
+    let mut flags = if *tip {
         " --require-tip".to_owned()
     } else {
         String::new()
     };
-    if verify {
+    if *verify {
         flags.push_str(" --verify-exemptions");
     }
-    for name in pr_only {
+    for name in *pr_only {
         let _ = write!(flags, " --pr-only-check={}", shell_word(name));
+    }
+    for name in *ignore {
+        let _ = write!(flags, " --ignore-job={}", shell_word(name));
+    }
+    if let Some(job) = published {
+        let _ = write!(flags, " --require-published={}", shell_word(job));
     }
     RenderedStep {
         id: Some(GATE_STEP.to_owned()),
@@ -125,6 +149,14 @@ pub(crate) fn exemptions_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) 
 
 pub(crate) const GATE_JOB: &str = "image-gate";
 
+pub(crate) fn gate_ignored(workflow: &ImageWorkflow<'_>) -> Vec<String> {
+    let mut jobs = vec![GATE_JOB.to_owned()];
+    for build in &workflow.images {
+        jobs.push(crate::image_build::job_id(build.image, "publish"));
+    }
+    jobs
+}
+
 pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> RenderedJob {
     RenderedJob {
         id: GATE_JOB.to_owned(),
@@ -143,7 +175,14 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),
-            gate_step(GATE_WAIT_SECONDS, false, &workflow.pr_only_checks(), false),
+            gate_step(&GateOptions {
+                wait: GATE_WAIT_SECONDS,
+                tip: false,
+                pr_only: &workflow.pr_only_checks(),
+                verify: false,
+                ignore: &gate_ignored(workflow),
+                published: None,
+            }),
         ],
         ..RenderedJob::default()
     }

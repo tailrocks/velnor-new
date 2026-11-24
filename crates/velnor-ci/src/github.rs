@@ -289,6 +289,11 @@ pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
 }
 
 #[must_use]
+pub fn pull_files_path(repo: &Repo, number: u64, page: u32) -> String {
+    format!("/repos/{repo}/pulls/{number}/files?per_page=100&page={page}")
+}
+
+#[must_use]
 pub fn merge_group_runs_path(repo: &Repo, workflow_file: &str, sha: &str) -> String {
     format!(
         "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&per_page=100",

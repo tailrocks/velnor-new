@@ -95,6 +95,8 @@ pub(super) fn request(total: u64, tip: bool, pr_only: &[String]) -> Request<'_> 
         run_id: None,
         pr_only_checks: pr_only,
         verify_exemptions: false,
+        ignore_jobs: &[],
+        require_published: None,
     }
 }
 
@@ -314,6 +316,8 @@ fn the_last_pause_never_runs_past_the_wait() {
         run_id: None,
         pr_only_checks: &[],
         verify_exemptions: false,
+        ignore_jobs: &[],
+        require_published: None,
     };
     let run = wait(&running(), &running(), &request, 99);
     assert!(run.outcome.is_err());
@@ -351,6 +355,8 @@ fn time_spent_in_the_api_requests_counts_against_the_wait() {
         run_id: None,
         pr_only_checks: &[],
         verify_exemptions: false,
+        ignore_jobs: &[],
+        require_published: None,
     };
     let run = drive_on(&github, &request, &|_| {}, &clock);
     assert!(run.outcome.is_err());

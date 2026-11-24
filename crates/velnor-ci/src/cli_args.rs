@@ -3,7 +3,9 @@
 
 use std::path::PathBuf;
 
-use crate::cli_image::{ImageGateArgs, ImagePreflightArgs, ImageStageArgs, ImageSysrootArgs};
+use crate::cli_image::{
+    ImageChangesArgs, ImageGateArgs, ImagePreflightArgs, ImageStageArgs, ImageSysrootArgs,
+};
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
@@ -215,6 +217,10 @@ pub enum ImageCommand {
         about = "Wait until every required check of the commit has passed, as release-gate judges them, then write ready=true to $GITHUB_OUTPUT. Exit 1 when a check failed or the checks were not green within --wait-seconds. With --require-tip, write ready=false and exit 0 when the commit is no longer the tip of the default branch. Reads GITHUB_TOKEN, which needs actions: read, contents: read and statuses: read"
     )]
     Gate(ImageGateArgs),
+    #[command(
+        about = "Write IMAGE=true or IMAGE=false to $GITHUB_OUTPUT for each image named by --match: on a pull_request event an image is true when a file of the pull request, or the path it was renamed from, matches one of its globs; any other event, and a pull request of more than 3000 files, select every image. Reads GITHUB_TOKEN, which needs pull-requests: read"
+    )]
+    Changes(ImageChangesArgs),
     #[command(
         about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private, and write sha_exists=true or false to $GITHUB_OUTPUT for the tag. Never prints a credential"
     )]

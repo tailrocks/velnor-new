@@ -103,6 +103,18 @@ pub struct ImageGateArgs {
         help = "A required check that runs only on pull requests; repeat for each"
     )]
     pub pr_only_checks: Vec<String>,
+    #[arg(
+        allow_hyphen_values = true,
+        long = "ignore-job",
+        help = "A job of the workflow that this run belongs to, which the wait does not count as a required check: the gate itself and the jobs that need it. The other jobs of this workflow count like any push job, so a required job of the workflow is waited for and its result is the evidence; repeat for each"
+    )]
+    pub ignore_jobs: Vec<String>,
+    #[arg(
+        allow_hyphen_values = true,
+        long = "require-published",
+        help = "A job of the push run of the commit on the default branch, such as image-<name>-publish, that must have succeeded before the gate is ready; the wait covers a job that is still running, and a cancelled, skipped or failed job refuses"
+    )]
+    pub require_published: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -128,4 +140,45 @@ pub struct ImageSysrootArgs {
         help = "The dpkg-deb program that unpacks a package"
     )]
     pub dpkg_deb: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageGlob {
+    pub image: String,
+    pub glob: String,
+}
+
+fn image_glob(text: &str) -> Result<ImageGlob, String> {
+    match text.split_once('=') {
+        Some((image, glob)) if !image.is_empty() && !glob.is_empty() => Ok(ImageGlob {
+            image: image.to_owned(),
+            glob: glob.to_owned(),
+        }),
+        _ => Err("expected IMAGE=GLOB".to_owned()),
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct ImageChangesArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(
+        long,
+        help = "The event name; only pull_request reads the changed files"
+    )]
+    pub event: String,
+    #[arg(
+        long,
+        help = "The pull request number, required for a pull_request event"
+    )]
+    pub pull_request: Option<String>,
+    #[arg(
+        allow_hyphen_values = true,
+        long = "match",
+        value_name = "IMAGE=GLOB",
+        value_parser = image_glob,
+        required = true,
+        help = "A path pattern that selects an image, written as the paths of an on.pull_request filter (`*` stays inside a path segment, `**` crosses them); repeat for each"
+    )]
+    pub matches: Vec<ImageGlob>,
 }

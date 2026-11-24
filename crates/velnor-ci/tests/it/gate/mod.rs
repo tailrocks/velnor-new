@@ -13,6 +13,7 @@ mod image_gate;
 mod image_gate_modes;
 mod inputs;
 mod own_run;
+mod own_workflow;
 mod pr_only;
 mod pr_rules;
 mod skipped;

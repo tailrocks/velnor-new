@@ -26,6 +26,8 @@ fn request(pr_only: &[String], total: u64, verify: bool) -> Request<'_> {
         run_id: None,
         pr_only_checks: pr_only,
         verify_exemptions: verify,
+        ignore_jobs: &[],
+        require_published: None,
     }
 }
 

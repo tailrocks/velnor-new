@@ -3,13 +3,16 @@
 
 use std::fmt::Write;
 
-use velnor_model::{ImageConfig, ImageOpenssl, ImagePrBuild};
+use velnor_model::{ImageConfig, ImageOpenssl, ImagePrBuild, Step, StepKind};
 
+use crate::base_steps::sources_locks;
+use crate::cache::cache_step;
 use crate::cargo::offline_env;
 use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirror_step};
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
+use crate::image_changes::{CHANGES_JOB, selective};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
@@ -17,7 +20,7 @@ use crate::private_steps::{release_mint, release_phase};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
 use crate::rules::{RenderedJob, RenderedStep, Value};
-use crate::steps::{CHECKOUT, RUN};
+use crate::steps::{CACHE_RESTORE, CHECKOUT, RUN};
 
 const ARTIFACT_RETENTION_DAYS: u64 = 7;
 
@@ -66,19 +69,42 @@ pub(crate) fn checkout() -> RenderedStep {
     }
 }
 
+fn sources_restores(steps: &[Step]) -> Vec<RenderedStep> {
+    steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::SourcesLocks(locks) => Some(sources_locks(locks)),
+            StepKind::CacheRestore(key) => Some(cache_step(CACHE_RESTORE, "Restore", key, true)),
+            _ => None,
+        })
+        .collect()
+}
+
 pub(crate) fn build_job(
     workflow: &ImageWorkflow<'_>,
     build: &ImageBuild<'_>,
     events: &Events<'_>,
 ) -> RenderedJob {
     let image = build.image;
+    let selective = selective(workflow);
     let reached = match image.pr_build {
         ImagePrBuild::Off => events.branch_push(),
+        _ if selective => format!(
+            "({}) || (({}) && needs.{CHANGES_JOB}.outputs.{} == 'true')",
+            events.branch_push(),
+            events.pull_request(),
+            image.name
+        ),
         _ => format!("({}) || ({})", events.branch_push(), events.pull_request()),
     };
     RenderedJob {
         id: job_id(image, "build"),
         condition: Some(expression(&reached)),
+        needs: if selective && image.pr_build != ImagePrBuild::Off {
+            vec![CHANGES_JOB.to_owned()]
+        } else {
+            Vec::new()
+        },
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: image.timeout_minutes,
@@ -96,12 +122,26 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         ImageMbx::Shared => steps.extend([mbx_store_step(), mbx_seed_step()]),
     }
     steps.extend(workflow.mirror.map(mirror_step));
+    let restores = sources_restores(&workflow.sources);
+    let hit_id = restores
+        .iter()
+        .find(|step| step.uses.is_some())
+        .and_then(|step| step.id.clone());
+    steps.extend(restores);
     if let Some(sources) = workflow.private {
-        steps.extend(release_phase(
-            sources,
-            &join(build.root, "Cargo.toml"),
-            release_mint(workflow.helper),
-        ));
+        let unless_hit =
+            hit_id.map(|id| expression(&format!("steps.{id}.outputs.cache-hit != 'true'")));
+        steps.extend(
+            release_phase(
+                sources,
+                &join(build.root, "Cargo.toml"),
+                release_mint(workflow.helper),
+            )
+            .map(|step| RenderedStep {
+                condition: unless_hit.clone(),
+                ..step
+            }),
+        );
     }
     steps.push(install_tools(None));
     steps.extend(workflow.mirror.map(mirror_step));
@@ -125,6 +165,9 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
             *value = Value::Int(ARTIFACT_RETENTION_DAYS);
         }
     }
+    artifact_step
+        .with
+        .push(("include-hidden-files".to_owned(), Value::Bool(true)));
     steps.push(artifact_step);
     steps
 }

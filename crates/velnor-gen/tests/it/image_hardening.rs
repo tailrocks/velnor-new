@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::Value;
 use velnor_gen::{GenerateError, ImageError, expected_files};
 use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
-use crate::image_workflow::{edited, rendered, sample};
+use crate::image_workflow::{edited, image, rendered, sample, step_named, steps};
 
 #[test]
 fn a_title_edit_of_a_pull_request_neither_cancels_nor_joins_the_image_run_of_the_pull_request()
@@ -184,5 +185,121 @@ fn only_the_cargo_config_that_cargo_reads_is_checked_in_each_directory() -> Test
         expected_files(&effective),
         Err(GenerateError::Image(ImageError::CpuBaseline { .. }))
     ));
+    Ok(())
+}
+
+fn second_image(off: bool) -> String {
+    let build = if off { "pr_build = \"off\"\n" } else { "" };
+    format!(
+        "\n[[image]]\nname = \"other-svc\"\nbins = [\"plain-svc\"]\n{build}\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"acme/other\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
+    )
+}
+
+fn two_images(off: bool) -> Result<Value, Box<dyn std::error::Error>> {
+    image(&edited("image-plain", |text| {
+        format!("{text}{}", second_image(off))
+    })?)
+}
+
+fn text(value: &Value) -> String {
+    value.as_str().unwrap_or_default().to_owned()
+}
+
+#[test]
+fn several_images_are_selected_by_their_own_paths_and_one_image_needs_no_selection() -> TestResult {
+    let single = rendered("image-plain")?;
+    assert!(single["jobs"]["image-changes"].is_null());
+    assert!(single["jobs"]["image-plain-svc-build"]["needs"].is_null());
+    let both = two_images(false)?;
+    let changes = &both["jobs"]["image-changes"];
+    let run = text(&step_named(changes, "Select the images")?["run"]);
+    assert!(run.contains("image changes"), "{run}");
+    assert!(run.contains("--match='plain-svc=**'"), "{run}");
+    assert!(run.contains("--match='other-svc=**/Cargo.toml'"), "{run}");
+    for name in ["plain-svc", "other-svc"] {
+        let build = &both["jobs"][format!("image-{name}-build").as_str()];
+        assert!(
+            text(&build["if"]).contains(&format!("needs.image-changes.outputs.{name} == 'true'"))
+        );
+        assert_eq!(build["needs"], serde_json::json!(["image-changes"]));
+        assert!(text(&changes["outputs"][name]).contains(&format!("outputs.{name}")));
+    }
+    let one_off = two_images(true)?;
+    assert!(one_off["jobs"]["image-changes"].is_null());
+    Ok(())
+}
+
+#[test]
+fn the_gate_ignores_its_own_jobs_and_the_authority_waits_for_the_publish_job() -> TestResult {
+    let workflow = rendered("image-plain")?;
+    let gate =
+        text(&step_named(&workflow["jobs"]["image-gate"], "Wait for every required")?["run"]);
+    assert!(gate.contains("--ignore-job=image-gate"), "{gate}");
+    assert!(
+        gate.contains("--ignore-job=image-plain-svc-publish"),
+        "{gate}"
+    );
+    assert!(!gate.contains("--require-published"), "{gate}");
+    let authority = text(
+        &step_named(
+            &workflow["jobs"]["image-plain-svc-authority"],
+            "Wait for every required",
+        )?["run"],
+    );
+    assert!(
+        authority.contains("--require-published=image-plain-svc-publish"),
+        "{authority}"
+    );
+    assert!(authority.contains("--ignore-job=image-gate"), "{authority}");
+    assert!(
+        !authority.contains("--ignore-job=image-plain-svc-publish"),
+        "{authority}"
+    );
+    assert!(!authority.contains("--wait-seconds=0"), "{authority}");
+    Ok(())
+}
+
+#[test]
+fn the_image_build_restores_the_shared_sources_cache_before_the_tools_and_cargo() -> TestResult {
+    let workflow = rendered("image-plain")?;
+    let build = &workflow["jobs"]["image-plain-svc-build"];
+    let all = steps(build);
+    let position = |needle: &str| {
+        all.iter().position(|step| {
+            step["name"]
+                .as_str()
+                .is_some_and(|name| name.contains(needle))
+                || step["uses"]
+                    .as_str()
+                    .is_some_and(|uses| uses.contains(needle))
+        })
+    };
+    let locks = position("Hash the sources lockfiles").ok_or("no lock hash")?;
+    let restore = position("cache/restore").ok_or("no restore")?;
+    let install = position("Install tools").ok_or("no tools")?;
+    let compile = position("Compile").ok_or("no compile")?;
+    assert!(locks < restore && restore < install && install < compile);
+    let key = text(&all[restore]["with"]["key"]);
+    assert!(key.contains("velnor-src-"), "{key}");
+    Ok(())
+}
+
+#[test]
+fn the_staged_artifact_is_uploaded_with_hidden_files_and_a_rust_source_change_builds_the_image()
+-> TestResult {
+    let workflow = rendered("image-plain")?;
+    let upload = step_named(
+        &workflow["jobs"]["image-plain-svc-build"],
+        "Upload image-plain-svc",
+    )?;
+    assert_eq!(upload["with"]["include-hidden-files"], Value::Bool(true));
+    let filtered = image(&edited("image-plain", |text| {
+        text.replace("pr_build = \"always\"", "pr_build = \"inputs\"")
+    })?)?;
+    let paths = filtered["on"]["pull_request"]["paths"].to_string();
+    assert!(paths.contains("**/*.rs"), "{paths}");
+    let nested = rendered("image-workspace")?;
+    let paths = nested["on"]["pull_request"]["paths"].to_string();
+    assert!(paths.contains("backend-rust/**"), "{paths}");
     Ok(())
 }

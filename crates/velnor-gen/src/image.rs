@@ -67,6 +67,7 @@ pub(crate) fn image_workflow(
         branch: &facts.config.default_branch,
         runner: &facts.config.runner,
         private: facts.config.private_sources.as_ref(),
+        sources: velnor_rust::image_sources_restore(facts),
         mirror: facts
             .config
             .crates_mirror

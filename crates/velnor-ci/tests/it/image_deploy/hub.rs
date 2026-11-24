@@ -9,8 +9,8 @@ const BASE: &str = "https://hub.test";
 const SECRET: &str = "dckr_pat_0123456789";
 const USER: &str = "deployer";
 const AUTH: &str = "https://hub.test/v2/auth/token";
-const REPO: &str = "https://hub.test/v2/repositories/acme/svc/";
-const TAG: &str = "https://hub.test/v2/repositories/acme/svc/tags/sha-abc/";
+const REPO: &str = "https://hub.test/v2/namespaces/acme/repositories/svc";
+const TAG: &str = "https://hub.test/v2/namespaces/acme/repositories/svc/tags/sha-abc";
 
 fn hub(repository: Reply, tag: Reply) -> Fake {
     Fake::default()

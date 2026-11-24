@@ -45,6 +45,8 @@ pub struct Request<'a> {
     pub run_id: Option<u64>,
     pub pr_only_checks: &'a [String],
     pub verify_exemptions: bool,
+    pub ignore_jobs: &'a [String],
+    pub require_published: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -151,6 +153,8 @@ fn attempt(github: &dyn GitHub, repo: &Repo, request: &Request<'_>) -> Result<At
         GateMode {
             verify_exemptions: request.verify_exemptions,
             wait_for_unfinished: true,
+            ignore_jobs: request.ignore_jobs,
+            require_published: request.require_published,
         },
     )?;
     if !verdict.ready {
