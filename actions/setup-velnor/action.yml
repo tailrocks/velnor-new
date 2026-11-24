@@ -94,8 +94,9 @@ runs:
           stat -c %Y "$1" 2> /dev/null || stat -f %m "$1" 2> /dev/null
         }
         drop_abandoned_evictions() {
+          set -- "$dir"/.velnor-ci.evicting.*
           now="$(date +%s 2> /dev/null)" || return 0
-          for path in "$dir"/.velnor-ci.evicting.*; do
+          for path; do
             [ -f "$path" ] || [ -L "$path" ] || continue
             started="${path##*/.velnor-ci.evicting.}"
             started="${started%%.*}"
@@ -119,9 +120,13 @@ runs:
         }
         keep_quarantine() {
           kept="$dir/.velnor-ci.kept.${quarantine##*/.velnor-ci.evicting.}"
-          touch -- "$quarantine" 2> /dev/null || true
+          touch -c -- "$quarantine" 2> /dev/null || true
           move_file -n "$quarantine" "$kept" 2> /dev/null || true
-          [ ! -e "$quarantine" ] || kept="$quarantine"
+          if [ -e "$quarantine" ]; then
+            kept="$quarantine"
+          elif [ ! -f "$kept" ]; then
+            return 0
+          fi
           echo "::warning title=setup-velnor::the verified copy of $archive for velnor-ci $VERSION is kept at $kept, because the store entry path is taken"
         }
         evict_store_entry() {

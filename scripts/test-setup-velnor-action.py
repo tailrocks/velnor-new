@@ -200,7 +200,7 @@ case "$last" in
         case "$arg" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) cp "$STUB_RACE" "$arg" ;; esac
       done
     fi ;;
-  *)
+  */velnor-ci-x86_64-unknown-linux-musl.tar.gz)
     case "$*" in *.velnor-ci.evict*) printf 'planted\\n' > "$last" ;; esac ;;
 esac
 exec "$REAL_MV" "$@"
@@ -1167,8 +1167,8 @@ class SetupVelnorInstallTests(unittest.TestCase):
             },
         )
         self.assertEqual(result.returncode, 1, result.output)
-        kept = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
-        self.assertTrue(kept, "the verified archive was deleted when it could not be put back at the store entry path")
+        kept = [path for path in cached.parent.glob(".velnor-ci.kept.*") if path.read_bytes() == self.archive]
+        self.assertTrue(kept, "the verified archive was not kept when it could not be put back at the store entry path")
 
     def test_every_download_attempt_is_capped_at_ten_minutes_and_a_fifteen_minute_retry_window(self):
         result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
