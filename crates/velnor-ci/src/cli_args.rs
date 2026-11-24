@@ -198,6 +198,33 @@ pub enum ImageCommand {
         about = "Check a job image candidate: exit 1 unless the OCI archive is a bounded linux/amd64 image whose blobs, layer DiffIDs and graph match the candidate record, the record's archive hash and size match the archive bytes, the build inputs under --root hash to the recorded values, and the record's source commit, ref and workflow identity equal the current GITHUB_* environment and its Buildx version equals buildx_version in .velnor/runner.lock. Prints PASS on success"
     )]
     VerifyCandidate(VerifyCandidateArgs),
+    #[command(
+        about = "Build the job image candidate: check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, check the Docker Buildx plugin against buildx_version and buildx_sha256 in .velnor/runner.lock, run build-test.sh, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
+    )]
+    Build(BuildArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BuildArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout to build; it must be a clean Git worktree"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The commit the checkout must be at")]
+    pub source_commit: String,
+    #[arg(long, help = "Where to write the candidate OCI archive (a new file)")]
+    pub archive: PathBuf,
+    #[arg(long, help = "Where to write the candidate record JSON (a new file)")]
+    pub record: PathBuf,
+    #[arg(long, default_value = "docker", help = "The Docker client to run")]
+    pub docker: String,
+    #[arg(
+        long,
+        help = "The docker-buildx plugin file to use. Without it, the first docker-buildx in $DOCKER_CONFIG/cli-plugins (or $HOME/.docker/cli-plugins) and then the system Docker plugin directories. The file is copied, its SHA-256 is checked against buildx_sha256 in .velnor/runner.lock, and only the copy is ever run"
+    )]
+    pub buildx: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

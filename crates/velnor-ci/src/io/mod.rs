@@ -236,6 +236,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Image(ImageCommand::VerifyCandidate(args)) => {
             image_candidate::verify_candidate(&args)
         }
+        Command::Image(ImageCommand::Build(args)) => image_candidate::build(&args),
         Command::Fetch(args) => fetch::fetch(&args),
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io::{self, Read};
+use std::os::fd::AsFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
@@ -52,6 +53,9 @@ impl Supervisor {
             let stderr = scope.spawn(move || keep(stderr, STDERR_KEPT));
             let stdout = scope.spawn(move || self.bounded(stdout, stdout_limit));
             let status = self.wait();
+            if let Some(child) = self.lock().child.as_ref() {
+                kill_group(child);
+            }
             (status, stdout.join(), stderr.join())
         });
         let stopped = {
@@ -67,6 +71,38 @@ impl Supervisor {
             status: status?,
             stdout,
             stderr,
+            stopped,
+        })
+    }
+
+    pub(super) fn run_streaming(&self, command: &mut Command) -> io::Result<Finished> {
+        {
+            let mut slot = self.lock();
+            if let Some(reason) = &slot.stopped {
+                return Err(io::Error::other(reason.clone()));
+            }
+            let output = io::stderr().as_fd().try_clone_to_owned()?;
+            slot.child = Some(
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::from(output))
+                    .stderr(Stdio::inherit())
+                    .process_group(0)
+                    .spawn()?,
+            );
+        }
+        let status = self.wait();
+        let stopped = {
+            let mut slot = self.lock();
+            if let Some(child) = slot.child.take() {
+                kill_group(&child);
+            }
+            slot.stopped.clone()
+        };
+        Ok(Finished {
+            status: status?,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
             stopped,
         })
     }
