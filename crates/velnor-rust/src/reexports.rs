@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub use crate::ansible::attach_ansible;
+pub use crate::ansible::{ANSIBLE_SLUG, ansible_runs, attach_ansible};
 pub use crate::base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use crate::build_profile::{BuildProfile, build_profile, rustc_release};
 pub use crate::build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
@@ -59,6 +59,7 @@ pub use crate::reads::{
     resolve, unlisted, without_identity,
 };
 pub use crate::repo_profile::{cargo_config_paths, check_runtime_configs, repo_profile};
+pub use crate::report::finish_present;
 pub use crate::required_job::tests_expected;
 pub use crate::select::{select, unknown_paths, unread_packages};
 pub use crate::select_event::{select_event, selects_by_diff};
