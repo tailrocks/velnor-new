@@ -23,6 +23,8 @@ HTML_CLOSED = re.compile(
     r"|<(script|pre|style|textarea)(?:\s|>|$).*</\1>",
     re.I,
 )
+CONTAINER_TOKEN = re.compile(r"( *)(?:(>)|([-*+]|\d{1,9}[.)])( +|$)|(\[\^[^\]\s]+\]:) *)")
+NESTED_QUOTE = re.compile(r" {0,3}>")
 RAW_HTML_OPEN = re.compile(r"<(script|pre|style|textarea)(?:\s|>|$)", re.I)
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
@@ -115,6 +117,38 @@ def raw_html_open(line):
     return m.group(1).lower() if m and not HTML_CLOSED.match(text) else None
 
 
+def container_shape(line):
+    shape = []
+    pos = 0
+    while m := CONTAINER_TOKEN.match(line, pos):
+        pos = m.end()
+        if m.group(2):
+            pos += line[pos : pos + 1] == " "
+            shape.append(None)
+        elif m.group(3):
+            gap = len(m.group(4))
+            shape.append(m.start(3) + len(m.group(3)) + (gap if 1 <= gap <= 4 else 1))
+        else:
+            shape.append(m.start(5) + 4)
+    return shape
+
+
+def in_container(line, shape, quote_start):
+    pos = 0
+    for k, indent in enumerate(shape):
+        if indent is None:
+            m = (quote_start if k == 0 else NESTED_QUOTE).match(line, pos)
+            if not m:
+                return False
+            pos = m.end()
+            pos += line[pos : pos + 1] == " "
+        elif line[pos:].strip():
+            if len(line) - len(line[pos:].lstrip(" ")) < indent:
+                return False
+            pos = max(pos, indent)
+    return True
+
+
 def opens_paragraph(line, before, para):
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
     if not text or text.startswith("#") or HRULE.fullmatch(text) or HTML_CLOSED.match(text):
@@ -145,15 +179,18 @@ def markdown_hit(lines, indent, quote_start):
         root_item = ROOT_ORDERED.match(line) and not CONTAINER_START.match(para or "")
         if (item and not (lazy and root_item)) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
+        if html and not in_container(line, html[1], quote_start):
+            html = None
         if html:
-            if re.search(rf"</{html}>", line, re.I):
+            if re.search(rf"</{html[0]}>", line, re.I):
                 html = None
             before, para = False, None
         elif indent.match(line):
             if not lazy:
                 return k
         else:
-            html = raw_html_open(line)
+            tag = raw_html_open(line)
+            html = (tag, container_shape(line)) if tag else None
             if html or not opens_paragraph(line, before, para):
                 before, para = False, None
             else:
@@ -214,7 +251,7 @@ def doc_findings(src):
     attr_depth = 0
     attr_name = ""
     paren = 0
-    cfg_comma = False
+    cfg_frames = []
     doc_paren = 0
     doc_value = False
     while i < len(src):
@@ -250,11 +287,13 @@ def doc_findings(src):
         elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
             paren = 0
-            cfg_comma = False
+            cfg_frames = []
             k = skip_trivia(src, j)
             k += 2 if src.startswith("r#", k) else 0
             name = IDENT.match(src, k)
             attr_name = name.group() if name else ""
+            if attr_name == "cfg_attr":
+                cfg_frames = [[1, False]]
             i = j
         elif c == "[":
             if attr_depth:
@@ -270,11 +309,13 @@ def doc_findings(src):
                 paren += 1
             elif attr_depth and c == ")":
                 paren -= 1
+                while cfg_frames and paren < cfg_frames[-1][0]:
+                    cfg_frames.pop()
                 doc_value = doc_value and paren >= doc_paren
             elif attr_depth and c == ",":
                 doc_value = doc_value and paren > doc_paren
-                if attr_name == "cfg_attr" and paren == 1:
-                    cfg_comma = True
+                if cfg_frames and paren == cfg_frames[-1][0]:
+                    cfg_frames[-1][1] = True
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
@@ -293,13 +334,14 @@ def doc_findings(src):
                 yield i
                 i = j
             else:
+                frame = cfg_frames[-1] if cfg_frames and paren == cfg_frames[-1][0] and cfg_frames[-1][1] else None
+                if word == "cfg_attr" and frame and src.startswith("(", skip_trivia(src, j)):
+                    cfg_frames.append([paren + 1, False])
                 if word == "doc":
                     k = skip_trivia(src, j)
                     if DOC_INCLUDE.match(src, k):
                         yield i
-                    elif DOC_EQ.match(src, k) and (
-                        (attr_name == "doc" and paren == 0) or (attr_name == "cfg_attr" and paren == 1 and cfg_comma)
-                    ):
+                    elif DOC_EQ.match(src, k) and ((attr_name == "doc" and paren == 0) or frame):
                         doc_value = True
                         doc_paren = paren
                 i = j

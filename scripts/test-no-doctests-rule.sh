@@ -211,6 +211,17 @@ check html_indented_lazy_pass pass '/// prose\n///     <script></script>\n///   
 check html_block_close_indent fail '/// <script>\n/// </script>\n///     compile_error!("x");\nfn f() {}\n'
 check lazy_ordered_in_quote fail '/// > quote\n/// continuation\n/// 2.     compile_error!("x");\nfn f() {}\n'
 check setext_root_after_quote pass '/// > Title\n/// ===\n///     compile_error!("x");\nfn f() {}\n'
+check html_quote_pre_blank fail '/// > <pre>\n///\n///     compile_error!("x");\nfn f() {}\n'
+check html_quote_script_blank fail '/// > <script>\n///\n///     compile_error!("x");\nfn f() {}\n'
+check html_quote_nested_blank fail '/// > > <script>\n/// >\n/// >     compile_error!("x");\nfn f() {}\n'
+check html_ordered_dedent fail '/// 1. <script>\n///\n/// text\n///\n///     compile_error!("x");\nfn f() {}\n'
+check html_quote_block_blank fail '/**\n * > <script>\n *\n *     compile_error!("x");\n */\nfn f() {}\n'
+check html_quote_attr_blank fail '#[doc = "> <script>\\n\\n    compile_error!(\\"x\\");"]\nfn f() {}\n'
+check html_quote_no_blank fail '/// > <script>\n///     compile_error!("x");\nfn f() {}\n'
+check cfg_attr_nested_doc fail '#[cfg_attr(all(), cfg_attr(all(), doc = "```\\ncompile_error!(\\"x\\");\\n```"))]\nfn f() {}\n'
+check html_quote_open_pass pass '/// > <script>\n/// >\n/// >     compile_error!("x");\nfn f() {}\n'
+check html_list_open_pass pass '/// - <script>\n///   x\n///\n///       compile_error!("x");\nfn f() {}\n'
+check cfg_attr_nested_pass pass '#[cfg_attr(all(), cfg_attr(all(), deprecated(note = "```x```")))]\nfn f() {}\n'
 check nested_starless_block_pass pass '    /**\n        Prose.\n\n        let x = 1;\n    */\npub fn n7() {}\n'
 
 missing="$work/scanner_missing"
