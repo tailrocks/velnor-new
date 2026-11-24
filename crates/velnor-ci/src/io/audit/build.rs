@@ -137,18 +137,12 @@ impl Builder<'_> {
     fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
         let root = self.invoked();
         let members = root.map_or(&[][..], |root| root.members.as_slice());
-        let dependencies: Vec<&str> = root.map_or_else(Vec::new, |root| {
-            crate::needs::reached(root, &self.facts.unowned)
-                .values()
-                .map(|package| package.name.as_str())
-                .collect()
-        });
         let canonical =
             fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
         invocation.selection(
             root.map_or("", |root| root.manifest.as_str()),
             members,
-            &dependencies,
+            &self.facts.unowned,
             &[&self.repository, &canonical],
         )
     }

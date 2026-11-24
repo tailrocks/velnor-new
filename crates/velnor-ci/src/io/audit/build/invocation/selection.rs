@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use velnor_model::RustMember;
+use velnor_model::{
+    DependencyKind, MemberDependency, RepoPath, RustMember, TargetKind, UnownedPackage,
+};
 
-use super::Invocation;
 use super::package_spec::{Spec, parse};
+use super::{Invocation, subcommand};
 
 #[derive(Default, Serialize, Deserialize)]
 pub(in super::super) struct Selection {
@@ -32,7 +35,7 @@ impl Invocation {
         &self,
         root: &str,
         members: &[RustMember],
-        dependencies: &[&str],
+        unowned: &BTreeMap<RepoPath, UnownedPackage>,
         repositories: &[&Path],
     ) -> Option<Selection> {
         if !self.cargo_program() {
@@ -45,6 +48,31 @@ impl Invocation {
             .map(String::as_str)
             .take_while(|word| *word != "--")
             .collect();
+        let arguments = if Path::new(&self.command[0])
+            .file_name()
+            .is_some_and(|name| name == "cargo")
+        {
+            subcommand(&words).map_or(&[][..], |start| &words[start..])
+        } else {
+            &words[..]
+        };
+        let dev = matches!(
+            arguments,
+            ["test" | "t" | "bench", ..] | ["nextest", "run" | "archive", ..]
+        ) || words.iter().any(|word| {
+            *word == "--all-targets"
+                || flag(
+                    word,
+                    &[
+                        "--tests",
+                        "--test",
+                        "--benches",
+                        "--bench",
+                        "--examples",
+                        "--example",
+                    ],
+                )
+        });
         let workspace = !words.iter().any(|word| target_filter(word))
             && words
                 .iter()
@@ -77,7 +105,7 @@ impl Invocation {
         }
         let selected: Vec<Spec<'_>> = selected.into_iter().filter_map(parse).collect();
         let excluded: Vec<Spec<'_>> = excluded.into_iter().filter_map(parse).collect();
-        let mut packages: Vec<String> = members
+        let chosen: Vec<&RustMember> = members
             .iter()
             .filter(|member| {
                 if !provable {
@@ -92,11 +120,16 @@ impl Invocation {
                         .any(|spec| spec.matches(member, repositories))
                 }
             })
+            .collect();
+        let mut packages: Vec<String> = chosen
+            .iter()
             .map(|member| member.name.as_str().to_owned())
             .collect();
-        if provable && workspace {
-            packages.extend(dependencies.iter().map(|name| (*name).to_owned()));
-        }
+        packages.extend(
+            built(&chosen, members, unowned, dev)
+                .into_iter()
+                .map(str::to_owned),
+        );
         Some(Selection {
             root: root.to_owned(),
             packages,
@@ -112,6 +145,68 @@ fn cluster_package(word: &str) -> Option<&str> {
     flags.trim_start_matches(['q', 'v', 'r']).strip_prefix('p')
 }
 
+fn built<'a>(
+    chosen: &[&'a RustMember],
+    members: &'a [RustMember],
+    unowned: &'a BTreeMap<RepoPath, UnownedPackage>,
+    dev: bool,
+) -> BTreeSet<&'a str> {
+    let mut pending: Vec<&MemberDependency> = chosen
+        .iter()
+        .flat_map(|member| {
+            let tested = dev
+                && member.targets.iter().any(|target| {
+                    target.tests
+                        || target.kinds.iter().any(|kind| {
+                            matches!(
+                                kind,
+                                TargetKind::Test | TargetKind::Bench | TargetKind::Example
+                            )
+                        })
+                });
+            member
+                .dependencies
+                .iter()
+                .filter(move |dependency| tested || dependency.kind != DependencyKind::Dev)
+        })
+        .collect();
+    let mut visited = BTreeSet::new();
+    let mut packages = BTreeSet::new();
+    while let Some(dependency) = pending.pop() {
+        if dependency.optional
+            || dependency.platform.is_some()
+            || !visited.insert(&dependency.manifest)
+        {
+            continue;
+        }
+        let next = if let Some(package) = unowned.get(&dependency.manifest) {
+            packages.insert(package.name.as_str());
+            &package.dependencies
+        } else if let Some(member) = members
+            .iter()
+            .find(|member| member.manifest == dependency.manifest)
+        {
+            &member.dependencies
+        } else {
+            continue;
+        };
+        pending.extend(
+            next.iter()
+                .filter(|dependency| dependency.kind != DependencyKind::Dev),
+        );
+    }
+    packages
+}
+
+fn flag(word: &str, names: &[&str]) -> bool {
+    names.iter().any(|name| {
+        word == *name
+            || word
+                .strip_prefix(name)
+                .is_some_and(|rest| rest.starts_with('='))
+    })
+}
+
 fn target_filter(word: &str) -> bool {
     const FILTERS: [&str; 9] = [
         "--lib",
@@ -124,10 +219,5 @@ fn target_filter(word: &str) -> bool {
         "--benches",
         "--bench",
     ];
-    FILTERS.iter().any(|filter| {
-        word == *filter
-            || word
-                .strip_prefix(filter)
-                .is_some_and(|rest| rest.starts_with('='))
-    })
+    flag(word, &FILTERS)
 }
