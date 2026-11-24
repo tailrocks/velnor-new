@@ -27,6 +27,7 @@ mod sealed;
 mod selection;
 mod setup_phase;
 mod shape;
+mod step_setup;
 mod steps;
 mod test_group;
 mod token_permission;
