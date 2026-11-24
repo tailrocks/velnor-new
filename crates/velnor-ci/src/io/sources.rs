@@ -39,7 +39,13 @@ fn fetch_roots(roots: &[PathBuf]) -> Result<(), (u8, String)> {
             Err((code, message)) => return Err((code, failed(root, &message))),
         }
     }
-    Ok(())
+    match super::cache_credentials::leak() {
+        Some(why) => Err((
+            1,
+            format!("sources fetch left a credential that could be saved: {why}"),
+        )),
+        None => Ok(()),
+    }
 }
 
 fn failed(root: &Path, reason: &str) -> String {

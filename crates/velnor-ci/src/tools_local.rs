@@ -11,6 +11,7 @@ use crate::mbx_seed::SEED_DIR_ENV;
 use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
 
 mod clear;
+mod lease;
 mod store;
 use clear::clear_home;
 use store::{restore, save};
@@ -33,6 +34,7 @@ pub struct Inputs<'a> {
     pub key: &'a str,
     pub event_name: &'a str,
     pub git_ref: &'a str,
+    pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub shared_dir: Option<&'a str>,
     pub seed_dir: Option<&'a str>,
@@ -45,7 +47,7 @@ pub enum Outcome {
     NotOffered,
     BadKey,
     Miss,
-    Restored { from: PathBuf },
+    Restored { from: PathBuf, leased: bool },
     Rejected(&'static str),
     Saved { to: PathBuf, kept: Vec<String> },
     Healed { to: PathBuf, kept: Vec<String> },
@@ -78,7 +80,12 @@ pub fn run(inputs: &Inputs<'_>) -> Outcome {
     if inputs.verb != Verb::Clear && !valid_key(inputs.key) {
         return Outcome::BadKey;
     }
-    let trusted = trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch);
+    let trusted = trusted_event(
+        inputs.event_name,
+        inputs.git_ref,
+        inputs.ref_protected,
+        inputs.default_branch,
+    );
     match inputs.verb {
         Verb::Restore => match home_owner(inputs.home) {
             Ok(owner) => {
@@ -161,12 +168,19 @@ fn describe(outcome: &Outcome) -> String {
             "::warning::the tools key is not a plain name; the node store is skipped".to_owned()
         }
         Outcome::Miss => "velnor: the node-local tools store has no entry for this key".to_owned(),
-        Outcome::Restored { from } => {
+        Outcome::Restored { from, leased: true } => {
             format!(
                 "velnor: tools restored from the node store {}",
                 from.display()
             )
         }
+        Outcome::Restored {
+            from,
+            leased: false,
+        } => format!(
+            "::warning::tools restored from the node store {} without a shared lock, because another process holds the entry locked",
+            from.display()
+        ),
         Outcome::Rejected(reason) => {
             format!("::warning::node-local tools store ignored ({reason})")
         }
@@ -219,6 +233,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         key,
         event_name: &var("GITHUB_EVENT_NAME").unwrap_or_default(),
         git_ref: &var("GITHUB_REF").unwrap_or_default(),
+        ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),

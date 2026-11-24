@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::io::Repo;
+use crate::io::{Repo, hang_up};
 
 mod cargo_directory;
 mod fetch_config;
@@ -104,12 +104,12 @@ fn nested_cargo_uses_saved_executable_when_relative_path_is_unavailable() -> Tes
             .env("VELNOR_CARGO_WRAPPER", wrapper)
             .env("PATH", std::env::join_paths(paths)?)
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", hang_up())
             .env("NO_PROXY", "127.0.0.1")
             .env("CARGO_NET_RETRY", "0")
             .env(
                 "CARGO_REGISTRIES_CRATES_IO_INDEX",
-                "sparse+http://127.0.0.1:1/index/",
+                format!("sparse+{}/index/", hang_up()),
             )
             .output()?;
         assert!(output.status.success(), "{output:?}");
@@ -154,12 +154,12 @@ fn direct_fetches_using(repo: &Repo, wrapper: &Path, config: &Path, proxy: &str)
             .env("VELNOR_CARGO_CONFIG", config)
             .env("VELNOR_CARGO_WRAPPER", wrapper)
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", hang_up())
             .env("NO_PROXY", "127.0.0.1")
             .env("CARGO_NET_RETRY", "0")
             .env(
                 "CARGO_REGISTRIES_CRATES_IO_INDEX",
-                "sparse+http://127.0.0.1:1/index/",
+                format!("sparse+{}/index/", hang_up()),
             )
             .output()?;
         assert!(output.status.success(), "{output:?}");
@@ -282,12 +282,12 @@ fn child_fetches_with_path(
         .env("VELNOR_CARGO_WRAPPER", wrapper)
         .env("PATH", std::env::join_paths(paths)?)
         .env("CARGO_NET_OFFLINE", "false")
-        .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+        .env("CARGO_HTTP_PROXY", hang_up())
         .env("NO_PROXY", "127.0.0.1")
         .env("CARGO_NET_RETRY", "0")
         .env(
             "CARGO_REGISTRIES_CRATES_IO_INDEX",
-            "sparse+http://127.0.0.1:1/index/",
+            format!("sparse+{}/index/", hang_up()),
         )
         .output()?;
     assert!(output.status.success(), "{output:?}");

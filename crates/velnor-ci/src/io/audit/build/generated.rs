@@ -40,10 +40,7 @@ pub(super) fn targets(
         for (unit, path) in roots.unit_files(&target)? {
             let (UnitFile::Fingerprint { configuration, .. }
             | UnitFile::BuildOutput { configuration, .. }
-            | UnitFile::DepInfo {
-                configuration: Some(configuration),
-                ..
-            }) = unit
+            | UnitFile::DepInfo { configuration, .. }) = unit
             else {
                 continue;
             };

@@ -19,7 +19,7 @@ pub(super) struct Printed {
 pub(in crate::io) fn unchecked_unit_files(
     target: &Path,
 ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    Ok(scan(target, directory_limit()?, None)?.0)
+    Ok(scan(target, directory_limit()?, None)?.found)
 }
 
 pub(in crate::io) struct Roots {
@@ -83,10 +83,13 @@ struct Apart {
 
 fn apart(target: &Path, build: &Path) -> Result<Apart, CiError> {
     let limit = directory_limit()?;
-    let (in_target, target_built) = scan(target, limit, inside(target, build))?;
-    let (mut found, build_built) = scan(build, limit, inside(build, target))?;
+    let in_target = scan(target, limit, inside(target, build))?;
+    let in_build = scan(build, limit, inside(build, target))?;
+    let (target_built, build_built) = (in_target.built, in_build.built);
+    let mut found = in_build.found;
     found.extend(
         in_target
+            .found
             .into_iter()
             .filter(|(unit, _)| matches!(unit, UnitFile::Directory { .. })),
     );
@@ -140,10 +143,6 @@ impl Workspace {
 }
 
 impl Workspace {
-    pub(in crate::io) fn units(&self) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-        unit_files_apart(&self.target_directory, &self.build_directory)
-    }
-
     pub(in crate::io) fn build_units(
         &self,
         workspaces: &[Workspace],

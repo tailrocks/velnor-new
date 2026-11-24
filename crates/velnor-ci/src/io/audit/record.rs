@@ -53,13 +53,7 @@ impl Audit<'_> {
                 configuration,
                 hash,
                 stem,
-            } => self.record_dep_info(
-                indices,
-                file,
-                configuration.as_deref(),
-                hash.as_deref(),
-                &stem,
-            )?,
+            } => self.record_dep_info(indices, file, &configuration, hash.as_deref(), &stem)?,
             UnitFile::Script { profile, package } => {
                 let owners = self.member_owners(&package, indices);
                 if let Some(first) = owners.first() {
@@ -90,25 +84,23 @@ impl Audit<'_> {
         &mut self,
         indices: &[usize],
         file: &Path,
-        configuration: Option<&str>,
+        configuration: &str,
         hash: Option<&str>,
         stem: &str,
     ) -> Result<(), CiError> {
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
         for index in indices {
-            let key = configuration.map(|configuration| {
-                let key = (
-                    *index,
-                    configuration.to_owned(),
-                    hash.unwrap_or(stem).to_owned(),
-                );
-                self.present.insert(key.clone());
-                key
-            });
-            if let Some(identity) = key.and_then(|key| match hash {
+            let key = (
+                *index,
+                configuration.to_owned(),
+                hash.unwrap_or(stem).to_owned(),
+            );
+            self.present.insert(key.clone());
+            let identity = match hash {
                 Some(_) => self.fingerprints.get(&key),
                 None => self.names.get(&key),
-            }) {
+            };
+            if let Some(identity) = identity {
                 hits.push((*index, identity.clone()));
             }
         }
@@ -121,16 +113,14 @@ impl Audit<'_> {
         let Some((source, _)) = self.dep_info(&base, budget, file, package)? else {
             return Ok(());
         };
-        if let Some(configuration) = configuration {
-            for (index, (package, fingerprint)) in hits {
-                self.built[index].units.insert(Unit {
-                    configuration: configuration.to_owned(),
-                    kind: fingerprint.kind,
-                    package,
-                    target: fingerprint.target,
-                    source: source.clone(),
-                });
-            }
+        for (index, (package, fingerprint)) in hits {
+            self.built[index].units.insert(Unit {
+                configuration: configuration.to_owned(),
+                kind: fingerprint.kind,
+                package,
+                target: fingerprint.target,
+                source: source.clone(),
+            });
         }
         Ok(())
     }

@@ -199,7 +199,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         timings_notes,
         private_base_caches: config.private_sources.is_some()
             && crate::private_sources::private_cause(view, &config, &rust_roots).is_some()
-            && crate::private_sources::only_private_git(view, &rust_roots),
+            && crate::private_sources::only_private_git(view, &rust_roots, helper.as_ref()),
         private_sources,
         private_suggestion: private_suggestion(view, &config, &rust_roots),
         weakenings,

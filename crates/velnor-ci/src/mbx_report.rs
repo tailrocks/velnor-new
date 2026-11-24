@@ -137,6 +137,12 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
             bypassed = bypassed.saturating_add(*count);
         }
     }
+    let mut compiler = BTreeMap::new();
+    for (outcome, work) in counts.compiler {
+        let work = serde_json::from_value::<MbxCompilerWork>(work)
+            .map_err(|error| format!("compiler work `{outcome}` not understood ({error})"))?;
+        compiler.insert(outcome, work);
+    }
     let not_looked_up = counts
         .unconsulted
         .saturating_add(counts.incremental_compilations);
@@ -155,16 +161,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
         bypassed,
         verifications: Some(counts.verifications).filter(|count| *count > 0),
         bypasses: counts.bypasses,
-        compiler: counts
-            .compiler
-            .into_iter()
-            .filter_map(|(outcome, work)| {
-                Some((
-                    outcome,
-                    serde_json::from_value::<MbxCompilerWork>(work).ok()?,
-                ))
-            })
-            .collect(),
+        compiler,
         probe_only,
     }))
 }

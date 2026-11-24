@@ -166,6 +166,23 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
 }
 
 #[test]
+fn a_malformed_compiler_work_entry_makes_its_report_not_understood() -> ResultTest {
+    let repo = fixture("mbx-reports-malformed-work")?;
+    let body = r#"{"version":5,"hits":3,"misses":1,"unconsulted":0,"compiler":{"miss":{"invocations":1,"duration_ns":900},"verification":{"invocations":"four","duration_ns":70}}}"#;
+    cargo(&repo, "build", body, "compiled")?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    let errors = metrics.verification_errors.join("\n");
+    assert!(
+        errors.contains("MBX stats report not understood (1 report(s))")
+            && errors.contains("compiler work `verification`"),
+        "{errors}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_session_with_only_routine_bypasses_reaches_the_metrics() -> ResultTest {
     let repo = fixture("mbx-reports-routine-only")?;
     let body = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
@@ -198,7 +215,7 @@ fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
 
 #[test]
 fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
-    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true}}}"#;
     assert_eq!(
         parse(newer),
         Ok(Some(MbxSession {

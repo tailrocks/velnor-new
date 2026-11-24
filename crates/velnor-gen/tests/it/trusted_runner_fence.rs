@@ -207,3 +207,19 @@ fn a_docker_build_in_an_untrusted_workflow_keeps_its_inputs() -> TestResult {
     )?;
     Ok(())
 }
+
+#[test]
+fn a_reusable_workflow_cannot_set_the_trusted_runner() -> TestResult {
+    let job = checkout_job("fetch-depth = \"0\"");
+    rendered_file(&workflow(HEADER, ON, &job), DECLARED_FILE)?;
+    for on in [
+        "",
+        "[workflow.on]\nworkflow_call = true\n",
+        "[workflow.on]\nworkflow_call = true\n\n[workflow.on.workflow_dispatch]\n",
+    ] {
+        let message = refusal(&workflow(HEADER, on, &job))?;
+        assert!(message.contains("trusted_runner"), "{on:?}: {message}");
+        assert!(message.contains("workflow_call"), "{on:?}: {message}");
+    }
+    Ok(())
+}

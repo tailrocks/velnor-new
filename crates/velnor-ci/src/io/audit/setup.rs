@@ -6,12 +6,13 @@ use std::path::{Path, PathBuf};
 
 use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
-use velnor_rust::{Located, Owners, locate};
+use velnor_rust::{Located, Owners, locate, resolve};
 
+use super::inventory::unresolved;
 use super::{Audit, REBUILD};
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
-use crate::io::units::{UnitFile, Workspace, unit_files, unit_files_apart};
+use crate::io::units::{UnitFile, Workspace, unit_files_apart};
 use crate::platform::Platforms;
 
 pub(super) fn begin<'a>(
@@ -80,28 +81,43 @@ pub(super) fn gathered_files(
     groups: &[PathBuf],
     chosen: &[bool],
 ) -> Result<Vec<(UnitFile, PathBuf, Vec<usize>)>, CiError> {
-    let mut files: Vec<(UnitFile, PathBuf, Vec<usize>)> = Vec::new();
+    let mut scans: BTreeMap<(PathBuf, PathBuf), Scan> = BTreeMap::new();
     for (index, workspace) in workspaces
         .iter()
         .enumerate()
         .filter(|(index, _)| chosen[*index])
     {
-        files.extend(
-            workspace
-                .units()?
-                .into_iter()
-                .map(|(unit, file)| (unit, file, vec![index])),
-        );
+        scans
+            .entry((
+                resolved(&workspace.target_directory)?,
+                resolved(&workspace.build_directory)?,
+            ))
+            .or_insert_with(|| Scan::new(&workspace.target_directory, &workspace.build_directory))
+            .indices
+            .insert(index);
     }
     for (indices, directory) in shared.iter().zip(groups) {
         if indices.len() < 2 || !chosen[indices[0]] {
             continue;
         }
-        files.extend(
-            group_units(directory, &workspaces[indices[0]])?
-                .into_iter()
-                .map(|(unit, file)| (unit, file, indices.clone())),
-        );
+        let first = &workspaces[indices[0]];
+        let build = if first.build_directory == first.target_directory {
+            directory
+        } else {
+            &first.build_directory
+        };
+        scans
+            .entry((resolved(directory)?, resolved(build)?))
+            .or_insert_with(|| Scan::new(directory, build))
+            .indices
+            .extend(indices);
+    }
+    let mut files: Vec<(UnitFile, PathBuf, Vec<usize>)> = Vec::new();
+    for scan in scans.into_values() {
+        let indices: Vec<usize> = scan.indices.into_iter().collect();
+        for (unit, file) in unit_files_apart(&scan.target, &scan.build)? {
+            files.push((unit, file, indices.clone()));
+        }
     }
     files.sort_by(|left, right| {
         left.0
@@ -112,11 +128,23 @@ pub(super) fn gathered_files(
     Ok(files)
 }
 
-fn group_units(directory: &Path, first: &Workspace) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    if first.build_directory == first.target_directory {
-        unit_files(directory)
-    } else {
-        unit_files_apart(directory, &first.build_directory)
+fn resolved(path: &Path) -> Result<PathBuf, CiError> {
+    resolve(path).map_err(|error| unresolved(path, &error))
+}
+
+struct Scan {
+    target: PathBuf,
+    build: PathBuf,
+    indices: BTreeSet<usize>,
+}
+
+impl Scan {
+    fn new(target: &Path, build: &Path) -> Self {
+        Self {
+            target: target.to_path_buf(),
+            build: build.to_path_buf(),
+            indices: BTreeSet::new(),
+        }
     }
 }
 

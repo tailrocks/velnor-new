@@ -1,6 +1,7 @@
 .mise-version	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 .velnor/runner.lock	velnor-local	crates/velnor-local/Cargo.toml
 .velnor/runner.lock	velnor-runner-host	crates/velnor-runner-host/Cargo.toml
+.velnor/rust-toolchain.toml	velnor-ci	crates/velnor-ci/Cargo.toml
 .velnor/version-policy.toml	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 Cargo.lock	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml
 Cargo.toml	velnor-archive-guard	crates/velnor-archive-guard/Cargo.toml

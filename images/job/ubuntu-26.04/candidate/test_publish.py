@@ -13,6 +13,8 @@ import unittest
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
+import test_candidate
+
 
 MODULE_PATH = Path(__file__).with_name("publish.py")
 SPEC = importlib.util.spec_from_file_location("job_image_publish", MODULE_PATH)
@@ -474,6 +476,34 @@ class PublisherTests(unittest.TestCase):
             publish._Response(200, {"Docker-Content-Digest": manifest_digest}, manifest),
         ])
         publish._upload_manifest(transport, "secret-token-value-123456", manifest, manifest_digest)
+
+    def test_candidate_image_must_carry_the_source_commit_as_its_revision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            root = directory / "root"
+            for name in publish.candidate.INPUT_PATHS:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(name.encode())
+            (root / ".velnor/runner.lock").write_text('buildx_version = "0.38.0"\n')
+            archive = directory / "candidate.oci.tar"
+            test_candidate.write_archive(archive, test_candidate.archive_entries())
+            record = test_candidate.valid_record(archive)
+            record["source"]["ref"] = "refs/heads/main"
+            record["source"]["inputs"] = publish.candidate._source_inputs(root)
+            record["workflow"].update(
+                event="workflow_dispatch", workflow_ref=publish.WORKFLOW + "@refs/heads/main",
+                repository_id=publish.REPOSITORY_ID, authority_commit="a" * 40, run_id=100, run_attempt=1,
+            )
+            record_path = directory / "candidate.json"
+            record_path.write_text(json.dumps(record))
+            identity = {
+                "repository_id": publish.REPOSITORY_ID, "workflow_ref": publish.WORKFLOW + "@refs/heads/main",
+                "source": "a" * 40, "run_id": 100, "run_attempt": 1,
+            }
+            publish._check_candidate(root, archive, record_path, identity)
+            test_candidate.write_archive(archive, test_candidate.archive_entries(labels={}))
+            with self.assertRaisesRegex(publish.candidate.CandidateError, "revision label is not the source commit"):
+                publish._check_candidate(root, archive, record_path, identity)
 
 
 if __name__ == "__main__":

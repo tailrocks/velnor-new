@@ -17,6 +17,7 @@ use layers::{check_layers, diff_ids};
 const MAX_UNCOMPRESSED: u64 = 4 << 30;
 const MAX_LAYER_MEMBERS: usize = 1_000_000;
 const MAX_METADATA_BLOB: u64 = 64 << 20;
+const REVISION_LABEL: &str = "org.opencontainers.image.revision";
 const MANIFEST_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 const INDEX_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 const CONFIG_TYPE: &str = "application/vnd.oci.image.config.v1+json";
@@ -247,7 +248,7 @@ fn read_graph(scan: &Scanned, source: &dyn BlobSource) -> Result<Graph, CiError>
     })
 }
 
-pub fn verify(scan: &Scanned, source: &dyn BlobSource) -> Result<Value, CiError> {
+pub fn verify(scan: &Scanned, source: &dyn BlobSource, revision: &str) -> Result<Value, CiError> {
     let Graph {
         described,
         manifest_raw,
@@ -273,6 +274,9 @@ pub fn verify(scan: &Scanned, source: &dyn BlobSource) -> Result<Value, CiError>
         || config_data.get("architecture") != Some(&json!("amd64"))
     {
         return fail("OCI image configuration platform is not linux/amd64.");
+    }
+    if config_data["config"]["Labels"][REVISION_LABEL] != revision {
+        return fail("OCI image configuration revision label is not the source commit.");
     }
     let diff_ids = diff_ids(&config_data, entries.len())?;
     check_layers(scan, source, &entries, &diff_ids)?;

@@ -42,6 +42,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.112 via e34b20da63
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.113 via f5ced2b48c
 const SOURCES_RESTORED_ENV_HELPER: (u64, u64, u64) = (0, 1, 113);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
@@ -132,9 +133,16 @@ pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
                 .iter()
                 .map(|unit| unit.gate.clone())
                 .collect(),
+            fails_on_private: facts
+                .helper
+                .as_ref()
+                .is_some_and(|release| release.version().at_least(PUBLIC_PROBE_FAILS_HELPER)),
         })
     })
 }
+
+// helper-gate: first in tools-v0.1.114 via c9dfb11d50b1cbbf55273621878dd949d4a7c5f9
+const PUBLIC_PROBE_FAILS_HELPER: (u64, u64, u64) = (0, 1, 114);
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
 

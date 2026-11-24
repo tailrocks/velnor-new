@@ -94,6 +94,16 @@ fn budget_job(title: Option<&str>, started: u64, done: Option<u64>) -> Value {
     })
 }
 
+fn stepped(selection: &str, mut job: Value) -> Value {
+    job["steps"] = json!([{
+        "name": format!("Check the speed budget ({selection})"),
+        "conclusion": job["conclusion"].clone(),
+        "started_at": job["started_at"].clone(),
+        "completed_at": job["completed_at"].clone()
+    }]);
+    job
+}
+
 fn rust_job(done: u64) -> Value {
     json!({
         "id": 1, "name": "rust", "conclusion": "success",
@@ -105,6 +115,10 @@ fn rust_job(done: u64) -> Value {
 /// A finished default branch push that took `wall` seconds, whose budget job
 /// was titled `title`.
 fn finished(fake: &mut FakeGitHub, id: u64, wall: u64, title: Option<&str>) {
+    finished_with(fake, id, wall, budget_job(title, wall - 2, Some(wall)));
+}
+
+fn finished_with(fake: &mut FakeGitHub, id: u64, wall: u64, budget: Value) {
     fake.respond(
         run_path(&repo(), id),
         &json!({
@@ -114,7 +128,7 @@ fn finished(fake: &mut FakeGitHub, id: u64, wall: u64, title: Option<&str>) {
         })
         .to_string(),
     );
-    let jobs = [rust_job(wall - 3), budget_job(title, wall - 2, Some(wall))];
+    let jobs = [rust_job(wall - 3), budget];
     fake.respond(
         jobs_path(&repo(), id, 1, 1),
         &json!({ "total_count": 2, "jobs": jobs }).to_string(),
@@ -123,6 +137,10 @@ fn finished(fake: &mut FakeGitHub, id: u64, wall: u64, title: Option<&str>) {
 
 /// The run that executes the budget job, `wall` seconds old.
 fn executing(fake: &mut FakeGitHub, id: u64, wall: u64, title: Option<&str>) -> Current {
+    executing_with(fake, id, wall, budget_job(title, wall - 2, None))
+}
+
+fn executing_with(fake: &mut FakeGitHub, id: u64, wall: u64, budget: Value) -> Current {
     fake.respond(
         run_path(&repo(), id),
         &json!({
@@ -132,7 +150,7 @@ fn executing(fake: &mut FakeGitHub, id: u64, wall: u64, title: Option<&str>) -> 
         })
         .to_string(),
     );
-    let jobs = [rust_job(wall - 3), budget_job(title, wall - 2, None)];
+    let jobs = [rust_job(wall - 3), budget];
     fake.respond(
         run_jobs_path(&repo(), id, 1),
         &json!({ "total_count": 2, "jobs": jobs }).to_string(),

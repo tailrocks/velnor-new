@@ -266,13 +266,8 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
     let sources_restored = std::env::var(SOURCES_RESTORED_VARIABLE).is_ok_and(|hit| hit == "true");
-    let leak = (!sources_restored)
-        .then(|| {
-            super::cache_credentials::saved_root().map_or_else(
-                || Some("HOME is not set".to_owned()),
-                |home| super::cache_credentials::find(&home),
-            )
-        })
+    let leak = (admission.refusal.is_none() && !sources_restored)
+        .then(super::cache_credentials::leak)
         .flatten();
     let sources = admission.refusal.is_none() && leak.is_none();
     let (probe_log, mismatch) = (admission.log, admission.mismatch);

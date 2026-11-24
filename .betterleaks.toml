@@ -40,7 +40,7 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "credential-scrub fixtures: only the known fake values in these four files, so a real credential added later is still reported"
+description = "credential-scrub fixtures: only the known fake values in these five files, so a real credential added later is still reported"
 targetRules = ["generic-credential-uri"]
 condition = "AND"
 paths = [
@@ -48,6 +48,7 @@ paths = [
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_crates\.rs$''',
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_hardening\.rs$''',
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_ancestry\.rs$''',
+  '''^crates/velnor-ci/tests/it/sources_fetch\.rs$''',
 ]
 regexTarget = "secret"
 regexes = [

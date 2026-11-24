@@ -15,6 +15,7 @@ mod groups;
 mod guards;
 mod identity;
 mod inventory;
+mod invocation_roots;
 mod link_targets;
 mod links;
 mod lock_identity;
@@ -29,12 +30,15 @@ mod path_dependency_fixture;
 mod per_root;
 mod plain_build;
 mod reads;
+mod real_cargo;
 mod relative_build_dir;
 mod script_dep_info;
 mod selection;
 mod separate_build;
+mod shared_build;
 mod stale_run;
 mod stand_ins;
+mod tracked_build;
 
 use std::ffi::OsStr;
 use std::fs;
@@ -46,7 +50,7 @@ use own_units::{OWN_UNITS, own_units, own_units_in};
 pub(super) use path_dependency_fixture::{path_dependency_units, path_dependency_units_in};
 
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
-    let mut command = Command::new(program);
+    let mut command = crate::run::command_without_nextest_environment(program);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")

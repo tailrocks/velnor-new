@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::audit_job::AUDIT_JOB;
 use crate::lane::{PLAN_JOB, present_plan_job, used_outputs};
 use crate::plan::{HELPER_JOB, job, step};
 use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
@@ -58,8 +57,13 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         if !job.steps.iter().any(|step| step.kind.runs_cargo()) && !saves {
             continue;
         }
-        let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
-        attach_metrics(job, nextest_artifacts, saved_keys, reason, optional_saves);
+        attach_metrics(
+            job,
+            nextest_artifacts,
+            saved_keys,
+            not_generated,
+            optional_saves,
+        );
         producers.push(&*job);
     }
     producers.extend(maintenance);

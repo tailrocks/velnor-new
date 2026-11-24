@@ -24,6 +24,7 @@ pub(crate) fn name(text: &str) -> PackageName {
 
 pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> RustMember {
     RustMember {
+        version: None,
         name: name(package),
         manifest: path(&format!("{directory}/Cargo.toml")),
         directory: Some(path(directory)),
@@ -296,6 +297,7 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
 #[test]
 fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
     let top = RustMember {
+        version: None,
         directory: None,
         manifest: path("Cargo.toml"),
         ..member("top", "top", &[])
@@ -359,6 +361,7 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
 #[test]
 fn a_target_source_outside_every_package_directory_selects_every_root() {
     let sharing = |package: &str, directory: &str| RustMember {
+        version: None,
         targets: vec![Target {
             source: Some(path("shared/common.rs")),
             ..crate::job_shape::target(TargetKind::Lib)

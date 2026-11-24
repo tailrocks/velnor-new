@@ -15,10 +15,10 @@ use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::RepoFacts;
+use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{MetadataInvocation, Roots, Workspace, apart};
+use super::super::units::{MetadataInvocation, Roots, Workspace, apart, outside_tracked};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -26,7 +26,7 @@ use super::outside::outside_selection;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
-use invocation::Invocation;
+use invocation::{Invocation, invoked_root, root_directory};
 use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
@@ -50,7 +50,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
-    let invocation = Invocation::new(&args.command);
+    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
@@ -64,6 +64,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         &inherit,
     )?;
     apart(&workspaces, &shared_groups(&facts))?;
+    outside_tracked(&workspaces, &checkout.root, &checkout.view.tracked_paths)?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(
         directory,
@@ -97,8 +98,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed =
-                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
+            let failed = failure::Failure::new(invocation.label(), builder.selection(&invocation));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -130,12 +130,23 @@ impl Builder<'_> {
         )
     }
 
-    fn members(&self) -> BTreeSet<&str> {
-        self.facts
-            .rust_roots
-            .iter()
-            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
-            .collect()
+    fn invoked(&self) -> Option<&RustRoot> {
+        let repository =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
+        invoked_root(&self.facts.rust_roots, &repository, &self.location)
+    }
+
+    fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
+        let root = self.invoked();
+        let members = root.map_or(&[][..], |root| root.members.as_slice());
+        let canonical =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
+        invocation.selection(
+            root.map_or("", |root| root.manifest.as_str()),
+            members,
+            &self.facts.unowned,
+            &[&self.repository, &canonical],
+        )
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
@@ -151,6 +162,9 @@ impl Builder<'_> {
             &self.facts,
             &self.workspaces,
             &self.location,
+            self.invoked()
+                .map(|root| root_directory(root, &self.repository))
+                .as_deref(),
             self.max_entries,
         )
     }
@@ -180,8 +194,8 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command)
-                    .selection(&self.members())
+                let selection = self
+                    .selection(&Invocation::new(command))
                     .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
@@ -189,9 +203,13 @@ impl Builder<'_> {
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(Stop::Refused(outside_selection(
+                    return Err(Stop::Refused(failure::outside_selection(
                         &outside,
-                        failure::earlier_failure(&self.marker_directories(), &outside),
+                        failure::earlier_failure(
+                            &self.marker_directories(),
+                            self.invoked().map_or("", |root| root.manifest.as_str()),
+                            &outside,
+                        ),
                     )));
                 }
                 declarations::invalidate(&declared)?;

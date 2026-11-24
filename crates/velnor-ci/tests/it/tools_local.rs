@@ -53,7 +53,6 @@ fn put(home: &Path) {
 
 fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
     let store = node.root.join("store").display().to_string();
-    let home = node.root.join(home);
     run(&Inputs {
         verb,
         key,
@@ -63,10 +62,11 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         } else {
             "refs/pull/1/merge"
         },
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
-        home: &home,
+        home: &node.root.join(home),
         replace: false,
     })
 }
@@ -114,6 +114,7 @@ fn a_push_to_a_non_default_branch_never_saves() {
             key: KEY,
             event_name: event,
             git_ref: "refs/heads/feature",
+            ref_protected: true,
             default_branch: Some("main"),
             shared_dir: Some(&store),
             seed_dir: Some(&store),
@@ -362,6 +363,7 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         Outcome::Miss,
         Outcome::Restored {
             from: PathBuf::from("/store/tools/k"),
+            leased: false,
         },
         Outcome::Rejected("world-writable"),
         Outcome::Saved {
