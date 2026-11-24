@@ -124,14 +124,14 @@ fn a_registry_token_has_the_token_format_and_the_exchange_asks_for_push() {
         token.as_ref().map(|token| token.as_str()).ok(),
         Some("abcdefghijklmnop.q-r_s~t=")
     );
-    let fallback = challenge::token(br#"{"access_token":"abcdefghijklmnop1234"}"#);
+    let fallback = challenge::token(br#"{"access_token":"aaaaaaaaaaaaaaaaaaaa"}"#);
     assert!(fallback.is_ok());
     for refused in [
         r#"{"token":"short"}"#,
         r#"{"token":"abcdefghijklmnop with space"}"#,
         r#"{"token":5}"#,
         r"{}",
-        r#"{"token":"abcdefghijklmnop1234","token":"abcdefghijklmnop1234"}"#,
+        r#"{"token":"aaaaaaaaaaaaaaaaaaaa","token":"aaaaaaaaaaaaaaaaaaaa"}"#,
         "not json",
     ] {
         assert!(challenge::token(refused.as_bytes()).is_err(), "{refused}");
