@@ -50,18 +50,26 @@ async fn a_journal_with_exact_clock_guards_migrates_to_one_tick_windows_on_open(
 }
 
 #[tokio::test]
-async fn a_current_journal_with_exact_clock_guards_is_refused_at_open() -> TestResult<()> {
+async fn a_current_journal_with_any_one_exact_clock_guard_is_refused_at_open() -> TestResult<()> {
     let state = tempfile::tempdir()?;
-    let path = state.path().join("launch.db");
-    {
-        let journal = Journal::open(&path).await?;
-        let connection = journal.connection().await?;
-        super::restore_exact_guards_at_v60(&connection).await?;
-        connection
-            .execute(&format!("PRAGMA user_version = {}", super::VERSION), ())
-            .await?;
+    let guards = {
+        let journal = Journal::open(&state.path().join("guards.db")).await?;
+        super::guards(&journal.connection().await?).await?
+    };
+    assert_eq!(guards.len(), 9);
+    for (index, (name, sql)) in guards.iter().enumerate() {
+        let path = state.path().join(format!("guard-{index}.db"));
+        {
+            let journal = Journal::open(&path).await?;
+            let connection = journal.connection().await?;
+            super::recreate(&connection, name, &super::exact(sql)).await?;
+        }
+        assert!(
+            Journal::open(&path).await.is_err(),
+            "a v{} journal with only {name} in its exact form must be refused",
+            super::VERSION
+        );
     }
-    assert!(Journal::open(&path).await.is_err());
     Ok(())
 }
 
