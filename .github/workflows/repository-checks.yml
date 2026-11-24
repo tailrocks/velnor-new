@@ -69,7 +69,7 @@ jobs:
         shell: bash -e {0}
     env:
       VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'merge_group'
     steps:
       - name: Checkout with history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -145,10 +145,14 @@ jobs:
             exit 1
           fi
           bash scripts/test-helper-gates-gaps.sh
+      - name: Test the gate check against a release cut before the queue entry
+        run: bash scripts/test-helper-gates-merge-queue.sh
       - name: Check the added gates against the base
         env:
-          BASE_REF: ${{ github.base_ref }}
-        run: bash scripts/check-helper-gates.sh "origin/$BASE_REF"
+          BASE_REF: ${{ github.event.merge_group.base_ref || github.base_ref }}
+        run: |
+          git fetch --force --tags --quiet origin
+          bash scripts/check-helper-gates.sh "origin/${BASE_REF#refs/heads/}"
   secret-scan:
     name: Secret scanners
     runs-on: [velnor, ubuntu-26.04-scale-set]
