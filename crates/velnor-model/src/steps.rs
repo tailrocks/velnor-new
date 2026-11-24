@@ -7,7 +7,7 @@ use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
-use crate::plan_gate::{Gate, PlanFrom};
+use crate::plan_gate::{FetchedManifest, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,12 +16,6 @@ pub struct GroupUpload {
     pub name: String,
     pub paths: Vec<String>,
     pub retention_days: u8,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FetchedManifest {
-    pub path: RepoPath,
-    pub selected_by: Option<Gate>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -77,7 +77,7 @@ pub use plan::{
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
     TOOLS_ANCHOR_OUTPUT, Triggers, When, WorkflowPlan,
 };
-pub use plan_gate::{Gate, GateNeed, PlanFrom, group_output_name};
+pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
@@ -106,7 +106,6 @@ pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, FetchedManifest, GroupFilter, GroupUpload, HelperCommand, InputsCli,
-    PrepareLocks, PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily,
-    VerifiedSave,
+    BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
+    PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
