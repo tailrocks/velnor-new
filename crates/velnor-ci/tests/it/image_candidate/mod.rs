@@ -4,6 +4,7 @@
 mod archive;
 mod build;
 mod build_fixture;
+mod build_secrets;
 mod canonical;
 mod cli;
 mod fixture;

@@ -259,9 +259,7 @@ impl Source {
             ("GITHUB_WORKFLOW_SHA", "c".repeat(40)),
             ("GITHUB_RUN_ID", "10".to_owned()),
             ("GITHUB_RUN_ATTEMPT", "2".to_owned()),
-            ("GH_TOKEN", "secret-token".to_owned()),
             ("DOCKER_HOST", "tcp://elsewhere:2375".to_owned()),
-            ("REGISTRY_PASSWORD", "secret-password".to_owned()),
         ];
         for (name, value) in env {
             vars.retain(|(known, _)| known != name);

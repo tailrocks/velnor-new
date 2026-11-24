@@ -10,7 +10,7 @@ use super::process::{Runner, script_environment};
 use super::{DOCKERFILE_DIR, FileSource, docker, github_env, read_lock, scan_archive, source};
 use crate::cli_args::BuildArgs;
 use crate::error::CiError;
-use crate::image_candidate::build::{Parts, record};
+use crate::image_candidate::build::{Parts, record, refuse_secrets};
 use crate::image_candidate::canonical;
 use crate::image_candidate::identity::workflow;
 use crate::image_candidate::oci;
@@ -19,6 +19,7 @@ const DONE: &str = "PASS: Candidate archive and record were written.\n";
 const CHECK_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
+    refuse_secrets(std::env::vars_os().map(|(name, _)| name))?;
     let runner = Runner::start()?;
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;

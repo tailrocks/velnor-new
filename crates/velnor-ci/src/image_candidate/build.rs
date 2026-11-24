@@ -18,6 +18,7 @@ const DROPPED: &[&str] = &[
     "BUILDKIT_HOST",
 ];
 const SECRET_MARKERS: &[&str] = &["TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "KEY"];
+const NOT_SECRETS: &[&str] = &["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_AUTHOR_DATE"];
 
 #[derive(Debug)]
 pub struct Parts<'a> {
@@ -87,8 +88,34 @@ fn csv_field(archive: &Path) -> OsString {
     OsString::from_vec(quoted)
 }
 
+fn secret_named(name: &str) -> bool {
+    let upper = name.to_uppercase();
+    !NOT_SECRETS.contains(&name) && SECRET_MARKERS.iter().any(|marker| upper.contains(marker))
+}
+
+pub fn refuse_secrets(names: impl IntoIterator<Item = OsString>) -> Result<(), CiError> {
+    let mut secrets: Vec<String> = names
+        .into_iter()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| secret_named(name))
+        .collect();
+    if secrets.is_empty() {
+        return Ok(());
+    }
+    secrets.sort();
+    secrets.dedup();
+    Err(CiError::new(format!(
+        "image build refuses to start with secret-named variables in its environment: {}. \
+         build-test.sh can read this environment through /proc/$PPID/environ, so remove them \
+         from the step's env. A name is secret-named when it contains any of {} in any case, \
+         except {}.",
+        secrets.join(", "),
+        SECRET_MARKERS.join(", "),
+        NOT_SECRETS.join(", "),
+    )))
+}
+
 #[must_use]
 pub fn forwards(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    !DROPPED.contains(&name) && !SECRET_MARKERS.iter().any(|marker| upper.contains(marker))
+    !DROPPED.contains(&name) && !secret_named(name)
 }
