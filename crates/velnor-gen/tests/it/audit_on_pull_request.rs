@@ -38,11 +38,11 @@ fn audit_runs(
 }
 
 #[test]
-fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_1_112() -> TestResult
+fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_1_113() -> TestResult
 {
     for config in ["", EVERYTHING] {
         assert!(
-            audit_runs("0.1.112", config, "pull_request", false, "run")?,
+            audit_runs("0.1.113", config, "pull_request", false, "run")?,
             "{config}"
         );
     }
@@ -53,11 +53,11 @@ fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_
 fn a_pull_request_that_changed_neither_does_not_audit_with_a_warm_cache() -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            !audit_runs("0.1.112", config, "pull_request", false, "skip")?,
+            !audit_runs("0.1.113", config, "pull_request", false, "skip")?,
             "{config}"
         );
     }
-    assert!(audit_runs("0.1.112", "", "pull_request", true, "skip")?);
+    assert!(audit_runs("0.1.113", "", "pull_request", true, "skip")?);
     Ok(())
 }
 
@@ -65,17 +65,17 @@ fn a_pull_request_that_changed_neither_does_not_audit_with_a_warm_cache() -> Tes
 fn an_older_helper_never_reads_the_inputs_output() -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            !audit_runs("0.1.111", config, "pull_request", false, "run")?,
+            !audit_runs("0.1.112", config, "pull_request", false, "run")?,
             "{config}"
         );
     }
-    assert!(audit_runs("0.1.111", "", "pull_request", true, "run")?);
+    assert!(audit_runs("0.1.112", "", "pull_request", true, "run")?);
     Ok(())
 }
 
 #[test]
 fn a_push_keeps_its_audit_rule_at_every_helper() -> TestResult {
-    for helper in ["0.1.111", "0.1.112"] {
+    for helper in ["0.1.112", "0.1.113"] {
         for inputs in ["run", "skip"] {
             assert!(
                 !audit_runs(helper, "", "push", false, inputs)?,
@@ -105,7 +105,7 @@ fn grouped(version: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 #[test]
 fn a_plan_job_exposes_the_inputs_output_to_the_audits_of_its_lanes() -> TestResult {
-    let text = grouped("0.1.112")?;
+    let text = grouped("0.1.113")?;
     assert!(
         text.contains("rust_inputs: '${{ steps.plan.outputs.rust_inputs }}'"),
         "{text}"
@@ -114,7 +114,7 @@ fn a_plan_job_exposes_the_inputs_output_to_the_audits_of_its_lanes() -> TestResu
         text.contains("needs.rust-plan.outputs.rust_inputs) == ''run''"),
         "{text}"
     );
-    let older = grouped("0.1.111")?;
+    let older = grouped("0.1.112")?;
     assert!(!older.contains("rust_inputs"), "{older}");
     Ok(())
 }
