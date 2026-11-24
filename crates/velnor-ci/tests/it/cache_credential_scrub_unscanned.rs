@@ -76,6 +76,48 @@ fn a_credential_in_a_registry_config_stops_the_sources_save() {
 }
 
 #[test]
+fn an_escaped_or_database_shaped_registry_config_still_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "registry-dl-escaped-slashes",
+            ".cargo/registry/index/registry.example-1/config.json",
+            concat!(
+                "{\"dl\": \"https:\\/\\/user:",
+                "secret@registry.example\\/crates\"}\n"
+            ),
+        ),
+        (
+            "registry-dl-escaped-at",
+            ".cargo/registry/index/registry.example-1/config.json",
+            concat!(
+                "{\"dl\": \"https://user:",
+                "secret\\u0040registry.example/crates\"}\n"
+            ),
+        ),
+    ]);
+    let repo = private_checkout("decide-unscanned-registry-shaped-like-a-database", GIT_LOCK);
+    for (file, content) in [
+        ("HEAD", "ref: refs/heads/main\n"),
+        ("config", "[core]\n\tbare = true\n"),
+        (
+            "config.json",
+            concat!(
+                "{\"dl\": \"https://user:",
+                "secret@registry.example/crates\"}\n"
+            ),
+        ),
+    ] {
+        repo.write_unstaged(
+            &format!("home/.cargo/registry/index/registry.example-1/{file}"),
+            content,
+        );
+    }
+    let (output, written) = decide_with(&repo, Some("true"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
+}
+
+#[test]
 fn a_bare_hex_token_anywhere_in_a_saved_git_config_stops_the_sources_save() {
     let configs = [
         format!("[core]\n\tbare = true\n# {HEX_TOKEN}\n"),
@@ -113,6 +155,16 @@ fn only_a_sparse_index_entry_at_its_own_path_may_carry_a_credential_file_name() 
         (
             "dot-netrc-at-an-index-path",
             ".cargo/registry/index/registry.example-1/.cache/.n/et/.netrc",
+            NETRC,
+        ),
+        (
+            "netrc-under-a-nested-index",
+            ".cargo/registry/index/registry.example-1/nested/index/fake/.cache/_n/et/_netrc",
+            NETRC,
+        ),
+        (
+            "netrc-under-an-index-in-the-crate-cache",
+            ".cargo/registry/cache/index/fake/.cache/_n/et/_netrc",
             NETRC,
         ),
         (

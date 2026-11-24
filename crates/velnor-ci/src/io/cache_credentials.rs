@@ -12,10 +12,10 @@ mod prune;
 use prune::Identity;
 
 const SAVED_ROOT: &str = ".cargo";
-const SAVED: &[(&str, bool)] = &[
-    ("registry/index", false),
-    ("registry/cache", false),
-    ("git/db", true),
+const SAVED: &[(&str, Context)] = &[
+    ("registry/index", Context::Index),
+    ("registry/cache", Context::Outside),
+    ("git/db", Context::Repository),
 ];
 const GIT_DIRECTORY: &str = ".git";
 const CREDENTIAL_FILES: &[&str] = &[
@@ -30,7 +30,6 @@ const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "confi
 const LEFT_OUT_TREES: &[&str] = &["hooks", "logs", "remotes", "branches"];
 const LEFT_OUT_FILES: &[&str] = &["fetch_head", "http-alternates"];
 const REGISTRY_CONFIG: &str = "config.json";
-const INDEX: &str = "index";
 const INDEX_CACHE: &str = ".cache";
 const REFS: &str = "refs";
 const HEAD: &str = "head";
@@ -45,6 +44,7 @@ const MAX_ENTRIES: usize = 2_000_000;
 #[derive(Clone, Copy, PartialEq)]
 enum Context {
     Outside,
+    Index,
     Repository,
     Declared,
     Refs,
@@ -71,7 +71,7 @@ impl Context {
     }
 
     fn git(self) -> bool {
-        self != Self::Outside
+        !matches!(self, Self::Outside | Self::Index)
     }
 
     fn names_refs(self) -> bool {
@@ -95,18 +95,13 @@ fn find(root: &Path) -> Option<String> {
 
 fn find_within(root: &Path, entries: usize) -> Option<String> {
     let mut budget = entries;
-    for (saved, git) in SAVED {
+    for (saved, context) in SAVED {
         let directory = match plain_path(root, saved) {
             Ok(Some(directory)) => directory,
             Ok(None) => continue,
             Err(reason) => return Some(reason),
         };
-        let context = if *git {
-            Context::Repository
-        } else {
-            Context::Outside
-        };
-        if let Some(found) = walk(&directory, 0, &mut budget, context, None) {
+        if let Some(found) = walk(&directory, 0, &mut budget, *context, None) {
             return Some(found);
         }
     }
@@ -226,7 +221,8 @@ fn walk(
             ));
         }
         let git = context.git() && !context.names_refs();
-        if (CREDENTIAL_FILES.contains(&name.as_str()) && (context.git() || !is_index_entry(&path)))
+        if (CREDENTIAL_FILES.contains(&name.as_str())
+            && !(context == Context::Index && is_index_entry(&path, depth)))
             || (git && GIT_CREDENTIAL_FILES.contains(&name.as_str()))
         {
             return Some(format!("{} is a credential file", shown(&path)));
@@ -257,10 +253,7 @@ fn walk(
                 "{} holds a credential or a transport setting",
                 shown(&path)
             ));
-        } else if !context.git()
-            && name == REGISTRY_CONFIG
-            && read_small(&path).is_none_or(|text| names_credential(&text))
-        {
+        } else if !context.names_refs() && name == REGISTRY_CONFIG && json_holds_credential(&path) {
             return Some(format!("{} holds a credential", shown(&path)));
         }
     }
@@ -340,7 +333,27 @@ fn holds_credential(path: &Path) -> bool {
         .is_none_or(|text| !crate::io::saved_git_config::is_plain(&text) || names_credential(&text))
 }
 
-fn is_index_entry(path: &Path) -> bool {
+fn json_holds_credential(path: &Path) -> bool {
+    read_small(path)
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .filter(serde_json::Value::is_object)
+        .is_none_or(|value| names_credential_in(&value))
+}
+
+fn names_credential_in(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => names_credential(text),
+        serde_json::Value::Array(items) => items.iter().any(names_credential_in),
+        serde_json::Value::Object(fields) => fields
+            .iter()
+            .any(|(key, value)| names_credential(key) || names_credential_in(value)),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+            false
+        }
+    }
+}
+
+fn is_index_entry(path: &Path, depth: usize) -> bool {
     let Some(name) = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -359,12 +372,7 @@ fn is_index_entry(path: &Path) -> bool {
         _ => entry.extend([&name[..2], &name[2..4]]),
     }
     entry.push(name);
-    path.ends_with(&entry)
-        && path
-            .ancestors()
-            .nth(entry.components().count() + 1)
-            .and_then(Path::file_name)
-            .is_some_and(|index| index == INDEX)
+    depth == entry.components().count() && path.ends_with(&entry)
 }
 
 fn read_small(path: &Path) -> Option<String> {
