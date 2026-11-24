@@ -3,8 +3,8 @@
 
 use super::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, FORBIDDEN_SYMBOLS, FORBIDDEN_WORDS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value,
+    MAX_EXPRESSION_CHARACTERS, MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value,
 };
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{credential_rules, pin_rules};
@@ -110,7 +110,24 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     {
         rules.push(Rule::EnvTooLong(length));
     }
+    if let Some(length) = longest_expression(step)
+        && length > MAX_EXPRESSION_CHARACTERS
+    {
+        rules.push(Rule::ExpressionTooLong(length));
+    }
     rules
+}
+
+fn longest_expression(step: &RenderedStep) -> Option<usize> {
+    step.env
+        .iter()
+        .filter_map(|(_, value)| match value {
+            Value::Expr(text) | Value::BoundedExpr { text, .. } => {
+                Some(crate::expression_length::joined_length(text))
+            }
+            _ => None,
+        })
+        .max()
 }
 
 fn longest_env(step: &RenderedStep) -> Option<usize> {

@@ -353,7 +353,7 @@ fn adversarial_one_mebibyte_credential_runs_are_decided_without_quadratic_work()
 
 #[test]
 fn adversarial_one_mebibyte_headers_are_decided_without_quadratic_work() {
-    let near_cap = format!("authorization basic {} ", "A".repeat(480));
+    let near_cap = format!("authorization basic {} ", "Z".repeat(480));
     adversarial_comments(&[
         (
             "short-headers",

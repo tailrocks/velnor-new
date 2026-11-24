@@ -43,7 +43,7 @@ const AUTHORIZATION: &str = "authorization";
 const BASIC: &str = "basic";
 
 pub(super) fn is_plain(text: &str) -> bool {
-    if has_token_prefix(&text.to_ascii_lowercase()) {
+    if holds_token(text) {
         return false;
     }
     let mut section = String::new();
@@ -220,6 +220,10 @@ fn has_token_prefix(text: &str) -> bool {
                 >= TOKEN_BODY_LEN
         })
     })
+}
+
+pub(super) fn holds_token(text: &str) -> bool {
+    looks_like_token(&text.to_ascii_lowercase())
 }
 
 fn looks_like_token(text: &str) -> bool {

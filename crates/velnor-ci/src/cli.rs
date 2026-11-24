@@ -107,7 +107,7 @@ pub enum Command {
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(
-        about = "Run cargo fetch --locked for each manifest with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
+        about = "Run cargo fetch --locked for each manifest (--manifest-path, or --manifests-env naming a variable of JSON [[hex path, fetch]] pairs, which skips a pair whose fetch is false) with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
     )]
     Fetch(FetchArgs),
     #[command(
@@ -200,7 +200,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum SourcesCommand {
     #[command(
-        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code; after the last fetch it leaves out the hooks, reflogs and FETCH_HEAD of the saved git databases under $HOME/.cargo and exits 1 when they hold a credential or HOME is not set"
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code; after the last fetch it leaves out the hooks, reflogs, remotes, branches, FETCH_HEAD and http-alternates of the saved git databases under $HOME/.cargo and exits 1 when they hold a credential or HOME is not set"
     )]
     Fetch(SourcesFetchArgs),
 }
@@ -221,10 +221,16 @@ pub struct SourcesFetchArgs {
 pub struct FetchArgs {
     #[arg(
         long,
-        required = true,
+        required_unless_present = "manifests_env",
+        conflicts_with = "manifests_env",
         help = "Cargo manifest to fetch; repeat for each Cargo root"
     )]
     pub manifest_path: Vec<PathBuf>,
+    #[arg(
+        long,
+        help = "Environment variable containing JSON [[hex manifest path, fetch]] pairs; a pair whose fetch is false is left out"
+    )]
+    pub manifests_env: Option<String>,
     #[arg(
         long,
         hide = true,
