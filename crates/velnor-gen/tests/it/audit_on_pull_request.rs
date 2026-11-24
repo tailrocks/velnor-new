@@ -55,7 +55,7 @@ fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_
 {
     for config in ["", EVERYTHING] {
         assert!(
-            audit_runs("0.1.113", config, "pull_request", false, "run")?,
+            audit_runs("0.1.116", config, "pull_request", false, "run")?,
             "{config}"
         );
     }
@@ -66,11 +66,11 @@ fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_
 fn a_pull_request_that_changed_neither_does_not_audit_with_a_warm_cache() -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            !audit_runs("0.1.113", config, "pull_request", false, "skip")?,
+            !audit_runs("0.1.116", config, "pull_request", false, "skip")?,
             "{config}"
         );
     }
-    assert!(audit_runs("0.1.113", "", "pull_request", true, "skip")?);
+    assert!(audit_runs("0.1.116", "", "pull_request", true, "skip")?);
     Ok(())
 }
 
@@ -91,11 +91,11 @@ fn a_merge_group_audits_inputs_only_when_a_lock_or_a_manifest_changed_from_helpe
 -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            audit_runs("0.1.113", config, "merge_group", false, "run")?,
+            audit_runs("0.1.116", config, "merge_group", false, "run")?,
             "{config}"
         );
         assert!(
-            !audit_runs("0.1.113", config, "merge_group", false, "skip")?,
+            !audit_runs("0.1.116", config, "merge_group", false, "skip")?,
             "{config}"
         );
         assert!(
@@ -111,11 +111,11 @@ fn a_full_replan_does_not_hide_the_changed_inputs_of_a_pull_request() -> TestRes
     for config in ["", EVERYTHING] {
         for event in ["pull_request", "merge_group"] {
             assert!(
-                audit_after_replan("0.1.113", config, event, true, "run", "skip")?,
+                audit_after_replan("0.1.116", config, event, true, "run", "skip")?,
                 "{config} {event}"
             );
             assert!(
-                !audit_after_replan("0.1.113", config, event, false, "skip", "skip")?,
+                !audit_after_replan("0.1.116", config, event, false, "skip", "skip")?,
                 "{config} {event}"
             );
         }
@@ -125,7 +125,7 @@ fn a_full_replan_does_not_hide_the_changed_inputs_of_a_pull_request() -> TestRes
 
 #[test]
 fn a_push_keeps_its_audit_rule_at_every_helper() -> TestResult {
-    for helper in ["0.1.112", "0.1.113"] {
+    for helper in ["0.1.115", "0.1.116"] {
         for inputs in ["run", "skip"] {
             assert!(
                 !audit_runs(helper, "", "push", false, inputs)?,
@@ -155,7 +155,7 @@ fn grouped(version: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 #[test]
 fn a_plan_job_exposes_the_inputs_output_to_the_audits_of_its_lanes() -> TestResult {
-    let text = grouped("0.1.113")?;
+    let text = grouped("0.1.116")?;
     assert!(
         text.contains("rust_inputs: '${{ steps.plan.outputs.rust_inputs }}'"),
         "{text}"
