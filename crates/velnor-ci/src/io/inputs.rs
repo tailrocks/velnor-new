@@ -12,8 +12,8 @@ pub(super) use super::inputs_git::{git, modified_ns, set_modified_ns};
 mod sources;
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, format_inputs, inputs_file, plan_restore, restored_units_file,
-    snapshot_file, witness_file,
+    SavedInput, Tracked, format_inputs, input_dirs_file, inputs_file, plan_restore,
+    restored_units_file, snapshot_file, witness_file,
 };
 use crate::restored_units::RestoredUnits;
 use crate::scope::Scope;
@@ -36,7 +36,8 @@ pub(super) fn save_inputs_scoped(
     let identity =
         super::delta_source::identity_of(&top_level_files(&top, &Scope::default(), false)?)
             .unwrap_or_default();
-    let relative = target.join(inputs_file(&git_prefix(root)?));
+    let prefix = git_prefix(root)?;
+    let relative = target.join(inputs_file(&prefix));
     let path = root.join(&relative);
     check_snapshot_parent(&path)?;
     if std::env::var("EXPECTED_SOURCE_IDENTITY")
@@ -72,7 +73,10 @@ pub(super) fn save_inputs_scoped(
         file: link.clone(),
         mtime_ns: 0,
     }));
-    publish_snapshot(&path, &super::input_snapshot::encode(&identity, &saved))?;
+    let text = super::input_snapshot::encode(&identity, &saved);
+    let dirs = root.join(target).join(input_dirs_file(&prefix));
+    super::input_dirs::save(&top, &dirs, &text, &saved)?;
+    publish_snapshot(&path, &text)?;
     Ok(format!(
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
@@ -242,6 +246,8 @@ pub(super) fn restore_inputs_scoped(
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
+    let dirs = root.join(target).join(input_dirs_file(&prefix));
+    super::input_dirs::restore(&top, &dirs, &text, &plan.restore)?;
     Ok(format!(
         "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         plan.restore.len(),

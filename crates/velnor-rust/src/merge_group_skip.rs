@@ -10,6 +10,7 @@ use crate::lane::{PLAN_JOB, POLICY_JOB};
 use crate::plan::{RUST_JOB, step};
 use crate::test_setup;
 
+// helper-gate: first in tools-v0.1.112 via b465708228
 const PER_ROOT_SETUP_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn apply(

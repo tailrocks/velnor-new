@@ -23,8 +23,11 @@ use crate::gate::{
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
-use crate::install_steps::{install_generator_step, install_mise, install_tools};
+use crate::install_steps::{
+    generator_check_step, install_generator_step, install_mise, install_tools,
+};
 use crate::permission_pairs;
+use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
@@ -145,6 +148,11 @@ fn job_steps(
                     saved_after: gate.required(),
                     chained: job.chained_saves,
                     job_name: job.name.as_deref(),
+                    privacy_gate: job
+                        .steps
+                        .iter()
+                        .find(|step| step.kind == StepKind::RepositoryPrivacy)
+                        .and_then(|step| step.gate.as_ref().or(job.gate.as_ref())),
                     after_setup: after_setup(step, setups),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
@@ -180,6 +188,7 @@ struct Around<'a> {
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
+    privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
 }
 
@@ -202,8 +211,10 @@ fn rendered_steps(
         rendered.extend(sources_fetch_all_rest(manifests, lane));
     }
     for body in &mut rendered {
-        if let (StepKind::Cargo(_) | StepKind::TestSetup { .. }, Some(target)) =
-            (&step.kind, &step.target_dir)
+        if let (
+            StepKind::Cargo(_) | StepKind::TestSetup { .. } | StepKind::GeneratorCheck { .. },
+            Some(target),
+        ) = (&step.kind, &step.target_dir)
         {
             body.env.push(crate::cargo::target_dir_env(target));
         }
@@ -224,6 +235,14 @@ fn rendered_steps(
             body.env.push((
                 "VELNOR_REPORT_JOB_NAME".to_owned(),
                 Value::Text(name.to_owned()),
+            ));
+        }
+        if matches!(step.kind, StepKind::ReportCaches { .. })
+            && let Some(gate) = around.privacy_gate
+        {
+            body.env.push((
+                "VELNOR_REPORT_PLAN_MODE".to_owned(),
+                Value::Expr(plan_modes(gate, setup)),
             ));
         }
         let extra = extra_conditions(step, setup, &around.after_setup);
@@ -309,6 +328,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
+        StepKind::CachePurgePrivate => crate::base_steps::cache_purge_private(),
         StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
         StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
         StepKind::DeltaStage(root, packages) => crate::delta_steps::delta_stage(root, packages),
@@ -355,7 +375,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
-        StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
+        StepKind::GeneratorCheck { from_source } => {
+            generator_check_step(*from_source, directory, lane)
+        }
         StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),

@@ -6,34 +6,34 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 
 | ID | Required outcome (class) | Package | Status | Evidence / commit |
 |----|--------------------------|---------|--------|-------------------|
-| R01 | 7 Rust crate jobs + 1 job per repo-wide validator (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (47-job graph) |
+| R01 | 7 Rust crate jobs + 1 job per repo-wide validator (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (47-job graph) |
 | R02 | Each validator owns its job; no per-task fan-out (D) | orchestrator | partial | merge side done in 6d142e4 (exact-set required-evidence, VELNOR_NEEDS_JSON); validator-job rendering pending P05 |
-| R03 | No umbrella Policy/Workflow-Lint groupings (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (merge_support_jobs) |
+| R03 | No umbrella Policy/Workflow-Lint groupings (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (merge_support_jobs) |
 | R04 | Alint bundles + edition-2024 enforcement (B) | alint | partial | P00 done in 1748495; P11-policy f63e04f: 5 bundles deduped (53 rules, check exit 0, 4 info-only), same-id gha-pin demote pinned in tests; literal edition rule REJECTED per adoption §4 (would fail edition.workspace=true); inheritance-aware enforcement pending |
 | R05 | Per-job cache restore; MBX setup before any Cargo cmd (B) | cache | pending | verification pending (hosted run) |
 | R06 | Single Mise cache identity; drop role duplicates (B) | cache | pending | V2 payload/runtime-key tests; same-selector rendered keys; hosted cold/warm acceptance pending |
 | R07 | Measured Rust cache design choice (V) | cache | pending | verification pending (hosted run) |
 | R08 | No two caches archive the same paths (V) | cache | pending | source/tool path-ownership tests; hosted cache evidence pending |
 | R09 | Shared-cache single-writer policy (V) | cache | pending | V2 writer-election and emitted-YAML tests; controlled hosted writer run pending |
-| R10 | Cache paths = real Cargo home; offline on restore (B) | cache | pending | `/tmp/pr1-p07p10-probe.md`; owned-home and offline miss/fetch tests |
+| R10 | Cache paths = real Cargo home; offline on restore (B) | cache | pending | `<tmp>/pr1-p07p10-probe.md`; owned-home and offline miss/fetch tests |
 | R11 | Measured sizes/hits/durations/eviction, quota headroom (V) | cache | pending | verification pending (hosted run) |
 | R12 | Warm run reuses registry/artifacts; only deltas rebuild (V) | cache | pending | verification pending (hosted run) |
 | R13 | PR-scoped cache save; fork PRs read-only (V) | cache | pending | verification pending (hosted run) |
-| R14 | `ci.yml` + display `CI`; no vendor in filenames (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (2-file tree) |
-| R15 | Rust-grouped jobs named from Cargo package (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (Velnor-prefixed IDs) |
-| R16 | Crate jobs hold fmt+clippy+test steps; no fan-out (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (1-step vs 12-step gap) |
+| R14 | `ci.yml` + display `CI`; no vendor in filenames (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (2-file tree) |
+| R15 | Rust-grouped jobs named from Cargo package (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (Velnor-prefixed IDs) |
+| R16 | Crate jobs hold fmt+clippy+test steps; no fan-out (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (1-step vs 12-step gap) |
 | R17 | Test-runner detection: nextest.toml + [profile.ci] (B) | rust-detect | partial | P06 8087fbc: structural [profile.ci] inspector + NextestProfile, independent runner dimension; residual: generated argv lacks --profile, nextest_digest None |
-| R18 | Mise detection → jdx/mise-action in needing jobs (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (evidence scan) |
+| R18 | Mise detection → jdx/mise-action in needing jobs (D) | renderer | pending | <tmp>/pr1-p05p06-probe.md (evidence scan) |
 | R19 | Mise action pinned SHA, post-checkout, pinned ver+sha256 (V) | renderer | pending | verification pending (hosted run) |
-| R20 | Standard Mise setup; remove duplicate manual setup (B) | renderer | pending | /tmp/pr1-p07p10-probe.md (env overlay) |
+| R20 | Standard Mise setup; remove duplicate manual setup (B) | renderer | pending | <tmp>/pr1-p07p10-probe.md (env overlay) |
 | R21 | Reproducible install; cold cache passes; mise.lock rule (V) | renderer | pending | verification pending (hosted run) |
-| R22 | rustfmt/clippy present on cold AND warm caches (B) | cache | pending | /tmp/pr1-p07p10-probe.md; upstream jdx/mise-action#215 |
+| R22 | rustfmt/clippy present on cold AND warm caches (B) | cache | pending | <tmp>/pr1-p07p10-probe.md; upstream jdx/mise-action#215 |
 | R23 | MBX via repo wrapper; default Cargo; explicit override (B) | rust-detect | complete | P06 8087fbc: exact-`mbx` wrapper evidence, absence→Cargo, explicit override with provenance; 4-combo argv tests |
 | R24 | MBX mode: action + `mbx test`; Cargo mode: `cargo test` (D) | rust-detect | partial | P06 8087fbc: driver dimension resolves all 4 combos; actual command emission pending argv.rs/tasks.rs |
 | R25 | Explicit MBX+Nextest combined command (D) | rust-detect | partial | P06 8087fbc: MBX+Nextest+CI-profile selection rule; emission pending argv.rs |
 | R26 | No Mise-task auto-select from name; explicit config only (B) | orchestrator | partial | P06 8087fbc: Mise-task names never select (tested); explicit custom-task opt-in key still undefined |
-| R27 | No Velnor prefix in job names/IDs; purpose names (B) | renderer | pending | /tmp/pr1-p05p06-probe.md (6/6 prefixed) |
-| R28 | Formatting runs once per scope (B) | orchestrator | pending | /tmp/pr1-p05p06-probe.md (Plan double-fmt) |
+| R27 | No Velnor prefix in job names/IDs; purpose names (B) | renderer | pending | <tmp>/pr1-p05p06-probe.md (6/6 prefixed) |
+| R28 | Formatting runs once per scope (B) | orchestrator | pending | <tmp>/pr1-p05p06-probe.md (Plan double-fmt) |
 | R29 | README documents local CLI build/run (V) | cli-docs | pending | verification pending |
 | R30 | pr-1 accepted as requirements source (D) | contract | complete | 8529f1d + docs/reviews/pr-1-adoption.md |
 | G01 | Thread 4119057282 (workflow-contract:175, P1) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
@@ -141,7 +141,7 @@ original review history.
   wire_w2, rust identity). Queued behind P03: P05 crate
   graph (needs internal_plan.rs), P11-types.
 - P08-cache-probe (done, research-only, zero repo writes):
-  /tmp/p08-probe/P08-PLAN.md (257 lines, 10 sections). Measured
+  <tmp>/p08-probe/P08-PLAN.md (257 lines, 10 sections). Measured
   runtime path inventory; broken-symlink failure structurally
   confirmed; quota 576MiB/10GB (~94% headroom); target
   ownership table; race-safety argument (immutable entries +
@@ -156,7 +156,7 @@ original review history.
   vars; generation deterministic across two runs). Regeneration
   deferred to P05's ci.yml migration — no velnor.yml refresh.
 
-## PR state (2026-09-29, /tmp/pr1-state.md)
+## PR state (2026-09-29, <tmp>/pr1-state.md)
 
 Head `8ccc60c`, 0 unresolved threads, no APPROVED/CHANGES_REQUESTED reviews.
 Run 36617447350: 45 success + 2 failure (rust nextest, Required aggregator).

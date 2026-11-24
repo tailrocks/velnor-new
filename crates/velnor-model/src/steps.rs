@@ -71,6 +71,7 @@ pub enum StepKind {
         budget_bytes: u64,
         verdicts: Option<PlanFrom>,
         private: PrivateVerdict,
+        sources_restore: Option<RootSlug>,
     },
     PublicSources {
         manifests: Vec<RepoPath>,
@@ -89,6 +90,7 @@ pub enum StepKind {
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
+    CachePurgePrivate,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -151,7 +153,9 @@ pub enum StepKind {
         before_build: bool,
         offline_after_private_fetch: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        from_source: bool,
+    },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
@@ -193,6 +197,14 @@ pub enum StepKind {
 
 impl StepKind {
     #[must_use]
+    pub const fn runs_cargo(&self) -> bool {
+        matches!(
+            self,
+            Self::Cargo(_) | Self::GeneratorCheck { from_source: true }
+        )
+    }
+
+    #[must_use]
     pub const fn feeds_build(&self) -> bool {
         matches!(
             self,
@@ -230,6 +242,7 @@ impl StepKind {
             | Self::DeltaApply(_)
             | Self::DeltaStage(_, _)
             | Self::CacheBudget(_)
+            | Self::CachePurgePrivate
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }

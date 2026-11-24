@@ -280,3 +280,39 @@ fn ungrouped_root_beside_the_group(build_directory: bool) {
         String::from_utf8_lossy(&built.stderr)
     );
 }
+
+#[test]
+fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group() {
+    let repo = grouped_tools();
+    unit(
+        &repo,
+        ".velnor/rust-ci.toml",
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n\n[[workspace_groups]]\nname = \"libs\"\nroots = [\"libs/c\", \"libs/d\"]\n",
+    );
+    for package in ["c", "d"] {
+        unit(
+            &repo,
+            &format!("libs/{package}/Cargo.toml"),
+            &format!("[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        );
+        unit(
+            &repo,
+            &format!("libs/{package}/Cargo.lock"),
+            &format!("version = 4\n\n[[package]]\nname = \"{package}\"\nversion = \"0.1.0\"\n"),
+        );
+        unit(&repo, &format!("libs/{package}/src/lib.rs"), "");
+    }
+    unit(
+        &repo,
+        "tools/a/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../../shared\"\n",
+    );
+    repo.git(&["add", "--all"]);
+    let built = velnor_ci()
+        .current_dir(repo.root().join("tools/a"))
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{stderr}");
+}
