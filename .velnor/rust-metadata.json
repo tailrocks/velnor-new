@@ -326,7 +326,8 @@
                 "user",
                 "resource",
                 "socket",
-                "poll"
+                "poll",
+                "process"
               ]
             },
             {
@@ -2055,7 +2056,7 @@
     "Cargo.toml": "fcd357b27346204436fc3fa5df3b07762849947dc17bdc3edb88137ce1d88ae3",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "ad8bd88bfbaf00dc9577a4b7c408f2fa37603ec62fc88e1ae86c3e245c164b61",
+    "crates/velnor-ci/Cargo.toml": "261add0520b9bda7214a1c3de3fdab0801f9514bf8da3e7f2d0445565994b3a3",
     "crates/velnor-gen/Cargo.toml": "8be0645c48ddef4180f5e96ed9a175db15b40806d38213e9e26227c34bf8b274",
     "crates/velnor-local/Cargo.toml": "6cdf2ba685fc927b16675e0e0b1a703d629ce93d8ab322472cbe9e47ec56e3ca",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",
