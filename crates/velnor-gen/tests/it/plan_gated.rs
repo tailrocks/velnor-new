@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 use velnor_gen::{GenerateError, expected_files};
@@ -18,6 +18,7 @@ const POLICY_GATED: &[u8] = b"[policy]\ngate_on_plan = true\n";
 const CHECK_GATED: &str = "[[lint]]\nkind = 'generated-check'\ngate_on_plan = true\n";
 const CHECK_PLAIN: &str = "[[lint]]\nkind = 'generated-check'\n";
 const FIRST: &str = "0.1.112";
+const CHECK_FIRST: &str = "0.1.113";
 
 fn policy_repo(
     config: Option<&[u8]>,
@@ -62,7 +63,7 @@ fn plans(job: &Value) -> bool {
 }
 
 fn selected(paths: &[&str], event: EventKind) -> Result<bool, Box<dyn std::error::Error>> {
-    selected_in(&check_repo(CHECK_GATED, FIRST)?, paths, event)
+    selected_in(&check_repo(CHECK_GATED, CHECK_FIRST)?, paths, event)
 }
 
 fn selected_in(
@@ -70,17 +71,35 @@ fn selected_in(
     paths: &[&str],
     event: EventKind,
 ) -> Result<bool, Box<dyn std::error::Error>> {
+    selected_against(repo, paths, event, &[], &[])
+}
+
+fn selected_against(
+    repo: &RepoView,
+    paths: &[&str],
+    event: EventKind,
+    tracked: &[&str],
+    at_base: &[&str],
+) -> Result<bool, Box<dyn std::error::Error>> {
     let facts = detect(repo)?;
-    let changed: BTreeSet<RepoPath> = paths
-        .iter()
-        .map(|path| RepoPath::new(*path))
-        .collect::<Result<_, _>>()?;
+    let paths_of = |names: &[&str]| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
+        names
+            .iter()
+            .map(|path| RepoPath::new(*path).map_err(Into::into))
+            .collect()
+    };
+    let changed = paths_of(paths)?;
+    let base: BTreeMap<RepoPath, String> = paths_of(at_base)?
+        .into_iter()
+        .map(|path| (path, String::new()))
+        .collect();
     let runs = lint_runs(
         &facts,
         event,
         Some(&changed),
+        &paths_of(tracked)?,
         &BTreeSet::new(),
-        &BTreeSet::new(),
+        &base,
     );
     runs.into_iter()
         .find(|(slug, _)| slug.as_str() == "generated_check")
@@ -140,7 +159,7 @@ fn a_helper_older_than_the_policy_key_is_refused() -> TestResult {
 
 #[test]
 fn a_gated_generated_check_waits_for_the_plan_and_runs_only_when_the_plan_says_run() -> TestResult {
-    let text = workflow(&check_repo(CHECK_GATED, FIRST)?)?;
+    let text = workflow(&check_repo(CHECK_GATED, CHECK_FIRST)?)?;
     let check = job(&text, "lint-generated-check")?;
     assert_eq!(check["needs"], serde_json::json!(["rust-plan"]), "{check}");
     let condition = condition(&check);
@@ -158,7 +177,7 @@ fn a_gated_generated_check_waits_for_the_plan_and_runs_only_when_the_plan_says_r
 
 #[test]
 fn an_ungated_generated_check_still_runs_on_every_pull_request_with_no_plan() -> TestResult {
-    let text = workflow(&check_repo(CHECK_PLAIN, FIRST)?)?;
+    let text = workflow(&check_repo(CHECK_PLAIN, CHECK_FIRST)?)?;
     let check = job(&text, "lint-generated-check")?;
     assert!(check["needs"].is_null(), "{check}");
     assert!(!condition(&check).contains("lint_"), "{check}");
@@ -229,12 +248,36 @@ fn a_markdown_file_named_like_the_task_of_a_mise_task_lint_runs_the_generated_ch
     crate::facts::lock_pinned_tools(&mut bare)?;
     bare.tracked_paths.insert(LOCK_PATH);
     bare.files
-        .insert(LOCK_PATH, archive_lock_at(FIRST)?.into_bytes());
+        .insert(LOCK_PATH, archive_lock_at(CHECK_FIRST)?.into_bytes());
     assert!(!selected_in(
         &bare,
         &["mise-tasks/lint-generator-samples.md"],
         EventKind::PullRequest
     )?);
+    Ok(())
+}
+
+#[test]
+fn an_edit_of_an_existing_task_file_skips_the_generated_check_but_an_addition_or_deletion_runs_it()
+-> TestResult {
+    let repo = check_repo(CHECK_GATED, CHECK_FIRST)?;
+    let task = "mise-tasks/lint-generator-samples.md";
+    let selected = |tracked: &[&str], at_base: &[&str]| {
+        selected_against(
+            &repo,
+            &["docs/readme.md", task],
+            EventKind::PullRequest,
+            tracked,
+            at_base,
+        )
+    };
+    assert!(
+        !selected(&[task], &[task])?,
+        "an edit cannot change the file names the generator reads"
+    );
+    assert!(selected(&[task], &[])?, "an addition");
+    assert!(selected(&[], &[task])?, "a deletion");
+    assert!(selected(&[], &[])?, "no base content to compare with");
     Ok(())
 }
 
@@ -262,13 +305,14 @@ fn an_empty_change_list_on_a_pull_request_runs_the_gated_generated_check() -> Te
 
 #[test]
 fn an_unlisted_change_set_runs_the_gated_generated_check() -> TestResult {
-    let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
+    let facts = detect(&check_repo(CHECK_GATED, CHECK_FIRST)?)?;
     let runs = lint_runs(
         &facts,
         EventKind::PullRequest,
         None,
         &BTreeSet::new(),
         &BTreeSet::new(),
+        &BTreeMap::new(),
     );
     assert!(runs.values().all(|run| *run), "{runs:?}");
     Ok(())
@@ -276,7 +320,7 @@ fn an_unlisted_change_set_runs_the_gated_generated_check() -> TestResult {
 
 #[test]
 fn a_tracked_symlink_runs_the_gated_generated_check_unless_it_is_a_markdown_file() -> TestResult {
-    let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
+    let facts = detect(&check_repo(CHECK_GATED, CHECK_FIRST)?)?;
     let changed: BTreeSet<RepoPath> = [RepoPath::new("README.md")?].into();
     for (link, expected) in [("CLAUDE.md", false), ("Cargo.toml", true)] {
         let links: BTreeSet<RepoPath> = [RepoPath::new(link)?].into();
@@ -286,6 +330,7 @@ fn a_tracked_symlink_runs_the_gated_generated_check_unless_it_is_a_markdown_file
             Some(&changed),
             &BTreeSet::new(),
             &links,
+            &BTreeMap::new(),
         );
         assert_eq!(
             runs.get(&velnor_model::RootSlug::new("generated_check")?),
@@ -301,24 +346,26 @@ fn the_key_is_refused_on_any_other_lint_and_by_a_helper_older_than_it() -> TestR
     let foreign = lint_repo("[[lint]]\nkind = 'jactionlint'\ngate_on_plan = true\n")?;
     let text = format!("{:?}", detect(&foreign).err());
     assert!(text.contains("gate_on_plan"), "{text}");
-    let error = expected_files(&check_repo(CHECK_GATED, "0.1.110")?).err();
-    assert!(
-        matches!(
-            error,
-            Some(GenerateError::ConfigKeyHelperTooOld {
-                first: (0, 1, 112),
-                ..
-            })
-        ),
-        "{error:?}"
-    );
+    for older in ["0.1.110", "0.1.112"] {
+        let error = expected_files(&check_repo(CHECK_GATED, older)?).err();
+        assert!(
+            matches!(
+                error,
+                Some(GenerateError::ConfigKeyHelperTooOld {
+                    first: (0, 1, 113),
+                    ..
+                })
+            ),
+            "{older}: {error:?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn the_required_gate_expects_a_gated_generated_check_only_when_the_plan_says_run() -> TestResult {
     for (config, conditional) in [(CHECK_GATED, true), (CHECK_PLAIN, false)] {
-        let text = workflow(&check_repo(config, FIRST)?)?;
+        let text = workflow(&check_repo(config, CHECK_FIRST)?)?;
         let spec = crate::lint_gate::spec(&text)?;
         let check = spec
             .jobs

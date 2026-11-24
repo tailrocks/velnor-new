@@ -10,8 +10,8 @@ use crate::stacks::ansible_repository;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const IMPORT: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible\"";
-const REMOVE: &str = "rm -rf \"$RUNNER_TEMP/ansible/ansible\" \"$RUNNER_TEMP/ansible/ansiblelint\"";
+const IMPORT: &str =
+    "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible-tools:$RUNNER_TEMP/ansible\"";
 
 fn runs(workflow: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let tree = crate::yaml_tree::document(workflow)?;
@@ -22,9 +22,15 @@ fn runs(workflow: &str) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(crate::lint_lane::runs(job))
 }
 
+fn position(steps: &[String], marker: &str) -> Result<usize, Box<dyn Error>> {
+    steps
+        .iter()
+        .position(|run| run.contains(marker))
+        .ok_or_else(|| format!("no step with {marker}").into())
+}
+
 #[test]
-fn the_repair_install_unlinks_planted_tool_directories_and_imports_through_empty_site_hooks()
--> TestResult {
+fn each_tool_is_installed_once_into_its_own_directory_that_the_imports_put_first() -> TestResult {
     let files = expected_with_notes(&ansible_repository(
         "---\n- hosts: all\n  tasks: []\n",
         "ansible-configs/site.yml",
@@ -36,28 +42,43 @@ fn the_repair_install_unlinks_planted_tool_directories_and_imports_through_empty
     let steps = runs(workflow)?;
     let pip: Vec<_> = steps
         .iter()
-        .enumerate()
-        .filter(|(_, run)| run.contains("pip install"))
-        .map(|(index, _)| index)
+        .filter(|run| run.contains("pip install"))
         .collect();
     assert_eq!(pip.len(), 2, "{steps:?}");
-    for index in &pip {
-        assert!(
-            steps[*index].contains("--only-binary=:all:"),
-            "{}",
-            steps[*index]
-        );
+    for run in &pip {
+        assert!(run.contains("--only-binary=:all:"), "{run}");
+        assert!(run.contains("--require-hashes"), "{run}");
+        assert!(!run.contains("--upgrade"), "{run}");
     }
-    let remove_at = steps
-        .iter()
-        .position(|run| run == REMOVE)
-        .ok_or("no rm of the planted tool paths")?;
-    let upgrade_at = pip
-        .iter()
-        .copied()
-        .find(|index| steps[*index].contains("--upgrade"))
-        .ok_or("no upgrade install")?;
-    let hook_at = steps
+    assert!(steps.iter().all(|run| !run.contains("rm -rf")), "{steps:?}");
+    let others = position(&steps, "-r \"$RUNNER_TEMP/ansible-requirements.txt\"")?;
+    let tools = position(&steps, "-r \"$RUNNER_TEMP/ansible-tools.txt\"")?;
+    assert!(
+        steps[others].contains("--target \"$RUNNER_TEMP/ansible\" "),
+        "{}",
+        steps[others]
+    );
+    assert!(
+        steps[tools].contains("--target \"$RUNNER_TEMP/ansible-tools\" "),
+        "{}",
+        steps[tools]
+    );
+    let pins = position(&steps, "ansible-core==2.16.14")?;
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|run| run.contains("ansible-core==2.16.14"))
+            .count(),
+        1,
+        "{steps:?}"
+    );
+    let filter = position(&steps, "ansible-lint==(?:")?;
+    assert!(
+        steps[filter].contains("ansible-configs/requirements.txt"),
+        "{}",
+        steps[filter]
+    );
+    let hook = steps
         .iter()
         .position(|run| {
             run.contains("sitecustomize.py\").write_text(\"\")")
@@ -65,18 +86,10 @@ fn the_repair_install_unlinks_planted_tool_directories_and_imports_through_empty
                 && run.contains("ansible-clean")
         })
         .ok_or("no empty site hooks")?;
-    let galaxy_at = steps
-        .iter()
-        .position(|run| run.contains("ansible.cli.galaxy"))
-        .ok_or("no galaxy step")?;
-    assert!(
-        !steps[hook_at].contains("pip install"),
-        "{}",
-        steps[hook_at]
-    );
-    assert!(pip[0] < remove_at && remove_at < upgrade_at);
-    assert!(upgrade_at < hook_at && hook_at < galaxy_at);
-    assert!(remove_at < galaxy_at);
-    assert!(steps[galaxy_at].starts_with(IMPORT), "{}", steps[galaxy_at]);
+    let galaxy = position(&steps, "ansible.cli.galaxy")?;
+    assert!(!steps[hook].contains("pip install"), "{}", steps[hook]);
+    assert!(pins < tools && filter < others, "{steps:?}");
+    assert!(others < hook && tools < hook && hook < galaxy, "{steps:?}");
+    assert!(steps[galaxy].starts_with(IMPORT), "{}", steps[galaxy]);
     Ok(())
 }
