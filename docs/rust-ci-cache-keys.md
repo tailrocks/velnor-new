@@ -167,7 +167,13 @@ repository variable `VELNOR_CACHE_DEBUG` set to `1`, see `generator/CONFIG.md`),
 the report keeps cargo's `dirty:` reason, from either fingerprint namespace
 (`cargo::compiler::fingerprint` or `cargo::core::compiler::fingerprint`), as
 `dirty` on the compilation and appends it to the waste and notice lines as
-`(cargo: <reason>)`. Without it no `dirty:` reason is recorded.
+`(cargo: <reason>)`. Without it no `dirty:` reason is recorded. A workspace
+crate whose only stale path artifacts are files the prune always removes —
+pages under the target `doc/` directory and extensionless executables other
+than a kept build script — is not waste. A stale `.rlib`, `.rmeta`, or build
+script still is. The `doc/` directory is the one directly inside the
+invocation's target directory, including a Windows path recorded by another
+runner.
 
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 

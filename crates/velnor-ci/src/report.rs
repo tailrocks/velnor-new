@@ -119,15 +119,15 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace && event.restored == Some(true))
-                || (warm
-                    && event.workspace
-                    && (event.unchanged
-                        && event
-                            .dependencies
-                            .iter()
-                            .all(|dependency| !compiled.contains(dependency.as_str()))))
-            {
+            let workspace_waste = warm
+                && event.workspace
+                && event.unchanged
+                && event
+                    .dependencies
+                    .iter()
+                    .all(|dependency| !compiled.contains(dependency.as_str()))
+                && !crate::report_prune::outputs_only(invocation, &event.package, &event.version);
+            if (same_lock && !event.workspace && event.restored == Some(true)) || workspace_waste {
                 violations.push(format!(
                     "{}: {} v{} compiled despite usable restored inputs{}",
                     invocation.root,
