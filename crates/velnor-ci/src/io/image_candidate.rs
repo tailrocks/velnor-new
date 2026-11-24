@@ -14,6 +14,7 @@ use crate::image_candidate::archive::{self, Blob, MAX_ARCHIVE_BYTES};
 use crate::image_candidate::hashing::sha256_hex;
 use crate::image_candidate::identity::{buildx_version, workflow};
 use crate::image_candidate::json::parse;
+use crate::image_candidate::lock::{Lock, parse_lock};
 use crate::image_candidate::oci::{self, BlobSource};
 use crate::image_candidate::record::{INPUT_PATHS, validate};
 
@@ -105,16 +106,11 @@ fn source_inputs(root: &Path) -> Result<Value, CiError> {
     Ok(Value::Object(inputs))
 }
 
-fn locked_buildx(root: &Path) -> Result<String, CiError> {
+fn read_lock(root: &Path) -> Result<Lock, CiError> {
     let path = root.join(".velnor/runner.lock");
     let text = fs::read_to_string(&path)
         .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
-    let lock: toml::Table = toml::from_str(&text)
-        .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
-    lock.get("buildx_version")
-        .and_then(toml::Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| CiError::new(format!("{}: buildx_version is missing", path.display())))
+    parse_lock(&text).map_err(|error| error.context(&path.display().to_string()))
 }
 
 fn github_env() -> HashMap<String, String> {
@@ -167,9 +163,9 @@ fn verify_with(
             "Candidate workflow identity is not the same as the current GitHub workflow identity.",
         );
     }
-    let locked = locked_buildx(&root)?;
+    let lock = read_lock(&root)?;
     let builder = record["build"]["builder"].as_str().unwrap_or_default();
-    if buildx_version(builder) != Some(locked.as_str()) {
+    if buildx_version(builder) != Some(lock.buildx_version.as_str()) {
         return fail(
             "Candidate Buildx identity is not the same as the value in .velnor/runner.lock.",
         );

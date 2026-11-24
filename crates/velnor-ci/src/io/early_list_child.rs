@@ -52,6 +52,9 @@ impl Supervisor {
             let stderr = scope.spawn(move || keep(stderr, STDERR_KEPT));
             let stdout = scope.spawn(move || self.bounded(stdout, stdout_limit));
             let status = self.wait();
+            if let Some(child) = self.lock().child.as_ref() {
+                kill_group(child);
+            }
             (status, stdout.join(), stderr.join())
         });
         let stopped = {

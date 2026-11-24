@@ -8,14 +8,14 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use super::process;
+use super::process::Runner;
 use super::{DOCKERFILE, fail, regular, source_inputs};
 use crate::error::CiError;
 use crate::image_candidate::json::is_hex;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn git(root: &Path, args: &[&str]) -> Result<String, CiError> {
+fn git(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
     let mut command = Command::new("git");
     command.arg("-C").arg(root).args(args);
     for (name, _) in std::env::vars_os() {
@@ -23,25 +23,29 @@ fn git(root: &Path, args: &[&str]) -> Result<String, CiError> {
             command.env_remove(name);
         }
     }
-    process::text(&mut command, GIT_TIMEOUT).map(|output| output.trim().to_owned())
+    runner
+        .text(&mut command, GIT_TIMEOUT)
+        .map(|output| output.trim().to_owned())
 }
 
 pub(super) fn identity(
+    runner: &Runner,
     root: &Path,
     requested: &str,
     github_sha: Option<&str>,
 ) -> Result<Value, CiError> {
-    let head = git(root, &["rev-parse", "HEAD"])?;
+    let head = git(runner, root, &["rev-parse", "HEAD"])?;
     if requested != head || !is_hex(&head, 40) {
         return fail("Requested source commit is not the same as the Git commit in the worktree.");
     }
-    if !git(root, &["status", "--porcelain", "--untracked-files=all"])?.is_empty() {
+    let status = ["status", "--porcelain", "--untracked-files=all"];
+    if !git(runner, root, &status)?.is_empty() {
         return fail("Build only when the Git worktree is clean.");
     }
     if github_sha != Some(head.as_str()) {
         return fail("GitHub source commit is not the same as the Git commit in the worktree.");
     }
-    let committed = git(root, &["show", &format!("{head}:{DOCKERFILE}")])?;
+    let committed = git(runner, root, &["show", &format!("{head}:{DOCKERFILE}")])?;
     let path = root.join(DOCKERFILE);
     regular(&path, DOCKERFILE)?;
     let current = fs::read_to_string(&path)

@@ -3,8 +3,12 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
-use super::build_fixture::{Run, Source};
+use nix::sys::signal::{Signal, kill};
+use nix::unistd::Pid;
+
+use super::build_fixture::{PLANTED, Run, Source};
 
 const LEGACY_RECORD: &str = include_str!("../data/image_build_record.json");
 
@@ -46,16 +50,15 @@ fn builds_into_a_local_archive_without_a_registry_or_credentials() {
     assert!(run.ok, "{}", run.stderr);
     let log = source.text("docker.log");
     let calls: Vec<&str> = log.lines().collect();
-    assert_eq!(calls.len(), 3, "{log}");
-    assert_eq!(calls[0], "info --format {{json .ClientInfo.Plugins}}");
-    assert_eq!(calls[1], "buildx version");
+    assert_eq!(calls.len(), 2, "{log}");
+    assert_eq!(calls[0], "buildx version");
     assert!(
-        calls[2].starts_with("buildx build --platform linux/amd64 --file "),
+        calls[1].starts_with("buildx build --platform linux/amd64 --file "),
         "{}",
-        calls[2]
+        calls[1]
     );
-    assert!(calls[2].contains(" --provenance=false --output type=oci,dest="));
-    assert!(calls[2].contains("/candidate.oci.tar,compression=gzip,force-compression=true "));
+    assert!(calls[1].contains(" --provenance=false --output type=oci,dest="));
+    assert!(calls[1].contains("/candidate.oci.tar,compression=gzip,force-compression=true "));
     assert!(!log.contains("push") && !log.contains("login"));
     let env = source.text("docker.env");
     for hidden in ["GH_TOKEN", "REGISTRY_PASSWORD", "DOCKER_HOST"] {
@@ -116,18 +119,69 @@ refusal!(
     a_buildx_binary_other_than_the_locked_one_is_refused,
     "Docker Buildx binary is not the same as the value in .velnor/runner.lock.",
     |source| {
-        fs::write(source.path("buildx"), "tampered").unwrap_or_default();
+        source.plugin(b"#!/bin/sh\necho tampered\n");
         source.run(&[], &[])
     }
 );
 
 #[test]
-fn a_tampered_buildx_binary_is_never_run_by_the_buildx_probe() {
-    let source = Source::new("tampered-plugin");
-    fs::write(source.path("buildx"), "tampered").unwrap_or_default();
-    assert!(!source.run(&[], &[]).ok);
-    let log = source.text("docker.log");
-    assert_eq!(log.trim(), "info --format {{json .ClientInfo.Plugins}}");
+fn a_plugin_that_swaps_itself_for_the_genuine_bytes_is_never_run() {
+    let source = Source::new("planted-plugin");
+    source.plugin(PLANTED);
+    let run = source.run(&[], &[]);
+    assert!(!run.ok, "a planted plugin was accepted");
+    assert!(
+        run.stderr.contains("Docker Buildx binary is not the same"),
+        "{}",
+        run.stderr
+    );
+    assert_eq!(source.text("planted.ran"), "");
+    assert_eq!(source.text("plugin.ran"), "");
+    assert_eq!(source.text("docker.log"), "");
+}
+
+#[test]
+fn an_explicit_buildx_path_replaces_discovery() {
+    let source = Source::new("explicit-plugin");
+    let elsewhere = source.path("elsewhere/docker-buildx");
+    fs::create_dir_all(source.path("elsewhere")).unwrap_or_default();
+    fs::copy(source.path("genuine-plugin"), &elsewhere).unwrap_or_default();
+    source.plugin(PLANTED);
+    let run = source.run(&[("--buildx", elsewhere)], &[]);
+    assert!(run.ok, "{}", run.stderr);
+    assert_eq!(source.text("planted.ran"), "");
+    assert!(source.path("out/candidate.json").is_file());
+}
+
+#[test]
+fn a_termination_signal_stops_the_docker_build_and_removes_the_staging_directory() {
+    let source = Source::new("signal");
+    source.docker(
+        "echo $$ > \"$FAKE_DIR/build.pid\"\nsleep 60 &\necho $! > \"$FAKE_DIR/sleep.pid\"\nwait",
+    );
+    let mut child = source.spawn();
+    let pids = ["build.pid", "sleep.pid"];
+    let started = Instant::now();
+    while pids.iter().any(|name| source.text(name).is_empty()) {
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "build never started"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let velnor = Pid::from_raw(i32::try_from(child.id()).unwrap_or(0));
+    kill(velnor, Signal::SIGTERM).unwrap_or_default();
+    let status = child.wait().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!status.success());
+    for name in pids {
+        let pid = source.text(name).trim().parse::<i32>().unwrap_or(0);
+        let gone = (0..200).any(|_| {
+            std::thread::sleep(Duration::from_millis(5));
+            kill(Pid::from_raw(pid), None).is_err()
+        });
+        assert!(gone, "{name} is still running");
+    }
+    assert_eq!(left_behind(&source), Vec::<String>::new());
 }
 
 refusal!(

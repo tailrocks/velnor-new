@@ -4,15 +4,13 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use velnor_ci::image_candidate::hashing::sha256_hex;
 use velnor_ci::image_candidate::record::INPUT_PATHS;
 
 use super::fixture::{LAYER, build, plain_layer, spec};
 use crate::support::fresh_dir;
-
-pub(super) const PLUGIN: &[u8] = b"fake buildx plugin\n";
 
 pub(super) struct Run {
     pub(super) ok: bool,
@@ -47,38 +45,64 @@ fn git(checkout: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn fake_docker(dir: &Path, behavior: &str) -> String {
-    let log = dir.join("docker.log").display().to_string();
-    let env = dir.join("docker.env").display().to_string();
-    let plugin = dir.join("buildx").display().to_string();
-    format!(
-        r#"#!/bin/sh
-printf '%s\n' "$*" >> '{log}'
-if [ "$1 $2" = "buildx version" ]; then
+const DOCKER: &str = r#"#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_DIR/docker.log"
+plugin="$DOCKER_CONFIG/cli-plugins/docker-buildx"
+if [ "$1" = "info" ]; then
+  if [ -x "$plugin" ]; then
+    "$plugin" docker-cli-plugin-metadata > /dev/null
+    echo "[{\"Name\":\"buildx\",\"Path\":\"$plugin\",\"Version\":\"v0.38.0\"}]"
+  else
+    echo null
+  fi
+  exit 0
+fi
+if [ "$1" = "buildx" ] && [ -x "$plugin" ]; then
+  exec "$plugin" "$@"
+fi
+exit 2
+"#;
+
+const GENUINE: &[u8] = br#"#!/bin/sh
+if [ "$1" = "docker-cli-plugin-metadata" ]; then
+  echo '{"SchemaVersion":"0.1.0","Vendor":"fake","Version":"v0.38.0"}'
+  exit 0
+fi
+echo "$2" >> "$FAKE_DIR/plugin.ran"
+if [ "$2" = "version" ]; then
   echo "github.com/docker/buildx v0.38.0 fake"
   exit 0
 fi
-if [ "$1" = "info" ]; then
-  echo '[{{"Name":"buildx","Path":"{plugin}","Version":"v0.38.0"}}]'
-  exit 0
-fi
-if [ "$1 $2" = "buildx build" ]; then
-  env > '{env}'
+if [ "$2" = "build" ]; then
+  env > "$FAKE_DIR/docker.env"
   for argument in "$@"; do
     case "$argument" in
-      type=oci,dest=*) dest="${{argument#type=oci,dest=}}"; dest="${{dest%%,*}}" ;;
+      type=oci,dest=*) dest="${argument#type=oci,dest=}"; dest="${dest%%,*}" ;;
     esac
   done
-  {behavior}
+  . "$FAKE_DIR/behavior.sh"
 fi
 exit 2
-"#,
-    )
-}
+"#;
 
-pub(super) const COPY: &str = r#"[ -f "$DOCKER_CONFIG/cli-plugins/docker-buildx" ] || exit 9
-  cp '{archive}' "$dest"
-  exit 0"#;
+pub(super) const PLANTED: &[u8] = br#"#!/bin/sh
+echo planted >> "$FAKE_DIR/planted.ran"
+cp "$FAKE_DIR/genuine-plugin" "$0"
+if [ "$1" = "docker-cli-plugin-metadata" ]; then
+  echo '{"SchemaVersion":"0.1.0","Vendor":"fake","Version":"v0.38.0"}'
+fi
+exit 0
+"#;
+
+const COPY: &str = r#"[ -f "$DOCKER_CONFIG/cli-plugins/docker-buildx" ] || exit 9
+cp "$FAKE_DIR/archive.tar" "$dest"
+exit 0"#;
+
+fn executable(path: &Path, data: &[u8]) {
+    write(path, data);
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
 
 impl Source {
     pub(super) fn new(label: &str) -> Self {
@@ -95,31 +119,34 @@ impl Source {
             &checkout.join(".velnor/runner.lock"),
             format!(
                 "buildx_version = \"0.38.0\"\nbuildx_sha256 = \"{}\"\n",
-                sha256_hex(PLUGIN)
+                sha256_hex(GENUINE)
             ),
         );
         git(&checkout, &["init", "-q"]);
         git(&checkout, &["add", "-A"]);
         git(&checkout, &["commit", "-q", "-m", "fixture"]);
-        write(&dir.join("buildx"), PLUGIN);
+        executable(&dir.join("bin/docker"), DOCKER.as_bytes());
+        executable(&dir.join("genuine-plugin"), GENUINE);
         write(
             &dir.join("archive.tar"),
             build(&spec(vec![(plain_layer(), LAYER)])).archive(),
         );
         fs::create_dir(dir.join("out")).unwrap_or_else(|e| unreachable!("{e}"));
         let source = Self { dir };
-        source.docker(&COPY.replace(
-            "{archive}",
-            &source.dir.join("archive.tar").display().to_string(),
-        ));
+        source.plugin(GENUINE);
+        source.docker(COPY);
         source
     }
 
     pub(super) fn docker(&self, behavior: &str) {
-        let script = self.dir.join("bin/docker");
-        write(&script, fake_docker(&self.dir, behavior));
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
-            .unwrap_or_else(|e| unreachable!("{e}"));
+        write(&self.dir.join("behavior.sh"), behavior);
+    }
+
+    pub(super) fn plugin(&self, bytes: &[u8]) {
+        executable(
+            &self.dir.join("userconfig/cli-plugins/docker-buildx"),
+            bytes,
+        );
     }
 
     pub(super) fn path(&self, name: &str) -> PathBuf {
@@ -157,12 +184,37 @@ impl Source {
         self.invoke("verify-candidate", &[], &[])
     }
 
+    pub(super) fn spawn(&self) -> std::process::Child {
+        self.command("build", &[], &[])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+    }
+
     fn invoke(
         &self,
         subcommand: &str,
         flags: &[(&str, PathBuf)],
         env: &[(&str, Option<&str>)],
     ) -> Run {
+        let output = self
+            .command(subcommand, flags, env)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        Run {
+            ok: output.status.success(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        }
+    }
+
+    fn command(
+        &self,
+        subcommand: &str,
+        flags: &[(&str, PathBuf)],
+        env: &[(&str, Option<&str>)],
+    ) -> Command {
         let head = self.head();
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         let path = format!(
@@ -180,7 +232,9 @@ impl Source {
         }
         for (name, value) in flags {
             arguments.retain(|(known, _)| known != name);
-            arguments.push((name, value.clone()));
+            if !value.as_os_str().is_empty() {
+                arguments.push((name, value.clone()));
+            }
         }
         command.env_clear().args(["image", subcommand]);
         for (name, value) in arguments {
@@ -188,6 +242,11 @@ impl Source {
         }
         let mut vars = vec![
             ("PATH", path),
+            ("FAKE_DIR", self.dir.display().to_string()),
+            (
+                "DOCKER_CONFIG",
+                self.path("userconfig").display().to_string(),
+            ),
             ("GITHUB_SHA", head),
             ("GITHUB_REF", "refs/pull/7/merge".to_owned()),
             ("GITHUB_REPOSITORY", "tailrocks/velnor-new".to_owned()),
@@ -211,11 +270,6 @@ impl Source {
             }
         }
         command.envs(vars);
-        let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
-        Run {
-            ok: output.status.success(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        }
+        command
     }
 }

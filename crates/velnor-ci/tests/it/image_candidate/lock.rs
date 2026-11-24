@@ -4,12 +4,12 @@
 use std::path::Path;
 
 use velnor_ci::image_candidate::build::{buildx_arguments, forwards};
-use velnor_ci::image_candidate::lock::{Lock, banner, parse_lock, plugin};
+use velnor_ci::image_candidate::lock::{Lock, banner, parse_lock};
 
 fn locked() -> Lock {
     Lock {
         buildx_version: "0.38.0".to_owned(),
-        buildx_sha256: "a".repeat(64),
+        buildx_sha256: Some("a".repeat(64)),
     }
 }
 
@@ -38,34 +38,22 @@ fn the_buildx_banner_must_name_the_locked_version_on_one_line() {
 }
 
 #[test]
-fn exactly_one_buildx_plugin_with_a_path_is_required() {
-    let one =
-        r#"[{"Name":"compose","Path":"/c"},{"Name":"buildx","Path":"/b","Version":"v0.38.0"}]"#;
-    let found = plugin(one).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(found.path.to_string_lossy(), "/b");
-    assert_eq!(found.version.as_deref(), Some("v0.38.0"));
-    for refused in [
-        "null",
-        "[]",
-        r#"[{"Name":"buildx","Path":"/a"},{"Name":"buildx","Path":"/b"}]"#,
-        r#"[{"Name":"buildx"}]"#,
-        "not json",
-    ] {
-        assert!(plugin(refused).is_err(), "{refused}");
-    }
-}
-
-#[test]
-fn the_runner_lock_must_pin_the_buildx_version_and_hash() {
+fn the_runner_lock_must_pin_the_buildx_version_and_may_pin_its_hash() {
     let parsed = parse_lock("buildx_version = \"0.38.0\"\nbuildx_sha256 = \"abc\"\nother = 1\n");
     assert_eq!(
         parsed.unwrap_or_else(|e| unreachable!("{e}")),
         Lock {
             buildx_version: "0.38.0".to_owned(),
-            buildx_sha256: "abc".to_owned()
+            buildx_sha256: Some("abc".to_owned())
         }
     );
-    assert!(parse_lock("buildx_version = \"0.38.0\"\n").is_err());
+    let versioned = parse_lock("buildx_version = \"0.38.0\"\n");
+    assert_eq!(
+        versioned
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .buildx_sha256,
+        None
+    );
     assert!(parse_lock("buildx_sha256 = \"abc\"\n").is_err());
 }
 

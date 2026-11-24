@@ -220,6 +220,11 @@ pub struct BuildArgs {
     pub record: PathBuf,
     #[arg(long, default_value = "docker", help = "The Docker client to run")]
     pub docker: String,
+    #[arg(
+        long,
+        help = "The docker-buildx plugin file to use. Without it, the first docker-buildx in $DOCKER_CONFIG/cli-plugins (or $HOME/.docker/cli-plugins) and then the system Docker plugin directories. The file is copied, its SHA-256 is checked against buildx_sha256 in .velnor/runner.lock, and only the copy is ever run"
+    )]
+    pub buildx: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

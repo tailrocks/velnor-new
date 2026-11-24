@@ -2,50 +2,47 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
 use super::output::{self, Staging};
-use super::{DOCKERFILE_DIR, FileSource, docker, github_env, process, scan_archive, source};
+use super::process::{Runner, clean_environment};
+use super::{DOCKERFILE_DIR, FileSource, docker, github_env, read_lock, scan_archive, source};
 use crate::cli_args::BuildArgs;
 use crate::error::CiError;
 use crate::image_candidate::build::{Parts, record};
 use crate::image_candidate::canonical;
 use crate::image_candidate::identity::workflow;
-use crate::image_candidate::lock::parse_lock;
 use crate::image_candidate::oci;
 
 const DONE: &str = "PASS: Candidate archive and record were written.\n";
-const LOCK: &str = ".velnor/runner.lock";
 const CHECK_TIMEOUT: Duration = Duration::from_secs(300);
 
-fn read(path: &Path) -> Result<String, CiError> {
-    fs::read_to_string(path).map_err(|error| CiError::new(format!("{}: {error}", path.display())))
-}
-
 pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
+    let runner = Runner::start()?;
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
     let env = github_env();
     let github_sha = env.get("GITHUB_SHA").map(String::as_str);
-    let inputs = source::identity(&root, &args.source_commit, github_sha)?;
+    let inputs = source::identity(&runner, &root, &args.source_commit, github_sha)?;
     let (workflow, reference) = workflow(&env)?;
-    let lock = parse_lock(&read(&root.join(LOCK))?)?;
-    let buildx = docker::buildx(&args.docker, &lock)?;
+    let lock = read_lock(&root)?;
     let outputs = output::plan(&root, &args.archive, &args.record)?;
     let parent = outputs
         .archive
         .parent()
         .ok_or_else(|| CiError::new("Candidate output directory must exist."))?;
     let staging = Staging::create(parent)?;
+    let plugin = docker::plugin_source(args.buildx.as_deref())?;
+    let isolated = docker::isolate(&plugin, &lock, staging.path())?;
+    let builder = docker::version(&runner, &args.docker, &isolated, &lock)?;
     let mut check = Command::new("bash");
     check
         .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
         .current_dir(&root);
-    process::clean_environment(&mut check).env("HOME", staging.home());
-    process::run(&mut check, CHECK_TIMEOUT)?;
-    if source::identity(&root, &args.source_commit, github_sha)? != inputs {
+    clean_environment(&mut check).env("HOME", &isolated.home);
+    runner.run(&mut check, CHECK_TIMEOUT)?;
+    if source::identity(&runner, &root, &args.source_commit, github_sha)? != inputs {
         return Err(CiError::new(
             "Build inputs changed while build-test.sh ran.",
         ));
@@ -53,14 +50,14 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
     let archive = staging.path().join("candidate.oci.tar");
     let manifest = staging.path().join("candidate.json");
     docker::build(
+        &runner,
         &args.docker,
         &root,
         staging.path(),
-        &staging.home(),
+        &isolated,
         &archive,
-        &buildx,
-        &lock,
     )?;
+    runner.checkpoint()?;
     let scan = scan_archive(&archive)?;
     let graph = oci::verify(
         &scan,
@@ -73,12 +70,13 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         reference: &reference,
         inputs,
         workflow,
-        builder: &buildx.banner,
+        builder: &builder,
         archive_sha: &scan.archive_sha,
         archive_size: scan.archive_size,
         oci: graph,
     })?;
     output::write_private(&manifest, &canonical::encode(&value))?;
+    runner.checkpoint()?;
     output::publish_pair([
         (archive.as_path(), outputs.archive.as_path()),
         (manifest.as_path(), outputs.record.as_path()),
