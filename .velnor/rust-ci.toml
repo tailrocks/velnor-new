@@ -117,6 +117,11 @@ tools = ["hk"]
 timeout_minutes = 5
 inputs = ["hk.pkl", "hk.local.pkl", ".hkrc.pkl", "mise.toml", "mise.lock"]
 
+[[lint]]
+kind = "generated-check"
+from_source = true
+gate_on_plan = true
+
 [[inputs]]
 glob = ".mise-version"
 packages = ["velnor-gen"]

@@ -6,6 +6,7 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::migration::outputs::run_outputs;
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo_str};
@@ -22,11 +23,9 @@ fn refused_with(output: &Output, texts: &[&str]) {
 }
 
 fn lib_runs(repo: &Repo) -> BTreeSet<String> {
-    fs::read_dir(repo.root().join(DEBUG).join("build/lib"))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .filter(|entry| entry.path().join("run/stdout").is_file())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+    run_outputs(&repo.root().join(DEBUG).join("build"), "lib")
+        .into_iter()
+        .map(|run| run.unit)
         .collect()
 }
 
@@ -64,13 +63,21 @@ fn library_with_asset_input() -> Repo {
     repo
 }
 
+fn finished(
+    runs: impl IntoIterator<Item = super::migration::outputs::RunOutput>,
+) -> Option<SystemTime> {
+    runs.into_iter()
+        .filter_map(|run| fs::metadata(run.stdout).and_then(|m| m.modified()).ok())
+        .max()
+}
+
 fn run_finished(repo: &Repo, hash: &str) -> SystemTime {
-    fs::metadata(
-        repo.root()
-            .join(format!("{DEBUG}/build/lib/{hash}/run/stdout")),
+    finished(
+        run_outputs(&repo.root().join(DEBUG).join("build"), "lib")
+            .into_iter()
+            .filter(|run| run.unit == hash),
     )
-    .and_then(|metadata| metadata.modified())
-    .unwrap_or_else(|e| unreachable!("{e}"))
+    .unwrap_or_else(|| unreachable!("no run output for {hash}"))
 }
 
 #[test]
@@ -176,23 +183,8 @@ fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
     let repo = fan_out_repo();
     let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
     assert!(build.status.success(), "{build:?}");
-    let ran = fs::read_dir(repo.root().join(DEBUG).join("build"))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .flat_map(|package| {
-            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
-                .unwrap_or_else(|e| unreachable!("{e}"))
-                .map(|run| {
-                    run.unwrap_or_else(|e| unreachable!("{e}"))
-                        .path()
-                        .join("run/stdout")
-                })
-        })
-        .filter_map(|stdout| {
-            fs::metadata(stdout)
-                .and_then(|metadata| metadata.modified())
-                .ok()
-        })
-        .max()
+    let build_dir = repo.root().join(DEBUG).join("build");
+    let ran = finished((1..=FAN_OUT).flat_map(|i| run_outputs(&build_dir, &format!("lib{i}"))))
         .unwrap_or_else(|| unreachable!());
     for i in 1..=FAN_OUT {
         repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "second\n");
