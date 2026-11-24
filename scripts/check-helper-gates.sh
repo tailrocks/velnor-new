@@ -43,9 +43,16 @@ if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
   trap 'rm -f "$diff_file" "$tree_file"' EXIT
   moved_from=()
-  while IFS= read -r old; do moved_from+=("$old"); done < <(git diff -M --name-status "$base...HEAD" | awk -F'\t' -v dirs="$gate_dirs" '
-    BEGIN { n = split(dirs, d, " ") }
-    $1 ~ /^R/ { for (i = 1; i <= n; i++) if (index($3, d[i] "/") == 1) { print $2; break } }')
+  while IFS= read -r -d '' status; do
+    IFS= read -r -d '' old
+    case "$status" in
+      R*)
+        IFS= read -r -d '' dest
+        for d in $gate_dirs; do
+          case "$dest" in "$d"/*) moved_from+=("$old"); break ;; esac
+        done ;;
+    esac
+  done < <(git diff -M -z --name-status "$base...HEAD")
   git diff -M "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
@@ -161,14 +168,17 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { hdr = $0; cut = 0; while ((at = index(substr(hdr, cut + 1), " b/")) > 0) cut += at; file = substr(hdr, cut + 3); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
-  /^@@/ { prevnew = ""; prevadded = 0; next }
+  /^diff --git / { hdr = $0; cut = 0; while ((at = index(substr(hdr, cut + 1), " b/")) > 0) cut += at; file = substr(hdr, cut + 3); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; prevmk = ""; next }
+  /^@@/ { prevnew = ""; prevadded = 0; prevmk = ""; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
     above = prevnew
     aboveadded = prevadded
+    if (above ~ /^[ \t]*#!?\[/ && prevmk != "") above = prevmk
+    prevmk = (text ~ /^[ \t]*#!?\[/ && marker(above, carry)) ? above : ""
+    delete carry
     prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
