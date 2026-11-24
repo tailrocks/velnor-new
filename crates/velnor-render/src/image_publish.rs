@@ -145,24 +145,16 @@ pub(crate) fn login(registry: &ImageRegistry) -> RenderedStep {
     RenderedStep { with, ..step }
 }
 
-fn tags(image: &ImageConfig, branch: &str) -> Value {
+fn tags(image: &ImageConfig) -> Value {
     let lines: Vec<String> = image
         .registries
         .iter()
-        .flat_map(|registry| {
-            let reference = registry.reference();
-            [
-                format!("{reference}:sha-${{{{ github.sha }}}}"),
-                format!(
-                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && '{reference}:{branch}' || '' }}}}"
-                ),
-            ]
-        })
+        .map(|registry| format!("{}:sha-${{{{ github.sha }}}}", registry.reference()))
         .collect();
     Value::Expr(lines.join("\n"))
 }
 
-fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
+fn push(image: &ImageConfig) -> RenderedStep {
     let attested = image.attestations;
     let attestation = |on: &str| {
         if attested {
@@ -183,7 +175,7 @@ fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
             ("push".to_owned(), Value::Bool(true)),
             ("provenance".to_owned(), attestation("mode=max")),
             ("sbom".to_owned(), Value::Bool(attested)),
-            ("tags".to_owned(), tags(image, branch)),
+            ("tags".to_owned(), tags(image)),
             ("labels".to_owned(), labels()),
         ],
         ..DOCKER_BUILD_PUSH.step(format!("Build and push the {} image", image.name))
@@ -203,6 +195,54 @@ fn tip() -> RenderedStep {
             "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip".to_owned(),
         )
     }
+}
+
+fn retag(registry: &ImageRegistry, branch: &str) -> RenderedStep {
+    RenderedStep {
+        condition: Some(expression(&format!(
+            "steps.{TIP_STEP}.outputs.ready == 'true'"
+        ))),
+        env: vec![
+            ("IMAGE".to_owned(), Value::Text(registry.reference())),
+            ("BRANCH".to_owned(), Value::Text(branch.to_owned())),
+            (
+                "COMMIT".to_owned(),
+                Value::Expr("${{ github.sha }}".to_owned()),
+            ),
+        ],
+        ..command(
+            format!("Add the default-branch tag in {}", registry.host.name()),
+            "docker buildx imagetools create --tag \"$IMAGE:$BRANCH\" \"$IMAGE:sha-$COMMIT\""
+                .to_owned(),
+        )
+    }
+}
+
+pub(crate) fn host_guard(image: &ImageConfig) -> Vec<RenderedStep> {
+    if !image
+        .registries
+        .iter()
+        .any(|registry| registry.host == ImageHost::Ghcr)
+    {
+        return Vec::new();
+    }
+    let condition = expression("github.server_url != 'https://github.com'");
+    vec![
+        RenderedStep {
+            condition: Some(condition.clone()),
+            ..command(
+                "Say that ghcr.io is for github.com only".to_owned(),
+                "echo \"::error title=Image::ghcr.io accepts only repositories on github.com, because a GitHub Enterprise Server or custom-domain instance publishes to its own containers registry\"".to_owned(),
+            )
+        },
+        RenderedStep {
+            condition: Some(condition),
+            ..command(
+                "Refuse ghcr.io outside github.com".to_owned(),
+                "false".to_owned(),
+            )
+        },
+    ]
 }
 
 fn withheld(branch: &str) -> Vec<RenderedStep> {
@@ -272,10 +312,17 @@ pub(crate) fn publish_job(
     steps.extend(hub.as_ref().map(preflight));
     steps.push(restore_modes(image));
     steps.push(setup_buildx());
+    steps.extend(host_guard(image));
     steps.extend(image.registries.iter().map(login));
+    steps.push(push(image));
     steps.push(tip());
+    steps.extend(
+        image
+            .registries
+            .iter()
+            .map(|registry| retag(registry, workflow.branch)),
+    );
     steps.extend(withheld(workflow.branch));
-    steps.push(push(image, workflow.branch));
     for registry in &image.registries {
         steps.extend(report(registry));
     }

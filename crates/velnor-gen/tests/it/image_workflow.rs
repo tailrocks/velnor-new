@@ -220,12 +220,7 @@ fn the_pushed_image_carries_the_commit_tags_the_source_labels_and_the_declared_a
         assert_eq!(with["push"], true);
         let tags = with["tags"].as_str().ok_or("no tags")?;
         for line in tags.lines() {
-            assert!(
-                line.ends_with(":sha-${{ github.sha }}")
-                    || (line.starts_with("${{ steps.tip.outputs.ready == 'true' && '")
-                        && line.ends_with(":main' || '' }}")),
-                "{line}"
-            );
+            assert!(line.ends_with(":sha-${{ github.sha }}"), "{line}");
         }
         let labels = with["labels"].as_str().ok_or("no labels")?;
         assert!(labels.contains(
@@ -245,7 +240,7 @@ fn the_pushed_image_carries_the_commit_tags_the_source_labels_and_the_declared_a
 }
 
 #[test]
-fn a_second_registry_adds_one_login_and_the_same_two_tags_while_a_single_one_has_one_login()
+fn a_second_registry_adds_one_login_and_one_more_commit_tag_while_a_single_one_has_one_login()
 -> TestResult {
     let plain = rendered("image-plain")?;
     let both = rendered("image-ghcr")?;
@@ -258,7 +253,7 @@ fn a_second_registry_adds_one_login_and_the_same_two_tags_while_a_single_one_has
         .as_str()
         .ok_or("no tags")?
         .to_owned();
-    assert_eq!(tags.lines().count(), 4);
+    assert_eq!(tags.lines().count(), 2);
     assert!(tags.contains("ghcr.io/acme/cluster-svc:sha-${{ github.sha }}"));
     let permissions = &publish["permissions"];
     assert_eq!(permissions["packages"], "write");

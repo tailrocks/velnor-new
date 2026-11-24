@@ -71,6 +71,7 @@ pub(crate) fn authority_job(
 pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
     let image = build.image;
     let mut steps = vec![setup_buildx()];
+    steps.extend(crate::image_publish::host_guard(image));
     steps.extend(image.registries.iter().map(login));
     for registry in &image.registries {
         steps.push(RenderedStep {

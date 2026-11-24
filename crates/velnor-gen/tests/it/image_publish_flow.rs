@@ -96,7 +96,7 @@ fn the_pull_request_filter_matches_a_declared_input_file_and_the_dockerfile_spec
 }
 
 #[test]
-fn the_tip_is_checked_right_before_the_push_and_main_moves_only_while_it_holds() -> TestResult {
+fn the_tip_is_checked_after_the_push_and_main_moves_only_while_it_holds() -> TestResult {
     for (name, id) in [
         ("image-plain", "image-plain-svc-publish"),
         ("image-ghcr", "image-cluster-svc-publish"),
@@ -107,20 +107,35 @@ fn the_tip_is_checked_right_before_the_push_and_main_moves_only_while_it_holds()
             .iter()
             .filter_map(|step| step["name"].as_str())
             .collect();
-        let tip = names
-            .iter()
-            .position(|text| text.starts_with("Check that the commit is still the tip"))
-            .ok_or("no tip step")?;
-        let push = names
-            .iter()
-            .position(|text| text.starts_with("Build and push"))
-            .ok_or("no push step")?;
-        assert!(
-            names[tip + 1..push]
+        let position = |prefix: &str| {
+            names
                 .iter()
-                .all(|text| text.contains("default-branch tag was withheld")),
-            "{name}: only the withheld notices may sit between the check and the push"
-        );
+                .position(|text| text.starts_with(prefix))
+                .ok_or(format!("no step {prefix}"))
+        };
+        let push = position("Build and push")?;
+        let tip = position("Check that the commit is still the tip")?;
+        let retag = position("Add the default-branch tag")?;
+        assert!(push < tip && tip < retag, "{name}: {names:?}");
+        for step in steps(publish) {
+            if step["name"]
+                .as_str()
+                .is_some_and(|text| text.starts_with("Add the default-branch tag"))
+            {
+                assert!(
+                    step["if"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("steps.tip.outputs.ready == 'true'")),
+                    "{name}"
+                );
+                assert!(
+                    step["run"]
+                        .as_str()
+                        .is_some_and(|run| run.contains("imagetools create --tag")),
+                    "{name}"
+                );
+            }
+        }
         assert!(
             step_named(publish, "Say that the default-branch tag was withheld")?["if"]
                 .as_str()
@@ -143,13 +158,46 @@ fn the_tip_is_checked_right_before_the_push_and_main_moves_only_while_it_holds()
             .as_str()
             .ok_or("no tags")?
             .to_owned();
-        let moving = tags.lines().filter(|line| line.contains(":main")).count();
-        let guarded = tags
-            .lines()
-            .filter(|line| line.contains("steps.tip.outputs.ready == 'true'"))
-            .count();
-        assert!(moving > 0 && moving == guarded, "{name}: {tags}");
+        assert!(!tags.contains(":main"), "{name}: {tags}");
     }
+    Ok(())
+}
+
+#[test]
+fn ghcr_is_refused_on_a_github_host_other_than_github_com() -> TestResult {
+    let both = rendered("image-ghcr")?;
+    for id in ["image-cluster-svc-publish", "image-cluster-svc-promote"] {
+        let job = &both["jobs"][id];
+        let guard = step_named(job, "Refuse ghcr.io outside github.com")?;
+        assert!(
+            guard["if"]
+                .as_str()
+                .is_some_and(|text| text.contains("github.server_url != 'https://github.com'")),
+            "{id}"
+        );
+        let names: Vec<&str> = steps(job)
+            .iter()
+            .filter_map(|step| step["name"].as_str())
+            .collect();
+        let refuse = names
+            .iter()
+            .position(|text| text.starts_with("Refuse ghcr.io"))
+            .ok_or("no guard")?;
+        let login = names
+            .iter()
+            .position(|text| text.starts_with("Log in to"))
+            .ok_or("no login")?;
+        assert!(refuse < login, "{id}");
+    }
+    let plain = rendered("image-plain")?;
+    assert!(
+        steps(&plain["jobs"]["image-plain-svc-publish"])
+            .iter()
+            .all(|step| !step["name"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("Refuse ghcr.io"))
+    );
     Ok(())
 }
 
