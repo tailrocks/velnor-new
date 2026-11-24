@@ -15,6 +15,17 @@ fn audit_runs(
     expired: bool,
     inputs: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
+    audit_after_replan(helper, config, event, expired, inputs, "")
+}
+
+fn audit_after_replan(
+    helper: &str,
+    config: &str,
+    event: &str,
+    expired: bool,
+    inputs: &str,
+    replanned: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
     let lane = jobs(helper, config)?
         .into_iter()
         .find(|(id, _)| id == "rust")
@@ -34,6 +45,8 @@ fn audit_runs(
     context.set("github.event_name", event);
     context.set("steps.restored.outputs.expired", &expired.to_string());
     context.set("steps.plan.outputs.rust_inputs", inputs);
+    context.set("steps.replan.outputs.rust_inputs", replanned);
+    context.set("steps.replan.outcome", "success");
     runs(&condition_of(audit)?, &context)
 }
 
@@ -94,6 +107,23 @@ fn a_merge_group_audits_inputs_only_when_a_lock_or_a_manifest_changed_from_helpe
 }
 
 #[test]
+fn a_full_replan_does_not_hide_the_changed_inputs_of_a_pull_request() -> TestResult {
+    for config in ["", EVERYTHING] {
+        for event in ["pull_request", "merge_group"] {
+            assert!(
+                audit_after_replan("0.1.113", config, event, true, "run", "skip")?,
+                "{config} {event}"
+            );
+            assert!(
+                !audit_after_replan("0.1.113", config, event, false, "skip", "skip")?,
+                "{config} {event}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn a_push_keeps_its_audit_rule_at_every_helper() -> TestResult {
     for helper in ["0.1.112", "0.1.113"] {
         for inputs in ["run", "skip"] {
@@ -131,9 +161,10 @@ fn a_plan_job_exposes_the_inputs_output_to_the_audits_of_its_lanes() -> TestResu
         "{text}"
     );
     assert!(
-        text.contains("needs.rust-plan.outputs.rust_inputs) == ''run''"),
+        text.contains("needs.rust-plan.outputs.rust_inputs == ''run''"),
         "{text}"
     );
+    assert!(!text.contains("replan.outputs.rust_inputs"), "{text}");
     let older = grouped("0.1.112")?;
     assert!(!older.contains("rust_inputs"), "{older}");
     Ok(())
