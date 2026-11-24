@@ -4,7 +4,7 @@
 use std::process::{Command, Stdio};
 
 use crate::error::CiError;
-use crate::image_deploy::promote::Registry;
+use crate::image_deploy::promote::{Registry, is_missing};
 
 const STDERR_SHOWN: usize = 1000;
 
@@ -49,10 +49,7 @@ impl Registry for Docker {
                     CiError::new(format!("docker answered {reference} with no digest"))
                 });
         }
-        if String::from_utf8_lossy(&output.stderr)
-            .to_ascii_lowercase()
-            .contains("not found")
-        {
+        if is_missing(reference, &String::from_utf8_lossy(&output.stderr)) {
             return Ok(None);
         }
         Err(failure(reference, &output.stderr))

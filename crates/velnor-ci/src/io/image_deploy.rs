@@ -232,6 +232,9 @@ fn authorize_release(args: &ImageAuthorizeArgs) -> Result<String, CiError> {
             tag: &args.tag,
             actor: &args.actor,
             actors: &args.release_actors,
+            run_id: std::env::var("GITHUB_RUN_ID")
+                .ok()
+                .and_then(|id| id.parse().ok()),
         },
     )
 }

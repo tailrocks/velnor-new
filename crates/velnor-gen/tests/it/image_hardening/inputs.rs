@@ -62,6 +62,26 @@ fn an_image_input_behind_a_symbolic_link_or_a_submodule_is_refused() -> TestResu
         expected_files(&nested),
         Err(GenerateError::Image(ImageError::InputLinked { .. }))
     ));
+    for link in ["migrations/current", "migrations/vendor"] {
+        let mut inner = sample("image-ghcr")?;
+        inner.symlinks.insert(RepoPath::new(link)?);
+        inner.tracked_paths.insert(RepoPath::new(link)?);
+        assert!(
+            matches!(
+                expected_files(&inner),
+                Err(GenerateError::Image(ImageError::InputLinked { .. }))
+            ),
+            "{link}"
+        );
+    }
+    let mut submodule = sample("image-ghcr")?;
+    submodule
+        .gitlinks
+        .insert(RepoPath::new("migrations/vendor")?);
+    assert!(matches!(
+        expected_files(&submodule),
+        Err(GenerateError::Image(ImageError::InputLinked { .. }))
+    ));
     let mut module = sample("image-ghcr")?;
     module.gitlinks.insert(RepoPath::new("migrations")?);
     assert!(matches!(

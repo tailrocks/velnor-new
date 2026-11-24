@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use velnor_ci::error::CiError;
-use velnor_ci::image_deploy::promote::{Promotion, Registry, promote};
+use velnor_ci::image_deploy::promote::{Promotion, Registry, is_missing, promote};
 
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const OLD: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
@@ -17,6 +17,7 @@ const GHCR: &str = "ghcr.io/acme/svc";
 struct Fake {
     digests: RefCell<BTreeMap<String, String>>,
     tagged: RefCell<Vec<(String, String)>>,
+    racing: Option<String>,
 }
 
 impl Fake {
@@ -24,6 +25,11 @@ impl Fake {
         self.digests
             .borrow_mut()
             .insert(reference.to_owned(), digest.to_owned());
+        self
+    }
+
+    fn racing(mut self, digest: &str) -> Self {
+        self.racing = Some(digest.to_owned());
         self
     }
 
@@ -42,6 +48,12 @@ impl Registry for Fake {
         self.tagged
             .borrow_mut()
             .push((source.to_owned(), target.to_owned()));
+        let digest = self.racing.clone().unwrap_or_else(|| {
+            source
+                .split_once('@')
+                .map_or_else(String::new, |(_, digest)| digest.to_owned())
+        });
+        self.digests.borrow_mut().insert(target.to_owned(), digest);
         Ok(())
     }
 }
@@ -118,4 +130,39 @@ fn an_unpublished_commit_and_malformed_requests_promote_nothing() {
     );
     assert!(twice.is_err());
     assert!(fake.tagged.borrow().is_empty());
+}
+
+#[test]
+fn a_tag_that_another_writer_moved_during_the_promotion_fails_loudly_and_stops() {
+    let fake = Fake::default().published().racing(OLD);
+    let message = run(&fake, "1.2.3").err().unwrap_or_default();
+    assert!(
+        message.contains("another writer") && message.contains(OLD) && message.contains(NEW),
+        "{message}"
+    );
+    assert_eq!(fake.tagged.borrow().len(), 1);
+}
+
+#[test]
+fn only_the_registrys_own_miss_signals_count_as_a_missing_tag() {
+    let reference = "ghcr.io/acme/svc:1.2.3";
+    for (stderr, missing) in [
+        ("ERROR: ghcr.io/acme/svc:1.2.3: not found\n", true),
+        ("error: GHCR.io/acme/svc:1.2.3: Not Found", true),
+        ("ERROR: MANIFEST_UNKNOWN: manifest unknown", true),
+        ("ERROR: failed to authorize: manifest unknown\n", true),
+        (
+            "ERROR: failed to do request: Head \"https://proxy.test/v2/acme/svc/manifests/1.2.3\": 404 Not Found\n",
+            false,
+        ),
+        ("<html><title>404 Not Found</title></html>\n", false),
+        ("ERROR: ghcr.io/acme/other:1.2.3: not found\n", false),
+        (
+            "ERROR: proxy says ghcr.io/acme/svc:1.2.3: not found upstream\n",
+            false,
+        ),
+        ("", false),
+    ] {
+        assert_eq!(is_missing(reference, stderr), missing, "{stderr}");
+    }
 }
