@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Selection, WORKFLOW_PATH};
+use velnor_model::{BUDGET_JOB_NAME, Selection, WORKFLOW_PATH};
 
 use crate::budget::{History, Population, Sample};
 use crate::collect::{all_jobs, setup_seconds};
@@ -168,12 +168,17 @@ fn by_selection(
     Ok(groups)
 }
 
-/// The selection a run records in the title of its budget job, when it has one
-/// that ran.
 fn selection_of(jobs: &[ApiJob]) -> Option<Selection> {
     jobs.iter()
         .filter(|job| job.conclusion.as_deref() != Some("skipped"))
-        .find_map(|job| Selection::of_job_title(&job.name))
+        .filter(|job| job.name.starts_with(BUDGET_JOB_NAME))
+        .find_map(|job| {
+            job.steps
+                .iter()
+                .filter(|step| step.conclusion.as_deref() != Some("skipped"))
+                .find_map(|step| Selection::of_step_name(&step.name))
+                .or_else(|| Selection::of_job_title(&job.name))
+        })
 }
 
 fn job_seconds(job: &ApiJob, run_id: u64) -> Result<u64, CiError> {

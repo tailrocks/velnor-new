@@ -62,7 +62,15 @@ fn plans(job: &Value) -> bool {
 }
 
 fn selected(paths: &[&str], event: EventKind) -> Result<bool, Box<dyn std::error::Error>> {
-    let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
+    selected_in(&check_repo(CHECK_GATED, FIRST)?, paths, event)
+}
+
+fn selected_in(
+    repo: &RepoView,
+    paths: &[&str],
+    event: EventKind,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let facts = detect(repo)?;
     let changed: BTreeSet<RepoPath> = paths
         .iter()
         .map(|path| RepoPath::new(*path))
@@ -196,6 +204,37 @@ fn a_pull_request_that_touches_a_generator_input_runs_the_generated_check() -> T
             "{path}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_markdown_file_named_like_the_task_of_a_mise_task_lint_runs_the_generated_check() -> TestResult
+{
+    for folder in [
+        "mise-tasks",
+        ".mise-tasks",
+        "mise/tasks",
+        ".mise/tasks",
+        ".config/mise/tasks",
+    ] {
+        let task = format!("{folder}/lint-generator-samples.md");
+        let other = format!("{folder}/build.md");
+        assert!(
+            selected(&["docs/readme.md", &task], EventKind::PullRequest)?,
+            "{task}"
+        );
+        assert!(!selected(&[&other], EventKind::PullRequest)?, "{other}");
+    }
+    let mut bare = view(&["Cargo.toml"], Some(CHECK_GATED.as_bytes()))?;
+    crate::facts::lock_pinned_tools(&mut bare)?;
+    bare.tracked_paths.insert(LOCK_PATH);
+    bare.files
+        .insert(LOCK_PATH, archive_lock_at(FIRST)?.into_bytes());
+    assert!(!selected_in(
+        &bare,
+        &["mise-tasks/lint-generator-samples.md"],
+        EventKind::PullRequest
+    )?);
     Ok(())
 }
 

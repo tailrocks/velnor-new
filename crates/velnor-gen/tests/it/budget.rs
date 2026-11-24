@@ -16,7 +16,7 @@ fn pinned(version: &str) -> String {
     String::from_utf8_lossy(HELPER_LOCK).replace("0.1.81", version)
 }
 
-fn budgeted(version: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) fn budgeted(version: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut files = view(&["Cargo.toml"], Some(config.as_bytes()))?;
     files.files.insert(LOCK_PATH, pinned(version).into_bytes());
     Ok(files)

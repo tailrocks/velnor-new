@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BUDGET_JOB_NAME, GateNeed, Job, Selection, SelectionName};
+use velnor_model::{BUDGET_JOB_NAME, BUDGET_STEP_NAME, GateNeed, Job, Selection, SelectionName};
 
 use crate::event_gate::event_gate;
 use crate::gate::{ACTIVE_EVENT, Setup, check_name, merge_group_skipped, pr_parts};
@@ -28,7 +28,7 @@ fn guard(job: &Job) -> String {
     parts.join(" && ")
 }
 
-fn expression(name: &SelectionName, job: &Job) -> String {
+fn selected(name: &SelectionName) -> String {
     let modes: Vec<String> = name
         .roots
         .iter()
@@ -52,13 +52,29 @@ fn expression(name: &SelectionName, job: &Job) -> String {
         .map(|mode| format!("{mode} == '{}'", Selection::Nothing.plan_value()))
         .collect::<Vec<_>>()
         .join(" && ");
-    let ran = guard(job);
     format!(
-        "${{{{ ({ran}) && format('{BUDGET_JOB_NAME} ({{0}})', ({}) && '{}' || (({}) && '{}' || (({every}) && '{}' || 'unknown'))) || '{BUDGET_JOB_NAME}' }}}}",
+        "({}) && '{}' || (({}) && '{}' || (({every}) && '{}' || 'unknown'))",
         any(Selection::Full),
         Selection::Full.name(),
         any(Selection::Affected),
         Selection::Affected.name(),
         Selection::Nothing.name(),
     )
+}
+
+fn expression(name: &SelectionName, job: &Job) -> String {
+    let ran = guard(job);
+    let selected = selected(name);
+    format!(
+        "${{{{ ({ran}) && format('{BUDGET_JOB_NAME} ({{0}})', {selected}) || '{BUDGET_JOB_NAME}' }}}}"
+    )
+}
+
+pub(crate) fn step_title(name: &SelectionName) -> String {
+    let selected = selected(name);
+    format!("${{{{ format('{BUDGET_STEP_NAME} ({{0}})', {selected}) }}}}")
+}
+
+pub(crate) fn selection_value(name: &SelectionName) -> String {
+    format!("${{{{ {} }}}}", selected(name))
 }

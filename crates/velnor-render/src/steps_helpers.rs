@@ -47,6 +47,21 @@ pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     }
 }
 
+pub(super) fn trailing_steps(kind: &StepKind, lane: CargoLane) -> Vec<RenderedStep> {
+    match kind {
+        StepKind::SourcesFetchAll { manifests, .. } => {
+            crate::base_steps::sources_fetch_all_rest(manifests, lane)
+        }
+        StepKind::PrivateFetch {
+            filled,
+            filled_private,
+            listed,
+            ..
+        } => crate::private_steps::filled_fetch(filled, *filled_private, *listed),
+        _ => Vec::new(),
+    }
+}
+
 pub(super) fn variable(need: GateNeed) -> &'static str {
     match need {
         GateNeed::TestFilter => "TEST_FILTER",

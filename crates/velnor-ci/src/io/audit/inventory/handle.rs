@@ -66,14 +66,20 @@ pub(super) struct Anchor {
 
 pub(super) struct Climb<'a> {
     pub(super) anchor: Option<Anchor>,
+    #[cfg(test)]
     pub(super) stepped: &'a dyn Fn(&Path, usize),
+    #[cfg(not(test))]
+    pub(super) marker: std::marker::PhantomData<&'a ()>,
 }
 
 impl Climb<'_> {
     pub(super) fn none() -> Self {
         Self {
             anchor: None,
+            #[cfg(test)]
             stepped: &|_, _| {},
+            #[cfg(not(test))]
+            marker: std::marker::PhantomData,
         }
     }
 }
@@ -136,11 +142,14 @@ fn reopen(parent: &Path, expected: &Stamp, climb: &Climb<'_>) -> io::Result<Owne
         .anchor
         .as_ref()
         .and_then(|anchor| Some((anchor, parent.strip_prefix(&anchor.path).ok()?)));
-    let steps = below.map_or_else(
-        || parent.components().count(),
-        |(_, below)| below.components().count(),
-    );
-    (climb.stepped)(parent, steps);
+    #[cfg(test)]
+    {
+        let steps = below.map_or_else(
+            || parent.components().count(),
+            |(_, below)| below.components().count(),
+        );
+        (climb.stepped)(parent, steps);
+    }
     let opened = match below {
         Some((anchor, below)) => resolve::open_below(anchor.dir.as_fd(), below, false),
         None => resolve::open_path(parent, false),

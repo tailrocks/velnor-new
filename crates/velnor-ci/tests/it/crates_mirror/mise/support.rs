@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Command, Path, PathBuf, Repo, TestResult, fs, rustup_binary};
+use crate::io::hang_up;
 
 pub(super) struct Mise {
     binary: PathBuf,
@@ -173,9 +174,11 @@ impl Mise {
         args: &[String],
     ) -> Result<std::process::Output, Box<dyn std::error::Error>> {
         repo.write_unstaged("ca.pem", "fixture");
-        let output =
-            super::super::fixture::setup_command(repo.root(), "sparse+http://127.0.0.1:1/index/")
-                .output()?;
+        let output = super::super::fixture::setup_command(
+            repo.root(),
+            &format!("sparse+{}/index/", hang_up()),
+        )
+        .output()?;
         assert!(output.status.success(), "{output:?}");
         let wrapper = repo.root().join("velnor-cargo/cargo");
         let paths = [
@@ -259,12 +262,12 @@ impl Mise {
             .env("VELNOR_CARGO_WRAPPER", wrapper)
             .env("PATH", std::env::join_paths(paths)?)
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", hang_up())
             .env("NO_PROXY", "127.0.0.1")
             .env("CARGO_NET_RETRY", "0")
             .env(
                 "CARGO_REGISTRIES_CRATES_IO_INDEX",
-                "sparse+http://127.0.0.1:1/index/",
+                format!("sparse+{}/index/", hang_up()),
             )
             .output()?;
         assert!(output.status.success(), "{output:?}");

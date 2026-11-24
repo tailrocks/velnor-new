@@ -26,6 +26,7 @@ struct Api {
     workflows: RefCell<Vec<&'static str>>,
     workflows_total: Cell<Option<u64>>,
     repository: RefCell<Option<Value>>,
+    run_listing: RefCell<Option<Result<String, String>>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -46,6 +47,7 @@ impl Api {
             promoted_to: None,
             workflows: RefCell::default(),
             workflows_total: Cell::default(),
+            run_listing: RefCell::default(),
             repository: RefCell::default(),
         }
     }
@@ -53,6 +55,12 @@ impl Api {
     fn with_runs(entries: Vec<Value>, runs: &[(&'static str, u64)]) -> Self {
         let api = Self::new(entries);
         *api.running.borrow_mut() = runs.to_vec();
+        api
+    }
+
+    fn with_run_listing(entries: Vec<Value>, listing: Result<&str, &str>) -> Self {
+        let api = Self::new(entries);
+        *api.run_listing.borrow_mut() = Some(listing.map(str::to_owned).map_err(str::to_owned));
         api
     }
 
@@ -99,6 +107,9 @@ impl GitHub for Api {
             return Ok(json!({"total_count":total,"workflows":rows}).to_string());
         }
         if path.contains("/actions/runs?") {
+            if let Some(listing) = self.run_listing.borrow().clone() {
+                return listing.map_err(CiError::new);
+            }
             let status = path
                 .split("status=")
                 .nth(1)

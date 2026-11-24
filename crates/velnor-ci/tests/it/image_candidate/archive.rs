@@ -105,6 +105,20 @@ fn diff_ids_that_do_not_describe_the_layers_are_refused() {
 }
 
 #[test]
+fn an_image_whose_revision_label_is_not_the_source_commit_is_refused() {
+    let wrong = Some("b".repeat(40));
+    for revision in [wrong, Some(String::new()), None] {
+        let mut candidate = spec(vec![(plain_layer(), LAYER)]);
+        candidate.revision = revision.clone();
+        assert_eq!(
+            refused(&build(&candidate).archive()),
+            "OCI image configuration revision label is not the source commit.",
+            "{revision:?}"
+        );
+    }
+}
+
+#[test]
 fn an_unknown_layer_media_type_is_refused() {
     let image = build(&spec(vec![(plain_layer(), "application/x-other")]));
     assert_eq!(

@@ -242,6 +242,7 @@ pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
 
 pub(super) fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
     command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .env_remove("CARGO_ALIAS_XT")
         .current_dir(repo.root().join("rust"))
         .args(["inputs", "build", "--"])
         .args(cargo)

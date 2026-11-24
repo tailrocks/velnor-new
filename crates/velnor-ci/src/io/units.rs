@@ -19,12 +19,14 @@ mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
 mod metadata;
+#[cfg(test)]
+mod owner_tests;
 mod separation;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
 pub(super) use metadata::{MetadataInvocation, own_workspace, workspace};
-pub(super) use separation::apart;
+pub(super) use separation::{apart, outside_tracked};
 pub(super) use workspace::{Roots, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
@@ -54,7 +56,7 @@ pub(super) enum UnitFile {
         name: String,
     },
     DepInfo {
-        configuration: Option<String>,
+        configuration: String,
         hash: Option<String>,
         stem: String,
     },
@@ -98,15 +100,25 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let (found, built) = scan(target, limit, None)?;
+    let Scanned {
+        found,
+        built,
+        artifacts,
+    } = scan(target, limit, None)?;
     built::refuse_without_units(target, built, &found)?;
+    built::refuse_orphan(target, &found, &artifacts)?;
     Ok(found)
 }
 
-type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
+struct Scanned {
+    found: Vec<(UnitFile, PathBuf)>,
+    built: bool,
+    artifacts: Vec<PathBuf>,
+}
 
 fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
+    let mut artifacts = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
     let mut built = false;
@@ -121,6 +133,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 )));
             }
         };
+        let mut places_outputs = None;
         for entry in entries {
             let entry = entry
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
@@ -151,15 +164,26 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 .strip_prefix(target)
                 .ok()
                 .and_then(unit_file)
-                .filter(|_| kind.is_file() && !generated(&path))
+                .filter(|_| kind.is_file() && !built::generated(&path))
             {
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
+                if built::artifact(&entry.file_name())
+                    && !built::generated(&path)
+                    && *places_outputs
+                        .get_or_insert_with(|| built::places_outputs(&directory, target))
+                {
+                    artifacts.push(path);
+                }
             }
         }
     }
-    Ok((found, built))
+    Ok(Scanned {
+        found,
+        built,
+        artifacts,
+    })
 }
 
 fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
@@ -173,15 +197,6 @@ fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
         "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
         path.display()
     ))
-}
-
-/// A file in the `out` folder of a unit that ran a build script. That folder is the script's
-/// `OUT_DIR`, so a `.d` file there is generated content, not dep-info.
-fn generated(file: &Path) -> bool {
-    let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
-        return false;
-    };
-    out.parent().is_some_and(|unit| unit.join("run").is_dir())
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -232,11 +247,14 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
         _ => {
             let stem = name.strip_suffix(".d")?;
             let hash = split(stem).map(|(_, hash)| hash.to_owned());
-            let placed = folders
+            let folder = folders
                 .last()
-                .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
-            (hash.is_some() || folders.last() == Some(&"deps")).then(|| UnitFile::DepInfo {
-                configuration: configuration(1).filter(|_| placed),
+                .copied()
+                .filter(|folder| matches!(*folder, "deps" | "examples"))?;
+            let configuration =
+                configuration(1).filter(|configuration| !configuration.is_empty())?;
+            (hash.is_some() || folder == "deps").then(|| UnitFile::DepInfo {
+                configuration,
                 hash,
                 stem: stem.to_owned(),
             })
@@ -277,7 +295,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
                 });
             }
             Some(UnitFile::DepInfo {
-                configuration: Some(configuration),
+                configuration,
                 hash: Some(hash),
                 stem: stem.to_owned(),
             })
