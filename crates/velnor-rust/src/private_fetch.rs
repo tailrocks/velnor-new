@@ -40,6 +40,7 @@ pub(crate) fn after_trusted_setup(steps: &[Step]) -> usize {
                 StepKind::Checkout { .. }
                     | StepKind::InstallHelper(_)
                     | StepKind::Helper(HelperCommand::Plan)
+                    | StepKind::PublicSources { .. }
                     | StepKind::RepositoryPrivacy
                     | StepKind::PrivateCheck { .. }
                     | StepKind::ReleaseAssets { .. }
