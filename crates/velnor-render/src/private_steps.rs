@@ -33,9 +33,13 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, mint, .. } => token(sources, *mint),
         StepKind::PrivateFetch {
-            manifests, filled, ..
+            manifests,
+            filled,
+            filled_private,
+            ..
         } => RenderedStep {
-            condition: (!filled.is_empty()).then(|| format!("${{{{ !({}) }}}}", saving_run())),
+            condition: (!filled.is_empty())
+                .then(|| format!("${{{{ !({}) }}}}", saving_run(*filled_private))),
             ..fetch(manifests)
         },
         StepKind::ReleaseAssets { assets, part } => {
@@ -253,17 +257,22 @@ pub(crate) fn advisory_fetch(configs: &[Option<RepoPath>]) -> RenderedStep {
     }
 }
 
-fn saving_run() -> String {
-    format!("{ON_DEFAULT_BRANCH} && {SAVING_EVENTS}")
+fn saving_run(private: bool) -> String {
+    let saving = format!("{ON_DEFAULT_BRANCH} && {SAVING_EVENTS}");
+    if private {
+        format!("{saving} && {PRIVATE_REPOSITORY}")
+    } else {
+        saving
+    }
 }
 
-pub(crate) fn filled_fetch(filled: &[RepoPath]) -> Vec<RenderedStep> {
+pub(crate) fn filled_fetch(filled: &[RepoPath], private: bool) -> Vec<RenderedStep> {
     if filled.is_empty() {
         return Vec::new();
     }
     vec![RenderedStep {
         name: "Fetch the dependencies of every root, then drop the token".to_owned(),
-        condition: Some(format!("${{{{ {} }}}}", saving_run())),
+        condition: Some(format!("${{{{ {} }}}}", saving_run(private))),
         ..fetch(filled)
     }]
 }

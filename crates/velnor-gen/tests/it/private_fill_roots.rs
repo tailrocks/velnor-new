@@ -70,7 +70,31 @@ fn lock(repository: &str) -> String {
     )
 }
 
-fn context(event: &'static str) -> impl Fn(&str) -> Result<Value, String> {
+#[derive(Clone, Copy)]
+struct Run {
+    event: &'static str,
+    private: Option<&'static str>,
+}
+
+const PUSH: Run = Run {
+    event: "push",
+    private: Some("true"),
+};
+const PULL_REQUEST: Run = Run {
+    event: "pull_request",
+    private: Some("true"),
+};
+const PUBLIC_PUSH: Run = Run {
+    event: "push",
+    private: Some("false"),
+};
+const UNCHECKED_PUSH: Run = Run {
+    event: "push",
+    private: None,
+};
+
+fn context(run: Run) -> impl Fn(&str) -> Result<Value, String> {
+    let Run { event, private } = run;
     move |name: &str| {
         let text = |value: &str| Ok(Value::Str(value.to_owned()));
         match name {
@@ -81,7 +105,10 @@ fn context(event: &'static str) -> impl Fn(&str) -> Result<Value, String> {
             "github.repository" | "github.event.pull_request.head.repo.full_name" => text("o/r"),
             "github.actor" | "github.event.pull_request.user.login" => text("alice"),
             "github.event.pull_request.state" => text("open"),
-            "steps.private_repo.outputs.private" | "steps.base.outputs.sources" => text("true"),
+            "steps.private_repo.outputs.private" => {
+                Ok(private.map_or(Value::Null, |value| Value::Str(value.to_owned())))
+            }
+            "steps.base.outputs.sources" => text("true"),
             _ if name.ends_with("_mode") => text("all"),
             _ if name.ends_with(".outcome") || name.ends_with(".result") => text("success"),
             _ => Ok(Value::Null),
@@ -89,9 +116,9 @@ fn context(event: &'static str) -> impl Fn(&str) -> Result<Value, String> {
     }
 }
 
-fn runs(step: &Json, event: &'static str) -> Result<bool, String> {
+fn runs(step: &Json, run: Run) -> Result<bool, String> {
     step["if"].as_str().map_or(Ok(true), |guard| {
-        Ok(evaluate(guard, &context(event))?.truthy())
+        Ok(evaluate(guard, &context(run))?.truthy())
     })
 }
 
@@ -134,25 +161,33 @@ fn lanes(layout: &Layout) -> Result<Vec<Vec<Json>>, Box<dyn std::error::Error>> 
     Ok(lanes)
 }
 
-fn fetched(steps: &[Json], event: &'static str) -> Result<Vec<BTreeSet<String>>, String> {
+fn fetched(steps: &[Json], run: Run) -> Result<Vec<BTreeSet<String>>, String> {
     let mut fetched = Vec::new();
     for step in steps {
-        if step["run"].as_str().is_some_and(|run| run.contains(FETCH)) && runs(step, event)? {
+        if step["run"]
+            .as_str()
+            .is_some_and(|line| line.contains(FETCH))
+            && runs(step, run)?
+        {
             fetched.push(manifests(step));
         }
     }
     Ok(fetched)
 }
 
+fn fill(steps: &[Json]) -> Result<&Json, &'static str> {
+    steps
+        .iter()
+        .find(|step| step["run"].as_str().is_some_and(|run| run.contains(FILL)))
+        .ok_or("no fill")
+}
+
 fn every_root_on_a_saving_run(layout: &Layout) -> TestResult {
     let every: BTreeSet<String> = layout.roots.iter().cloned().collect();
     for steps in lanes(layout)? {
-        let fill = steps
-            .iter()
-            .find(|step| step["run"].as_str().is_some_and(|run| run.contains(FILL)))
-            .ok_or("no fill")?;
-        assert!(runs(fill, "push")?, "the fill does not run: {fill}");
-        let fetched = fetched(&steps, "push")?;
+        let fill = fill(&steps)?;
+        assert!(runs(fill, PUSH)?, "the fill does not run: {fill}");
+        let fetched = fetched(&steps, PUSH)?;
         assert_eq!(
             fetched,
             vec![every.clone()],
@@ -162,11 +197,11 @@ fn every_root_on_a_saving_run(layout: &Layout) -> TestResult {
     Ok(())
 }
 
-fn own_roots_on_a_pull_request(layout: &Layout) -> TestResult {
+fn own_roots(layout: &Layout, run: Run) -> TestResult {
     let mut seen = BTreeSet::new();
     let mut count = 0;
     for steps in lanes(layout)? {
-        let fetched = fetched(&steps, "pull_request")?;
+        let fetched = fetched(&steps, run)?;
         assert_eq!(fetched.len(), 1, "{fetched:?}");
         count += fetched[0].len();
         seen.extend(fetched[0].iter().cloned());
@@ -183,17 +218,30 @@ fn a_saving_run_fetches_with_the_token_every_root_the_offline_sources_fill_lists
 
 #[test]
 fn a_pull_request_fetches_with_the_token_only_the_roots_its_job_builds() -> TestResult {
-    own_roots_on_a_pull_request(&two_roots())
+    own_roots(&two_roots(), PULL_REQUEST)
 }
 
 #[test]
 fn a_saving_run_fetches_every_root_when_their_paths_outgrow_one_command_line() -> TestResult {
     every_root_on_a_saving_run(&long_roots())?;
-    own_roots_on_a_pull_request(&long_roots())
+    own_roots(&long_roots(), PULL_REQUEST)
 }
 
 #[test]
 fn a_grouped_job_fetches_with_the_token_every_root_it_compiles() -> TestResult {
-    own_roots_on_a_pull_request(&grouped_roots())?;
+    own_roots(&grouped_roots(), PULL_REQUEST)?;
     every_root_on_a_saving_run(&grouped_roots())
+}
+
+#[test]
+fn a_saving_run_not_confirmed_private_fetches_with_the_token_only_the_roots_its_job_builds()
+-> TestResult {
+    for run in [PUBLIC_PUSH, UNCHECKED_PUSH] {
+        for steps in lanes(&two_roots())? {
+            let fill = fill(&steps)?;
+            assert!(!runs(fill, run)?, "the fill runs: {fill}");
+        }
+        own_roots(&two_roots(), run)?;
+    }
+    Ok(())
 }

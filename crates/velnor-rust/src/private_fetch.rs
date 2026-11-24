@@ -66,7 +66,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 _ => None,
             })
             .collect();
-        let filled = filled(&job.steps, &manifests);
+        let (filled, filled_private) = filled(&job.steps, &manifests);
         let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
@@ -100,6 +100,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 manifests,
                 cached,
                 filled,
+                filled_private,
             },
         ]);
         if early {
@@ -130,15 +131,15 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
     }
 }
 
-fn filled(steps: &[Step], built: &[RepoPath]) -> Vec<RepoPath> {
-    let Some(every) = steps.iter().find_map(|step| match &step.kind {
-        StepKind::SourcesFetchAll { manifests, .. } => Some(manifests),
+fn filled(steps: &[Step], built: &[RepoPath]) -> (Vec<RepoPath>, bool) {
+    let Some((every, private)) = steps.iter().find_map(|step| match &step.kind {
+        StepKind::SourcesFetchAll { manifests, .. } => Some((manifests, step.private_repo)),
         _ => None,
     }) else {
-        return Vec::new();
+        return (Vec::new(), false);
     };
     if every.iter().all(|manifest| built.contains(manifest)) {
-        return Vec::new();
+        return (Vec::new(), false);
     }
     let mut filled = built.to_vec();
     filled.extend(
@@ -147,7 +148,7 @@ fn filled(steps: &[Step], built: &[RepoPath]) -> Vec<RepoPath> {
             .filter(|manifest| !built.contains(manifest))
             .cloned(),
     );
-    filled
+    (filled, private)
 }
 
 fn hoist_sources_restores(steps: &mut Vec<Step>, from: usize, to: usize) -> Vec<Step> {
