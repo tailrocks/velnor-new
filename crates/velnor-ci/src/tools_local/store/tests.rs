@@ -135,10 +135,10 @@ impl<T> Paused<'_, T> {
     }
 }
 
-fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
+fn started<'scope, T: Send + std::fmt::Debug + 'scope>(
     scope: &'scope Scope<'scope, '_>,
     operation: impl FnOnce(&dyn Fn()) -> T + Send + 'scope,
-) -> Paused<'scope, T> {
+) -> (bool, Paused<'scope, T>) {
     let (reached, at_pause) = mpsc::channel();
     let (resume, resumed) = mpsc::channel::<()>();
     let worker = scope.spawn(move || {
@@ -150,12 +150,16 @@ fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
             }
         })
     });
-    assert!(
-        at_pause.recv().is_ok(),
-        "ended before its pause: {:?}",
-        worker.join()
-    );
-    Paused { resume, worker }
+    (at_pause.recv().is_ok(), Paused { resume, worker })
+}
+
+fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
+    scope: &'scope Scope<'scope, '_>,
+    operation: impl FnOnce(&dyn Fn()) -> T + Send + 'scope,
+) -> Paused<'scope, T> {
+    let (reached, operation) = started(scope, operation);
+    assert!(reached, "ended before its pause: {:?}", operation.finish());
+    operation
 }
 
 fn interleave<T: Send + std::fmt::Debug>(
@@ -321,4 +325,25 @@ fn a_lock_whose_taker_was_killed_is_taken_over_once_it_is_stale_again() {
     let restored = node.restore("k1", &|| {});
     assert!(restored.hit(), "{restored:?}");
     assert_eq!(node.listed(), ["k1", "k2"]);
+}
+
+#[test]
+fn a_job_that_took_over_a_stale_lock_keeps_the_key_until_it_moved_the_lock() {
+    let node = node("taken-lock");
+    node.with_a_killed_jobs_lock();
+    let (healed, saved) = std::thread::scope(|scope| {
+        let heal = paused(scope, |pause| {
+            node.save("k1", true, &at(Step::Taken, pause))
+        });
+        let (_, prune) = started(scope, |pause| {
+            node.save("k3", false, &at(Step::Retiring, pause))
+        });
+        (heal.finish(), prune.finish())
+    });
+    let listed = node.listed();
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert!(quiet(&saved), "{saved:?}");
+    let restored = node.restore("k1", &|| {});
+    assert!(restored.hit(), "{restored:?}, the store lists {listed:?}");
+    assert_eq!(listed, ["k1", "k3"]);
 }

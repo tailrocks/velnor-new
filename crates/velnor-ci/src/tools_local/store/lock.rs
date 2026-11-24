@@ -53,12 +53,12 @@ fn take_over(tools: &Path, path: &Path, key: &str, pause: &dyn Fn(Step)) -> bool
     }
     pause(Step::Breaking);
     let marker = format!(".taken-{}.{:09}", seen.mtime(), seen.mtime_nsec());
-    if mkdirat(&held, marker.as_str(), Mode::S_IRWXU).is_err() {
+    if mkdirat(&held, marker.as_str(), Mode::S_IRWXU).is_err() || !published(&held, path) {
         return false;
     }
     pause(Step::Taken);
     let grave = tools.join(format!("{STAGING_PREFIX}{key}-{:016x}", random_u64()));
-    if !published(&held, path) || fs::rename(path, &grave).is_err() {
+    if fs::rename(path, &grave).is_err() {
         return false;
     }
     remove_tree(&grave).ok();
