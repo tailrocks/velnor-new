@@ -28,6 +28,7 @@ pub mod event;
 pub mod gate;
 pub mod github;
 pub mod image_candidate;
+pub mod image_publish;
 pub mod input_dirs;
 pub mod inputs;
 pub mod io;

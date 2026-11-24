@@ -83,6 +83,7 @@ mod group_runs;
 mod helper_commands;
 mod http_errors;
 mod image_candidate;
+mod image_publish;
 mod inputs;
 mod io;
 mod io_cold;
