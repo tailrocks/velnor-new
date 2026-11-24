@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::escape::inert;
-use crate::io::saved_git_config::names_credential;
+use crate::io::saved_git_config::{holds_token, names_credential};
 
 mod prune;
 
@@ -334,19 +334,26 @@ fn holds_credential(path: &Path) -> bool {
 }
 
 fn json_holds_credential(path: &Path) -> bool {
-    read_small(path)
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .filter(serde_json::Value::is_object)
-        .is_none_or(|value| names_credential_in(&value))
+    read_small(path).is_none_or(|text| {
+        holds_token(&text)
+            || serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .filter(serde_json::Value::is_object)
+                .is_none_or(|value| names_credential_in(&value))
+    })
+}
+
+fn names_secret(text: &str) -> bool {
+    names_credential(text) || holds_token(text)
 }
 
 fn names_credential_in(value: &serde_json::Value) -> bool {
     match value {
-        serde_json::Value::String(text) => names_credential(text),
+        serde_json::Value::String(text) => names_secret(text),
         serde_json::Value::Array(items) => items.iter().any(names_credential_in),
         serde_json::Value::Object(fields) => fields
             .iter()
-            .any(|(key, value)| names_credential(key) || names_credential_in(value)),
+            .any(|(key, value)| names_secret(key) || names_credential_in(value)),
         serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
             false
         }

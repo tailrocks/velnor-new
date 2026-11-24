@@ -60,6 +60,22 @@ fn a_credential_in_a_registry_config_stops_the_sources_save() {
                 "0123456789abcdefghijklmnopqrstuvwxyzAB\"}\n"
             ),
         ),
+        (
+            "registry-bare-hex-token",
+            ".cargo/registry/index/registry.example-1/config.json",
+            concat!(
+                "{\"dl\": \"https://registry.example/crates\", \"token\": \"0123456789abcdef0123",
+                "456789abcdef01234567\"}\n"
+            ),
+        ),
+        (
+            "registry-bare-numeric-token",
+            ".cargo/registry/index/registry.example-1/config.json",
+            concat!(
+                "{\"dl\": \"https://registry.example/crates\", \"token\": 12345678901234567890",
+                "12345678901234567890}\n"
+            ),
+        ),
     ]);
     sources_save_goes_on(&[
         (
