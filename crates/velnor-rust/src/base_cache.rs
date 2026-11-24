@@ -133,9 +133,15 @@ pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
                 .iter()
                 .map(|unit| unit.gate.clone())
                 .collect(),
+            fails_on_private: facts
+                .helper
+                .as_ref()
+                .is_some_and(|release| release.version().at_least(PUBLIC_PROBE_FAILS_HELPER)),
         })
     })
 }
+
+const PUBLIC_PROBE_FAILS_HELPER: (u64, u64, u64) = (0, 1, 114);
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
 
