@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use velnor_model::{CompileInputs, RepoFacts, RepoPath};
 use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
 
-use super::inputs::{TrackedPaths, git, top_level_files, tracked_paths};
+use super::inputs::{git, top_level_files, tracked_paths};
 use crate::error::CiError;
 use crate::inputs::Tracked;
 use crate::scope::Scope;
@@ -77,16 +77,15 @@ pub(super) fn git_prefix(root: &Path) -> Result<String, CiError> {
 pub(super) fn scoped_files(
     root: &Path,
     scope: Option<&Scope>,
-) -> Result<(TrackedPaths, Tracked), CiError> {
-    let index = tracked_paths(root)?;
+) -> Result<(PathBuf, Tracked), CiError> {
+    let top = tracked_paths(root)?.top;
     let owned;
     let scope = if let Some(scope) = scope {
         scope
     } else {
-        let context = context(&index.top)?;
+        let context = context(&top)?;
         owned = Scope::new(&git_prefix(root)?, &context.listed, context.facts.as_ref());
         &owned
     };
-    let tracked = top_level_files(&index.top, scope, false)?;
-    Ok((index, tracked))
+    Ok((top.clone(), top_level_files(&top, scope, false)?))
 }

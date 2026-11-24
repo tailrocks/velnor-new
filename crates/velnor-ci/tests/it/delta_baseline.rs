@@ -158,8 +158,9 @@ fn staging_reads_only_files_the_build_touched_and_still_sees_hidden_rewrites() {
     let (output, saved) = run(&repo, "stage", "base");
     let report = stdout(&output);
     assert_eq!(saved, "save=true\n");
-    // The two new outputs, the rewritten file and the inputs record `compiled` saved.
-    let expected = format!("read 4 of {} files\n", FILES + 3);
+    // The two new outputs, the rewritten file, and the inputs record and directory listing
+    // that `compiled` saved.
+    let expected = format!("read 5 of {} files\n", FILES + 4);
     assert!(report.contains(&expected), "{report}");
     let nodes = manifest(&repo)["nodes"].clone();
     assert!(nodes.get("debug/deps/lib9.rlib").is_some(), "{nodes}");

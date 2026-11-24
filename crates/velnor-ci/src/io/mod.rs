@@ -50,6 +50,7 @@ mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+mod input_dirs;
 mod input_scopes;
 mod input_snapshot;
 mod input_target;
