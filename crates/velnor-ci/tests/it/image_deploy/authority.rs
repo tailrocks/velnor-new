@@ -154,7 +154,7 @@ fn a_ruleset_that_predates_the_push_vouches_and_an_unknown_push_time_never_does(
     let covered = api(&ruleset(|_| {}));
     assert!(run(&covered, "mallory", &[]).is_ok());
     let same = api(&ruleset(|r| {
-        r["updated_at"] = json!("2026-02-01T12:00:00Z")
+        r["updated_at"] = json!("2026-02-01T12:00:00Z");
     }));
     assert!(run(&same, "mallory", &[]).is_ok());
     let unknown = run_with(&covered, "mallory", &[], None)
