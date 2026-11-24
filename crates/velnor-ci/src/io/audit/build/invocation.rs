@@ -7,14 +7,16 @@ use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
+mod alias;
 mod selection;
+pub(super) use alias::resolve;
 pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
 
-const CARGO_SUBCOMMANDS: [&str; 16] = [
+const CARGO_SUBCOMMANDS: [&str; 18] = [
     "build", "b", "check", "c", "clippy", "test", "t", "nextest", "doc", "d", "run", "r", "bench",
-    "rustc", "fetch", "metadata",
+    "rustc", "rustdoc", "fix", "fetch", "metadata",
 ];
 
 pub(super) struct Invocation {
@@ -83,39 +85,52 @@ impl Invocation {
             (program, arguments),
             ("cargo" | "cargo-nextest", ["nextest", "run", ..])
         );
-        let test = matches!((program, arguments), ("cargo", ["test" | "t", ..]));
+        let test = matches!(
+            (program, arguments),
+            ("cargo", ["test" | "t" | "bench", ..])
+        );
         let doctest = test && words.contains(&"--doc");
         let compilation = matches!(
             (program, arguments),
             (
                 "cargo",
-                ["build" | "b" | "check" | "c" | "clippy" | "doc" | "d", ..]
+                [
+                    "build"
+                        | "b"
+                        | "check"
+                        | "c"
+                        | "clippy"
+                        | "doc"
+                        | "d"
+                        | "rustc"
+                        | "rustdoc"
+                        | "fix",
+                    ..
+                ]
             ) | ("cargo-clippy", ["clippy", ..])
                 | ("cargo" | "cargo-nextest", ["nextest", "archive", ..])
         );
         let compiler = compilation && !words.contains(&"--open")
             || (nextest || test && !doctest) && words.contains(&"--no-run");
-        let preflight = ((nextest || test && !doctest) && !compiler).then(|| {
-            let end = command
-                .iter()
-                .position(|word| word == "--")
-                .unwrap_or(command.len());
-            let mut preflight: Vec<String> = command[..end]
-                .iter()
-                .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
-                .cloned()
-                .collect();
-            preflight.push("--no-run".to_owned());
-            preflight.extend(command[end..].iter().cloned());
-            preflight
-        });
-        let running = matches!(
-            (program, arguments),
-            (
-                "cargo",
-                ["run" | "r" | "bench" | "rustc" | "rustdoc" | "fix", ..]
-            )
-        );
+        let running = matches!((program, arguments), ("cargo", ["run" | "r", ..]));
+        let preflight = if running {
+            start.map(|start| build_of(command, start))
+        } else {
+            ((nextest || test && !doctest) && !compiler).then(|| {
+                let end = command
+                    .iter()
+                    .position(|word| word == "--")
+                    .unwrap_or(command.len());
+                let mut preflight: Vec<String> = command[..end]
+                    .iter()
+                    .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
+                    .cloned()
+                    .collect();
+                preflight.push("--no-run".to_owned());
+                preflight.extend(command[end..].iter().cloned());
+                preflight
+            })
+        };
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())
         } else {
@@ -137,11 +152,17 @@ impl Invocation {
             command: command.to_vec(),
             preflight,
             compiler,
-            cargo: compilation || nextest || test,
+            cargo: compilation || nextest || test || running,
             builds: compilation || nextest || test || running,
             globals,
             chdir,
         }
+    }
+
+    fn work(&self, directory: &Path) -> PathBuf {
+        self.chdir
+            .as_ref()
+            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir))
     }
 
     pub(super) fn step(&self, directory: &Path) -> PathBuf {
@@ -242,6 +263,16 @@ impl Invocation {
         }
         Ok(())
     }
+}
+
+fn build_of(command: &[String], subcommand: usize) -> Vec<String> {
+    let end = command
+        .iter()
+        .position(|word| word == "--")
+        .unwrap_or(command.len());
+    let mut build = command[..end].to_vec();
+    "build".clone_into(&mut build[subcommand + 1]);
+    build
 }
 
 fn without_command_scope(globals: &[String]) -> Vec<String> {

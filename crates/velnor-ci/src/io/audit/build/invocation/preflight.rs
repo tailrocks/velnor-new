@@ -33,3 +33,48 @@ fn the_preflight_keeps_the_arguments_after_the_separator_untouched() {
         words("cargo test --workspace --no-run -- --no-fail-fast")
     );
 }
+
+#[test]
+fn a_run_is_prepared_by_building_what_it_would_run() {
+    for (command, build) in [
+        (
+            "cargo run -p lib --bin tool --release -- --flag",
+            "cargo build -p lib --bin tool --release",
+        ),
+        ("cargo r --bin tool", "cargo build --bin tool"),
+        (
+            "cargo --locked -C rust run --example demo",
+            "cargo --locked -C rust build --example demo",
+        ),
+    ] {
+        let invocation = Invocation::new(&words(command));
+        assert_eq!(invocation.preflight, Some(words(build)), "{command}");
+        assert!(invocation.cargo && !invocation.compiler, "{command}");
+    }
+}
+
+#[test]
+fn a_bench_is_prepared_like_a_test() {
+    let invocation = Invocation::new(&words("cargo bench -p lib -- --save-baseline base"));
+    assert_eq!(
+        invocation.preflight,
+        Some(words("cargo bench -p lib --no-run -- --save-baseline base"))
+    );
+    let compile_only = Invocation::new(&words("cargo bench -p lib --no-run"));
+    assert!(compile_only.compiler && compile_only.preflight.is_none());
+}
+
+#[test]
+fn rustc_rustdoc_and_fix_compile_in_place() {
+    for command in [
+        "cargo rustc -p lib --lib -- -Zunpretty=expanded",
+        "cargo rustdoc -p lib",
+        "cargo fix --lib --allow-no-vcs",
+    ] {
+        let invocation = Invocation::new(&words(command));
+        assert!(
+            invocation.cargo && invocation.compiler && invocation.preflight.is_none(),
+            "{command}"
+        );
+    }
+}
