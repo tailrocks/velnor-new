@@ -4,13 +4,14 @@
 experimental = ["wrapper-scripts"]
 
 [scripts.wrapper.local-docker-ci]
-command = ["sh", "-c", 'if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
+command = ["sh", "-c", 'unset VELNOR_MBX_REPORTS; if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
 
 [scripts.wrapper.no-programs]
-command = ["/usr/bin/env", "PATH=/nonexistent"]
+command = ["/usr/bin/env", "-u", "VELNOR_MBX_REPORTS", "PATH=/nonexistent"]
 
 [scripts.wrapper.no-mbx-reports]
 command = ["/usr/bin/env", "-u", "VELNOR_MBX_REPORTS"]
+target-runner = "within-wrapper"
 
 [test-groups]
 docker-networks = { max-threads = 4 }
