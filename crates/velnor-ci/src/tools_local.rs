@@ -213,11 +213,10 @@ fn home_owner(home: &Path) -> Result<u32, std::io::Error> {
         .map(|metadata| metadata.uid())
 }
 
-pub fn note_clear(verb: Verb, github_env: Option<&Path>, now: i64) {
-    if verb == Verb::Clear
-        && let Some(file) = github_env
-    {
-        crate::restore_clock::record(file, now).ok();
+pub fn note_clear(verb: Verb, github_env: Option<&Path>, now: i64) -> Result<(), CiError> {
+    match github_env {
+        Some(file) if verb == Verb::Clear => crate::restore_clock::record(file, now),
+        _ => Ok(()),
     }
 }
 
@@ -240,7 +239,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         verb,
         var("GITHUB_ENV").map(PathBuf::from).as_deref(),
         crate::time::now_unix(),
-    );
+    )?;
     let outcome = run(&Inputs {
         verb,
         key,

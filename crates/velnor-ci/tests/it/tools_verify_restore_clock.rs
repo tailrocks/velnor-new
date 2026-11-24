@@ -163,7 +163,7 @@ fn the_clear_step_exports_the_clock_it_is_given_exactly() {
     let job = job("restore-clock-clear-exact");
     let file = job.root.join("github-env");
     fs::write(&file, "EARLIER=1\n").unwrap_or_else(|e| unreachable!("{e}"));
-    note_clear(ToolsVerb::Clear, Some(&file), BEGAN);
+    assert!(note_clear(ToolsVerb::Clear, Some(&file), BEGAN).is_ok());
     assert_eq!(
         fs::read_to_string(&file).ok().as_deref(),
         Some(format!("EARLIER=1\n{ENV_NAME}={BEGAN}\n").as_str())
@@ -175,18 +175,40 @@ fn only_the_clear_step_exports_a_start() {
     let job = job("restore-clock-other-verbs");
     let file = job.root.join("github-env");
     for verb in [ToolsVerb::Restore, ToolsVerb::Save] {
-        note_clear(verb, Some(&file), BEGAN);
+        assert!(note_clear(verb, Some(&file), BEGAN).is_ok());
     }
     assert!(!file.exists());
     assert_eq!(cutoff(None, FAR_FUTURE), Some(margined(FAR_FUTURE)));
 }
 
 #[test]
-fn a_record_that_cannot_be_written_is_reported_and_the_clear_step_goes_on() {
+fn a_start_that_cannot_be_exported_fails_the_clear_step_instead_of_leaving_the_cutoff_to_the_check()
+{
     let job = job("restore-clock-unwritable");
     let blocked = job.root.join("no-such-dir").join("github-env");
     assert!(record(&blocked, BEGAN).is_err());
-    note_clear(ToolsVerb::Clear, Some(&blocked), BEGAN);
+    assert!(note_clear(ToolsVerb::Clear, Some(&blocked), BEGAN).is_err());
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .env_clear()
+        .env("HOME", &job.home)
+        .env("RUNNER_TEMP", &job.root)
+        .env("GITHUB_ENV", &blocked)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_REF", "refs/heads/main")
+        .args(["tools-local", "clear"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!output.status.success(), "{output:?}");
+    let said = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        said.contains("cannot record when the restore began"),
+        "{said}"
+    );
+}
+
+#[test]
+fn without_a_github_env_file_the_clear_step_has_nothing_to_export_and_goes_on() {
+    assert!(note_clear(ToolsVerb::Clear, None, BEGAN).is_ok());
 }
 
 #[test]
