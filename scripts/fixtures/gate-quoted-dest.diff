@@ -1,0 +1,8 @@
+diff --git "a/crates/velnor-gen/src/old/gates.rs" "b/crates/velnor-gen/src/\303\274/gates.rs"
+similarity index 90%
+rename from crates/velnor-gen/src/old/gates.rs
+rename to "crates/velnor-gen/src/\303\274/gates.rs"
+--- "a/crates/velnor-gen/src/old/gates.rs"
++++ "b/crates/velnor-gen/src/\303\274/gates.rs"
+@@ -0,0 +1 @@
++gate(RustCi, "lint", (0, 1, 110)),
