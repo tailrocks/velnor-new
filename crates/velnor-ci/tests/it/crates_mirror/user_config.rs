@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use super::fixture::{TestResult, active_toolchain, mirror_fixture};
-use crate::io::Repo;
+use crate::io::{Repo, hang_up};
 
 /// Cargo does not merge `--config` given before the subcommand with `--config`
 /// given after it: the later group replaces the earlier one. The wrapper puts the
@@ -57,12 +57,12 @@ fn fetch_with<const N: usize>(
         .env("VELNOR_CARGO_CONFIG", config)
         .env("VELNOR_CARGO_WRAPPER", wrapper)
         .env("CARGO_NET_OFFLINE", "false")
-        .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+        .env("CARGO_HTTP_PROXY", hang_up())
         .env("NO_PROXY", "127.0.0.1")
         .env("CARGO_NET_RETRY", "0")
         .env(
             "CARGO_REGISTRIES_CRATES_IO_INDEX",
-            "sparse+http://127.0.0.1:1/index/",
+            format!("sparse+{}/index/", hang_up()),
         )
         .output()?;
     assert!(output.status.success(), "{output:?}");

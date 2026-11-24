@@ -223,6 +223,21 @@ fn omitted_open_pull_requests_are_confirmed_before_closed_deltas_are_deleted() {
 }
 
 #[test]
+fn omitted_open_pull_requests_are_confirmed_before_their_mbx_objects_are_deleted() {
+    let objects = |id: u64| json!({"id":id,"key":format!("linux-x64-mbx-v1-rust-test-dir-rust-0123456789ab-{}-run-{id}-1", "a".repeat(40)),"ref":"refs/pull/101/merge","created_at":"2026-11-17T00:00:00Z","last_accessed_at":"2026-11-17T00:00:00Z","size_in_bytes":10});
+    let mut api = Api::new();
+    *api.entries.borrow_mut() = vec![objects(1)];
+    api.prs.truncate(100);
+    let report = budget(&api, &repo(), 0, 2000, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("deleted 0"), "{report}");
+    assert_eq!(api.entries.borrow().len(), 1);
+    assert_eq!(api.confirmations.borrow().len(), 1);
+    api.status = json!({"state":"closed"});
+    budget(&api, &repo(), 0, 2000, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(api.entries.borrow().len(), 0);
+}
+
+#[test]
 fn concurrent_cache_removal_does_not_stop_trim_or_budget() {
     for status in [404, 410, 403, 500] {
         for trimming in [false, true] {

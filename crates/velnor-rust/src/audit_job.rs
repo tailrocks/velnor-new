@@ -13,6 +13,8 @@ pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
 const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 102);
 
+const AUDIT_BEFORE_SAVES_HELPER: (u64, u64, u64) = (0, 1, 116);
+
 /// Helpers from this release audit one Cargo root, or one workspace group,
 /// with `inputs audit --root`, so each lane audits what it built and no job
 /// builds every workspace again.
@@ -21,6 +23,13 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
+}
+
+pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(AUDIT_BEFORE_SAVES_HELPER))
 }
 
 pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Option<Job> {

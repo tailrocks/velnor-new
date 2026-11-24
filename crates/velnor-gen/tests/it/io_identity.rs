@@ -56,7 +56,7 @@ fn schedule(path: &Path) -> Result<String, Box<dyn Error>> {
     let output = generate(path)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    let workflow = fs::read_to_string(path.join(".github/workflows/rust-ci.yml"))?;
+    let workflow = fs::read_to_string(path.join(".github/workflows/ci.yml"))?;
     workflow
         .lines()
         .find_map(|line| line.trim().strip_prefix("- cron: "))
@@ -164,7 +164,7 @@ fn local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity() -> TestR
         "local origin unexpectedly generated a workflow"
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("origin"));
-    assert!(!repo.0.join(".github/workflows/rust-ci.yml").exists());
+    assert!(!repo.0.join(".github/workflows/ci.yml").exists());
     Ok(())
 }
 
@@ -183,7 +183,7 @@ fn local_origin_generates_when_the_schedule_does_not_need_the_identity() -> Test
     let output = generate(&off.0)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    let workflow = fs::read_to_string(off.0.join(".github/workflows/rust-ci.yml"))?;
+    let workflow = fs::read_to_string(off.0.join(".github/workflows/ci.yml"))?;
     assert!(!workflow.contains("- cron: "), "{workflow}");
     assert_eq!(schedule(&cron.0)?, "17 3 * * 2");
     drop(cron);

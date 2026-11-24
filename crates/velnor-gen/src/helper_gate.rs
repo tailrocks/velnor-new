@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, Platform,
-    PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, MisePlatform, Platform,
+    PushAfterMergeGroup, RELEASE_CONFIG_PATH, RepoFacts, RepoView, WORKFLOWS_CONFIG_PATH,
 };
 
-use velnor_rust::{INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER};
+use velnor_rust::{
+    INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER, check_lint_tools, check_mbx, check_tools,
+};
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
@@ -23,14 +25,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     if !release.version().at_least(HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
-    if facts
-        .config
-        .runner
-        .as_str()
-        .to_ascii_lowercase()
-        .starts_with("macos")
-        && !release.digests().contains_key(&Platform::MacosArm64)
-    {
+    if is_macos(facts) && !release.digests().contains_key(&Platform::MacosArm64) {
         return Err(GenerateError::HelperLockLacksMacos {
             version: release.version().clone(),
             runner: facts.config.runner.to_string(),
@@ -85,11 +80,44 @@ fn require_generator_digests(
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck);
-    if wanted && release.generator_digests().is_none() {
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }));
+    if !wanted {
+        return Ok(());
+    }
+    if is_macos_x64(facts) {
+        return Err(GenerateError::GeneratorMacosX64 {
+            runner: facts.config.runner.to_string(),
+        });
+    }
+    let Some(digests) = release.generator_digests() else {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
+    };
+    let installs_archive = facts.config.lint.iter().any(|lint| {
+        matches!(
+            lint.kind,
+            LintKind::GeneratedCheck {
+                from_source: false,
+                ..
+            }
+        )
+    });
+    if installs_archive && is_macos(facts) && !digests.contains_key(&Platform::MacosArm64) {
+        return Err(GenerateError::GeneratorLockLacksMacos {
+            version: release.version().clone(),
+            runner: facts.config.runner.to_string(),
+        });
     }
     Ok(())
+}
+
+fn is_macos(facts: &RepoFacts) -> bool {
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos"))
+}
+
+fn is_macos_x64(facts: &RepoFacts) -> bool {
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos/x64"))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
@@ -98,6 +126,50 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
     } else {
         Err(GenerateError::IncompatibleHelper(version.clone()))
     }
+}
+
+pub(crate) fn pinned_helper<'a>(
+    view: &RepoView,
+    facts: &'a RepoFacts,
+) -> Result<Option<&'a HelperRelease>, GenerateError> {
+    if !facts.rust_roots.is_empty() || facts.helper.is_some() || needs_pinned_helper(view, facts) {
+        let helper = check_helper(facts)?;
+        crate::key_gates::check_config_keys(view, helper.version())?;
+        return Ok(Some(helper));
+    }
+    if crate::key_gates::required_helper(view).is_some() {
+        return Err(GenerateError::HelperNotPinned);
+    }
+    Ok(None)
+}
+
+pub(crate) fn check_stack_tools(view: &RepoView, facts: &RepoFacts) -> Result<(), GenerateError> {
+    if !facts.rust_roots.is_empty() {
+        check_tools(facts)?;
+        check_mbx(facts, &view.files)?;
+    } else if needs_lint_tools(facts) {
+        check_lint_tools(facts)?;
+    }
+    Ok(())
+}
+
+fn needs_pinned_helper(view: &RepoView, facts: &RepoFacts) -> bool {
+    view.files.contains_key(&WORKFLOWS_CONFIG_PATH)
+        || view.files.contains_key(&RELEASE_CONFIG_PATH)
+        || facts
+            .config
+            .lint
+            .iter()
+            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }) || lint.planned())
+}
+
+fn needs_lint_tools(facts: &RepoFacts) -> bool {
+    facts.config.lint.iter().any(|lint| {
+        matches!(
+            lint.kind,
+            LintKind::Jactionlint { .. } | LintKind::Alint { .. } | LintKind::MiseTask { .. }
+        )
+    })
 }
 
 pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {

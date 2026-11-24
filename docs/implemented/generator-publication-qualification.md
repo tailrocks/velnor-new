@@ -50,7 +50,7 @@
   acceptance. The refreshed inventory above confirms that `v0.1.5` remains
   occupied and `v0.1.6` remains unused.
 - Canonical route and gates: dispatch only
-  [`.github/workflows/product-release.yml`](../../.github/workflows/product-release.yml#L4)
+  `.github/workflows/product-release.yml`
   on `main`, with `workflow_dispatch: {}` and no inputs. Release eligibility
   requires the exact current `main` tip and successful same-source CI with the
   `Required` job. Generator publication runs through the protected
@@ -206,7 +206,7 @@ The generated publisher output was refreshed through the supported CLI, with
 no hand edits:
 
 ```text
-cargo run --locked -p velnor-actions-cli -- generate --output-dir /private/tmp/velnor-publication-generated
+cargo run --locked -p velnor-actions-cli -- generate --output-dir "${TMPDIR:-/tmp}/velnor-publication-generated"
 ```
 
 The first preview attempt exposed uncached registry entries used by offline
@@ -227,9 +227,9 @@ coordinator with `workflow_dispatch: {}` and no inputs; it invokes the reusable
 `.github/workflows/product-release-generator.yml` module. Release eligibility
 requires the dispatch SHA to be the exact current `main` tip and its
 exact-source main CI run and `Required` job to succeed; see
-[`release-eligibility`](../../.github/workflows/product-release.yml#L11) and its
+`release-eligibility` and its
 main/`Required` checks at
-[`product-release.yml`](../../.github/workflows/product-release.yml#L51).
+`product-release.yml`.
 The image and generator branches both depend on that eligibility job, while
 `release-generator` depends on eligibility and `prepare-generator`; it does not
 depend on `release-images` or its outcome. A runner-image job failure is
@@ -259,9 +259,9 @@ path, and signer digest. It binds the caller's source and workflow authority
 to the same exact `main` SHA and performs these checks directly; it does not
 require the overall coordinator conclusion.
 See the existing-release checks in
-[`prepare-generator`](../../.github/workflows/product-release.yml#L161) and the
+`prepare-generator` and the
 protected generator publication job at
-[`product-release-generator.yml`](../../.github/workflows/product-release-generator.yml#L455).
+`product-release-generator.yml`.
 
 Read-only GitHub rules inspection on 2026-10-08 confirmed that the active
 `protect-main` ruleset requires the strict `Required` check, pull requests with

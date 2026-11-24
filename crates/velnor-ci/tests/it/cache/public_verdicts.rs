@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::net::TcpListener;
 use std::process::{Command, Output};
 
 use super::public_declared::{declare, repositories};
@@ -10,7 +9,7 @@ use super::public_git::{
     OTHER_SHA, SHA, TOKEN, decide_with, git, lock, public, refused, reply, serve,
 };
 use super::support::seed;
-use crate::io::Repo as Checkout;
+use crate::io::{Repo as Checkout, hang_up};
 
 const VERDICTS: &str = "VELNOR_PUBLIC_VERDICTS";
 
@@ -41,16 +40,6 @@ fn declaring(
     (output, written)
 }
 
-fn closed_api() -> String {
-    let closed = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
-    let url = format!(
-        "http://{}",
-        closed.local_addr().unwrap_or_else(|e| unreachable!("{e}"))
-    );
-    drop(closed);
-    url
-}
-
 fn everything(output: &Output) -> String {
     format!(
         "{}{}",
@@ -74,13 +63,23 @@ fn the_run_wide_step_looks_each_repository_up_once_and_writes_the_verdicts() {
 }
 
 #[test]
-fn the_run_wide_step_records_a_failed_lookup_and_still_succeeds() {
+fn the_run_wide_step_fails_on_a_definitive_private_verdict() {
     let mock = serve(reply(404, String::new()));
     let sources = [("dep", git("acme/shared-lib", SHA))];
-    let (output, written) = public_sources(&sources, &mock.url, &[]);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(written, "verdicts={\"acme/shared-lib\":false}\n");
-    let (output, written) = public_sources(&sources, &closed_api(), &[]);
+    let (output, _) = public_sources(&sources, &mock.url, &[]);
+    assert!(!output.status.success(), "{output:?}");
+    let text = everything(&output);
+    assert!(
+        text.contains("github.com/acme/shared-lib is not public"),
+        "{text}"
+    );
+    assert!(text.contains("[private_sources]"), "{text}");
+}
+
+#[test]
+fn the_run_wide_step_records_an_unproven_lookup_and_still_succeeds() {
+    let sources = [("dep", git("acme/shared-lib", SHA))];
+    let (output, written) = public_sources(&sources, &hang_up(), &[]);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "verdicts={\"acme/shared-lib\":false}\n");
 }
@@ -228,7 +227,7 @@ fn a_public_verdict_does_not_admit_a_source_the_lock_check_refuses() {
 fn a_failed_lookup_never_prints_the_token() {
     let sources = [("dep", git("acme/shared-lib", SHA))];
     let env = [("GITHUB_TOKEN", TOKEN), ("GH_TOKEN", TOKEN)];
-    for api in [closed_api(), serve(reply(403, TOKEN.to_owned())).url] {
+    for api in [hang_up(), serve(reply(403, TOKEN.to_owned())).url] {
         let (output, written) = decide_with(&sources, &api, &env);
         refused(&output, &written);
         assert!(!everything(&output).contains(TOKEN), "{output:?}");

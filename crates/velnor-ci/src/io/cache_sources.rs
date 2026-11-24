@@ -91,16 +91,16 @@ pub(super) fn refusal(
             .map(|dir| dir.join(".cargo"))
             .chain([cargo_home.clone()])
         {
-            for name in ["config", "config.toml"] {
-                let path = dir.join(name);
-                match fs::symlink_metadata(&path) {
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                    Ok(meta) if meta.is_file() => {}
-                    _ => return Ok(refused(&path, None)),
-                }
-                if !read_public(&path, velnor_rust::cacheable_config) {
-                    return Ok(refused(&path, None));
-                }
+            let Ok(path) = effective_config(&dir) else {
+                return Ok(refused(&dir.join("config"), None));
+            };
+            match fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Ok(meta) if meta.is_file() => {}
+                _ => return Ok(refused(&path, None)),
+            }
+            if !read_public(&path, velnor_rust::cacheable_config) {
+                return Ok(refused(&path, None));
             }
         }
     }
@@ -138,6 +138,15 @@ pub(super) fn refusal(
     );
     admission.private_sources = private_sources;
     Ok(admission)
+}
+
+fn effective_config(dir: &Path) -> std::io::Result<PathBuf> {
+    let plain = dir.join("config");
+    match fs::symlink_metadata(&plain) {
+        Ok(_) => Ok(plain),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(dir.join("config.toml")),
+        Err(error) => Err(error),
+    }
 }
 
 pub(super) struct UnreadableDeclaration;

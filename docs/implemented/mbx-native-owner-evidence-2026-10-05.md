@@ -55,10 +55,10 @@ These results belong to the separate cache-foundation worktree, based on
 
 - The reviewed eight-family filter `d799720a-3dab-4805-bfe4-849a58de8f45`
   passed 33/33 with 313 filtered. Log:
-  `/tmp/velnor-cache-renderer-eight-family-fixed-anchor-nextest.log`.
+  `<tmp>`.
 - The full renderer run `60fecb18-8738-4900-8f4a-c722502b132f` ran 346
   tests: 328 passed and 18 failed, with no skipped tests. Log:
-  `/tmp/velnor-cache-renderer-full-fixed-anchor-nextest.log`.
+  `<tmp>`.
 - Independent review accepted only the eight-file fixture slice and its
   scoped run. It did not accept the broader cache migration. The 18 failures
   remain open; the current cache work is not a mergeable V2 implementation.

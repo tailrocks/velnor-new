@@ -24,6 +24,7 @@ pub(super) const SHA: &str = "9f3c1e2";
 
 #[derive(Debug, Default)]
 pub(super) struct FakeRunners {
+    pub(super) kept: Mutex<Vec<velnor_test_support::ScratchDir>>,
     pub(super) runs: Mutex<BTreeMap<(&'static str, String), Value>>,
     pub(super) agents: Mutex<Vec<(Side, u64, String)>>,
     pub(super) down: Mutex<Vec<Side>>,
@@ -178,9 +179,15 @@ pub(super) async fn authority<'a>(
     runners: &'a FakeRunners,
 ) -> Authority<&'a FakeRunners> {
     let dir = temp_dir(name);
-    Authority::open(runners, TOKEN.to_owned(), &dir.join("authority"))
+    let authority = Authority::open(runners, TOKEN.to_owned(), &dir.join("authority"))
         .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    runners
+        .kept
+        .lock()
         .unwrap_or_else(|e| unreachable!("{e}"))
+        .push(dir);
+    authority
 }
 
 pub(super) async fn ask(

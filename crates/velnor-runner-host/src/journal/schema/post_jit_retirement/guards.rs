@@ -27,7 +27,7 @@ WHEN NOT EXISTS (
       AND p.engine_id=a.engine_id AND p.docker_root_digest=a.docker_root_digest
       AND s.instance_binding_digest=NEW.instance_binding_digest AND s.runner_id=NEW.runner_id AND s.runner_name=NEW.runner_name AND s.runner_scale_set_id=NEW.scale_set_id
       AND j.runner_id=NEW.runner_id AND j.runner_name=NEW.runner_name AND j.scale_set_id=NEW.scale_set_id AND j.witness_request_id=NEW.witness_request_id
-      AND NEW.lease_until>unixepoch() AND NEW.created_at=unixepoch()
+      AND NEW.lease_until>unixepoch() AND unixepoch()-NEW.created_at IN (0,1)
       AND NEW.claim_generation=COALESCE((SELECT MAX(latest.claim_generation)+1 FROM physical_attempt_post_jit_retirement_claims latest WHERE latest.reservation_id=NEW.reservation_id),1)
       AND NOT EXISTS (SELECT 1 FROM physical_attempt_outcomes prior_outcome WHERE prior_outcome.lineage_id=a.lineage_id AND prior_outcome.generation=a.generation AND prior_outcome.reservation_id=a.reservation_id)
       AND NOT EXISTS (SELECT 1 FROM physical_attempt_post_jit_retirements retired WHERE retired.lineage_id=a.lineage_id AND retired.generation=a.generation AND retired.reservation_id=a.reservation_id)
@@ -76,7 +76,7 @@ pub(super) const PROGRESS_INSERT_GUARD: &str = r"CREATE TRIGGER physical_attempt
 WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_post_jit_retirement_claims c
  WHERE c.reservation_id=NEW.reservation_id AND c.claim_generation=NEW.claim_generation
  AND c.claim_generation=(SELECT MAX(latest.claim_generation) FROM physical_attempt_post_jit_retirement_claims latest WHERE latest.reservation_id=c.reservation_id)
- AND c.lease_until>unixepoch() AND NEW.created_at=unixepoch()
+ AND c.lease_until>unixepoch() AND unixepoch()-NEW.created_at IN (0,1)
  AND NEW.phase_index=COALESCE((SELECT MAX(p.phase_index)+1 FROM physical_attempt_post_jit_retirement_progress p WHERE p.reservation_id=c.reservation_id AND p.claim_generation=c.claim_generation),0)
  AND (NEW.phase_index!=0 OR NEW.evidence_sha256=c.snapshot_sha256)
  AND (NEW.phase_index!=2 OR EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_remote_absence remote WHERE remote.reservation_id=c.reservation_id AND remote.claim_generation=c.claim_generation AND remote.runner_id=c.runner_id AND remote.runner_name=c.runner_name AND remote.scale_set_id=c.scale_set_id))

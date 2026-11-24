@@ -9,5 +9,5 @@
   "full_name": "tailrocks/velnor-new",
   "default_branch": "main"
  },
- "workflow": ".github/workflows/ci.yml"
+ "workflow": ".github/workflows/repository-checks.yml"
 }

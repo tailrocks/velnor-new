@@ -95,10 +95,7 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
             ".velnor/rust-metadata.json",
             AllTrigger::Global(path(".velnor/rust-metadata.json")),
         ),
-        (
-            ".github/workflows/rust-ci.yml",
-            AllTrigger::GeneratedWorkflow,
-        ),
+        (".github/workflows/ci.yml", AllTrigger::GeneratedWorkflow),
     ] {
         rows.push((vec![file], vec![all(trigger.clone()), all(trigger)]));
     }
@@ -135,7 +132,7 @@ fn docs_and_licence_paths_select_nothing_and_look_alikes_select_everything() {
             "NOTICE.txt",
             "licenses/MIT.txt",
             ".github/CODEOWNERS",
-            ".github/workflows/ci.yml",
+            ".github/workflows/hand.yml",
             ".github/dependabot.yml",
             "scripts/build.sh",
             "build.rs",
@@ -334,6 +331,7 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
 #[test]
 fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_that_package() {
     let root_package = RustMember {
+        version: None,
         name: name("tool"),
         manifest: path("Cargo.toml"),
         directory: None,

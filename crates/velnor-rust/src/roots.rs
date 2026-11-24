@@ -31,7 +31,7 @@ pub(crate) fn rust_roots(
         .filter(|(manifest, metadata)| !metadata.members.is_empty() && !excluded(config, manifest))
         .collect();
     if candidates.is_empty() {
-        return Err(DetectError::NoRustRoot);
+        return Ok((Vec::new(), BTreeMap::new()));
     }
     let owner: BTreeMap<&RepoPath, &RepoPath> = candidates
         .iter()
@@ -325,6 +325,7 @@ fn member(
 ) -> Result<RustMember, DetectError> {
     Ok(RustMember {
         name: package.name.clone(),
+        version: package.version.clone(),
         manifest: package.manifest.clone(),
         directory: package.manifest.parent(),
         dependencies: package

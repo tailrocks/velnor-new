@@ -11,7 +11,7 @@ use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
 pub(super) const SWITCH: &str = "VELNOR_MBX_REPORTS";
-const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ] && [ -z \"$MBX_SOCKET\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
 
 pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String {
     format!(

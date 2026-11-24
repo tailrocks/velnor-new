@@ -32,7 +32,7 @@ targets only. It is not generator-release qualification.
 The GitHub-hosted-runner reference was fetched at `2026-10-09T22:01:23Z`; its
 public standard-runner table listed `ubuntu-26.04`, `ubuntu-24.04`, and
 `ubuntu-22.04`, matching the policy and inventory labels. The saved reference
-is `/private/tmp/velnor-freshness-pr126-1791582885318/github-hosted-runners-docs.md`
+is `<tmp>/velnor-freshness-pr126-1791582885318/github-hosted-runners-docs.md`
 (SHA-256 `a9ec7930b95280432f5687584bafa19c42fd72c25c08a1fc43e6f86b0a3faf19`).
 A query of 11 workflow runs from `2026-10-08T22:03:30Z` found no successful
 target jobs on the `ubuntu-24.04` or `ubuntu-22.04` labels (saved query SHA-256
@@ -51,7 +51,7 @@ stale/pending inventory; that exit is not recorded as a passing freshness
 check. The exact 19 emitted rows, command context, and raw log binding are
 preserved in [the probe receipt](freshness-upstream-probe-2026-10-09.json).
 The raw log is retained at
-`/private/tmp/velnor-pr126-gates-bbf2-fixedcontext-20261010/freshness-upstream-refresh.log`
+`<tmp>/velnor-pr126-gates-bbf2-fixedcontext-20261010/freshness-upstream-refresh.log`
 (SHA-256 `b67989c10464445cff9b5b22958427f4629378117307959b7888ca95e9404193`).
 
 The five newer values are Rust `1.99.0`, MBX `v1.23.0`,
@@ -81,7 +81,7 @@ Nextest, Alint, and Cargo Deny. Nextest reported 3,648 passed, zero failed,
 and two skipped. The freshness gate failed on the then-pending Mise status and
 stale observation timestamps; `scripts/verify-local.sh` exited 1 at
 `repo-policy`. Those earlier logs are at
-`/private/tmp/velnor-pr126-gates-bbf2-fixedcontext-20261010/` (`verify_local.log`
+`<tmp>/velnor-pr126-gates-bbf2-fixedcontext-20261010/` (`verify_local.log`
 SHA-256 `a2b9b3aca0c16560bb41eefdb2080990926cef3e6faebd9a541b708624e3668c`).
 
 The terminal full gate batch was run on clean code/evidence head
@@ -107,7 +107,7 @@ are separate results; the pass does not clear the failure. PR #126 therefore
 has no local merge or release clearance.
 
 The final batch receipts are retained at
-`/private/tmp/velnor-pr126-gates-3538-final-20261010/` with the adjacent
+`<tmp>/velnor-pr126-gates-3538-final-20261010/` with the adjacent
 `velnor-pr126-gates-3538-final-20261010-run-gates.sh`. The script SHA-256 is
 `b4f2acc9581f085150b3f87cdff55f7391bbc39c811c0565276fd0de4a7c1105`; the
 standalone results table SHA-256 is
@@ -125,7 +125,7 @@ After the inventory and evidence update in the isolated evidence worktree,
 `bash scripts/check-freshness.sh`, `alint validate-config`,
 `alint check --fail-on-warning`, and `git diff --check` all exited 0. The
 focused result table is at
-`/private/tmp/velnor-refresh-qualified-tool-evidence-checks-20261010/results.tsv`;
+`<tmp>/velnor-refresh-qualified-tool-evidence-checks-20261010/results.tsv`;
 the offline freshness log SHA-256 is
 `962d4ae15f9e80e9a55fcf00cdb6fa9f691bd06c880709483ec4871f2c61e924`. Those
 focused checks do not change the terminal full-gate result above.

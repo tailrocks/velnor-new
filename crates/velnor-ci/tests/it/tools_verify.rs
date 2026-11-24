@@ -255,6 +255,7 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
         event_name: event.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
         base_ref: String::new(),
+        ref_protected: true,
         default_branch: Some("main".to_owned()),
         cache_key: String::new(),
         restored_before: Some("2026-11-22T00:00:00Z".to_owned()),
@@ -357,6 +358,7 @@ pub(crate) fn step_output(job: &Job, verb: &str, vars: &[(&str, &str)]) -> Strin
         .env("GITHUB_EVENT_NAME", "push")
         .env("GITHUB_EVENT_PATH", &event)
         .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_REF_PROTECTED", "true")
         .envs(vars.iter().copied());
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(run.status.success(), "{run:?}");

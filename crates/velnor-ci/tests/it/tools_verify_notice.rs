@@ -181,7 +181,7 @@ fn the_notice_names_the_window_where_a_first_ref_entry_of_another_version_resolv
 fn the_notice_says_which_velnor_ci_to_install_before_the_command() {
     let stdout = poisoned("tools-verify-named-install", &[]);
     let requirement = stdout
-        .find("needs velnor-ci 0.1.112 or newer")
+        .find("needs velnor-ci 0.1.116 or newer")
         .unwrap_or_else(|| unreachable!("{stdout}"));
     let command = stdout
         .find("GITHUB_API_URL=")
@@ -189,7 +189,7 @@ fn the_notice_says_which_velnor_ci_to_install_before_the_command() {
     assert!(requirement < command, "{stdout}");
     assert!(
         stdout.contains(
-            "https://github.com/tailrocks/velnor-new/releases (tag tools-v0.1.112 or newer)"
+            "https://github.com/tailrocks/velnor-new/releases (tag tools-v0.1.116 or newer)"
         ),
         "{stdout}"
     );

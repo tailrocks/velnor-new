@@ -240,7 +240,7 @@ fn a_velnor_gen_owned_workflow_selects_nothing_while_rust_ci_and_a_hand_written_
     let repo = plan_repo("generated-workflows");
     repo.write_all(&[
         (".github/workflows/release.yml", &sealed),
-        (".github/workflows/rust-ci.yml", &sealed),
+        (".github/workflows/ci.yml", &sealed),
         (".github/workflows/lint.yml", "name: Lint\n"),
     ]);
     let release = plan_with_bases(&repo, &[".github/workflows/release.yml"], &[]);
@@ -257,7 +257,7 @@ fn a_velnor_gen_owned_workflow_selects_nothing_while_rust_ci_and_a_hand_written_
         selected(&deleted),
         "Cargo.toml: none\ntools/Cargo.toml: none\n"
     );
-    let rust_ci = plan_with_bases(&repo, &[".github/workflows/rust-ci.yml"], &[]);
+    let rust_ci = plan_with_bases(&repo, &[".github/workflows/ci.yml"], &[]);
     assert_eq!(
         selected(&rust_ci),
         "Cargo.toml: all:generated-workflow\ntools/Cargo.toml: all:generated-workflow\n"

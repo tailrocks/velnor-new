@@ -9,6 +9,17 @@ description = "matrix_key task-digest ids (m-<16 hex>), not credentials"
 regexes = ['''^m-[0-9a-f]{16}$''']
 
 [[allowlists]]
+description = "cache-sources fixture: only the known fake x-access-token value in this file, so a real credential added later is still reported"
+condition = "AND"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_sources_restored\.rs$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^ghs_secret$''',
+]
+
+[[allowlists]]
 description = "test fixture: fake key in the qualification cache lineage test"
 targetRules = ["generic-api-key"]
 condition = "AND"
@@ -19,6 +30,14 @@ paths = [
 regexes = [
   '''^qualification\-k1$''',
 ]
+
+[[allowlists]]
+description = "dbt contract proposal: the placeholder service credential, in this one document only"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/proposed/dbt-contract\.md$''']
+regexTarget = "secret"
+regexes = ['''^example-org$''']
 
 [[allowlists]]
 description = "test fixture: fake key in the mise env policy test"

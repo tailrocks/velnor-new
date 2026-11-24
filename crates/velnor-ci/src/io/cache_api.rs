@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use serde::Deserialize;
-use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
+use velnor_rust::{CacheEntry, budget_plan, cache_family, scoped_pull_request};
 
 use crate::cache::{MAX_PAGES, encode, foreign_entries, stale_entries};
 use crate::cli_cache::BudgetArgs;
@@ -314,7 +314,7 @@ fn confirm_absent(
 ) -> Result<(), CiError> {
     let candidates: BTreeSet<_> = entries
         .iter()
-        .filter_map(delta_pull_request)
+        .filter_map(scoped_pull_request)
         .filter(|number| !prs.contains(number))
         .collect();
     for number in candidates {

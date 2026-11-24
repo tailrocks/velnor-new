@@ -5,9 +5,9 @@ repositories:
 - id: git://github.com/tailrocks/velnor-new
   findings:
   - path: .velnor/runner.lock
-    fingerprint: '5508753565254821617'
+    fingerprint: '6170771356442646214'
     rule_id: betterleaks.generic-api-key
-    line: 73
+    line: 75
     first_seen_at: 2026-11-21T00:00:00+00:00
     last_updated_at: 2026-11-21T00:00:00+00:00
   - path: docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json

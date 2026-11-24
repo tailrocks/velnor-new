@@ -9,7 +9,7 @@
                 std::env::join_paths([PathBuf::from("../proxy-bin"), root.join("commands")])?,
             )
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:2")
         let toolchain = cargo.parent().and_then(Path::parent).ok_or("toolchain")?;
         let selected = repo.root().join(name);
         std::os::unix::fs::symlink(toolchain, &selected)?;

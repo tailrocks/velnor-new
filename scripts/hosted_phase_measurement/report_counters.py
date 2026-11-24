@@ -76,7 +76,7 @@ def build_actual_counters(event_steps: list[dict[str, Any]], timeline: dict[str,
             "remote_downloaded_bytes": sum(row["remote_downloaded_bytes"] for row in mbx_rows),
             "remote_uploaded_bytes": sum(row["remote_uploaded_bytes"] for row in mbx_rows),
             "lookup_totals": {label: sum(row["counts"].get(label, 0) for row in mbx_rows)
-                              for label in ("hits", "misses", "not_looked_up", "bypassed")},
+                              for label in ("hits", "misses", "not_looked_up", "bypassed", "incremental")},
             "scope": "sum of actual MBX summary counters only; zero is not compiler freshness or full cache-transfer telemetry"},
         **_unknown_actual_counters(timeline),
     }

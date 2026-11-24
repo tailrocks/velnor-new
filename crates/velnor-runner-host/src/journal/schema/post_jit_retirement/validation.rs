@@ -36,6 +36,7 @@ pub(super) async fn validate_objects_with_view(
     claim_guard: &str,
     terminal_view: &str,
 ) -> Result<(), HostError> {
+    let version = super::super::journal_version(conn).await?;
     let mut expected = Vec::new();
     expected.extend(
         ddl::TABLE_NAMES
@@ -83,10 +84,13 @@ pub(super) async fn validate_objects_with_view(
             .ok_or(HostError::Journal)?
             .get(0)
             .map_err(|_| HostError::Journal)?;
-        let actual_normalized = super::super::sql_normalization::normalize(&actual);
-        let expected_normalized = super::super::sql_normalization::normalize(expected_sql);
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-            || actual_normalized != expected_normalized
+            || !super::super::clock_tick::matches(
+                version,
+                &actual,
+                expected_sql,
+                super::super::sql_normalization::normalize,
+            )
         {
             return Err(HostError::Journal);
         }

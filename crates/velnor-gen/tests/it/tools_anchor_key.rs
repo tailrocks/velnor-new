@@ -39,10 +39,11 @@ fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestRe
 
 #[test]
 fn every_declared_anchor_key_output_is_read_and_every_read_one_is_declared() -> TestResult {
-    let cases: [(&str, &[&str], &str, bool); 3] = [
+    let cases: [(&str, &[&str], &str, bool); 4] = [
         ("0.1.111", &["Cargo.toml", "tools/Cargo.toml"], "", true),
-        ("0.1.112", &["Cargo.toml", "tools/Cargo.toml"], "", false),
-        ("0.1.112", &["Cargo.toml"], "shape = \"one-job\"\n", false),
+        ("0.1.115", &["Cargo.toml", "tools/Cargo.toml"], "", true),
+        ("0.1.116", &["Cargo.toml", "tools/Cargo.toml"], "", false),
+        ("0.1.116", &["Cargo.toml"], "shape = \"one-job\"\n", false),
     ];
     for config in STORES {
         for (helper, manifests, shape, keyed) in cases {
@@ -101,9 +102,9 @@ fn the_plan_job_of_helper_0_1_110_emits_the_anchor_digest_and_key_outputs() -> T
 }
 
 #[test]
-fn the_anchor_key_output_is_kept_before_helper_0_1_112_and_dropped_from_it() -> TestResult {
+fn the_anchor_key_output_is_kept_before_helper_0_1_116_and_dropped_from_it() -> TestResult {
     for config in STORES.iter().copied() {
-        for (helper, keyed) in [("0.1.111", true), ("0.1.112", false)] {
+        for (helper, keyed) in [("0.1.111", true), ("0.1.115", true), ("0.1.116", false)] {
             let mut readers = 0;
             for (id, job) in jobs(&render(&["Cargo.toml"], config, helper)?)? {
                 let Some(outputs) = job["outputs"].as_object() else {

@@ -6,7 +6,7 @@ use crate::pipeline::{pin_helper, view, workflow};
 
 #[test]
 fn no_pinned_helper_renders_the_delete_entry_command() -> TestResult {
-    for helper in ["0.1.110", "0.1.111", "0.1.112"] {
+    for helper in ["0.1.110", "0.1.111", "0.1.115", "0.1.116"] {
         for config in ["mbx_shared_store = true\n", "mbx_shared_store = false\n"] {
             let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
             pin_helper(&mut repo, helper)?;
@@ -17,7 +17,7 @@ fn no_pinned_helper_renders_the_delete_entry_command() -> TestResult {
             );
             assert!(
                 !rendered.contains("delete-entry"),
-                "{helper} {config:?} renders the command that only helper 0.1.112 has"
+                "{helper} {config:?} renders the command that only helper 0.1.116 has"
             );
         }
     }

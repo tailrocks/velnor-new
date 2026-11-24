@@ -38,6 +38,8 @@ mod delta_source;
 mod delta_tree;
 mod delta_trim;
 mod early_list;
+mod early_list_child;
+mod early_list_dir;
 mod fetch;
 mod fetch_credentials;
 mod fetch_fixed;
@@ -51,6 +53,7 @@ mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+mod input_dirs;
 mod input_scopes;
 mod input_snapshot;
 mod input_target;
@@ -87,6 +90,7 @@ mod restored;
 mod restored_targets;
 mod restored_units;
 mod run;
+mod run_signals;
 mod saved_git_config;
 mod scope_cache;
 mod setup;
@@ -106,6 +110,9 @@ use std::{path::Path, process::ExitCode};
 pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target};
+pub use self::image_candidate::publish::{
+    Body, Https, OpenBlob, Registry, Request, Response, Run, Transport, publish_with,
+};
 pub use self::input_target::{CaseSensitivity, check_input_target_with};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::inputs_batch::restore_inputs_batch_with;
@@ -233,10 +240,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Image(ImageCommand::VerifyCandidate(args)) => {
             image_candidate::verify_candidate(&args)
         }
+        Command::Image(ImageCommand::Build(args)) => image_candidate::build(&args),
+        Command::Image(ImageCommand::Publish(args)) => image_candidate::publish::publish(&args),
         Command::Fetch(args) => fetch::fetch(&args),
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
         Command::AppToken(args) => app_token::run(&args),
+        Command::RevokeToken => app_token::revoke(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
