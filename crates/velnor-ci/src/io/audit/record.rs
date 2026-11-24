@@ -10,8 +10,8 @@ use velnor_model::RepoPath;
 use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
 use super::super::units::{UnitFile, profile};
-use super::Audit;
 use super::freshness::Cause;
+use super::{Audit, REBUILD};
 use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
@@ -21,7 +21,7 @@ impl Audit<'_> {
             return Ok(());
         }
         Err(CiError::new(format!(
-            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
+            "found stale dep-info {}; rebuild every observed target through {REBUILD} or delete its stale unit files before auditing inputs",
             self.stale.join(", ")
         )))
     }
