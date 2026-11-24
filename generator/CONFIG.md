@@ -35,7 +35,7 @@ fork_runner = "ubuntu-24.04"
 
 ## Trusted runner pool
 
-A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label. Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback. The generator does not read the text of a `run` step, so a `run` step of a trusted workflow can still build or fetch code that an input, the matrix or a step or job output chooses (for example `env T=${{ inputs.target }}` with `docker build $T`, a `git clone` or a `curl | sh`), and that code runs on the trusted pool. Don't set `trusted_runner` on a workflow whose `run` steps do that.
+A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label. Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback. The generator does not read the text of a `run` step, so a `run` step of a trusted workflow can still build or fetch code that an input, the matrix or a step or job output chooses (for example `env T=${{ inputs.target }}` with `docker build $T`, a `git clone` or a `curl | sh`), and that code runs on the trusted pool. `trusted_runner` is not supported for use yet. The generator cannot check the runner group, and a pull request from this repository can edit its copy of a workflow to name the trusted label, so only a runner group that is restricted to the default-branch workflow files at `refs/heads/<default branch>` keeps that job off the trusted pool. Do not set the key.
 
 ```toml
 runner = "ubuntu-26.04-scale-set"
