@@ -23,7 +23,7 @@ fn assert_holds_tracked_input(repo: &Repo, directory: &str, arguments: &[&str]) 
 
 #[test]
 fn a_build_directory_that_holds_tracked_inputs_is_refused_by_the_audit_and_the_build() {
-    for directory in [".", "rust", "rust/app"] {
+    for directory in [".", "..", "rust", "rust/app"] {
         let repo = workspace_below_the_root();
         assert_holds_tracked_input(&repo, directory, &["inputs", "audit", "--write"]);
         assert_holds_tracked_input(&repo, directory, &["inputs", "build", "--", "true"]);
