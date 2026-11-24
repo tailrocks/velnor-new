@@ -24,7 +24,7 @@ mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
 pub(super) use metadata::{MetadataInvocation, own_workspace, workspace};
-pub(super) use separation::apart;
+pub(super) use separation::{apart, outside_tracked};
 pub(super) use workspace::{Roots, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
