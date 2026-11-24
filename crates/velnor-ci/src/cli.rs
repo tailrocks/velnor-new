@@ -196,7 +196,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum SourcesCommand {
     #[command(
-        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code; after the last fetch it leaves out the hooks, reflogs and FETCH_HEAD of the saved git databases under $HOME/.cargo and exits 1 when they hold a credential or HOME is not set"
     )]
     Fetch(SourcesFetchArgs),
 }
