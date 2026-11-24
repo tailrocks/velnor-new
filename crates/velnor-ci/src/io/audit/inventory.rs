@@ -5,6 +5,7 @@ mod evidence;
 mod handle;
 mod held;
 mod latest;
+mod probe;
 mod resolve;
 mod walk;
 

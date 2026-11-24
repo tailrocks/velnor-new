@@ -14,6 +14,7 @@ fn library(doctest: bool) -> RustMember {
 
 fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustMember {
     RustMember {
+        version: None,
         targets: vec![Target {
             name: TargetName::new(name).unwrap_or_else(|e| unreachable!("{e}")),
             kinds: vec![kind],
@@ -165,6 +166,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             "tools/Cargo.toml",
             vec![
                 RustMember {
+                    version: None,
                     targets: target_of("tool", TargetKind::Lib, true, "tools/tool/src/lib.txt")
                         .targets,
                     ..member("tool", "tools/tool", &[])

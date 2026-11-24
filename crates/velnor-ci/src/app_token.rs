@@ -78,13 +78,68 @@ pub fn jwt(key: &AppKey, client_id: &str, now: u64) -> Result<Zeroizing<String>,
     )))
 }
 
-#[must_use]
-pub fn token_request(repositories: &[String]) -> String {
-    serde_json::json!({
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Permission {
+    name: String,
+    access: &'static str,
+}
+
+impl std::str::FromStr for Permission {
+    type Err = CiError;
+
+    fn from_str(text: &str) -> Result<Self, CiError> {
+        let refused = || {
+            CiError::new(format!(
+                "{} is not <name>:read or <name>:write with a name of lower-case letters and _",
+                crate::escape::inert(text)
+            ))
+        };
+        let (name, access) = text.split_once(':').ok_or_else(refused)?;
+        let access = match access {
+            "read" => "read",
+            "write" => "write",
+            _ => return Err(refused()),
+        };
+        if name.is_empty() || !name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+            return Err(refused());
+        }
+        Ok(Self {
+            name: name.to_owned(),
+            access,
+        })
+    }
+}
+
+impl std::fmt::Display for Permission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.name, self.access)
+    }
+}
+
+pub fn token_request(
+    repositories: &[String],
+    permissions: &[Permission],
+) -> Result<String, CiError> {
+    let mut granted = serde_json::Map::new();
+    for permission in permissions {
+        if granted
+            .insert(permission.name.clone(), permission.access.into())
+            .is_some()
+        {
+            return Err(CiError::new(format!(
+                "--permission names {} more than once",
+                permission.name
+            )));
+        }
+    }
+    if granted.is_empty() {
+        return Err(CiError::new("name at least one --permission"));
+    }
+    Ok(serde_json::json!({
         "repositories": repositories,
-        "permissions": { "contents": "read" },
+        "permissions": granted,
     })
-    .to_string()
+    .to_string())
 }
 
 #[derive(Deserialize)]
@@ -136,6 +191,7 @@ pub fn mint(
     app: &impl GitHubPost,
     owner: &str,
     repositories: &[String],
+    permissions: &[Permission],
     pause: &dyn Fn(Duration),
 ) -> Result<Zeroizing<String>, CiError> {
     let mut bad = std::iter::once(owner)
@@ -155,11 +211,11 @@ pub fn mint(
     let first = repositories
         .first()
         .ok_or_else(|| CiError::new("name at least one --repository"))?;
+    let request = token_request(repositories, permissions)?;
     let lookup = format!("/repos/{owner}/{first}/installation");
     let installation: Installation = serde_json::from_str(&retried(pause, || app.get(&lookup))?)
         .map_err(|_| CiError::new("the App installation answer has no numeric id"))?;
     let path = format!("/app/installations/{}/access_tokens", installation.id);
-    let request = token_request(repositories);
     let answer = Zeroizing::new(retried(pause, || app.post(&path, &request))?);
     let minted: Minted = serde_json::from_str(&answer)
         .map_err(|_| CiError::new("the installation token answer holds no token"))?;

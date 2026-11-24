@@ -7,6 +7,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 fn scratch(name: &str) -> PathBuf {
     let directory =
@@ -32,7 +33,11 @@ fn archive_run(program: &Path) -> Vec<String> {
 }
 
 fn environment(runner_temp: Option<OsString>) -> Environment {
-    Environment { runner_temp }
+    Environment {
+        runner_temp,
+        stdout_limit: 1 << 20,
+        supervisor: Arc::default(),
+    }
 }
 
 fn report(result: Result<Listing, Failure>) -> String {

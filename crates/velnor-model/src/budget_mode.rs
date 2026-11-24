@@ -7,7 +7,13 @@ use crate::ids::{JobId, RootSlug};
 /// name of its budget job and applies the per-mode tables of `[budget]`.
 pub const BUDGET_MODES_HELPER: (u64, u64, u64) = (0, 1, 104);
 
+pub const BUDGET_STEP_HELPER: (u64, u64, u64) = (0, 1, 116);
+
 pub const BUDGET_JOB_NAME: &str = "Speed budget";
+
+pub const BUDGET_STEP_NAME: &str = "Check the speed budget";
+
+pub const BUDGET_SELECTION_VARIABLE: &str = "VELNOR_BUDGET_SELECTION";
 
 /// How much of the workspace the plan of a run selected. A run that tests
 /// everything and a run that tests nothing differ by an order of magnitude, so
@@ -54,8 +60,17 @@ impl Selection {
     /// `Speed budget (full)`. A title without a known selection is `None`.
     #[must_use]
     pub fn of_job_title(title: &str) -> Option<Self> {
-        let inner = title
-            .strip_prefix(BUDGET_JOB_NAME)?
+        Self::of_name(title, BUDGET_JOB_NAME)
+    }
+
+    #[must_use]
+    pub fn of_step_name(name: &str) -> Option<Self> {
+        Self::of_name(name, BUDGET_STEP_NAME)
+    }
+
+    fn of_name(name: &str, prefix: &str) -> Option<Self> {
+        let inner = name
+            .strip_prefix(prefix)?
             .strip_prefix(" (")?
             .strip_suffix(')')?;
         Self::from_name(inner)
@@ -79,8 +94,6 @@ impl ModeBudget {
     }
 }
 
-/// The job title of the budget job: it names the selection of the run from the
-/// plan outputs of `plan`, so a later run can read it from the jobs API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionName {
     pub plan: JobId,

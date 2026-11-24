@@ -27,6 +27,7 @@ pub(crate) fn save_as(store: &Path, home: &Path, key: &str, replace: bool) -> Ou
         key,
         event_name: "push",
         git_ref: "refs/heads/main",
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
@@ -298,6 +299,7 @@ fn save_in_a_working_directory(name: &str, runner_temp: Option<&str>, marker_dir
         .env("HOME", &home)
         .env("GITHUB_EVENT_NAME", "push")
         .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_REF_PROTECTED", "true")
         .env("GITHUB_EVENT_PATH", &event)
         .env("VELNOR_MBX_SHARED_DIR", &store)
         .env("VELNOR_MBX_SEED_DIR", &store);

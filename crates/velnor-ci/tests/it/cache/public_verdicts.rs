@@ -8,8 +8,8 @@ use super::public_declared::{declare, repositories};
 use super::public_git::{
     OTHER_SHA, SHA, TOKEN, decide_with, git, lock, public, refused, reply, serve,
 };
-use super::support::{hang_up, seed};
-use crate::io::Repo as Checkout;
+use super::support::seed;
+use crate::io::{Repo as Checkout, hang_up};
 
 const VERDICTS: &str = "VELNOR_PUBLIC_VERDICTS";
 
@@ -63,12 +63,22 @@ fn the_run_wide_step_looks_each_repository_up_once_and_writes_the_verdicts() {
 }
 
 #[test]
-fn the_run_wide_step_records_a_failed_lookup_and_still_succeeds() {
+fn the_run_wide_step_fails_on_a_definitive_private_verdict() {
     let mock = serve(reply(404, String::new()));
     let sources = [("dep", git("acme/shared-lib", SHA))];
-    let (output, written) = public_sources(&sources, &mock.url, &[]);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(written, "verdicts={\"acme/shared-lib\":false}\n");
+    let (output, _) = public_sources(&sources, &mock.url, &[]);
+    assert!(!output.status.success(), "{output:?}");
+    let text = everything(&output);
+    assert!(
+        text.contains("github.com/acme/shared-lib is not public"),
+        "{text}"
+    );
+    assert!(text.contains("[private_sources]"), "{text}");
+}
+
+#[test]
+fn the_run_wide_step_records_an_unproven_lookup_and_still_succeeds() {
+    let sources = [("dep", git("acme/shared-lib", SHA))];
     let (output, written) = public_sources(&sources, &hang_up(), &[]);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "verdicts={\"acme/shared-lib\":false}\n");

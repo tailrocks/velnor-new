@@ -143,6 +143,11 @@ for package in "${packages[@]}"; do
     || fail "Dockerfile does not contain necessary job package: $package"
 done
 
+[[ "$(grep -Ec '^ARG VELNOR_SOURCE_SHA$' "$dockerfile")" == 1 ]] \
+  || fail "Dockerfile must declare ARG VELNOR_SOURCE_SHA exactly once."
+awk '/^ARG VELNOR_SOURCE_SHA$/ { seen = 1; next } seen && /^RUN[[:space:]]/ { exit 1 }' "$dockerfile" \
+  || fail "No RUN step may follow ARG VELNOR_SOURCE_SHA: a new commit would miss the build cache."
+
 lower="$(tr '[:upper:]' '[:lower:]' < "$dockerfile")"
 for forbidden in actions-runner runner.listener runner-home jitconfig /velnor/ resource-probe storage-init dockerd containerd node24; do
   grep -Fq -- "$forbidden" <<<"$lower" && fail "The job Dockerfile has Runner or controller data: $forbidden"

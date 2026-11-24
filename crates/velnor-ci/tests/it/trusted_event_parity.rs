@@ -90,16 +90,17 @@ fn routes_to_trusted(
 }
 
 #[test]
-fn the_rendered_routing_and_the_helper_trust_the_same_events_on_a_protected_default_branch()
--> Result<(), String> {
+fn the_rendered_routing_and_the_helper_trust_the_same_events() -> Result<(), String> {
     let expression = routing_expression();
-    for default_branch in [Some("main"), None, Some("")] {
-        for (event, git_ref) in TABLE {
-            assert_eq!(
-                routes_to_trusted(&expression, event, git_ref, default_branch, true)?,
-                trusted_event(event, git_ref, default_branch),
-                "{event} {git_ref} {default_branch:?}"
-            );
+    for protected in [true, false] {
+        for default_branch in [Some("main"), None, Some("")] {
+            for (event, git_ref) in TABLE {
+                assert_eq!(
+                    routes_to_trusted(&expression, event, git_ref, default_branch, protected)?,
+                    trusted_event(event, git_ref, protected, default_branch),
+                    "{event} {git_ref} {default_branch:?} protected={protected}"
+                );
+            }
         }
     }
     Ok(())
@@ -110,7 +111,7 @@ fn the_rendered_routing_needs_a_protected_ref_and_the_helper_needs_the_exact_ref
 -> Result<(), String> {
     let expression = routing_expression();
     let rows = [
-        ("push", "refs/heads/main", false, false, true),
+        ("push", "refs/heads/main", false, false, false),
         ("push", "refs/heads/MAIN", false, false, false),
         ("workflow_dispatch", "refs/heads/MAIN", false, false, false),
         ("schedule", "refs/heads/MAIN", false, false, false),
@@ -125,7 +126,7 @@ fn the_rendered_routing_needs_a_protected_ref_and_the_helper_needs_the_exact_ref
             "routing {event} {git_ref} protected={protected}"
         );
         assert_eq!(
-            trusted_event(event, git_ref, Some("main")),
+            trusted_event(event, git_ref, protected, Some("main")),
             helper,
             "helper {event} {git_ref}"
         );

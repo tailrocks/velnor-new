@@ -17,6 +17,7 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
     let deadline = Deadline::after(std::time::Duration::from_secs(args.public_probe_seconds));
     let mut verdicts = Verdicts::default();
     let mut log: Vec<String> = Vec::new();
+    let mut private: Vec<String> = Vec::new();
     let (declared, _) = super::cache_sources::declared_only(&root, repositories(&root, &manifests))
         .unwrap_or_default();
     for pinned in declared {
@@ -36,15 +37,24 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
                 true
             }
             Err(reason) => {
-                log.push(format!(
-                    "::notice::git dependency {name} is not proven public ({reason})\n"
-                ));
+                if reason.is_private() {
+                    private.push(format!(
+                        "git dependency {name} is not public ({reason}), but Cargo.lock locks it as a public git source; make the repository public again or declare it in [private_sources]\n"
+                    ));
+                } else {
+                    log.push(format!(
+                        "::notice::git dependency {name} is not proven public ({reason})\n"
+                    ));
+                }
                 false
             }
         };
         verdicts.record(&repository, public);
     }
     super::append_outputs(&format!("verdicts={}\n", verdicts.render()))?;
+    if !private.is_empty() {
+        return Err(CiError::new(log.concat() + &private.concat()));
+    }
     Ok(log.concat())
 }
 

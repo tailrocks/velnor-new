@@ -11,7 +11,7 @@ use crate::facts::TestResult;
 use crate::private_sources::{SECTION, private_repo};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
-const RENDERED_DIGEST: &str = "1d4af09a6b61f249b7a314eb2b0bf09b83d9afee34633114a57e276f103412ba";
+const RENDERED_DIGEST: &str = "64c66d98c0eff0d5944f949b8339eb5afffc09280eaaede6312c641b3113ccc7";
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 fn assets() -> String {
