@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod ansible_reinstall;
 mod app_key;
 mod archive;
 mod auto_shape_note;
@@ -203,6 +204,8 @@ mod pr_ci;
 mod pr_ci_labels;
 mod pr_ci_queue;
 mod pr_ci_sim;
+mod present_plan;
+mod present_tools;
 mod private_base_budget;
 mod private_base_caches;
 mod private_base_order;

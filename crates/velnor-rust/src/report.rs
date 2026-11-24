@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::audit_job::AUDIT_JOB;
+use crate::lane::{PLAN_JOB, present_plan_job, used_outputs};
 use crate::plan::{HELPER_JOB, job, step};
 use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
@@ -203,4 +204,27 @@ pub(crate) fn finish(
     if !facts.config.cache_check_blocks {
         jobs.push(cache);
     }
+}
+
+pub fn finish_present(facts: &RepoFacts, jobs: &mut Vec<Job>) {
+    if jobs.is_empty()
+        || facts.helper.is_none()
+        || jobs
+            .iter()
+            .any(|job| job.id == crate::required_job::VERDICT_JOB)
+    {
+        return;
+    }
+    if !jobs.iter().any(|job| job.id == PLAN_JOB) {
+        let outputs = used_outputs(jobs);
+        jobs.insert(0, present_plan_job(facts, outputs));
+    }
+    crate::merge_queue_check::ask(facts, jobs, false);
+    jobs.push(crate::required_job::verdict_job(
+        facts,
+        jobs,
+        false,
+        crate::plan_budget::draft_guard(facts),
+    ));
+    jobs.extend(label_reset(facts));
 }
