@@ -6,7 +6,8 @@ use std::fmt;
 
 use crate::ids::{PackageName, RepoPath};
 
-pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rust-ci.yml");
+pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/ci.yml");
+pub const WORKFLOW_NAME: &str = "CI";
 pub const CACHE_TRIM_WORKFLOW_PATH: RepoPath =
     RepoPath::from_static(".github/workflows/rust-cache-trim.yml");
 pub const RELEASE_WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/release.yml");

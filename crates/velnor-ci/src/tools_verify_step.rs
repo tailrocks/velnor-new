@@ -9,7 +9,9 @@ use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
 use crate::tools_discard;
-use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
+use crate::tools_verify::{
+    Anchor, Discard, MALFORMED_ANCHOR, Recording, Verb, Verdict, check, read, record,
+};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
@@ -24,6 +26,7 @@ pub struct Context {
     pub verified: bool,
     pub event_name: String,
     pub git_ref: String,
+    pub ref_protected: bool,
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
@@ -126,6 +129,7 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
 fn outputs(verdict: &Verdict) -> String {
     match verdict {
         Verdict::Anchored(digest) => format!("anchor={digest}\n"),
+        Verdict::Unanchored(Discard::BadAnchor) => format!("anchor={MALFORMED_ANCHOR}\n"),
         Verdict::Unanchored(_) => "anchor=\n".to_owned(),
         Verdict::Verified => "verified=true\n".to_owned(),
         Verdict::NothingRestored | Verdict::Discarded(_) => "verified=false\n".to_owned(),
@@ -161,6 +165,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
                 trusted: trusted_event(
                     &context.event_name,
                     &context.git_ref,
+                    context.ref_protected,
                     context.default_branch.as_deref(),
                 ),
                 verified: context.verified,
@@ -209,6 +214,7 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             verified: var("VELNOR_TOOLS_VERIFIED").as_deref() == Some("true"),
             event_name: var("GITHUB_EVENT_NAME").unwrap_or_default(),
             git_ref: var("GITHUB_REF").unwrap_or_default(),
+            ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),

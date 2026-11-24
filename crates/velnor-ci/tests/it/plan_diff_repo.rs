@@ -107,7 +107,11 @@ fn import(repo: &Path, commits: &[Tree]) {
     );
 }
 
-pub(crate) fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
+pub(crate) fn repository(
+    case: &Path,
+    event: &str,
+    name: &str,
+) -> (velnor_test_support::ScratchDir, String, String) {
     repository_with(case, event, name, "")
 }
 
@@ -116,7 +120,7 @@ pub(crate) fn repository_with(
     event: &str,
     name: &str,
     config_tail: &str,
-) -> (PathBuf, String, String) {
+) -> (velnor_test_support::ScratchDir, String, String) {
     let repo = fresh_dir("velnor-ci-plan-diff", name);
     git(&repo, &["init", "-q", "-b", "main"]);
     let snapshot = case.join("snapshot");

@@ -40,7 +40,10 @@ pub(crate) fn finalize_job(plan: &ReleasePlan, helper: &HelperRelease) -> Option
         return None;
     }
     let released: Vec<String> = packages.iter().map(|package| released(package)).collect();
-    let mut steps = vec![install_helper(helper), app_token(&[("contents", "write")])];
+    let mut steps = vec![
+        install_helper(helper),
+        app_token(helper, &[("contents", "write")]),
+    ];
     steps.extend(
         packages
             .iter()

@@ -98,7 +98,7 @@ ran and printed `mbx128 qualification probe`. A second fresh checkout of the
 same source built with one MBX cache hit, zero misses, and zero bytes
 transferred. Its binary ran with the same output. `mbx cache verify` passed
 with 7 verified objects and 1 action result. Cache statistics reported 2
-checkouts and 2 target directories. The temporary fixture is under `/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/mbx128-isolated-qualification-zv6g1l_e`.
+checkouts and 2 target directories. The temporary fixture is under `<tmp>/mbx128-isolated-qualification-zv6g1l_e`.
 
 Local qualification is complete for MBX 1.28.0 and action v1.7.3. This does
 not claim Linux runtime execution or a protected-main hosted cache roundtrip.

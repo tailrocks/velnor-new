@@ -114,6 +114,7 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "list",
             "--archive-file",
             "a.tar.zst",
+            "--extract-to",
             "--workspace-remap",
             "--ignore-default-filter",
             "-E",
@@ -121,12 +122,43 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "--message-format",
             "json",
         ],
+        &["--locked", "--workspace", "--extract-overwrite"],
+    );
+}
+
+#[test]
+fn run_lists_the_persisted_archive_scope_without_the_extract_tempdir() {
+    assert_scope(
+        "tests-run-list-persisted-archive",
         &[
-            "--locked",
-            "--workspace",
-            "--extract-to",
-            "--extract-overwrite",
+            "cargo-nextest",
+            "nextest",
+            "run",
+            "--archive-file",
+            "a.tar.zst",
+            "--persist-extract-tempdir",
+            "--workspace-remap",
+            ".",
+            "--no-fail-fast",
+            "--ignore-default-filter",
+            "--status-level",
+            "skip",
+            "-E",
+            "all()",
+            "--no-tests=pass",
         ],
+        &[
+            "list",
+            "--archive-file",
+            "a.tar.zst",
+            "--workspace-remap",
+            "--ignore-default-filter",
+            "-E",
+            "all()",
+            "--message-format",
+            "json",
+        ],
+        &["--persist-extract-tempdir"],
     );
 }
 

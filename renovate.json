@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; the workflows velnor-gen writes under .github/workflows are ignored, so only the hand-maintained ci.yml gets action-pin updates.",
+  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; the workflows velnor-gen writes under .github/workflows are ignored, so only the hand-maintained repository-checks.yml gets action-pin updates.",
   "extends": ["config:recommended"],
   "enabledManagers": ["cargo", "github-actions", "mise", "custom.regex"],
   "ignorePaths": [
@@ -12,7 +12,7 @@
     ".github/workflows/qualification.yml",
     ".github/workflows/release.yml",
     ".github/workflows/rust-cache-trim.yml",
-    ".github/workflows/rust-ci.yml",
+    ".github/workflows/ci.yml",
     ".github/workflows/tag-ruleset-drift.yml",
     ".github/actions/**"
   ],
@@ -40,7 +40,7 @@
   ],
   "packageRules": [
     {
-      "description": "ci.yml's mise-action `version:` input is read by Renovate as a jdx/mise release tag, so it is looked up. The tag is written v-prefixed (v2026.11.1) because the bare form 404s; mise-action strips the v. Bumps are not proposed: the input is paired with a pinned sha256, and a version-only bump would fail checksum verification.",
+      "description": "Generated workflows pin jdx/mise-action with a sha256. Renovate ignores those files. A version-only bump of jdx/mise would fail checksum verification, so this package stays disabled.",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["jdx/mise"],
       "enabled": false

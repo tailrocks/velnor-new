@@ -26,17 +26,26 @@ pub(super) fn declarations(
     facts: &RepoFacts,
     workspaces: &[Workspace],
     location: &Path,
+    invoked: Option<&Path>,
     max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
     let mut pass = Pass::new(max_entries);
     let targets = inventory::exclusions(workspaces)?;
-    let active = workspaces
-        .iter()
-        .enumerate()
-        .filter(|(_, workspace)| location.starts_with(&workspace.root))
-        .max_by_key(|(_, workspace)| workspace.root.components().count())
-        .map(|(index, _)| index);
+    let active = invoked
+        .and_then(|root| {
+            workspaces
+                .iter()
+                .position(|workspace| workspace.root == root)
+        })
+        .or_else(|| {
+            workspaces
+                .iter()
+                .enumerate()
+                .filter(|(_, workspace)| location.starts_with(&workspace.root))
+                .max_by_key(|(_, workspace)| workspace.root.components().count())
+                .map(|(index, _)| index)
+        });
     for (_, workspace) in workspaces
         .iter()
         .enumerate()
@@ -63,7 +72,7 @@ pub(super) fn declarations(
                     .insert(base.to_path_buf());
             }
         }
-        for (unit, output) in workspace.unchecked_units()? {
+        for (unit, output) in workspace.build_units(workspaces)? {
             let UnitFile::BuildOutput { package, .. } = unit else {
                 continue;
             };

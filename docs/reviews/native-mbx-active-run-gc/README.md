@@ -13,7 +13,7 @@ checkout:
 ```sh
 VELNOR_REPO_ROOT="$(git rev-parse --show-toplevel)"
 MBX_SOURCE=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
-MBX_UPSTREAM_CHECKOUT="$(mktemp -d /tmp/mbx-v1.21.1.XXXXXX)"
+MBX_UPSTREAM_CHECKOUT="$(mktemp -d "${TMPDIR:-/tmp}/mbx-v1.21.1.XXXXXX")"
 git clone --no-checkout https://github.com/jdx/mr-boxington "$MBX_UPSTREAM_CHECKOUT"
 git -C "$MBX_UPSTREAM_CHECKOUT" checkout --detach "$MBX_SOURCE"
 git -C "$MBX_UPSTREAM_CHECKOUT" apply "$VELNOR_REPO_ROOT/docs/reviews/native-mbx-active-run-gc/active-prediction-repro.patch"

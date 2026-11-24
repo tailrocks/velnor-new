@@ -230,14 +230,6 @@ pub(crate) fn test_groups_step(groups: &[GroupFilter]) -> RenderedStep {
     }
 }
 
-pub(crate) fn generator_check_step() -> RenderedStep {
-    RenderedStep {
-        name: "Check the generated workflow".to_owned(),
-        run: Some("velnor-gen check --verify-release".to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
 pub(crate) fn mirror_step(mirror: &CratesMirror) -> RenderedStep {
     RenderedStep {
     name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),

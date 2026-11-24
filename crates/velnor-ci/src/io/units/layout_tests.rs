@@ -7,7 +7,8 @@
 use std::fs;
 use std::path::Path;
 
-use super::{UnitFile, unit_file, unit_files_within};
+use super::workspace::Roots;
+use super::{UnitFile, Workspace, unit_file, unit_files_within};
 
 const LIB: &str = "debug/build/dep/5c64b2dee9af80ce";
 const SCRIPT: &str = "debug/build/dep/3f722b21ff7c4711";
@@ -59,7 +60,7 @@ fn dep_info_carries_the_hash_of_its_unit_directory() {
         assert_eq!(
             parsed(&format!("{unit}/out/{stem}.d")),
             Some(UnitFile::DepInfo {
-                configuration: Some("debug".to_owned()),
+                configuration: "debug".to_owned(),
                 hash: Some(hash.to_owned()),
                 stem: stem.to_owned(),
             }),
@@ -139,7 +140,7 @@ fn the_old_layout_is_still_read() {
     ));
 }
 
-fn target_with(files: &[&str]) -> std::path::PathBuf {
+pub(super) fn target_with(files: &[&str]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let root = std::env::temp_dir().join(format!(
         "velnor-units-built-{}-{}",
@@ -188,16 +189,63 @@ fn a_target_directory_nothing_was_built_in_is_not_refused() {
 #[test]
 fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
     for layout in [
-        "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
-        "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+        [
+            "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
+            "debug/deps/dep-5c64b2dee9af80ce.d",
+        ],
+        [
+            "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+            "debug/build/dep/5c64b2dee9af80ce/out/dep-5c64b2dee9af80ce.d",
+        ],
     ] {
-        let root = target_with(&[layout, "debug/out/libdep.rlib"]);
+        let root = target_with(&[
+            layout[0],
+            layout[1],
+            "debug/.cargo-lock",
+            "debug/libdep.rlib",
+        ]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(
             found.unwrap_or_else(|e| unreachable!("{e}")).len(),
-            1,
-            "{layout}"
+            2,
+            "{layout:?}"
         );
     }
+}
+
+fn sharing(root: &std::path::Path, build: &std::path::Path) -> Workspace {
+    Workspace {
+        root: root.join("..").join(build.file_name().unwrap_or_default()),
+        target_directory: root.to_owned(),
+        build_directory: build.to_owned(),
+    }
+}
+
+#[test]
+fn a_shared_target_is_scanned_strictly_only_when_every_workspace_using_it_is_plain() {
+    let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
+    let plain = sharing(&root, &root);
+    let apart = sharing(&root, &root.join("build"));
+    let alone = Roots::new(std::slice::from_ref(&plain)).unit_files(&root);
+    let mixed = Roots::new(&[apart, plain]).unit_files(&root);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let message = alone
+        .expect_err("a plain target that holds outputs and no unit must be refused")
+        .to_string();
+    assert!(message.contains("unknown cargo layout?"), "{message}");
+    assert!(
+        mixed.is_ok(),
+        "a target shared with a separate build directory must keep the unchecked scan"
+    );
+}
+
+#[test]
+fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_build_units_unchecked()
+{
+    let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
+    let group = [sharing(&root, &root.join("build")), sharing(&root, &root)];
+    let found = group[1].build_units(&group);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(found.is_ok(), "{found:?}");
 }

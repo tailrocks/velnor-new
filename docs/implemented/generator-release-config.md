@@ -2,7 +2,7 @@
 
 The Rust generator reads top-level keys from `.velnor/release.toml`.
 By default, `roots = ["."]` lists Cargo roots with `release-plz.toml` files and
-`after = ["Rust CI"]` lists workflow names and must include every push workflow.
+`after = ["CI"]` lists workflow names and must include every push workflow.
 
 `pr_only_checks = ["DCO"]` explicitly exempts names from release push checks;
 it defaults to `[]` and requires pinned `velnor-ci` 0.1.82 or newer. Each name
@@ -27,6 +27,9 @@ read permissions. Administration write is needed to expose `bypass_actors`;
 see the [ruleset API evidence](../proposed/github-actions-reference.md#rulesets-api-bypass_actors-visibility).
 The gate requests these permissions on a token scoped to
 the current repository. It checks out nothing and runs only the pinned helper.
+With `velnor-ci` 0.1.114 or later the helper mints that token itself and the
+gate's last step revokes it; see **The release App key** in
+[`generator/CONFIG.md`](../../generator/CONFIG.md#release-settings).
 The job's own `GITHUB_TOKEN` retains read permissions. Without exemptions,
 the gate uses `github.token` and needs neither the App nor the environment.
 An App token cannot authorize exemptions when inherited ruleset metadata

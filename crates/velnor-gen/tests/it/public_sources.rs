@@ -302,3 +302,28 @@ fn only_a_plain_github_repository_url_can_be_declared() -> TestResult {
     }
     Ok(())
 }
+
+fn probe_step(workflow: &str) -> &str {
+    let start = workflow
+        .find("Look up the public git dependencies once for this run")
+        .unwrap_or_else(|| unreachable!("{workflow}"));
+    let rest = &workflow[start..];
+    rest.find("\n      - ").map_or(rest, |end| &rest[..end])
+}
+
+#[test]
+fn the_probe_step_stops_the_job_on_a_private_verdict_only_with_a_helper_that_fails() -> TestResult {
+    let before = render(&locked(&pinned_source(), DECLARED, "0.1.113")?)?;
+    assert!(
+        probe_step(&before.workflow).contains("continue-on-error: true"),
+        "{}",
+        probe_step(&before.workflow)
+    );
+    let after = render(&locked(&pinned_source(), DECLARED, "0.1.114")?)?;
+    assert!(
+        !probe_step(&after.workflow).contains("continue-on-error"),
+        "{}",
+        probe_step(&after.workflow)
+    );
+    Ok(())
+}

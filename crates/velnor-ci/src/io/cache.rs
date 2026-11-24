@@ -5,6 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::cache_limits::{budget_bytes_from, max_age_days_from};
 use super::cache_prune::prune;
 use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
@@ -20,6 +21,7 @@ const INCREMENTAL: &str = "incremental";
 const MAX_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const REF_VARIABLE: &str = "GITHUB_REF";
+const SOURCES_RESTORED_VARIABLE: &str = "VELNOR_SOURCES_RESTORED";
 
 #[derive(Debug)]
 pub struct Decision {
@@ -185,11 +187,7 @@ pub struct Expiry {
 }
 
 pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry, CiError> {
-    let Some(days) = std::env::var(MAX_AGE_VARIABLE)
-        .ok()
-        .and_then(|text| text.trim().parse::<u64>().ok())
-        .filter(|days| *days > 0)
-    else {
+    let Some(days) = max_age_days_from(std::env::var_os(MAX_AGE_VARIABLE).as_deref())? else {
         return Ok(Expiry {
             expired: false,
             report: String::new(),
@@ -245,14 +243,7 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
 }
 
 fn budget_limit() -> Result<Option<u64>, CiError> {
-    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
-        Ok(text) if !text.trim().is_empty() => text
-            .trim()
-            .parse()
-            .map(Some)
-            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
-        _ => Ok(None),
-    }
+    budget_bytes_from(std::env::var_os("VELNOR_CACHE_BUDGET_BYTES").as_deref())
 }
 
 pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {
@@ -274,10 +265,10 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     ));
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
-    let leak = super::cache_credentials::saved_root().map_or_else(
-        || Some("HOME is not set".to_owned()),
-        |home| super::cache_credentials::find(&home),
-    );
+    let sources_restored = std::env::var(SOURCES_RESTORED_VARIABLE).is_ok_and(|hit| hit == "true");
+    let leak = (admission.refusal.is_none() && !sources_restored)
+        .then(super::cache_credentials::leak)
+        .flatten();
     let sources = admission.refusal.is_none() && leak.is_none();
     let (probe_log, mismatch) = (admission.log, admission.mismatch);
     let decision = if let Some(reason) = admission.refusal {

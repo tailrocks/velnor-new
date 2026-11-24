@@ -638,7 +638,7 @@ A twin always lands on a different node from its original.
 - **Control plane.** k3s has one server [M]. Sandboxes are created by agents, not pods, so its loss
   stops deployments, not verification. Three servers are still a precondition of the executor
   cutover, as v2 has it.
-- **Other organisations.** ChainArgos and jackin keep ARC, with guaranteed CPU requests, their own
+- **Other organisations.** example-org and jackin keep ARC, with guaranteed CPU requests, their own
   namespaces and no shared stores. `cpu.idle` keeps Velnor's batch work off their CPU. Moving them
   to Velnor is phase 5.
 
@@ -869,7 +869,7 @@ corpus pass rate against the latest official release.
 | 1, weeks 2–4 | Work items 2–5; executor MVP, oracle and native actions in the lab | ≤ 4 / ≤ 8 min | ≤ 6 / ≤ 15 min | ≤ 60 | ≥ 90% | ≥ 70% |
 | 2, weeks 4–8 | Per-obligation keys with read audit, shadow then graduation; agent sandboxes; incremental; twin and tip audits; speculation; ALLGREEN; overlayfs and rootless-Docker experiments; executor cutover when §5.3 holds | ≤ 90 s / ≤ 4 min | ≤ 3 / ≤ 8 min | ≤ 25 | ≥ 98%; ≥ 85% of groups execute nothing | 100% (cutover gate) |
 | 3, weeks 8–12 | `velnor verify`; test floor ≤ 30 s, then 10 s; `velnor-runner-host` split; audit test spreading; high-clock node; tuning | **≤ 60 s / ≤ 3 min** (stretch 25 s / 90 s) | **≤ 2 / ≤ 5 min** (stretch 70 s / 3 min) | ≤ 17 | ≥ 98%; ≥ 90% of groups | 100%, each new release certified within 7 days |
-| 4, after week 12 | macOS back as a Mac host class under the same executor and oracle; ChainArgos and jackin to Velnor; a microVM class | Held | Held | Held | Held | 100% on both platforms |
+| 4, after week 12 | macOS back as a Mac host class under the same executor and oracle; example-org and jackin to Velnor; a microVM class | Held | Held | Held | Held | 100% on both platforms |
 
 **The first five work items:**
 

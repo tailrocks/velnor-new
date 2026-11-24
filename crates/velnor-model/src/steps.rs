@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::budget_mode::SelectionName;
 use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
-use crate::plan_gate::PlanFrom;
+use crate::plan_gate::{FetchedManifest, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,10 +72,12 @@ pub enum StepKind {
         budget_bytes: u64,
         verdicts: Option<PlanFrom>,
         private: PrivateVerdict,
+        sources_restore: Option<RootSlug>,
     },
     PublicSources {
         manifests: Vec<RepoPath>,
         selected: Vec<RootSlug>,
+        fails_on_private: bool,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -89,6 +92,7 @@ pub enum StepKind {
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
+    CachePurgePrivate,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -121,10 +125,14 @@ pub enum StepKind {
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
-        manifests: Vec<RepoPath>,
+        manifests: Vec<FetchedManifest>,
         cached: Vec<crate::ids::RootSlug>,
+        filled: Vec<RepoPath>,
+        filled_private: bool,
+        listed: bool,
     },
     ReleaseAssets {
         assets: Vec<crate::release_asset::ReleaseAsset>,
@@ -148,8 +156,11 @@ pub enum StepKind {
         name: String,
         run: String,
         before_build: bool,
+        offline_after_private_fetch: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        from_source: bool,
+    },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
@@ -163,9 +174,12 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        saved_keys: bool,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -173,8 +187,13 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+    Ansible {
+        name: String,
+        run: String,
+    },
     Budget {
         last: usize,
+        selection: Option<SelectionName>,
     },
     MergeGroupPassed {
         required: String,
@@ -183,6 +202,14 @@ pub enum StepKind {
 }
 
 impl StepKind {
+    #[must_use]
+    pub const fn runs_cargo(&self) -> bool {
+        matches!(
+            self,
+            Self::Cargo(_) | Self::GeneratorCheck { from_source: true }
+        )
+    }
+
     #[must_use]
     pub const fn feeds_build(&self) -> bool {
         matches!(
@@ -221,6 +248,7 @@ impl StepKind {
             | Self::DeltaApply(_)
             | Self::DeltaStage(_, _)
             | Self::CacheBudget(_)
+            | Self::CachePurgePrivate
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
@@ -259,7 +287,8 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::MergeQueueCheck { .. } => false,
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
         }
     }
 
@@ -295,6 +324,7 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    RecordSavedKey,
     AnchorReset,
     AnchorRestore,
     AnchorFind,
@@ -334,6 +364,7 @@ pub enum VerifiedSave {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub saved_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

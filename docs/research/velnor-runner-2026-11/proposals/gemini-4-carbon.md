@@ -47,8 +47,8 @@ T5 and ruleset `24396608`) and **141.2 min** under `11-18` contention (`71.8 + 5
 |---|---:|---:|---:|---|
 | **1. Queueing** | **57.0 min (79.4%)** | **5.8 min (36.3%)** | `0.0` | Three serial hosted gates on `ubuntu-26.04`: `Plan` (`21.6m` med on `11-18`), `Required verdict` (`23.3m`), `Required` (`15.3m`, evidence pack T5). All 8 hosted jobs cost only **3.78 runner-min** combined (`#1305` comment `6980386757`). Scale-set jobs queue **12 s median (`0.2m`), 18 s p90** (`n = 3,944`, evidence pack T4). |
 | **2. Pod and step setup** | **~0.5 min (0.7%)** | **~0.5 min (3.1%)** | **~9.0** (`17%`) | Per scale-set job (measured from job `134779761482` millisecond log): `Set up job` `4.88 s` (`4.17 s` sequentially downloading 6 uncached JS action tarballs, `0.66 s` `runnerresolve`, `0.045 s` C# init), `Checkout` `2.77 s`, `Setup Mise` `1.56 s`, `Acquire Velnor` `1.09 s`, `Download plan` `2.63 s`, `Download ledger` + `Upload reports` `6.73 s`, paid across ~31 scale-set jobs. |
-| **3. Tool and crate downloads** | **~0.3 min (0.4%)** | **~0.3 min (1.9%)** | **~8.5** (`16%`) | Rust `1.99.1` is omitted from `velnor-ci-runner:2026-11-16.2` ([state/RESULT.md:115](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/RESULT.md#L115)) and `Restore Mise tools` is omitted on scale-set jobs ([crates/velnor-actions-workflow-renderer/src/cache_p08_runtime_identity.rs:230-240](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-workflow-renderer/src/cache_p08_runtime_identity.rs#L230-L240)), costing `12.2 s` per Rust job (`~5.9` runner-min/run, `706` runner-min in sample, evidence pack T9b). Cargo sources miss `48/48`, fetching `435` to `522` `.crate` archives from `crates.io` (`4.12 s` in job `134779761482`) while the in-cluster `crates-mirror` sits unused. |
-| **4. Cache transfer** | **~0.02 min (<0.1%)** | **~0.02 min (0.1%)** | **~0.5** (`1%`) | `Restore Cargo sources` 404s in `0.62 s`/job; `Restore state snapshot` skips `3,636/3,636` (`0 s`); `MBX_REMOTE_URL` is empty `68/68` (evidence pack T9a, T9b). When remote `target/` caching was tested on `velnor-new` in `#585` (comment `6856187529`), restoring **1.92 GB** over transatlantic HTTPS (`13.6` to `22.4 MB/s`, [state/log.md:31](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/log.md#L31)) took **44 to 61 s** and saving took **24 to 28 s**. |
+| **3. Tool and crate downloads** | **~0.3 min (0.4%)** | **~0.3 min (1.9%)** | **~8.5** (`16%`) | Rust `1.99.1` is omitted from `velnor-ci-runner:2026-11-16.2` (state/RESULT.md:115) and `Restore Mise tools` is omitted on scale-set jobs (crates/velnor-actions-workflow-renderer/src/cache_p08_runtime_identity.rs:230-240), costing `12.2 s` per Rust job (`~5.9` runner-min/run, `706` runner-min in sample, evidence pack T9b). Cargo sources miss `48/48`, fetching `435` to `522` `.crate` archives from `crates.io` (`4.12 s` in job `134779761482`) while the in-cluster `crates-mirror` sits unused. |
+| **4. Cache transfer** | **~0.02 min (<0.1%)** | **~0.02 min (0.1%)** | **~0.5** (`1%`) | `Restore Cargo sources` 404s in `0.62 s`/job; `Restore state snapshot` skips `3,636/3,636` (`0 s`); `MBX_REMOTE_URL` is empty `68/68` (evidence pack T9a, T9b). When remote `target/` caching was tested on `velnor-new` in `#585` (comment `6856187529`), restoring **1.92 GB** over transatlantic HTTPS (`13.6` to `22.4 MB/s`, state/log.md:31) took **44 to 61 s** and saving took **24 to 28 s**. |
 | **5. Compilation, lint, and doc** | **~2.0 min (2.8%)** | **~2.5 min (15.6%)** | **~17.5** (`33%`) | Cold compilation of `104` to `497` crates across 29 isolated `emptyDir` pods (evidence pack T9a). `Build test executables` takes `81 s` med (`94.7 s` in `134779761482`, storing `7.0 GiB` in local `mbx`), followed by `Clippy` (`70` to `77 s`) and `Documentation` (`60` to `66 s`) recompiling `124` to `155` crates. `Check / maintenance-helpers` compiles 104 crates three times (`dev`, `release`, examples) in `181 s` with `--config build.jobs=2` (`#1305` comment `6980497787`). |
 | **6. Test execution** | **~6.5 min (9.1%)** | **~6.0 min (37.5%)** | **~17.4** (`33%`) | Dominated by four jobs (evidence pack T10): `velnor-runner-host` (`192 s` med, `338.2 s` in `134779761482`), `velnor-runner-host (local-mode)` (`246 s` med), `velnor-actions-cli` (`238 s` med + `89 s` fixture prep), and `Check / maintenance-helpers` (`252 s` for 54 tests). All other crates test in `1` to `78 s`. |
 | **7. Duplicate work** | *(inside 2 to 6)* | *(inside 2 to 6)* | **~24.0 intra-run** (`~45%`) | Intra-run: `velnor-runner-host (local-mode)` rebuilds 448 crates and reruns all 348 default tests just to add 2 `local-mode` binaries (`5.5` to `9.2` runner-min); 29 crate pods repeat setup and compile overlapping crates from 5 `Cargo.lock` files (`1,160` external lock entries vs **527** unique `crate@version` pairs, measured via lockfile scan at `b4a1357ceb`). Inter-run: `merge_group` and `push` repeat all 39 jobs. |
@@ -56,28 +56,28 @@ T5 and ruleset `24396608`) and **141.2 min** under `11-18` contention (`71.8 + 5
 ### Why scale-set caches miss 100% of the time in code
 
 Both cache failures stem from one architectural split:
-[crates/velnor-actions-contract/src/workflow/lanes_placement.rs:27-29](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-contract/src/workflow/lanes_placement.rs#L27-L29)
+crates/velnor-actions-contract/src/workflow/lanes_placement.rs:27-29
 and
-[crates/velnor-actions-workflow-renderer/src/render_state_seal.rs:278-311](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-workflow-renderer/src/render_state_seal.rs#L278-L311)
+crates/velnor-actions-workflow-renderer/src/render_state_seal.rs:278-311
 force `Plan` and all 17 the State seal workflow producer/sealer jobs onto hosted `ubuntu-26.04`
 (`RUNNER_TEMP=/home/runner/work/_temp`, `GITHUB_WORKSPACE=/home/runner/work/velnor-new/velnor-new`,
 `ImageOS=ubuntu26`), whereas verification jobs run on `[velnor, ubuntu-26.04-scale-set]`
 (`RUNNER_TEMP=/home/runner/_work/_temp` using `_work` instead of `work`,
 `GITHUB_WORKSPACE=/home/runner/_work/velnor-new/velnor-new`, `ImageOS=velnor-arc-ubuntu24` per
-[state/values.yaml:20-21](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/values.yaml#L20-L21)).
+state/values.yaml:20-21).
 
 1. **Cargo sources (`48/48` misses).** `@actions/cache` v6.1.0 computes
    `version = sha256(resolved_paths + compression)` and filters strictly by `entry.version == version`
    before key matching
-   ([crates/velnor-cache-rules/src/lookup.rs:28-32](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-cache-rules/src/lookup.rs#L28-L32)).
+   ([crates/velnor-cache-rules/src/lookup.rs:28-32](../../../../crates/velnor-cache-rules/src/lookup.rs#L28-L32)).
    Hosted `sources-producer` saves `${{ runner.temp }}/velnor/cargo/...` under
    `/home/runner/work/_temp`, so hosted `Plan` hits `10/10` while scale-set jobs compute `version`
    over `/home/runner/_work/_temp` and miss `48/48`.
 2. **State snapshots (`3,636/3,636` skips).**
-   [crates/velnor-actions-contract/src/workflow/cache_family/state.rs:224-227](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-contract/src/workflow/cache_family/state.rs#L224-L227)
+   crates/velnor-actions-contract/src/workflow/cache_family/state.rs:224-227
    emits `ImageOS=${ImageOS-}`, `store=$RUNNER_TEMP/velnor/mbx`, and `checkout=$GITHUB_WORKSPACE`.
    Because none starts with `$`,
-   [crates/velnor-actions-workflow-renderer/src/state_fragments.rs:15-21](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-workflow-renderer/src/state_fragments.rs#L15-L21)
+   crates/velnor-actions-workflow-renderer/src/state_fragments.rs:15-21
    wraps them in double quotes so the shell expands them into `StateCompat`. Even when
    the State seal workflow succeeded for `generator` and `ci-helper` on `11-18`, scale-set jobs computed a
    different `compat` hash from hosted `Plan`, matched zero attested keys, and skipped restore. Note
@@ -106,13 +106,13 @@ replaces), here is the verdict on each hypothesis.
   - Cutting JS and C# CPU execution to zero saves **2.0 to 2.5 s out of 481 s (0.5%)** on the job and
     **<0.3%** on a `16 to 72 min` PR run.
   - `velnor-legacy` tested this exact premise by reimplementing 26 JS actions in Rust inside
-    [crates/velnor-runner/src/executor.rs:8477-12950](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/executor.rs#L8477-L12950)
+    crates/velnor-runner/src/executor.rs:8477-12950
     (`37,028` LOC) and isolating remaining JS actions in `node:24-bookworm` sidecar containers
-    ([crates/velnor-runner/src/container.rs:806-961](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/container.rs#L806-L961)).
+    (crates/velnor-runner/src/container.rs:806-961).
     That split broke tool-installing actions
-    ([crates/velnor-runner/src/action.rs:410-434](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/action.rs#L410-L434)),
+    (crates/velnor-runner/src/action.rs:410-434),
     required a fallback to the official runner, and produced **0 accepted CI speedup**
-    ([evidence.md](file:///Users/donbeave/.cache/ci-ambition/panel/evidence.md) E.7).
+    (evidence.md E.7).
   - **Expected gain from what actually matters.** Caching action tarballs locally saves **4.17 s/job**
     (`Set up job` sequential downloads), and serving git objects, caches, and artifacts from local
     NVMe saves **~8 to 11 s/job** of WAN transfers (**~12 to 15 s total** on the critical path once
@@ -128,35 +128,35 @@ replaces), here is the verdict on each hypothesis.
 - **Evidence and expected numbers.**
   - **Why ARC loses (`12 s` med, `18 s` p90, `270 s` max queue, evidence pack T4).**
     - Code reading of
-      [controllers/actions.github.com/ephemeralrunnerset_controller.go:323-357](file:///Users/donbeave/.cache/ci-ambition/refs/arc/controllers/actions.github.com/ephemeralrunnerset_controller.go#L323-L357)
+      controllers/actions.github.com/ephemeralrunnerset_controller.go:323-357
       shows ARC **defers scale-up for two reconcile cycles** whenever finished `EphemeralRunner`
       objects exist, batches creates at `runnerBatchConcurrency = 8` (`:68`), and runs 4 sequential
       K8s/GitHub calls per runner
-      ([controllers/actions.github.com/ephemeralrunner_controller.go:285-406](file:///Users/donbeave/.cache/ci-ambition/refs/arc/controllers/actions.github.com/ephemeralrunner_controller.go#L285-L406)).
+      (controllers/actions.github.com/ephemeralrunner_controller.go:285-406).
     - Live pod timing (`kubectl get pods -n arc-runners -o json`, `n = 4` pods at `2026-11-18T17:27Z`)
       shows **6 to 7 s** from `PodScheduled` to `runnerStarted` on every pod: **1 to 2 s** in
       `init-dind-externals` copying Node24
-      ([charts/gha-runner-scale-set/templates/_helpers.tpl:250-261](file:///Users/donbeave/.cache/ci-ambition/refs/arc/charts/gha-runner-scale-set/templates/_helpers.tpl#L250-L261))
+      (charts/gha-runner-scale-set/templates/_helpers.tpl:250-261)
       plus **3 to 4 s** waiting on `dind`'s `startupProbe` because `periodSeconds: 5`
-      ([charts/gha-runner-scale-set/templates/_helpers.tpl:276-284](file:///Users/donbeave/.cache/ci-ambition/refs/arc/charts/gha-runner-scale-set/templates/_helpers.tpl#L276-L284))
+      (charts/gha-runner-scale-set/templates/_helpers.tpl:276-284)
       sleeps 5 s after the `t = 0` probe misses `dockerd` startup, even
       though 28 of 31 jobs never use Docker.
   - **Why wrapping `actions/runner` via hooks loses.** `ContainerHookManager`
-    ([src/Runner.Worker/Container/ContainerHooks/ContainerHookManager.cs:38-131](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/Container/ContainerHooks/ContainerHookManager.cs#L38-L131))
+    (src/Runner.Worker/Container/ContainerHooks/ContainerHookManager.cs:38-131)
     requires `container:` jobs (`ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true`), breaks `docker build`
     and Testcontainers, adds a subprocess spawn per step, and retains 100% of `Runner.Listener` and
     `Runner.Worker` startup.
   - **What replacing `actions/runner` saves.** In
-    [src/Runner.Listener/JobDispatcher.cs:395-406](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Listener/JobDispatcher.cs#L395-L406),
+    src/Runner.Listener/JobDispatcher.cs:395-406,
     `Runner.Listener` **blocks synchronously on `POST /renewjob` before spawning `Runner.Worker`**,
     boots a second .NET CLR process over anonymous pipes (serializing `AgentJobRequestMessage` three
-    times, [src/Runner.Worker/Worker.cs:62-101](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/Worker.cs#L62-L101)),
+    times, src/Runner.Worker/Worker.cs:62-101),
     waits up to `1,000 ms` on a `500 ms` timer when OIDC is enabled
-    ([src/Runner.Worker/JobRunner.cs:214-222](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/JobRunner.cs#L214-L222)),
+    (src/Runner.Worker/JobRunner.cs:214-222),
     downloads actions at concurrency = 1
-    ([src/Runner.Worker/ActionManager.cs:235-270](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/ActionManager.cs#L235-L270)),
+    (src/Runner.Worker/ActionManager.cs:235-270),
     and spawns `node24` synchronously for `hashFiles()`
-    ([src/Runner.Worker/Expressions/HashFilesFunction.cs:73-111](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/Expressions/HashFilesFunction.cs#L73-L111)).
+    (src/Runner.Worker/Expressions/HashFilesFunction.cs:73-111).
     A single static Rust worker removes **~2.5 to 4.5 s** of startup latency per job.
 
 ### Hypothesis 3: Kubernetes is the right base because it schedules and scales pods across all hardware
@@ -168,7 +168,7 @@ replaces), here is the verdict on each hypothesis.
   - Current k3s pod scheduling (`requests: 2 CPU`, no CPU limit, `cpuManagerPolicy: none`, evidence
     pack B.1.3, B.2.3) let individual pods burst to **83.7 of 96 cores** (evidence pack B.2.2).
     Because `cpu.max` is unlimited, `cargo`, `mbx`, and `nextest` (`test-threads = "num-cpus"`,
-    [.config/nextest.toml:9](file:///Users/donbeave/Projects/tailrocks/velnor-new/.config/nextest.toml#L9))
+    [.config/nextest.toml:9](../../../../.config/nextest.toml#L9))
     each see `96` CPUs, spawning up to
     `9 pods * 3 background steps * 96 threads = 2,592 runnable threads` on one node and slowing
     `velnor-runner-host` **2.4x**, from **3.7 min** (`11-16`) to **8.8 min** (`11-18`, evidence pack
@@ -190,7 +190,7 @@ replaces), here is the verdict on each hypothesis.
     (`14.7 GB` extracted) took **44 to 61 s** and saving took **24 to 28 s**, making a `warm` run
     (**345 s**) slower than a `cold` run (**291 s**).
   - Our five workers hold **95.8 TB** of XFS NVMe
-    ([evidence.md](file:///Users/donbeave/.cache/ci-ambition/panel/evidence.md) B.1.4) versus GitHub's
+    (evidence.md B.1.4) versus GitHub's
     **10 GB** limit (**9,580x** larger). Cloning an uncompressed 14.7 GB `target/` tree (~45,000 files) on local
     XFS via `cp --reflink=always -a` (`FICLONE` ioctl, zero data blocks copied) takes **0.4 to 1.2 s**
     (estimated at 40k to 100k metadata extents/s on Linux 6.12 NVMe, **40x to 100x faster** than
@@ -210,7 +210,7 @@ replaces), here is the verdict on each hypothesis.
   - Setting `min_entries_to_merge_wait_minutes = 0` removes **5.0 min** of idle merge-queue sleep.
   - Consolidating 5 workspaces (`1,160` lock entries) into 1 workspace (`527` unique external crates),
     running affected-only `merge_group` diffs relative to green `main`
-    ([docs/goals.md:86](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L86)),
+    ([docs/goals.md:86](../../../goals.md)),
     filtering `local-mode` to its 2 specific test binaries (`saves 5.5 to 9.2` runner-min), and fixing
     + LPT-sharding the 4 slow test suites brings typical PR wall time from **16 to 75 min** down to
     **24 to 38 s** (arithmetic in Section 5).
@@ -227,16 +227,16 @@ actions inside the job sandbox**, avoiding `velnor-legacy`'s 37k-line native-act
    the org-level GitHub App, exchanges `RemoteAuth` registration tokens for scale-set admin JWTs,
    opens the long-poll `/_apis/runtime/runnerscalesets/{id}/sessions` queue (`X-ScaleSetMaxCapacity`),
    and calls `/acquirejobs` and `/generatejitconfig` concurrently
-   ([crates/velnor-runner-github/src/lib.rs:12-54](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-runner-github/src/lib.rs#L12-L54)).
+   ([crates/velnor-runner-github/src/lib.rs:12-54](../../../../crates/velnor-runner-github/src/lib.rs#L12-L54)).
 2. **Execution and reporting plane (`v2.338.0` wire contract).**
    - `velnor-worker` receives the decoded JIT identity in memory over a one-shot pipe/vsock (never
      persisting `.credentials_rsaparams` to workspace disk), mints the RS256 OAuth assertion, calls
      `POST {run_service_url}/acquirejob`, starts async `POST {vss_url}/renewjob` every 45 s **in
      parallel** with job setup, and reports final status via `POST {vss_url}/completejob`
-     ([src/Sdk/RSWebApi/RunServiceHttpClient.cs:58-184](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Sdk/RSWebApi/RunServiceHttpClient.cs#L58-L184)).
+     (src/Sdk/RSWebApi/RunServiceHttpClient.cs:58-184).
    - Because 100% of GitHub.com scale-set jobs arrive as V2 `RunnerJobRequest`, `velnor-worker`
      follows `resultsServiceOnly: true`
-     ([src/Runner.Worker/JobRunner.cs:85](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/JobRunner.cs#L85)):
+     (src/Runner.Worker/JobRunner.cs:85):
      it omits legacy AzDO timeline calls, posts step states to Twirp
      `WorkflowStepUpdateService/WorkflowStepsUpdate`, streams console lines over `FeedStreamUrl`
      WebSocket, and uploads step/job logs in 4 MiB streaming chunks via
@@ -244,14 +244,14 @@ actions inside the job sandbox**, avoiding `velnor-legacy`'s 37k-line native-act
      `rustls` HTTP/2 pools.
    - Enforces upstream's exact environment boundary: all steps get the 39 allowlisted `GITHUB_*` and
      `RUNNER_*` variables
-     ([src/Runner.Worker/GitHubContext.cs:9-50](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/GitHubContext.cs#L9-L50)),
+     (src/Runner.Worker/GitHubContext.cs:9-50),
      while `ACTIONS_RUNTIME_TOKEN`, `ACTIONS_RUNTIME_URL`, `ACTIONS_RESULTS_URL`, and
      `ACTIONS_CACHE_URL` are injected **only** into `uses:` action steps
-     ([src/Runner.Worker/Handlers/NodeScriptActionHandler.cs:54-93](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Runner.Worker/Handlers/NodeScriptActionHandler.cs#L54-L93)),
+     (src/Runner.Worker/Handlers/NodeScriptActionHandler.cs:54-93),
      never into `run:` shell steps.
 3. **In-sandbox `node24` and composite execution.** `velnor-worker` batch-resolves action SHAs via
    `POST .../runnerresolve/actions`
-   ([src/Sdk/WebApi/WebApi/LaunchHttpClient.cs:35-85](file:///Users/donbeave/.cache/ci-ambition/refs/actions-runner/src/Sdk/WebApi/WebApi/LaunchHttpClient.cs#L35-L85)),
+   (src/Sdk/WebApi/WebApi/LaunchHttpClient.cs:35-85),
    reflinks pre-extracted action directories from `velnor-node`'s CAS into `_work/_actions` in
    `<20 ms`, expands `composite` steps, and runs `node24` actions using `/opt/velnor/node24/bin/node`
    inside the **same** rootfs, UID, and `PATH` as `run:` steps.
@@ -321,7 +321,7 @@ pub struct JobDispatchSpec {
 
 - **Take from `velnor-new`.**
   - `velnor-runner-github` (`7,864` LOC,
-    [crates/velnor-runner-github/src/poll.rs:205-308](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-runner-github/src/poll.rs#L205-L308)):
+    [crates/velnor-runner-github/src/poll.rs:205-308](../../../../crates/velnor-runner-github/src/poll.rs#L205-L308)):
     transport-pure Scale Set `6.0-preview` state machines, `runnerRequestId == 0` synthetic SHA-256
     deduplication, poison-batch quarantine, and `workflow_run` PR/fork verification.
   - `velnor-runner-core` (`883` LOC), `velnor-runner-attestation` (`1,773` LOC), and
@@ -330,7 +330,7 @@ pub struct JobDispatchSpec {
     `(scope, key, version)` lookup engine and `runner.server` differential conformance harness.
   - `velnor-gen` and `velnor-ci` (`generator/`, `ci-helper/`): workspace planning, `#595` `Cargo.lock`
     graph diffing, `inputs save/restore` mtime normalization
-    ([crates/velnor-ci/src/inputs.rs:138-240](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-ci/src/inputs.rs#L138-L240)),
+    ([crates/velnor-ci/src/inputs.rs:138-240](../../../../crates/velnor-ci/src/inputs.rs#L138-L240)),
     `crates-mirror` wrapper, and `report --check` cache verification.
 - **Do NOT copy from `velnor-new`.**
   - `velnor-runner-host`'s **171,054-line / 1,002-file monolith**, especially `src/journal/`
@@ -347,31 +347,31 @@ pub struct JobDispatchSpec {
     `workflow_run_backend_id` validation dropping all 19 artifacts on job redelivery (`#670` to `#672`
     / PRs `#681`, `#684`), and sidecar JS actions losing installed tools.
   - **Lift cleanly.** `expression/` (`3,565` LOC shunting-yard `.NET` `Expressions2` port at
-    [crates/velnor-runner/src/expression/mod.rs:1-60](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/expression/mod.rs#L1-L60),
+    crates/velnor-runner/src/expression/mod.rs:1-60,
     adding upstream's 1 MiB `MemoryCounter` and converting recursive `write_json` at
-    [crates/velnor-runner/src/expression/eval.rs:532](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/expression/eval.rs#L532)
+    crates/velnor-runner/src/expression/eval.rs:532
     to an explicit heap stack),
-    [crates/velnor-runner/src/workflow_command.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/workflow_command.rs)
+    crates/velnor-runner/src/workflow_command.rs
     (`1,521` LOC),
-    [crates/velnor-runner/src/command_files.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/command_files.rs)
+    crates/velnor-runner/src/command_files.rs
     (`481` LOC),
-    [crates/velnor-runner/src/script_step.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/script_step.rs)
+    crates/velnor-runner/src/script_step.rs
     (`2,160` LOC), parallel `rayon` `hashFiles()`
-    ([crates/velnor-runner/src/executor.rs:16189-16445](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/executor.rs#L16189-L16445)),
+    (crates/velnor-runner/src/executor.rs:16189-16445),
     the 11-encoder Aho-Corasick `Masker`
-    ([crates/velnor-runner/src/runner.rs:13166-13397](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/runner.rs#L13166-L13397),
+    (crates/velnor-runner/src/runner.rs:13166-13397,
     instantiated fresh per job so `OpsSink` never leaks across jobs), and `RunService`/`Twirp` wire
     types from
-    [crates/velnor-runner/src/protocol.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/protocol.rs).
+    crates/velnor-runner/src/protocol.rs.
 - **Do NOT copy from `velnor-legacy`.**
   - `executor.rs`'s 26 native action clones (`37k` LOC), `node:24-bookworm` sidecars,
-    [crates/velnor-runner/src/docker_lease.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/docker_lease.rs)'s
+    crates/velnor-runner/src/docker_lease.rs's
     `21.6k`-LOC Docker socket proxy over a shared host `dockerd`, `curl` subprocess spawns for TLS
     fingerprinting
-    ([crates/velnor-runner/src/protocol.rs:1449](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/protocol.rs#L1449)),
-    [crates/velnor-runner/src/gha_cache.rs](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/gha_cache.rs)'s
+    (crates/velnor-runner/src/protocol.rs:1449),
+    crates/velnor-runner/src/gha_cache.rs's
     `17.1k`-LOC custom 5-tier file-lock hierarchy, or Firecracker's empty cache transport
-    ([crates/velnor-runner/src/execution/backend.rs:129-137](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/execution/backend.rs#L129-L137)).
+    (crates/velnor-runner/src/execution/backend.rs:129-137).
 - **Take vs reject from `actions/runner` and `ARC`.**
   - Copy wire protocol rules only (`resultsServiceOnly`, `LaunchHttpClient`, 39-key env split,
     `ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE` in Phase 1). Reject ARC's 4-CRD controller chain,
@@ -382,7 +382,7 @@ pub struct JobDispatchSpec {
 
 Following `Separate Before Serializing Shared State`, concurrent jobs never share a mutable directory
 or lockfile (avoiding `velnor-legacy`
-[crates/velnor-runner/src/mbx_store.rs:4-20](file:///Users/donbeave/.cache/ci-ambition/refs/velnor-legacy/crates/velnor-runner/src/mbx_store.rs#L4-L20)'s
+crates/velnor-runner/src/mbx_store.rs:4-20's
 144 GiB per-slot blowup). All shared cache tiers on `/var/lib/rancher/velnor` are **read-only
 immutable directories (`0555`)**, and each job receives an isolated writable workspace via XFS
 `FICLONE` reflinks.
@@ -407,7 +407,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
    - Extracted `.crate` directories in `.../cas/cargo-src/<lock_sha>` reflink into
      `~/.cargo/registry`, backed by the existing node-local `velnor-system/crates-mirror` nginx
      DaemonSet (`PreferSameNode`, 200 GB cache,
-     [state/RESULT.md:132](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/RESULT.md#L132))
+     state/RESULT.md:132)
      for newly added crates.
 4. **Build artifacts: Cargo `target/` + `inputs.tsv` (`L1` node-local XFS CoW snapshots + `L2`
    same-site LAN CAS, `92% to 96%` hit on 1st PR push, `>96%` on 2nd+ PR push, `0.5 to 1.2 s`
@@ -430,7 +430,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      DE-to-FI) so all 5 workers stay warm on `main`.
 5. **Test results (tree-verdict receipts only, `0%` cross-change caching by design).**
    - Arbitrary test-result caching across code edits that reach a crate is **rejected** to preserve
-     [docs/goals.md:36](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L36)
+     [docs/goals.md:36](../../../goals.md)
      Promise 3; unaffected crates already skip tests via `velnor-ci plan`. The sole safe test-result
      reuse is an **attested Tree-Verdict Receipt** keyed by
      `(git_tree_sha, workflow_sha, toolchain_sha)`, which skips re-running identical `merge_group`
@@ -445,7 +445,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
   more busy CCDs than an idle worker with a warm `main` snapshot (`+60`), preventing queue hotspots
   while keeping all shards of one `run_id` in the same site (`DE` or `FI`).
 - **Trust and secret boundaries
-  ([docs/goals.md:44](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L44)).**
+  ([docs/goals.md:44](../../../goals.md)).**
   - `compat_hash` binds
     `(OS, arch, distro_id, rustc_commit_hash, cargo_profile_flags, relative_workspace)` and **never**
     `$RUNNER_TEMP` or `ImageOS`.
@@ -456,7 +456,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
     generation retained per open PR, deleted on PR close or 48 h TTL). `merge_group` reads `main` only
     and writes nothing.
   - Private dependencies (`velnor-deps` App token,
-    [docs/hard-decisions.md:388-421](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/hard-decisions.md#L388-L421))
+    [docs/hard-decisions.md:388-421](../../../hard-decisions.md))
     are fetched and revoked before repository code runs, and any snapshot containing private-dep
     artifacts is tagged `visibility = internal` so public fork microVMs receive only public `main`
     block seeds (`dm-snapshot` read-only, all guest writes destroyed on VM exit).
@@ -505,19 +505,19 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      `3 to 6 s`).
    - **`runner_image_qualification_public` hardcoded sleeps.** Inject configurable timeout parameters
      into
-     [crates/velnor-runner-host/tests/runner_image_qualification_public.rs:312-396](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-runner-host/tests/runner_image_qualification_public.rs#L312-L396)
+     [crates/velnor-runner-host/tests/runner_image_qualification_public.rs](../../../../crates/velnor-runner-host/tests/runner_image_qualification_public.rs)
      (`100 ms` fault deadlines in place of 8 serial `6 to 12 s` wall-clock sleeps), cutting **~95 s**
      of idle sleep to **<3 s**.
    - **`local-mode` duplicate test sweep.** `local-mode = ["tokio/signal"]`
-     ([crates/velnor-runner-host/Cargo.toml:12-14](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-runner-host/Cargo.toml#L12-L14))
+     ([crates/velnor-runner-host/Cargo.toml:12-14](../../../../crates/velnor-runner-host/Cargo.toml#L12-L14))
      has zero negative `cfg` gates, so build workspace tests once with `--features local-mode` (or
      filter the `local-mode` shard to `-E 'binary(local_pair_public) | binary(local_host_public)'`)
      and remove the random-nonce Dockerfile layer on static helper binaries in
-     [crates/velnor-runner-host/tests/local_pair_public/support.rs:184-188](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-runner-host/tests/local_pair_public/support.rs#L184-L188),
+     [crates/velnor-runner-host/tests/local_pair_public/support.rs:184-188](../../../../crates/velnor-runner-host/tests/local_pair_public/support.rs#L184-L188),
      saving **5.5 to 9.2 runner-min** per run.
    - **`Check / maintenance-helpers`.** Move `velnor-archive-guard` and `velnor-actions-freshness`
      into the unified cached workspace run, deleting
-     [mise.toml:90-199](file:///Users/donbeave/Projects/tailrocks/velnor-new/mise.toml#L90-L199)'s
+     [mise.toml:90-199](../../../../mise.toml)'s
      uncached temp `CARGO_HOME`, `--config build.jobs=2`, `--jobs 2`, and
      `threads-required = "num-test-threads"` serialization (`508 s` drops to `~20 s`).
 5. **Eliminate double and triple runs across push-to-merge.**
@@ -528,7 +528,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      `merge_group` in **~8 s**.
    - **Affected-only `merge_group` when `main` advanced.** Diff `merge_group` against its green `main`
      first parent and test **only the affected crate closure**
-     ([docs/goals.md:86](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L86)
+     ([docs/goals.md:86](../../../goals.md)
      default), backed by a **6-hourly or nightly full scheduled run** (`mode = all`).
    - **No test re-run on `push` to `main`.** When `GITHUB_SHA` already passed `merge_group`, `push`
      exits green in **~8 s** and runs only an async background `main` XFS snapshot seal. Restrict
@@ -570,19 +570,19 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
   NVMe). `velnor-coordinator` co-locates all shards of a run within one site so nextest archives and
   L2 cache hits stay on `<0.5 ms` Hetzner site LANs instead of crossing the `35 ms` DE-to-FI WireGuard
   link.
-- **Untrusted PRs and multi-org isolation.** The cluster serves `tailrocks`, `ChainArgos` (15 private
+- **Untrusted PRs and multi-org isolation.** The cluster serves `tailrocks`, `example-org` (15 private
   repos), and `jackin-project`
-  ([state/RESULT.md:84-89](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/RESULT.md#L84-L89)).
+  ([state/RESULT.md:84-89](file://<local-path>)).
   Fork PRs run strictly inside **KVM microVMs** (`/dev/kvm` AMD-V hardware isolation, separate guest
   kernel, `automountServiceAccountToken: false`, `NetworkPolicy` dropping `10.42.0.0/16`,
   `10.43.0.0/16`, `169.254.169.254`, and `5.9.55.237:6443`, read-only `dm-snapshot` public cache seed,
   zero tokens). Until Phase 3 KVM lands, keep fork PRs fenced off privileged DinD workers via PR
   `#1332`'s hosted gate twin (plus `all_external_contributors` approval).
 - **What buying more servers would buy.** Today's 480 EPYC threads easily absorb `velnor-new`
-  (`~96 to 120` peak threads for `40 s` per heavy run) with >70% headroom for `ChainArgos` and
+  (`~96 to 120` peak threads for `40 s` per heavy run) with >70% headroom for `example-org` and
   `jackin-project`, so **more worker servers buy 0 s of single-PR latency today**. Buying **two small
   Hetzner nodes (~10 EUR/mo each)** buys **3-node etcd HA for `velnor-237`** (currently a single point
-  of failure, [README.md:12](file:///Users/donbeave/Projects/tailrocks/velnor-runners/README.md#L12));
+  of failure, README.md:12);
   additional EPYC workers only pay off once concurrent multi-org demand regularly exceeds ~25
   simultaneous workspace builds.
 
@@ -600,9 +600,9 @@ experiment `#652` (comment `6874232403`, recorded in `#586`) rules `blaze` out f
    `rustup`, and `RUSTUP_TOOLCHAIN`** (`docs/toolchain.md:12-26,262-265`). Its own docs state: *"Keep
    `cargo build`/`cargo test` with the project's toolchain in CI. blaze is for the edit loop; the
    project's toolchain decides"* (`docs/toolchain.md:272-273`). Adopting it in CI would break
-   [docs/goals.md:36](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L36) Promise
+   [docs/goals.md:36](../../../goals.md) Promise
    3 and
-   [docs/hard-decisions.md:232-265](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/hard-decisions.md#L232-L265)
+   [docs/hard-decisions.md:232-265](../../../hard-decisions.md)
    (`Rust 1.99.1`).
 2. **Missing gates and partial borrow checking.** `blaze` fails with `no such command` on `clippy`,
    `fmt`, and `doc` (`docs/usage.md:320-324`), does not run `cargo nextest` (`#652` run
@@ -628,7 +628,7 @@ all 9 `mbx` configurations (`v1.29.2` and `v1.30.0`):
 - **Recommendation.** Retire `mbx cache export/import` bundles (the State seal workflow) and run **plain
   `cargo` directly over node-local XFS CoW `target/` clones + `velnor-ci inputs restore`** (matching
   `velnor-gen`
-  [crates/velnor-rust/src/compat.rs:9](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-rust/src/compat.rs#L9)).
+  [crates/velnor-rust/src/compat.rs:11](../../../../crates/velnor-rust/src/compat.rs#L11)).
   Because a 48-thread EPYC node cold-builds all 527 external crates in `~80 to 100 s` only on rare
   `Cargo.lock` bumps, an L2 compiler cache (`sccache` or `mbx-cache` with `MBX_SHARE_OUT_DIR=0`)
   affects `<5%` of runs; test `sccache` vs `mbx-cache` (`MBX_SHARE_OUT_DIR=0`) on `velnor-lab` only
@@ -640,8 +640,8 @@ all 9 `mbx` configurations (`v1.29.2` and `v1.30.0`):
 
 Measured via read-only `kubectl get/describe/top`, `/proxy/configz`, and `/proxy/stats/summary`
 (evidence pack B and live checks) plus
-[PLAN.md:44-80](file:///Users/donbeave/Projects/tailrocks/velnor-runners/PLAN.md#L44-L80) and
-[state/inventory.md:1-57](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/inventory.md#L1-L57):
+PLAN.md:44-80 and
+state/inventory.md:1-57:
 
 - **Nodes.** 5 workers (`4x EPYC 9454P`, `1x EPYC 9454`: 48 Zen 4 cores / 96 threads, **8 CCDs x 6
   cores [12 threads] x 32 MB L3 = 256 MB L3**, `125.5 GiB` allocatable RAM) + `velnor-237` control
@@ -653,7 +653,7 @@ Measured via read-only `kubectl get/describe/top`, `/proxy/configz`, and `/proxy
      mounted without `noatime`), so **100% of pod `emptyDir` scratch I/O (`_work`, `/tmp`,
      `dind-sock`, `dind-externals`) hammers the single OS `ext4` disk** while `/var/lib/rancher`
      (`imagefs = 34.6 TB` on `105`, `49.9 TB` on `240`) holds only **6 to 8 GB** of images.
-  2. **LVM `data/rancher` is linear, not striped ([PLAN.md:76](file:///Users/donbeave/Projects/tailrocks/velnor-runners/PLAN.md#L76)).**
+  2. **LVM `data/rancher` is linear, not striped (PLAN.md:76).**
      `lvcreate -l 100%FREE -n rancher data` omitted `-i <stripes>`, concatenating the 3 to 4 data
      NVMes on `105` and `240` linearly so one drive takes 100% of I/O while 2 to 3 NVMes sit idle.
   3. **Zero CPU or memory isolation (`configz`).** `cpuManagerPolicy: "none"`,
@@ -782,7 +782,7 @@ debug = false
 | **2** | **Move kubelet `--root-dir` + Velnor caches onto `/var/lib/rancher` XFS (`reflink=1,noatime`), mount `/tmp` on `8Gi` `tmpfs`, and mount XFS at `/var/lib/docker`.** | Moves all pod I/O off OS `ext4` disk; unlocks **0.5 to 1.2 s XFS CoW clones** of 14.7 GB `target/` (saving **44 to 61 s** vs WAN cache, `#585`); cuts `/tmp` `.rcgu.o` syncs **5% to 10%**. | Low (`7 * 8Gi = 56Gi` worst-case tmpfs inside `125.5 GiB` RAM). | Revert `--kubelet-arg=root-dir` and `/tmp` `medium: Memory`. |
 | **3** | **`[profile.ci]` (`line-tables-only`, `debug = false` on deps) + `mold` linker on Linux x86_64.** | `-24%` `target/` bytes (measured `#585` M5), **18% to 30% faster cold compile/link** (`~15 to 25 s`), plus **~3 to 7 s** link savings from `mold` over default `rust-lld`. | Very low (`file:line` backtraces kept; Linux-gated flag). | Revert `Cargo.toml` profile and `.cargo/config.toml` rustflags. |
 | **4** | **OS sysctls & CPU power: `amd_pstate=active` + `performance` governor, THP `madvise`, `vm.dirty_bytes=8G` / `background=2G`, `inotify`/`file-max`/`pid_max`, `swapoff -a`.** | **5% to 12% faster build/test wall time** on short-lived compiler/test spawns; eliminates THP compaction pauses and 25 GB writeback stalls. | Low (+40 to 60 W idle draw on flat-rate dedicated servers). | Remove `/etc/sysctl.d/99-velnor.conf` and kernel arg; `cpupower -g schedutil`. |
-| **5** | **Topology labels (`fsn1`/`hel1`), PriorityClasses, global `crates-mirror`, Spegel P2P OCI mirror, and `1420` WireGuard MTU + MSS clamping.** | `cargo fetch` at **2.7 to 3.3 s** (measured [state/RESULT.md:134](file:///Users/donbeave/Projects/tailrocks/velnor-runners/state/RESULT.md#L134)), zero `35 ms` cross-site cache transfers, zero manual `import-pod.sh` image loads. | Very low (`preemptionPolicy: Never` avoids killing live jobs). | Delete labels, PriorityClasses, and Spegel release; unset mirror config. |
+| **5** | **Topology labels (`fsn1`/`hel1`), PriorityClasses, global `crates-mirror`, Spegel P2P OCI mirror, and `1420` WireGuard MTU + MSS clamping.** | `cargo fetch` at **2.7 to 3.3 s** (measured state/RESULT.md:134), zero `35 ms` cross-site cache transfers, zero manual `import-pod.sh` image loads. | Very low (`preemptionPolicy: Never` avoids killing live jobs). | Delete labels, PriorityClasses, and Spegel release; unset mirror config. |
 | **6** | **Striped RAID0 LVM LV (`-i 4` on `240`, `-i 3` on `105`, `-I 128k`) for `/var/lib/rancher/velnor` (+ optional later BIOS `NPS4`).** | **3x to 4x NVMe bandwidth and IOPS** on `velnor-240` and `velnor-105` (`~14 to 22 GB/s` sequential read across 3 to 4 Gen4 NVMes vs 1 linear drive). | Medium (cordon/drain 1 node at a time to create striped LV). | Unmount striped LV and point `/var/lib/rancher/velnor` back to linear LV. |
 
 ## 8. Phased delivery plan and risk containment
@@ -810,7 +810,7 @@ standalone measurable win on `velnor-new`.
    - *Detection.* `velnor-ci report --check` flags unexpected crate rebuilds on the `Cache` check;
      `main` snapshots are `chmod 0555` immutable and verified against `inputs.tsv` digests.
    - *Containment.* Any verification error deletes the suspect snapshot, marks `Cache` red, and falls
-     back to a clean cold build ([docs/goals.md:36](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L36) Never-Compromise #3). Fork jobs run exclusively in
+     back to a clean cold build ([docs/goals.md:36](../../../goals.md) Never-Compromise #3). Fork jobs run exclusively in
      KVM microVMs over `dm-snapshot` read-only public block seeds whose writes vanish at VM exit.
 3. **Undeclared cross-crate file read missed by affected-only `merge_group` selection.**
    - *Detection.* `rust-inputs-audit` checks reads on every PR, and the 6-hourly/nightly scheduled
@@ -837,19 +837,19 @@ standalone measurable win on `velnor-new`.
 ## Owner questions
 
 1. **Updating `docs/goals.md` for self-hosted CoW caches and Phase 4 native execution.**
-   [docs/goals.md:16](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L16) and Rule
-   11 ([docs/goals.md:74](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L74))
+   [docs/goals.md:16](../../../goals.md) and Rule
+   11 ([docs/goals.md:74](../../../goals.md))
    require that *"Jobs are always executed by GitHub's official runner"*, and
-   [docs/goals.md:45](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L45) binds
+   [docs/goals.md:45](../../../goals.md) binds
    the design to *"GitHub's 10 GB of cache and on standard hosted runners."* Do you approve updating
-   [docs/goals.md](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md) so hosted mode
+   [docs/goals.md](../../../goals.md) so hosted mode
    preserves those limits for external users while self-hosted cluster mode uses >10 GB node-local XFS
    CoW snapshots and Phase 4's `velnor-worker` native Rust runtime (with `OfficialRunner` retained as
    local-mode oracle and fallback)?
-2. **Merge-queue ruleset and selection policy ([docs/goals.md:86](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L86) vs [docs/hard-decisions.md:108](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/hard-decisions.md#L108)).**
+2. **Merge-queue ruleset and selection policy ([docs/goals.md:86](../../../goals.md) vs [docs/hard-decisions.md:108](../../../hard-decisions.md)).**
    Do you approve (a) changing ruleset `24396608` to `min_entries_to_merge_wait_minutes = 0` and
    `max_entries_to_build = 5`, (b) skipping `push`-to-`main` test execution when `merge_group` passed
-   on the identical commit SHA, and (c) enabling [docs/goals.md:86](file:///Users/donbeave/Projects/tailrocks/velnor-new/docs/goals.md#L86)'s default affected-only selection on
+   on the identical commit SHA, and (c) enabling [docs/goals.md:86](../../../goals.md)'s default affected-only selection on
    `merge_group` (plus tree-equal fast-pass) backed by 6-hourly/nightly full workspace runs once
    `velnor-gen` owns CI?
 3. **Replacing `velnor-runner-host`'s 171k-LOC monolith instead of extending it via PR `#1324`.** PR
@@ -864,4 +864,4 @@ standalone measurable win on `velnor-new`.
    untrusted pool now?
 5. **Control-plane HA (`velnor-237`).** Once the zero-spend research constraint ends, do you approve
    adding two small Hetzner instances (~20 EUR/mo total) to turn `velnor-237` (`5.9.55.237`) into a
-   3-node HA k3s control plane for `tailrocks`, `ChainArgos`, and `jackin-project`?
+   3-node HA k3s control plane for `tailrocks`, `example-org`, and `jackin-project`?

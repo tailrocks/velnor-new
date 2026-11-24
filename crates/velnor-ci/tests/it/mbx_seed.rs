@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
+use velnor_ci::mbx_seed_copy::SUBSETS;
 
 use crate::io::Repo;
 
@@ -56,6 +57,12 @@ fn warm_seed(host: &Host) -> PathBuf {
     ] {
         put(&seed.join(path), text);
     }
+    for subset in SUBSETS {
+        assert!(
+            fs::read_dir(seed.join("actions").join(subset)).is_ok_and(|mut d| d.next().is_some()),
+            "the fixture holds no {subset} files that mbx-seed copies"
+        );
+    }
     read_only(&seed);
     seed
 }
@@ -76,6 +83,7 @@ fn run_within(
     select(&Inputs {
         event_name: event,
         git_ref,
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.as_deref(),
         runner_temp: &temp,
@@ -234,6 +242,7 @@ fn a_symlinked_or_unsafe_seed_is_refused() {
     let wrong = select(&Inputs {
         event_name: "pull_request",
         git_ref: "refs/pull/1/merge",
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.to_str(),
         runner_temp: &host.root.join("temp"),

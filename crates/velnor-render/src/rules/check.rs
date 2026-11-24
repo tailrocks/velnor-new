@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, FORBIDDEN_SYMBOLS, FORBIDDEN_WORDS,
-    MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob,
-    RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, FORBIDDEN_SYMBOLS, FORBIDDEN_WORDS, MAX_ENV_CHARACTERS,
+    MAX_EXPRESSION_CHARACTERS, MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value,
 };
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{credential_rules, pin_rules};
+use velnor_model::CACHE_KEY_MAX_UNITS;
 
 pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>> {
     let violations: Vec<RuleViolation> = workflow
@@ -52,10 +53,18 @@ fn holds_app_token(job: &RenderedJob) -> bool {
             crate::private_steps::release_asset_steps::TOKEN_STEP,
         ]
         .contains(&step.id.as_deref().unwrap_or_default())
-            && step
+            && (step
                 .uses
                 .as_deref()
                 .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+                || step.run.as_deref().is_some_and(|run| {
+                    ["velnor-ci ", crate::helper_integrity::INVOCATION_PREFIX]
+                        .iter()
+                        .any(|prefix| {
+                            run.strip_prefix(prefix)
+                                .is_some_and(|command| command.starts_with("app-token "))
+                        })
+                }))
     })
 }
 
@@ -92,7 +101,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     }
     credential_rules(step, &mut rules);
     if let Some(length) = longest_cache_key(step)
-        && length > MAX_CACHE_KEY_CHARACTERS
+        && length > CACHE_KEY_MAX_UNITS
     {
         rules.push(Rule::CacheKeyTooLong(length));
     }
@@ -101,7 +110,24 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     {
         rules.push(Rule::EnvTooLong(length));
     }
+    if let Some(length) = longest_expression(step)
+        && length > MAX_EXPRESSION_CHARACTERS
+    {
+        rules.push(Rule::ExpressionTooLong(length));
+    }
     rules
+}
+
+fn longest_expression(step: &RenderedStep) -> Option<usize> {
+    step.env
+        .iter()
+        .filter_map(|(_, value)| match value {
+            Value::Expr(text) | Value::BoundedExpr { text, .. } => {
+                Some(crate::expression_length::joined_length(text))
+            }
+            _ => None,
+        })
+        .max()
 }
 
 fn longest_env(step: &RenderedStep) -> Option<usize> {

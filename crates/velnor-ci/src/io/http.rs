@@ -52,13 +52,28 @@ fn body(
     what: &str,
     response: Result<Response<ureq::Body>, ureq::Error>,
 ) -> Result<String, CiError> {
-    let mut response = response.map_err(|e| CiError::new(format!("{what}: {e}")))?;
+    let mut response = response.map_err(|e| transport_error(what, &e))?;
     if is_failure(response.status()) {
         return Err(status_error(what, &mut response));
     }
     let bytes = super::read_limited(response.body_mut().as_reader(), BODY_LIMIT)
         .map_err(|e| CiError::new(format!("{what}: {e}")))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn transport_error(what: &str, error: &ureq::Error) -> CiError {
+    let message = format!("{what}: {error}");
+    if matches!(
+        error,
+        ureq::Error::Io(_)
+            | ureq::Error::Timeout(_)
+            | ureq::Error::HostNotFound
+            | ureq::Error::ConnectionFailed
+    ) {
+        CiError::transient(message)
+    } else {
+        CiError::new(message)
+    }
 }
 
 fn is_failure(status: StatusCode) -> bool {
@@ -92,6 +107,8 @@ fn status_error(what: &str, response: &mut Response<ureq::Body>) -> CiError {
     let message = format!("{what}: http status: {status}{suffix}");
     if matches!(status, 404 | 410) {
         CiError::missing(message)
+    } else if status == 429 || status >= 500 {
+        CiError::transient(message)
     } else {
         CiError::new(message)
     }
@@ -232,5 +249,78 @@ pub(super) fn trusted_api(api: &str) -> bool {
         Some("https") => uri.host().is_some(),
         Some("http") => matches!(uri.host(), Some("127.0.0.1" | "localhost")),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    use super::*;
+
+    fn api_answering(status: u16) -> HttpGitHub {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let api = format!("http://{}", listener.local_addr().expect("addr"));
+        thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let mut reader = BufReader::new(&stream);
+                let mut line = String::new();
+                while reader.read_line(&mut line).is_ok_and(|n| n > 0) && line != "\r\n" {
+                    line.clear();
+                }
+                let mut stream = &stream;
+                stream
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                        .as_bytes(),
+                    )
+                    .ok();
+            }
+        });
+        HttpGitHub::new(api, "t".to_owned(), Duration::from_secs(5))
+    }
+
+    #[test]
+    fn server_errors_and_rate_limits_are_transient_and_other_statuses_are_not() {
+        for status in [500, 502, 503, 504, 429] {
+            let api = api_answering(status);
+            assert!(
+                api.get("/x").expect_err("failure").is_transient(),
+                "GET {status}"
+            );
+            assert!(
+                api.post("/x", "{}").expect_err("failure").is_transient(),
+                "POST {status}"
+            );
+        }
+        for status in [400, 401, 403, 404, 410, 422] {
+            let api = api_answering(status);
+            assert!(
+                !api.get("/x").expect_err("failure").is_transient(),
+                "GET {status}"
+            );
+            assert!(
+                !api.post("/x", "{}").expect_err("failure").is_transient(),
+                "POST {status}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dropped_connection_is_transient() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let address = listener.local_addr().expect("addr");
+        thread::spawn(move || listener.incoming().for_each(drop));
+        let api = HttpGitHub::new(
+            format!("http://{address}"),
+            "t".to_owned(),
+            Duration::from_secs(5),
+        );
+        let error = api.get("/x").expect_err("failure");
+        assert!(error.is_transient(), "{error}");
     }
 }

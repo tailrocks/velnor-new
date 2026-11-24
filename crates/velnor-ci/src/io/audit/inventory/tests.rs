@@ -1,18 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::{fs, thread};
 
 use super::super::options::MAX_ENTRIES_VARIABLE;
-use super::walk::{Probe, scan_with as walk};
+use super::probe::Probe;
+use super::walk::scan_with as walk;
 use super::*;
 
 mod ancestors;
+mod budget;
+mod checkpoints;
 mod decision;
+mod descriptors;
 mod links;
 mod placement;
 mod racing;
+mod released;
+mod root;
+mod settled;
 
 fn scan_with(
     root: &Path,
@@ -116,30 +123,30 @@ fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
 #[test]
 fn an_entry_removed_during_the_walk_is_not_an_error() {
     let root = std::env::temp_dir().join(format!("velnor-scan-vanish-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    let names: Vec<PathBuf> = (0..64)
-        .map(|index| root.join(format!("entry-{index}")))
-        .collect();
-    let stop = AtomicBool::new(false);
-    let failure = thread::scope(|scope| {
-        scope.spawn(|| {
-            while !stop.load(Ordering::Relaxed) {
-                for name in &names {
-                    let _ = fs::write(name, b"");
-                    let _ = fs::remove_file(name);
-                }
-            }
-        });
-        let mut budget = Budget::new(usize::MAX);
-        let failure = (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut budget).err());
-        stop.store(true, Ordering::Relaxed);
-        failure
-    });
-    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        failure.is_none(),
-        "scan failed on a vanished entry: {failure:?}"
+    for index in 0..8 {
+        fs::write(root.join(format!("entry-{index}")), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            listed: &|name| {
+                let _ = fs::remove_file(root.join(name));
+            },
+            ..Probe::default()
+        },
     );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a vanished entry: {e}"));
+    let children = entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"));
+    assert!(children.is_empty(), "{children:?}");
 }
 
 #[test]

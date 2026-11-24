@@ -51,7 +51,7 @@ def oci(layers, diff_ids=None, platform=None, config_extra=None, manifest_extra=
     blobs = [(media, data) for data, media in layers]
     diffs = diff_ids if diff_ids is not None else [
         dg(gzip.decompress(d) if m.endswith("+gzip") else d) for d, m in layers]
-    config = {"architecture": "amd64", "os": "linux", "rootfs": {"type": "layers", "diff_ids": diffs}}
+    config = {"architecture": "amd64", "os": "linux", "config": {"Labels": {legacy.REVISION_LABEL: SHA}}, "rootfs": {"type": "layers", "diff_ids": diffs}}
     config.update(config_extra or {})
     config_raw = jb(config)
     manifest = {
@@ -179,6 +179,10 @@ def cases():
     add("config wrong os", oci([(BASE_GZ, LAYER_GZ)], config_extra={"os": "windows"}))
     add("config wrong arch", oci([(BASE_GZ, LAYER_GZ)], config_extra={"architecture": "arm64"}))
     add("config rootfs wrong type", oci([(BASE_GZ, LAYER_GZ)], config_extra={"rootfs": {"type": "x", "diff_ids": [dg(BASE_TAR)]}}))
+    add("config revision label other commit", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {"Labels": {legacy.REVISION_LABEL: "b" * 40}}}))
+    add("config revision label empty", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {"Labels": {legacy.REVISION_LABEL: ""}}}))
+    add("config labels missing", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {}}))
+    add("config section not an object", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": "x"}))
     es = oci([(BASE_GZ, LAYER_GZ)])
     add("changed blob bytes", [(n, corrupt(d, 20) if n.startswith("blobs/") and d == BASE_GZ else d) for n, d in es])
     add("extra blob", es + [("blobs/sha256/" + "e" * 64, b"x")])
@@ -264,6 +268,9 @@ def cases():
         ("build force compression false", ["build", "force_compression"], False, False),
         ("build force compression 1", ["build", "force_compression"], 1, False),
         ("build arguments", ["build", "arguments"], ["--x"], False),
+        ("build arguments empty", ["build", "arguments"], [], False),
+        ("build arguments other commit", ["build", "arguments"], ["VELNOR_SOURCE_SHA=" + "b" * 40], False),
+        ("build arguments extra", ["build", "arguments"], [f"VELNOR_SOURCE_SHA={SHA}", "--x"], False),
         ("archive sha wrong", ["archive", "sha256"], "0" * 64, False),
         ("archive sha upper", ["archive", "sha256"], "A" * 64, False),
         ("archive size wrong", ["archive", "size_bytes"], 1, False),
@@ -359,7 +366,7 @@ UNBOUND_OCI = {
 
 def bind_oci(archive):
     try:
-        return legacy.verify_oci_archive(archive)
+        return legacy.verify_oci_archive(archive, SHA)
     except Exception:
         return copy.deepcopy(UNBOUND_OCI)
 
@@ -433,7 +440,8 @@ def main():
                 "workflow": {"repository": "tailrocks/velnor-new", "repository_id": 1, "event": "push",
                             "workflow_ref": ENV["GITHUB_WORKFLOW_REF"], "authority_commit": "c" * 40, "run_id": 10, "run_attempt": 2},
                 "platform": "linux/amd64",
-                "build": {"builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64", "arguments": [],
+                "build": {"builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64",
+                          "arguments": [f"VELNOR_SOURCE_SHA={SHA}"],
                           "exporter": "oci", "provenance": "disabled", "compression": "gzip", "force_compression": True},
                 "archive": {"sha256": archive_hash, "size_bytes": archive_size},
                 "oci": oci_part,

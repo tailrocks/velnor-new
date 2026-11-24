@@ -34,7 +34,7 @@
 - The accepted source merge preserves the integrated Mise 2026.10.6,
   `rustix` process support, freshness and UID/process-scope changes, protocol
   updates, cache retirement, and source tests. A durable renderer
-  source-regression report at `/private/tmp/v110r-gi0n7aiv/EVIDENCE.md`
+  source-regression report at `<tmp>/v110r-gi0n7aiv/EVIDENCE.md`
   (SHA-256
   `0ccb17863b2d08840d675da18c33b6c64ef146e83b6a7a952b272ef26d2cbc29`)
   is tied to reviewed source `ab8ea904d46b2bf925db73c6ed8a3a80051cdd08`,
@@ -50,7 +50,7 @@
   report Ready within its debug-fixture source-regression scope; official
   binary and release qualification remain pending.
 - Tooling and capture environment: commands used the retained local wrapper
-  `/private/tmp/velnor-persistent-stage-mise.sh` (SHA-256
+  `<tmp>/velnor-persistent-stage-mise.sh` (SHA-256
   `602fa43a3854e3f2c85d78f2c491d972ecc32b8021173170dee86f4c1395cd33`),
   which reported Mise 2026.10.6, Rust/Cargo 1.98.1, cargo-nextest 0.9.148,
   and MBX 1.21.1. A fresh short `TMPDIR` was verified by Python as caller-owned
@@ -116,7 +116,7 @@
 - The final source-branch batch ran on clean head
   `40f3648e76f6ea3dc00d4a6beee331d5adbf7bf3` with tree
   `c41fd1418519569788592a8d509770a9b41f9b4b`. The receipt at
-  `/private/tmp/v016q.55gki8/final-40f/batch-receipt.txt` records the pinned
+  `<tmp>/v016q.55gki8/final-40f/batch-receipt.txt` records the pinned
   Mise 2026.10.6 / Rust 1.98.1 / Nextest 0.9.148 / MBX 1.21.1 environment,
   exact target and temporary paths, unchanged root and nested lockfile hashes,
   and command start/end times. All eight commands in `status.tsv` exited 0:
@@ -126,7 +126,7 @@
   skipped. `verify-local` passed all 51 stages, including the generated-selector
   stage, a zero-diff generated workflow tree, and integration Nextest (3,668
   passed, 2 skipped). Its selector used the executable emitted by that Cargo
-  build: `/private/tmp/v016q.55gki8/target/debug/velnor-actions`, SHA-256
+  build: `<tmp>/v016q.55gki8/target/debug/velnor-actions`, SHA-256
   `88026383f1ad31ef0f60546caf59063cc4916f6a3b9952f0e52bc4d6788f1564`.
 - The final independent review of PR #122 marked exact head `40f` Ready with no
   unresolved review threads. Ready-event workflow
@@ -138,7 +138,7 @@
 - The merged commit message has the trailer lines in reverse order from the
   required source-commit order: `Signed-off-by` precedes `Co-authored-by`.
   The saved merge attempt at
-  `/private/tmp/v016q.55gki8/final-40f/merge-attempt.txt` records a guarded
+  `<tmp>/v016q.55gki8/final-40f/merge-attempt.txt` records a guarded
   `gh pr merge` invocation with `--squash` and `--match-head-commit`, but without
   `--body-file` or `--author-email`. The saved PR body
   (`pr-body-terminal-success.md`, SHA-256

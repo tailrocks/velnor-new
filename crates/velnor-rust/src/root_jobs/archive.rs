@@ -62,7 +62,7 @@ impl RootJobs<'_> {
             true,
         ));
         let mut jobs = vec![
-            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build)),
+            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build, true)),
             self.archive_runner(
                 self.id(DEFAULT_GROUP_JOB),
                 &build_id,
@@ -194,7 +194,7 @@ impl RootJobs<'_> {
                 group.map_or(&[], |group| &group.artifacts),
             ),
         );
-        steps.extend(mbx(self.facts, self.lane.steps()));
+        steps.extend(mbx(self.facts, self.lane.steps().as_ref()));
         steps.extend(mirror());
         let plan = self
             .lane
@@ -244,6 +244,7 @@ impl RootJobs<'_> {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
                 before_build: false,
+                offline_after_private_fetch: false,
             }));
         }
         steps.extend(
@@ -269,7 +270,7 @@ impl RootJobs<'_> {
                 .into_iter()
                 .flat_map(|group| self.artifact_steps(group, partition)),
         );
-        let mut job = self.lane_job(id, steps);
+        let mut job = self.lane_job(id, steps, false);
         if let Some(group) = group.filter(|group| group.selects()) {
             job.gate = self.lane.group_job(group.name.clone()).or(job.gate);
         }

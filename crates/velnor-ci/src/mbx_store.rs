@@ -11,11 +11,13 @@ use crate::escape::file_value;
 
 pub const SHARED_DIR_ENV: &str = "VELNOR_MBX_SHARED_DIR";
 pub const SHIMS_DIR_NAME: &str = "velnor-mbx-shims";
+pub const KEEP_OUT_DIR: &str = "MBX_SHARE_OUT_DIR=0\n";
 
 #[derive(Debug, Clone, Copy)]
 pub struct Inputs<'a> {
     pub event_name: &'a str,
     pub git_ref: &'a str,
+    pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub shared_dir: Option<&'a str>,
     pub runner_temp: &'a Path,
@@ -30,9 +32,14 @@ pub enum Outcome {
 }
 
 #[must_use]
-pub fn trusted_event(event_name: &str, git_ref: &str, default_branch: Option<&str>) -> bool {
+pub fn trusted_event(
+    event_name: &str,
+    git_ref: &str,
+    ref_protected: bool,
+    default_branch: Option<&str>,
+) -> bool {
     match event_name {
-        "push" | "schedule" | "workflow_dispatch" => default_branch
+        "push" | "schedule" | "workflow_dispatch" if ref_protected => default_branch
             .filter(|branch| !branch.is_empty())
             .is_some_and(|branch| git_ref.strip_prefix("refs/heads/") == Some(branch)),
         _ => false,
@@ -44,7 +51,12 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     let Some(dir) = inputs.shared_dir.filter(|dir| !dir.is_empty()) else {
         return Outcome::NotOffered;
     };
-    if !trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch) {
+    if !trusted_event(
+        inputs.event_name,
+        inputs.git_ref,
+        inputs.ref_protected,
+        inputs.default_branch,
+    ) {
         return Outcome::Untrusted;
     }
     match validated(Path::new(dir)) {
@@ -168,11 +180,11 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
 pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
     Ok(match outcome {
         Outcome::Shared { dir, shims } => format!(
-            "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n",
+            "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}",
             file_value(&dir.display().to_string())?,
             file_value(&shims.display().to_string())?
         ),
-        _ => String::new(),
+        _ => KEEP_OUT_DIR.to_owned(),
     })
 }
 
@@ -208,19 +220,18 @@ pub fn setup() -> Result<String, CiError> {
     let outcome = select(&Inputs {
         event_name: &var("GITHUB_EVENT_NAME").unwrap_or_default(),
         git_ref: &var("GITHUB_REF").unwrap_or_default(),
+        ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         shared_dir: shared.as_deref(),
         runner_temp: &runner_temp,
     });
     let lines = env_lines(&outcome)?;
-    if !lines.is_empty() {
-        let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
-        fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(lines.as_bytes()))
-            .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
-    }
+    let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
+    fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&file)
+        .and_then(|mut handle| handle.write_all(lines.as_bytes()))
+        .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     Ok(message(&outcome))
 }

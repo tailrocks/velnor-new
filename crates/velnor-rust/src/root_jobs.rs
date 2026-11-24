@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod audit;
 mod lanes;
 mod timeouts;
 
 use velnor_model::{
-    CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
-    StepKind, When,
+    CargoCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step, StepKind, When,
 };
 
-use crate::audit_job::{AuditLocation, audit_when, audits_per_root};
+use crate::audit_job::{AuditLocation, audits_per_root};
 use crate::base_cache::{save_steps, saving_run};
 use crate::lane::Lane;
 use crate::members::{Member, check_alone, lint};
@@ -153,15 +153,16 @@ impl RootJobs<'_> {
             .is_some_and(|helper| helper.version().at_least(BUILT_RECORD_HELPER))
     }
 
-    fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
-        let mut steps = if self.unit.grouped {
+    fn lane_job(&self, id: JobId, steps: Vec<Step>, checks: bool) -> Job {
+        let grouped = self.unit.grouped;
+        let mut steps = if grouped {
             self.members.iter().fold(steps, |steps, member| {
                 crate::test_setup::before_builds(self.facts, &member.root, steps)
             })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
-        crate::test_setup::gate_job(&mut steps);
+        steps = crate::test_setup::place_checks(self.facts, &self.members, grouped, checks, steps);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
@@ -188,28 +189,6 @@ impl RootJobs<'_> {
             timeout_minutes: self.timeout_minutes(),
             ..job(self.facts, id)
         }
-    }
-
-    fn audit(&self) -> Option<Step> {
-        if self.audit == AuditLocation::Separate {
-            return None;
-        }
-        let when = audit_when(self.facts)?;
-        let kind = if audits_per_root(self.facts) {
-            StepKind::InputsAuditRoot(
-                self.unit
-                    .roots
-                    .first()
-                    .and_then(|root| root.manifest.parent()),
-            )
-        } else {
-            StepKind::Helper(HelperCommand::InputsAudit)
-        };
-        Some(Step {
-            when,
-            gate: self.lane.steps(),
-            ..step(kind)
-        })
     }
 
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
@@ -320,7 +299,7 @@ impl RootJobs<'_> {
         }
         self.inline_lanes_timeout(Job {
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(job_id, steps)
+            ..self.lane_job(job_id, steps, true)
         })
     }
 
@@ -345,7 +324,7 @@ impl RootJobs<'_> {
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(lint_id, steps)
+            ..self.lane_job(lint_id, steps, true)
         }];
         if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
@@ -354,6 +333,7 @@ impl RootJobs<'_> {
             let mut steps = self.setup(&test_id);
             let saves = self.saves(&test_id, None, true);
             let saving = self.nextest() && !saves.is_empty();
+            let audit_last = saving && self.audit_after_saves();
             if saving {
                 if !self.records_build() {
                     for member in self.members.iter().filter(|member| member.nextest) {
@@ -374,6 +354,9 @@ impl RootJobs<'_> {
                     );
                     steps.extend(self.member_steps(member, tests));
                 }
+                if !audit_last {
+                    steps.extend(self.audit());
+                }
                 steps.extend(saves.iter().cloned());
             } else {
                 for member in &self.members {
@@ -381,11 +364,13 @@ impl RootJobs<'_> {
                     steps.extend(self.member_steps(member, tests));
                 }
             }
-            steps.extend(self.audit());
+            if audit_last || !saving {
+                steps.extend(self.audit());
+            }
             if !saving {
                 steps.extend(saves);
             }
-            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps)));
+            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps, true)));
         }
         jobs
     }

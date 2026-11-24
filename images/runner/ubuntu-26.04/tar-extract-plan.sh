@@ -37,7 +37,7 @@ extract_root_fifo() {
   shift
   local -a indices=("$@")
   mkdir -p -- "$dest_root"
-  busybox tar -xf "$fifo" -C "$dest_root" &
+  busybox tar "${extract_flags[@]}" -xf "$fifo" -C "$dest_root" &
   bb_pid=$!
   wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
   bb_pid=""
@@ -51,7 +51,7 @@ extract_staged_fifo() {
   local -a indices=("$@")
   stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-group.XXXXXX")"
   mkdir -p -- "$stage_dir/root"
-  busybox tar -xf "$fifo" -C "$stage_dir/root" &
+  busybox tar "${extract_flags[@]}" -xf "$fifo" -C "$stage_dir/root" &
   bb_pid=$!
   wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
   bb_pid=""
@@ -69,7 +69,7 @@ extract_direct_fifo() {
   shift 2
   local -a indices=("$@")
   mkdir -p -- "$root"
-  busybox tar -xf "$fifo" -C "$root" &
+  busybox tar "${extract_flags[@]}" -xf "$fifo" -C "$root" &
   bb_pid=$!
   wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
   bb_pid=""

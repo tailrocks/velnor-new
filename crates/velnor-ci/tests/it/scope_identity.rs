@@ -19,6 +19,7 @@ fn util(directory: &str) -> RustRoot {
         target_dir: path(&format!("{directory}/target")),
         nextest_ci_profile: false,
         members: vec![RustMember {
+            version: None,
             name: PackageName::new("util").unwrap_or_else(|e| unreachable!("{e}")),
             manifest: path(&format!("{directory}/util/Cargo.toml")),
             directory: Some(path(&format!("{directory}/util"))),

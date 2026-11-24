@@ -2,10 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{CheckConfigurations, RepoPath, RepoView, RustCiConfig, RustRoot};
+use velnor_model::{
+    CheckConfigurations, HelperRelease, RepoPath, RepoView, RustCiConfig, RustRoot,
+};
 
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::error::{DetectError, Reason};
+
+// helper-gate: first in tools-v0.1.112 via a60bd44dc6
+pub(crate) const CHECKS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn current(helper: Option<&HelperRelease>) -> bool {
+    helper.is_some_and(|helper| helper.version().at_least(CHECKS_HELPER))
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -53,8 +62,31 @@ pub(crate) fn check(
     view: &RepoView,
     config: &RustCiConfig,
     rust_roots: &[RustRoot],
+    helper: Option<&HelperRelease>,
 ) -> Result<(), DetectError> {
+    let current = current(helper);
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
+    if current
+        && let Some(index) = config
+            .check_configurations
+            .iter()
+            .enumerate()
+            .find(|(index, entry)| config.check_configurations[..*index].contains(entry))
+            .map(|(index, _)| index)
+    {
+        let entry = &config.check_configurations[index];
+        return Err(invalid(Reason::InvalidValue {
+            key: "check_configurations",
+            value: format!(
+                "root {} with {}, listed twice",
+                entry
+                    .root
+                    .as_ref()
+                    .map_or_else(|| ".".to_owned(), ToString::to_string),
+                entry.command()
+            ),
+        }));
+    }
     if let Some(entry) = config.check_configurations.iter().find(|entry| {
         !rust_roots
             .iter()
@@ -72,12 +104,16 @@ pub(crate) fn check(
         .iter()
         .filter_map(CheckConfigurations::file)
     {
-        let linked = std::iter::successors(Some(file.clone()), RepoPath::parent)
-            .any(|part| view.symlinks.contains(&part));
+        let parts: Vec<RepoPath> =
+            std::iter::successors(Some(file.clone()), RepoPath::parent).collect();
+        let linked = parts.iter().any(|part| view.symlinks.contains(part));
+        let submodule = current && parts.iter().any(|part| view.gitlinks.contains(part));
         let reason = if !view.tracked_paths.contains(&file) {
             Some("a file that is not tracked in the repository")
         } else if linked {
             Some("a symbolic link, or inside one; name the regular file")
+        } else if submodule {
+            Some("a git submodule, or inside one; name the regular file")
         } else if config
             .non_inputs
             .iter()
