@@ -11,7 +11,7 @@ mod restored_units;
 pub(crate) fn lane() -> Value {
     json!({"schema":1,"lane":"rust","caches":[{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","matched_key":"target-lock-old","hit":"fallback","bytes":null,"usable":true,"usable_same_lock":true,"save":"not_attempted"}],"invocations":[{"argv":["cargo","check"],"root":".","configuration":"default","started_at":10,"seconds":1.0,"log_start":0,"log_end":0,"compilations":[{"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]}],"downloads":[],"capture_complete":true,"verified_git_downloads":[]}],"downloaded":0,"first_cargo_seconds":null,"slowest_tests":[],"tests_run":null,"diagnostics":[],"violations":[]})
 }
-fn metrics(value: Value) -> LaneMetrics {
+pub(crate) fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
 }
 
@@ -67,7 +67,7 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
     }
 }
 
-fn artifact(package_id: &str, fresh: bool, filenames: &[&str]) -> Value {
+pub(crate) fn artifact(package_id: &str, fresh: bool, filenames: &[&str]) -> Value {
     artifact_kind(package_id, fresh, &["lib"], filenames)
 }
 
@@ -83,7 +83,7 @@ fn artifact_kind(package_id: &str, fresh: bool, kind: &[&str], filenames: &[&str
     })
 }
 
-fn workspace_app(artifacts: Value, target_directory: Option<&str>) -> Value {
+pub(crate) fn workspace_app(artifacts: Value, target_directory: Option<&str>) -> Value {
     let mut value = lane();
     value["invocations"][0]["compilations"][0]["package"] = json!("app");
     value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
