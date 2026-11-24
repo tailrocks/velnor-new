@@ -220,6 +220,7 @@ mod private_sources_phase;
 mod private_sources_status;
 mod public_sources;
 mod public_verdicts;
+mod purge_private_no_roots;
 mod purge_private_step;
 mod qualification;
 mod release_assets;

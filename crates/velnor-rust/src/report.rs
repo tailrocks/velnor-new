@@ -207,12 +207,16 @@ pub(crate) fn finish(
 }
 
 pub fn finish_present(facts: &RepoFacts, jobs: &mut Vec<Job>) {
-    if jobs.is_empty()
-        || facts.helper.is_none()
+    if facts.helper.is_none()
         || jobs
             .iter()
             .any(|job| job.id == crate::required_job::VERDICT_JOB)
     {
+        return;
+    }
+    let trim = crate::base_cache_trim::standalone_job(facts);
+    if jobs.is_empty() {
+        jobs.extend(trim);
         return;
     }
     if !jobs.iter().any(|job| job.id == PLAN_JOB) {
@@ -220,11 +224,13 @@ pub fn finish_present(facts: &RepoFacts, jobs: &mut Vec<Job>) {
         jobs.insert(0, present_plan_job(facts, outputs));
     }
     crate::merge_queue_check::ask(facts, jobs, false);
-    jobs.push(crate::required_job::verdict_job(
+    let verdict = crate::required_job::verdict_job(
         facts,
         jobs,
         false,
         crate::plan_budget::draft_guard(facts),
-    ));
+    );
+    jobs.extend(trim);
+    jobs.push(verdict);
     jobs.extend(label_reset(facts));
 }

@@ -16,6 +16,15 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 // helper-gate: first in tools-v0.1.112 via 81eb49accb
 const PRIVATE_PURGE_HELPER: (u64, u64, u64) = (0, 1, 112);
 
+pub(crate) fn standalone_job(facts: &RepoFacts) -> Option<Job> {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(PRIVATE_PURGE_HELPER))
+        .then(|| trim_job(facts, &[]))
+        .flatten()
+}
+
 pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let release = facts.helper.as_ref().filter(|_| has_saving_helper(facts))?;
     let trims: Vec<Step> = jobs.iter().flat_map(lane_trims).collect();
