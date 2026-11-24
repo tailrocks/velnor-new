@@ -204,6 +204,17 @@ fi
 exec "$REAL_WC" "$@"
 """
 
+STUB_CONCURRENT_PUBLISH_CP = """#!/bin/sh
+"$REAL_CP" "$@" || exit $?
+cat "$STUB_GOOD_ARCHIVE" > "$STUB_ENTRY"
+"""
+
+STUB_FAILING_ENTRY_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+[ "$last" = "$STUB_ENTRY" ] && exit 1
+exec "$REAL_MV" "$@"
+"""
+
 STUB_NO_INODE_MKTEMP = """#!/bin/sh
 for arg; do
   case "$arg" in *.velnor-ci.evict.*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
@@ -1318,6 +1329,29 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.output)
         self.assertIn("because the store entry path is taken", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_regular_store_entry_published_by_another_job_survives_a_failed_publish(self):
+        cached = self.cached_archive()
+        good = self.root / "good-archive"
+        good.write_bytes(self.archive)
+        for name, body in (("cp", STUB_CONCURRENT_PUBLISH_CP), ("mv", STUB_FAILING_ENTRY_MV)):
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_CP": shutil.which("cp"),
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_GOOD_ARCHIVE": str(good),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertTrue(
+            cached.is_file() and cached.read_bytes() == self.archive,
+            "a regular entry published by another job was deleted before this job's publish rename",
+        )
 
     def test_a_directory_planted_between_the_check_and_the_publish_rename_is_not_moved_into(self):
         stub = self.stub_bin / "mv"
