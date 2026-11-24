@@ -39,8 +39,8 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{
-    BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_STEP_HELPER, BUDGET_STEP_NAME, ModeBudget,
-    Selection, SelectionName,
+    BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_SELECTION_VARIABLE, BUDGET_STEP_HELPER,
+    BUDGET_STEP_NAME, ModeBudget, Selection, SelectionName,
 };
 pub use cache::{
     AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,

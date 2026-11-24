@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Selection, WORKFLOW_PATH};
+use velnor_model::{BUDGET_JOB_NAME, Selection, WORKFLOW_PATH};
 
 use crate::budget::{History, Population, Sample};
 use crate::collect::{all_jobs, setup_seconds};
@@ -168,11 +168,10 @@ fn by_selection(
     Ok(groups)
 }
 
-/// The selection a run records in the name of the step that checks its budget,
-/// or in the title of its budget job, when that job ran.
 fn selection_of(jobs: &[ApiJob]) -> Option<Selection> {
     jobs.iter()
         .filter(|job| job.conclusion.as_deref() != Some("skipped"))
+        .filter(|job| job.name.starts_with(BUDGET_JOB_NAME))
         .find_map(|job| {
             job.steps
                 .iter()

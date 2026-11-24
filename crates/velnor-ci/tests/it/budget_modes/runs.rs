@@ -87,6 +87,30 @@ fn a_run_records_its_selection_in_the_name_of_the_budget_step() {
 }
 
 #[test]
+fn a_step_of_another_job_with_the_name_of_the_budget_step_records_nothing() {
+    let mut fake = FakeGitHub::default();
+    run_listing(&mut fake, &[1]);
+    let mut rust = stepped("full", rust_job(50));
+    rust["conclusion"] = json!("success");
+    fake.respond(
+        run_path(&repo(), 1),
+        &json!({
+            "name": "Rust CI", "status": "completed", "conclusion": "success",
+            "run_attempt": 1, "event": "push", "head_sha": "a".repeat(40),
+            "created_at": at(0), "run_started_at": at(0), "updated_at": at(60)
+        })
+        .to_string(),
+    );
+    fake.respond(
+        jobs_path(&repo(), 1, 1, 1),
+        &json!({ "total_count": 2, "jobs": [rust, budget_job(None, 52, Some(60))] }).to_string(),
+    );
+    let measured = velnor_ci::budget_history::sample(&fake, &repo(), 1)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(measured.selection, None);
+}
+
+#[test]
 fn runs_that_do_not_record_their_selection_are_one_group_of_their_own() {
     let mut fake = FakeGitHub::default();
     run_listing(&mut fake, &[1, 2, 3]);

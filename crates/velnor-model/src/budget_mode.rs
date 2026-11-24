@@ -13,6 +13,8 @@ pub const BUDGET_JOB_NAME: &str = "Speed budget";
 
 pub const BUDGET_STEP_NAME: &str = "Check the speed budget";
 
+pub const BUDGET_SELECTION_VARIABLE: &str = "VELNOR_BUDGET_SELECTION";
+
 /// How much of the workspace the plan of a run selected. A run that tests
 /// everything and a run that tests nothing differ by an order of magnitude, so
 /// the speed budget measures each kind against its own runs.

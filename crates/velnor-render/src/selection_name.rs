@@ -74,3 +74,7 @@ pub(crate) fn step_title(name: &SelectionName) -> String {
     let selected = selected(name);
     format!("${{{{ format('{BUDGET_STEP_NAME} ({{0}})', {selected}) }}}}")
 }
+
+pub(crate) fn selection_value(name: &SelectionName) -> String {
+    format!("${{{{ {} }}}}", selected(name))
+}
