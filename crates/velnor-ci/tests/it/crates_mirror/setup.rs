@@ -100,6 +100,28 @@ fn mirror_off_leaves_an_existing_job_configuration_alone() -> TestResult {
 }
 
 #[test]
+fn mirror_off_inherited_from_an_earlier_step_stays_disabled_until_overridden_empty() -> TestResult {
+    let repo = Repo::empty("crates-mirror-off-inherited");
+    for _ in 0..2 {
+        let output = setup_command(repo.root(), REGISTRY)
+            .env("VELNOR_CRATES_MIRROR", "off")
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+    }
+    assert_eq!(
+        fs::read_to_string(repo.root().join("env"))?,
+        "VELNOR_CARGO_CONFIG=\nVELNOR_CARGO_MBX=\nVELNOR_CARGO_CONFIG=\nVELNOR_CARGO_MBX=\n"
+    );
+    assert!(!repo.root().join("velnor-cargo").exists());
+    let output = setup_command(repo.root(), REGISTRY)
+        .env("VELNOR_CRATES_MIRROR", "")
+        .output()?;
+    assert!(!output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read crates mirror CA"));
+    Ok(())
+}
+
+#[test]
 fn mirror_unset_or_empty_still_requires_the_ca() -> TestResult {
     for value in [None, Some("")] {
         let repo = Repo::empty("crates-mirror-on");
