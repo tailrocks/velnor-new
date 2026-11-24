@@ -9,7 +9,7 @@ const REFUSAL: &str = "outside this command's explicit selection";
 
 const ROOT: &str = "@ROOT@";
 
-const FORMS: [(&str, &str, bool); 49] = [
+const FORMS: [(&str, &str, bool); 53] = [
     ("x", "x", true),
     ("beta", "beta", true),
     ("x@0.1.0", "x", true),
@@ -60,6 +60,10 @@ const FORMS: [(&str, &str, bool); 49] = [
     ("B*", "beta", false),
     ("b*@0.1", "beta", false),
     ("nomatch*", "beta", false),
+    ("path+file:///elsewhere/pkg-beta#beta", "beta", false),
+    ("path+file:///elsewhere/pkg-beta#beta@0.1.0", "beta", false),
+    ("file:///elsewhere/x", "x", false),
+    ("path+file:///elsewhere/x#0.1.0", "x", false),
     ("*e*a", "beta", true),
     ("*t*t", "beta", false),
     ("b*a*a", "beta", false),
@@ -97,7 +101,8 @@ fn untrusted_output_of(repo: &Repo, package: &str) {
 }
 
 fn spec_in(repo: &Repo, form: &str) -> String {
-    form.replace(ROOT, &repo.root().display().to_string())
+    let root = std::fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    form.replace(ROOT, &root.display().to_string())
 }
 
 fn refused(stderr: &str, package: &str) -> bool {

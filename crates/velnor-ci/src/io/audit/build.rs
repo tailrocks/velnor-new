@@ -143,10 +143,13 @@ impl Builder<'_> {
                 .map(|package| package.name.as_str())
                 .collect()
         });
+        let canonical =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
         invocation.selection(
             root.map_or("", |root| root.manifest.as_str()),
             members,
             &dependencies,
+            &[&self.repository, &canonical],
         )
     }
 

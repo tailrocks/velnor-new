@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 use velnor_model::RustMember;
@@ -31,6 +33,7 @@ impl Invocation {
         root: &str,
         members: &[RustMember],
         dependencies: &[&str],
+        repositories: &[&Path],
     ) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
@@ -50,21 +53,22 @@ impl Invocation {
         let mut excluded = Vec::new();
         let mut provable = true;
         for (index, word) in words.iter().enumerate() {
-            let (specs, spec) = match *word {
-                "-p" | "--package" => (&mut selected, words.get(index + 1).copied()),
-                "--exclude" => (&mut excluded, words.get(index + 1).copied()),
-                _ => {
-                    if let Some(spec) = word
-                        .strip_prefix("--package=")
-                        .or_else(|| word.strip_prefix("-p"))
-                    {
-                        (&mut selected, Some(spec.strip_prefix('=').unwrap_or(spec)))
-                    } else if let Some(spec) = word.strip_prefix("--exclude=") {
-                        (&mut excluded, Some(spec))
-                    } else {
-                        continue;
-                    }
+            let (specs, spec) = if *word == "--package" {
+                (&mut selected, words.get(index + 1).copied())
+            } else if *word == "--exclude" {
+                (&mut excluded, words.get(index + 1).copied())
+            } else if let Some(spec) = word.strip_prefix("--package=") {
+                (&mut selected, Some(spec))
+            } else if let Some(spec) = word.strip_prefix("--exclude=") {
+                (&mut excluded, Some(spec))
+            } else if let Some(rest) = cluster_package(word) {
+                if rest.is_empty() {
+                    (&mut selected, words.get(index + 1).copied())
+                } else {
+                    (&mut selected, Some(rest.strip_prefix('=').unwrap_or(rest)))
                 }
+            } else {
+                continue;
             };
             match spec {
                 Some(spec) if !spec.is_empty() && !spec.starts_with('-') => specs.push(spec),
@@ -79,9 +83,13 @@ impl Invocation {
                 if !provable {
                     false
                 } else if workspace {
-                    !excluded.iter().any(|spec| spec.matches(member))
+                    !excluded
+                        .iter()
+                        .any(|spec| spec.matches(member, repositories))
                 } else {
-                    selected.iter().any(|spec| spec.matches(member))
+                    selected
+                        .iter()
+                        .any(|spec| spec.matches(member, repositories))
                 }
             })
             .map(|member| member.name.as_str().to_owned())
@@ -94,6 +102,14 @@ impl Invocation {
             packages,
         })
     }
+}
+
+fn cluster_package(word: &str) -> Option<&str> {
+    let flags = word.strip_prefix('-')?;
+    if flags.starts_with('-') {
+        return None;
+    }
+    flags.trim_start_matches(['q', 'v', 'r']).strip_prefix('p')
 }
 
 fn target_filter(word: &str) -> bool {

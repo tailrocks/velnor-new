@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+
 use velnor_model::RustMember;
 
 pub(super) struct Spec<'a> {
     name: Name<'a>,
     version: Option<Partial>,
+    address: Option<&'a str>,
 }
 
 enum Name<'a> {
@@ -20,12 +23,18 @@ struct Partial {
 }
 
 impl Spec<'_> {
-    pub(super) fn matches(&self, member: &RustMember) -> bool {
+    pub(super) fn matches(&self, member: &RustMember, repositories: &[&Path]) -> bool {
         let named = match self.name {
             Name::Exact(name) => member.name.as_str() == name,
-            Name::Glob(pattern) => glob(pattern.as_bytes(), member.name.as_str().as_bytes()),
+            Name::Glob(pattern) => glob(
+                &pattern.chars().collect::<Vec<_>>(),
+                &member.name.as_str().chars().collect::<Vec<_>>(),
+            ),
         };
         named
+            && self
+                .address
+                .is_none_or(|address| located(member, repositories, address))
             && self.version.as_ref().is_none_or(|version| {
                 member
                     .version
@@ -34,6 +43,14 @@ impl Spec<'_> {
                     .is_some_and(|actual| version.matches(&actual))
             })
     }
+}
+
+fn located(member: &RustMember, repositories: &[&Path], address: &str) -> bool {
+    member.manifest.parent().is_some_and(|directory| {
+        repositories
+            .iter()
+            .any(|repository| repository.join(directory.as_str()) == Path::new(address))
+    })
 }
 
 impl Partial {
@@ -53,13 +70,14 @@ pub(super) fn parse(spec: &str) -> Option<Spec<'_>> {
         return Some(Spec {
             name: Name::Glob(spec),
             version: None,
+            address: None,
         });
     }
     let Some((scheme, location)) = spec.split_once("://") else {
         return if spec.contains('#') {
             None
         } else {
-            versioned(spec)
+            versioned(spec, None)
         };
     };
     let scheme = scheme.to_ascii_lowercase();
@@ -73,28 +91,32 @@ pub(super) fn parse(spec: &str) -> Option<Spec<'_>> {
         });
     match fragment {
         Some(fragment) if !fragment.starts_with(|c: char| c.is_ascii_digit()) => {
-            versioned(fragment)
+            versioned(fragment, Some(address))
         }
         Some(version) => Some(Spec {
             name: Name::Exact(last_segment(address)),
             version: Some(parse_version(version)?),
+            address: Some(address),
         }),
         None => Some(Spec {
             name: Name::Exact(last_segment(address)),
             version: None,
+            address: Some(address),
         }),
     }
 }
 
-fn versioned(spec: &str) -> Option<Spec<'_>> {
+fn versioned<'a>(spec: &'a str, address: Option<&'a str>) -> Option<Spec<'a>> {
     match spec.split_once(['@', ':']) {
         Some((name, version)) => Some(Spec {
             name: Name::Exact(name),
             version: Some(parse_version(version)?),
+            address,
         }),
         None => Some(Spec {
             name: Name::Exact(spec),
             version: None,
+            address,
         }),
     }
 }
@@ -122,12 +144,12 @@ fn last_segment(address: &str) -> &str {
     address.rsplit('/').next().unwrap_or(address)
 }
 
-fn glob(pattern: &[u8], name: &[u8]) -> bool {
+fn glob(pattern: &[char], name: &[char]) -> bool {
     let (mut at, mut on) = (0, 0);
     let mut star: Option<(usize, usize)> = None;
     loop {
         match pattern.get(at) {
-            Some(b'*') => {
+            Some('*') => {
                 at += 1;
                 star = Some((at, on));
                 continue;
@@ -153,36 +175,36 @@ fn glob(pattern: &[u8], name: &[u8]) -> bool {
     }
 }
 
-fn token(pattern: &[u8], at: usize, byte: u8) -> Option<usize> {
+fn token(pattern: &[char], at: usize, symbol: char) -> Option<usize> {
     match pattern[at] {
-        b'?' => Some(at + 1),
-        b'[' => {
+        '?' => Some(at + 1),
+        '[' => {
             let (negated, members, after) = class(&pattern[at + 1..])?;
-            (members_contain(members, byte) != negated).then(|| pattern.len() - after.len())
+            (members_contain(members, symbol) != negated).then(|| pattern.len() - after.len())
         }
-        literal => (literal == byte).then_some(at + 1),
+        literal => (literal == symbol).then_some(at + 1),
     }
 }
 
-fn class(pattern: &[u8]) -> Option<(bool, &[u8], &[u8])> {
+fn class(pattern: &[char]) -> Option<(bool, &[char], &[char])> {
     let (negated, body) = match pattern.split_first() {
-        Some((b'!', rest)) => (true, rest),
+        Some(('!', rest)) => (true, rest),
         _ => (false, pattern),
     };
-    let end = body.iter().skip(1).position(|byte| *byte == b']')? + 1;
+    let end = body.iter().skip(1).position(|symbol| *symbol == ']')? + 1;
     Some((negated, &body[..end], &body[end + 1..]))
 }
 
-fn members_contain(members: &[u8], byte: u8) -> bool {
+fn members_contain(members: &[char], symbol: char) -> bool {
     let mut index = 0;
     while index < members.len() {
-        if members.get(index + 1) == Some(&b'-') && index + 2 < members.len() {
-            if (members[index]..=members[index + 2]).contains(&byte) {
+        if members.get(index + 1) == Some(&'-') && index + 2 < members.len() {
+            if (members[index]..=members[index + 2]).contains(&symbol) {
                 return true;
             }
             index += 3;
         } else {
-            if members[index] == byte {
+            if members[index] == symbol {
                 return true;
             }
             index += 1;

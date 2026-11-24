@@ -94,20 +94,25 @@ fn a_failed_workspace_build_in_one_root_does_not_blame_another_roots_package_in_
     ]);
 }
 
-const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 7] = [
+const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 11] = [
     &["cargo", "build", "-p", "b", "--no-such-flag"],
     &["cargo", "build", "--package", "b", "--no-such-flag"],
     &["cargo", "build", "--package=b", "--no-such-flag"],
     &["cargo", "build", "-pb", "--no-such-flag"],
     &["cargo", "build", "-p=b", "--no-such-flag"],
+    &["cargo", "build", "-qpb", "--no-such-flag"],
+    &["cargo", "build", "-vvp", "b", "--no-such-flag"],
+    &["cargo", "build", "-rqp=b", "--no-such-flag"],
+    &["cargo", "build", "-vp", "b@0.1.0", "--no-such-flag"],
     &["cargo", "build", "-p", "b@0.1.0", "--no-such-flag"],
     &["cargo", "build", "--package=b@0.1.0", "--no-such-flag"],
 ];
 
-const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 6] = [
+const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 7] = [
     &["cargo", "build", "-p", "no-such", "--no-such-flag"],
     &["cargo", "build", "--package=no-such", "--no-such-flag"],
     &["cargo", "build", "-pno-such", "--no-such-flag"],
+    &["cargo", "build", "-qpno-such", "--no-such-flag"],
     &[
         "cargo",
         "build",
