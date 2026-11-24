@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::budget_mode::SelectionName;
 use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
@@ -189,6 +190,7 @@ pub enum StepKind {
     },
     Budget {
         last: usize,
+        selection: Option<SelectionName>,
     },
     MergeGroupPassed {
         required: String,

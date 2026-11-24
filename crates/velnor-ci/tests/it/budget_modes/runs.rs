@@ -54,6 +54,63 @@ fn a_full_run_after_only_affected_history_passes_within_its_own_limit() {
 }
 
 #[test]
+fn a_run_records_its_selection_in_the_name_of_the_budget_step() {
+    let mut fake = FakeGitHub::default();
+    run_listing(&mut fake, &[1, 2, 3]);
+    for id in [1, 2] {
+        finished_with(
+            &mut fake,
+            id,
+            60,
+            stepped("affected", budget_job(None, 58, Some(60))),
+        );
+    }
+    finished_with(
+        &mut fake,
+        3,
+        800,
+        stepped("full", budget_job(None, 798, Some(800))),
+    );
+    let running = executing_with(
+        &mut fake,
+        FULL_RUN,
+        700,
+        stepped("full", budget_job(None, 698, None)),
+    );
+    assert_eq!(running.sample.selection, Some(Selection::Full));
+    let (ids, _) = judged(&fake, &running, &two_modes());
+    assert_eq!(
+        ids,
+        [FULL_RUN, 3],
+        "only the full run is a sample of a full run"
+    );
+}
+
+#[test]
+fn a_step_of_another_job_with_the_name_of_the_budget_step_records_nothing() {
+    let mut fake = FakeGitHub::default();
+    run_listing(&mut fake, &[1]);
+    let mut rust = stepped("full", rust_job(50));
+    rust["conclusion"] = json!("success");
+    fake.respond(
+        run_path(&repo(), 1),
+        &json!({
+            "name": "Rust CI", "status": "completed", "conclusion": "success",
+            "run_attempt": 1, "event": "push", "head_sha": "a".repeat(40),
+            "created_at": at(0), "run_started_at": at(0), "updated_at": at(60)
+        })
+        .to_string(),
+    );
+    fake.respond(
+        jobs_path(&repo(), 1, 1, 1),
+        &json!({ "total_count": 2, "jobs": [rust, budget_job(None, 52, Some(60))] }).to_string(),
+    );
+    let measured = velnor_ci::budget_history::sample(&fake, &repo(), 1)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(measured.selection, None);
+}
+
+#[test]
 fn runs_that_do_not_record_their_selection_are_one_group_of_their_own() {
     let mut fake = FakeGitHub::default();
     run_listing(&mut fake, &[1, 2, 3]);

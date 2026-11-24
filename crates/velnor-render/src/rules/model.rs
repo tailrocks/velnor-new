@@ -14,6 +14,7 @@ pub enum Value {
 pub struct RenderedStep {
     pub id: Option<String>,
     pub name: String,
+    pub name_expression: Option<String>,
     pub condition: Option<String>,
     pub continue_on_error: bool,
     pub uses: Option<String>,

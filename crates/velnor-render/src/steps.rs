@@ -394,6 +394,6 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
-        StepKind::Budget { last } => budget_step(*last),
+        StepKind::Budget { last, selection } => budget_step(*last, selection.as_ref()),
     }
 }
