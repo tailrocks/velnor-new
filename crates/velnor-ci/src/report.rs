@@ -119,15 +119,15 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace && event.restored == Some(true))
-                || (warm
-                    && event.workspace
-                    && (event.unchanged
-                        && event
-                            .dependencies
-                            .iter()
-                            .all(|dependency| !compiled.contains(dependency.as_str()))))
-            {
+            let workspace_waste = warm
+                && event.workspace
+                && event.unchanged
+                && event
+                    .dependencies
+                    .iter()
+                    .all(|dependency| !compiled.contains(dependency.as_str()))
+                && !pruned_outputs_only(invocation, &event.package);
+            if (same_lock && !event.workspace && event.restored == Some(true)) || workspace_waste {
                 violations.push(format!(
                     "{}: {} v{} compiled despite usable restored inputs{}",
                     invocation.root,
@@ -162,6 +162,41 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     );
     violations.extend(crate::waste_evidence::waste(metrics));
     violations
+}
+
+fn pruned_outputs_only(invocation: &Invocation, package: &str) -> bool {
+    let mut saw = false;
+    for artifact in &invocation.artifacts {
+        if artifact.fresh {
+            continue;
+        }
+        let Some(identity) = crate::cargo_package::PackageIdentity::parse(&artifact.package_id)
+        else {
+            continue;
+        };
+        if identity.name != package {
+            continue;
+        }
+        saw = true;
+        if artifact.filenames.is_empty()
+            || artifact.filenames.iter().any(|file| !pruned_output(file))
+        {
+            return false;
+        }
+    }
+    saw
+}
+
+fn pruned_output(file: &str) -> bool {
+    let path = std::path::Path::new(file);
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    crate::cache_prune::is_executable(name)
+        || path
+            .components()
+            .any(|component| component.as_os_str() == "doc")
 }
 
 fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {

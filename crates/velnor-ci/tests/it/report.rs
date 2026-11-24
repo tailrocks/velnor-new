@@ -67,6 +67,70 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
     }
 }
 
+fn artifact(package_id: &str, fresh: bool, filenames: &[&str]) -> Value {
+    json!({
+        "package_id": package_id,
+        "manifest_path": "/checkout/app/Cargo.toml",
+        "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/checkout/app/src/lib.rs"},
+        "profile": {"opt_level": "0", "debuginfo": 0, "debug_assertions": true, "overflow_checks": true, "test": false},
+        "features": [],
+        "filenames": filenames,
+        "fresh": fresh
+    })
+}
+
+#[test]
+fn pruned_doc_and_executable_outputs_are_not_workspace_waste() {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["package"] = json!("app");
+    value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
+    value["invocations"][0]["compilations"][0]["unchanged"] = json!(true);
+    value["invocations"][0]["artifacts"] = json!([
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/doc/app/index.html"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/app"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/build/app/aaaaaaaaaaaaaaaa/out/app-aaaaaaaaaaaaaaaa"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            true,
+            &["target/debug/deps/libapp-bbbbbbbbbbbbbbbb.rlib"]
+        ),
+    ]);
+    assert!(waste(&metrics(value)).is_empty());
+
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["package"] = json!("app");
+    value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
+    value["invocations"][0]["compilations"][0]["unchanged"] = json!(true);
+    value["invocations"][0]["artifacts"] = json!([
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/doc/app/index.html"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/deps/libapp-aaaaaaaaaaaaaaaa.rlib"]
+        ),
+    ]);
+    assert_eq!(
+        waste(&metrics(value)),
+        [".: app v1.0.0 compiled despite usable restored inputs"]
+    );
+}
+
 #[test]
 fn only_workspace_dependency_compilation_exempts_unchanged_workspace_crates() {
     for workspace in [false, true] {
