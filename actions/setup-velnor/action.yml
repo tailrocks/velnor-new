@@ -63,7 +63,15 @@ runs:
           [ "$measured" -le "$MAX_BYTES" ] || return 3
         }
         clear_entry() {
-          if [ -L "$1" ] || { [ -e "$1" ] && [ ! -f "$1" ]; }; then rm -rf -- "$1"; fi
+          { [ -L "$1" ] || { [ -e "$1" ] && [ ! -f "$1" ]; }; } || return 0
+          cleared="$dir/.velnor-ci.evicting.$(date +%s 2> /dev/null || echo 0).$$.$RANDOM$RANDOM"
+          move_file -n "$1" "$cleared" 2> /dev/null || return 0
+          if [ -f "$cleared" ] && [ ! -L "$cleared" ]; then
+            move_file -n "$cleared" "$1" 2> /dev/null || true
+            rm -f -- "$cleared" 2> /dev/null || true
+          else
+            rm -rf -- "$cleared"
+          fi
         }
         copy_extracted() {
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
@@ -102,7 +110,7 @@ runs:
           set -- "$dir"/.velnor-ci.evicting.* "$dir"/.velnor-ci.evict.*
           now="$(date +%s 2> /dev/null)" || return 0
           for path; do
-            [ -f "$path" ] || [ -L "$path" ] || continue
+            [ -e "$path" ] || [ -L "$path" ] || continue
             case "$path" in
               */.velnor-ci.evicting.*)
                 started="${path##*/.velnor-ci.evicting.}"
@@ -114,7 +122,7 @@ runs:
               '' | *[!0-9]*) ;;
               *) if [ "$started" -ge "$((now - 3600))" ] 2> /dev/null && [ "$started" -le "$((now + 3600))" ] 2> /dev/null; then continue; fi ;;
             esac
-            rm -f -- "$path" 2> /dev/null || true
+            rm -rf -- "$path" 2> /dev/null || true
           done
         }
         prune_quarantine() {
