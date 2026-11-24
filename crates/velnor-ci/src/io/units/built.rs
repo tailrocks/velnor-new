@@ -153,5 +153,5 @@ pub(super) fn places_outputs(directory: &Path, target: &Path) -> bool {
         || configuration(directory)
         || matches!(named(Some(directory)), Some("deps" | "examples"))
             && directory.parent().is_some_and(configuration)
-        || unit_out_configuration(directory).is_some()
+        || unit_out_configuration(directory).is_some_and(configuration)
 }

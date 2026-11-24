@@ -203,6 +203,7 @@ fn sources_cargo_package_stages_in_the_target_are_not_outputs() {
                 "package/my-lib-0.1.0/native.d",
                 "package/my-lib-0.1.0/deps/libnative.rlib",
                 "package/my-lib-0.1.0/build/native-0123456789abcdef.d",
+                "package/my-lib-0.1.0/build/native/0123456789abcdef/out/libghost.rlib",
             ] {
                 let accepted = with_orphan(root, staged);
                 assert!(accepted.is_ok(), "{staged}: {accepted:?}");
