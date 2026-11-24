@@ -131,7 +131,7 @@ scan() {
     gsub(/"([^"\\]|\\.)*"/, "\"\"", line)
     rest = line
     off = 0
-    while (match(rest, /\(0, ?1, ?[0-9]+,?\)|0\.1\.[0-9]+/)) {
+    while (match(rest, /\([ \t]*[0-9][0-9_]*(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)?[ \t]*,[ \t]*[0-9][0-9_]*(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)?[ \t]*,[ \t]*[0-9][0-9_]*(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)?[ \t]*,?[ \t]*\)|0\.1\.[0-9]+/)) {
       v = substr(rest, RSTART, RLENGTH)
       before = substr(line, 1, off + RSTART - 1)
       sub(/[ \t]+$/, "", before)
@@ -140,9 +140,12 @@ scan() {
       off += RSTART + RLENGTH - 1
       rest = after
       if (substr(v, 1, 1) == "(" && (before == "!" || after ~ /^[ \t]*(=>|=([^=]|$)|if[ \t]|\|)/ || after ~ /^[^()]*\)[ \t]*(=>|=([^=]|$)|if[ \t]|\|)/)) continue
+      gsub(/[ \t_]/, "", v)
+      gsub(/(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)/, "", v)
       sub(/,\)$/, ")", v)
-      gsub(/[() ]/, "", v)
+      gsub(/[()]/, "", v)
       gsub(/,/, ".", v)
+      if (v !~ /^0\.1\.[0-9]+$/) continue
       out[++n] = v
     }
     return n

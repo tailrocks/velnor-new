@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-helper-gates.sh"
 fixtures="$root/scripts/fixtures"
 
-for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-pub-in gate-const-pub-space gate-string-marker; do
+for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-underscore gate-const-suffix gate-const-pub-in gate-const-pub-space gate-string-marker; do
   if bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110; then
     echo "the check accepted $f.diff" >&2
     exit 1
@@ -25,6 +25,7 @@ git config commit.gpgsign false
 git config tag.gpgsign false
 git config core.hooksPath /dev/null
 git config core.excludesFile /dev/null
+git config core.attributesFile /dev/null
 mkdir -p crates/velnor-ci generator "generator/old dir" "generator/old ü"
 printf '[package]\nname = "velnor-ci"\nversion = "0.1.110"\n' >crates/velnor-ci/Cargo.toml
 echo 'gate(RustCi, "budget", (0, 1, 110)),' >generator/gates.rs
