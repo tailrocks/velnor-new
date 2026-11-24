@@ -338,6 +338,15 @@
               ]
             },
             {
+              "name": "rustix",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "process",
+                "std"
+              ]
+            },
+            {
               "name": "rustls-pki-types",
               "kind": "normal",
               "manifest": null,
@@ -2046,7 +2055,7 @@
     "Cargo.toml": "f89d5b76ca996957e3ab38f7f26b72f0b4ec957fad1d459886748616e3a1d8aa",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "ac4eec3134f782b9c94e3090ab2d3dd5545a72db81b789a8bf4070e93e0ed8b4",
+    "crates/velnor-ci/Cargo.toml": "ed64d329d529f317bdbc6ba2e84bb213da753adbe85e3814714b9912ad4bc345",
     "crates/velnor-gen/Cargo.toml": "9d549847d02285846797a0f855b36024967e49b5424d977e34056cd91aa4e0f0",
     "crates/velnor-local/Cargo.toml": "6cdf2ba685fc927b16675e0e0b1a703d629ce93d8ab322472cbe9e47ec56e3ca",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",

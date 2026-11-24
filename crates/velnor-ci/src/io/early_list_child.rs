@@ -15,6 +15,7 @@ use nix::fcntl::{FcntlArg, OFlag, fcntl};
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
+use rustix::process::{WaitId, WaitIdOptions, waitid};
 
 const POLL_FIRST: Duration = Duration::from_millis(1);
 const POLL_LAST: Duration = Duration::from_millis(10);
@@ -142,7 +143,7 @@ impl Supervisor {
             if exited.is_none() {
                 exited = self.exited()?.map(|status| (status, Instant::now()));
             }
-            let idle = read_ready([&mut *stdout, &mut *stderr], poll)?;
+            let progressed = read_ready([&mut *stdout, &mut *stderr], poll)?;
             if !overflowed && u64::try_from(stdout.kept.len()).is_ok_and(|read| read > limit) {
                 overflowed = true;
                 self.stop(format!("its listing is longer than {limit} bytes"));
@@ -152,7 +153,7 @@ impl Supervisor {
                 if stdout.file.is_none() && stderr.file.is_none() {
                     return Ok(status);
                 }
-                if idle && at.elapsed() >= DRAIN_GRACE || at.elapsed() >= DRAIN_LIMIT {
+                if !progressed && at.elapsed() >= DRAIN_GRACE || at.elapsed() >= DRAIN_LIMIT {
                     self.stop(format!(
                         "{} exited, but a process it started left its process group and still held its output {} ms later",
                         command.get_program().to_string_lossy(),
@@ -178,17 +179,18 @@ impl Supervisor {
 
     fn exited(&self) -> io::Result<Option<ExitStatus>> {
         let mut slot = self.lock();
-        let status = slot
+        let child = slot
             .child
             .as_mut()
-            .ok_or_else(|| io::Error::other("no child"))?
-            .try_wait()?;
-        if status.is_some()
-            && let Some(mut child) = slot.child.take()
-        {
-            kill(&mut child);
+            .ok_or_else(|| io::Error::other("no child"))?;
+        let peek = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
+        if waitid(WaitId::Pid(rustix::process::Pid::from_child(child)), peek)?.is_none() {
+            return Ok(None);
         }
-        Ok(status)
+        kill(child);
+        let status = child.wait()?;
+        slot.child = None;
+        Ok(Some(status))
     }
 
     fn release(&self) -> Option<String> {
@@ -226,9 +228,9 @@ impl Pipe {
         Ok(())
     }
 
-    fn read(&mut self) -> io::Result<()> {
+    fn read(&mut self) -> io::Result<bool> {
         let Some(file) = self.file.as_mut() else {
-            return Ok(());
+            return Ok(false);
         };
         let mut chunk = [0; CHUNK];
         match file.read(&mut chunk) {
@@ -237,16 +239,16 @@ impl Pipe {
                 let room = self.keep.saturating_sub(self.kept.len()).min(read);
                 self.kept.extend_from_slice(&chunk[..room]);
             }
-            Err(error)
-                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {}
+            Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(false),
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
             Err(error) => return Err(error),
         }
-        Ok(())
+        Ok(true)
     }
 }
 
 fn read_ready(pipes: [&mut Pipe; 2], wait: Duration) -> io::Result<bool> {
-    let idle = {
+    {
         let mut fds: Vec<PollFd<'_>> = pipes
             .iter()
             .filter_map(|pipe| pipe.file.as_ref())
@@ -256,19 +258,16 @@ fn read_ready(pipes: [&mut Pipe; 2], wait: Duration) -> io::Result<bool> {
             &mut fds,
             PollTimeout::try_from(wait).unwrap_or(PollTimeout::MAX),
         ) {
-            Ok(ready) => ready == 0,
-            Err(Errno::EINTR) => false,
-            Err(Errno::EAGAIN) => {
-                thread::sleep(wait);
-                false
-            }
+            Ok(_) | Err(Errno::EINTR) => {}
+            Err(Errno::EAGAIN) => thread::sleep(wait),
             Err(errno) => return Err(errno.into()),
         }
-    };
-    for pipe in pipes {
-        pipe.read()?;
     }
-    Ok(idle)
+    let mut progressed = false;
+    for pipe in pipes {
+        progressed |= pipe.read()?;
+    }
+    Ok(progressed)
 }
 
 fn kill(child: &mut Child) {
