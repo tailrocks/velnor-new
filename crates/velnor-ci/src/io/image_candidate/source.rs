@@ -23,9 +23,11 @@ fn git(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
             command.env_remove(name);
         }
     }
-    runner
-        .text(&mut command, GIT_TIMEOUT)
-        .map(|output| output.trim().to_owned())
+    runner.text(&mut command, GIT_TIMEOUT)
+}
+
+fn git_line(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
+    git(runner, root, args).map(|output| output.trim().to_owned())
 }
 
 pub(super) fn identity(
@@ -34,12 +36,12 @@ pub(super) fn identity(
     requested: &str,
     github_sha: Option<&str>,
 ) -> Result<Value, CiError> {
-    let head = git(runner, root, &["rev-parse", "HEAD"])?;
+    let head = git_line(runner, root, &["rev-parse", "HEAD"])?;
     if requested != head || !is_hex(&head, 40) {
         return fail("Requested source commit is not the same as the Git commit in the worktree.");
     }
     let status = ["status", "--porcelain", "--untracked-files=all"];
-    if !git(runner, root, &status)?.is_empty() {
+    if !git_line(runner, root, &status)?.is_empty() {
         return fail("Build only when the Git worktree is clean.");
     }
     if github_sha != Some(head.as_str()) {
@@ -50,7 +52,7 @@ pub(super) fn identity(
     regular(&path, DOCKERFILE)?;
     let current = fs::read_to_string(&path)
         .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
-    if committed != current.trim_end_matches('\n') {
+    if committed != current {
         return fail(
             "Dockerfile bytes are not the same as the Dockerfile bytes in the requested source commit.",
         );

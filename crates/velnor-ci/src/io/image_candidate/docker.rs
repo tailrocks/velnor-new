@@ -72,7 +72,8 @@ pub(super) fn isolate(source: &Path, lock: &Lock, context: &Path) -> Result<Isol
     let home = context.join("home");
     let copy = plugins.join(PLUGIN);
     let failed = |error: io::Error| CiError::new(format!("{}: {error}", context.display()));
-    fs::create_dir_all(&plugins).map_err(failed)?;
+    fs::create_dir(&config).map_err(failed)?;
+    fs::create_dir(&plugins).map_err(failed)?;
     fs::copy(source, &copy).map_err(failed)?;
     fs::set_permissions(&copy, fs::Permissions::from_mode(0o755)).map_err(failed)?;
     if hash_file(&copy)? != locked {

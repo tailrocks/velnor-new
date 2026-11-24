@@ -267,7 +267,13 @@ refusal!(
 fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
     let source = Source::new("script-env");
     source.script("sleep 30 &\nenv > \"$PWD/../script.env\"");
-    let run = source.run(&[], &[]);
+    let run = source.run(
+        &[],
+        &[
+            ("KUBECONFIG", Some("/etc/kube/config")),
+            ("CARGO_HOME", Some("/etc/cargo")),
+        ],
+    );
     assert!(run.ok, "{}", run.stderr);
     let seen = source.text("script.env");
     assert!(seen.contains("PATH="), "{seen}");
@@ -275,7 +281,40 @@ fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
         seen.contains("HOME=") && seen.contains("/.velnor-job-image-candidate-"),
         "build-test.sh kept the real home directory: {seen}"
     );
-    for hidden in ["GH_TOKEN", "REGISTRY_PASSWORD", "DOCKER_HOST"] {
+    for hidden in [
+        "GH_TOKEN",
+        "REGISTRY_PASSWORD",
+        "DOCKER_HOST",
+        "KUBECONFIG",
+        "CARGO_HOME",
+        "DOCKER_CONFIG",
+        "FAKE_DIR",
+    ] {
         assert!(!seen.contains(hidden), "{hidden} reached build-test.sh");
     }
+}
+
+#[test]
+fn state_planted_by_the_validation_script_never_reaches_the_build() {
+    let source = Source::new("planted-state");
+    source.script(concat!(
+        "dir=\"$HOME/../docker-config/cli-plugins\"\n",
+        "mkdir -p \"$dir\"\n",
+        "printf '#!/bin/sh\\necho evil >> \"$FAKE_DIR/evil.ran\"\\n' > \"$dir/docker-buildx\"\n",
+        "chmod +x \"$dir/docker-buildx\""
+    ));
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
+    assert_eq!(source.text("evil.ran"), "");
+    assert!(source.text("plugin.ran").contains("build"));
+}
+
+#[test]
+fn a_dockerfile_with_leading_and_trailing_whitespace_is_compared_byte_for_byte() {
+    let source = Source::new("dockerfile-whitespace");
+    let dockerfile = source.path("checkout/images/job/ubuntu-26.04/Dockerfile");
+    fs::write(&dockerfile, "\n  FROM scratch \t\n\n").unwrap_or_default();
+    source.commit_all("whitespace");
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
 }

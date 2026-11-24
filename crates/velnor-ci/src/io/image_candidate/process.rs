@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -17,6 +18,7 @@ use crate::image_candidate::build::forwards;
 const CAPTURE_LIMIT: u64 = 1 << 20;
 const STDERR_SHOWN: usize = 2000;
 const SIGNALLED: &str = "velnor-ci received a signal";
+const SCRIPT_VARIABLES: &[&str] = &["PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"];
 
 pub(super) struct Runner {
     supervisor: Arc<Supervisor>,
@@ -93,6 +95,16 @@ impl Drop for Runner {
     fn drop(&mut self) {
         self.close.close();
     }
+}
+
+pub(super) fn script_environment<'a>(command: &'a mut Command, home: &Path) -> &'a mut Command {
+    command.env_clear().env("HOME", home);
+    for name in SCRIPT_VARIABLES {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    command
 }
 
 pub(super) fn clean_environment(command: &mut Command) -> &mut Command {

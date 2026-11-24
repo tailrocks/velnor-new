@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use super::output::{self, Staging};
-use super::process::{Runner, clean_environment};
+use super::process::{Runner, script_environment};
 use super::{DOCKERFILE_DIR, FileSource, docker, github_env, read_lock, scan_archive, source};
 use crate::cli_args::BuildArgs;
 use crate::error::CiError;
@@ -32,21 +32,23 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         .archive
         .parent()
         .ok_or_else(|| CiError::new("Candidate output directory must exist."))?;
-    let staging = Staging::create(parent)?;
-    let plugin = docker::plugin_source(args.buildx.as_deref())?;
-    let isolated = docker::isolate(&plugin, &lock, staging.path())?;
-    let builder = docker::version(&runner, &args.docker, &isolated, &lock)?;
+    let scratch = Staging::create(parent)?;
     let mut check = Command::new("bash");
     check
         .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
         .current_dir(&root);
-    clean_environment(&mut check).env("HOME", &isolated.home);
+    script_environment(&mut check, &scratch.home());
     runner.run(&mut check, CHECK_TIMEOUT)?;
+    drop(scratch);
     if source::identity(&runner, &root, &args.source_commit, github_sha)? != inputs {
         return Err(CiError::new(
             "Build inputs changed while build-test.sh ran.",
         ));
     }
+    let staging = Staging::create(parent)?;
+    let plugin = docker::plugin_source(args.buildx.as_deref())?;
+    let isolated = docker::isolate(&plugin, &lock, staging.path())?;
+    let builder = docker::version(&runner, &args.docker, &isolated, &lock)?;
     let archive = staging.path().join("candidate.oci.tar");
     let manifest = staging.path().join("candidate.json");
     docker::build(
