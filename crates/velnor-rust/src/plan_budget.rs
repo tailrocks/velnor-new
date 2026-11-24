@@ -18,8 +18,6 @@ use crate::units::Unit;
 const BUDGET_RUNS: usize = 10;
 const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 
-/// True when the budget job records the selection of its run in its title,
-/// which only a helper that reads the title can use.
 fn names_selection(facts: &RepoFacts) -> bool {
     facts.config.budget.is_some_and(|budget| budget.enabled())
         && facts
@@ -41,8 +39,6 @@ pub(crate) fn plan_job_id(single: bool) -> JobId {
     if single { RUST_JOB } else { PLAN_JOB }
 }
 
-/// Makes the job that runs the plan expose `rust_<root>_mode` of every root, so
-/// that the budget job can title itself with what the run selected.
 pub(crate) fn expose_selection(facts: &RepoFacts, jobs: &mut [Job], single: bool, units: &[Unit]) {
     if !names_selection(facts) {
         return;

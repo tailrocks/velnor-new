@@ -94,8 +94,6 @@ impl ModeBudget {
     }
 }
 
-/// The job title of the budget job: it names the selection of the run from the
-/// plan outputs of `plan`, so a later run can read it from the jobs API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionName {
     pub plan: JobId,
