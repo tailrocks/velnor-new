@@ -13,7 +13,7 @@ mod package_spec;
 mod root;
 mod selection;
 pub(super) use alias::resolve;
-use derived::{build_of, refusal, without_open};
+use derived::{build_of, refusal, run_program_arguments, without_open};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
@@ -147,7 +147,14 @@ impl Invocation {
             }
         }
         let chdir = start.and_then(|start| chdir(&words[..start]));
-        let refusal = refusal(program, arguments, running, &words);
+        let refusal = refusal(
+            program,
+            arguments,
+            running,
+            &words[..start.filter(|_| running).map_or(words.len(), |start| {
+                (run_program_arguments(command, start) - 1).min(words.len())
+            })],
+        );
         Self {
             command: command.to_vec(),
             preflight,

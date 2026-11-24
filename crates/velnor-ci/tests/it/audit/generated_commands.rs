@@ -177,3 +177,13 @@ fn a_bang_argument_of_an_alias_is_not_a_shell_alias() {
     let stderr = String::from_utf8_lossy(&built.stderr);
     assert!(!stderr.contains("runs a shell command"), "{stderr}");
 }
+
+#[test]
+fn a_cargo_alias_behind_the_global_separator_is_judged_by_what_it_expands_to() {
+    let repo = project_with_lib_targets();
+    repo.write(
+        "rust/.cargo/config.toml",
+        "[alias]\nxt = \"run -p lib --bin tool\"\n",
+    );
+    rebuilds_the_untrusted_lib_in(&repo, &["cargo", "--", "xt", "--offline"]);
+}

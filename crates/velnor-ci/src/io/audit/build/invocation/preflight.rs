@@ -136,3 +136,16 @@ fn a_command_whose_compile_cannot_be_trusted_or_named_is_refused() {
         );
     }
 }
+
+#[test]
+fn flags_after_the_first_program_argument_do_not_select_the_run_target() {
+    for command in [
+        "cargo run input.txt -p lib --bin bad",
+        "cargo run -p lib input.txt --bin bad",
+    ] {
+        assert!(
+            Invocation::new(&words(command)).refusal.is_some(),
+            "{command}"
+        );
+    }
+}

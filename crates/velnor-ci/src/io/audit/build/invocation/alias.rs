@@ -29,9 +29,12 @@ pub(in super::super) fn resolve(
         Some(expanded) if shell_alias(&expanded, &words) => Err(CiError::new(format!(
             "cargo alias {name} runs a shell command; run the command it names outside inputs build"
         ))),
-        Some(expanded) => Ok(std::iter::once(command[0].clone())
-            .chain(expanded)
-            .collect()),
+        Some(expanded) => {
+            let separator = usize::from(expanded.first().is_some_and(|word| word == "--"));
+            Ok(std::iter::once(command[0].clone())
+                .chain(expanded.into_iter().skip(separator))
+                .collect())
+        }
         None => Err(CiError::new(format!(
             "cannot resolve the cargo alias {name}; run the cargo command it expands to"
         ))),

@@ -64,7 +64,7 @@ const RUN_VALUED: [&str; 18] = [
     "--artifact-dir",
 ];
 
-fn run_program_arguments(command: &[String], subcommand: usize) -> usize {
+pub(super) fn run_program_arguments(command: &[String], subcommand: usize) -> usize {
     let mut index = subcommand + 2;
     while let Some(word) = command.get(index) {
         if word == "--" || !word.starts_with('-') {
