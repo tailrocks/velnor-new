@@ -123,3 +123,22 @@ fn an_override_that_passes_a_slow_timeout_and_a_table_form_profile_retry_are_nam
     );
     Ok(())
 }
+
+#[test]
+fn a_platform_override_default_filter_in_a_checked_profile_is_named() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[[profile.default.overrides]]\nplatform = \"cfg(windows)\"\ndefault-filter = \"not test(win_only)\"\n\n[[profile.ci.overrides]]\nplatform = { host = \"cfg(unix)\", target = \"cfg(unix)\" }\ndefault-filter = \"not test(slow)\"\n\n[[profile.other.overrides]]\nplatform = \"cfg(windows)\"\ndefault-filter = \"none()\"\n\n[[profile.default.overrides]]\nplatform = \"cfg(windows)\"\npriority = 5\n",
+        )],
+        false,
+    )?;
+    assert_eq!(
+        named,
+        [
+            ".config/nextest.toml: profile.ci.overrides default-filter = \"not test(slow)\" platform = { host = \"cfg(unix)\", target = \"cfg(unix)\" }: limits the default nextest run to the tests matching \"not test(slow)\" on the matching platform; the generated test step applies it, so only a test group or lane that selects a test runs it",
+            ".config/nextest.toml: profile.default.overrides default-filter = \"not test(win_only)\" platform = \"cfg(windows)\": limits the default nextest run to the tests matching \"not test(win_only)\" on the matching platform; the generated test step applies it, so only a test group or lane that selects a test runs it",
+        ]
+    );
+    Ok(())
+}

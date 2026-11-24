@@ -118,6 +118,15 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
 fn overrides(profile: &str, section: &Value, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     for entry in entries(section, "overrides") {
+        if let (Some(filter), Some(platform)) = (entry.get("default-filter"), entry.get("platform"))
+        {
+            found.push(make(
+                format!("profile.{profile}.overrides default-filter = {filter} platform = {platform}"),
+                format!(
+                    "limits the default nextest run to the tests matching {filter} on the matching platform; the generated test step applies it, so only a test group or lane that selects a test runs it"
+                ),
+            ));
+        }
         let selector = entry
             .get("filter")
             .map_or_else(|| "every test".to_owned(), ToString::to_string);
