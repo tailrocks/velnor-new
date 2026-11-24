@@ -185,6 +185,25 @@ fi
 exec "$REAL_WC" "$@"
 """
 
+STUB_BLIND_FIRST_FIND = """#!/bin/sh
+if [ ! -e "$STUB_FIND_MARK" ]; then
+  : > "$STUB_FIND_MARK"
+  exit 0
+fi
+if [ "$STUB_FIND_OVERSIZED" = 1 ]; then
+  case "$*" in *-size*) echo "$1"; exit 0 ;; esac
+fi
+exec "$REAL_FIND" "$@"
+"""
+
+STUB_FAILING_FIRST_WC = """#!/bin/sh
+if [ ! -e "$STUB_WC_MARK" ]; then
+  : > "$STUB_WC_MARK"
+  exit 1
+fi
+exec "$REAL_WC" "$@"
+"""
+
 STUB_NO_INODE_MKTEMP = """#!/bin/sh
 for arg; do
   case "$arg" in *.velnor-ci.evict.*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
@@ -426,6 +445,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "REAL_TAR": shutil.which("tar"),
             "REAL_HEAD": shutil.which("head"),
             "REAL_WC": shutil.which("wc"),
+            "REAL_FIND": shutil.which("find"),
         }
         result = subprocess.run(
             ["bash", "-c", install_script()],
@@ -997,13 +1017,14 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "a fifo at the store entry path survived a job that could not download",
         )
 
-    def test_a_store_entry_found_oversized_while_copying_is_evicted_without_being_hashed(self):
+    def stub_oversize_race(self, stubs, find_oversized):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
         cached.write_bytes(self.archive)
-        wc = self.stub_bin / "wc"
-        wc.write_text(STUB_OVERSIZE_FIRST_WC)
-        wc.chmod(0o755)
+        for name, body in stubs.items():
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
         digest = self.stub_bin / "sha256sum"
         digest.write_text(STUB_DIGEST)
         digest.chmod(0o755)
@@ -1012,16 +1033,44 @@ class SetupVelnorInstallTests(unittest.TestCase):
             sha256(self.archive),
             extra_env={
                 "STUB_WC_MARK": str(self.root / "wc-mark"),
+                "STUB_FIND_MARK": str(self.root / "find-mark"),
+                "STUB_FIND_OVERSIZED": "1" if find_oversized else "0",
+                "STUB_HEAD_MARK": str(self.root / "head-mark"),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
                 "STUB_DIGEST_LOG": str(digest_log),
                 "REAL_SHA256SUM": shutil.which("sha256sum") or "",
                 "REAL_SHASUM": shutil.which("shasum") or "",
             },
         )
+        digested = digest_log.read_text().splitlines() if digest_log.exists() else []
+        return cached, result, [call for call in digested if str(cached) in call]
+
+    def test_a_store_entry_found_oversized_while_copying_is_evicted_without_being_hashed(self):
+        cached, result, hashed = self.stub_oversize_race(
+            {"wc": STUB_OVERSIZE_FIRST_WC, "find": STUB_BLIND_FIRST_FIND}, True
+        )
         self.assertEqual(result.returncode, 1, result.output)
         self.assertFalse(cached.exists(), "an oversized store entry survived the job")
-        digested = digest_log.read_text().splitlines() if digest_log.exists() else []
-        self.assertEqual([call for call in digested if str(cached) in call], [])
+        self.assertEqual(hashed, [])
+
+    def test_a_store_entry_replaced_by_a_normal_archive_before_the_oversize_eviction_is_kept(self):
+        cached, result, hashed = self.stub_oversize_race({"wc": STUB_OVERSIZE_FIRST_WC}, False)
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue(cached.is_file() and cached.read_bytes() == self.archive, result.output)
+
+    def test_a_failed_size_measurement_does_not_evict_a_healthy_store_entry(self):
+        cached, result, hashed = self.stub_oversize_race({"wc": STUB_FAILING_FIRST_WC}, False)
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue(cached.is_file() and cached.read_bytes() == self.archive, result.output)
+        self.assertNotIn("removed the tool-cache copy", result.output)
+
+    def test_a_store_entry_that_grows_while_the_copy_fails_early_is_not_hashed(self):
+        cached, result, hashed = self.stub_oversize_race(
+            {"head": STUB_FAILING_FIRST_HEAD, "find": STUB_BLIND_FIRST_FIND}, True
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertEqual(hashed, [])
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
 
     def test_a_dangling_symlink_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
