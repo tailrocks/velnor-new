@@ -133,6 +133,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 )));
             }
         };
+        let mut places_outputs = None;
         for entry in entries {
             let entry = entry
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
@@ -168,7 +169,11 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
-                if built::artifact(&entry.file_name()) && !built::generated(&path) {
+                if built::artifact(&entry.file_name())
+                    && !built::generated(&path)
+                    && *places_outputs
+                        .get_or_insert_with(|| built::places_outputs(&directory, target))
+                {
                     artifacts.push(path);
                 }
             }

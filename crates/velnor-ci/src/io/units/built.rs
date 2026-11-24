@@ -85,14 +85,14 @@ fn names(artifact: &Path) -> Vec<String> {
         return Vec::new();
     };
     let bare = stem.strip_prefix("lib");
-    match artifact.extension().and_then(OsStr::to_str) {
-        Some("d") => [Some(stem), bare]
-            .into_iter()
-            .flatten()
-            .map(crate_name)
-            .collect(),
-        _ => bare.map(crate_name).into_iter().collect(),
-    }
+    let stems: Vec<&str> = match artifact.extension().and_then(OsStr::to_str) {
+        Some("d") => [Some(stem), bare].into_iter().flatten().collect(),
+        _ => bare.into_iter().collect(),
+    };
+    stems
+        .into_iter()
+        .flat_map(|stem| [crate_name(stem), stem.replace('-', "_")])
+        .collect()
 }
 
 fn crate_name(stem: &str) -> String {
@@ -103,25 +103,26 @@ fn named(path: Option<&Path>) -> Option<&str> {
     path?.file_name()?.to_str()
 }
 
+fn unit_out_configuration(directory: &Path) -> Option<&Path> {
+    let unit = directory.parent();
+    let build = unit.and_then(Path::parent).and_then(Path::parent);
+    (named(Some(directory)) == Some("out")
+        && named(unit).is_some_and(is_hash)
+        && named(build) == Some("build"))
+    .then(|| build.and_then(Path::parent))
+    .flatten()
+}
+
 fn scopes(file: &Path) -> Vec<PathBuf> {
     let Some(directory) = file.parent() else {
         return Vec::new();
     };
-    let unit = directory.parent();
-    let build = unit.and_then(Path::parent).and_then(Path::parent);
-    if named(Some(directory)) == Some("out")
-        && named(unit).is_some_and(is_hash)
-        && named(build) == Some("build")
-    {
-        return build
-            .and_then(Path::parent)
-            .map(Path::to_path_buf)
-            .into_iter()
-            .collect();
+    if let Some(configuration) = unit_out_configuration(directory) {
+        return vec![configuration.to_path_buf()];
     }
     let mut scopes = vec![directory.to_path_buf()];
     if matches!(named(Some(directory)), Some("deps" | "examples"))
-        && let Some(configuration) = unit
+        && let Some(configuration) = directory.parent()
     {
         scopes.push(configuration.to_path_buf());
     }
@@ -142,4 +143,15 @@ fn script_out_dir(out: &Path) -> bool {
         || folder.is_some_and(is_hash)
             && build(unit.parent().and_then(Path::parent))
             && unit.join("run").is_dir()
+}
+
+pub(super) fn places_outputs(directory: &Path, target: &Path) -> bool {
+    let configuration = |directory: &Path| {
+        directory.join(".cargo-lock").is_file() || directory.join(".fingerprint").is_dir()
+    };
+    directory == target
+        || configuration(directory)
+        || matches!(named(Some(directory)), Some("deps" | "examples"))
+            && directory.parent().is_some_and(configuration)
+        || unit_out_configuration(directory).is_some()
 }

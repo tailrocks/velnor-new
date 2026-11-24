@@ -198,7 +198,12 @@ fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
             "debug/build/dep/5c64b2dee9af80ce/out/dep-5c64b2dee9af80ce.d",
         ],
     ] {
-        let root = target_with(&[layout[0], layout[1], "debug/libdep.rlib"]);
+        let root = target_with(&[
+            layout[0],
+            layout[1],
+            "debug/.cargo-lock",
+            "debug/libdep.rlib",
+        ]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(

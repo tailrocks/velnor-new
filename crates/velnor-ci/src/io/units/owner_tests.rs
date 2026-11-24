@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Which build outputs of a plain target a unit owns. The trees are the files a real `cargo build
-//! --all-targets` leaves for a workspace with a library, a proc macro, a binary, an example and
-//! a package with a build script, in the legacy layout and in the layout of `build-dir-new-layout`.
-
 use std::fs;
 use std::path::Path;
 
@@ -13,6 +9,7 @@ use super::unit_files_within;
 
 const LEGACY: &[&str] = &[
     "debug/CACHEDIR.TAG",
+    "debug/.cargo-lock",
     "debug/.fingerprint/my-lib-18bfefdf9e43d124/lib-my_lib",
     "debug/.fingerprint/my-lib-8ad54dfc6697efab/test-lib-my_lib",
     "debug/.fingerprint/my-macro-565897ab67399604/lib-my_macro",
@@ -41,6 +38,7 @@ const LEGACY: &[&str] = &[
 
 const NEW_LAYOUT: &[&str] = &[
     "debug/CACHEDIR.TAG",
+    "debug/.cargo-lock",
     "debug/build/my-lib/18bfefdf9e43d124/fingerprint/lib-my_lib",
     "debug/build/my-lib/18bfefdf9e43d124/out/libmy_lib-18bfefdf9e43d124.rlib",
     "debug/build/my-lib/18bfefdf9e43d124/out/libmy_lib-18bfefdf9e43d124.rmeta",
@@ -155,7 +153,6 @@ fn an_output_of_a_crate_no_unit_builds_is_refused_in_every_place_cargo_writes_on
             "debug/examples/libghost.rlib",
             "debug/deps/libghost-0123456789abcdef.rlib",
             "debug/deps/libghost-0123456789abcdef.rmeta",
-            "other/libmy_lib.rlib",
         ] {
             assert_refused(root, orphan);
         }
@@ -167,7 +164,6 @@ fn an_output_of_a_crate_no_unit_builds_is_refused_in_every_place_cargo_writes_on
             "debug/examples/ghost.d",
             "debug/build/ghost/0123456789abcdef/out/libghost-0123456789abcdef.rlib",
             "debug/build/my-lib/0123456789abcdef/out/libghost-0123456789abcdef.rmeta",
-            "other/libmy_lib.rlib",
         ] {
             assert_refused(root, orphan);
         }
@@ -196,4 +192,37 @@ fn a_profile_named_like_a_cargo_folder_keeps_its_own_outputs_apart() {
             }
         });
     }
+}
+
+#[test]
+fn sources_cargo_package_stages_in_the_target_are_not_outputs() {
+    for tree in [LEGACY, NEW_LAYOUT] {
+        in_tree(tree, |root| {
+            for staged in [
+                "package/my-lib-0.1.0/src/native.d",
+                "package/my-lib-0.1.0/native.d",
+                "package/my-lib-0.1.0/deps/libnative.rlib",
+                "package/my-lib-0.1.0/build/native-0123456789abcdef.d",
+            ] {
+                let accepted = with_orphan(root, staged);
+                assert!(accepted.is_ok(), "{staged}: {accepted:?}");
+            }
+        });
+    }
+}
+
+#[test]
+fn a_target_named_with_sixteen_hex_digits_keeps_its_own_outputs() {
+    let tree = [
+        "debug/.cargo-lock",
+        "debug/.fingerprint/tool-58b8ba277ce342dc/bin-tool-0123456789abcdef",
+        "debug/deps/tool_0123456789abcdef-58b8ba277ce342dc.d",
+        "debug/tool-0123456789abcdef.d",
+        "debug/examples/tool_ex-0123456789abcdef.d",
+    ];
+    in_tree(&tree, |root| {
+        let found = unit_files_within(root, 100);
+        assert!(found.is_ok(), "{found:?}");
+        assert_refused(root, "debug/ghost-0123456789abcdef.d");
+    });
 }

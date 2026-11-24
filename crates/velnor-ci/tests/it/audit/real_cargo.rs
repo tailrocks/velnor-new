@@ -47,9 +47,11 @@ fn workspace() -> Repo {
     );
     package(
         "my-tool",
-        "\n[dependencies]\nmy-lib = { path = \"../my-lib\" }\n",
+        "\n[[bin]]\nname = \"hex-0123456789abcdef\"\npath = \"src/hex.rs\"\n\n[dependencies]\nmy-lib = { path = \"../my-lib\" }\n",
     );
     unit(&repo, "my-lib/src/lib.rs", "pub fn lib() -> u32 { 1 }\n");
+    unit(&repo, "my-lib/src/native.d", "not dep-info\n");
+    unit(&repo, "my-tool/src/hex.rs", "fn main() {}\n");
     unit(
         &repo,
         "my-macro/src/lib.rs",
@@ -92,6 +94,7 @@ fn inputs_build(repo: &Repo, new_layout: bool, command: &[&str]) -> Output {
 
 fn build_every_shape(repo: &Repo, new_layout: bool) {
     let mut scenarios: Vec<Vec<&str>> = vec![
+        vec!["package", "-p", "my-lib", "--no-verify", "--allow-dirty"],
         vec!["build", "-p", "my-tool", "--bin", "my-tool"],
         vec!["build", "-p", "my-tool", "--examples"],
         vec!["build", "-p", "my-app", "--bin", "my-app"],
