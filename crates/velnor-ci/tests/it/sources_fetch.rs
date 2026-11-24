@@ -30,7 +30,11 @@ impl Fixture {
             &cargo,
             "#!/bin/sh\nprintf '%s|%s\\n' \"$(basename \"$PWD\")\" \"$*\" >> \"$FAKE_CARGO_CALLS\"\n\
              echo \"fetching $(basename \"$PWD\")\"\n\
-             if [ -f fail ]; then echo 'error: cannot fetch' >&2; exit 42; fi\n",
+             if [ -f fail ]; then echo 'error: cannot fetch' >&2; exit 42; fi\n\
+             if [ -f database ]; then d=\"$HOME/.cargo/git/db/dep-1\"; \
+             mkdir -p \"$d/hooks\" \"$d/objects/info\" \"$d/objects/pack\"; \
+             echo ref: refs/heads/main > \"$d/HEAD\"; cp database \"$d/config\"; \
+             echo hook > \"$d/hooks/post-fetch\"; echo head > \"$d/FETCH_HEAD\"; fi\n",
         )
         .unwrap_or_else(|e| unreachable!("{e}"));
         fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755))
@@ -40,6 +44,15 @@ impl Fixture {
 
     fn fail_in(&self, root: &str) {
         fs::write(self.work.join(root).join("fail"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    fn fetched_database(&self, root: &str, config: &str) {
+        fs::write(self.work.join(root).join("database"), config)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    fn database(&self) -> PathBuf {
+        self.temp.join("home/.cargo/git/db/dep-1")
     }
 
     fn fetch(&self, roots: &[&str]) -> Output {
@@ -54,6 +67,7 @@ impl Fixture {
             .current_dir(&self.work)
             .env("PATH", path)
             .env("RUNNER_TEMP", self.temp.path())
+            .env("HOME", self.temp.join("home"))
             .env("FAKE_CARGO_CALLS", self.calls_path())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"))
@@ -239,6 +253,7 @@ fn only_cargo_is_started_and_nothing_else_reaches_the_network() {
         .env_clear()
         .env("PATH", &bin)
         .env("RUNNER_TEMP", temp.path())
+        .env("HOME", temp.join("home"))
         .env("FAKE_PROGRAMS", &programs)
         .env("FAKE_FAIL", &marker);
     for key in [
@@ -264,4 +279,51 @@ fn only_cargo_is_started_and_nothing_else_reaches_the_network() {
         .map(str::to_owned)
         .collect();
     assert_eq!(started, ["cargo fetch --locked", "cargo fetch --locked"]);
+}
+
+const PLAIN_CONFIG: &str = "[core]\n\tbare = true\n";
+const TOKEN_CONFIG: &str =
+    "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n";
+
+#[test]
+fn a_database_fetched_by_the_run_has_its_hooks_and_fetch_head_left_out() {
+    let fixture = Fixture::new("sources-fetch-scrub", &["one", "two"]);
+    fixture.fetched_database("two", PLAIN_CONFIG);
+    let output = fixture.fetch(&["one", "two"]);
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let database = fixture.database();
+    assert!(database.join("config").is_file());
+    assert!(!database.join("hooks").exists());
+    assert!(!database.join("FETCH_HEAD").exists());
+}
+
+#[test]
+fn a_database_fetched_by_the_run_that_holds_a_credential_fails_the_fetch() {
+    let fixture = Fixture::new("sources-fetch-credential", &["one", "two"]);
+    fixture.fetched_database("two", TOKEN_CONFIG);
+    let output = fixture.fetch(&["one", "two"]);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = text(&output.stderr);
+    assert!(stderr.contains("credential"), "{stderr}");
+    assert!(stderr.contains("config"), "{stderr}");
+    assert!(!stderr.contains("ghs_secret"), "{stderr}");
+}
+
+#[test]
+fn a_run_without_a_home_directory_fails_the_fetch() {
+    let fixture = Fixture::new("sources-fetch-no-home", &["one"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["sources", "fetch", "--roots", "one"])
+        .current_dir(&fixture.work)
+        .env("PATH", format!("{}:/usr/bin:/bin", fixture.bin.display()))
+        .env("RUNNER_TEMP", fixture.temp.path())
+        .env("FAKE_CARGO_CALLS", fixture.calls_path())
+        .env_remove("HOME")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        text(&output.stderr).contains("HOME is not set"),
+        "{output:?}"
+    );
 }

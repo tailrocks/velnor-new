@@ -76,13 +76,17 @@ impl Context {
     }
 }
 
-pub(super) fn saved_root() -> Option<PathBuf> {
+fn saved_root() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
         .map(|home| PathBuf::from(home).join(SAVED_ROOT))
 }
 
-pub(super) fn find(root: &Path) -> Option<String> {
+pub(super) fn leak() -> Option<String> {
+    saved_root().map_or_else(|| Some("HOME is not set".to_owned()), |home| find(&home))
+}
+
+fn find(root: &Path) -> Option<String> {
     find_within(root, MAX_ENTRIES)
 }
 
