@@ -275,15 +275,16 @@ fn last_fetch_all_id(manifests: &[RepoPath]) -> String {
     fetch_all_id(fetch_chunks(manifests).len() - 1)
 }
 
-fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool, offline: bool) -> Vec<RenderedStep> {
+fn fetch_all_steps(manifests: &[RepoPath], lane: crate::cargo::CargoLane) -> Vec<RenderedStep> {
     fetch_chunks(manifests)
         .into_iter()
         .enumerate()
         .map(|(chunk, roots)| RenderedStep {
-            env: cache_debug
+            env: lane
+                .cache_debug
                 .then(crate::cargo::cache_debug_env)
                 .into_iter()
-                .chain(offline.then(crate::cargo::offline_env))
+                .chain(lane.offline.then(crate::cargo::offline_env))
                 .collect(),
             id: Some(fetch_all_id(chunk)),
             name: if chunk == 0 {
@@ -300,24 +301,24 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool, offline: bool) -> 
             continue_on_error: true,
             run: Some(format!(
                 "{FETCH_ROOTS} {}",
-                roots_argument(manifests, &roots)
+                roots_argument(manifests, &roots, lane.literal_roots)
             )),
             ..RenderedStep::default()
         })
         .collect()
 }
 
-fn roots_argument(manifests: &[RepoPath], roots: &[String]) -> String {
+fn roots_argument(manifests: &[RepoPath], roots: &[String], literal: bool) -> String {
     crate::source_roots::roots_env(manifests)
+        .filter(|_| !literal)
         .map_or_else(|| roots.join(" "), |(name, _)| format!("${name}"))
 }
 
 pub(crate) fn sources_fetch_all(
     manifests: &[RepoPath],
-    cache_debug: bool,
-    offline: bool,
+    lane: crate::cargo::CargoLane,
 ) -> RenderedStep {
-    fetch_all_steps(manifests, cache_debug, offline)
+    fetch_all_steps(manifests, lane)
         .into_iter()
         .next()
         .unwrap_or_default()
@@ -325,10 +326,9 @@ pub(crate) fn sources_fetch_all(
 
 pub(crate) fn sources_fetch_all_rest(
     manifests: &[RepoPath],
-    cache_debug: bool,
-    offline: bool,
+    lane: crate::cargo::CargoLane,
 ) -> Vec<RenderedStep> {
-    fetch_all_steps(manifests, cache_debug, offline)
+    fetch_all_steps(manifests, lane)
         .into_iter()
         .skip(1)
         .collect()
@@ -359,6 +359,18 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
             )
         }),
     )
+}
+
+pub(crate) fn cache_purge_private() -> RenderedStep {
+    RenderedStep {
+        name: "Delete the private-base caches unless the repository is private".to_owned(),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci cache purge-private --if-public".to_owned()),
+        ..RenderedStep::default()
+    }
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {

@@ -4,7 +4,8 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use super::state::DeferredMutation;
 
@@ -125,12 +126,18 @@ pub(super) fn read_request(stream: &mut UnixStream) -> io::Result<Request> {
     Ok(Request { method, path, body })
 }
 
-pub(super) fn write_reply(stream: &mut UnixStream, reply: &Reply) -> io::Result<()> {
+pub(super) fn write_reply(
+    stream: &mut UnixStream,
+    reply: &Reply,
+    stopping: &AtomicBool,
+) -> io::Result<()> {
     if reply.upgraded {
         stream
             .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")?;
-        if let Some(delay) = reply.delay {
-            std::thread::sleep(delay);
+        if let Some(delay) = reply.delay
+            && !sleep_unless_stopping(delay, stopping)
+        {
+            return Ok(());
         }
         stream.write_all(&reply.body)?;
         stream.shutdown(std::net::Shutdown::Both)?;
@@ -138,9 +145,6 @@ pub(super) fn write_reply(stream: &mut UnixStream, reply: &Reply) -> io::Result<
     }
     if reply.disconnect {
         return stream.shutdown(std::net::Shutdown::Both);
-    }
-    if let Some(delay) = reply.delay {
-        std::thread::sleep(delay);
     }
     let reason = match reply.status {
         200 => "OK",
@@ -159,4 +163,18 @@ pub(super) fn write_reply(stream: &mut UnixStream, reply: &Reply) -> io::Result<
     )?;
     stream.write_all(&reply.body)?;
     stream.shutdown(std::net::Shutdown::Both)
+}
+
+pub(super) fn sleep_unless_stopping(duration: Duration, stopping: &AtomicBool) -> bool {
+    let end = Instant::now() + duration;
+    loop {
+        if stopping.load(Ordering::Acquire) {
+            return false;
+        }
+        let remaining = end.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10).min(remaining));
+    }
 }

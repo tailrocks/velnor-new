@@ -11,7 +11,7 @@ use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
 pub(super) const SWITCH: &str = "VELNOR_MBX_REPORTS";
-const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ] && [ -z \"$MBX_SOCKET\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
 
 pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String {
     format!(
@@ -96,6 +96,7 @@ pub(super) const fn session(hits: u64, misses: u64, not_looked_up: u64) -> MbxSe
         hits,
         misses,
         not_looked_up,
+        bypassed: 0,
         verifications: None,
         bypasses: BTreeMap::new(),
         compiler: BTreeMap::new(),
@@ -369,5 +370,23 @@ fn an_inputs_build_wrapper_leaves_no_orphaned_report_marker() -> ResultTest {
         .output()?;
     let metrics = report(&repo)?;
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_non_numeric_bypass_count_is_not_understood_instead_of_zero() -> ResultTest {
+    let repo = fixture("mbx-reports-text-bypass-count")?;
+    let bad =
+        r#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"cc-missing-output":"4"}}"#;
+    cargo(&repo, "build", bad, "")?;
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        velnor_ci::report::check(std::slice::from_ref(&metrics)).is_err_and(|error| error
+            .to_string()
+            .contains("MBX stats report not understood")),
+        "{metrics:?}"
+    );
     Ok(())
 }

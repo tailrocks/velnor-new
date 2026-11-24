@@ -75,7 +75,7 @@ fn a_listed_path_that_does_not_exist_is_refused() -> TestResult {
 
 #[test]
 fn a_listed_path_velnor_gen_writes_is_refused() -> TestResult {
-    let generated = ".github/workflows/rust-ci.yml";
+    let generated = ".github/workflows/ci.yml";
     let view = view_of("0.1.109", &config(&format!("\"{generated}\"")))?;
     assert_eq!(
         external_skips(&view, &one(generated, HAND_WRITTEN)?).err(),

@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{SWITCH, cargo, cargo_with, report, report_json, session};
+use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_socket::{SocketDir, fill_backlog, run_bounded};
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixListener;
 use std::process::Command;
 use velnor_ci::mbx_report::reports_session;
 
@@ -38,7 +40,7 @@ fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> Re
     Ok(())
 }
 
-fn plant_session(repo: &Repo, name: &str, json: Option<&str>) -> ResultTest {
+pub(super) fn plant_session(repo: &Repo, name: &str, json: Option<&str>) -> ResultTest {
     fs::write(plant(repo, &format!("{name}.expected"))?, b"")?;
     if let Some(json) = json {
         fs::write(plant(repo, &format!("{name}.json"))?, json)?;
@@ -133,7 +135,8 @@ fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> Result
 #[test]
 fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
     let repo = fixture("mbx-reports-nested")?;
-    let socket = repo.root().join("cache-agent.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
     let _daemon = std::os::unix::net::UnixListener::bind(&socket)?;
     cargo_with(
         &repo,
@@ -149,6 +152,84 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
     assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 0);
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultTest {
+    let repo = fixture("mbx-reports-stale-socket")?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
+    drop(UnixListener::bind(&socket)?);
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 2, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(&socket),
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_stale_socket_is_not_inherited_by_a_command_that_reports_nothing() -> ResultTest {
+    let repo = fixture("mbx-reports-stale-inherited")?;
+    let bin = repo.root().join("fake-bin");
+    fs::create_dir_all(&bin)?;
+    let nextest = bin.join("cargo-nextest");
+    fs::write(
+        &nextest,
+        "#!/bin/sh\nif [ -z \"${MBX_SOCKET+x}\" ]; then printf unset > \"$FAKE_CHILD_ENV\"; else printf set > \"$FAKE_CHILD_ENV\"; fi\n",
+    )?;
+    fs::set_permissions(&nextest, fs::Permissions::from_mode(0o755))?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
+    drop(UnixListener::bind(&socket)?);
+    let observed = repo.root().join("child-env");
+    let output = run_bounded(
+        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args([
+                "run",
+                "--",
+                nextest.to_str().ok_or("path")?,
+                "nextest",
+                "run",
+            ])
+            .current_dir(repo.root())
+            .env("RUNNER_TEMP", repo.root())
+            .env(SWITCH, "true")
+            .env("MBX_SOCKET", &socket)
+            .env("FAKE_CHILD_ENV", &observed),
+    )?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fs::read_to_string(&observed)?, "unset");
+    Ok(())
+}
+
+#[test]
+fn a_listener_with_a_full_queue_does_not_stall_the_session() -> ResultTest {
+    let repo = fixture("mbx-reports-busy-socket")?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
+    let _listener = UnixListener::bind(&socket)?;
+    let _clients = fill_backlog(&socket)?;
+    let mut command = cargo_command(
+        &repo,
+        "build",
+        &report_json(5, 1, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(&socket),
+    )?;
+    let output = run_bounded(&mut command)?;
+    assert!(output.status.success(), "{output:?}");
     Ok(())
 }
 

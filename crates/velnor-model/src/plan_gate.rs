@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ids::{JobId, PackageName, RootSlug};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gate {
@@ -16,6 +16,12 @@ pub struct Gate {
     pub unselected: bool,
     pub group: Option<JobId>,
     pub also: Vec<RootSlug>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchedManifest {
+    pub path: RepoPath,
+    pub selected_by: Option<Gate>,
 }
 
 impl Gate {

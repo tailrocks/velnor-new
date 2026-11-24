@@ -325,7 +325,7 @@ fetches Check Runs, Job/Step REST objects, raw job & step logs, annotations, ste
 Artifacts v4 zips, and Attestation bundles, normalising **only**:
 - Ephemeral identifiers and clocks: `run_id`, `job_id`, `step.external_id` GUIDs, ISO-8601 timestamps, elapsed
   durations, runner/machine names, `RUNNER_TRACKING_ID`.
-- Root prefixes: `/home/runner/_work` vs `/w`, `/tmp/_runner_file_commands/<guid>`.
+- Root prefixes: `/home/runner/_work` vs `/w`, `<tmp>/_runner_file_commands/<guid>`.
 - Official-runner chrome lines: `Current runner version:`, `Download action repository`, Node setup banners, and
   concurrent `background: true` stdout line interleaving (compared per-step before merge, and as multiset across
   concurrent background steps).
@@ -571,11 +571,11 @@ worker $w$ already holds the current `main` `overlayfs` lowerdir (`>99%` of runs
      pre-snapshotted **Firecracker KVM microVMs** (`80 ms` snapshot restore from `/store/vm-snapshots/docker-ready` on
      `/dev/kvm`, 8 vCPU / 16 GiB RAM, CoW rootfs) running an isolated in-guest `dockerd` pre-loaded with base images,
      torn down on exit.
-- **Sharing nodes with `ChainArgos` and `jackin-project`:** Both orgs stay in isolated k8s namespaces
-  (`arc-runners-chainargos` max 60, `arc-runners-jackin` max 40, `evidence.md:471-478`) under top-level
-  systemd/kubelet cgroup slices enforcing guaranteed shares (`tailrocks 60% = 288T`, `ChainArgos 25% = 120T`,
+- **Sharing nodes with `example-org` and `jackin-project`:** Both orgs stay in isolated k8s namespaces
+  (`arc-runners-example-org` max 60, `arc-runners-jackin` max 40, `evidence.md:471-478`) under top-level
+  systemd/kubelet cgroup slices enforcing guaranteed shares (`tailrocks 60% = 288T`, `example-org 25% = 120T`,
   `jackin 15% = 72T`, work-conserving burst via `cpu.weight`, hard RAM caps `68 GiB / 28 GiB / 18 GiB` per worker) and
-  separate XFS project-quota trees (`FI` 3.84 TB disks: `tailrocks <= 1.4 TB`, `ChainArgos <= 600 GB`,
+  separate XFS project-quota trees (`FI` 3.84 TB disks: `tailrocks <= 1.4 TB`, `example-org <= 600 GB`,
   `jackin <= 400 GB`). Zero caches, mirrors, or credentials cross orgs.
 
 ### Host and kernel tuning (`Debian 13`, Linux `6.12.94`)
@@ -865,5 +865,5 @@ advancing. From Phase 1 onward, GitHub's official C# runner never runs in produc
 | **3. Unannounced GitHub SaaS protocol drift (Broker V2, Run Service, Results Twirp, Cache v2, Artifacts v4)** | **60-minute** `velnor-conformance --canary` probing all wire RPCs side-by-side against `actions/runner` + shadow `deny_unknown_fields` schema telemetry; **30-minute** `actions/runner` release poller running all 420 differential cases within 2 h of any upstream release. | Schema warning pages immediately while tolerant prod parser continues; hard RPC failure automatically switches `velnor-dispatch` to the pinned `N - 1` `velnor-exec` binary (or ships hotfix inside hours, backed by GitHub's 63-day runner protocol window). |
 | **4. `conclusion: skipped` or `GITHUB_TOKEN` suppression breaks `velnor:verify` gating** | Continuous conformance check testing all 5 `velnor:verify` transitions (`draft push`, `ready_for_review`, `labeled` by user & `GITHUB_TOKEN`, `synchronize`, `unlabeled`) + ruleset drift check every 10 min via `velnor-ci check-rulesets`. | Dual ruleset (`velnor/verdict` `queued` + `Required`) fails closed (`Expected` = blocking) even if `velnor-hooks` crashes; `velnor-hooks` 8 s watchdog + 30 s `/pulls` poller re-dispatches suppressed `GITHUB_TOKEN` label events via App token. |
 | **5. `velnor-exec` regression or crash mid-job strands locks or double-completes** | 420-case blocking differential gate on every runner PR + kill-9 fault-injection matrix across every journal state; Prometheus alert on `InfrastructureFailure` rate `> 0.5%` or lease-renewal errors. | New runner versions canary on `10%` of workers for 24 h; automatic rollback to `N - 1` Velnor binary on `>1%` infra error; SQLite WAL `intent -> call -> outcome` journal + `min(25 s, (locked_until-now)/2)` renewal prevents orphaned locks and duplicate `completejob`. |
-| **6. Speculative `ALLGREEN` bisection storm or noisy-neighbour starvation from `ChainArgos` / `jackin`** | Queue-wait SLO (`velnor-merge` eligible-to-start `p90 > 1.0 s`), per-sandbox PSI (`memory.pressure`, `cpu.pressure`), and paired-rerun flake rate (`> 1.0%`). | Hard org cgroup caps (`60% / 25% / 15%`), `10.8%` dedicated `velnor-merge` thread reservation, `<20 ms` `cgroup.kill` preemption of `velnor-batch` speculation, and `2k - 1` pre-verified bypass trees keeping `ALLGREEN` ejections `0 s`. |
+| **6. Speculative `ALLGREEN` bisection storm or noisy-neighbour starvation from `example-org` / `jackin`** | Queue-wait SLO (`velnor-merge` eligible-to-start `p90 > 1.0 s`), per-sandbox PSI (`memory.pressure`, `cpu.pressure`), and paired-rerun flake rate (`> 1.0%`). | Hard org cgroup caps (`60% / 25% / 15%`), `10.8%` dedicated `velnor-merge` thread reservation, `<20 ms` `cgroup.kill` preemption of `velnor-batch` speculation, and `2k - 1` pre-verified bypass trees keeping `ALLGREEN` ejections `0 s`. |
 | **7. Disk exhaustion on FI workers (`3.84 TB` NVMe) or site / control-plane outage** | Disk usage alerts at `65%`, XFS per-org/per-sandbox `prjquota` hard limits, and cross-site health probes every `5 s`. | Automatic LRU eviction keeping last 3 `main` `overlayfs` generations; 3-node k3s etcd quorum + site-autonomous `velnor-{hooks,dispatch,ledger,store}` pairs allow either FI (`288T`) or DE (`192T`) to carry 100% of load solo if the other site goes dark. |

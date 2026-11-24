@@ -228,7 +228,7 @@ to answer them. Questions that block work come first. Sources: the
 
 - **Question.** May the agents' `interactive` class outrank PR-class work, including other
   organisations' CI? The design ranks other organisations' CI equal to PR work.
-- **Example.** Ten agents each run a 10 s test while ChainArgos' PRs fill the cluster.
+- **Example.** Ten agents each run a 10 s test while example-org' PRs fill the cluster.
 - **At stake.** Keeping an agent's loop near the Mac's 7.2 s nextest P50 (measured) under load. The
   class has a budget of 30 CPU-minutes an hour per identity and never touches the merge, gate or
   audit reservations.

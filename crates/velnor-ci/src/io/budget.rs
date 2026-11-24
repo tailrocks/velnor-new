@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use velnor_model::SpeedBudget;
+use velnor_model::{BUDGET_SELECTION_VARIABLE, Selection, SpeedBudget};
 
 use super::{api_url, current_dir, http, token};
 use crate::budget;
@@ -48,7 +48,14 @@ fn running(github: &dyn GitHub, repo: &Repo) -> Result<Option<Current>, CiError>
     else {
         return Ok(None);
     };
-    current(github, repo, run_id, now_seconds()).map(Some)
+    let mut running = current(github, repo, run_id, now_seconds())?;
+    if let Some(selection) = std::env::var(BUDGET_SELECTION_VARIABLE)
+        .ok()
+        .and_then(|name| Selection::from_name(&name))
+    {
+        running.sample.selection = Some(selection);
+    }
+    Ok(Some(running))
 }
 
 fn read_budget(root: &Path) -> Result<Option<SpeedBudget>, CiError> {

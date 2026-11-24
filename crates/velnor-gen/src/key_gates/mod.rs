@@ -40,6 +40,7 @@ pub struct KeyGate {
     pub key: &'static str,
     pub value: Option<&'static str>,
     pub first: (u64, u64, u64),
+    pub filled: bool,
 }
 
 const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
@@ -48,9 +49,21 @@ const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> Ke
         key,
         value: None,
         first,
+        filled: false,
     }
 }
 
+const fn gate_filled(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
+    KeyGate {
+        file,
+        key,
+        value: None,
+        first,
+        filled: true,
+    }
+}
+
+#[expect(dead_code, reason = "house form for unreleased gates")]
 const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
     gate(file, key, first)
 }
@@ -66,12 +79,24 @@ const fn gate_value(
         key,
         value: Some(value),
         first,
+        filled: false,
     }
 }
 
 /// Every row, `rust-ci.toml` first.
 pub fn key_gates() -> impl Iterator<Item = &'static KeyGate> {
     rust_ci::RUST_CI.iter().chain(release::RELEASE)
+}
+
+fn filled(value: &toml::Value, segments: &[&str]) -> bool {
+    match (value, segments.split_first()) {
+        (toml::Value::Array(items), None) => !items.is_empty(),
+        (toml::Value::Array(items), _) => items.iter().any(|item| filled(item, segments)),
+        (toml::Value::Table(table), Some((head, rest))) => {
+            table.get(*head).is_some_and(|inner| filled(inner, rest))
+        }
+        _ => false,
+    }
 }
 
 fn written(value: &toml::Value, segments: &[&str], expected: Option<&str>) -> bool {
@@ -107,6 +132,7 @@ fn newest(view: &RepoView, skip: impl Fn(&KeyGate) -> bool) -> Option<&'static K
         for row in key_gates().filter(|row| row.file == file && !skip(row)) {
             let segments: Vec<&str> = row.key.split('.').collect();
             if written(&root, &segments, row.value)
+                && (!row.filled || filled(&root, &segments))
                 && newest.is_none_or(|best| row.first > best.first)
             {
                 newest = Some(row);

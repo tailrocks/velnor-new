@@ -61,16 +61,14 @@ fn unused(view: &RepoView, config: &RustCiConfig, roots: &[RustRoot]) -> Option<
 pub(crate) fn notes(view: &RepoView, config: &RustCiConfig, roots: &[RustRoot]) -> Vec<String> {
     let declared = declared_public(config);
     let pinned = pinned(view, roots);
-    let private_owner = config
-        .private_sources
-        .as_ref()
-        .map(|sources| sources.owner.as_str());
     let mut notes = Vec::new();
+    if config.private_sources.is_some() {
+        return notes;
+    }
     if let Some((lock, package, git)) = pinned.iter().find(|(_, _, git)| {
         !declared
             .iter()
             .any(|known| known.matches(&git.owner, &git.name))
-            && private_owner.is_none_or(|owner| !git.owner.eq_ignore_ascii_case(owner))
     }) {
         let (owner, name) = (&git.owner, &git.name);
         notes.push(format!(

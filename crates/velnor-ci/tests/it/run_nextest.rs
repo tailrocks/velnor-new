@@ -6,8 +6,8 @@
 use crate::run::scratch;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::Path;
+use std::process::Output;
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
 pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
@@ -15,6 +15,9 @@ pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
     let program = directory.join("cargo-nextest");
     let mut script = String::from("#!/bin/sh\nif [ \"$2\" = list ]; then\n");
     script.push_str("printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n");
+    script.push_str(
+        "p=; for a in \"$@\"; do d=; [ \"$p\" = --extract-to ] && d=$a; case $a in --extract-to=*) d=${a#--extract-to=};; esac; [ -n \"$d\" ] && [ -d \"$d\" ] && : > \"$RUNNER_TEMP/list-dest-existed\"; p=$a; done\n",
+    );
     script.push_str("echo 'Summary [   0.001s] 99 tests run: 99 passed, 0 skipped' >&2\n");
     script.push_str("printf '%s\\n' '");
     script.push_str(list_json);
@@ -79,7 +82,7 @@ pub(crate) fn run_with_output(
     run: &str,
     list_json: &str,
     command: &[&str],
-) -> (Output, String, PathBuf) {
+) -> (Output, String, velnor_test_support::ScratchDir) {
     let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
     (output, written, temp)
 }
@@ -93,15 +96,24 @@ pub(crate) fn without_built(written: &str) -> String {
     }
     kept
 }
+pub(crate) fn archive_in(directory: &Path) {
+    fs::write(directory.join("a.tar.zst"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+}
 pub(crate) fn execute_nextest(
     name: &str,
     run: &str,
     list_json: &str,
     command: &[&str],
     grace_ms: Option<&str>,
-) -> (Output, String, PathBuf, std::time::Duration) {
+) -> (
+    Output,
+    String,
+    velnor_test_support::ScratchDir,
+    std::time::Duration,
+) {
     let started = std::time::Instant::now();
     let temp = scratch(name);
+    archive_in(&temp);
     fake_nextest(&temp, run, list_json);
     let outputs = temp.join("github-output");
     fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
@@ -110,12 +122,13 @@ pub(crate) fn execute_nextest(
         temp.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut child = crate::run::velnor_ci_run();
     child
         .arg("run")
         .arg("--")
         .args(command)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path);
     if let Some(grace_ms) = grace_ms {
@@ -190,7 +203,7 @@ fn run_reports_a_run_without_tests_as_zero() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package={}\n"
     );
 }
 

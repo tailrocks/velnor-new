@@ -18,7 +18,7 @@ use crate::release_source::{Source, source_of};
 use crate::release_steps::{
     RECORD_GROUPS_HELPER, RECORD_RECOVERY_HELPER, TOOLCHAIN, app_token, checkout, expression,
     install_release_plz, join, label, permissions, refuse_commands, release_plz_arguments,
-    release_plz_step, shell_word, variables,
+    release_plz_step, revoke_app_token, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow,
@@ -70,7 +70,8 @@ pub fn render_release(
     jobs.extend(finalize_job(plan, helper));
     let jobs = jobs
         .into_iter()
-        .map(crate::mise_digest::pin_to_runner_platform);
+        .map(revoke_app_token)
+        .map(|job| crate::mise_digest::pin_to_runner_platform(job, Some(helper)));
     let rendered = RenderedWorkflow {
         jobs: jobs.collect(),
     };
@@ -174,10 +175,10 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(newest_check());
     steps.push(on_the_default_branch());
     steps.push(refuse_commands(&plan.roots, false));
-    steps.push(app_token(&[
-        ("contents", "write"),
-        ("pull-requests", "write"),
-    ]));
+    steps.push(app_token(
+        helper,
+        &[("contents", "write"), ("pull-requests", "write")],
+    ));
     steps.extend(plan.roots.iter().map(|root| {
         release_plz_step(
             format!("Open the release pull request of {}", label(root)),
@@ -216,10 +217,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(newest_check());
     steps.push(refuse_commands(&plan.roots, true));
     steps.push(source_preflight(plan));
-    steps.push(app_token(&[
-        ("contents", "write"),
-        ("pull-requests", "read"),
-    ]));
+    steps.push(app_token(
+        helper,
+        &[("contents", "write"), ("pull-requests", "read")],
+    ));
     let files: Vec<String> = (0..plan.roots.len())
         .map(|index| format!("\"$RUNNER_TEMP/release-{index}.json\""))
         .collect();

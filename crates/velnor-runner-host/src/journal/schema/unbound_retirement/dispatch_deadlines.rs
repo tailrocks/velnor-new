@@ -79,7 +79,7 @@ fn objects() -> Vec<(&'static str, String, String)> {
         }
     }
     objects.push(("trigger","bootstrap_claim_clock_insert_guard".to_owned(),format!("CREATE TRIGGER bootstrap_claim_clock_insert_guard BEFORE INSERT ON bootstrap_create_claim_clocks WHEN NEW.claimed_at IS NOT NULL OR NOT ({}) BEGIN SELECT RAISE(ABORT,'A bootstrap claim clock requires its committed creation identity.'); END",RESOURCE.replace("clock.","NEW."))));
-    objects.push(("trigger","bootstrap_claim_clock_anchor_guard".to_owned(),"CREATE TRIGGER bootstrap_claim_clock_anchor_guard BEFORE UPDATE ON bootstrap_create_claim_clocks WHEN OLD.claimed_at IS NOT NULL OR NEW.claimed_at IS NULL OR NEW.claimed_at<unixepoch()+1 OR NEW.reservation_id!=OLD.reservation_id OR NEW.resource_kind!=OLD.resource_kind OR NEW.role!=OLD.role OR NEW.docker_name!=OLD.docker_name BEGIN SELECT RAISE(ABORT,'The bootstrap claim clock is already anchored.'); END".to_owned()));
+    objects.push(("trigger","bootstrap_claim_clock_anchor_guard".to_owned(),"CREATE TRIGGER bootstrap_claim_clock_anchor_guard BEFORE UPDATE ON bootstrap_create_claim_clocks WHEN OLD.claimed_at IS NOT NULL OR NEW.claimed_at IS NULL OR NEW.claimed_at<unixepoch() OR NEW.reservation_id!=OLD.reservation_id OR NEW.resource_kind!=OLD.resource_kind OR NEW.role!=OLD.role OR NEW.docker_name!=OLD.docker_name BEGIN SELECT RAISE(ABORT,'The bootstrap claim clock is already anchored.'); END".to_owned()));
     let trigger = "bootstrap_create_absence_insert_guard";
     objects.push(("trigger", trigger.to_owned(), format!("CREATE TRIGGER {trigger} BEFORE INSERT ON bootstrap_create_absences WHEN NOT EXISTS (SELECT 1 FROM bootstrap_create_claim_clocks clock JOIN capacity_reservation_unbound_retirement_claims claim ON claim.reservation_id=clock.reservation_id JOIN capacity_reservations reservation ON reservation.id=claim.reservation_id WHERE clock.reservation_id=NEW.reservation_id AND clock.resource_kind=NEW.resource_kind AND clock.role=NEW.role AND clock.docker_name=NEW.docker_name AND NEW.observed_at>=clock.claimed_at+60 AND claim.lease_until>unixepoch() AND reservation.state='uncertain') BEGIN SELECT RAISE(ABORT,'The bootstrap claim deadline has not elapsed.'); END")));
     objects
@@ -100,6 +100,14 @@ pub(super) async fn install(conn: &turso::Connection) -> Result<(), HostError> {
             .map_err(|_| HostError::Journal)?;
     }
     super::creation_targets::install_absence_guards(conn).await
+}
+
+pub(super) fn clock_guard() -> Result<(String, String), HostError> {
+    objects()
+        .into_iter()
+        .find(|(_, name, _)| name == "bootstrap_claim_clock_anchor_guard")
+        .map(|(_, name, sql)| (name, sql))
+        .ok_or(HostError::Journal)
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {

@@ -96,6 +96,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
+            anchor_key_output: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
             mbx_stats: velnor_model::MbxStats::Summary,
@@ -275,6 +276,39 @@ fn a_violation_names_the_job_and_the_step() {
         step: 1,
         rule: Rule::ForbiddenSyntax(";"),
     }));
+}
+
+fn with_env(value: velnor_render::Value) -> RenderedStep {
+    RenderedStep {
+        env: vec![("LIST".to_owned(), value)],
+        ..run("echo")
+    }
+}
+
+#[test]
+fn an_env_value_whose_joined_expression_is_over_github_s_limit_is_refused() {
+    let entries = |count: usize| {
+        (0..count)
+            .map(|index| format!("[\"{index}\",${{{{ github.ref == 'refs/heads/main' || github.run_id != 'x{index}' }}}}]"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let over = velnor_render::Value::Expr(format!("[{}]", entries(400)));
+    let under = velnor_render::Value::Expr(format!("[{}]", entries(40)));
+    let single = velnor_render::Value::Expr("${{ github.ref }}".to_owned());
+    assert!(matches!(
+        violations(with_env(over)).as_slice(),
+        [Rule::ExpressionTooLong(length)] if *length > 21_000
+    ));
+    assert_eq!(violations(with_env(under)), Vec::new());
+    assert_eq!(violations(with_env(single)), Vec::new());
+    let whole =
+        |length: usize| velnor_render::Value::Expr(format!("${{{{ {} }}}}", "a".repeat(length)));
+    assert_eq!(violations(with_env(whole(21_000))), Vec::new());
+    assert!(matches!(
+        violations(with_env(whole(21_001))).as_slice(),
+        [Rule::ExpressionTooLong(21_001)]
+    ));
 }
 
 #[test]

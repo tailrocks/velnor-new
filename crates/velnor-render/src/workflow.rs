@@ -283,7 +283,13 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     if let Some(id) = &step.id {
         items.push(entry("id", text(id)));
     }
-    items.push(entry("name", text(&step.name)));
+    items.push(entry(
+        "name",
+        step.name_expression.as_ref().map_or_else(
+            || text(&step.name),
+            |expression| Yaml::Expr(expression.clone()),
+        ),
+    ));
     if let Some(condition) = &step.condition {
         let condition = Yaml::Expr(condition.clone());
         items.push(entry(

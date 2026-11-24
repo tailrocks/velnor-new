@@ -21,6 +21,16 @@ struct Printed {
     packages: Vec<Member>,
 }
 
+pub(super) fn refuse_template(build: &Path) -> Result<(), CiError> {
+    if build.to_string_lossy().contains('{') {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} uses a cargo path template; set a plain path instead",
+            build.display()
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {
     let printed: Printed = serde_json::from_slice(metadata)
         .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))?;

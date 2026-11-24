@@ -22,7 +22,7 @@ fn anchor(id: u64, reference: &str, key: String) -> CacheEntry {
         reference: reference.to_owned(),
         size_in_bytes: 1,
         created_at: i64::try_from(id).unwrap_or(0),
-        last_accessed_at: NOW,
+        last_accessed_at: NOW - 2 * DAY,
     }
 }
 
@@ -138,6 +138,40 @@ fn anchors_do_not_displace_or_count_as_tools_entries() {
 }
 
 #[test]
+fn an_anchor_read_within_the_last_day_is_never_trimmed() {
+    let mut entries: Vec<_> = (1..=3)
+        .map(|id| anchor(id, MAIN, anchor_key("Linux-X64", 'a', id)))
+        .collect();
+    entries[0].last_accessed_at = NOW;
+    assert_eq!(plan(&entries, 0), Vec::<u64>::new());
+}
+
+#[test]
+fn an_anchor_stays_protected_until_a_full_day_after_its_last_read() {
+    let mut entries: Vec<_> = (1..=4)
+        .map(|id| anchor(id, MAIN, anchor_key("Linux-X64", 'a', id)))
+        .collect();
+    entries[0].last_accessed_at = NOW - DAY + 1;
+    entries[1].last_accessed_at = NOW - DAY;
+    assert_eq!(plan(&entries, 0), [2]);
+}
+
+#[test]
+fn newest_by_created_at_wins_even_when_last_accessed_orders_differently() {
+    let entry = |id: u64, created_at: i64, last_accessed_at: i64| CacheEntry {
+        created_at,
+        last_accessed_at,
+        ..anchor(id, MAIN, anchor_key("Linux-X64", 'a', id))
+    };
+    let entries = [
+        entry(1, 3, NOW - 4 * DAY),
+        entry(2, 1, NOW - 2 * DAY),
+        entry(3, 2, NOW - 3 * DAY),
+    ];
+    assert_eq!(plan(&entries, u64::MAX), [2]);
+}
+
+#[test]
 fn run_attempt_anchor_keys_are_classified_and_age_out_with_the_per_run_keys() {
     let attempt_key = |run: u64, attempt: u64| {
         format!(
@@ -153,4 +187,34 @@ fn run_attempt_anchor_keys_are_classified_and_age_out_with_the_per_run_keys() {
         anchor(4, MAIN, attempt_key(3, 1)),
     ];
     assert_eq!(plan(&entries, u64::MAX), [1, 2]);
+}
+
+#[test]
+fn only_canonical_anchor_suffixes_are_classified() {
+    let lock = "a".repeat(64);
+    let key = |lock: &str, suffix: &str| {
+        format!("velnor-tools-anchor-Linux-X64-mise2026.11.10-{lock}{suffix}")
+    };
+    for canonical in ["-7-x", "-7-2-x", "-7-rust-plan", "-7-2-_job-1"] {
+        assert_eq!(
+            cache_family(&key(&lock, canonical)),
+            CacheFamily::ToolsAnchor,
+            "{canonical}"
+        );
+    }
+    for suffix in ["-7-x/y", "-7-2-3x", "-7-2-3-j", "-7-x y", "-7-2-", "-7--x"] {
+        assert_eq!(
+            cache_family(&key(&lock, suffix)),
+            CacheFamily::Unknown,
+            "{suffix}"
+        );
+    }
+    assert_eq!(
+        cache_family(&key(&"A".repeat(64), "-7-x")),
+        CacheFamily::Unknown
+    );
+    assert_eq!(
+        cache_family(&key(&"A".repeat(64), "")),
+        CacheFamily::Unknown
+    );
 }

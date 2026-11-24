@@ -9,7 +9,9 @@ use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
 use crate::tools_discard;
-use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
+use crate::tools_verify::{
+    Anchor, Discard, MALFORMED_ANCHOR, Recording, Verb, Verdict, check, read, record,
+};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
@@ -24,6 +26,7 @@ pub struct Context {
     pub verified: bool,
     pub event_name: String,
     pub git_ref: String,
+    pub ref_protected: bool,
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
@@ -126,6 +129,7 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
 fn outputs(verdict: &Verdict) -> String {
     match verdict {
         Verdict::Anchored(digest) => format!("anchor={digest}\n"),
+        Verdict::Unanchored(Discard::BadAnchor) => format!("anchor={MALFORMED_ANCHOR}\n"),
         Verdict::Unanchored(_) => "anchor=\n".to_owned(),
         Verdict::Verified => "verified=true\n".to_owned(),
         Verdict::NothingRestored | Verdict::Discarded(_) => "verified=false\n".to_owned(),
@@ -141,7 +145,8 @@ fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdic
         verdict,
         Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
     ) {
-        tools_discard::mark(&context.runner_temp)?;
+        tools_discard::mark(&context.runner_temp)
+            .map_err(|error| CiError::new(format!("{error}; the poisoned entry would be kept")))?;
     }
     Ok(verdict)
 }
@@ -160,6 +165,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
                 trusted: trusted_event(
                     &context.event_name,
                     &context.git_ref,
+                    context.ref_protected,
                     context.default_branch.as_deref(),
                 ),
                 verified: context.verified,
@@ -199,13 +205,16 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
         verb,
         &Context {
             home: required("HOME")?,
-            runner_temp: required("RUNNER_TEMP")?,
+            runner_temp: tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
+                CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
+            })?,
             github_output: var("GITHUB_OUTPUT").map(PathBuf::from),
             anchor: var("VELNOR_TOOLS_ANCHOR").unwrap_or_default(),
             anchor_matched: var("VELNOR_ANCHOR_MATCHED").is_some_and(|key| !key.is_empty()),
             verified: var("VELNOR_TOOLS_VERIFIED").as_deref() == Some("true"),
             event_name: var("GITHUB_EVENT_NAME").unwrap_or_default(),
             git_ref: var("GITHUB_REF").unwrap_or_default(),
+            ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),

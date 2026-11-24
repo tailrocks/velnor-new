@@ -16,6 +16,23 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     validation::validate(conn).await
 }
 
+pub(super) async fn clock_guards(
+    conn: &turso::Connection,
+) -> Result<Vec<(String, String)>, HostError> {
+    let mut guards = Vec::new();
+    for (_, name, sql) in schema_objects() {
+        if matches!(
+            name,
+            "physical_attempt_jit_conflict_claim_insert_guard"
+                | "physical_attempt_jit_conflict_settlement_insert_guard"
+        ) {
+            let sql = super::jit_interrupted_claims::versioned_recovery_sql(conn, sql).await?;
+            guards.push((name.to_owned(), sql));
+        }
+    }
+    Ok(guards)
+}
+
 pub(super) async fn validate_persisted_proofs(conn: &turso::Connection) -> Result<(), HostError> {
     validation::validate_persisted_jit_conflict_proofs(conn).await
 }

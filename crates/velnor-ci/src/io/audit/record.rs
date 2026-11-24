@@ -12,7 +12,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 use super::super::units::{UnitFile, profile};
 use super::Audit;
 use super::freshness::Cause;
-use crate::coverage::{Fingerprint, RunGap, Unit, UnitKind};
+use crate::coverage::{Fingerprint, MoreInputs, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
 impl Audit<'_> {
@@ -53,13 +53,7 @@ impl Audit<'_> {
                 configuration,
                 hash,
                 stem,
-            } => self.record_dep_info(
-                indices,
-                file,
-                configuration.as_deref(),
-                hash.as_deref(),
-                &stem,
-            )?,
+            } => self.record_dep_info(indices, file, &configuration, hash.as_deref(), &stem)?,
             UnitFile::Script { profile, package } => {
                 let owners = self.member_owners(&package, indices);
                 if let Some(first) = owners.first() {
@@ -90,25 +84,23 @@ impl Audit<'_> {
         &mut self,
         indices: &[usize],
         file: &Path,
-        configuration: Option<&str>,
+        configuration: &str,
         hash: Option<&str>,
         stem: &str,
     ) -> Result<(), CiError> {
         let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
         for index in indices {
-            let key = configuration.map(|configuration| {
-                let key = (
-                    *index,
-                    configuration.to_owned(),
-                    hash.unwrap_or(stem).to_owned(),
-                );
-                self.present.insert(key.clone());
-                key
-            });
-            if let Some(identity) = key.and_then(|key| match hash {
+            let key = (
+                *index,
+                configuration.to_owned(),
+                hash.unwrap_or(stem).to_owned(),
+            );
+            self.present.insert(key.clone());
+            let identity = match hash {
                 Some(_) => self.fingerprints.get(&key),
                 None => self.names.get(&key),
-            }) {
+            };
+            if let Some(identity) = identity {
                 hits.push((*index, identity.clone()));
             }
         }
@@ -121,16 +113,14 @@ impl Audit<'_> {
         let Some((source, _)) = self.dep_info(&base, budget, file, package)? else {
             return Ok(());
         };
-        if let Some(configuration) = configuration {
-            for (index, (package, fingerprint)) in hits {
-                self.built[index].units.insert(Unit {
-                    configuration: configuration.to_owned(),
-                    kind: fingerprint.kind,
-                    package,
-                    target: fingerprint.target,
-                    source: source.clone(),
-                });
-            }
+        for (index, (package, fingerprint)) in hits {
+            self.built[index].units.insert(Unit {
+                configuration: configuration.to_owned(),
+                kind: fingerprint.kind,
+                package,
+                target: fingerprint.target,
+                source: source.clone(),
+            });
         }
         Ok(())
     }
@@ -171,7 +161,11 @@ impl Audit<'_> {
                 .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
-            let mut gap = (!known.is_empty() && scripts.is_empty()).then_some(RunGap::Older);
+            let mut gap = if known.is_empty() {
+                Some(RunGap::Uncompiled)
+            } else {
+                scripts.is_empty().then_some(RunGap::Older)
+            };
             let mut current = false;
             for source in scripts {
                 let mut ran = false;
@@ -236,7 +230,17 @@ impl Audit<'_> {
         std::mem::swap(&mut self.freshness, &mut self.diagnostic);
         let all = self.changed_inputs(base, paths, built, output, true, usize::MAX);
         std::mem::swap(&mut self.freshness, &mut self.diagnostic);
-        let more = all.map_or(0, |all| all.len().saturating_sub(1));
+        let more = all.map_or(MoreInputs::default(), |all| {
+            all.iter()
+                .skip(1)
+                .fold(MoreInputs::default(), |mut more, (_, cause)| {
+                    match cause {
+                        Cause::Changed => more.changed += 1,
+                        Cause::Unproven => more.unproven += 1,
+                    }
+                    more
+                })
+        });
         match cause {
             Cause::Changed => RunGap::Stale { input: first, more },
             Cause::Unproven => RunGap::Unproven { input: first, more },

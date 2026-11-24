@@ -1,47 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The SHA-256 of the mise binary every generated `jdx/mise-action` step installs.
-//!
-//! The action's `sha256` input compares the installed executable with one digest, and a non-empty
-//! input makes the action skip its signed-archive check. That check also covers `mise-shim.exe`,
-//! which the Windows archive ships beside `mise.exe` and which only the signed check verifies.
-//! Windows therefore carries no digest: its selection is empty and the signed check runs. Linux
-//! carries none either, unless the job runs on a GitHub-hosted glibc label: a musl runner downloads
-//! a different binary, so a glibc digest would fail its check, and `runner.os` cannot tell the two
-//! apart. A GitHub-hosted job (no fork runner, no trusted runner) whose label names one platform
-//! gets that platform's digest as a literal; a hosted `ubuntu-*` label is glibc, while a label that
-//! only names Linux is not. A self-hosted label proves no platform, because any name can be
-//! registered: `ubuntu-musl` is a musl runner. Any other job (a self-hosted label, an unknown
-//! label, a matrix runner, a fork runner of another architecture) keeps a run-time
-//! selection by `runner.os` and `runner.arch`, which is longer (about 500 bytes a step, and a
-//! workflow of many roots has to stay under the 500 000 byte limit). A macOS platform without a
-//! row selects a text that matches no binary, so the action fails with a SHA256 mismatch instead
-//! of installing an unchecked binary.
-//!
-//! The table is checked in, next to [`MISE_VERSION`], because Velnor owns the mise pin (mise is
-//! not a project-declared catalog tool, see hard decision 4). A version without a row does not
-//! build: the assertion below fails at compile time. `scripts/mise-binary-digests.sh` rewrites
-//! the row from the release's official `SHASUMS256.txt` and checks it against the same file.
-
 use std::error::Error;
 use std::fmt;
 
-use velnor_model::MisePlatform;
+use velnor_model::{HelperRelease, MisePlatform};
 
 use crate::rules::{RenderedJob, Value};
 use crate::steps::MISE_VERSION;
 
-/// The digests of one mise release. `sha256` maps `<runner.os>-<runner.arch>` to the lower-case
-/// SHA-256 of the raw executable `mise-v<version>-<os>-<arch>` of that release.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiseBinary {
     pub version: &'static str,
     pub sha256: [(&'static str, &'static str); 4],
 }
 
-/// Every mise release the renderer can pin. Rewrite the row with
-/// `scripts/mise-binary-digests.sh <version> --write` when `MISE_VERSION` changes.
 pub const MISE_BINARIES: &[MiseBinary] = &[MiseBinary {
     version: "2026.11.10",
     sha256: [
@@ -64,7 +37,6 @@ pub const MISE_BINARIES: &[MiseBinary] = &[MiseBinary {
     ],
 }];
 
-/// What a platform without a digest selects: no binary has this SHA-256.
 const NO_DIGEST: &str = "no-mise-digest-for-this-runner";
 
 const fn same(left: &str, right: &str) -> bool {
@@ -98,7 +70,6 @@ const _: () = assert!(
     "MISE_VERSION has no row in MISE_BINARIES (crates/velnor-render/src/mise_digest.rs)"
 );
 
-/// The pinned mise version has no known digest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownMiseVersion(pub String);
 
@@ -114,7 +85,6 @@ impl fmt::Display for UnknownMiseVersion {
 
 impl Error for UnknownMiseVersion {}
 
-/// The `sha256` input that pins `version` of mise, or an error when no digest is known for it.
 pub fn mise_sha256_input(version: &str) -> Result<Value, UnknownMiseVersion> {
     MISE_BINARIES
         .iter()
@@ -123,13 +93,10 @@ pub fn mise_sha256_input(version: &str) -> Result<Value, UnknownMiseVersion> {
         .ok_or_else(|| UnknownMiseVersion(version.to_owned()))
 }
 
-/// The `sha256` input of the pinned mise version. `MISE_VERSION` always has a row (compile-time
-/// assertion above); the fallback text fails the action's check rather than skipping it.
 pub(crate) fn pinned_sha256() -> Value {
     mise_sha256_input(MISE_VERSION).unwrap_or_else(|_| Value::Text(NO_DIGEST.to_owned()))
 }
 
-/// One comparison chain: no `fromJSON`, no matrix, so the workflow stays straight-line text.
 fn selecting(binary: &MiseBinary) -> Value {
     let chain: String = binary
         .sha256
@@ -147,10 +114,16 @@ fn selecting(binary: &MiseBinary) -> Value {
     ))
 }
 
-/// Narrows the run-time digest selection of every mise step of `job` to the one digest of the
-/// job's runner platform, when the labels of the job name exactly one platform.
-pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
-    let Some(digest) = runner_digest(&job) else {
+// helper-gate: first in tools-v0.1.112 via 106a05c994
+const CASE_INSENSITIVE_LABEL_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn pin_to_runner_platform(
+    mut job: RenderedJob,
+    helper: Option<&HelperRelease>,
+) -> RenderedJob {
+    let case_insensitive =
+        helper.is_some_and(|release| release.version().at_least(CASE_INSENSITIVE_LABEL_HELPER));
+    let Some(digest) = runner_digest(&job, case_insensitive) else {
         return job;
     };
     for step in job.steps.iter_mut().filter(|step| {
@@ -167,11 +140,11 @@ pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
     job
 }
 
-fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
-    if job.runs_on_axis.is_some() || job.fork_runner.is_some() || job.trusted_runner.is_some() {
+fn runner_digest(job: &RenderedJob, case_insensitive: bool) -> Option<&'static str> {
+    if job.runs_on_axis.is_some() || job.fork_runner.is_some() {
         return None;
     }
-    let platform = plain_label_platform(&job.runs_on)?;
+    let platform = plain_label_platform(&job.runs_on, case_insensitive)?;
     let binary = MISE_BINARIES
         .iter()
         .find(|binary| binary.version == MISE_VERSION)?;
@@ -182,13 +155,16 @@ fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
         .map(|(_, digest)| *digest)
 }
 
-/// `<os>-<arch>` of a plain runner label such as `ubuntu-26.04-arm`; no expression, no guess.
-/// A Linux label that is not `ubuntu-*` names no libc, so it has no platform here.
-fn plain_label_platform(label: &str) -> Option<String> {
+fn plain_label_platform(label: &str, case_insensitive: bool) -> Option<String> {
     label
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_'))
         .then_some(())?;
     let platform = MisePlatform::runner(label)?;
-    (!platform.matches("linux") || label.starts_with("ubuntu-")).then(|| platform.lock_key())
+    let ubuntu = if case_insensitive {
+        label.to_ascii_lowercase().starts_with("ubuntu-")
+    } else {
+        label.starts_with("ubuntu-")
+    };
+    (!platform.matches("linux") || ubuntu).then(|| platform.lock_key())
 }

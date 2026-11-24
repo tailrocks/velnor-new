@@ -13,6 +13,7 @@ pub struct RepoView {
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
+    pub gitlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
 }
 
@@ -259,6 +260,7 @@ pub struct RustRoot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustMember {
     pub name: PackageName,
+    pub version: Option<String>,
     pub manifest: RepoPath,
     pub directory: Option<RepoPath>,
     pub dependencies: Vec<MemberDependency>,
@@ -333,5 +335,5 @@ pub use crate::repo_config::{
     CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, GitRepository,
     InputRule, LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi,
     PrivateSources, PublicSources, PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget,
-    TestLane, TestSetup, WorkspaceGroup,
+    TestLane, TestSetup, TokenMint, WorkspaceGroup,
 };
