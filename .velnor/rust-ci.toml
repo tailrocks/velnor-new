@@ -106,7 +106,7 @@ name = "No-doctests listing fixtures"
 task = "test-no-doctests-listing"
 tools = ["rust", "mr-boxington"]
 timeout_minutes = 10
-inputs = ["scripts/check-no-doctests.sh", "scripts/test-no-doctests-listing.sh", "mise.toml", "mise.lock"]
+inputs = ["scripts/check-no-doctests.sh", "scripts/test-no-doctests-listing.sh", "mise.toml", "mise.lock", "rust-toolchain.toml"]
 
 [[lint]]
 kind = "mise-task"

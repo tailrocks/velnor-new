@@ -12,7 +12,6 @@ fi
 diagnostics="$(mktemp)"
 trap 'rm -f "$diagnostics"' EXIT
 
-# An inherited `--test-args` would filter rustdoc's listing and hide doctests.
 for flags in "${RUSTDOCFLAGS:-}" "${CARGO_ENCODED_RUSTDOCFLAGS:-}"; do
   case "$flags" in
     *--test-args*)
@@ -42,9 +41,6 @@ for features in "${passes[@]}"; do
     echo "no-doctests: rustdoc doctest discovery failed (exit $status) with $features features." >&2
     exit "$status"
   fi
-  # rustdoc ends each listing group with "N tests, M benchmarks" after a blank line.
-  # Only the N lines above that blank line are doctests; other stdout, such as a
-  # procedural macro that prints a doctest-shaped line, is not.
   parsed="$(printf '%s\n' "$listing" | awk '
     { line[NR] = $0 }
     /^[0-9]+ tests?, [0-9]+ benchmarks$/ {
