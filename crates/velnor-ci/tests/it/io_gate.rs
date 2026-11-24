@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use crate::gate::{AHEAD, GATE, GREEN, RED, RUNNING};
-use crate::io::{Repo, serve};
+use crate::io::{Repo, hang_up, serve};
 
 fn release_gate(api: &str, token: Option<&str>, sha: &str, outputs: &Path) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -60,7 +60,7 @@ fn release_gate_writes_ready_and_exits_0_until_a_refusal_exits_1() {
 
 #[test]
 fn release_gate_without_a_token_exits_1_before_any_request() {
-    let output = release_gate("http://127.0.0.1:1", None, GREEN, Path::new(""));
+    let output = release_gate(&hang_up(), None, GREEN, Path::new(""));
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("set GITHUB_TOKEN"));
 }
