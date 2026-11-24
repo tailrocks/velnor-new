@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::os::unix::fs::MetadataExt;
+use std::fs::{self, File, TryLockError};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use super::clear::{check_home, clear_home};
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
@@ -61,6 +61,47 @@ fn slot(path: &str) -> String {
     path.replace('/', "_")
 }
 
+type Identity = (u64, u64, i64, i64);
+
+fn identity(metadata: &fs::Metadata) -> Identity {
+    (
+        metadata.dev(),
+        metadata.ino(),
+        metadata.mtime(),
+        metadata.mtime_nsec(),
+    )
+}
+
+fn open_entry(entry: &Path) -> std::io::Result<File> {
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(entry)
+}
+
+fn published(held: &File, entry: &Path) -> bool {
+    match (held.metadata(), fs::symlink_metadata(entry)) {
+        (Ok(held), Ok(named)) => identity(&held) == identity(&named),
+        _ => false,
+    }
+}
+
+fn lease(entry: &Path, owner: u32) -> Result<File, Outcome> {
+    let held = open_entry(entry).map_err(|_| Outcome::Miss)?;
+    match held.try_lock_shared() {
+        Ok(()) => {}
+        Err(TryLockError::WouldBlock) => return Err(Outcome::Miss),
+        Err(TryLockError::Error(_)) => {
+            return Err(Outcome::Rejected("the entry cannot be locked"));
+        }
+    }
+    if published(&held, entry) && complete(entry, owner) {
+        Ok(held)
+    } else {
+        Err(Outcome::Miss)
+    }
+}
+
 fn copy_tree(from: &Path, to: &Path) -> bool {
     fs::create_dir_all(to).is_ok()
         && Command::new(COPY)
@@ -97,9 +138,10 @@ fn restore_with(
         Err(outcome) => return outcome,
     };
     let entry = base.join(TOOLS_DIR).join(inputs.key);
-    if !complete(&entry, owner) {
-        return Outcome::Miss;
-    }
+    let held = match lease(&entry, owner) {
+        Ok(held) => held,
+        Err(outcome) => return outcome,
+    };
     if let Err(reason) = clear_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
@@ -108,6 +150,11 @@ fn restore_with(
             return Outcome::Rejected("a copy failed, so the cache action restores instead");
         }
         copied();
+    }
+    if !published(&held, &entry) {
+        return Outcome::Rejected(
+            "the entry was replaced during the copy, so the cache action restores instead",
+        );
     }
     Outcome::Restored { from: entry }
 }
@@ -280,22 +327,51 @@ fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
-    let mut older: Vec<(SystemTime, PathBuf)> = entries
+    let mut older: Vec<(Identity, PathBuf)> = entries
         .flatten()
         .filter(|entry| {
             let name = entry.file_name();
             name != current && !name.to_string_lossy().starts_with('.')
         })
-        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .filter_map(|entry| Some((identity(&entry.metadata().ok()?), entry.path())))
         .collect();
-    older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+    older.sort_by_key(|(listed, _)| std::cmp::Reverse((listed.2, listed.3)));
     let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
     chosen();
     candidates
         .into_iter()
-        .filter(|(_, path)| remove_tree(path).is_err())
+        .filter(|(listed, path)| stuck(tools, path, *listed))
         .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
         .collect()
+}
+
+fn stuck(tools: &Path, path: &Path, listed: Identity) -> bool {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let _lock = match claim(tools, &name) {
+        Claim::Won(lock) => lock,
+        Claim::Held => return false,
+        Claim::Broken => return true,
+    };
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return false;
+    };
+    if identity(&metadata) != listed {
+        return false;
+    }
+    let _held = if metadata.is_dir() {
+        let Ok(held) = open_entry(path) else {
+            return true;
+        };
+        match held.try_lock() {
+            Ok(()) => Some(held),
+            Err(TryLockError::WouldBlock) => return false,
+            Err(TryLockError::Error(_)) => return true,
+        }
+    } else {
+        None
+    };
+    let grave = tools.join(format!("{STAGING_PREFIX}{name}-{:016x}", random_u64()));
+    fs::rename(path, &grave).is_err() || remove_tree(&grave).is_err()
 }
 
 fn plain(name: &str) -> String {

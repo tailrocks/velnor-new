@@ -27,7 +27,8 @@ impl Drop for Node {
 }
 
 fn node(name: &str) -> Node {
-    let root = std::env::temp_dir().join(format!("velnor-tools-race-{name}-{}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("velnor-tools-race-{name}-{}", std::process::id()));
     drop(fs::remove_dir_all(&root));
     for dir in ["store", "fresh", "home"] {
         fs::create_dir_all(root.join(dir)).expect("create the node");
@@ -60,7 +61,11 @@ impl Node {
 
     fn save(&self, key: &str, replace: bool, chosen: &dyn Fn()) -> Outcome {
         let home = self.root.join("home");
-        save_with(&self.inputs(Verb::Save, key, &home, replace), self.owner, chosen)
+        save_with(
+            &self.inputs(Verb::Save, key, &home, replace),
+            self.owner,
+            chosen,
+        )
     }
 
     fn restore(&self, key: &str, copied: &dyn Fn()) -> Outcome {
@@ -103,14 +108,16 @@ fn interleave<T: Send + std::fmt::Debug>(
             let first = AtomicBool::new(true);
             paused(&|| {
                 if first.swap(false, Ordering::SeqCst) {
-                    drop(reached.send(()));
-                    drop(resumed.recv());
+                    reached.send(()).ok();
+                    resumed.recv().ok();
                 }
             })
         });
-        if at_pause.recv().is_err() {
-            panic!("ended before its pause: {:?}", worker.join());
-        }
+        assert!(
+            at_pause.recv().is_ok(),
+            "ended before its pause: {:?}",
+            worker.join()
+        );
         meanwhile();
         drop(resume);
         worker.join().expect("the paused operation panicked")
@@ -161,8 +168,12 @@ fn a_prune_does_not_remove_the_fresh_entry_a_replacing_save_published_after_the_
 fn a_restore_whose_entry_is_replaced_during_the_copy_is_not_a_hit() {
     let node = node("restore-replaced");
     node.saved_aged("k1", 0);
-    fs::write(node.entry("k1").join(".local_share_mise/installs/cosign/bin/cosign"), "evil")
-        .expect("poison the entry");
+    fs::write(
+        node.entry("k1")
+            .join(".local_share_mise/installs/cosign/bin/cosign"),
+        "evil",
+    )
+    .expect("poison the entry");
     let restored = interleave(
         |pause| node.restore("k1", pause),
         || {
