@@ -62,7 +62,15 @@ fn plans(job: &Value) -> bool {
 }
 
 fn selected(paths: &[&str], event: EventKind) -> Result<bool, Box<dyn std::error::Error>> {
-    let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
+    selected_in(&check_repo(CHECK_GATED, FIRST)?, paths, event)
+}
+
+fn selected_in(
+    repo: &RepoView,
+    paths: &[&str],
+    event: EventKind,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let facts = detect(repo)?;
     let changed: BTreeSet<RepoPath> = paths
         .iter()
         .map(|path| RepoPath::new(*path))
@@ -200,7 +208,8 @@ fn a_pull_request_that_touches_a_generator_input_runs_the_generated_check() -> T
 }
 
 #[test]
-fn a_markdown_file_in_a_mise_task_folder_runs_the_generated_check() -> TestResult {
+fn a_markdown_file_in_a_mise_task_folder_runs_the_generated_check_only_with_a_mise_task_lint()
+-> TestResult {
     for path in [
         "mise-tasks/build.md",
         ".mise-tasks/build.md",
@@ -214,6 +223,16 @@ fn a_markdown_file_in_a_mise_task_folder_runs_the_generated_check() -> TestResul
         );
     }
     assert!(!selected(&["docs/tasks/build.md"], EventKind::PullRequest)?);
+    let mut bare = view(&["Cargo.toml"], Some(CHECK_GATED.as_bytes()))?;
+    crate::facts::lock_pinned_tools(&mut bare)?;
+    bare.tracked_paths.insert(LOCK_PATH);
+    bare.files
+        .insert(LOCK_PATH, archive_lock_at(FIRST)?.into_bytes());
+    assert!(!selected_in(
+        &bare,
+        &["mise-tasks/build.md"],
+        EventKind::PullRequest
+    )?);
     Ok(())
 }
 
