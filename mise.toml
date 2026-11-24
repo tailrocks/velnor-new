@@ -97,6 +97,15 @@ python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''
 
+[tasks.test-setup-velnor-action]
+description = "Run the setup-velnor action shell tests against stubbed curl and digest tools"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+python3 scripts/test-setup-velnor-action.py
+'''
+
 [tasks.validate-hk]
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"

@@ -96,6 +96,15 @@ inputs = ["scripts/mise-binary-digests.sh", "scripts/mise-minisign.pub", "script
 
 [[lint]]
 kind = "mise-task"
+id = "setup-velnor-action"
+name = "setup-velnor action tests"
+task = "test-setup-velnor-action"
+tools = ["python"]
+timeout_minutes = 5
+inputs = ["actions/setup-velnor/**", "scripts/test-setup-velnor-action.py", "mise.toml", "mise.lock"]
+
+[[lint]]
+kind = "mise-task"
 id = "validate-hk"
 name = "hk config"
 task = "validate-hk"
