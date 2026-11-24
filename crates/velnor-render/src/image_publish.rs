@@ -205,15 +205,8 @@ fn tip() -> RenderedStep {
     }
 }
 
-fn withheld(branch: &str, fresh: Option<&str>) -> Vec<RenderedStep> {
-    let superseded = format!("steps.{TIP_STEP}.outputs.ready != 'true'");
-    let condition = match fresh {
-        Some(text) => format!(
-            "${{{{ {} && {superseded} }}}}",
-            text.trim_start_matches("${{ ").trim_end_matches(" }}")
-        ),
-        None => expression(&superseded),
-    };
+fn withheld(branch: &str) -> Vec<RenderedStep> {
+    let condition = expression(&format!("steps.{TIP_STEP}.outputs.ready != 'true'"));
     let notice = format!(
         "echo \"::notice title=Image::the {branch} tag was withheld because this commit is no longer the tip\""
     );
@@ -239,11 +232,10 @@ fn withheld(branch: &str, fresh: Option<&str>) -> Vec<RenderedStep> {
     ]
 }
 
-fn report(registry: &ImageRegistry, fresh: Option<&str>) -> Vec<RenderedStep> {
+fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
     let reference = format!("{}:sha-${{{{ github.sha }}}}", registry.reference());
     let host = registry.host.name();
     vec![RenderedStep {
-        condition: fresh.map(str::to_owned),
         env: vec![
             ("IMAGE".to_owned(), Value::Expr(reference)),
             (
@@ -272,18 +264,6 @@ pub(crate) fn publish_job(
 ) -> RenderedJob {
     let image = build.image;
     let hub = private_hub(image);
-    let fresh = hub
-        .as_ref()
-        .filter(|_| image.registries.len() == 1)
-        .map(|_| {
-            expression(&format!(
-                "steps.{PREFLIGHT_STEP}.outputs.sha_exists != 'true'"
-            ))
-        });
-    let on_fresh = |mut step: RenderedStep| {
-        step.condition.clone_from(&fresh);
-        step
-    };
     let mut steps = vec![
         sparse_checkout(image),
         install_helper(workflow.helper),
@@ -291,18 +271,13 @@ pub(crate) fn publish_job(
     ];
     steps.extend(hub.as_ref().map(preflight));
     steps.push(restore_modes(image));
-    steps.push(on_fresh(setup_buildx()));
-    steps.extend(
-        image
-            .registries
-            .iter()
-            .map(|registry| on_fresh(login(registry))),
-    );
-    steps.push(on_fresh(tip()));
-    steps.extend(withheld(workflow.branch, fresh.as_deref()));
-    steps.push(on_fresh(push(image, workflow.branch)));
+    steps.push(setup_buildx());
+    steps.extend(image.registries.iter().map(login));
+    steps.push(tip());
+    steps.extend(withheld(workflow.branch));
+    steps.push(push(image, workflow.branch));
     for registry in &image.registries {
-        steps.extend(report(registry, fresh.as_deref()));
+        steps.extend(report(registry));
     }
     RenderedJob {
         id: job_id(image, "publish"),

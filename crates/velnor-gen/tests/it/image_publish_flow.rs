@@ -66,7 +66,7 @@ fn several_images_share_one_gate_and_every_publish_job_waits_for_it() -> TestRes
 }
 
 #[test]
-fn a_second_registry_is_never_skipped_because_the_first_already_holds_the_tag() -> TestResult {
+fn a_rerun_pushes_again_so_that_a_missing_branch_tag_or_registry_is_repaired() -> TestResult {
     let both = rendered("image-ghcr")?;
     let publish = &both["jobs"]["image-cluster-svc-publish"];
     assert!(step_named(publish, "Build and push")?.get("if").is_none());
@@ -77,7 +77,8 @@ fn a_second_registry_is_never_skipped_because_the_first_already_holds_the_tag() 
     );
     let single = rendered("image-plain")?;
     let publish = &single["jobs"]["image-plain-svc-publish"];
-    assert!(step_named(publish, "Build and push")?.get("if").is_some());
+    assert!(step_named(publish, "Build and push")?.get("if").is_none());
+    assert!(step_named(publish, "Refuse to push")?.get("id").is_some());
     Ok(())
 }
 

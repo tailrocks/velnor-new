@@ -335,7 +335,14 @@ fn check_openssl(view: &RepoView, image: &ImageConfig, root: &RustRoot) -> Resul
         .and_then(|path| view.files.get(&path))
         .is_some_and(|bytes| {
             std::str::from_utf8(bytes)
-                .is_ok_and(|text| text.lines().any(|line| line == "name = \"openssl-sys\""))
+                .ok()
+                .and_then(|text| toml::from_str::<toml::Table>(text).ok())
+                .and_then(|lock| lock.get("package")?.as_array().cloned())
+                .is_some_and(|packages| {
+                    packages.iter().any(|package| {
+                        package.get("name").and_then(toml::Value::as_str) == Some("openssl-sys")
+                    })
+                })
         });
     if holds {
         Err(ImageError::OpensslRequired {
