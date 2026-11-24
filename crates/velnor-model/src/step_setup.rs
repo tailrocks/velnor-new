@@ -19,7 +19,13 @@ impl StepKind {
             | Self::MbxStore
             | Self::MbxSeed
             | Self::CratesMirror(_) => true,
-            Self::Helper(command) => matches!(command, HelperCommand::Plan),
+            Self::Helper(command) => match command {
+                HelperCommand::Plan => true,
+                HelperCommand::PlanFull
+                | HelperCommand::CheckMetadata
+                | HelperCommand::Restored(_)
+                | HelperCommand::InputsAudit => false,
+            },
             Self::InstallTools { .. }
             | Self::InstallMise
             | Self::Lint(_)
