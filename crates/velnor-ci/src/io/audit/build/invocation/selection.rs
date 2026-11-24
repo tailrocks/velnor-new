@@ -186,6 +186,7 @@ fn built<'a>(
             .iter()
             .find(|member| member.manifest == dependency.manifest)
         {
+            packages.insert(member.name.as_str());
             &member.dependencies
         } else {
             continue;

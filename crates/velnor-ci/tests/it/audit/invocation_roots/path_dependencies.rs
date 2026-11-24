@@ -90,6 +90,21 @@ fn a_package_build_selects_the_path_dependencies_of_that_package_only() {
     assert_refused(&stderr, "-p top mid");
 }
 
+#[test]
+fn a_package_build_selects_the_members_it_depends_on() {
+    let repo = root_package_with_path_dependencies();
+    unit(
+        &repo,
+        "Cargo.toml",
+        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[dependencies]\nside = { path = \"vendor/side\" }\nother = { path = \"other\" }\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
+    );
+    repo.git(&["add", "--all"]);
+    for package in ["other", "mid"] {
+        let stderr = stderr_of_build_with_untrusted_output_in(&repo, package, &["-p", "top"]);
+        assert_selected(&stderr, &format!("-p top {package}"));
+    }
+}
+
 fn with_dev_only_path_dependency() -> Repo {
     let repo = root_package_with_path_dependencies();
     unit(
