@@ -387,23 +387,3 @@ fn the_publish_job_checks_out_only_the_dockerfile_and_its_inputs_and_downloads_t
     assert_eq!(download["path"], "dist");
     Ok(())
 }
-
-#[test]
-fn the_pull_request_trigger_follows_pr_build() -> TestResult {
-    let triggers = |view: &RepoView| -> Result<Value, Box<dyn std::error::Error>> {
-        Ok(image(view)?["on"].clone())
-    };
-    let inputs = triggers(&sample("image-ghcr")?)?;
-    let paths = inputs["pull_request"]["paths"]
-        .as_array()
-        .ok_or("no paths")?;
-    assert!(paths.iter().any(|path| path == "migrations/**"));
-    assert!(paths.iter().any(|path| path == "Dockerfile"));
-    let always = triggers(&sample("image-plain")?)?;
-    assert!(always["pull_request"].get("paths").is_none());
-    let off = triggers(&edited("image-plain", |text| {
-        text.replace("pr_build = \"always\"", "pr_build = \"off\"")
-    })?)?;
-    assert!(off.get("pull_request").is_none());
-    Ok(())
-}

@@ -4,7 +4,8 @@
 use velnor_model::{RepoPath, RepoView};
 
 use crate::facts::TestResult;
-use crate::image_workflow::{CONFIG, image, jobs, rendered, sample, step_named, steps};
+use crate::image_workflow::{CONFIG, edited, image, jobs, rendered, sample, step_named, steps};
+use serde_json::Value;
 
 #[test]
 fn the_staged_binaries_get_their_executable_bits_back_before_the_image_is_built() -> TestResult {
@@ -351,5 +352,25 @@ fn a_superseded_commit_still_publishes_its_sha_image_so_that_its_release_tag_can
     )?;
     let run = gate["run"].as_str().ok_or("no gate")?;
     assert!(!run.contains("--require-tip"), "{run}");
+    Ok(())
+}
+
+#[test]
+fn the_pull_request_trigger_follows_pr_build() -> TestResult {
+    let triggers = |view: &RepoView| -> Result<Value, Box<dyn std::error::Error>> {
+        Ok(image(view)?["on"].clone())
+    };
+    let inputs = triggers(&sample("image-ghcr")?)?;
+    let paths = inputs["pull_request"]["paths"]
+        .as_array()
+        .ok_or("no paths")?;
+    assert!(paths.iter().any(|path| path == "migrations/**"));
+    assert!(paths.iter().any(|path| path == "Dockerfile"));
+    let always = triggers(&sample("image-plain")?)?;
+    assert!(always["pull_request"].get("paths").is_none());
+    let off = triggers(&edited("image-plain", |text| {
+        text.replace("pr_build = \"always\"", "pr_build = \"off\"")
+    })?)?;
+    assert!(off.get("pull_request").is_none());
     Ok(())
 }
