@@ -116,6 +116,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate_untagged(RustCi, "image.registry.token", IMAGE_HELPER),
     gate_untagged(RustCi, "image.registry.username", IMAGE_HELPER),
     gate_untagged(RustCi, "image.registry.visibility", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.release_actors", IMAGE_HELPER),
     gate_untagged(RustCi, "image.root", IMAGE_HELPER),
     gate_untagged(RustCi, "image.stage", IMAGE_HELPER),
     gate_untagged(RustCi, "image.timeout_minutes", IMAGE_HELPER),

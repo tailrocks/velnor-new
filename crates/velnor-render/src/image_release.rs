@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write;
+
 use velnor_model::ImageConfig;
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
@@ -82,7 +84,7 @@ fn authorize(image: &ImageConfig) -> RenderedStep {
         "velnor-ci image authorize --repo \"$REPOSITORY\" --tag \"$REF_NAME\" --actor \"$ACTOR\"",
     );
     for actor in &image.release_actors {
-        run.push_str(&format!(" --release-actor={}", shell_word(actor)));
+        let _ = write!(run, " --release-actor={}", shell_word(actor));
     }
     RenderedStep {
         env: variables(&[
@@ -103,11 +105,10 @@ pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) 
     let image = build.image;
     let mut steps = vec![install_helper(workflow.helper), setup_buildx()];
     steps.extend(image.registries.iter().map(login));
-    let images: String = image
-        .registries
-        .iter()
-        .map(|registry| format!(" --image={}", shell_word(&registry.reference())))
-        .collect();
+    let mut images = String::new();
+    for registry in &image.registries {
+        let _ = write!(images, " --image={}", shell_word(&registry.reference()));
+    }
     steps.push(RenderedStep {
         env: vec![
             (

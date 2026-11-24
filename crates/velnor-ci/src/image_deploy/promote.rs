@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write;
+
 use crate::error::CiError;
 
 pub trait Registry {
@@ -93,10 +95,10 @@ pub fn promote(registry: &dyn Registry, promotion: &Promotion<'_>) -> Result<Str
         match plan {
             Plan::Create { digest } => {
                 registry.tag(&format!("{name}@{digest}"), &target)?;
-                report.push_str(&format!("{target} now names {digest}\n"));
+                let _ = writeln!(report, "{target} now names {digest}");
             }
             Plan::Present { digest } => {
-                report.push_str(&format!("{target} already names {digest}\n"));
+                let _ = writeln!(report, "{target} already names {digest}");
             }
         }
     }

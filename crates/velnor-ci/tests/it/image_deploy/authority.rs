@@ -82,38 +82,7 @@ fn any_other_actor_needs_an_active_tag_ruleset_that_forbids_creating_moving_and_
     let covered = api(&ruleset(|_| {}));
     let report = run(&covered, "mallory", &[]).unwrap_or_else(|error| error);
     assert!(report.contains("release tags"), "{report}");
-    let refused: [(&str, Box<dyn Fn(&mut Value)>); 8] = [
-        (
-            "no deletion rule",
-            Box::new(|r| r["rules"] = json!([{"type": "creation"}, {"type": "update"}])),
-        ),
-        (
-            "no creation rule",
-            Box::new(|r| r["rules"] = json!([{"type": "update"}, {"type": "deletion"}])),
-        ),
-        (
-            "no update rule",
-            Box::new(|r| r["rules"] = json!([{"type": "creation"}, {"type": "deletion"}])),
-        ),
-        (
-            "evaluate only",
-            Box::new(|r| r["enforcement"] = json!("evaluate")),
-        ),
-        (
-            "a branch ruleset",
-            Box::new(|r| r["target"] = json!("branch")),
-        ),
-        (
-            "another tag family",
-            Box::new(|r| r["conditions"]["ref_name"]["include"] = json!(["refs/tags/other-v*"])),
-        ),
-        (
-            "the tag is excluded",
-            Box::new(|r| r["conditions"]["ref_name"]["exclude"] = json!(["refs/tags/svc-v1.*"])),
-        ),
-        ("no conditions", Box::new(|r| r["conditions"] = Value::Null)),
-    ];
-    for (what, change) in refused {
+    let refuse = |what: &str, change: fn(&mut Value)| {
         let message = run(&api(&ruleset(change)), "mallory", &["ann"])
             .err()
             .unwrap_or_default();
@@ -121,7 +90,25 @@ fn any_other_actor_needs_an_active_tag_ruleset_that_forbids_creating_moving_and_
             message.contains("no active tag ruleset"),
             "{what}: {message}"
         );
-    }
+    };
+    refuse("no deletion rule", |r| {
+        r["rules"] = json!([{"type": "creation"}, {"type": "update"}]);
+    });
+    refuse("no creation rule", |r| {
+        r["rules"] = json!([{"type": "update"}, {"type": "deletion"}]);
+    });
+    refuse("no update rule", |r| {
+        r["rules"] = json!([{"type": "creation"}, {"type": "deletion"}]);
+    });
+    refuse("evaluate only", |r| r["enforcement"] = json!("evaluate"));
+    refuse("a branch ruleset", |r| r["target"] = json!("branch"));
+    refuse("another tag family", |r| {
+        r["conditions"]["ref_name"]["include"] = json!(["refs/tags/other-v*"]);
+    });
+    refuse("the tag is excluded", |r| {
+        r["conditions"]["ref_name"]["exclude"] = json!(["refs/tags/svc-v1.*"]);
+    });
+    refuse("no conditions", |r| r["conditions"] = Value::Null);
 }
 
 #[test]
