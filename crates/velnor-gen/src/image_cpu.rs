@@ -60,6 +60,7 @@ fn sets_cpu_features(text: &str) -> bool {
                     .join(" "),
                 _ => String::new(),
             };
+            let text = text.replace('_', "-");
             text.contains("target-cpu") || text.contains("target-feature")
         })
 }

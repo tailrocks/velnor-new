@@ -120,6 +120,14 @@ fn rustflags_that_set_a_cpu_are_refused_wherever_cargo_would_read_them() -> Test
         ),
         (
             ".cargo/config.toml",
+            "[build]\nrustflags = [\"-Ctarget_cpu=native\"]\n",
+        ),
+        (
+            ".cargo/config",
+            "[build]\nrustflags = \"-C target_feature=+avx2\"\n",
+        ),
+        (
+            ".cargo/config.toml",
             "[target.'cfg(unix)']\nrustflags = [\"-C\", \"target-cpu=native\"]\n",
         ),
     ] {
