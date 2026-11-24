@@ -9,6 +9,7 @@ mod error;
 mod external;
 mod helper_gate;
 mod image;
+mod image_cpu;
 mod image_error;
 pub mod io;
 mod key_gates;

@@ -67,6 +67,10 @@ pub enum ImageError {
     BranchReleaseVersion {
         branch: String,
     },
+    CpuBaseline {
+        image: String,
+        path: String,
+    },
     DockerfileSymlink {
         image: String,
         path: String,
@@ -144,6 +148,10 @@ impl fmt::Display for ImageError {
             Self::BranchReleaseVersion { branch } => write!(
                 f,
                 "the default branch `{branch}` looks like a release version, so its image tag would collide with the tag that a release promotes; rename the branch or set default_branch"
+            ),
+            Self::CpuBaseline { image, path } => write!(
+                f,
+                "image {image}: `{path}` sets target-cpu or target-feature in rustflags, which would leak into the published linux/amd64 binary and can crash on another CPU; remove them from that file, or build the image with its own root that does not read it"
             ),
             Self::DockerfileSymlink { image, path } => write!(
                 f,

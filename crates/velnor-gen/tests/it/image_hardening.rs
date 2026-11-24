@@ -61,3 +61,84 @@ fn a_symlinked_dockerfile_or_ignore_file_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+const MIRROR: &str = "\n[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
+
+fn step_index(job: &serde_json::Value, needle: &str) -> Option<usize> {
+    job["steps"].as_array()?.iter().position(|step| {
+        step["name"]
+            .as_str()
+            .is_some_and(|name| name.contains(needle))
+            || step["run"].as_str().is_some_and(|run| run.contains(needle))
+    })
+}
+
+#[test]
+fn the_crates_mirror_of_the_image_runner_is_set_up_before_the_tools_and_cargo() -> TestResult {
+    let mirrored = crate::image_workflow::image(&edited("image-plain", |text| {
+        text.replace("ubuntu-26.04-scale-set", "mirror-box") + MIRROR
+    })?)?;
+    let build = &mirrored["jobs"]["image-plain-svc-build"];
+    let setup = step_index(build, "crates-mirror --registry").ok_or("no mirror step")?;
+    let install = step_index(build, "Install tools").ok_or("no tools step")?;
+    let compile = step_index(build, "cargo zigbuild").ok_or("no compile")?;
+    let after = build["steps"]
+        .as_array()
+        .ok_or("no steps")?
+        .iter()
+        .rposition(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("crates-mirror --registry"))
+        })
+        .ok_or("no second mirror step")?;
+    assert!(setup < install && install < after && after < compile);
+    let other = crate::image_workflow::image(&edited("image-plain", |text| {
+        text.replace("ubuntu-26.04-scale-set", "mirror-box")
+            + &MIRROR.replace("mirror-box", "another-box")
+    })?)?;
+    assert!(
+        step_index(
+            &other["jobs"]["image-plain-svc-build"],
+            "crates-mirror --registry"
+        )
+        .is_none()
+    );
+    Ok(())
+}
+
+#[test]
+fn rustflags_that_set_a_cpu_are_refused_wherever_cargo_would_read_them() -> TestResult {
+    for (path, content) in [
+        (
+            ".cargo/config.toml",
+            "[build]\nrustflags = [\"-C\", \"target-cpu=native\"]\n",
+        ),
+        (
+            ".cargo/config",
+            "[target.x86_64-unknown-linux-gnu]\nrustflags = \"-Ctarget-feature=+avx2\"\n",
+        ),
+        (
+            ".cargo/config.toml",
+            "[target.'cfg(unix)']\nrustflags = [\"-C\", \"target-cpu=native\"]\n",
+        ),
+    ] {
+        let mut view = sample("image-plain")?;
+        view.files
+            .insert(RepoPath::new(path)?, content.as_bytes().to_vec());
+        assert!(
+            matches!(
+                expected_files(&view),
+                Err(GenerateError::Image(ImageError::CpuBaseline { .. }))
+            ),
+            "{path}: {content}"
+        );
+    }
+    let mut harmless = sample("image-plain")?;
+    harmless.files.insert(
+        RepoPath::new(".cargo/config.toml")?,
+        b"[build]\nrustflags = [\"--cfg\", \"tokio_unstable\"]\n[target.aarch64-apple-darwin]\nrustflags = [\"-C\", \"target-cpu=native\"]\n".to_vec(),
+    );
+    assert!(expected_files(&harmless).is_ok());
+    Ok(())
+}

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    HelperRelease, ImageConfig, ImagePrBuild, PrivateSources, RepoPath, RunnerLabel,
+    CratesMirror, HelperRelease, ImageConfig, ImagePrBuild, PrivateSources, RepoPath, RunnerLabel,
 };
 
 use crate::helper_integrity::{defaults, secure_with};
@@ -48,6 +48,7 @@ pub struct ImageWorkflow<'a> {
     pub branch: &'a str,
     pub runner: &'a RunnerLabel,
     pub private: Option<&'a PrivateSources>,
+    pub mirror: Option<&'a CratesMirror>,
     pub mbx: ImageMbx,
     pub skip_draft_pull_requests: bool,
 }

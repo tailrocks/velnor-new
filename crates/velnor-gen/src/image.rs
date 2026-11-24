@@ -53,6 +53,7 @@ pub(crate) fn image_workflow(
         check_openssl(view, image, root)?;
         check_sysroot(view, image)?;
         check_profile(view, image, root)?;
+        crate::image_cpu::check(view, image, root_directory(root))?;
         builds.push(ImageBuild {
             image,
             root: root_directory(root),
@@ -66,6 +67,11 @@ pub(crate) fn image_workflow(
         branch: &facts.config.default_branch,
         runner: &facts.config.runner,
         private: facts.config.private_sources.as_ref(),
+        mirror: facts
+            .config
+            .crates_mirror
+            .as_ref()
+            .filter(|mirror| mirror.runner == facts.config.runner),
         mbx: mbx_of(facts),
         skip_draft_pull_requests: facts.config.skip_draft_pull_requests,
     };

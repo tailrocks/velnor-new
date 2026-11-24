@@ -6,7 +6,7 @@ use std::fmt::Write;
 use velnor_model::{ImageConfig, ImageOpenssl, ImagePrBuild};
 
 use crate::cargo::offline_env;
-use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step};
+use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirror_step};
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
@@ -95,6 +95,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
         ImageMbx::Shared => steps.extend([mbx_store_step(), mbx_seed_step()]),
     }
+    steps.extend(workflow.mirror.map(mirror_step));
     if let Some(sources) = workflow.private {
         steps.extend(release_phase(
             sources,
@@ -102,13 +103,12 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
             release_mint(workflow.helper),
         ));
     }
-    steps.extend([
-        install_tools(None),
-        command(
-            format!("Add the {IMAGE_TARGET} target"),
-            format!("rustup target add {IMAGE_TARGET}"),
-        ),
-    ]);
+    steps.push(install_tools(None));
+    steps.extend(workflow.mirror.map(mirror_step));
+    steps.extend([command(
+        format!("Add the {IMAGE_TARGET} target"),
+        format!("rustup target add {IMAGE_TARGET}"),
+    )]);
     if image.openssl == ImageOpenssl::Sysroot {
         steps.push(command(
             "Unpack the pinned OpenSSL sysroot".to_owned(),
