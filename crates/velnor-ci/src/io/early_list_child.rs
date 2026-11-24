@@ -36,12 +36,15 @@ impl Supervisor {
     pub(super) fn stop(&self, reason: impl Into<String>) {
         let mut slot = self.lock();
         slot.stopped.get_or_insert_with(|| reason.into());
-        if let Some(child) = slot.child.as_mut()
-            && matches!(child.try_wait(), Ok(None))
+        if let Some(child) = slot.child.as_ref()
             && let Ok(group) = i32::try_from(child.id())
         {
             killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
         }
+    }
+
+    pub(super) fn reason(&self) -> Option<String> {
+        self.lock().stopped.clone()
     }
 
     pub(super) fn run(&self, command: &mut Command, stdout_limit: u64) -> io::Result<Finished> {

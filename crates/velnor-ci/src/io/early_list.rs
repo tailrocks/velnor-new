@@ -89,7 +89,13 @@ impl EarlyList {
         let receiver = match state {
             State::Running(receiver) => receiver,
             State::Idle if wanted => self.spawn(),
-            State::Idle | State::Taken => return None,
+            State::Idle => {
+                if let Some(reason) = self.supervisor.reason() {
+                    report(&reason);
+                }
+                return None;
+            }
+            State::Taken => return None,
         };
         match receiver.recv_timeout(self.grace) {
             Ok(listing) => listing,

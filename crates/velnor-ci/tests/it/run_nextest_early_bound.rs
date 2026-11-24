@@ -233,3 +233,58 @@ fn a_signal_stops_the_list_with_the_run() {
         assert_list_stopped(&run);
     }
 }
+
+fn wait_for(path: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !path.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn a_signal_after_the_run_ended_still_stops_the_list() {
+    let mut run = launch(
+        "early-bound-signal-late",
+        &format!("{RECORD_LIST_PID}exec sleep 300"),
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}"),
+        &[(GRACE_VARIABLE, PATIENT)],
+    );
+    wait_for(&run.temp.join("list-pid"));
+    std::thread::sleep(Duration::from_secs(1));
+    kill(pid_of(&run.child), Signal::SIGTERM).ok();
+    let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
+    assert!(exited, "velnor-ci outlived the signal: {stderr}");
+    assert_list_stopped(&run);
+}
+
+#[test]
+fn a_descendant_that_outlives_the_list_is_stopped_with_it() {
+    let mut run = launch(
+        "early-bound-descendant",
+        "sleep 300 &\necho $! > \"$RUNNER_TEMP/list-pid\"\nexit 0",
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}"),
+        &[(GRACE_VARIABLE, "300")],
+    );
+    let (exited, stderr, written) = finish(&mut run, Duration::from_secs(10));
+    assert!(exited, "{stderr}");
+    assert_withheld(&written);
+    assert_list_stopped(&run);
+}
+
+#[test]
+fn a_signal_before_the_list_starts_is_reported() {
+    let mut run = launch(
+        "early-bound-signal-early",
+        "exit 0",
+        "echo started > \"$RUNNER_TEMP/run-started\"\nexec sleep 300",
+        &[(GRACE_VARIABLE, PATIENT)],
+    );
+    wait_for(&run.temp.join("run-started"));
+    kill(pid_of(&run.child), Signal::SIGTERM).ok();
+    let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
+    assert!(exited, "{stderr}");
+    assert!(
+        stderr.contains("velnor-ci: the early nextest list failed: velnor-ci received a signal"),
+        "{stderr}"
+    );
+}

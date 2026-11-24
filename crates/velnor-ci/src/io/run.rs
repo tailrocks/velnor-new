@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -121,9 +122,10 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         early.as_ref(),
     );
     let handle = signals.handle();
-    forward(signals, pid, own_group, early.clone());
+    let exited = Arc::new(AtomicBool::new(false));
+    forward(signals, pid, own_group, early.clone(), Arc::clone(&exited));
     let status = child.wait();
-    handle.close();
+    exited.store(true, Ordering::SeqCst);
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
     if runs_nextest(&args.command) {
@@ -138,6 +140,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     }
     let wanted = invocation.capture_complete && counts.is_some();
     let listing = early.map(|early| early.finish(wanted));
+    handle.close();
     if wanted
         && let Some(listing) = listing
         && let Some(counts) = counts
@@ -248,11 +251,20 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
     Ok((child, own_group))
 }
 
-fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool, early: Option<Arc<EarlyList>>) {
+fn forward(
+    mut signals: Signals,
+    pid: Option<Pid>,
+    own_group: bool,
+    early: Option<Arc<EarlyList>>,
+    exited: Arc<AtomicBool>,
+) {
     thread::spawn(move || {
         for received in signals.forever() {
             if let Some(early) = &early {
                 early.stop("velnor-ci received a signal");
+            }
+            if exited.load(Ordering::SeqCst) {
+                continue;
             }
             if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
                 if own_group {
