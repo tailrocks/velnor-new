@@ -17,6 +17,7 @@ mod links;
 mod placement;
 mod racing;
 mod released;
+mod settled;
 
 fn scan_with(
     root: &Path,
