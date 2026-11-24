@@ -11,6 +11,7 @@ mod helper_gate;
 mod image;
 mod image_cpu;
 mod image_error;
+mod image_inputs;
 pub mod io;
 mod key_gates;
 mod plan_render;

@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod inputs;
+mod queue;
+mod release_trust;
+
 use serde_json::Value;
 use velnor_gen::{GenerateError, ImageError, expected_files};
 use velnor_model::RepoPath;

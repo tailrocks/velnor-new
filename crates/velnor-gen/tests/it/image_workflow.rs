@@ -90,7 +90,7 @@ fn no_trigger_can_start_an_image_run_by_hand_or_from_another_workflow() -> TestR
         assert!(
             triggers
                 .iter()
-                .all(|trigger| matches!(*trigger, "pull_request" | "push")),
+                .all(|trigger| matches!(*trigger, "pull_request" | "merge_group" | "push")),
             "{name}: {triggers:?}"
         );
         assert_eq!(workflow["permissions"], serde_json::json!({}), "{name}");
@@ -135,16 +135,17 @@ fn registry_credentials_reach_only_the_publish_and_promote_jobs() -> TestResult 
 }
 
 #[test]
-fn the_compile_job_is_unprivileged_and_runs_only_for_a_push_or_a_same_repository_pull_request()
--> TestResult {
+fn the_compile_job_is_unprivileged_and_reached_only_by_trusted_events() -> TestResult {
     for name in SAMPLES {
         let workflow = rendered(name)?;
         let job = &workflow["jobs"][format!("image-{}-build", name_of(name))];
-        assert_eq!(
-            job["permissions"],
-            serde_json::json!({"contents": "read"}),
-            "{name}"
-        );
+        let private = name == "image-ghcr";
+        let scopes = if private {
+            serde_json::json!({"contents": "read", "pull-requests": "read"})
+        } else {
+            serde_json::json!({"contents": "read"})
+        };
+        assert_eq!(job["permissions"], scopes, "{name}");
         assert!(job.get("environment").is_none(), "{name}");
         let condition = job["if"].as_str().ok_or("no condition")?;
         assert!(
@@ -157,7 +158,7 @@ fn the_compile_job_is_unprivileged_and_runs_only_for_a_push_or_a_same_repository
             "{name}"
         );
         assert!(
-            condition.contains("!endsWith(github.actor, '[bot]')"),
+            condition.contains("github.event_name == 'merge_group'"),
             "{name}"
         );
     }
@@ -274,16 +275,22 @@ fn a_release_tag_promotes_the_pushed_digest_and_never_builds() -> TestResult {
             uses_of(promote, "docker/build-push-action").is_empty(),
             "{name}"
         );
-        let create = steps(promote)
+        let promoting: Vec<&str> = steps(promote)
             .into_iter()
-            .filter(|step| {
-                step["run"]
-                    .as_str()
-                    .is_some_and(|run| run.starts_with("docker buildx imagetools create --tag"))
-            })
-            .count();
+            .filter_map(|step| step["run"].as_str())
+            .filter(|run| run.contains("image promote"))
+            .collect();
         let registries = if name == "image-ghcr" { 2 } else { 1 };
-        assert_eq!(create, registries, "{name}");
+        assert_eq!(promoting.len(), 1, "{name}");
+        assert_eq!(
+            promoting[0].matches("--image=").count(),
+            registries,
+            "{name}"
+        );
+        assert!(
+            !promote.to_string().contains("imagetools create"),
+            "{name}: the tag is added by the helper after it compared digests"
+        );
         let authority = &workflow["jobs"][format!("image-{}-authority", name_of(name))];
         let condition = authority["if"].as_str().ok_or("no condition")?;
         assert!(

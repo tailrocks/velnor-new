@@ -11,18 +11,22 @@ use std::time::{Duration, Instant};
 use super::{api_url, append_outputs, http, image_candidate, read_limited, token};
 use crate::cli::ImageCommand;
 use crate::cli_image::{
-    GateOnly, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs, ImageStageArgs, OpensslMode,
+    GateOnly, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs,
+    ImagePromoteArgs, ImageStageArgs, OpensslMode,
 };
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
+use crate::image_deploy::authority::{Release, authorize};
 use crate::image_deploy::changes::select;
 use crate::image_deploy::gate::{
     Clock, Request, Wait, exemptions_only, tip_only, wait_for_required,
 };
 use crate::image_deploy::hub::{HUB_URL, preflight};
+use crate::image_deploy::promote::{Promotion, promote};
 use crate::image_deploy::stage::{Glibc, Openssl, check};
 
+mod registry;
 pub mod sysroot;
 
 const MAX_BINARY_BYTES: u64 = 1 << 30;
@@ -36,6 +40,8 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Gate(args) => gate(&args),
         ImageCommand::Changes(args) => changes(&args),
         ImageCommand::Preflight(args) => hub_preflight(&args),
+        ImageCommand::Authorize(args) => authorize_release(&args),
+        ImageCommand::Promote(args) => promote_release(&args),
         ImageCommand::Sysroot(args) => sysroot::unpack(&args),
     }
 }
@@ -214,4 +220,29 @@ fn hub_preflight(args: &ImagePreflightArgs) -> Result<String, CiError> {
     )?;
     append_outputs(&format!("sha_exists={}\n", outcome.sha_exists))?;
     Ok(outcome.report)
+}
+
+fn authorize_release(args: &ImageAuthorizeArgs) -> Result<String, CiError> {
+    let repo = Repo::parse(&args.repo)?;
+    let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
+    authorize(
+        &github,
+        &repo,
+        &Release {
+            tag: &args.tag,
+            actor: &args.actor,
+            actors: &args.release_actors,
+        },
+    )
+}
+
+fn promote_release(args: &ImagePromoteArgs) -> Result<String, CiError> {
+    promote(
+        &registry::Docker,
+        &Promotion {
+            images: &args.images,
+            version: &args.version,
+            commit: &args.commit,
+        },
+    )
 }

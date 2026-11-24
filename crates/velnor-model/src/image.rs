@@ -95,6 +95,7 @@ pub struct ImageConfig {
     pub pr_build: ImagePrBuild,
     pub attestations: bool,
     pub pr_only_checks: Vec<String>,
+    pub release_actors: Vec<String>,
     pub timeout_minutes: u16,
     pub registries: Vec<ImageRegistry>,
 }

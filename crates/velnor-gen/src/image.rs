@@ -47,6 +47,7 @@ pub(crate) fn image_workflow(
         check_registries(image, owner.as_deref())?;
         check_tools(facts, image)?;
         check_dockerfile(view, image)?;
+        crate::image_inputs::check(view, image)?;
         check_stage(view, image)?;
         let root = root_of(facts, image)?;
         let packages = packages_of(image, root)?;

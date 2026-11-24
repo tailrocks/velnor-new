@@ -182,3 +182,35 @@ pub struct ImageChangesArgs {
     )]
     pub matches: Vec<ImageGlob>,
 }
+
+#[derive(Debug, Args)]
+pub struct ImageAuthorizeArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(long, help = "The release tag that was pushed, without refs/tags/")]
+    pub tag: String,
+    #[arg(long, help = "The login that pushed the tag (github.actor)")]
+    pub actor: String,
+    #[arg(
+        long = "release-actor",
+        help = "A login that may release; repeat for each. Without a match, an active tag ruleset must forbid creating, moving and deleting the tag"
+    )]
+    pub release_actors: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ImagePromoteArgs {
+    #[arg(
+        long = "image",
+        required = true,
+        help = "A registry repository such as ghcr.io/owner/name; repeat for each"
+    )]
+    pub images: Vec<String>,
+    #[arg(long, help = "The version X.Y.Z to tag")]
+    pub version: String,
+    #[arg(
+        long,
+        help = "The full commit SHA whose sha-<commit> image is promoted"
+    )]
+    pub commit: String,
+}

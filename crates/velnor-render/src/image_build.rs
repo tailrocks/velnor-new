@@ -16,7 +16,7 @@ use crate::image_changes::{CHANGES_JOB, selective};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
-use crate::private_steps::{release_mint, release_phase};
+use crate::private_steps::{CHECK_STEP, queued_phase, release_mint};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
 use crate::rules::{RenderedJob, RenderedStep, Value};
@@ -80,6 +80,23 @@ fn sources_restores(steps: &[Step]) -> Vec<RenderedStep> {
         .collect()
 }
 
+fn and_condition(existing: Option<String>, extra: Option<&str>) -> Option<String> {
+    let inner = |text: &str| {
+        text.trim_start_matches("${{ ")
+            .trim_end_matches(" }}")
+            .to_owned()
+    };
+    match (existing, extra) {
+        (Some(condition), Some(extra)) => Some(format!(
+            "${{{{ ({}) && ({}) }}}}",
+            inner(&condition),
+            inner(extra)
+        )),
+        (condition, None) => condition,
+        (None, Some(extra)) => Some(extra.to_owned()),
+    }
+}
+
 pub(crate) fn build_job(
     workflow: &ImageWorkflow<'_>,
     build: &ImageBuild<'_>,
@@ -92,10 +109,10 @@ pub(crate) fn build_job(
         _ if selective => format!(
             "({}) || (({}) && needs.{CHANGES_JOB}.outputs.{} == 'true')",
             events.branch_push(),
-            events.pull_request(),
+            events.checked(),
             image.name
         ),
-        _ => format!("({}) || ({})", events.branch_push(), events.pull_request()),
+        _ => format!("({}) || ({})", events.branch_push(), events.checked()),
     };
     RenderedJob {
         id: job_id(image, "build"),
@@ -105,12 +122,20 @@ pub(crate) fn build_job(
         } else {
             Vec::new()
         },
-        permissions: permissions(&[("contents", "read")]),
+        permissions: permissions(&build_scopes(workflow)),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: image.timeout_minutes,
         steps: build_steps(workflow, build),
         ..RenderedJob::default()
     }
+}
+
+fn build_scopes(workflow: &ImageWorkflow<'_>) -> Vec<(&'static str, &'static str)> {
+    let mut scopes = vec![("contents", "read")];
+    if workflow.private.is_some() {
+        scopes.push(("pull-requests", "read"));
+    }
+    scopes
 }
 
 fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<RenderedStep> {
@@ -132,13 +157,18 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         let unless_hit =
             hit_id.map(|id| expression(&format!("steps.{id}.outputs.cache-hit != 'true'")));
         steps.extend(
-            release_phase(
+            queued_phase(
                 sources,
                 &join(build.root, "Cargo.toml"),
                 release_mint(workflow.helper),
             )
+            .into_iter()
             .map(|step| RenderedStep {
-                condition: unless_hit.clone(),
+                condition: if step.id.as_deref() == Some(CHECK_STEP) {
+                    step.condition
+                } else {
+                    and_condition(step.condition, unless_hit.as_deref())
+                },
                 ..step
             }),
         );

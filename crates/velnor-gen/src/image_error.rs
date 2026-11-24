@@ -11,6 +11,14 @@ pub enum ImageError {
         image: String,
         path: String,
     },
+    InputUntracked {
+        image: String,
+        path: String,
+    },
+    InputLinked {
+        image: String,
+        path: String,
+    },
     NotLinuxRunner {
         runner: String,
     },
@@ -160,6 +168,14 @@ impl fmt::Display for ImageError {
             Self::DockerfileMissing { image, path } => write!(
                 f,
                 "image {image}: the Dockerfile `{path}` is not a tracked file of this repository"
+            ),
+            Self::InputUntracked { image, path } => write!(
+                f,
+                "image {image}: the input `{path}` is neither a tracked file nor a directory with tracked files, so the sparse checkout of the Dockerfile inputs would not fetch it"
+            ),
+            Self::InputLinked { image, path } => write!(
+                f,
+                "image {image}: the input `{path}` is, or sits inside, a symbolic link or a git submodule; the sparse checkout fetches only regular tracked files, so name the real directory"
             ),
             Self::NotLinuxRunner { runner } => write!(
                 f,
