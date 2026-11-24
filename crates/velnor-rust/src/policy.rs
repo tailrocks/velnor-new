@@ -10,6 +10,7 @@ use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
 use crate::os_pins::pinned_for_runner;
+use crate::reads::INPUTS_LOCK;
 use crate::roots::is_cargo_config;
 
 const DEPENDENCY_FILES: &[&str] = &["Cargo.toml", "Cargo.lock"];
@@ -151,6 +152,14 @@ pub fn policy_runs(
             && (dependency || deny_only),
         machete: tools.machete && (manifest || unused_possible),
     }
+}
+
+#[must_use]
+pub fn inputs_changed(changed: &BTreeSet<RepoPath>) -> bool {
+    changed.iter().any(|path| {
+        let name = path.as_str().rsplit('/').next().unwrap_or_default();
+        DEPENDENCY_FILES.contains(&name) || *path == INPUTS_LOCK
+    })
 }
 
 fn rust_source(path: &RepoPath) -> bool {

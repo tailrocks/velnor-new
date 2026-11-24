@@ -12,7 +12,7 @@ use crate::units::Unit;
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
 const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 102);
-const PULL_REQUEST_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 112);
+const PULL_REQUEST_INPUTS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 /// Helpers from this release audit one Cargo root, or one workspace group,
 /// with `inputs audit --root`, so each lane audits what it built and no job
@@ -22,6 +22,14 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
+}
+
+pub(crate) fn audits_changed_inputs(facts: &RepoFacts) -> bool {
+    audits_per_root(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(PULL_REQUEST_INPUTS_HELPER))
 }
 
 pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Option<Job> {
@@ -95,14 +103,8 @@ pub(crate) fn audit_when(facts: &RepoFacts) -> Option<velnor_model::When> {
             (OnMain::Affected, _) => Some(When::Scheduled),
         };
     }
-    let on_pull_requests = facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER));
-    Some(match (facts.config.on_main, on_pull_requests) {
-        (OnMain::Everything, false) => When::FullAuditOrPush,
-        (OnMain::Affected, false) => When::FullAudit,
-        (OnMain::Everything, true) => When::FullAuditOrPushOrPullRequest,
-        (OnMain::Affected, true) => When::FullAuditOrPullRequest,
+    Some(match facts.config.on_main {
+        OnMain::Everything => When::FullAuditOrPush,
+        OnMain::Affected => When::FullAudit,
     })
 }

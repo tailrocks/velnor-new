@@ -4,6 +4,7 @@
 use crate::base_save::{jobs, steps};
 use crate::facts::TestResult;
 use crate::gate_eval::{Context, condition_of, runs};
+use crate::pipeline::{pin_helper, view, workflow};
 
 const EVERYTHING: &str = "on_main = \"everything\"\n";
 
@@ -12,6 +13,7 @@ fn audit_runs(
     config: &str,
     event: &str,
     expired: bool,
+    inputs: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let lane = jobs(helper, config)?
         .into_iter()
@@ -25,20 +27,22 @@ fn audit_runs(
     let mut context = Context::new(&[
         ("steps.restored.outcome", "success"),
         ("steps.plan.outcome", "success"),
-        ("steps.plan.outputs.rust_root_mode", "full"),
+        ("steps.plan.outputs.rust_root_mode", "some"),
         ("steps.build_1.outcome", "success"),
         ("steps.test.outputs.built", "true"),
     ]);
     context.set("github.event_name", event);
     context.set("steps.restored.outputs.expired", &expired.to_string());
+    context.set("steps.plan.outputs.rust_inputs", inputs);
     runs(&condition_of(audit)?, &context)
 }
 
 #[test]
-fn a_pull_request_audits_inputs_with_a_warm_cache_from_helper_0_1_112() -> TestResult {
+fn a_pull_request_that_changed_a_lock_or_a_manifest_audits_inputs_from_helper_0_1_112() -> TestResult
+{
     for config in ["", EVERYTHING] {
         assert!(
-            audit_runs("0.1.112", config, "pull_request", false)?,
+            audit_runs("0.1.112", config, "pull_request", false, "run")?,
             "{config}"
         );
     }
@@ -46,26 +50,71 @@ fn a_pull_request_audits_inputs_with_a_warm_cache_from_helper_0_1_112() -> TestR
 }
 
 #[test]
-fn an_older_helper_audits_a_pull_request_only_when_the_base_expired() -> TestResult {
+fn a_pull_request_that_changed_neither_does_not_audit_with_a_warm_cache() -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            !audit_runs("0.1.111", config, "pull_request", false)?,
+            !audit_runs("0.1.112", config, "pull_request", false, "skip")?,
             "{config}"
         );
     }
-    assert!(audit_runs("0.1.111", "", "pull_request", true)?);
+    assert!(audit_runs("0.1.112", "", "pull_request", true, "skip")?);
+    Ok(())
+}
+
+#[test]
+fn an_older_helper_never_reads_the_inputs_output() -> TestResult {
+    for config in ["", EVERYTHING] {
+        assert!(
+            !audit_runs("0.1.111", config, "pull_request", false, "run")?,
+            "{config}"
+        );
+    }
+    assert!(audit_runs("0.1.111", "", "pull_request", true, "run")?);
     Ok(())
 }
 
 #[test]
 fn a_push_keeps_its_audit_rule_at_every_helper() -> TestResult {
     for helper in ["0.1.111", "0.1.112"] {
-        assert!(!audit_runs(helper, "", "push", false)?, "{helper} affected");
-        assert!(audit_runs(helper, "", "push", true)?, "{helper} expired");
-        assert!(
-            audit_runs(helper, EVERYTHING, "push", false)?,
-            "{helper} everything"
-        );
+        for inputs in ["run", "skip"] {
+            assert!(
+                !audit_runs(helper, "", "push", false, inputs)?,
+                "{helper} affected"
+            );
+            assert!(
+                audit_runs(helper, "", "push", true, inputs)?,
+                "{helper} expired"
+            );
+            assert!(
+                audit_runs(helper, EVERYTHING, "push", false, inputs)?,
+                "{helper} everything"
+            );
+        }
     }
+    Ok(())
+}
+
+const GROUPED: &str = "full_run = \"nightly\"\n[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+const ROOTS: &[&str] = &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+
+fn grouped(version: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut view = view(ROOTS, Some(GROUPED.as_bytes()))?;
+    pin_helper(&mut view, version)?;
+    workflow(&view)
+}
+
+#[test]
+fn a_plan_job_exposes_the_inputs_output_to_the_audits_of_its_lanes() -> TestResult {
+    let text = grouped("0.1.112")?;
+    assert!(
+        text.contains("rust_inputs: '${{ steps.plan.outputs.rust_inputs }}'"),
+        "{text}"
+    );
+    assert!(
+        text.contains("needs.rust-plan.outputs.rust_inputs) == ''run''"),
+        "{text}"
+    );
+    let older = grouped("0.1.111")?;
+    assert!(!older.contains("rust_inputs"), "{older}");
     Ok(())
 }

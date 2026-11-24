@@ -63,6 +63,11 @@ pub fn outputs(
 }
 
 #[must_use]
+pub fn inputs_output(run: bool) -> String {
+    format!("rust_inputs={}\n", lane(run))
+}
+
+#[must_use]
 pub fn workspace_group_outputs(
     groups: &[WorkspaceGroup],
     selections: &BTreeMap<RepoPath, RustSelection>,

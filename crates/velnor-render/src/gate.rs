@@ -159,7 +159,9 @@ pub(crate) fn condition(
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
-            parts.extend((when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()));
+            parts.extend(
+                (when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()),
+            );
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());
@@ -203,15 +205,18 @@ pub(crate) fn condition(
             parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
         When::FullAudit => {
-            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
-            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
-        },
-        When::FullAuditOrPush => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')".to_owned()),
-        When::FullAuditOrPullRequest => {
-            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
-            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'{expired})"));
+            let expired = if setup == Setup::Before {
+                ""
+            } else {
+                " || steps.restored.outputs.expired == 'true'"
+            };
+            let changed = inputs_changed(gate, setup);
+            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired}{changed})"));
         }
-        When::FullAuditOrPushOrPullRequest => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'pull_request')".to_owned()),
+        When::FullAuditOrPush => {
+            let changed = inputs_changed(gate, setup);
+            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'{changed})"));
+        }
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
@@ -242,6 +247,25 @@ pub(crate) fn condition(
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
     }
+}
+
+fn inputs_changed(gate: Option<&Gate>, setup: Setup) -> String {
+    let Some(gate) = gate.filter(|gate| gate.need == GateNeed::Inputs) else {
+        return String::new();
+    };
+    let read = plan_read(
+        &plan_source(&gate.from),
+        &output(&gate.slug, GateNeed::Inputs),
+        setup,
+    );
+    format!(
+        " || ({IS_PULL_REQUEST} && {} == 'run')",
+        if setup == Setup::Replanned {
+            format!("({read})")
+        } else {
+            read
+        }
+    )
 }
 
 fn has_label(label: &str) -> String {
@@ -319,6 +343,11 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
 
 pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
+    let need = if gate.need == GateNeed::Inputs {
+        GateNeed::Selected
+    } else {
+        gate.need
+    };
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
         PlanFrom::Job(_) | PlanFrom::WorkJob(_) => Vec::new(),
@@ -332,7 +361,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     };
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
-    match gate.need {
+    match need {
         GateNeed::Selected if !gate.also.is_empty() => {
             let any = gate
                 .roots()
@@ -341,11 +370,11 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 .join(" || ");
             parts.push(format!("({any})"));
         }
-        GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
+        GateNeed::Selected | GateNeed::Inputs | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
-            match gate.need {
+            match need {
                 GateNeed::Doctests | GateNeed::Docs => {
-                    parts.push(runs(gate.need));
+                    parts.push(runs(need));
                     parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
                 }
                 _ => {}
@@ -387,7 +416,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
         | GateNeed::PackageArgs
         | GateNeed::DoctestsKnown
         | GateNeed::TestsExpected => {
-            parts.push(format!("{} != ''", read(gate.need)));
+            parts.push(format!("{} != ''", read(need)));
         }
     }
     parts

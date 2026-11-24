@@ -129,6 +129,24 @@ fn plan_runs_both_policy_tools_for_a_changed_lock_file_and_on_a_schedule() {
     );
 }
 
+#[test]
+fn plan_asks_for_the_inputs_audit_only_when_a_lock_or_a_manifest_changed() {
+    let repo = plan_repo("inputs-audit");
+    for (changed, expected) in [
+        ("Cargo.lock", "rust_inputs=run "),
+        ("b/Cargo.toml", "rust_inputs=run "),
+        (".velnor/rust-inputs.lock", "rust_inputs=run "),
+        ("b/src/lib.rs", "rust_inputs=skip "),
+        ("README.md", "rust_inputs=skip "),
+    ] {
+        assert_eq!(
+            lines_of(&repo, &[changed], &["rust_inputs="]),
+            expected,
+            "{changed}"
+        );
+    }
+}
+
 const DOCTESTS_OFF: &str =
     "[package]\nname = \"a\"\nedition = \"2024\"\n\n[lib]\ndoctest = false\n";
 const RUNNER: &str = "[target.x86_64-unknown-linux-gnu]\nrunner = \"true\"\n";
