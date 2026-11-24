@@ -9,6 +9,7 @@ use crate::support::repo;
 mod current_run;
 mod external_checks;
 mod hostile_check;
+mod image_gate;
 mod inputs;
 mod pr_only;
 mod pr_rules;

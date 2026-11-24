@@ -24,6 +24,7 @@ pub use crate::cli_args::{
     VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
+pub use crate::cli_image::{ImageStageArgs, ImageSysrootArgs, OpensslMode};
 pub use gate::GateArgs;
 pub use report::ReportArgs;
 pub use resolve_qualification::ResolveQualificationArgs;

@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use crate::cli_image::{ImageGateArgs, ImagePreflightArgs, ImageStageArgs, ImageSysrootArgs};
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
@@ -206,6 +207,22 @@ pub enum ImageCommand {
         about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; the checkout is at GITHUB_SHA, which is the tip of main; the candidate record and archive verify against --root; the run has one unexpired candidate artifact; the latest canonical ci.yml push run of the commit succeeded; and `gh attestation verify` passes for the archive and the record with the repository, workflow, ref and commit pinned. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
     )]
     Publish(ImagePublishArgs),
+    #[command(
+        about = "Copy the compiled binaries out of the Cargo target directory, which may be a link, into a real directory, and refuse to stage any that is not an x86-64 dynamic binary whose newest GLIBC_ symbol version is within --glibc, that carries a library search path outside $ORIGIN, or whose libssl and libcrypto dependency does not match --openssl. Stages nothing when any binary is refused"
+    )]
+    Stage(ImageStageArgs),
+    #[command(
+        about = "Wait until every required check of the commit has passed, as release-gate judges them, then write ready=true to $GITHUB_OUTPUT. Exit 1 when a check failed or the checks were not green within --wait-seconds. With --require-tip, write ready=false and exit 0 when the commit is no longer the tip of the default branch. Reads GITHUB_TOKEN, which needs actions: read, contents: read and statuses: read"
+    )]
+    Gate(ImageGateArgs),
+    #[command(
+        about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private, and write sha_exists=true or false to $GITHUB_OUTPUT for the tag. Never prints a credential"
+    )]
+    Preflight(ImagePreflightArgs),
+    #[command(
+        about = "Download the Debian packages named in the sysroot lock, check each sha256, unpack them with dpkg-deb into --out, keep only the shared OpenSSL libraries and the merged headers, and append X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR and X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR to $GITHUB_ENV"
+    )]
+    Sysroot(ImageSysrootArgs),
 }
 
 #[derive(Debug, Args)]
