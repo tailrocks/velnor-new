@@ -28,7 +28,7 @@ use velnor_rust::{
 };
 
 use super::unit_platforms::platforms;
-use super::units::apart;
+use super::units::{apart, outside_tracked};
 use crate::coverage::{Built, Fingerprint};
 use crate::error::CiError;
 use crate::platform::Platforms;
@@ -78,6 +78,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
     let workspaces = workspaces(&facts, &checkout.root, directory, None, &inherit)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
+    outside_tracked(&workspaces, &checkout.root, &checkout.view.tracked_paths)?;
     let chosen = selected(&facts, &shared, options.root.as_deref())?;
     let groups = group_dirs(&facts, &checkout.root);
     let mut audit = setup::begin(

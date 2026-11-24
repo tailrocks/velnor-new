@@ -30,12 +30,15 @@ mod path_dependency_fixture;
 mod per_root;
 mod plain_build;
 mod reads;
+mod real_cargo;
 mod relative_build_dir;
 mod script_dep_info;
 mod selection;
 mod separate_build;
+mod shared_build;
 mod stale_run;
 mod stand_ins;
+mod tracked_build;
 
 use std::ffi::OsStr;
 use std::fs;

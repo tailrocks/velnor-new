@@ -19,7 +19,7 @@ fn output(directory: &str) -> String {
     format!("{directory}/debug/build/lib/f000000000000008/run/stdout")
 }
 
-fn with_build_directory(repo: &Repo, directory: &str, arguments: &[&str]) -> Output {
+pub(super) fn with_build_directory(repo: &Repo, directory: &str, arguments: &[&str]) -> Output {
     velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_BUILD_BUILD_DIR", repo.root().join(directory))
@@ -114,7 +114,7 @@ fn a_build_directory_that_holds_no_units_while_the_target_holds_outputs_makes_th
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
-fn unit_count(output: &Output) -> usize {
+pub(super) fn unit_count(output: &Output) -> usize {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let (_, tail) = stdout
         .split_once(" reads from ")
