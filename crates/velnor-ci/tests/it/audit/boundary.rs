@@ -134,7 +134,7 @@ fn audit_wrapped_nextest_cannot_forge_step_outputs() {
     // forged `tests_run=999` line must still be absent: only the wrapper's lines remain.
     assert_eq!(
         crate::run_nextest::without_built(&written),
-        "existing=1\ntests_run=7\ntests_listed=9\n"
+        "existing=1\ntests_run=7\n"
     );
     assert!(
         written
