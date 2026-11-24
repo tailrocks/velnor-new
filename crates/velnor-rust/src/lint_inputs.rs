@@ -26,17 +26,11 @@ pub fn lint_runs(
         .lint
         .iter()
         .filter(|lint| lint.planned())
-        .map(|lint| {
-            (
-                lint.slug(),
-                runs(facts, lint, event, changed, tracked, symlinks),
-            )
-        })
+        .map(|lint| (lint.slug(), runs(lint, event, changed, tracked, symlinks)))
         .collect()
 }
 
 fn runs(
-    facts: &RepoFacts,
     lint: &LintJob,
     event: EventKind,
     changed: Option<&BTreeSet<RepoPath>>,
@@ -48,20 +42,15 @@ fn runs(
     else {
         return true;
     };
-    triggered(facts, lint, changed, symlinks)
+    triggered(lint, changed, symlinks)
         || (!lint.inputs.is_empty() && !has_tracked_input(lint, tracked, symlinks))
 }
 
-fn triggered(
-    facts: &RepoFacts,
-    lint: &LintJob,
-    changed: &BTreeSet<RepoPath>,
-    symlinks: &BTreeSet<RepoPath>,
-) -> bool {
+fn triggered(lint: &LintJob, changed: &BTreeSet<RepoPath>, symlinks: &BTreeSet<RepoPath>) -> bool {
     symlinks
         .iter()
         .chain(changed)
-        .any(|path| reached(facts, lint, path))
+        .any(|path| reached(lint, path))
 }
 
 #[must_use]
@@ -77,7 +66,7 @@ pub fn unmatched_inputs(
         .config
         .lint
         .iter()
-        .filter(|lint| !changed.is_some_and(|changed| triggered(facts, lint, changed, symlinks)))
+        .filter(|lint| !changed.is_some_and(|changed| triggered(lint, changed, symlinks)))
         .flat_map(|lint| {
             lint.inputs
                 .iter()
@@ -173,21 +162,11 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
 
 const GENERATOR_FOLDERS: [&str; 3] = [".github/", ".velnor/", "generator/"];
 
-fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath) -> bool {
-    GENERATOR_FOLDERS
+fn inert(path: &RepoPath) -> bool {
+    !GENERATOR_FOLDERS
         .iter()
         .chain(TASK_FOLDERS)
         .any(|folder| path.as_str().starts_with(folder))
-        || facts.compile_inputs.contains_key(&None)
-        || facts
-            .compile_inputs
-            .keys()
-            .flatten()
-            .any(|input| input == path || path.as_str().starts_with(&format!("{input}/")))
-}
-
-fn inert(facts: &RepoFacts, path: &RepoPath) -> bool {
-    !read_by_the_generator(facts, path)
         && Path::new(path.as_str())
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
@@ -197,9 +176,9 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
     lint.inputs.iter().any(|glob| reaches(glob, path))
 }
 
-fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath) -> bool {
+fn reached(lint: &LintJob, path: &RepoPath) -> bool {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
-        return from_source || !inert(facts, path);
+        return from_source || !inert(path);
     }
     declared(lint, path)
         || implicit(lint, path)
