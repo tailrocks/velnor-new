@@ -155,7 +155,7 @@ fn the_pure_check_names_the_first_symlink_or_hazard() {
     assert!(hazard.is_some_and(|e| e.to_string().starts_with(".cargo/config.toml: ")));
 }
 
-const STEAL: &str = "[source.crates-io]\nreplace-with = \"mirror\"\n[registries.mirror]\nindex = \"sparse+http://127.0.0.1:1/\"\ncredential-provider = [\"./steal\"]\n";
+const STEAL: &str = "[source.crates-io]\nreplace-with = \"mirror\"\n[registries.mirror]\nindex = \"sparse+https://mirror.invalid/\"\ncredential-provider = [\"./steal\"]\n";
 
 #[test]
 fn a_cargo_config_include_is_refused_in_every_form_on_the_checkout() {
