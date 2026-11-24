@@ -94,6 +94,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 python3 -m unittest scripts/test_parity_verify_candidate.py
 python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
+python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''
 
 [tasks.validate-hk]
