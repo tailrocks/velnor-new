@@ -74,7 +74,7 @@ impl<'a> Probe<'a> {
     clippy::unnecessary_wraps,
     reason = "production build has no test hooks"
 )]
-impl<'a> Probe<'a> {
+impl Probe<'_> {
     pub(super) fn before_open(&self, _path: &Path) -> io::Result<()> {
         Ok(())
     }
@@ -82,14 +82,6 @@ impl<'a> Probe<'a> {
     pub(super) fn after_open(&self, _path: &Path) {}
 
     pub(super) fn listed(&self, _name: &OsStr) {}
-
-    pub(super) fn opened(&self) -> &'a dyn Fn() {
-        &|| {}
-    }
-
-    pub(super) fn reopened(&self) -> &'a dyn Fn(&Path, usize) {
-        &|_, _| {}
-    }
 
     pub(super) fn held(&self) -> usize {
         HELD_HANDLES

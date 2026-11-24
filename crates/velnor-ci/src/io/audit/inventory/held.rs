@@ -40,7 +40,10 @@ impl<'p, 'a> Held<'p, 'a> {
         let in_use = self.handles.len() + UNTRACKED_LISTING + RESOLVER_FIXED;
         Reach {
             bound: DESCRIPTOR_BUDGET.saturating_sub(in_use),
+            #[cfg(test)]
             opened: self.probe.opened(),
+            #[cfg(not(test))]
+            marker: std::marker::PhantomData,
         }
     }
 
@@ -51,7 +54,10 @@ impl<'p, 'a> Held<'p, 'a> {
         };
         Climb {
             anchor,
+            #[cfg(test)]
             stepped: self.probe.reopened(),
+            #[cfg(not(test))]
+            marker: std::marker::PhantomData,
         }
     }
 

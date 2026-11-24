@@ -75,14 +75,20 @@ fn descend(mut current: OwnedFd, below: &Path, listing: bool) -> io::Result<Owne
 #[derive(Clone, Copy)]
 pub(super) struct Reach<'a> {
     pub(super) bound: usize,
+    #[cfg(test)]
     pub(super) opened: &'a dyn Fn(),
+    #[cfg(not(test))]
+    pub(super) marker: std::marker::PhantomData<&'a ()>,
 }
 
 impl Default for Reach<'_> {
     fn default() -> Self {
         Self {
             bound: DESCRIPTOR_BUDGET.saturating_sub(RESOLVER_FIXED + UNTRACKED_LISTING),
+            #[cfg(test)]
             opened: &|| {},
+            #[cfg(not(test))]
+            marker: std::marker::PhantomData,
         }
     }
 }
@@ -163,6 +169,7 @@ pub(super) fn resolve(
     reach: Reach<'_>,
 ) -> io::Result<Followed> {
     let mut current = directory.try_clone_to_owned()?;
+    #[cfg(test)]
     (reach.opened)();
     let mut trail = Trail::new(reach.bound);
     let mut path = base.to_path_buf();
@@ -175,6 +182,7 @@ pub(super) fn resolve(
             Step::Root => {
                 trail.clear();
                 current = open_path(Path::new("/"), false)?;
+                #[cfg(test)]
                 (reach.opened)();
                 path = PathBuf::from("/");
                 last = None;
@@ -195,6 +203,7 @@ pub(super) fn resolve(
                         parent
                     }
                 };
+                #[cfg(test)]
                 (reach.opened)();
                 path.pop();
                 last = None;
@@ -218,6 +227,7 @@ pub(super) fn resolve(
                     steps(&next, &mut pending);
                 } else if format == SFlag::S_IFDIR {
                     let opened = open_directory(current.as_fd(), Path::new(&name), false)?;
+                    #[cfg(test)]
                     (reach.opened)();
                     trail.push(std::mem::replace(&mut current, opened))?;
                     path.push(&name);
