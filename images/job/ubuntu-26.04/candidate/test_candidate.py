@@ -23,6 +23,9 @@ sys.modules[SPEC.name] = candidate
 SPEC.loader.exec_module(candidate)
 
 
+REVISION = "a" * 40
+
+
 def digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
@@ -36,6 +39,7 @@ def archive_entries(
     media_type: str = "application/vnd.oci.image.layer.v1.tar",
     layer_data: bytes | None = None,
     diff_id_data: bytes | None = None,
+    labels: object | None = None,
 ) -> dict[str, bytes]:
     layer_buffer = io.BytesIO()
     with tarfile.open(fileobj=layer_buffer, mode="w") as layer_tar:
@@ -46,6 +50,7 @@ def archive_entries(
     diff_layer = diff_id_data if diff_id_data is not None else layer
     config = json_bytes({
         "architecture": "amd64", "os": "linux",
+        "config": {"Labels": labels if labels is not None else {candidate.REVISION_LABEL: REVISION}},
         "rootfs": {"type": "layers", "diff_ids": diff_ids if diff_ids is not None else [digest(diff_layer)]},
     })
     manifest = json_bytes({
@@ -126,7 +131,7 @@ def write_archive(path: Path, entries: dict[str, bytes], duplicate: str | None =
 
 def valid_record(archive_path: Path) -> dict[str, object]:
     archive_hash, archive_size = candidate._hash_file(archive_path)
-    oci = candidate.verify_oci_archive(archive_path)
+    oci = candidate.verify_oci_archive(archive_path, REVISION)
     return {
         "schema": candidate.SCHEMA,
         "source": {
@@ -140,7 +145,8 @@ def valid_record(archive_path: Path) -> dict[str, object]:
         },
         "platform": "linux/amd64",
         "build": {
-            "builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64", "arguments": [],
+            "builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64",
+            "arguments": [f"VELNOR_SOURCE_SHA={REVISION}"],
             "exporter": "oci", "provenance": "disabled",
             "compression": "gzip", "force_compression": True,
         },
@@ -165,7 +171,7 @@ class CandidateTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def test_valid_amd64_archive_and_separate_archive_hash(self) -> None:
-        oci = candidate.verify_oci_archive(self.archive)
+        oci = candidate.verify_oci_archive(self.archive, REVISION)
         record = candidate.validate_record(valid_record(self.archive))
         self.assertEqual(oci["platform_manifest_digest"], record["oci"]["platform_manifest_digest"])
         self.assertNotEqual(record["archive"]["sha256"], oci["platform_manifest_digest"].removeprefix("sha256:"))
@@ -174,7 +180,7 @@ class CandidateTests(unittest.TestCase):
         entries = duplicate_layer_reference(self.entries)
         write_archive(self.archive, entries)
 
-        result = candidate.verify_oci_archive(self.archive)
+        result = candidate.verify_oci_archive(self.archive, REVISION)
 
         self.assertEqual(len(result["layer_digests"]), 2)
         self.assertEqual(result["layer_digests"][0], result["layer_digests"][1])
@@ -184,7 +190,7 @@ class CandidateTests(unittest.TestCase):
         write_archive(self.archive, entries)
 
         with self.assertRaisesRegex(candidate.CandidateError, "different size or media type"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_repeated_layer_descriptor_with_different_media_type_is_rejected(self) -> None:
         entries = duplicate_layer_reference(
@@ -193,37 +199,37 @@ class CandidateTests(unittest.TestCase):
         write_archive(self.archive, entries)
 
         with self.assertRaisesRegex(candidate.CandidateError, "different size or media type"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_wrong_platform_rejected(self) -> None:
         entries = archive_entries({"architecture": "arm64", "os": "linux"})
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "platform is not linux/amd64"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_invalid_rootfs_diff_id_rejected(self) -> None:
         entries = archive_entries(diff_ids="x")
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "incorrect DiffID data"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_wrong_but_well_formed_diff_id_rejected(self) -> None:
         entries = archive_entries(diff_ids=["sha256:" + "0" * 64])
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "DiffID is not the same as"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_unregistered_layer_media_type_rejected(self) -> None:
         entries = archive_entries(media_type="application/vnd.oci.image.layer.v1.evil")
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "media type is incorrect"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_layer_must_be_a_tar_archive(self) -> None:
         entries = archive_entries(layer_data=b"not a tar archive")
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "not a tar archive"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_gzip_layer_uses_uncompressed_diff_id(self) -> None:
         plain_entries = archive_entries()
@@ -238,7 +244,7 @@ class CandidateTests(unittest.TestCase):
             layer_data=gzip.compress(plain_layer), diff_id_data=plain_layer,
         )
         write_archive(self.archive, entries)
-        self.assertEqual(len(candidate.verify_oci_archive(self.archive)["layer_digests"]), 1)
+        self.assertEqual(len(candidate.verify_oci_archive(self.archive, REVISION)["layer_digests"]), 1)
 
     def test_layer_rejects_duplicate_paths(self) -> None:
         layer_buffer = io.BytesIO()
@@ -250,7 +256,7 @@ class CandidateTests(unittest.TestCase):
         entries = archive_entries(layer_data=layer_buffer.getvalue())
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "repeats a path"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_layer_pax_header_is_bounded_before_tar_parse(self) -> None:
         layer_buffer = io.BytesIO()
@@ -265,7 +271,7 @@ class CandidateTests(unittest.TestCase):
         candidate.MAX_TAR_EXTENSION_BYTES = 64
         try:
             with self.assertRaisesRegex(candidate.CandidateError, "extension header exceeds"):
-                candidate.verify_oci_archive(self.archive)
+                candidate.verify_oci_archive(self.archive, REVISION)
         finally:
             candidate.MAX_TAR_EXTENSION_BYTES = original_limit
 
@@ -281,7 +287,7 @@ class CandidateTests(unittest.TestCase):
                         info.pax_headers = {"comment": "x" * 65}
                     archive.addfile(info, io.BytesIO(data))
             with self.assertRaisesRegex(candidate.CandidateError, "extension header exceeds"):
-                candidate.verify_oci_archive(self.archive)
+                candidate.verify_oci_archive(self.archive, REVISION)
         finally:
             candidate.MAX_TAR_EXTENSION_BYTES = original_limit
 
@@ -295,39 +301,39 @@ class CandidateTests(unittest.TestCase):
             with self.subTest(format=name):
                 self.archive.write_bytes(compress(raw_archive))
                 with self.assertRaisesRegex(candidate.CandidateError, "uncompressed tar"):
-                    candidate.verify_oci_archive(self.archive)
+                    candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_duplicate_archive_path_rejected(self) -> None:
         write_archive(self.archive, self.entries, "index.json")
         with self.assertRaisesRegex(candidate.CandidateError, "Duplicate archive path"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_duplicate_json_key_rejected(self) -> None:
         entries = dict(self.entries)
         entries["index.json"] = b'{"schemaVersion":2,"schemaVersion":2,"manifests":[]}'
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "Duplicate JSON key"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_changed_blob_rejected(self) -> None:
         entries = dict(self.entries)
         entries[self.layer_name] = b"bad-layer-bytes"
         write_archive(self.archive, entries)
         with self.assertRaises(candidate.CandidateError):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_extra_blob_rejected(self) -> None:
         entries = dict(self.entries)
         entries[f"blobs/sha256/{hashlib.sha256(b'extra').hexdigest()}"] = b"extra"
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "missing or unreferenced"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_missing_blob_rejected(self) -> None:
         entries = {name: data for name, data in self.entries.items() if name != self.layer_name}
         write_archive(self.archive, entries)
         with self.assertRaisesRegex(candidate.CandidateError, "missing or unreferenced"):
-            candidate.verify_oci_archive(self.archive)
+            candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_record_rejects_unknown_field(self) -> None:
         record = valid_record(self.archive)
@@ -351,11 +357,29 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(candidate.CandidateError, "cannot use symlinks"):
             candidate._output_path(source, str(dangling))
 
-    def test_record_rejects_unrecorded_build_arguments(self) -> None:
+    def test_record_rejects_build_arguments_other_than_the_source_commit(self) -> None:
+        for arguments in (
+            [], ["TOKEN=secret"], ["VELNOR_SOURCE_SHA=" + "b" * 40],
+            [f"VELNOR_SOURCE_SHA={REVISION}", "TOKEN=secret"], [f"VELNOR_SOURCE_SHA={REVISION}"] * 2,
+        ):
+            with self.subTest(arguments=arguments):
+                record = valid_record(self.archive)
+                record["build"]["arguments"] = arguments
+                with self.assertRaisesRegex(candidate.CandidateError, "Build arguments must be VELNOR_SOURCE_SHA"):
+                    candidate.validate_record(record)
+
+    def test_record_schema_is_version_two(self) -> None:
         record = valid_record(self.archive)
-        record["build"]["arguments"] = ["TOKEN=secret"]
-        with self.assertRaisesRegex(candidate.CandidateError, "Build arguments must be empty"):
+        record["schema"] = "velnor.job-image-candidate.v1"
+        with self.assertRaisesRegex(candidate.CandidateError, "schema or platform"):
             candidate.validate_record(record)
+
+    def test_image_revision_label_must_be_the_source_commit(self) -> None:
+        for labels in ({}, {candidate.REVISION_LABEL: ""}, {candidate.REVISION_LABEL: "b" * 40}, "x"):
+            with self.subTest(labels=labels):
+                write_archive(self.archive, archive_entries(labels=labels))
+                with self.assertRaisesRegex(candidate.CandidateError, "revision label is not the source commit"):
+                    candidate.verify_oci_archive(self.archive, REVISION)
 
     def test_buildx_banner_does_not_replace_binary_hash(self) -> None:
         binary = self.directory / "fake-buildx"
@@ -378,7 +402,7 @@ class CandidateTests(unittest.TestCase):
         candidate.MAX_ARCHIVE_BYTES = 1
         try:
             with self.assertRaisesRegex(candidate.CandidateError, "file size limit"):
-                candidate.verify_oci_archive(self.archive)
+                candidate.verify_oci_archive(self.archive, REVISION)
         finally:
             candidate.MAX_ARCHIVE_BYTES = original_limit
 

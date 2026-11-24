@@ -141,6 +141,7 @@ pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
     })
 }
 
+// helper-gate: first in tools-v0.1.114 via c9dfb11d50b1cbbf55273621878dd949d4a7c5f9
 const PUBLIC_PROBE_FAILS_HELPER: (u64, u64, u64) = (0, 1, 114);
 
 pub const MAX_SOURCE_ROOTS: usize = 16;

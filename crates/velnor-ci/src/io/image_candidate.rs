@@ -14,10 +14,24 @@ use crate::image_candidate::archive::{self, Blob, MAX_ARCHIVE_BYTES};
 use crate::image_candidate::hashing::sha256_hex;
 use crate::image_candidate::identity::{buildx_version, workflow};
 use crate::image_candidate::json::parse;
+use crate::image_candidate::lock::{Lock, parse_lock};
 use crate::image_candidate::oci::{self, BlobSource};
 use crate::image_candidate::record::{INPUT_PATHS, validate};
 
+mod build;
+mod client;
+mod docker;
+mod output;
+mod process;
+pub(in crate::io) mod publish;
+mod source;
+
+pub(in crate::io) use build::build;
+
+const DOCKERFILE_DIR: &str = "images/job/ubuntu-26.04";
+const DOCKERFILE: &str = "images/job/ubuntu-26.04/Dockerfile";
 const MAX_RECORD_BYTES: u64 = 1 << 20;
+const MAX_INPUT_BYTES: u64 = 1 << 24;
 const PASS: &str =
     "PASS: Candidate record has the same source inputs and OCI archive identities.\n";
 
@@ -83,58 +97,89 @@ fn scan_archive(path: &Path) -> Result<archive::Scanned, CiError> {
 fn source_inputs(root: &Path) -> Result<Value, CiError> {
     let mut inputs = Map::new();
     for name in INPUT_PATHS.iter().copied() {
-        let data = fs::read(root.join(name))
-            .map_err(|error| CiError::new(format!("{}: {error}", root.join(name).display())))?;
+        let path = root.join(name);
+        if regular(&path, name)? > MAX_INPUT_BYTES {
+            return fail(format!("{name} exceeds its size limit."));
+        }
+        let data = fs::read(&path)
+            .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
         inputs.insert(name.to_owned(), Value::String(sha256_hex(&data)));
     }
     Ok(Value::Object(inputs))
 }
 
-fn locked_buildx(root: &Path) -> Result<String, CiError> {
+fn read_lock(root: &Path) -> Result<Lock, CiError> {
     let path = root.join(".velnor/runner.lock");
     let text = fs::read_to_string(&path)
         .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
-    let lock: toml::Table = toml::from_str(&text)
-        .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
-    lock.get("buildx_version")
-        .and_then(toml::Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| CiError::new(format!("{}: buildx_version is missing", path.display())))
+    parse_lock(&text).map_err(|error| error.context(&path.display().to_string()))
+}
+
+fn github_env() -> HashMap<String, String> {
+    std::env::vars_os()
+        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
+        .filter(|(name, _)| name.starts_with("GITHUB_"))
+        .collect()
 }
 
 pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiError> {
-    let env: HashMap<String, String> = std::env::vars_os()
-        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
-        .filter(|(name, _)| name.starts_with("GITHUB_"))
-        .collect();
-    verify_with(args, &env)
+    verify_with(args, &github_env())
+}
+
+struct Checked {
+    raw: Vec<u8>,
+    record: Value,
+    scan: archive::Scanned,
+}
+
+fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, CiError> {
+    let raw = read_record(record)?;
+    let value = parse(&raw, "candidate record")?;
+    validate(&value)?;
+    let scan = scan_archive(archive)?;
+    let actual = oci::verify(
+        &scan,
+        &FileSource {
+            path: archive.to_path_buf(),
+        },
+        value["source"]["commit"].as_str().unwrap_or_default(),
+    )?;
+    if value["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
+        return fail("Candidate archive is not the same as the archive in its record.");
+    }
+    if value["oci"] != actual {
+        return fail("OCI graph is not the same as the graph in its candidate record.");
+    }
+    let root = fs::canonicalize(root)
+        .map_err(|error| CiError::new(format!("{}: {error}", root.display())))?;
+    if value["source"]["inputs"] != source_inputs(&root)? {
+        return fail("Build input bytes changed after candidate creation.");
+    }
+    Ok(Checked {
+        raw,
+        record: value,
+        scan,
+    })
+}
+
+fn check_builder(root: &Path, record: &Value) -> Result<(), CiError> {
+    let lock = read_lock(root)?;
+    let builder = record["build"]["builder"].as_str().unwrap_or_default();
+    if buildx_version(builder) != Some(lock.buildx_version.as_str()) {
+        return fail(
+            "Candidate Buildx identity is not the same as the value in .velnor/runner.lock.",
+        );
+    }
+    Ok(())
 }
 
 fn verify_with(
     args: &VerifyCandidateArgs,
     env: &HashMap<String, String>,
 ) -> Result<String, CiError> {
-    let raw = read_record(&args.record)?;
-    let value = parse(&raw, "candidate record")?;
-    let record = validate(&value)?;
-    let scan = scan_archive(&args.archive)?;
-    let actual = oci::verify(
-        &scan,
-        &FileSource {
-            path: args.archive.clone(),
-        },
-    )?;
-    if record["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
-        return fail("Candidate archive is not the same as the archive in its record.");
-    }
-    if record["oci"] != actual {
-        return fail("OCI graph is not the same as the graph in its candidate record.");
-    }
+    let Checked { record, .. } = check_archive(&args.record, &args.archive, &args.root)?;
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
-    if record["source"]["inputs"] != source_inputs(&root)? {
-        return fail("Build input bytes changed after candidate creation.");
-    }
     let (identity, reference) = workflow(env)?;
     let commit = env.get("GITHUB_SHA");
     if commit.map(String::as_str) != record["source"]["commit"].as_str()
@@ -149,12 +194,6 @@ fn verify_with(
             "Candidate workflow identity is not the same as the current GitHub workflow identity.",
         );
     }
-    let locked = locked_buildx(&root)?;
-    let builder = record["build"]["builder"].as_str().unwrap_or_default();
-    if buildx_version(builder) != Some(locked.as_str()) {
-        return fail(
-            "Candidate Buildx identity is not the same as the value in .velnor/runner.lock.",
-        );
-    }
+    check_builder(&root, &record)?;
     Ok(PASS.to_owned())
 }

@@ -18,9 +18,9 @@ pub use app_token::AppTokenArgs;
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
-    BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
-    QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
+    BaseFile, BenchCommand, BudgetArgs, BuildArgs, CheckConfigurationsArgs, CollectArgs,
+    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, MisePinArgs, PlanArgs, PlanMode,
+    PrepareArgs, QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
     VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
@@ -119,9 +119,13 @@ pub enum Command {
     )]
     PrivateTokenAllowed,
     #[command(
-        about = "Create a GitHub App installation token that can only read the contents of the --repository repositories of --owner, and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. Runs no post step: the step that uses the token revokes it"
+        about = "Create a GitHub App installation token for the --repository repositories of --owner with only the --permission permissions (contents:read when none is named), and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. A permission that is not <name>:read or <name>:write, or a name given twice, makes no request. Runs no post step: a later step of the job revokes the token"
     )]
     AppToken(AppTokenArgs),
+    #[command(
+        about = "Revoke the GitHub App installation token in VELNOR_APP_TOKEN with DELETE /installation/token on the API in VELNOR_API_URL, the API that app-token minted it on. An empty or unset VELNOR_APP_TOKEN fails and makes no request"
+    )]
+    RevokeToken,
     #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
