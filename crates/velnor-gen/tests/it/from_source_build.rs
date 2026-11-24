@@ -5,10 +5,9 @@ use serde_json::Value;
 
 use crate::facts::TestResult;
 use crate::generated_check_source::{
-    FIRST, FROM_SOURCE, check_step, job, names, packages, rendered,
+    FIRST, FROM_SOURCE, check_step, job, names, nested_sample_job, rendered,
 };
 use crate::lint_lane::LINT;
-use crate::pipeline::workflow;
 
 fn run_names(job: &Value, text: &str) -> Option<usize> {
     job["steps"]
@@ -19,15 +18,7 @@ fn run_names(job: &Value, text: &str) -> Option<usize> {
 
 #[test]
 fn the_source_build_runs_cargo_in_the_generator_directory_for_the_host_target() -> TestResult {
-    let roots = [
-        ("Cargo.toml", "velnor-ci-app"),
-        ("tools/gen/Cargo.toml", "velnor-gen"),
-    ];
-    let job = job(&workflow(&packages(
-        &format!("{LINT}\n{FROM_SOURCE}"),
-        FIRST,
-        &roots,
-    )?)?)?;
+    let job = nested_sample_job()?;
     let step = check_step(&job);
     let work = step["working-directory"]
         .as_str()
@@ -100,12 +91,7 @@ fn the_source_build_asks_cargo_for_the_host_target_instead_of_computing_a_triple
 
 #[test]
 fn from_source_builds_the_generator_from_the_workspace_that_holds_it() -> TestResult {
-    let roots = [
-        ("Cargo.toml", "velnor-ci-app"),
-        ("tools/gen/Cargo.toml", "velnor-gen"),
-    ];
-    let repo = packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-    let job = job(&workflow(&repo)?)?;
+    let job = nested_sample_job()?;
     let step = check_step(&job);
     assert_eq!(step["working-directory"], "tools/gen", "{job}");
     assert!(

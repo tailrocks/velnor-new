@@ -256,13 +256,7 @@ fn from_source_keeps_the_date_of_a_host_qualified_nightly() -> TestResult {
 
 #[test]
 fn a_nested_generator_builds_into_its_detected_target_directory() -> TestResult {
-    let roots = [
-        ("Cargo.toml", "velnor-ci-app"),
-        ("tools/gen/Cargo.toml", "velnor-gen"),
-    ];
-    let repo =
-        crate::generated_check_source::packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-    let job = job(&workflow(&repo)?)?;
+    let job = crate::generated_check_source::nested_sample_job()?;
     let target = check_step(&job)["env"]["CARGO_TARGET_DIR"]
         .as_str()
         .unwrap_or_default()
