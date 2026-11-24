@@ -53,10 +53,18 @@ fn holds_app_token(job: &RenderedJob) -> bool {
             crate::private_steps::release_asset_steps::TOKEN_STEP,
         ]
         .contains(&step.id.as_deref().unwrap_or_default())
-            && step
+            && (step
                 .uses
                 .as_deref()
                 .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+                || step.run.as_deref().is_some_and(|run| {
+                    ["velnor-ci ", crate::helper_integrity::INVOCATION_PREFIX]
+                        .iter()
+                        .any(|prefix| {
+                            run.strip_prefix(prefix)
+                                .is_some_and(|command| command.starts_with("app-token "))
+                        })
+                }))
     })
 }
 
