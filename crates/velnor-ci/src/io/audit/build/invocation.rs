@@ -7,9 +7,13 @@ use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
+mod alias;
+mod derived;
 mod package_spec;
 mod root;
 mod selection;
+pub(super) use alias::resolve;
+use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
@@ -26,6 +30,7 @@ pub(super) struct Invocation {
     pub(super) compiler: bool,
     pub(super) cargo: bool,
     builds: bool,
+    refusal: Option<&'static str>,
     globals: Vec<String>,
     chdir: Option<PathBuf>,
 }
@@ -86,39 +91,46 @@ impl Invocation {
             (program, arguments),
             ("cargo" | "cargo-nextest", ["nextest", "run", ..])
         );
-        let test = matches!((program, arguments), ("cargo", ["test" | "t", ..]));
+        let test = matches!(
+            (program, arguments),
+            ("cargo", ["test" | "t" | "bench", ..])
+        );
         let doctest = test && words.contains(&"--doc");
         let compilation = matches!(
             (program, arguments),
             (
                 "cargo",
-                ["build" | "b" | "check" | "c" | "clippy" | "doc" | "d", ..]
+                [
+                    "build" | "b" | "check" | "c" | "clippy" | "doc" | "d" | "rustc" | "rustdoc",
+                    ..
+                ]
             ) | ("cargo-clippy", ["clippy", ..])
                 | ("cargo" | "cargo-nextest", ["nextest", "archive", ..])
         );
-        let compiler = compilation && !words.contains(&"--open")
+        let doctests = program == "cargo" && runs_doctests(arguments, command);
+        let compiler = compilation && !words.contains(&"--open") && !doctests
             || (nextest || test && !doctest) && words.contains(&"--no-run");
-        let preflight = ((nextest || test && !doctest) && !compiler).then(|| {
-            let end = command
-                .iter()
-                .position(|word| word == "--")
-                .unwrap_or(command.len());
-            let mut preflight: Vec<String> = command[..end]
-                .iter()
-                .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
-                .cloned()
-                .collect();
-            preflight.push("--no-run".to_owned());
-            preflight.extend(command[end..].iter().cloned());
-            preflight
-        });
-        let running = matches!(
-            (program, arguments),
-            (
-                "cargo",
-                ["run" | "r" | "bench" | "rustc" | "rustdoc" | "fix", ..]
-            )
-        );
+        let running = matches!((program, arguments), ("cargo", ["run" | "r", ..]));
+        let preflight = if running {
+            start.map(|start| build_of(command, start))
+        } else if compilation && words.contains(&"--open") && !doctests {
+            Some(without_open(command))
+        } else {
+            ((nextest || test && !doctest) && !compiler).then(|| {
+                let end = command
+                    .iter()
+                    .position(|word| word == "--")
+                    .unwrap_or(command.len());
+                let mut preflight: Vec<String> = command[..end]
+                    .iter()
+                    .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
+                    .cloned()
+                    .collect();
+                preflight.push("--no-run".to_owned());
+                preflight.extend(command[end..].iter().cloned());
+                preflight
+            })
+        };
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())
         } else {
@@ -136,15 +148,30 @@ impl Invocation {
             }
         }
         let chdir = start.and_then(|start| chdir(&words[..start]));
+        let refusal = refusal(
+            program,
+            arguments,
+            running,
+            &words[..start.filter(|_| running).map_or(words.len(), |start| {
+                (run_program_arguments(command, start) - 1).min(words.len())
+            })],
+        );
         Self {
             command: command.to_vec(),
             preflight,
             compiler,
-            cargo: compilation || nextest || test,
+            cargo: compilation || nextest || test || running,
             builds: compilation || nextest || test || running,
+            refusal,
             globals,
             chdir,
         }
+    }
+
+    fn work(&self, directory: &Path) -> PathBuf {
+        self.chdir
+            .as_ref()
+            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir))
     }
 
     pub(super) fn step(&self, directory: &Path) -> PathBuf {
@@ -186,6 +213,9 @@ impl Invocation {
         inherit: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
+        if let Some(refusal) = self.refusal {
+            return Err(CiError::new(refusal));
+        }
         if !self.builds {
             return Ok(());
         }
