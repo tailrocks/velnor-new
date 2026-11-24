@@ -185,6 +185,23 @@ fn a_termination_signal_stops_the_docker_build_and_removes_the_staging_directory
 }
 
 refusal!(
+    a_root_below_the_worktree_top_is_refused,
+    "--root must be the top directory of the Git worktree.",
+    |source| source.run(&[("--root", source.path("checkout/images"))], &[])
+);
+
+refusal!(
+    a_buildx_file_over_the_size_limit_is_refused_before_it_is_copied,
+    "Docker Buildx plugin exceeds its size limit.",
+    |source| {
+        let huge = source.path("huge-buildx");
+        let file = fs::File::create(&huge).unwrap_or_else(|e| unreachable!("{e}"));
+        file.set_len((1 << 30) + 1).unwrap_or_default();
+        source.run(&[("--buildx", huge)], &[])
+    }
+);
+
+refusal!(
     a_recorded_input_that_is_a_symlink_is_refused,
     "images/job/ubuntu-26.04/README.md must be a regular file.",
     |source| {

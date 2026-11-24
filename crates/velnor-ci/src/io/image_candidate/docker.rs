@@ -66,7 +66,9 @@ pub(super) fn isolate(source: &Path, lock: &Lock, context: &Path) -> Result<Isol
     let Some(locked) = lock.buildx_sha256.as_deref() else {
         return fail("runner.lock: buildx_sha256 is missing");
     };
-    regular(source, "Docker Buildx plugin")?;
+    if regular(source, "Docker Buildx plugin")? > BINARY_LIMIT {
+        return fail("Docker Buildx plugin exceeds its size limit.");
+    }
     let config = context.join("docker-config");
     let plugins = config.join("cli-plugins");
     let home = context.join("home");

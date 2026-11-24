@@ -79,6 +79,14 @@ fn the_archive_path_is_one_csv_field_of_the_output_specification() {
         output_argument("/out,x/a\"b.tar"),
         format!("type=oci,\"dest=/out,x/a\"\"b.tar\"{tail}")
     );
+    assert_eq!(
+        output_argument("/out/a\nb.tar"),
+        format!("type=oci,\"dest=/out/a\nb.tar\"{tail}")
+    );
+    assert_eq!(
+        output_argument("/out/a\rb.tar"),
+        format!("type=oci,\"dest=/out/a\rb.tar\"{tail}")
+    );
 }
 
 #[test]

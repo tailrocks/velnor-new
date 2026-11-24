@@ -70,7 +70,10 @@ fn csv_field(archive: &Path) -> OsString {
     let mut field = OsString::from("dest=");
     field.push(archive);
     let bytes = field.as_bytes();
-    if !bytes.iter().any(|byte| matches!(byte, b',' | b'"')) {
+    if !bytes
+        .iter()
+        .any(|byte| matches!(byte, b',' | b'"' | b'\n' | b'\r'))
+    {
         return field;
     }
     let mut quoted = vec![b'"'];

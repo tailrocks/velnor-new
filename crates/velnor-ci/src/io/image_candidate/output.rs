@@ -163,6 +163,11 @@ fn same_file(left: &Path, right: &Path) -> bool {
     }
 }
 
+pub(super) fn withdraw(outputs: &Outputs) {
+    drop(fs::remove_file(&outputs.archive));
+    drop(fs::remove_file(&outputs.record));
+}
+
 pub(super) fn publish_pair(staged: [(&Path, &Path); 2]) -> Result<(), CiError> {
     let mut linked: Vec<(&Path, &Path)> = Vec::new();
     for (source, destination) in staged {

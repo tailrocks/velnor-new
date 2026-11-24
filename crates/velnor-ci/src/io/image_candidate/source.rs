@@ -37,6 +37,10 @@ pub(super) fn identity(
     requested: &str,
     github_sha: Option<&str>,
 ) -> Result<Value, CiError> {
+    let top = git_line(runner, root, &["rev-parse", "--show-toplevel"])?;
+    if fs::canonicalize(&top).ok().as_deref() != Some(root) {
+        return fail("--root must be the top directory of the Git worktree.");
+    }
     let head = git_line(runner, root, &["rev-parse", "HEAD"])?;
     if requested != head || !is_hex(&head, 40) {
         return fail("Requested source commit is not the same as the Git commit in the worktree.");

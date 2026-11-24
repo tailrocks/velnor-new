@@ -88,5 +88,9 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         (archive.as_path(), outputs.archive.as_path()),
         (manifest.as_path(), outputs.record.as_path()),
     ])?;
+    if let Err(error) = runner.checkpoint() {
+        output::withdraw(&outputs);
+        return Err(error);
+    }
     Ok(DONE.to_owned())
 }
