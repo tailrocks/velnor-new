@@ -176,6 +176,45 @@ fi
 exec "$REAL_HEAD" "$@"
 """
 
+STUB_OVERSIZE_FIRST_WC = """#!/bin/sh
+if [ ! -e "$STUB_WC_MARK" ]; then
+  : > "$STUB_WC_MARK"
+  echo 268435457
+  exit 0
+fi
+exec "$REAL_WC" "$@"
+"""
+
+STUB_BLIND_FIRST_FIND = """#!/bin/sh
+if [ ! -e "$STUB_FIND_MARK" ]; then
+  : > "$STUB_FIND_MARK"
+  exit 0
+fi
+if [ "$STUB_FIND_OVERSIZED" = 1 ]; then
+  case "$*" in *-size*) echo "$1"; exit 0 ;; esac
+fi
+exec "$REAL_FIND" "$@"
+"""
+
+STUB_FAILING_FIRST_WC = """#!/bin/sh
+if [ ! -e "$STUB_WC_MARK" ]; then
+  : > "$STUB_WC_MARK"
+  exit 1
+fi
+exec "$REAL_WC" "$@"
+"""
+
+STUB_CONCURRENT_PUBLISH_CP = """#!/bin/sh
+"$REAL_CP" "$@" || exit $?
+cat "$STUB_GOOD_ARCHIVE" > "$STUB_ENTRY"
+"""
+
+STUB_FAILING_ENTRY_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+[ "$last" = "$STUB_ENTRY" ] && exit 1
+exec "$REAL_MV" "$@"
+"""
+
 STUB_NO_INODE_MKTEMP = """#!/bin/sh
 for arg; do
   case "$arg" in *.velnor-ci.evict*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
@@ -468,6 +507,8 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "STUB_TAR_LOG": str(self.tar_log),
             "REAL_TAR": shutil.which("tar"),
             "REAL_HEAD": shutil.which("head"),
+            "REAL_WC": shutil.which("wc"),
+            "REAL_FIND": shutil.which("find"),
         }
         result = subprocess.run(
             ["bash", "-c", install_script()],
@@ -1154,6 +1195,74 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "a directory at the store entry path survived a job that could not download",
         )
 
+    def test_a_fifo_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        os.mkfifo(cached)
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a fifo at the store entry path survived a job that could not download",
+        )
+
+    def stub_oversize_race(self, stubs, find_oversized):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        for name, body in stubs.items():
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+        digest = self.stub_bin / "sha256sum"
+        digest.write_text(STUB_DIGEST)
+        digest.chmod(0o755)
+        digest_log = self.root / "digest-calls.log"
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_WC_MARK": str(self.root / "wc-mark"),
+                "STUB_FIND_MARK": str(self.root / "find-mark"),
+                "STUB_FIND_OVERSIZED": "1" if find_oversized else "0",
+                "STUB_HEAD_MARK": str(self.root / "head-mark"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "STUB_DIGEST_LOG": str(digest_log),
+                "REAL_SHA256SUM": shutil.which("sha256sum") or "",
+                "REAL_SHASUM": shutil.which("shasum") or "",
+            },
+        )
+        digested = digest_log.read_text().splitlines() if digest_log.exists() else []
+        return cached, result, [call for call in digested if str(cached) in call]
+
+    def test_a_store_entry_found_oversized_while_copying_is_evicted_without_being_hashed(self):
+        cached, result, hashed = self.stub_oversize_race(
+            {"wc": STUB_OVERSIZE_FIRST_WC, "find": STUB_BLIND_FIRST_FIND}, True
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+        self.assertEqual(hashed, [])
+
+    def test_a_store_entry_replaced_by_a_normal_archive_before_the_oversize_eviction_is_kept(self):
+        cached, result, hashed = self.stub_oversize_race({"wc": STUB_OVERSIZE_FIRST_WC}, False)
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue(cached.is_file() and cached.read_bytes() == self.archive, result.output)
+
+    def test_a_failed_size_measurement_does_not_evict_a_healthy_store_entry(self):
+        cached, result, hashed = self.stub_oversize_race({"wc": STUB_FAILING_FIRST_WC}, False)
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue(cached.is_file() and cached.read_bytes() == self.archive, result.output)
+        self.assertNotIn("removed the tool-cache copy", result.output)
+
+    def test_a_store_entry_that_grows_while_the_copy_fails_early_is_not_hashed(self):
+        cached, result, hashed = self.stub_oversize_race(
+            {"head": STUB_FAILING_FIRST_HEAD, "find": STUB_BLIND_FIRST_FIND}, True
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertEqual(hashed, [])
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+
     def test_a_dangling_symlink_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
@@ -1400,6 +1509,29 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.output)
         self.assertIn("because the store entry path is taken", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_regular_store_entry_published_by_another_job_survives_a_failed_publish(self):
+        cached = self.cached_archive()
+        good = self.root / "good-archive"
+        good.write_bytes(self.archive)
+        for name, body in (("cp", STUB_CONCURRENT_PUBLISH_CP), ("mv", STUB_FAILING_ENTRY_MV)):
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_CP": shutil.which("cp"),
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_GOOD_ARCHIVE": str(good),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertTrue(
+            cached.is_file() and cached.read_bytes() == self.archive,
+            "a regular entry published by another job was deleted before this job's publish rename",
+        )
 
     def test_a_directory_planted_between_the_check_and_the_publish_rename_is_not_moved_into(self):
         stub = self.stub_bin / "mv"
