@@ -14,6 +14,7 @@ use crate::reads::INPUTS_LOCK;
 use crate::roots::is_cargo_config;
 
 const DEPENDENCY_FILES: &[&str] = &["Cargo.toml", "Cargo.lock"];
+const CLIPPY_CONFIGS: &[&str] = &["clippy.toml", ".clippy.toml"];
 const DENY_TOOL: &str = "cargo-deny";
 
 const DENY_CONFIG_NAMES: &[&str] = &[
@@ -158,7 +159,7 @@ pub fn policy_runs(
 pub fn inputs_changed(changed: &BTreeSet<RepoPath>) -> bool {
     changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
-        DEPENDENCY_FILES.contains(&name) || *path == INPUTS_LOCK
+        DEPENDENCY_FILES.contains(&name) || CLIPPY_CONFIGS.contains(&name) || *path == INPUTS_LOCK
     })
 }
 

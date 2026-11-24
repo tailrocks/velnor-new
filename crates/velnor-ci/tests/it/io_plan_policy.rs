@@ -143,6 +143,8 @@ fn plan_asks_for_the_inputs_audit_only_when_a_lock_or_a_manifest_changed() {
         ("Cargo.lock", "rust_inputs=run "),
         ("b/Cargo.toml", "rust_inputs=run "),
         (".velnor/rust-inputs.lock", "rust_inputs=run "),
+        ("clippy.toml", "rust_inputs=run "),
+        ("b/.clippy.toml", "rust_inputs=run "),
         ("b/src/lib.rs", "rust_inputs=skip "),
         ("README.md", "rust_inputs=skip "),
     ] {

@@ -203,7 +203,7 @@ impl Builder<'_> {
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(Stop::Refused(failure::outside_selection(
+                    return Err(Stop::Refused(outside_selection(
                         &outside,
                         failure::earlier_failure(
                             &self.marker_directories(),
