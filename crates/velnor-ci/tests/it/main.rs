@@ -26,6 +26,7 @@ mod cache_credential_scrub_modules;
 mod cache_credential_scrub_submodules;
 mod cache_credential_scrub_tokens;
 mod cache_credential_scrub_trees;
+mod cache_credential_scrub_unscanned;
 mod cache_flow;
 mod cache_private_repo;
 mod cache_prune;
