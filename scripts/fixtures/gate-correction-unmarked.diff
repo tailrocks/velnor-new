@@ -1,0 +1,7 @@
+diff --git a/crates/velnor-rust/src/base_cache.rs b/crates/velnor-rust/src/base_cache.rs
+--- a/crates/velnor-rust/src/base_cache.rs
++++ b/crates/velnor-rust/src/base_cache.rs
+@@ -43,2 +43,3 @@ const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
+ 
+-const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
++const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);

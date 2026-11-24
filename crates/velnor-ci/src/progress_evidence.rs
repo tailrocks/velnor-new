@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::cargo_artifacts::{CargoArtifact, CargoProgress, ProgressKind};
+use crate::cargo_artifacts::{ArtifactBatch, CargoArtifact, CargoProgress, ProgressKind};
 use crate::cargo_package::PackageIdentity;
 use crate::telemetry::Invocation;
 
@@ -70,6 +70,8 @@ fn git_location(source: &str, location: &str) -> bool {
 pub fn retain(
     invocation: &Invocation,
     progress: Vec<CargoProgress>,
+    failures: &ArtifactBatch,
+    lane: &str,
     diagnostics: &mut Vec<String>,
     verification_errors: &mut Vec<String>,
 ) -> Vec<CargoProgress> {
@@ -81,9 +83,28 @@ pub fn retain(
                         false
                     }
                     crate::progress_evidence::Evidence::Unavailable => {
-                        verification_errors.push(format!("{} v{}: progress has no matching artifact evidence", event.package, event.version));
+                        if failed_build(failures, event) {
+                            diagnostics.push(format!(
+                                "lane {lane}: build failed for {}; cache waste not evaluated for it",
+                                event.package
+                            ));
+                        } else {
+                            verification_errors.push(format!("{} v{}: progress has no matching artifact evidence", event.package, event.version));
+                        }
                         false
                     }
                 }
             }).collect()
+}
+
+// A unit without artifact evidence is explained by cargo's own failure report only when cargo
+// named that unit as failed. Every other unit in a failed build stays a strict check.
+fn failed_build(failures: &ArtifactBatch, event: &CargoProgress) -> bool {
+    failures.failed_units.iter().any(|unit| {
+        unit.package == event.package
+            && unit
+                .version
+                .as_deref()
+                .is_none_or(|version| version == event.version)
+    })
 }

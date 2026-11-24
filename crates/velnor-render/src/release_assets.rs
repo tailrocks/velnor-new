@@ -14,7 +14,8 @@ use crate::rules::{RenderedStep, Value};
 
 const VERSION_REFERENCE: &str = "${VERSION}";
 const VERSION_STEP: &str = "version";
-pub(crate) const STAGE: &str = "stage";
+pub(crate) const STAGE: &str = "${{ runner.temp }}/stage";
+pub(crate) const STAGE_SHELL: &str = "$RUNNER_TEMP/stage";
 
 pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
     binary
@@ -79,7 +80,7 @@ pub(crate) fn word(binary: &BinaryPlan, name: &str) -> String {
     }
 }
 
-pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
+pub(crate) fn read_version(binary: &BinaryPlan, tag: &str) -> Option<RenderedStep> {
     versioned(binary).then(|| {
         let pattern = binary
             .tag_pattern
@@ -88,10 +89,7 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
         let prefix = pattern.split("{{ version }}").next().unwrap_or_default();
         RenderedStep {
             id: Some(VERSION_STEP.to_owned()),
-            env: variables(&[(
-                "TAG",
-                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-            )]),
+            env: variables(&[("TAG", tag)]),
             ..command(
                 "Read the version of the tag".to_owned(),
                 format!("echo \"version=${{TAG#{prefix}}}\" >> \"$GITHUB_OUTPUT\""),
@@ -100,7 +98,6 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
     })
 }
 
-/// Hands the version to every step that names it, through that step's own `env`.
 pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
     for step in steps {
         let reads = step
@@ -116,13 +113,77 @@ pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
     }
 }
 
-pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
+const REPRODUCIBLE: &str = "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner ";
+const MACOS_PACK_DIR: &str = "$RUNNER_TEMP/pack";
+const MACOS_MTIME: &str = "197001010000";
+
+fn linux_pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
     let members = contents(binary);
     if versioned(binary) {
-        format!("tar -czf \"{STAGE}/{file}\" -C {release_dir}{members}")
+        format!("tar {REPRODUCIBLE}-czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
     } else {
-        format!("tar -czf {} -C {release_dir}{members}", shell_word(file))
+        format!(
+            "tar {REPRODUCIBLE}-czf {} -C {release_dir}{members}",
+            shell_word(file)
+        )
     }
+}
+
+fn macos_pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> Vec<RenderedStep> {
+    let bins = std::iter::once(binary.bin.as_str())
+        .chain(binary.extra_bins.iter().map(|extra| extra.bin.as_str()));
+    let mut sources: Vec<String> = bins
+        .clone()
+        .map(|bin| format!("{release_dir}/{bin}"))
+        .collect();
+    sources.extend(
+        binary
+            .include
+            .iter()
+            .map(|path| format!("\"$GITHUB_WORKSPACE/{path}\"")),
+    );
+    let mut names: Vec<String> = bins.map(str::to_owned).collect();
+    names.extend(binary.include.iter().map(|path| {
+        path.rsplit_once('/')
+            .map_or(path.as_str(), |(_, name)| name)
+            .to_owned()
+    }));
+    names.sort();
+    let staged = names
+        .iter()
+        .map(|name| format!("\"{MACOS_PACK_DIR}/{name}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let out = if versioned(binary) {
+        format!("\"{STAGE_SHELL}/{file}\"")
+    } else {
+        shell_word(file)
+    };
+    vec![
+        command(
+            format!("Stage {file}"),
+            format!("mkdir -p \"{MACOS_PACK_DIR}\""),
+        ),
+        command(
+            format!("Copy {file} members"),
+            format!("cp -p {} \"{MACOS_PACK_DIR}/\"", sources.join(" ")),
+        ),
+        command(
+            format!("Normalise {file} mtimes"),
+            format!("TZ=UTC touch -h -t {MACOS_MTIME} {staged}"),
+        ),
+        command(
+            format!("Pack {file}"),
+            format!(
+                "COPYFILE_DISABLE=1 tar -cf \"{MACOS_PACK_DIR}.tar\" -n --uid 0 --gid 0 --uname '' --gname '' --no-xattrs --no-mac-metadata -C \"{MACOS_PACK_DIR}\" {}",
+                names.join(" ")
+            ),
+        ),
+        command(
+            format!("Compress {file}"),
+            format!("gzip -n -c \"{MACOS_PACK_DIR}.tar\" > {out}"),
+        ),
+    ]
 }
 
 pub(crate) fn archive_packaging(
@@ -131,10 +192,13 @@ pub(crate) fn archive_packaging(
     file: &str,
     release_dir: &str,
 ) -> Vec<RenderedStep> {
-    let mut steps = vec![command(
-        format!("Pack {file}"),
-        pack(binary, file, release_dir),
-    )];
+    let mut steps = match platform {
+        Platform::MacosArm64 => macos_pack(binary, file, release_dir),
+        Platform::LinuxX64 | Platform::LinuxArm64 => vec![command(
+            format!("Pack {file}"),
+            linux_pack(binary, file, release_dir),
+        )],
+    };
     steps.extend(binary.checksum_files.map(|Checksum::Sha256| {
         let checksum = if platform == Platform::MacosArm64 {
             "shasum -a 256"

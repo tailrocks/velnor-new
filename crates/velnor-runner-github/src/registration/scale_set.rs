@@ -50,6 +50,24 @@ pub struct ScaleSetById<'a> {
     pub admin_token: &'a str,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub struct ScaleSetObserveById<'a> {
+    pub scale_set_id: i64,
+
+    pub admin_token: &'a str,
+}
+
+impl fmt::Debug for ScaleSetObserveById<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ScaleSetObserveById")
+            .field("scale_set_id", &self.scale_set_id)
+            .field("admin_token", &"[redacted]")
+            .finish()
+    }
+}
+
 impl fmt::Debug for ScaleSetById<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -200,6 +218,28 @@ where
     }
 }
 
+pub fn observe_runner_scale_set_id_only<T>(
+    transport: &mut T,
+    call: &ScaleSetObserveById<'_>,
+) -> Result<ScaleSetObserved, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    let request = SessionRequest {
+        method: Method::Get,
+        path: format!("{}/{}", scale_set_path(), call.scale_set_id),
+        query: Some(API_QUERY.to_owned()),
+        headers: admin_headers(call.admin_token)?,
+        body: Vec::new(),
+    };
+    let exchange = execute(transport, &request)?;
+    match exchange.status {
+        200 => decode_view(&exchange.body).map(ScaleSetObserved::Found),
+        404 => Ok(ScaleSetObserved::Missing),
+        status => Err(other_status(status)),
+    }
+}
+
 pub fn delete_runner_scale_set<T>(
     transport: &mut T,
     call: &ScaleSetDelete<'_>,
@@ -292,6 +332,14 @@ fn decode_page(
         }
         _ => Err(SessionError::from(WireError::RegistrationRejected)),
     }
+}
+
+fn decode_view(body: &[u8]) -> Result<ScaleSetView, SessionError> {
+    let view: ScaleSetView = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
+    if view.id <= 0 {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    Ok(view)
 }
 
 fn decode_one(

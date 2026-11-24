@@ -9,6 +9,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
 
 use crate::resolve_cases::cases;
 use crate::resolve_run::{Outcome, last_micros, run_helper, run_legacy};
@@ -52,14 +53,31 @@ fn write_expected(name: &str, outcome: &Outcome) {
 fn every_recorded_case_matches_the_legacy_op() {
     let all = cases();
     assert!(all.len() >= 110, "{} cases", all.len());
-    let mut wrong = Vec::new();
-    for (name, mut world) in all {
-        let got = run_helper(&mut world, BIN);
-        let want = read_expected(name);
-        if got != want {
-            wrong.push(format!("{name}: want {want:?}, got {got:?}"));
+    let workers = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .clamp(1, 4);
+    let queue = Mutex::new(all.into_iter());
+    let wrong = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    let next = queue.lock().unwrap_or_else(PoisonError::into_inner).next();
+                    let Some((name, mut world)) = next else { break };
+                    let got = run_helper(&mut world, BIN);
+                    let want = read_expected(name);
+                    if got != want {
+                        wrong
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .push(format!("{name}: want {want:?}, got {got:?}"));
+                    }
+                }
+            });
         }
-    }
+    });
+    let mut wrong = wrong.into_inner().unwrap_or_else(PoisonError::into_inner);
+    wrong.sort();
     assert!(
         wrong.is_empty(),
         "{} differ:\n{}",
@@ -111,6 +129,13 @@ fn a_phase_without_a_predecessor_asks_only_for_the_repository_and_its_branch() {
     }
 }
 
+#[test]
+fn the_worlds_built_together_share_one_template_repository() {
+    let first = World::new("warm");
+    let second = World::new("third");
+    assert_eq!(first.template_repo(), second.template_repo());
+}
+
 fn helper_error(world: &mut World) -> String {
     run_helper(world, BIN).error
 }
@@ -136,6 +161,15 @@ fn a_run_without_a_token_an_event_or_a_checkout_is_refused() {
     let mut world = World::new("warm");
     world.quirk = Some(Quirk::NotARepository);
     assert!(helper_error(&mut world).starts_with("not_work_tree: not_inside_work_tree:"));
+}
+
+#[test]
+fn a_request_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let mut world = World::new("warm");
+    world.quirk = Some(Quirk::RequestIsAFifo);
+    let got = run_helper(&mut world, BIN);
+    assert_eq!(got.error, "unreadable_event_payload");
+    assert_eq!(got.requests, Vec::<String>::new());
 }
 
 #[test]

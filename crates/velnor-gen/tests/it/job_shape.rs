@@ -14,7 +14,7 @@ use velnor_rust::{
 };
 
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 use crate::select::{facts, member, name};
 
 fn timings(lint: u64, test: u64, tests: u64) -> Timings {
@@ -214,7 +214,9 @@ fn timed_view(timings: &str, config: &str) -> Result<RepoView, Box<dyn std::erro
 fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_verdict()
 -> TestResult {
     let entry = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_seconds": 20, "test_seconds": 4}}"#;
-    let text = workflow(&timed_view(entry, "required_check = \"CI passed\"\n")?)?;
+    let mut repo = timed_view(entry, "required_check = \"CI passed\"\n")?;
+    pin_helper(&mut repo, "0.1.97")?;
+    let text = workflow(&repo)?;
     let jobs: Vec<&str> = text
         .lines()
         .skip_while(|line| *line != "jobs:")
@@ -233,7 +235,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
             "  cache:"
         ]
     );
-    assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  # jactionlint ignore=shellcheck\n  rust-lint-lab:\n"), "{text}");
+    assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  rust-lint-lab:\n"), "{text}");
     assert!(text.contains("    name: CI passed\n"), "{text}");
     assert_eq!(text.matches("      - name: Install tools\n").count(), 4);
     assert!(!text.contains("install_args"), "{text}");
@@ -261,8 +263,9 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         "required_check = \"\"\n",
         "required_check = \"a\\u0007b\"\n",
     ] {
-        let result = expected_with_notes(&view(&["Cargo.toml"], Some(config.as_bytes()))?)
-            .map(|(files, _)| files);
+        let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.97")?;
+        let result = expected_with_notes(&repo).map(|(files, _)| files);
         assert!(invalid(CONFIG_PATH)(result.clone()), "{config}: {result:?}");
     }
     Ok(())
@@ -295,6 +298,17 @@ const LAB: &str = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_s
 const GONE: &str =
     r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#;
 
+/// The notes that are not the `shape = "auto"` note of an untimed root or the note about the
+/// fixture's helper restoring the tools unverified.
+fn without_auto_note(notes: &[String]) -> Vec<&str> {
+    notes
+        .iter()
+        .map(String::as_str)
+        .filter(|note| !note.starts_with("shape = \"auto\""))
+        .filter(|note| !note.starts_with("the pinned velnor-ci restores the tools cache"))
+        .collect()
+}
+
 fn untimed() -> Result<BTreeMap<RepoPath, String>, Box<dyn std::error::Error>> {
     Ok(
         expected_with_notes(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?)
@@ -311,10 +325,11 @@ fn a_malformed_timings_file_is_named_and_the_default_shape_is_written() -> TestR
     ] {
         let (files, notes) = expected_with_notes(&timed_view(timings, "")?)?;
         assert_eq!(files, untimed()?, "{timings}");
-        assert_eq!(notes.len(), 1, "{timings}: {notes:?}");
+        let ignored = without_auto_note(&notes);
+        assert_eq!(ignored.len(), 1, "{timings}: {notes:?}");
         assert!(
-            notes[0].starts_with(".velnor/rust-ci-timings.json: ")
-                && notes[0].ends_with("; ignored"),
+            ignored[0].starts_with(".velnor/rust-ci-timings.json: ")
+                && ignored[0].ends_with("; ignored"),
             "{notes:?}"
         );
     }
@@ -351,9 +366,9 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
     let both = format!("{{{},{}", &GONE[1..GONE.len() - 1], &LAB[1..]);
     let (files, notes) = expected_with_notes(&timed_view(&both, "")?)?;
     assert_eq!(
-        notes,
+        without_auto_note(&notes),
         [
-            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
+            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings --repo owner/name` again; entry ignored"
         ]
     );
     assert_eq!(

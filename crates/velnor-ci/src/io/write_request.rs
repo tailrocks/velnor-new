@@ -1,11 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{self, OpenOptions};
+use std::ffi::OsStr;
+use std::fs::File;
 use std::io::{Read, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::fd::OwnedFd;
 use std::path::{Component, Path, PathBuf};
 
+use nix::errno::Errno;
+use nix::fcntl::{AtFlags, OFlag, open, openat};
+use nix::sys::stat::{Mode, fstatat, mkdirat};
+
+use super::open_regular;
 use crate::cli::WriteRequestArgs;
 use crate::error::CiError;
 use crate::write_request::{RequestParts, RunnerContext, build, internal};
@@ -72,14 +78,7 @@ pub(super) fn run(args: &WriteRequestArgs) -> Result<String, CiError> {
 
 fn read_payload(path: &Path) -> Result<String, CiError> {
     let unreadable = || internal("unreadable_event_payload");
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| unreadable())?;
-    if !file.metadata().map_err(|_| unreadable())?.is_file() {
-        return Err(unreadable());
-    }
+    let file = open_regular(path).ok_or_else(unreadable)?;
     let mut text = String::new();
     Read::take(file, PAYLOAD_LIMIT + 1)
         .read_to_string(&mut text)
@@ -90,11 +89,32 @@ fn read_payload(path: &Path) -> Result<String, CiError> {
     Ok(text)
 }
 
-fn refuse_link(path: &Path) -> Result<(), CiError> {
-    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
-        return Err(internal("symlink_refused"));
+fn directory_flags() -> OFlag {
+    OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC
+}
+
+fn is_link_at(directory: &OwnedFd, name: &OsStr) -> bool {
+    fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW)
+        .is_ok_and(|stat| stat.st_mode & libc::S_IFMT == libc::S_IFLNK)
+}
+
+fn step_into(directory: &OwnedFd, part: &OsStr, current: &Path) -> Result<OwnedFd, CiError> {
+    match mkdirat(directory, part, Mode::from_bits_truncate(0o777)) {
+        Ok(()) | Err(Errno::EEXIST) => {}
+        Err(error) => {
+            return Err(CiError::new(format!(
+                "cannot create {}: {error}",
+                current.display()
+            )));
+        }
     }
-    Ok(())
+    openat(directory, part, directory_flags(), Mode::empty()).map_err(|error| {
+        if is_link_at(directory, part) {
+            internal("symlink_refused")
+        } else {
+            CiError::new(format!("cannot open {}: {error}", current.display()))
+        }
+    })
 }
 
 pub(super) fn write_once(
@@ -103,47 +123,40 @@ pub(super) fn write_once(
     bytes: &[u8],
     context: &str,
 ) -> Result<(), CiError> {
+    let escape = || internal("anchor_escape");
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let relative = parent
-        .strip_prefix(anchor)
-        .map_err(|_| internal("anchor_escape"))?;
+    let relative = parent.strip_prefix(anchor).map_err(|_| escape())?;
+    let name = path.file_name().ok_or_else(escape)?;
+    let mut directory = open(
+        anchor,
+        directory_flags() & !OFlag::O_NOFOLLOW,
+        Mode::empty(),
+    )
+    .map_err(|error| internal(&format!("{context}_unwritable:{error}")))?;
     let mut current = anchor.to_path_buf();
     for component in relative.components() {
         let Component::Normal(part) = component else {
-            return Err(internal("anchor_escape"));
+            return Err(escape());
         };
         current.push(part);
-        refuse_link(&current)?;
-        if !current.is_dir() {
-            match fs::create_dir(&current) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(error) => {
-                    return Err(CiError::new(format!(
-                        "cannot create {}: {error}",
-                        current.display()
-                    )));
-                }
-            }
-        }
-        refuse_link(&current)?;
+        directory = step_into(&directory, part, &current)?;
     }
-    refuse_link(path)?;
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|error| {
-            internal(&format!(
-                "{context}{}",
-                if error.kind() == std::io::ErrorKind::AlreadyExists {
-                    "_exists"
-                } else {
-                    "_unwritable"
-                }
-            ))
-        })?;
-    file.write_all(bytes)
+    let created = openat(
+        &directory,
+        name,
+        OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+        Mode::from_bits_truncate(0o666),
+    )
+    .map_err(|error| {
+        if is_link_at(&directory, name) {
+            internal("symlink_refused")
+        } else if error == Errno::EEXIST {
+            internal(&format!("{context}_exists"))
+        } else {
+            internal(&format!("{context}_unwritable"))
+        }
+    })?;
+    File::from(created)
+        .write_all(bytes)
         .map_err(|_| internal(&format!("{context}_unwritable")))
 }

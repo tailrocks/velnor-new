@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::github_hosted;
+use velnor_model::looks_github_hosted;
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -44,9 +44,9 @@ fn every_self_hosted_job_runs_on_a_hosted_runner_for_fork_pull_requests() -> Tes
 }
 
 #[test]
-fn a_hosted_runner_needs_no_fence() -> TestResult {
+fn a_runner_declared_hosted_needs_no_fence() -> TestResult {
     for runner in ["ubuntu-latest", "ubuntu-24.04"] {
-        let jobs = jobs(&format!("runner = '{runner}'\n"))?;
+        let jobs = jobs(&format!("runner = '{runner}'\nhosted = true\n"))?;
         for (id, job) in &jobs {
             assert_eq!(job["runs-on"].as_str(), Some(runner), "{id}");
         }
@@ -109,7 +109,7 @@ fn unknown_primary_platform_accepts_only_a_linux_x64_fork_runner() -> TestResult
 }
 
 #[test]
-fn github_hosted_accepts_every_listed_label() {
+fn looks_github_hosted_accepts_every_listed_label() {
     for label in [
         "ubuntu-latest",
         "ubuntu-24.04",
@@ -138,12 +138,12 @@ fn github_hosted_accepts_every_listed_label() {
         "windows-11-vs2026-arm",
         "Ubuntu-Latest",
     ] {
-        assert!(github_hosted(label), "{label}");
+        assert!(looks_github_hosted(label), "{label}");
     }
 }
 
 #[test]
-fn github_hosted_rejects_every_look_alike_label() {
+fn looks_github_hosted_rejects_every_look_alike_label() {
     for label in [
         "ubuntu-",
         "ubuntu-999.99",
@@ -154,7 +154,7 @@ fn github_hosted_rejects_every_look_alike_label() {
         "velnor-box",
         "",
     ] {
-        assert!(!github_hosted(label), "{label}");
+        assert!(!looks_github_hosted(label), "{label}");
     }
 }
 
@@ -174,10 +174,10 @@ fn a_fork_fenced_workflow_never_listens_for_privileged_triggers() -> TestResult 
         "shape = 'lint-test'\n",
         "shape = 'groups'\n",
     ] {
-        for runner in [SCALE_SET, "ubuntu-latest"] {
+        for (runner, hosted) in [(SCALE_SET, ""), ("ubuntu-latest", "hosted = true\n")] {
             let repo = view(
                 &["Cargo.toml", "tools/Cargo.toml"],
-                Some(format!("runner = '{runner}'\n{shape}").as_bytes()),
+                Some(format!("runner = '{runner}'\n{hosted}{shape}").as_bytes()),
             )?;
             let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
             let triggers = yaml["on"].as_object().ok_or("on missing")?;
@@ -250,14 +250,14 @@ fn a_self_hosted_label_that_could_break_out_of_the_runs_on_expression_is_refused
 }
 
 #[test]
-fn only_exact_github_hosted_labels_skip_the_fork_fence() {
+fn only_exact_github_labels_look_github_hosted() {
     for runner in [
         "ubuntu-24.04-arm",
         "windows-11-arm",
         "ubuntu-latest",
         "macos-15",
     ] {
-        assert!(velnor_model::github_hosted(runner), "{runner}");
+        assert!(velnor_model::looks_github_hosted(runner), "{runner}");
     }
     for runner in [
         "ubuntu-26.04-arm-scale-set",
@@ -265,6 +265,6 @@ fn only_exact_github_hosted_labels_skip_the_fork_fence() {
         "ubuntu-26.04-scale-set",
         "ubuntu-24.04-arm-",
     ] {
-        assert!(!velnor_model::github_hosted(runner), "{runner}");
+        assert!(!velnor_model::looks_github_hosted(runner), "{runner}");
     }
 }

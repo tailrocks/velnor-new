@@ -49,7 +49,7 @@ fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> Tes
     let run = tree.at(&["on", "workflow_run"]).ok_or("no workflow_run")?;
     assert_eq!(
         run.get("workflows").ok_or("no workflows")?.texts(),
-        ["Rust CI", "Lint"]
+        ["CI", "Lint"]
     );
     assert_eq!(run.get("types").ok_or("no types")?.texts(), ["completed"]);
     assert_eq!(run.get("branches").ok_or("no branches")?.texts(), ["main"]);
@@ -74,7 +74,7 @@ fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> Tes
             .at(&["on", "workflow_run", "workflows"])
             .ok_or("no workflows")?
             .texts(),
-        ["Rust CI"]
+        ["CI"]
     );
     Ok(())
 }
@@ -86,8 +86,7 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
         assert!(all.len() >= 3, "{} jobs", all.len());
         let packages = tree
             .at(&["jobs", "tag", "outputs"])
-            .map(Node::keys)
-            .unwrap_or_default();
+            .map_or_default(Node::keys);
         let (gate_id, gate) = all[0];
         assert_eq!(gate_id, "gate");
         assert_eq!(

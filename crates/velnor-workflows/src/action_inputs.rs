@@ -3,7 +3,7 @@
 
 use crate::plan::Action;
 
-const CHECKOUT: [&str; 21] = [
+const CHECKOUT: &[&str] = &[
     "repository",
     "ref",
     "token",
@@ -26,7 +26,7 @@ const CHECKOUT: [&str; 21] = [
     "github-server-url",
     "allow-unsafe-pr-checkout",
 ];
-const MISE: [&str; 34] = [
+const MISE: &[&str] = &[
     "version",
     "auto_update",
     "minimum_release_age",
@@ -62,7 +62,7 @@ const MISE: [&str; 34] = [
     "export_path",
     "wings_enabled",
 ];
-const UPLOAD_ARTIFACT: [&str; 8] = [
+const UPLOAD_ARTIFACT: &[&str] = &[
     "name",
     "path",
     "if-no-files-found",
@@ -72,7 +72,7 @@ const UPLOAD_ARTIFACT: [&str; 8] = [
     "include-hidden-files",
     "archive",
 ];
-const DOWNLOAD_ARTIFACT: [&str; 10] = [
+const DOWNLOAD_ARTIFACT: &[&str] = &[
     "name",
     "artifact-ids",
     "path",
@@ -84,7 +84,7 @@ const DOWNLOAD_ARTIFACT: [&str; 10] = [
     "skip-decompress",
     "digest-mismatch",
 ];
-const CACHE: [&str; 7] = [
+const CACHE: &[&str] = &[
     "path",
     "key",
     "restore-keys",
@@ -93,7 +93,7 @@ const CACHE: [&str; 7] = [
     "fail-on-cache-miss",
     "lookup-only",
 ];
-const CACHE_RESTORE: [&str; 6] = [
+const CACHE_RESTORE: &[&str] = &[
     "path",
     "key",
     "restore-keys",
@@ -101,8 +101,8 @@ const CACHE_RESTORE: [&str; 6] = [
     "fail-on-cache-miss",
     "lookup-only",
 ];
-const CACHE_SAVE: [&str; 4] = ["path", "key", "upload-chunk-size", "enableCrossOsArchive"];
-const ATTEST: [&str; 11] = [
+const CACHE_SAVE: &[&str] = &["path", "key", "upload-chunk-size", "enableCrossOsArchive"];
+const ATTEST: &[&str] = &[
     "subject-path",
     "subject-digest",
     "subject-name",
@@ -115,7 +115,7 @@ const ATTEST: [&str; 11] = [
     "show-summary",
     "github-token",
 ];
-const GITHUB_SCRIPT: [&str; 9] = [
+const GITHUB_SCRIPT: &[&str] = &[
     "script",
     "github-token",
     "debug",
@@ -127,7 +127,7 @@ const GITHUB_SCRIPT: [&str; 9] = [
     "base-url",
 ];
 
-const MR_BOXINGTON: [&str; 10] = [
+const MR_BOXINGTON: &[&str] = &[
     "backend",
     "github-cache-mode",
     "version",
@@ -140,20 +140,136 @@ const MR_BOXINGTON: [&str; 10] = [
     "save-on-workflow-dispatch",
 ];
 
+const DOCKER_LOGIN_INPUTS: &[&str] = &[
+    "registry",
+    "username",
+    "password",
+    "ecr",
+    "scope",
+    "logout",
+    "registry-auth",
+];
+
+const DOCKER_BUILD_PUSH_INPUTS: &[&str] = &[
+    "add-hosts",
+    "allow",
+    "annotations",
+    "attests",
+    "build-args",
+    "build-contexts",
+    "builder",
+    "cache-from",
+    "cache-to",
+    "call",
+    "cgroup-parent",
+    "context",
+    "file",
+    "labels",
+    "load",
+    "network",
+    "no-cache",
+    "no-cache-filters",
+    "outputs",
+    "platforms",
+    "provenance",
+    "pull",
+    "push",
+    "sbom",
+    "secrets",
+    "secret-envs",
+    "secret-files",
+    "shm-size",
+    "ssh",
+    "tags",
+    "target",
+    "ulimit",
+    "github-token",
+];
+
+const CREATE_GITHUB_APP_TOKEN_INPUTS: &[&str] = &[
+    "client-id",
+    "app-id",
+    "private-key",
+    "owner",
+    "repositories",
+    "enterprise",
+    "skip-token-revoke",
+    "github-api-url",
+    "permission-actions",
+    "permission-administration",
+    "permission-artifact-metadata",
+    "permission-attestations",
+    "permission-checks",
+    "permission-code-quality",
+    "permission-codespaces",
+    "permission-contents",
+    "permission-custom-properties-for-organizations",
+    "permission-dependabot-secrets",
+    "permission-deployments",
+    "permission-discussions",
+    "permission-email-addresses",
+    "permission-enterprise-custom-properties-for-organizations",
+    "permission-environments",
+    "permission-followers",
+    "permission-git-ssh-keys",
+    "permission-gpg-keys",
+    "permission-interaction-limits",
+    "permission-issues",
+    "permission-members",
+    "permission-merge-queues",
+    "permission-metadata",
+    "permission-organization-administration",
+    "permission-organization-announcement-banners",
+    "permission-organization-copilot-agent-settings",
+    "permission-organization-copilot-seat-management",
+    "permission-organization-custom-org-roles",
+    "permission-organization-custom-properties",
+    "permission-organization-custom-roles",
+    "permission-organization-events",
+    "permission-organization-external-properties-for-repos",
+    "permission-organization-hooks",
+    "permission-organization-packages",
+    "permission-organization-personal-access-token-requests",
+    "permission-organization-personal-access-tokens",
+    "permission-organization-plan",
+    "permission-organization-projects",
+    "permission-organization-secrets",
+    "permission-organization-self-hosted-runners",
+    "permission-organization-user-blocking",
+    "permission-packages",
+    "permission-pages",
+    "permission-profile",
+    "permission-pull-requests",
+    "permission-repository-custom-properties",
+    "permission-repository-hooks",
+    "permission-repository-projects",
+    "permission-secret-scanning-alerts",
+    "permission-secrets",
+    "permission-security-events",
+    "permission-single-file",
+    "permission-starring",
+    "permission-statuses",
+    "permission-vulnerability-alerts",
+    "permission-workflows",
+];
+
 impl Action {
     #[must_use]
     pub fn known_inputs(self) -> &'static [&'static str] {
         match self {
-            Self::Checkout => &CHECKOUT,
-            Self::Mise => &MISE,
-            Self::UploadArtifact => &UPLOAD_ARTIFACT,
-            Self::DownloadArtifact => &DOWNLOAD_ARTIFACT,
-            Self::Cache => &CACHE,
-            Self::CacheRestore => &CACHE_RESTORE,
-            Self::CacheSave => &CACHE_SAVE,
-            Self::AttestBuildProvenance => &ATTEST,
-            Self::GithubScript => &GITHUB_SCRIPT,
-            Self::MrBoxington => &MR_BOXINGTON,
+            Self::Checkout => CHECKOUT,
+            Self::Mise => MISE,
+            Self::UploadArtifact => UPLOAD_ARTIFACT,
+            Self::DownloadArtifact => DOWNLOAD_ARTIFACT,
+            Self::Cache => CACHE,
+            Self::CacheRestore => CACHE_RESTORE,
+            Self::CacheSave => CACHE_SAVE,
+            Self::AttestBuildProvenance => ATTEST,
+            Self::GithubScript => GITHUB_SCRIPT,
+            Self::MrBoxington => MR_BOXINGTON,
+            Self::DockerLogin => DOCKER_LOGIN_INPUTS,
+            Self::DockerBuildPush => DOCKER_BUILD_PUSH_INPUTS,
+            Self::CreateGithubAppToken => CREATE_GITHUB_APP_TOKEN_INPUTS,
         }
     }
 
@@ -163,11 +279,14 @@ impl Action {
             Self::UploadArtifact => &["path"],
             Self::Cache | Self::CacheRestore | Self::CacheSave => &["path", "key"],
             Self::GithubScript => &["script"],
+            Self::CreateGithubAppToken => &["private-key"],
             Self::Checkout
             | Self::Mise
             | Self::DownloadArtifact
             | Self::AttestBuildProvenance
-            | Self::MrBoxington => &[],
+            | Self::MrBoxington
+            | Self::DockerLogin
+            | Self::DockerBuildPush => &[],
         }
     }
 }

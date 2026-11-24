@@ -9,7 +9,9 @@ use velnor_runner_host::{
     ConnectionId, HostConfig, HostError, SecretStore, build_job_authority_policy_json, store_secret,
 };
 
-use super::connect::{ConnectError, ConnectRequest, connect_with_store};
+use super::connect::{ConnectError, ConnectRequest, connect_with_store, persist_reconnected};
+use super::connection_state::{connection_absence_record, connection_drain_marker};
+use super::marker::write_marker;
 
 const SERVICE: &str = "com.tailrocks.velnor.test";
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -234,5 +236,24 @@ fn a_runner_group_needs_an_organization_that_owns_the_repository()
     );
     assert_eq!(keychain.stored(), Vec::<Vec<u8>>::new());
     assert!(!state.join("host.toml").exists());
+    Ok(())
+}
+
+#[test]
+fn reconnecting_removes_the_github_absence_record() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let state = dir.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    connect(&keychain, &request(&state, None), "token").map_err(|_| "connect")?;
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    let id = ConnectionId::parse("conn-test-1")?;
+    let config = HostConfig::parse(&text)?;
+    let connection = config.connection(&id).ok_or("connection missing")?;
+    let marker = connection_drain_marker(&state, &id);
+    let token = write_marker(&marker).map_err(|_| "marker")?;
+    let record = connection_absence_record(&state, &id);
+    std::fs::write(&record, "token\n")?;
+    persist_reconnected(&state, &text, connection, &marker, &token).map_err(|_| "reconnect")?;
+    assert!(!record.exists());
     Ok(())
 }

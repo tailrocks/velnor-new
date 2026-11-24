@@ -233,7 +233,7 @@ I say which generation a fact belongs to.
   the same version. [vendor] README; self-hosting/index.mdx
 - Where host difference still enters (from the vendor's own text):
   - Host files, env vars, secrets, sockets enter through attachables; their content is part of the
-    inputs, so a different checkout gives a different key. [vendor] 
+    inputs, so a different checkout gives a different key. [vendor]
   - CPU architecture: containers run on the engine's architecture; Apple Silicon engines run arm64
     unless a platform is specified. Cloud Engines were amd64-only with arm64 "coming soon" (see 3.4).
     [vendor] changelog (the arm64 line); the general platform rule is my reading of the OCI model,

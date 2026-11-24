@@ -36,19 +36,29 @@ impl GitHubWrite for Api {
         Ok(())
     }
 }
+const HEAD_SHA: &str = "0123456789012345678901234567890123456789";
 fn run() -> Value {
-    json!({"id":123,"status":"completed", "event":"pull_request", "workflow_id":2, "repository":{"id":1}, "head_repository":{"id":1}, "pull_requests":[{"number":42}]})
+    json!({"id":123,"status":"completed", "event":"pull_request", "workflow_id":2, "repository":{"id":1}, "head_repository":{"id":1}, "head_sha":HEAD_SHA, "pull_requests":[{"number":42}]})
+}
+fn same_repo_pr(number: u64) -> Value {
+    json!({"number":number, "base":{"repo":{"id":1}}, "head":{"repo":{"id":1}}})
 }
 fn entry(id: u64, lane: &str, base: &str) -> Value {
     json!({"id":id, "key":format!("velnor-dlt-pr42-{lane}.root.Linux-X64-0123456789abcdef-{base}-123"), "ref":"refs/pull/42/merge", "created_at":format!("2026-11-17T00:00:{id:02}Z")})
 }
 fn api(run: Value, pages: Vec<Result<Value, CiError>>) -> Api {
-    let mut responses = VecDeque::from([
-        Ok(json!({"id":1})),
-        Ok(json!({"id":2})),
-        Ok(run),
-        Ok(json!({"base":{"repo":{"id":1}}, "head":{"repo":{"id":1}}})),
-    ]);
+    api_with_lookup(run, Vec::new(), pages)
+}
+fn api_with_lookup(
+    run: Value,
+    lookup: Vec<Result<Value, CiError>>,
+    pages: Vec<Result<Value, CiError>>,
+) -> Api {
+    let mut responses = VecDeque::from([Ok(json!({"id":1})), Ok(json!({"id":2})), Ok(run)]);
+    responses.extend(lookup);
+    responses.push_back(Ok(
+        json!({"base":{"repo":{"id":1}}, "head":{"repo":{"id":1}}}),
+    ));
     responses.extend(pages);
     Api {
         responses: RefCell::new(responses),
@@ -101,7 +111,7 @@ fn unverifiable_runs_refs_and_incomplete_listings_never_delete_any_cache() {
         ("workflow_id", json!(99)),
         ("repository", json!({"id":99})),
         ("head_repository", json!({"id":99})),
-        ("pull_requests", json!([])),
+        ("pull_requests", json!([{"number":42},{"number":43}])),
     ] {
         let mut value_run = run();
         value_run[field] = value;
@@ -143,6 +153,56 @@ fn unverifiable_runs_refs_and_incomplete_listings_never_delete_any_cache() {
     for pages in cases {
         let api = api(run(), pages);
         assert!(trim_deltas(&api, &repo(), 123).is_err());
+        assert!(api.deleted.borrow().is_empty());
+    }
+}
+
+#[test]
+fn a_run_that_lost_its_pull_request_resolves_it_from_its_commit_and_trims_the_same_way() {
+    let mut lost = run();
+    lost["pull_requests"] = json!([]);
+    let commit_pulls = Ok(json!([
+        same_repo_pr(42),
+        {"number":43, "base":{"repo":{"id":1}}, "head":{"repo":{"id":9}}}
+    ]));
+    let api = api_with_lookup(
+        lost,
+        vec![commit_pulls],
+        vec![Ok(json!({"total_count":2,"actions_caches":[
+            entry(1, "rust-test", "11111111"), entry(2, "rust-test", "22222222")
+        ]}))],
+    );
+    let result = trim_deltas(&api, &repo(), 123).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(result.contains("PR 42"), "{result}");
+    assert_eq!(
+        *api.deleted.borrow(),
+        ["/repos/owner/repo/actions/caches/1"]
+    );
+    assert!(
+        api.gets
+            .borrow()
+            .iter()
+            .any(|path| path == &format!("/repos/owner/repo/commits/{HEAD_SHA}/pulls"))
+    );
+}
+
+#[test]
+fn a_lost_pull_request_is_trusted_only_when_exactly_one_same_repository_pr_matches() {
+    for commit_pulls in [
+        json!([]),
+        json!([same_repo_pr(42), same_repo_pr(44)]),
+        json!([{"number":43, "base":{"repo":{"id":1}}, "head":{"repo":null}}]),
+    ] {
+        let mut lost = run();
+        lost["pull_requests"] = json!([]);
+        let api = api_with_lookup(
+            lost,
+            vec![Ok(commit_pulls.clone())],
+            vec![Ok(json!({"total_count":2,"actions_caches":[
+                entry(1, "rust-test", "11111111"), entry(2, "rust-test", "22222222")
+            ]}))],
+        );
+        assert!(trim_deltas(&api, &repo(), 123).is_err(), "{commit_pulls}");
         assert!(api.deleted.borrow().is_empty());
     }
 }

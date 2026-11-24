@@ -34,13 +34,12 @@ pub(crate) fn release_workflow(
     let reality = Reality { facts, generated };
     let plan = read_plan(&release_files(view, Some(&reality))?)?;
     check_publish_budget(&plan.roots).map_err(GenerateError::Release)?;
-    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
-        return Err(GenerateError::PrOnlyChecksHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
-        return Err(GenerateError::FamilyTagHelperTooOld(
+    let grouped = plan
+        .roots
+        .iter()
+        .any(|root| !root.version_groups.is_empty());
+    if grouped && !helper.version().at_least((0, 1, 97)) {
+        return Err(GenerateError::VersionGroupsHelperTooOld(
             helper.version().clone(),
         ));
     }
@@ -58,8 +57,13 @@ pub(crate) fn release_workflow(
             reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
-    let files = render_release(&plan, helper, &facts.config.default_branch)
-        .map_err(GenerateError::Rules)?;
+    let files = render_release(
+        &plan,
+        helper,
+        &facts.config.default_branch,
+        facts.config.private_sources.as_ref(),
+    )
+    .map_err(GenerateError::Rules)?;
     Ok((files, Vec::new()))
 }
 
@@ -231,10 +235,18 @@ fn release_files(
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
         rust_metadata: (!view.rust_metadata.is_empty()).then(|| view.rust_metadata.clone()),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
+        tracked_paths: reality.map(|_| {
+            view.tracked_paths
+                .iter()
+                .chain(view.files.keys())
+                .map(ToString::to_string)
+                .collect()
+        }),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
         workflow_names: workflows.as_deref().map(workflow_names),
         push_workflows: workflows.as_deref().map(push_workflows),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
+        mbx_opt_out: reality.is_some_and(|known| !known.facts.config.mbx.routed()),
     })
 }

@@ -2,6 +2,7 @@
 file = "qualification"
 name = "Qualification"
 runner = "ubuntu-26.04"
+hosted = true
 fork_runner = "ubuntu-26.04"
 hosted_runner = "ubuntu-26.04"
 scale_set_runner = "ubuntu-26.04-scale-set"
@@ -391,6 +392,7 @@ run = "nc -z -w 1 redis 6379"
 id = "cancel-service"
 title = "Cancel service"
 timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
 
 [[workflow.case.service]]
 name = "redis"
@@ -407,8 +409,21 @@ name = "Announce service"
 run = "echo service-up"
 
 [[workflow.case.step]]
-name = "Sleep until cancelled"
-run = "sleep 900"
+name = "Sleep before the cancel"
+run = "sleep 10"
+
+[[workflow.case.step]]
+name = "Cancel the run mid-step"
+run = 'curl --fail --silent --show-error --request POST --header "Accept: application/vnd.github+json" --header "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"'
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.case.step]]
+name = "Wait for the cancel"
+run = "sleep 120"
+
+[[workflow.case.step]]
+name = "Fail when the cancel was not delivered"
+run = "exit 1"
 
 [[workflow.case]]
 id = "ports-a"
@@ -456,6 +471,54 @@ env = { G3_CANARY = "${{ secrets.G3_CANARY }}" }
 name = "Hold secret canary"
 run = "sleep 180"
 env = { G3_CANARY = "${{ secrets.G3_CANARY }}" }
+
+[[workflow.job]]
+id = "mode-guard"
+name = "Mode guard / unknown mode"
+if = "!(inputs.mode == 'both' || inputs.mode == 'features' || inputs.mode == 'js' || inputs.mode == 'artifacts' || inputs.mode == 'buildx' || inputs.mode == 'negative' || inputs.mode == 'composite' || inputs.mode == 'docker-action' || inputs.mode == 'post-fail' || inputs.mode == 'oidc' || inputs.mode == 'cancel' || inputs.mode == 'compose' || inputs.mode == 'bind' || inputs.mode == 'testcontainers' || inputs.mode == 'submodule' || inputs.mode == 'pressure' || inputs.mode == 'mask' || inputs.mode == 'outputs' || inputs.mode == 'js-pin' || inputs.mode == 'services' || inputs.mode == 'container' || inputs.mode == 'cancel-service' || inputs.mode == 'ports' || inputs.mode == 'secret' || inputs.mode == 'mise-pin' || inputs.mode == 'stable-sources' || inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip')"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject a mode that no job runs"
+run = "echo '::error title=unknown_qualification_mode::The mode is not one that Qualification runs. Without this job the run would succeed with every job skipped.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "cancel-service-check"
+name = "Check cancel-service / cancelled, not timed out"
+if = "always() && inputs.mode == 'cancel-service'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cancel-service-hosted", "cancel-service-scale-set"]
+permissions = { contents = "read", actions = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Check the cancelled runs"
+run = "bash qualification/cancel-service-check.sh"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.job]]
+id = "stable-sources-guard"
+name = "Stable sources / branch guard"
+if = "inputs.mode == 'stable-sources' && !(github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch))"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject stable sources outside a non-default branch"
+run = "echo '::error title=stable_sources_requires_non_default_branch::Dispatch stable-sources from a non-default branch of this repository. Every stable-sources job is skipped otherwise.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
 
 [[workflow.job]]
 id = "verify-hosted"
@@ -653,7 +716,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -675,7 +738,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
@@ -714,7 +777,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -736,7 +799,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
@@ -777,12 +840,12 @@ with = { ref = "${{ github.sha }}" }
 [[workflow.job.step]]
 name = "Setup Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Verify selected ref, version, and binary digest"
 run = "bash qualification/mise-pin.sh"
-env = { MISE_VERSION = "2026.11.1", MISE_SHA256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9" }
+env = { MISE_VERSION = "2026.11.10", MISE_SHA256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9" }
 
 [[workflow.job]]
 id = "stable-sources-producer-linux"
@@ -804,7 +867,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -854,7 +917,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -933,7 +996,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -959,3 +1022,31 @@ run = "bash qualification/stable-sources.sh provenance-cold"
 [[workflow.job.step]]
 name = "Measure offline archive guard build"
 run = "bash qualification/stable-sources.sh archive-guard"
+
+[[workflow]]
+file = "tag-ruleset-drift"
+name = "Tag ruleset drift"
+runner = "ubuntu-24.04"
+hosted = true
+
+[workflow.on]
+schedule = ["23 4 * * *"]
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.job]]
+id = "tag-ruleset-drift"
+name = "Tag ruleset drift"
+if = "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+with = { persist-credentials = "false" }
+
+[[workflow.job.step]]
+name = "Check tag immutability rulesets"
+run = "node scripts/tag-ruleset-drift.mjs"
+env = { TAG_RULESET_ADMIN_READ_TOKEN = "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY = "${{ github.repository }}" }

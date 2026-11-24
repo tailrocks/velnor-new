@@ -198,7 +198,7 @@ fn a_case_needs_a_mode_input_that_offers_its_modes() -> TestResult {
 }
 
 #[test]
-fn the_pair_runners_must_be_one_hosted_and_one_not() -> TestResult {
+fn the_pair_runners_are_declared_by_their_keys_and_cannot_be_one_label() -> TestResult {
     for (from, to, needle) in [
         ("hosted_runner = \"ubuntu-24.04\"", "", "hosted_runner"),
         (
@@ -207,14 +207,9 @@ fn the_pair_runners_must_be_one_hosted_and_one_not() -> TestResult {
             "scale_set_runner",
         ),
         (
-            "hosted_runner = \"ubuntu-24.04\"",
-            "hosted_runner = \"my-box\"",
-            "hosted_runner",
-        ),
-        (
             "scale_set_runner = \"ubuntu-26.04-scale-set\"",
             "scale_set_runner = \"ubuntu-24.04\"",
-            "scale_set_runner",
+            "one label is either hosted or self-hosted",
         ),
     ] {
         let message = refusal(&format!("{}{CASES}", MODES.replace(from, to)))?;
@@ -272,7 +267,7 @@ fn with_container_and_service(container: &str, service: &str) -> String {
     CASES.replace(
         "[[workflow.case.step]]\nname = \"Mask canary\"",
         &format!(
-            "[workflow.case.container]\nimage = \"{container}\"\n\n[[workflow.case.service]]\nname = \"redis\"\nimage = \"{service}\"\nports = [\"6379:6379\"]\noptions = \"--health-cmd 'redis-cli ping'\"\n\n[[workflow.case.step]]\nname = \"Mask canary\""
+            "[workflow.case.container]\nimage = \"{container}\"\n\n[[workflow.case.service]]\nname = \"redis\"\nimage = \"{service}\"\nports = [\"6379:6379\"]\noptions = \"--health-cmd \\\"redis-cli ping\\\"\"\n\n[[workflow.case.step]]\nname = \"Mask canary\""
         ),
     )
 }
@@ -337,8 +332,38 @@ fn a_case_container_or_service_without_a_digest_is_refused() -> TestResult {
 fn a_case_service_needs_a_health_check() -> TestResult {
     let pinned = format!("alpine:3@{DIGEST}");
     let cases = with_container_and_service(&pinned, &pinned)
-        .replace("--health-cmd 'redis-cli ping'", "--health-retries 3");
+        .replace("--health-cmd \\\"redis-cli ping\\\"", "--health-retries 3");
     let message = refusal(&format!("{MODES}{cases}"))?;
     assert!(message.contains("--health-cmd"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn a_mode_name_with_a_quote_is_escaped_in_the_case_condition() -> TestResult {
+    let config = format!("{MODES}{CASES}")
+        .replace(
+            "options = [\"both\", \"features\", \"js\", \"mask\", \"cache\"]",
+            "options = [\"both\", \"features\", \"js\", \"mask\", \"cache\", \"canary's\"]",
+        )
+        .replace("modes = [\"features\", \"js\"]", "modes = [\"canary's\"]");
+    let tree = qualification(&config)?;
+    assert_eq!(
+        job(&tree, "js-hosted")?.get("if").and_then(Node::text),
+        Some("${{ inputs.mode == 'canary''s' }}")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_wrapped_case_condition_is_joined_without_its_wrapper() -> TestResult {
+    let config = format!("{MODES}{CASES}").replace(
+        "if = \"github.ref != format('refs/heads/{0}', github.event.repository.default_branch)\"",
+        "if = \"${{ github.ref != 'refs/heads/main' }}\"",
+    );
+    let tree = qualification(&config)?;
+    assert_eq!(
+        job(&tree, "cache-hosted")?.get("if").and_then(Node::text),
+        Some("${{ (inputs.mode == 'cache') && (github.ref != 'refs/heads/main') }}")
+    );
     Ok(())
 }

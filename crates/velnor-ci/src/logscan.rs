@@ -239,14 +239,22 @@ fn set_cache_key(result: &mut LogScan, kind: CacheKind, key: &str) {
     }
 }
 
+/// Splits a job log at its top-level `Run` groups, one slice per step the job
+/// ran. A composite action's own `Run` groups sit between the runner's
+/// `##[start-action` and `##[end-action` markers; they belong to the
+/// composite step's slice, not to steps of their own.
 #[must_use]
 pub fn split_steps(log: &str) -> Vec<&str> {
     let mut starts: Vec<usize> = Vec::new();
+    let mut inside_actions = 0_usize;
     let mut at = 0;
     for raw in log.split_inclusive('\n') {
-        if strip_ansi(strip_timestamp(raw.trim_end_matches(['\n', '\r'])))
-            .starts_with("##[group]Run ")
-        {
+        let line = strip_ansi(strip_timestamp(raw.trim_end_matches(['\n', '\r'])));
+        if line.starts_with("##[start-action") {
+            inside_actions += 1;
+        } else if line.starts_with("##[end-action") {
+            inside_actions = inside_actions.saturating_sub(1);
+        } else if inside_actions == 0 && line.starts_with("##[group]Run ") {
             starts.push(at);
         }
         at += raw.len();

@@ -228,7 +228,7 @@ fn blank_or_repeated_pr_only_checks_are_refused_by_index() {
         ("pr_only_checks = [\"DCO\", \"DCO\"]\n", 1, "repeats"),
     ] {
         files.release_toml = Some(text.to_owned());
-        let message = refusal(&files).map(|e| e.to_string()).unwrap_or_default();
+        let message = refusal(&files).map_or_default(|e| e.to_string());
         assert!(message.contains(".velnor/release.toml"), "{message}");
         assert!(
             message.contains(&format!("pr_only_checks[{index}] {why}")),
@@ -291,6 +291,19 @@ fn a_root_whose_workspace_releases_nothing_is_refused() -> TestResult {
         refusal(&files),
         Some(ReleaseError::RootReleasesNothing { .. })
     ));
+    Ok(())
+}
+
+#[test]
+fn a_root_whose_workspace_releases_nothing_is_accepted_when_it_lists_its_packages() -> TestResult {
+    let text = edit(
+        &PLZ.replace("name = \"app\"\n", "name = \"app\"\nrelease = false\n"),
+        "[workspace]\n",
+        "[workspace]\nrelease = false\n",
+    )?;
+    let mut files = files();
+    files.release_plz_toml.insert(".".to_owned(), text);
+    assert_eq!(refusal(&files), None);
     Ok(())
 }
 

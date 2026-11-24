@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const TEST_OUTPUT: &str = "tests_run=17\ntests_listed=17\n";
+const TEST_OUTPUT: &str = "tests_run=17\n";
 
 #[test]
 fn completed_observations_survive_a_descendant_holding_the_stream_open() {
@@ -15,11 +15,10 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         ("empty", false, true),
         ("eof", true, false),
     ] {
-        let temp =
-            std::env::temp_dir().join(format!("velnor-capture-{}-{name}", std::process::id()));
+        let temp = crate::scratch_path("velnor-capture", name);
         let program = fixture(&temp, active, held).expect("fixture");
         let started = Instant::now();
-        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let mut child = crate::run::velnor_ci_run()
             .args([
                 "run",
                 "--",
@@ -27,8 +26,8 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
                 "nextest",
                 "run",
             ])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("CARGO_HOME", temp.join("cargo-home"))
             .env("GITHUB_OUTPUT", temp.join("outputs"))
             .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "20")
@@ -64,14 +63,17 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         );
         assert_eq!(invocation["capture_complete"], !held);
         assert_eq!(
-            fs::read_to_string(temp.join("outputs")).unwrap_or_default(),
+            crate::run_nextest::without_built(
+                &fs::read_to_string(temp.join("outputs")).unwrap_or_default()
+            ),
             if active && !held { TEST_OUTPUT } else { "" }
         );
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", temp.join("cache-outputs"))
+            .env("HOME", temp.path())
             .output()
             .expect("cache decision");
         if active {
@@ -87,7 +89,6 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
             );
             assert!(String::from_utf8_lossy(&decision.stderr).contains("incomplete"));
         }
-        fs::remove_dir_all(temp).expect("cleanup");
     }
 }
 
@@ -170,8 +171,7 @@ fn recorded_target_directory_uses_only_explicit_cargo_settings() {
             None,
         ),
     ] {
-        let temp =
-            std::env::temp_dir().join(format!("velnor-directory-{}-{name}", std::process::id()));
+        let temp = crate::scratch_path("velnor-directory", name);
         let program = fixture(&temp, true, false).expect("fixture");
         let temp = temp.canonicalize().expect("canonical root");
         fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");
@@ -210,7 +210,6 @@ fn recorded_target_directory_uses_only_explicit_cargo_settings() {
         let text = fs::read_to_string(temp.join("velnor-invocations.jsonl")).expect("sidecar");
         let invocation: serde_json::Value = serde_json::from_str(text.trim()).expect("record");
         assert_recorded_settings(&invocation, &argv, &temp, expected, name);
-        fs::remove_dir_all(temp).expect("cleanup");
     }
 }
 
@@ -252,7 +251,9 @@ fn assert_recorded_settings(
 fn unrelated_non_unicode_environment_preserves_the_child_result_and_record() {
     use std::os::unix::ffi::OsStringExt;
 
-    let temp = std::env::temp_dir().join(format!("velnor-non-unicode-{}", std::process::id()));
+    let temp = velnor_test_support::ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-non-unicode-{}", std::process::id())),
+    );
     let program = fixture(&temp, true, false).expect("fixture");
     fs::write(
         &program,
@@ -263,8 +264,8 @@ fn unrelated_non_unicode_environment_preserves_the_child_result_and_record() {
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--"])
         .args(argv)
-        .current_dir(&temp)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("UNRELATED", std::ffi::OsString::from_vec(vec![255]))
         .env(std::ffi::OsString::from_vec(vec![b'U', 255]), "unrelated")
         .output()
@@ -278,5 +279,4 @@ fn unrelated_non_unicode_environment_preserves_the_child_result_and_record() {
         invocation["artifacts"].as_array().expect("artifacts").len(),
         1
     );
-    fs::remove_dir_all(temp).expect("cleanup");
 }

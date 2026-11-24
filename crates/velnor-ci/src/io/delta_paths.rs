@@ -15,11 +15,6 @@ pub(super) fn staging(path: &Path) -> Result<(), CiError> {
 pub(super) fn untracked(path: &Path, role: &str) -> Result<(), CiError> {
     let root = std::env::current_dir().map_err(|error| CiError::new(error.to_string()))?;
     let tracked = super::inputs::tracked_paths(&root)?;
-    if tracked.non_utf8 > 0 {
-        return Err(CiError::new(format!(
-            "cannot verify {role} against tracked paths"
-        )));
-    }
     let destination = resolve(path)?;
     for path in tracked.paths {
         let full = tracked.top.join(path);

@@ -57,8 +57,8 @@ fn only_the_value_one_turns_the_golden_update_on() {
 #[test]
 fn a_different_render_is_a_failure_and_leaves_expected_alone_unless_updating() -> TestResult {
     let copy = Copy::of("single-crate", "modes")?;
-    let workflow = copy.0.join("expected/.github/workflows/rust-ci.yml");
-    let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
+    let workflow = copy.0.join("expected/.github/workflows/ci.yml");
+    let path = RepoPath::new(".github/workflows/ci.yml")?;
     fs::write(&workflow, "stale\n")?;
 
     let failures = check_sample(&copy.0, update_requested(Some(OsStr::new("0"))))?;
@@ -93,6 +93,23 @@ fn a_sample_that_records_a_cargo_symlink_is_refused_like_the_live_checkout() -> 
         expected_with_notes(&load(&copy.0)?),
         Err(GenerateError::Release(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_sample_that_records_a_symlinked_rust_source_loads_like_the_live_checkout() -> TestResult {
+    let copy = Copy::of("release-bin", "symlinked-source")?;
+    fs::write(copy.0.join("symlinks.txt"), "crates/app/src/shared.rs\n")?;
+    let view = load(&copy.0)?;
+    assert!(
+        view.symlinks
+            .contains(&RepoPath::new("crates/app/src/shared.rs")?)
+    );
+    assert!(
+        !view
+            .files
+            .contains_key(&RepoPath::new("crates/app/src/shared.rs")?)
+    );
     Ok(())
 }
 

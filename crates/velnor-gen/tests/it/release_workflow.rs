@@ -1,240 +1,226 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
+use serde_json::{Map, Value};
 
-type TestResult = Result<(), Box<dyn Error>>;
+use crate::declared_fixture::{TestResult, rendered_text};
+use crate::yaml_tree::document;
 
-const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
-const WRITER: &str = "release";
-const TAG_PUSH: &str = "    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))";
-fn read() -> Result<String, Box<dyn Error>> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(WORKFLOW);
-    Ok(fs::read_to_string(path)?)
+const WORKFLOW: &str = "release";
+const DRIFT: &str = "tag-ruleset-drift";
+const WRITER: &str = "publish-family";
+const BUILDS: &[&str] = &[
+    "build-velnor-ci-linux-x64",
+    "build-velnor-ci-linux-arm64",
+    "build-velnor-gen-linux-x64",
+    "build-velnor-gen-linux-arm64",
+];
+const TAG_PUSH: &str = "${{ github.ref_type == 'tag' }}";
+
+fn read(path: &str) -> Result<String, Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    Ok(fs::read_to_string(root.join(path))?)
 }
 
-fn jobs(text: &str) -> Vec<(String, Vec<&str>)> {
-    let mut jobs: Vec<(String, Vec<&str>)> = Vec::new();
-    let mut inside = false;
-    for line in text.lines() {
-        if line == "jobs:" {
-            inside = true;
-        } else if !inside {
-        } else if let Some(id) = line
-            .strip_prefix("  ")
-            .and_then(|rest| rest.strip_suffix(':'))
-            .filter(|rest| !rest.starts_with(' '))
-        {
-            jobs.push((id.to_owned(), Vec::new()));
-        } else if let Some((_, lines)) = jobs.last_mut() {
-            lines.push(line);
-        }
-    }
-    jobs
+fn committed(file: &str) -> Result<Value, Box<dyn Error>> {
+    Ok(document(&read(&format!(".github/workflows/{file}.yml"))?)?)
 }
 
-fn values<'a>(lines: &[&'a str], key: &str) -> Vec<&'a str> {
-    let prefix = format!("{key}: ");
-    lines
-        .iter()
-        .filter_map(|line| {
-            let line = line.trim_start();
-            line.strip_prefix("- ")
-                .unwrap_or(line)
-                .strip_prefix(&prefix)
-        })
+fn jobs(workflow: &Value) -> Result<&Map<String, Value>, Box<dyn Error>> {
+    Ok(workflow["jobs"].as_object().ok_or("no jobs")?)
+}
+
+fn runs(job: &Value) -> Vec<&str> {
+    job["steps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step["run"].as_str())
         .collect()
 }
 
-fn release_jobs(text: &str) -> BTreeMap<String, Vec<&str>> {
-    let jobs = jobs(text);
-    let mut ids: Vec<&str> = jobs.iter().map(|(id, _)| id.as_str()).collect();
-    ids.sort_unstable();
+fn uses(job: &Value) -> Vec<&str> {
+    job["steps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step["uses"].as_str())
+        .collect()
+}
+
+fn position(runs: &[&str], prefix: &str) -> Result<usize, Box<dyn Error>> {
+    runs.iter()
+        .position(|run| run.starts_with(prefix))
+        .ok_or_else(|| format!("no run starts with {prefix}").into())
+}
+
+#[test]
+fn the_committed_ruleset_drift_workflow_is_what_the_repository_config_renders() -> TestResult {
+    let config = read(".velnor/workflows.toml")?;
     assert_eq!(
-        ids,
-        ["build", "checksums", "gate", "release", "tag-ruleset-drift"]
+        read(&format!(".github/workflows/{DRIFT}.yml"))?,
+        rendered_text(&config, DRIFT)?
     );
-    jobs.into_iter()
-        .filter(|(id, _)| id != "tag-ruleset-drift")
+    Ok(())
+}
+
+fn needs(job: &Value) -> Vec<&str> {
+    job["needs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
         .collect()
 }
 
-fn steps(lines: &[&str]) -> Vec<RenderedStep> {
-    let uses = values(lines, "uses")
-        .into_iter()
-        .map(|action| RenderedStep {
-            uses: Some(action.to_owned()),
-            ..RenderedStep::default()
-        });
-    let runs = values(lines, "run")
-        .into_iter()
-        .map(|command| RenderedStep {
-            run: Some(command.to_owned()),
-            ..RenderedStep::default()
-        });
-    uses.chain(runs).collect()
-}
-
 #[test]
-fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
-    let text = read()?;
-    let jobs = release_jobs(&text);
-    let rendered = RenderedWorkflow {
-        jobs: jobs
-            .iter()
-            .map(|(id, lines)| RenderedJob {
-                id: id.clone(),
-                runs_on: String::new(),
-                timeout_minutes: 1,
-                steps: steps(lines)
-                    .into_iter()
-                    .map(|step| match step.run.as_deref() {
-                        Some("|") => RenderedStep {
-                            run: Some("true".to_owned()),
-                            ..step
-                        },
-                        _ => step,
-                    })
-                    .collect(),
-                ..RenderedJob::default()
-            })
-            .collect(),
-    };
-    assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
-    assert_eq!(check_rules(&rendered), Ok(()));
-    for (_, lines) in jobs.iter().filter(|(id, _)| *id != "gate") {
-        assert!(
-            values(lines, "run")
-                .iter()
-                .all(|run| !run.starts_with(['|', '>']))
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> TestResult {
-    let text = read()?;
-    let jobs = release_jobs(&text);
-    let gate = &jobs["gate"];
-    let header = format!(
-        "    name: Gate
-{TAG_PUSH}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      checks: read
-    steps:
-      - name: Check that the tagged commit is on the default branch
-        env:
-          GH_TOKEN: ${{{{ github.token }}}}
-        run: |
-"
+fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_anything_else() -> TestResult {
+    let workflow = committed(WORKFLOW)?;
+    let jobs = jobs(&workflow)?;
+    let mut ids: Vec<&str> = jobs.keys().map(String::as_str).collect();
+    ids.sort_unstable();
+    let mut expected = vec![
+        "gate",
+        "family-versions",
+        "family",
+        "sums-family",
+        "verify-family",
+        WRITER,
+    ];
+    expected.extend(BUILDS);
+    expected.sort_unstable();
+    assert_eq!(ids, expected);
+    assert_eq!(
+        workflow["on"]["push"]["tags"],
+        serde_json::json!(["tools-v*"])
     );
-    let text = gate.join("\n");
-    assert!(text.starts_with(&header), "{text}");
-    assert!(!text.contains("uses:"), "{text}");
-    assert!(text.contains("compare/$default_branch...$GITHUB_SHA"));
-    assert_eq!(values(gate, "needs"), [] as [&str; 0]);
-    for (id, dependency) in [
-        ("build", "gate"),
-        ("checksums", "build"),
-        (WRITER, "checksums"),
-    ] {
-        assert_eq!(values(&jobs[id], "needs"), [dependency], "{id}");
+    assert_eq!(workflow["on"].as_object().map(Map::len), Some(1));
+    let gate = &jobs["gate"];
+    assert_eq!(gate["if"], TAG_PUSH);
+    assert!(gate.get("needs").is_none());
+    let compare = runs(gate)
+        .into_iter()
+        .find(|run| run.contains("/compare/$DEFAULT_BRANCH...$COMMIT"))
+        .ok_or("the gate never compares the tag with the default branch")?;
+    assert!(compare.ends_with(
+        "--jq '.status == \"behind\" or .status == \"identical\" or error(\"the tagged commit is not on the default branch\")'"
+    ));
+    let checks_waived = read(".velnor/release.toml")?
+        .lines()
+        .any(|line| line == "family_required_checks = false");
+    assert_eq!(
+        position(&runs(gate), "velnor-ci release-gate").is_ok(),
+        !checks_waived
+    );
+    for (id, job) in jobs.iter().filter(|(id, _)| *id != "gate") {
+        assert!(needs(job).contains(&"gate"), "{id}");
     }
-    for (id, lines) in &jobs {
-        for line in lines {
-            let key = line.trim_start().trim_start_matches("- ");
-            assert!(
-                !key.starts_with("if:")
-                    || (id == "gate" && *line == TAG_PUSH)
-                    || (line.starts_with("        if:") && key.contains("runner.os")),
-                "{id}: {line}"
-            );
-            assert!(!key.starts_with("continue-on-error:"), "{id}: {line}");
-        }
+    for build in BUILDS.iter().copied() {
+        assert!(needs(&jobs[build]).contains(&"family"), "{build}");
     }
+    assert_eq!(needs(&jobs["sums-family"]).len(), 2 + BUILDS.len());
+    assert!(needs(&jobs["verify-family"]).contains(&"sums-family"));
+    assert!(needs(&jobs[WRITER]).contains(&"verify-family"));
     Ok(())
 }
 
 #[test]
-fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_publishes()
--> TestResult {
-    let text = read()?;
-    assert!(text.lines().any(|line| line == "permissions: {}"));
-    let jobs = jobs(&text);
-    for (id, lines) in &jobs {
-        let writes = values(lines, "contents")
-            .iter()
-            .filter(|access| **access == "write")
-            .count();
-        assert_eq!(writes, usize::from(id == WRITER), "{id}");
+fn only_the_publish_job_can_write_contents_and_verification_precedes_it() -> TestResult {
+    let workflow = committed(WORKFLOW)?;
+    assert_eq!(workflow["permissions"], serde_json::json!({}));
+    let jobs = jobs(&workflow)?;
+    for (id, job) in jobs {
+        let permissions = job["permissions"].as_object().ok_or("no permissions")?;
         assert_eq!(
-            values(lines, "uses")
-                .iter()
-                .any(|action| action.starts_with("actions/checkout@")),
-            id == "build",
-            "{id}"
-        );
-        assert_eq!(
-            values(lines, "run")
-                .iter()
-                .any(|run| run.starts_with("gh ")),
+            permissions
+                .get("contents")
+                .is_some_and(|access| access == "write"),
             id == WRITER,
             "{id}"
         );
+        let attests = permissions.contains_key("id-token")
+            || permissions.contains_key("attestations") && permissions["attestations"] == "write";
+        assert_eq!(attests, id == "sums-family", "{id}");
+        assert_eq!(
+            runs(job)
+                .iter()
+                .any(|run| run.starts_with("velnor-ci release publish")),
+            id == WRITER,
+            "{id}"
+        );
+        assert_eq!(
+            uses(job)
+                .iter()
+                .any(|action| action.starts_with("actions/checkout@")),
+            id == "family-versions" || BUILDS.contains(&id.as_str()),
+            "{id}"
+        );
     }
-    let release_jobs = release_jobs(&text);
-    let tag_checks: Vec<&str> = values(&release_jobs["build"], "run")
-        .into_iter()
-        .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
-        .collect();
-    assert_eq!(
-        tag_checks,
-        [
-            "stage/velnor-ci check-tag \"$GITHUB_REF_NAME\"",
-            "stage/velnor-gen check-tag \"$GITHUB_REF_NAME\""
-        ]
-    );
-    let writer = &release_jobs[WRITER];
-    let runs = values(writer, "run");
-    let verify = runs
-        .iter()
-        .position(|run| run.starts_with("sha256sum --check"))
-        .ok_or("the writing job never verifies SHA256SUMS")?;
-    let publish = runs
-        .iter()
-        .position(|run| run.starts_with("gh release create"))
-        .ok_or("the writing job never creates the release")?;
-    assert!(verify < publish);
-    assert!(runs[publish].contains(" --prerelease "));
-    let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 7);
-    assert!(runs[publish].contains(" dist/COMMIT "));
-    assert!(
-        !runs
+    for build in BUILDS.iter().copied() {
+        let build_runs = runs(&jobs[build]);
+        let built = position(&build_runs, "cargo build --profile release-tools ")?;
+        let smoke = build_runs
             .iter()
-            .any(|run| run.contains("dist/COMMIT >") || run.contains("> dist/COMMIT"))
+            .position(|run| run.ends_with(" check-tag \"$TAG\""))
+            .ok_or("no tag check")?;
+        let packed = build_runs
+            .iter()
+            .position(|run| run.starts_with("tar ") && run.contains(" -czf "))
+            .ok_or("no pack step")?;
+        assert!(built < smoke && smoke < packed, "{build}");
+    }
+    let sums = runs(&jobs["sums-family"]);
+    let record = position(&sums, "echo \"$COMMIT\" > COMMIT")?;
+    let written = position(&sums, "sha256sum velnor-ci-x86_64")?;
+    assert!(record < written);
+    let attest = uses(&jobs["sums-family"])
+        .iter()
+        .any(|action| action.starts_with("actions/attest-build-provenance@"));
+    assert!(attest);
+    assert!(
+        runs(&jobs["verify-family"])
+            .iter()
+            .any(|run| run.contains("gh attestation verify"))
     );
-    let checksum_runs = values(&release_jobs["checksums"], "run");
-    let record = checksum_runs
+    Ok(())
+}
+
+#[test]
+fn the_ruleset_drift_check_runs_nightly_and_on_dispatch_and_reads_its_admin_token_in_one_step()
+-> TestResult {
+    let workflow = committed(DRIFT)?;
+    assert_eq!(
+        workflow["on"],
+        serde_json::json!({
+            "workflow_dispatch": {},
+            "schedule": [{ "cron": "23 4 * * *" }]
+        })
+    );
+    assert_eq!(workflow["permissions"], serde_json::json!({}));
+    let jobs = jobs(&workflow)?;
+    assert_eq!(jobs.keys().collect::<Vec<_>>(), [DRIFT]);
+    let job = &jobs[DRIFT];
+    assert_eq!(
+        job["permissions"],
+        serde_json::json!({ "contents": "read" })
+    );
+    assert!(job.get("env").is_none());
+    let steps = job["steps"].as_array().ok_or("no steps")?;
+    let readers: Vec<&Value> = steps
         .iter()
-        .position(|run| *run == "echo \"$GITHUB_SHA\" > dist/COMMIT")
-        .ok_or("the checksums job never records the commit of the release")?;
-    let sums = checksum_runs
-        .iter()
-        .position(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
-        .ok_or("the checksums job never writes SHA256SUMS")?;
-    assert!(record < sums);
-    assert!(checksum_runs[sums].contains(" COMMIT "));
+        .filter(|step| step["env"].get("TAG_RULESET_ADMIN_READ_TOKEN").is_some())
+        .collect();
+    let [step] = readers.as_slice() else {
+        return Err("exactly one step reads the admin token".into());
+    };
+    assert_eq!(
+        step["env"]["TAG_RULESET_ADMIN_READ_TOKEN"],
+        "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}"
+    );
+    assert_eq!(step["run"], "node scripts/tag-ruleset-drift.mjs");
     Ok(())
 }

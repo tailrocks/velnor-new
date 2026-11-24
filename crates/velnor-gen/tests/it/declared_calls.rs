@@ -168,6 +168,31 @@ fn a_call_must_pass_the_declared_inputs_with_the_declared_types() -> TestResult 
         ("dry_run = \"true\"", "dry_run = \"maybe\"", "dry_run"),
         ("shards = 4", "shards = -4", "shards"),
         ("shards = 4", "shards = \"many\"", "shards"),
+        (
+            "dry_run = \"true\"",
+            "dry_run = \"${{ github.sha }}\"",
+            "dry_run",
+        ),
+        (
+            "dry_run = \"true\"",
+            "dry_run = \"${{ format('{0}', github.sha) }}\"",
+            "dry_run",
+        ),
+        (
+            "shards = 4",
+            "shards = \"${{ github.repository }}\"",
+            "shards",
+        ),
+        (
+            "shards = 4",
+            "shards = \"${{ github.sha == 'x' }}\"",
+            "shards",
+        ),
+        (
+            "shards = 4",
+            "shards = \"${{ !contains(github.sha, 'x') }}\"",
+            "shards",
+        ),
         ("version = \"1.2.3\"", "version = 5", "version"),
         (
             "version = \"1.2.3\"",
@@ -232,6 +257,24 @@ fn a_call_job_refuses_the_keys_of_a_step_job() -> TestResult {
         let config = CONFIG.replace("uses = \"leaf\"\n", &format!("uses = \"leaf\"\n{extra}\n"));
         let message = refusal(&config)?;
         assert!(message.contains(needle), "{extra}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn an_expression_of_a_possible_type_is_accepted_for_a_typed_input() -> TestResult {
+    for (from, to) in [
+        (
+            "dry_run = \"true\"",
+            "dry_run = \"${{ github.sha == 'x' }}\"",
+        ),
+        ("version = \"1.2.3\"", "version = \"${{ github.sha }}\""),
+        (
+            "version = \"1.2.3\"",
+            "version = \"${{ github.sha == 'x' }}\"",
+        ),
+    ] {
+        caller(&CONFIG.replace(from, to))?;
     }
     Ok(())
 }

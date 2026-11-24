@@ -9,6 +9,9 @@ use crate::journal::Journal;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
+#[path = "tests/other_container.rs"]
+mod other_container;
+
 const RESERVATION: i64 = 2;
 const CONNECTION: &str = "conn-test-1";
 const ENGINE: &str = "engine-test";

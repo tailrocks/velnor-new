@@ -16,6 +16,23 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     validation::validate(conn).await
 }
 
+pub(super) async fn clock_guards(
+    conn: &turso::Connection,
+) -> Result<Vec<(String, String)>, HostError> {
+    let mut guards = Vec::new();
+    for (_, name, sql) in schema_objects() {
+        if matches!(
+            name,
+            "physical_attempt_jit_conflict_claim_insert_guard"
+                | "physical_attempt_jit_conflict_settlement_insert_guard"
+        ) {
+            let sql = super::jit_interrupted_claims::versioned_recovery_sql(conn, sql).await?;
+            guards.push((name.to_owned(), sql));
+        }
+    }
+    Ok(guards)
+}
+
 pub(super) async fn validate_persisted_proofs(conn: &turso::Connection) -> Result<(), HostError> {
     validation::validate_persisted_jit_conflict_proofs(conn).await
 }
@@ -28,36 +45,40 @@ pub(super) fn jit_table_sql() -> &'static str {
     ddl::JIT_TABLE
 }
 
-pub(super) fn jit_index_contracts() -> &'static [(&'static str, &'static str); 5] {
-    &ddl::JIT_INDEXES
+pub(super) fn jit_index_contracts() -> &'static [(&'static str, &'static str)] {
+    ddl::JIT_INDEXES
 }
 
 pub(super) fn terminal_view_sql() -> &'static str {
     ddl::TERMINAL_PROOFS_VIEW
 }
 
-pub(super) fn table_names() -> &'static [&'static str; 3] {
-    &ddl::TABLE_NAMES
+pub(super) fn table_names() -> &'static [&'static str] {
+    ddl::TABLE_NAMES
 }
 
 pub(super) fn schema_objects() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
     ddl::TABLE_NAMES
-        .into_iter()
+        .iter()
+        .copied()
         .zip([ddl::CLAIMS, ddl::PROGRESS, ddl::SETTLEMENTS])
         .map(|(name, sql)| ("table", name, sql))
         .chain(
             guards::INSERT_GUARDS
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
         .chain(
             guards::IMMUTABLE_GUARDS
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
         .chain(
             guards::EFFECT_FENCES
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
 }

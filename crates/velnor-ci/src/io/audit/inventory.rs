@@ -2,23 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod evidence;
+mod handle;
+mod held;
+mod latest;
+mod probe;
+mod resolve;
+mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
+pub(super) use latest::newest;
+pub(super) use walk::{Budget, scan};
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use velnor_rust::{normalize, sha256_hex};
 
 use super::super::units::Workspace;
+use crate::error::CiError;
 
-pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+
+#[derive(Default)]
+pub(super) struct Scan {
+    pub(super) entries: Entries,
+    pub(super) identities: BTreeMap<PathBuf, handle::Stamp>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
@@ -39,17 +55,20 @@ pub(super) struct Receipt {
     pub(super) digest: String,
 }
 
-pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
+pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
     workspaces
         .iter()
         .flat_map(|workspace| {
-            [
-                workspace.workspace_root.join("target"),
-                workspace.target_directory.clone(),
-            ]
+            let mut excluded = vec![workspace.root.join("target")];
+            excluded.extend(workspace.directories());
+            excluded
         })
-        .map(|target| fs::canonicalize(&target).unwrap_or_else(|_| normalize(&target)))
+        .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
+}
+
+pub(super) fn unresolved(path: &Path, error: &io::Error) -> CiError {
+    CiError::new(format!("cannot resolve {}: {error}", path.display()))
 }
 
 pub(super) fn excluded(path: &Path, root: &Path, targets: &BTreeSet<PathBuf>) -> bool {
@@ -86,71 +105,6 @@ fn excluded_entry(path: &Path, kind: &Kind, root: &Path, targets: &BTreeSet<Path
             }
             Kind::File | Kind::Directory | Kind::Other => false,
         }
-}
-
-pub(super) fn scan(
-    root: &Path,
-    targets: &BTreeSet<PathBuf>,
-    remaining: &mut usize,
-) -> io::Result<Entries> {
-    let root = fs::canonicalize(root)?;
-    let mut entries = Entries::new();
-    let mut pending = vec![root.clone()];
-    let mut visited = BTreeSet::new();
-    while let Some(directory) = pending.pop() {
-        if !visited.insert(directory.clone()) {
-            continue;
-        }
-        reserve(remaining)?;
-        let mut children = BTreeMap::new();
-        for entry in fs::read_dir(&directory)? {
-            reserve(remaining)?;
-            let entry = entry?;
-            let path = entry.path();
-            let metadata = fs::symlink_metadata(&path)?;
-            let kind = if metadata.is_symlink() {
-                let resolved = match fs::canonicalize(&path) {
-                    Ok(resolved) => Some(resolved),
-                    Err(error) if unresolved_link(&error) => None,
-                    Err(error) => return Err(error),
-                };
-                Kind::Link {
-                    target: fs::read_link(&path)?,
-                    resolved,
-                }
-            } else if metadata.is_dir() {
-                Kind::Directory
-            } else if metadata.is_file() {
-                Kind::File
-            } else {
-                Kind::Other
-            };
-            if !excluded_entry(&path, &kind, &root, targets) {
-                match &kind {
-                    Kind::Directory => pending.push(path),
-                    Kind::Link {
-                        resolved: Some(resolved),
-                        ..
-                    } if fs::metadata(resolved)?.is_dir() => pending.push(resolved.clone()),
-                    Kind::File | Kind::Link { .. } | Kind::Other => {}
-                }
-            }
-            children.insert(PathBuf::from(entry.file_name()), kind);
-        }
-        entries.insert(directory, children);
-    }
-    Ok(entries)
-}
-
-fn reserve(remaining: &mut usize) -> io::Result<()> {
-    *remaining = remaining
-        .checked_sub(1)
-        .ok_or_else(|| io::Error::other("audit freshness scan limit exceeded"))?;
-    Ok(())
-}
-
-pub(super) fn unresolved_link(error: &io::Error) -> bool {
-    error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ELOOP)
 }
 
 pub(super) fn view(
@@ -267,7 +221,13 @@ pub(super) fn matches(
     Ok(view(&saved.entries, &root, targets)? == *current)
 }
 
-pub(super) fn load(output: &Path) -> io::Result<Evidence> {
+thread_local! {
+    static PARSED: RefCell<BTreeMap<String, Arc<Evidence>>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+const PARSED_LIMIT: usize = 8;
+
+pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
         || receipt.modified != fs::metadata(output)?.modified()?
@@ -280,5 +240,22 @@ pub(super) fn load(output: &Path) -> io::Result<Evidence> {
     if sha256_hex(&bytes) != receipt.digest {
         return Err(io::Error::other("directory inventory digest differs"));
     }
-    Ok(serde_json::from_slice(&bytes)?)
+    if let Some(parsed) = PARSED.with(|parsed| parsed.borrow().get(&receipt.digest).cloned()) {
+        return Ok(parsed);
+    }
+    super::timing::parsed();
+    let parsed = Arc::new(serde_json::from_slice::<Evidence>(&bytes)?);
+    PARSED.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= PARSED_LIMIT {
+            cache.clear();
+        }
+        cache.insert(receipt.digest, Arc::clone(&parsed));
+    });
+    Ok(parsed)
 }
+
+#[cfg(test)]
+mod revisit;
+#[cfg(test)]
+mod tests;

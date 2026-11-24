@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, OpenOptions};
+use std::io::BufReader;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -116,9 +117,13 @@ fn fetch_one(
     name: &str,
     id: u64,
 ) -> Result<u64, CiError> {
-    let bytes = api.download(repo, id)?;
-    extract(&bytes, name, reports, budget)?;
-    Ok(bytes.len() as u64)
+    let archive = api.download(repo, id, &reports.join(format!(".{name}.zip")))?;
+    let size = archive
+        .metadata()
+        .map_err(|e| CiError::new(format!("cannot size the archive of {name}: {e}")))?
+        .len();
+    extract(BufReader::new(archive), name, reports, budget)?;
+    Ok(size)
 }
 
 /// Reads plan.json without following a symbolic link or blocking on a FIFO, and only when it is a

@@ -1,0 +1,4 @@
+# Hand-written fixture, not generated: stands in for the Qualification workflow of a repo
+# that already has one. velnor-gen reads its name and push trigger only.
+name: Qualification
+on: push

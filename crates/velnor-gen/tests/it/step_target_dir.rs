@@ -11,7 +11,7 @@ use crate::pipeline::{view, workflow};
 
 const WORKSPACE: &str = "${{ github.workspace }}/";
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
-const NON_BUILDING: [&str; 4] = ["cargo-fmt", "cargo-deny", "cargo-machete", "cargo fetch"];
+const NON_BUILDING: &[&str] = &["cargo-fmt", "cargo-deny", "cargo-machete", "cargo fetch"];
 
 fn with_target_dir(
     repo: &mut RepoView,

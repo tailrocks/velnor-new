@@ -40,7 +40,7 @@ Fixed keys, in this order: the Velnor marker, `profile`,
   on GitHub's runners as self-hosted.
 - The file has no `rules`, `ignores`, `paths`, `baseline`, `online` or
   `extends` key.
-- A marked `.github/actionlint.yaml` left by an older generator is retired by
+- A marked `.github/jactionlint.yaml` left by an older generator is retired by
   the next generation; an unmarked one stays repository content.
 
 ## File set and flags

@@ -6,22 +6,23 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::super::super::units::{UnitFile, Workspace, unit_files};
+use super::super::super::units::{Roots, UnitFile, Workspace};
 use super::super::groups::scan_dirs;
 use super::super::inventory::{self, Evidence, State};
 use super::{identity, output};
 use crate::error::CiError;
 
 pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
-    let base = inventory::exclusions(workspaces);
+    let base = inventory::exclusions(workspaces)?;
     let mut found = BTreeSet::new();
+    let roots = Roots::new(workspaces);
     for target in scan_dirs(workspaces) {
-        for (unit, path) in unit_files(&target)? {
+        for (unit, path) in roots.unit_files(&target)? {
             if output(&unit)
                 && let Ok(saved) = inventory::load(&path)
                 && base.is_subset(&saved.targets)
             {
-                found.extend(saved.targets);
+                found.extend(saved.targets.iter().cloned());
             }
         }
     }
@@ -34,14 +35,12 @@ pub(super) fn targets(
     before: &BTreeMap<PathBuf, (String, SystemTime)>,
 ) -> Result<BTreeSet<PathBuf>, CiError> {
     let mut found = BTreeSet::new();
+    let roots = Roots::new(workspaces);
     for target in scan_dirs(workspaces) {
-        for (unit, path) in unit_files(&target)? {
+        for (unit, path) in roots.unit_files(&target)? {
             let (UnitFile::Fingerprint { configuration, .. }
             | UnitFile::BuildOutput { configuration, .. }
-            | UnitFile::DepInfo {
-                configuration: Some(configuration),
-                ..
-            }) = unit
+            | UnitFile::DepInfo { configuration, .. }) = unit
             else {
                 continue;
             };
@@ -61,3 +60,6 @@ pub(super) fn targets(
     }
     Ok(found)
 }
+
+#[cfg(test)]
+mod parses;

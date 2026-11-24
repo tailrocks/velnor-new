@@ -2,19 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::{Command, Output};
+use std::process::Output;
 
 use crate::io::Repo;
+use crate::support::fresh_dir;
 
-use super::{placed, unit};
+use super::{placed, unit, velnor_ci};
 
 const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
-fn grouped_tools() -> Repo {
-    let repo = Repo::new("audit-groups");
+pub(super) fn grouped_tools() -> Repo {
+    grouped_tools_in(Repo::new("audit-groups"))
+}
+
+fn grouped_tools_in(repo: Repo) -> Repo {
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(
         &repo,
         ".velnor/rust-ci.toml",
@@ -23,7 +27,7 @@ fn grouped_tools() -> Repo {
     unit(
         &repo,
         ".velnor/rust-ci.lock",
-        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.86\""),
+        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.96\""),
     );
     for package in ["a", "b"] {
         unit(
@@ -64,9 +68,8 @@ fn group_units(repo: &Repo, package: &str, normal: &str, harness: &str) {
 }
 
 fn audit(repo: &Repo, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut command = velnor_ci();
     command
-        .env_remove("CARGO_TARGET_DIR")
         .current_dir(repo.root())
         .args(["inputs", "audit"])
         .args(args);
@@ -164,8 +167,16 @@ fn an_ungrouped_root_keeps_its_own_target_directory() {
 }
 
 fn build_grouped(root: &std::path::Path, manifest: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .env("CARGO_TARGET_DIR", root.join("target-velnor/tools"))
+    build_grouped_with(root, manifest, false)
+}
+
+fn build_grouped_with(root: &std::path::Path, manifest: &str, build_directory: bool) -> Output {
+    let mut command = velnor_ci();
+    command.env("CARGO_TARGET_DIR", root.join("target-velnor/tools"));
+    if build_directory {
+        command.env("CARGO_BUILD_BUILD_DIR", root.join("target-velnor/tools"));
+    }
+    command
         .current_dir(root)
         .args([
             "inputs",
@@ -186,9 +197,32 @@ fn build_grouped(root: &std::path::Path, manifest: &str) -> Output {
 
 #[test]
 fn a_real_grouped_build_passes_the_audit() {
-    let repo = grouped_tools();
+    assert_real_grouped_build_passes(&grouped_tools());
+}
+
+/// A repository reached through a symlink, as on macOS where `$TMPDIR` is
+/// `/var/folders/...` and `/var` links to `/private/var`. Cargo and git report
+/// the resolved path, so a build that takes the link path must still audit.
+#[test]
+fn a_real_grouped_build_passes_the_audit_through_a_symlinked_root() {
+    let parent = fresh_dir("velnor-ci-audit-real", "parent");
+    let real = fs::canonicalize(parent.path()).unwrap_or_else(|e| unreachable!("{e}"));
+    let link = real.with_file_name(format!(
+        "{}-link",
+        real.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_else(|| unreachable!())
+    ));
+    std::os::unix::fs::symlink(&real, &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let repo = Repo::new_under(&link, "audit-groups");
+    assert_real_grouped_build_passes(&grouped_tools_in(repo));
+    let _ignored = fs::remove_file(&link);
+    let _ignored = fs::remove_dir_all(&real);
+}
+
+fn assert_real_grouped_build_passes(repo: &Repo) {
     unit(
-        &repo,
+        repo,
         "tools/a/build.rs",
         "fn main() {\n    println!(\"cargo:rerun-if-changed=data.txt\");\n}\n",
     );
@@ -201,14 +235,14 @@ fn a_real_grouped_build_passes_the_audit() {
             String::from_utf8_lossy(&built.stderr)
         );
     }
-    let written = audit(&repo, &["--write"]);
+    let written = audit(repo, &["--write"]);
     assert!(
         written.status.success(),
         "stderr: {}",
         String::from_utf8_lossy(&written.stderr)
     );
     repo.git(&["add", "--all"]);
-    let output = audit(&repo, &[]);
+    let output = audit(repo, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -217,6 +251,15 @@ fn a_real_grouped_build_passes_the_audit() {
 
 #[test]
 fn a_grouped_build_does_not_pull_an_ungrouped_root_into_the_shared_directory() {
+    ungrouped_root_beside_the_group(false);
+}
+
+#[test]
+fn a_build_directory_equal_to_the_shared_target_does_not_refuse_an_ungrouped_root() {
+    ungrouped_root_beside_the_group(true);
+}
+
+fn ungrouped_root_beside_the_group(build_directory: bool) {
     let repo = grouped_tools();
     unit(
         &repo,
@@ -230,10 +273,46 @@ fn a_grouped_build_does_not_pull_an_ungrouped_root_into_the_shared_directory() {
     );
     unit(&repo, "web/src/lib.rs", "");
     repo.git(&["add", "--all"]);
-    let built = build_grouped(repo.root(), "tools/a/Cargo.toml");
+    let built = build_grouped_with(repo.root(), "tools/a/Cargo.toml", build_directory);
     assert!(
         built.status.success(),
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
+}
+
+#[test]
+fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group() {
+    let repo = grouped_tools();
+    unit(
+        &repo,
+        ".velnor/rust-ci.toml",
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n\n[[workspace_groups]]\nname = \"libs\"\nroots = [\"libs/c\", \"libs/d\"]\n",
+    );
+    for package in ["c", "d"] {
+        unit(
+            &repo,
+            &format!("libs/{package}/Cargo.toml"),
+            &format!("[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        );
+        unit(
+            &repo,
+            &format!("libs/{package}/Cargo.lock"),
+            &format!("version = 4\n\n[[package]]\nname = \"{package}\"\nversion = \"0.1.0\"\n"),
+        );
+        unit(&repo, &format!("libs/{package}/src/lib.rs"), "");
+    }
+    unit(
+        &repo,
+        "tools/a/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../../shared\"\n",
+    );
+    repo.git(&["add", "--all"]);
+    let built = velnor_ci()
+        .current_dir(repo.root().join("tools/a"))
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{stderr}");
 }

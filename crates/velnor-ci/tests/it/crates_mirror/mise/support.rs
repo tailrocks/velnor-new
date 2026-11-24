@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Command, Path, PathBuf, Repo, TestResult, fs, rustup_binary};
+use crate::io::hang_up;
 
 pub(super) struct Mise {
     binary: PathBuf,
@@ -57,7 +58,10 @@ impl Mise {
         }
         std::os::unix::fs::symlink(
             root.join("rust-bin"),
-            root.join("mise-data/installs/rust/1.99.1"),
+            root.join(format!(
+                "mise-data/installs/rust/{}",
+                crate::toolchain::pinned_channel()
+            )),
         )?;
         std::os::unix::fs::symlink(
             rustup.parent().ok_or("Rustup bin")?,
@@ -145,11 +149,12 @@ impl Mise {
         };
         let tools = if kind == "implicit" {
             format!(
-                "rust={{version='1.99.1', mr_boxington=true}}\nmr-boxington='path:{}'\n",
+                "rust={{version='{}', mr_boxington=true}}\nmr-boxington='path:{}'\n",
+                crate::toolchain::pinned_channel(),
                 root.join("mbx").display()
             )
         } else {
-            "rust='1.99.1'\n".to_owned()
+            format!("rust='{}'\n", crate::toolchain::pinned_channel())
         };
         repo.write_unstaged("mise.toml", &format!("[tools]\n{tools}[env]\nCONFIG_ROOT_MARKER='{{{{ config_root }}}}'\nMISE_DATA_DIR='{}'\nCARGO_HOME='{}'\nRUSTUP_HOME='{}'\n{wrappers}[settings]\nauto_install=false\n[settings.rust]\ncargo_home='{}'\nrustup_home='{}'\n", root.join("mise-data").display(), root.join("cargo-home").display(), self.rustup_home.display(), root.join("unused-cargo-home").display(), root.join("unused-rustup-home").display()));
     }
@@ -169,9 +174,11 @@ impl Mise {
         args: &[String],
     ) -> Result<std::process::Output, Box<dyn std::error::Error>> {
         repo.write_unstaged("ca.pem", "fixture");
-        let output =
-            super::super::fixture::setup_command(repo.root(), "sparse+http://127.0.0.1:1/index/")
-                .output()?;
+        let output = super::super::fixture::setup_command(
+            repo.root(),
+            &format!("sparse+{}/index/", hang_up()),
+        )
+        .output()?;
         assert!(output.status.success(), "{output:?}");
         let wrapper = repo.root().join("velnor-cargo/cargo");
         let paths = [
@@ -255,12 +262,12 @@ impl Mise {
             .env("VELNOR_CARGO_WRAPPER", wrapper)
             .env("PATH", std::env::join_paths(paths)?)
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", hang_up())
             .env("NO_PROXY", "127.0.0.1")
             .env("CARGO_NET_RETRY", "0")
             .env(
                 "CARGO_REGISTRIES_CRATES_IO_INDEX",
-                "sparse+http://127.0.0.1:1/index/",
+                format!("sparse+{}/index/", hang_up()),
             )
             .output()?;
         assert!(output.status.success(), "{output:?}");

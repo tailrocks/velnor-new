@@ -1,39 +1,63 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot};
+use velnor_model::{
+    GitRepository, HelperRelease, RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot,
+};
 
 use crate::error::{DetectError, Reason};
+use crate::public_git::pinned_github;
 
-use crate::roots::{CARGO_LOCK, is_cargo_config};
+use crate::roots::{CARGO_LOCK, effective_configs};
 use crate::toml_file::table;
 use crate::weaken_scope::reaches_a_check;
 
-const PUBLIC_SOURCES: [&str; 2] = [
+const PUBLIC_SOURCES: &[&str] = &[
     "registry+https://github.com/rust-lang/crates.io-index",
     "sparse+https://index.crates.io/",
 ];
 
-pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
+const HTTP_GIT_HELPER: (u64, u64, u64) = (0, 1, 116);
+
+const NOT_SAVED: &str =
+    "base caches are not saved because this repository has private dependencies";
+const PRIVATE_ONLY: &str = "base caches are restored and saved only while GitHub reports this repository private, because it has private dependencies";
+
+/// The note that explains why the base caches are not saved.
+pub(crate) fn note(cause: &str) -> String {
+    format!("{NOT_SAVED} ({cause})")
+}
+
+#[must_use]
+pub fn base_cache_note(facts: &velnor_model::RepoFacts) -> Option<String> {
+    let note = facts.private_sources.as_ref()?;
+    Some(if crate::base_cache::private_base(facts) {
+        note.replacen(NOT_SAVED, PRIVATE_ONLY, 1)
+    } else {
+        note.clone()
+    })
+}
+
+/// The first reason the repository's dependencies are not proven public.
+pub(crate) fn private_cause(
+    view: &RepoView,
+    config: &RustCiConfig,
+    roots: &[RustRoot],
+) -> Option<String> {
+    let declared = declared_public(config);
     let locks = roots
         .iter()
         .map(|root| root.manifest.sibling(&CARGO_LOCK))
         .filter_map(|lock| {
             view.files
                 .get(&lock)
-                .map(|bytes| locked_source(&lock, bytes))
+                .map(|bytes| locked_source(&lock, bytes, declared))
         })
         .flatten();
-    let configs = view
-        .files
-        .iter()
-        .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
+    let configs = effective_configs(&view.files)
+        .filter(|(path, _)| reaches_a_check(path, roots))
         .filter_map(|(path, bytes)| configured_source(path, bytes));
-    locks.chain(configs).next().map(|cause| {
-        format!(
-            "base caches are not saved because this repository has private dependencies ({cause})"
-        )
-    })
+    locks.chain(configs).next()
 }
 
 pub(crate) fn refuse_locked_credentials(
@@ -73,7 +97,22 @@ fn locked_credentials(view: &RepoView, roots: &[RustRoot]) -> Option<(RepoPath, 
     })
 }
 
-fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
+pub(crate) fn declared_public(config: &RustCiConfig) -> &[GitRepository] {
+    config
+        .public_sources
+        .as_ref()
+        .map_or(&[], |sources| sources.git.as_slice())
+}
+
+fn is_declared(source: &str, declared: &[GitRepository]) -> bool {
+    pinned_github(source).is_some_and(|git| {
+        declared
+            .iter()
+            .any(|known| known.matches(git.owner, git.name))
+    })
+}
+
+fn locked_source(lock: &RepoPath, bytes: &[u8], declared: &[GitRepository]) -> Option<String> {
     let Ok(document) = table(bytes) else {
         return Some(format!("{lock} is unreadable"));
     };
@@ -91,7 +130,7 @@ fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
         .find_map(|package| {
             let source = package.get("source").and_then(toml::Value::as_str)?;
             let name = package.get("name").and_then(toml::Value::as_str)?;
-            (!PUBLIC_SOURCES.contains(&source))
+            (!PUBLIC_SOURCES.contains(&source) && !is_declared(source, declared))
                 .then(|| format!("{lock} locks {name} from {source}"))
         })
 }
@@ -111,15 +150,55 @@ fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
         .map(|section| format!("{path} declares [{section}]"))
 }
 
-pub fn cacheable_lock(text: &str) -> Result<bool, crate::lock::LockError> {
+pub fn cacheable_private_lock(text: &str) -> Result<bool, crate::lock::LockError> {
+    cacheable_lock(text, true)
+}
+
+fn cacheable_lock(text: &str, http: bool) -> Result<bool, crate::lock::LockError> {
     let lock = crate::cargo_lock::CargoLock::parse(text)?;
     Ok(lock.patch.is_none()
         && lock.packages.iter().all(|package| {
-            package
-                .source
-                .as_deref()
-                .is_none_or(|source| PUBLIC_SOURCES.contains(&source))
+            package.source.as_deref().is_none_or(|source| {
+                PUBLIC_SOURCES.contains(&source) || plain_git_source(source, http)
+            })
         }))
+}
+
+fn plain_git_source(source: &str, http: bool) -> bool {
+    let Some((scheme, tail)) = source
+        .strip_prefix("git+")
+        .and_then(|rest| rest.split_once("://"))
+    else {
+        return false;
+    };
+    let authority = tail.split('/').next().unwrap_or("");
+    match (scheme, authority.split_once('@')) {
+        ("https" | "ssh", None) => !authority.is_empty(),
+        ("http", None) => http && !authority.is_empty(),
+        ("ssh", Some((user, host))) => !user.contains(':') && !host.is_empty(),
+        _ => false,
+    }
+}
+
+pub(crate) fn only_private_git(
+    view: &RepoView,
+    roots: &[RustRoot],
+    helper: Option<&HelperRelease>,
+) -> bool {
+    let http = helper.is_some_and(|helper| helper.version().at_least(HTTP_GIT_HELPER));
+    let locks = roots.iter().all(|root| {
+        view.files
+            .get(&root.manifest.sibling(&CARGO_LOCK))
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .is_some_and(|text| cacheable_lock(text, http).unwrap_or(false))
+    });
+    locks
+        && !effective_configs(&view.files)
+            .filter(|(path, _)| reaches_a_check(path, roots))
+            .any(|(_, bytes)| {
+                !std::str::from_utf8(bytes)
+                    .is_ok_and(|text| cacheable_config(text).unwrap_or(false))
+            })
 }
 
 pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
@@ -137,38 +216,46 @@ pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
     .any(|key| document.contains_key(*key)))
 }
 
-const PUBLIC_GIT_HOSTS: [&str; 4] = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"];
+const PUBLIC_GIT_HOSTS: &[&str] = &["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"];
 
 pub(crate) fn private_suggestion(
     view: &RepoView,
     config: &RustCiConfig,
     roots: &[RustRoot],
 ) -> Option<String> {
-    if config.private_sources.is_some() {
-        return None;
-    }
+    let mut notes = crate::public_advice::notes(view, config, roots);
+    notes.extend(match &config.private_sources {
+        Some(sources) => crate::private_lock::mismatch(view, sources, roots),
+        None => looks_private(view, roots),
+    });
+    (!notes.is_empty()).then(|| notes.join("; "))
+}
+
+fn looks_private(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
     let owner = match &view.repository {
         RepositoryIdentity::Named(name) => name.split('/').next().filter(|_| name.contains('/')),
         RepositoryIdentity::Unhosted => None,
     };
-    let found = roots.iter().find_map(|root| {
-        let lock = root.manifest.sibling(&CARGO_LOCK);
-        let bytes = view.files.get(&lock)?;
-        let document = table(bytes).ok()?;
-        document
-            .get("package")
-            .and_then(toml::Value::as_array)?
-            .iter()
-            .filter_map(toml::Value::as_table)
-            .find_map(|package| {
-                let source = package.get("source").and_then(toml::Value::as_str)?;
-                let name = package.get("name").and_then(toml::Value::as_str)?;
-                private_looking(source, owner).then(|| format!("{lock} locks {name}"))
+    let looking: Vec<(RepoPath, String, String)> =
+        crate::private_lock::locked_packages(view, roots)
+            .into_iter()
+            .filter(|(_, _, source)| {
+                pinned_github(source).is_none() && private_looking(source, owner)
             })
-    })?;
-    Some(format!(
-        "{found} from a source that looks private; to build it, add a [private_sources] table to .velnor/rust-ci.toml with app_id = 'vars.<NAME>', private_key = 'secrets.<NAME>' and repositories = ['owner/name'] (see CONFIG.md)"
-    ))
+            .collect();
+    if let Some((lock, name, _)) = looking
+        .iter()
+        .find(|(_, _, source)| crate::private_lock::github_repository(source).is_some())
+    {
+        return Some(format!(
+            "{lock} locks {name} from a source that looks private; to build it, add a [private_sources] table to .velnor/rust-ci.toml with app_id = 'vars.<NAME>', private_key = 'secrets.<NAME>' and repositories = ['owner/name'] (see CONFIG.md)"
+        ));
+    }
+    looking.first().map(|(lock, name, _)| {
+        format!(
+            "{lock} locks {name} from a source that looks private but is not a github.com repository; [private_sources] creates a GitHub App token for repositories on the workflow's GitHub server only, so it cannot authenticate this source unless GitHub Enterprise Server hosts it, and a cold fetch needs its credentials another way"
+        )
+    })
 }
 
 fn private_looking(source: &str, owner: Option<&str>) -> bool {

@@ -27,6 +27,7 @@ impl InputSnapshot {
 }
 
 pub(super) struct VerifiedInputs {
+    pub name: std::path::PathBuf,
     pub digest: [u8; 32],
     pub sources: super::delta_source::SourceSnapshot,
 }
@@ -45,6 +46,9 @@ pub(super) fn verify(root: &Path, path: &Path) -> Result<VerifiedInputs, CiError
         return Err(invalid());
     }
     Ok(VerifiedInputs {
+        name: std::path::PathBuf::from(crate::inputs::inputs_file(
+            &super::input_scopes::git_prefix(root)?,
+        )),
         digest: Sha256::digest(text.as_bytes()).into(),
         sources: super::delta_source::SourceSnapshot {
             identity: captured.source_identity,

@@ -68,7 +68,7 @@ fn mirror_setup_refuses_unowned_job_configuration() -> TestResult {
 }
 
 #[test]
-fn mirror_off_skips_the_ca_and_writes_nothing() -> TestResult {
+fn mirror_off_skips_the_ca_and_writes_no_config() -> TestResult {
     let repo = Repo::empty("crates-mirror-off");
     let output = setup_command(repo.root(), REGISTRY)
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -77,7 +77,8 @@ fn mirror_off_skips_the_ca_and_writes_nothing() -> TestResult {
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("disabled by VELNOR_CRATES_MIRROR=off")
     );
-    assert_nothing_configured(repo.root());
+    assert!(!repo.root().join("velnor-cargo").exists());
+    assert_only_cleared(repo.root())?;
     Ok(())
 }
 
@@ -94,8 +95,7 @@ fn mirror_off_leaves_an_existing_job_configuration_alone() -> TestResult {
         EXISTING
     );
     assert!(!repo.root().join("velnor-cargo/cargo").exists());
-    assert!(!repo.root().join("env").exists());
-    assert!(!repo.root().join("path").exists());
+    assert_only_cleared(repo.root())?;
     Ok(())
 }
 
@@ -130,6 +130,15 @@ fn mirror_rejects_any_value_but_off() -> TestResult {
         );
         assert_nothing_configured(repo.root());
     }
+    Ok(())
+}
+
+fn assert_only_cleared(root: &Path) -> TestResult {
+    assert_eq!(
+        fs::read_to_string(root.join("env"))?,
+        "VELNOR_CARGO_CONFIG=\nVELNOR_CARGO_MBX=\n"
+    );
+    assert!(!root.join("path").exists());
     Ok(())
 }
 
@@ -174,5 +183,36 @@ fn mirror_setup_repeats_from_a_read_only_helper() -> TestResult {
             .output()?;
         assert!(output.status.success(), "{output:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn mirror_setup_refuses_a_runner_temp_with_a_line_break() -> TestResult {
+    let repo = Repo::empty("crates-mirror-line-break");
+    repo.write_unstaged("ca.pem", "fixture");
+    let output = setup_command(repo.root(), REGISTRY)
+        .env("RUNNER_TEMP", repo.root().join("temp\nGITHUB_ENV=forged"))
+        .output()?;
+    assert!(!output.status.success(), "{output:?}");
+    assert!(!repo.root().join("env").exists());
+    assert!(!repo.root().join("path").exists());
+    Ok(())
+}
+
+#[test]
+fn mirror_setup_keeps_a_registry_with_a_line_break_on_one_line() -> TestResult {
+    let repo = Repo::empty("crates-mirror-registry-line-break");
+    repo.write_unstaged("ca.pem", "fixture");
+    let registry = "sparse+https://mirror.example/index/\n::stop-commands::token";
+    let output = setup_command(repo.root(), registry).output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("%0A::stop-commands::token"), "{stdout}");
     Ok(())
 }

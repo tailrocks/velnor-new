@@ -3,20 +3,31 @@
 
 use crate::rules::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, Value,
+    RenderedStep, RenderedTrusted, Value,
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    BUDGET_OUTPUTS, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    Job, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TRUSTED_EVENT, WorkflowPlan,
 };
 
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
-pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
+/// Where the generated workflow tells jactionlint that `ShellCheck` cannot follow
+/// the launcher: on each launcher step, or, when that would push the file past
+/// the size GitHub accepts, once on each job that has one.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShellcheckMarks {
+    Steps,
+    Jobs,
+}
+
+pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
-    if let Some(name) = &job.name {
+    if let Some(expression) = &job.check_name {
+        items.push(entry("name", Yaml::Expr(expression.clone())));
+    } else if let Some(name) = &job.name {
         items.push(entry("name", text(name)));
     }
     if !job.needs.is_empty() {
@@ -29,7 +40,14 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(environment) = &job.environment {
-        items.push(entry("environment", text(environment)));
+        let value = text(environment);
+        items.push(entry(
+            "environment",
+            match &job.environment_note {
+                Some(note) => Yaml::Noted(note.clone(), Box::new(value)),
+                None => value,
+            },
+        ));
     }
     if job.no_permissions {
         items.push(entry("permissions", Yaml::Map(Vec::new())));
@@ -39,7 +57,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(concurrency) = &job.concurrency {
         items.push(entry("concurrency", yaml_concurrency(concurrency)));
     }
-    if let Some(mode) = &job.cache_mode {
+    if let Some(mode) = cache_mode(job) {
         items.push(entry("cache-mode", text(mode)));
     }
     if !job.outputs.is_empty() {
@@ -68,24 +86,43 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(uses) = &job.uses {
         items.push(entry("uses", text(uses)));
         if !job.with.is_empty() {
-            items.push(entry("with", values(&job.with)));
+            items.push(entry("with", values(&job.with, false)));
         }
     } else {
         items.push(entry(
             "timeout-minutes",
             Yaml::Int(u64::from(job.timeout_minutes)),
         ));
+        if job.continue_on_error {
+            items.push(entry("continue-on-error", Yaml::Bool(true)));
+        }
         if !job.env.is_empty() {
-            items.push(entry("env", values(&job.env)));
+            items.push(entry("env", values(&job.env, false)));
         }
         items.extend([entry(
             "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+            Yaml::Seq(
+                job.steps
+                    .iter()
+                    .map(|step| yaml_step(step, marks))
+                    .collect(),
+            ),
         )]);
     }
-    match job_notes(job) {
+    match job_notes(job, marks) {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
+    }
+}
+
+/// The `cache-mode` of a job: the declared one, else `read`. A job with no key gets GitHub's
+/// default, which is `write` on a trusted trigger, so the absence is never rendered. A job that
+/// calls a reusable workflow (`uses`) has no key of its own: its callee jobs carry theirs.
+fn cache_mode(job: &RenderedJob) -> Option<&str> {
+    match (&job.cache_mode, &job.uses) {
+        (Some(mode), _) => Some(mode),
+        (None, None) => Some("read"),
+        (None, Some(_)) => None,
     }
 }
 
@@ -112,7 +149,6 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
                         || name == TESTS_LISTED_OUTPUT
                         || name == TESTS_IGNORED_OUTPUT
                         || name == TESTS_BY_PACKAGE_OUTPUT
-                        || BUDGET_OUTPUTS.contains(&name.as_str())
                     {
                         Yaml::Unread(value)
                     } else {
@@ -155,7 +191,7 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
             RenderedMatrixSource::Output(from) => {
                 Yaml::Expr(format!("${{{{ fromJSON({from}) }}}}"))
             }
-            RenderedMatrixSource::Axes(axes) => Yaml::Map(
+            RenderedMatrixSource::Axes { axes, include } => Yaml::Map(
                 axes.iter()
                     .map(|(name, values)| {
                         entry(
@@ -163,6 +199,12 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
                             Yaml::Seq(values.iter().map(|value| text(value)).collect()),
                         )
                     })
+                    .chain((!include.is_empty()).then(|| {
+                        entry(
+                            "include",
+                            Yaml::Seq(include.iter().map(|item| pairs(item)).collect()),
+                        )
+                    }))
                     .collect(),
             ),
         },
@@ -170,12 +212,8 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
     Yaml::Map(items)
 }
 
-fn job_notes(job: &RenderedJob) -> Option<String> {
-    let launches_helper = job.steps.iter().any(|step| {
-        step.run
-            .as_deref()
-            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
-    });
+fn job_notes(job: &RenderedJob, marks: ShellcheckMarks) -> Option<String> {
+    let launches_helper = marks == ShellcheckMarks::Jobs && job.steps.iter().any(launches_helper);
     let notes: Vec<&str> = job
         .comment
         .as_deref()
@@ -185,14 +223,54 @@ fn job_notes(job: &RenderedJob) -> Option<String> {
     (!notes.is_empty()).then(|| notes.join("\n"))
 }
 
+fn launches_helper(step: &RenderedStep) -> bool {
+    step.run
+        .as_deref()
+        .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+}
+
+pub(crate) fn fork_runner(job: &Job, plan: &WorkflowPlan) -> Option<String> {
+    (!plan.hosted_runners.contains(&job.runs_on)).then(|| plan.fork_runner.to_string())
+}
+
+pub(crate) fn trusted_runner(job: &Job, plan: &WorkflowPlan) -> Option<RenderedTrusted> {
+    plan.trusted_runners
+        .for_runner(&job.runs_on)
+        .map(|trusted| RenderedTrusted {
+            label: trusted.to_string(),
+            replaces: job.runs_on.to_string(),
+        })
+}
+
 fn runs_on(job: &RenderedJob) -> Yaml {
-    match &job.fork_runner {
-        Some(fork) => Yaml::Expr(format!(
-            "${{{{ {SAME_REPOSITORY} && {} || {} }}}}",
-            literal(&job.runs_on),
-            literal(fork)
-        )),
-        None => text(&job.runs_on),
+    let primary = match &job.runs_on_axis {
+        Some(axis) => format!("matrix.{axis}"),
+        None => literal(&job.runs_on),
+    };
+    let fenced = match &job.fork_runner {
+        Some(fork) => format!("{SAME_REPOSITORY} && {primary} || {}", literal(fork)),
+        None => primary.clone(),
+    };
+    match (&job.trusted_runner, &job.fork_runner, &job.runs_on_axis) {
+        (Some(trusted), fork, axis) => {
+            let label = literal(&trusted.label);
+            let pick = match axis {
+                Some(_) => format!(
+                    "{TRUSTED_EVENT} && {primary} == {} && {label}",
+                    literal(&trusted.replaces)
+                ),
+                None => format!("{TRUSTED_EVENT} && {label}"),
+            };
+            let rest = if fork.is_some() {
+                format!("({fenced})")
+            } else {
+                fenced
+            };
+            Yaml::Expr(format!("${{{{ {pick} || {rest} }}}}"))
+        }
+        (None, Some(_), _) => Yaml::Expr(format!("${{{{ {fenced} }}}}")),
+        (None, None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
+        (None, None, None) => text(&job.runs_on),
     }
 }
 
@@ -200,14 +278,28 @@ fn literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-fn yaml_step(step: &RenderedStep) -> Yaml {
+fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
     if let Some(id) = &step.id {
         items.push(entry("id", text(id)));
     }
-    items.push(entry("name", text(&step.name)));
+    items.push(entry(
+        "name",
+        step.name_expression.as_ref().map_or_else(
+            || text(&step.name),
+            |expression| Yaml::Expr(expression.clone()),
+        ),
+    ));
     if let Some(condition) = &step.condition {
-        items.push(entry("if", Yaml::Expr(condition.clone())));
+        let condition = Yaml::Expr(condition.clone());
+        items.push(entry(
+            "if",
+            if step.shared {
+                Yaml::Shared(Box::new(condition))
+            } else {
+                condition
+            },
+        ));
     }
     if step.continue_on_error {
         items.push(entry("continue-on-error", Yaml::Bool(true)));
@@ -220,13 +312,18 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         items.push(entry("uses", value));
     }
     if !step.with.is_empty() {
-        items.push(entry("with", values(&step.with)));
+        items.push(entry("with", values(&step.with, step.shared)));
     }
     if let Some(directory) = &step.working_directory {
-        items.push(entry("working-directory", text(directory)));
+        let value = if directory.contains("${{") {
+            Yaml::Expr(directory.clone())
+        } else {
+            text(directory)
+        };
+        items.push(entry("working-directory", value));
     }
     if !step.env.is_empty() {
-        items.push(entry("env", values(&step.env)));
+        items.push(entry("env", values(&step.env, step.shared)));
     }
     if let Some(shell) = &step.shell {
         items.push(entry("shell", text(shell)));
@@ -234,12 +331,22 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
     if let Some(run) = &step.run {
         let value = if run.contains('\n') {
             Yaml::Block(run.clone())
+        } else if step.share_run {
+            Yaml::Shared(Box::new(text(run)))
         } else {
             text(run)
         };
         items.push(entry("run", value));
     }
-    Yaml::Map(items)
+    let rendered = Yaml::Map(items);
+    if marks == ShellcheckMarks::Steps && launches_helper(step) {
+        Yaml::Noted(
+            crate::helper_integrity::SHELLCHECK_IGNORE.to_owned(),
+            Box::new(rendered),
+        )
+    } else {
+        rendered
+    }
 }
 
 fn pairs(items: &[(String, String)]) -> Yaml {
@@ -251,7 +358,7 @@ fn pairs(items: &[(String, String)]) -> Yaml {
     )
 }
 
-fn values(items: &[(String, Value)]) -> Yaml {
+fn values(items: &[(String, Value)], share: bool) -> Yaml {
     Yaml::Map(
         items
             .iter()
@@ -262,7 +369,10 @@ fn values(items: &[(String, Value)]) -> Yaml {
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };
-                let yaml = if (key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
+                let named = key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS";
+                let yaml = if (named || share)
+                    && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > if named { 100 } else { 30 } && !text.contains('\n'))
+                {
                     Yaml::Shared(Box::new(yaml))
                 } else {
                     yaml

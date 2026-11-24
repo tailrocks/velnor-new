@@ -1,17 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::ToolPin;
+use velnor_model::{ToolLock, ToolPin, ToolRequest};
 use velnor_rust::{DetectError, Reason, detect};
 
 use crate::facts::{TestResult, lib, path, repo};
 
 fn pin(requested: &[&str], locked: &[&str]) -> ToolPin {
-    let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect();
     ToolPin {
-        requested: owned(requested),
-        locked: owned(locked),
-        ..ToolPin::default()
+        requested: requested
+            .iter()
+            .map(|version| ToolRequest {
+                version: (*version).to_owned(),
+                ..ToolRequest::default()
+            })
+            .collect(),
+        locked: locked
+            .iter()
+            .map(|version| ToolLock {
+                version: (*version).to_owned(),
+                ..ToolLock::default()
+            })
+            .collect(),
     }
 }
 
@@ -59,14 +69,22 @@ version = \"0.9.151\"
             ("edge", &pin(&["ref:main"], &[])),
             ("local", &pin(&["path:/opt/local"], &[])),
             ("node", &pin(&["20", "22"], &[])),
-            ("rust", &pin(&["1.99.1"], &["1.99.1"])),
+            ("rust", &{
+                let mut rust = pin(&["1.99.1"], &["1.99.1"]);
+                rust.locked[0].backend = Some("core:rust".to_owned());
+                rust.requested[0]
+                    .options
+                    .insert("profile".to_owned(), "minimal".to_owned());
+                rust
+            }),
         ]
     );
     Ok(())
 }
 
 #[test]
-fn an_os_filtered_request_keeps_its_filter_and_an_unfiltered_duplicate_drops_it() -> TestResult {
+fn each_request_keeps_its_own_os_filter_and_unfiltered_duplicates_remain_applicable() -> TestResult
+{
     let config = "\
 [tools]
 go = [{ version = \"1.22\", os = [\"macos\"] }, { version = \"1.23\", os = \"linux\" }, \"1\"]
@@ -78,12 +96,18 @@ node = [{ version = \"20\", os = [\"linux\"] }, \"20\"]
     )?;
     let tools = detect(&view)?.tools;
     let go = tools.tools.get("go").ok_or("go is pinned")?;
-    assert_eq!(go.requested, ["1.22", "1.23", "1"]);
-    assert_eq!(go.os_filters.get("1.22"), Some(&vec!["macos".to_owned()]));
-    assert_eq!(go.os_filters.get("1.23"), Some(&vec!["linux".to_owned()]));
-    assert_eq!(go.os_filters.get("1"), None);
+    assert_eq!(
+        go.requested
+            .iter()
+            .map(|request| request.version.as_str())
+            .collect::<Vec<_>>(),
+        ["1.22", "1.23", "1"]
+    );
+    assert_eq!(go.requested[0].os, Some(vec!["macos".to_owned()]));
+    assert_eq!(go.requested[1].os, Some(vec!["linux".to_owned()]));
+    assert_eq!(go.requested[2].os, None);
     let node = tools.tools.get("node").ok_or("node is pinned")?;
-    assert!(node.os_filters.is_empty());
+    assert!(node.requested.iter().any(|request| request.os.is_none()));
     Ok(())
 }
 
@@ -98,17 +122,25 @@ fn mise_toml_and_the_hidden_mise_toml_are_merged_with_the_hidden_one_winning() -
     )?;
     let tools = detect(&both)?.tools;
     assert_eq!(tools.configs, vec![path("mise.toml")?, path(".mise.toml")?]);
-    let found: Vec<(&str, &[String])> = tools
+    let found: Vec<(&str, Vec<&str>)> = tools
         .tools
         .iter()
-        .map(|(name, pin)| (name.as_str(), pin.requested.as_slice()))
+        .map(|(name, pin)| {
+            (
+                name.as_str(),
+                pin.requested
+                    .iter()
+                    .map(|request| request.version.as_str())
+                    .collect(),
+            )
+        })
         .collect();
     assert_eq!(
         found,
         vec![
-            ("bun", ["2.0.0".to_owned()].as_slice()),
-            ("jq", ["1.7".to_owned()].as_slice()),
-            ("yq", ["4".to_owned()].as_slice()),
+            ("bun", vec!["2.0.0"]),
+            ("jq", vec!["1.7"]),
+            ("yq", vec!["4"]),
         ]
     );
     let mut hidden = both;
@@ -116,7 +148,11 @@ fn mise_toml_and_the_hidden_mise_toml_are_merged_with_the_hidden_one_winning() -
     let tools = detect(&hidden)?.tools;
     assert_eq!(tools.configs, vec![path(".mise.toml")?]);
     assert_eq!(
-        tools.tools.get("bun").map(|pin| pin.requested.clone()),
+        tools.tools.get("bun").map(|pin| pin
+            .requested
+            .iter()
+            .map(|request| request.version.clone())
+            .collect::<Vec<_>>()),
         Some(vec!["2.0.0".to_owned()])
     );
     Ok(())

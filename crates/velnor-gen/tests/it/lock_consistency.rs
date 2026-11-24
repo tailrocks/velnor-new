@@ -204,6 +204,7 @@ fn a_root_packages_version_that_only_the_lockfile_changes_selects_everything_bes
         "Cargo.toml",
         vec![
             RustMember {
+                version: None,
                 manifest: path("Cargo.toml"),
                 directory: None,
                 ..member("app", "app", &[("lib", "lib")])

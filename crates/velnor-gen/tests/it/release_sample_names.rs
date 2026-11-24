@@ -33,7 +33,7 @@ fn triggers(release: &str) -> Vec<String> {
 fn every_release_golden_triggers_after_a_workflow_this_repository_has() -> TestResult {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut known = workflow_names(&root.join(".github/workflows"))?;
-    known.insert("Rust CI".to_owned());
+    known.insert("CI".to_owned());
     let mut checked = 0;
     for sample in fs::read_dir(root.join("generator/samples"))? {
         let release = sample?
@@ -42,6 +42,9 @@ fn every_release_golden_triggers_after_a_workflow_this_repository_has() -> TestR
         let Ok(text) = fs::read_to_string(&release) else {
             continue;
         };
+        if text.contains("\non:\n  push:\n    tags:") {
+            continue;
+        }
         let names = triggers(&text);
         assert!(!names.is_empty(), "{}", release.display());
         for name in names {

@@ -5,17 +5,17 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 const RATIO: &str = "echo '     Summary [   0.077s] 63/109 tests run: 62 passed, 1 failed, 0 skipped' >&2\nexit 100";
-const NEXTEST: [&str; 3] = ["cargo-nextest", "nextest", "run"];
+const NEXTEST: &[&str] = &["cargo-nextest", "nextest", "run"];
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-sum-{}-{name}", std::process::id()));
-    fs::remove_dir_all(&dir).ok();
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+fn scratch(name: &str) -> velnor_test_support::ScratchDir {
+    let dir = crate::scratch_path("velnor-ci-sum", name);
+    fs::remove_dir_all(dir.path()).ok();
+    fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
@@ -51,7 +51,7 @@ fn nextest(name: &str, body: &str) -> (Output, String) {
     let temp = scratch(name);
     script(&temp, "cargo-nextest", body);
     fs::write(temp.join("github-output"), "").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = velnor(&temp, &[], &NEXTEST)
+    let output = velnor(&temp, &[], NEXTEST)
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "300")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -67,7 +67,8 @@ fn doctests_in(temp: &Path, body: &str) -> Output {
 }
 
 fn doctests(name: &str, body: &str) -> Output {
-    doctests_in(&scratch(name), body)
+    let dir = scratch(name);
+    doctests_in(&dir, body)
 }
 
 #[test]
@@ -103,7 +104,10 @@ sleep 30 &\n\
 exit 0";
     let (output, written) = nextest("held", body);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
-    assert!(written.is_empty(), "{written}");
+    assert!(
+        crate::run_nextest::without_built(&written).is_empty(),
+        "{written}"
+    );
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("output capture incomplete"),
         "{output:?}"

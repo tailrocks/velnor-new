@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "tests/dead_set.rs"]
+mod dead_set;
 #[path = "tests/fixture.rs"]
 mod fixture;
 #[path = "tests/restore_timeout.rs"]

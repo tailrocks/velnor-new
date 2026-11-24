@@ -11,13 +11,20 @@ pub(crate) struct RawCratesMirror {
     runner: String,
     registry: String,
     cainfo: String,
+    pub(crate) trusted_runner: Option<String>,
 }
 
-pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror, Reason> {
+pub(crate) fn optional(
+    raw: Option<RawCratesMirror>,
+) -> Result<Option<velnor_model::CratesMirror>, Reason> {
+    raw.map(mirror).transpose()
+}
+
+fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror, Reason> {
     let invalid = |key, value| Reason::InvalidValue { key, value };
     let runner = RunnerLabel::new(raw.runner.clone())
         .map_err(|_| invalid("crates_mirror.runner", raw.runner))?;
-    if velnor_model::github_hosted(runner.as_str()) {
+    if velnor_model::looks_github_hosted(runner.as_str()) {
         return Err(invalid("crates_mirror.runner", runner.to_string()));
     }
     if !raw.registry.starts_with("sparse+https://")

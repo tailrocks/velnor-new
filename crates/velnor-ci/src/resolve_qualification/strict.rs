@@ -14,7 +14,7 @@ use crate::write_request::internal;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_DEPTH: usize = 128;
 
-pub(super) fn parse(text: &str) -> Result<Value, CiError> {
+pub(crate) fn parse(text: &str) -> Result<Value, CiError> {
     if text.len() > MAX_BYTES {
         return Err(internal(&format!(
             "document_too_large: {} bytes exceeds limit {MAX_BYTES}",

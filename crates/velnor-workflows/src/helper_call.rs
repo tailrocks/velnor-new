@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::expression::is_identifier;
+use crate::command_scan::segments;
+use crate::wrappers::{Invoked, invoked};
 
-pub const HELPER_COMMANDS: [&str; 38] = [
+pub const HELPER_COMMANDS: &[&str] = &[
     "report",
     "bench",
     "inputs",
@@ -14,102 +15,67 @@ pub const HELPER_COMMANDS: [&str; 38] = [
     "release",
     "plan",
     "merge-group-passed",
+    "merge-queue-check",
     "write-request",
     "resolve-qualification",
     "prepare",
     "crates-mirror",
     "fetch",
+    "fetch-assets",
     "private-token-allowed",
+    "app-token",
+    "revoke-token",
     "mbx-store",
     "mbx-seed",
     "tools-local",
+    "tools-verify",
     "check-metadata",
     "check-configurations",
     "lane-guard",
     "test-groups",
+    "artifacts",
     "restored",
     "delta",
     "image",
     "cache",
     "run",
     "sources",
-    "verify-runtime",
-    "verify-mac-proof",
-    "run-authority",
-    "admit-preview",
     "timings",
+    "mise-pin",
     "validate-artifact-id",
-    "install-gh",
-    "stage-bundle",
     "qualification",
 ];
 
 pub(crate) fn subcommand(run: &str) -> Option<String> {
-    shell_words(run).into_iter().nth(1)
+    let command = segments(run)?.into_iter().next()?;
+    command.into_iter().nth(1).map(|word| word.text)
 }
 
-/// Whether the command word of a `run` value is the `velnor-ci` helper.
+/// Whether a command of a `run` value is the `velnor-ci` helper.
 ///
-/// The value is split into shell words (quotes honoured), then leading
-/// `NAME=VALUE` assignments and an `env` prefix with its options and
-/// assignments are skipped. The command word counts when its basename is
-/// exactly `velnor-ci`, so `./velnor-ci` and `target/release/velnor-ci` do and
-/// `velnor-cix` and `echo velnor-ci-notes` do not. `cargo run -p velnor-ci`
-/// does not either: a helper built and run in-tree is not the pinned one that
-/// `helper = true` installs. A run value is one simple command, which the
-/// render rules enforce (no `;`, `&`, `|` or line breaks), so no later command
-/// is looked at.
+/// `wrappers::invoked` looks through assignments, `env` and the other command wrappers and
+/// reads every command of a sequence, so `nohup velnor-ci check`, `timeout 5 velnor-ci check`
+/// and `sh -c 'velnor-ci check'` call the helper like `velnor-ci check`. A command that the
+/// scan cannot read counts when any word of it names the helper. A command word counts when
+/// its basename is exactly `velnor-ci`, so `velnor-ci`, `/usr/local/bin/velnor-ci` and
+/// `~/bin/velnor-ci` do, and `velnor-cix` and `echo velnor-ci-notes` do not. A path that
+/// stays inside the workspace (`./velnor-ci`, `stage/velnor-ci`) is a binary of the
+/// repository, not the pinned helper that `helper = true` installs, and the write token rule
+/// treats it as repository code. `cargo run -p velnor-ci` is not the helper either.
 pub(crate) fn calls_velnor_ci(run: &str) -> bool {
-    let words = shell_words(run);
-    let mut rest = words
-        .iter()
-        .map(String::as_str)
-        .skip_while(|w| assignment(w));
-    let mut word = rest.next();
-    if word == Some("env") {
-        word = rest.find(|w| !assignment(w) && !w.starts_with('-'));
-    }
-    word.and_then(|word| word.rsplit('/').next()) == Some("velnor-ci")
+    invoked(run).iter().any(|call| match call {
+        Invoked::Command(words) => words.first().is_some_and(|word| names_helper(word)),
+        Invoked::Opaque(words) => words.iter().any(|word| names_helper(word)),
+    })
 }
 
-fn assignment(word: &str) -> bool {
-    word.split_once('=')
-        .is_some_and(|(name, _)| is_identifier(name, false))
+fn names_helper(word: &str) -> bool {
+    word.rsplit('/').next() == Some("velnor-ci") && !inside_workspace(word)
 }
 
-fn shell_words(text: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    let mut word = String::new();
-    let mut started = false;
-    let mut quote = None;
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        match (quote, c) {
-            (Some(open), c) if c == open => quote = None,
-            (Some('"'), '\\') => word.extend(chars.next()),
-            (Some(_), c) => word.push(c),
-            (None, '\'' | '"') => {
-                quote = Some(c);
-                started = true;
-            }
-            (None, '\\') => {
-                word.extend(chars.next());
-                started = true;
-            }
-            (None, c) if c.is_whitespace() => {
-                if started {
-                    words.push(std::mem::take(&mut word));
-                    started = false;
-                }
-            }
-            (None, c) => {
-                word.push(c);
-                started = true;
-            }
-        }
-    }
-    if started {
-        words.push(word);
-    }
-    words
+fn inside_workspace(word: &str) -> bool {
+    word.contains('/')
+        && !word.starts_with(['/', '~'])
+        && !word.contains('$')
+        && !word.split('/').any(|part| part == "..")
 }

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    EMPTY_PACKAGE_MAP, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 use crate::verdict_plan::{Need, PlanOutput};
@@ -66,6 +66,9 @@ pub struct TestCounts {
 
 #[must_use]
 pub fn encode_package_counts(packages: &BTreeMap<String, PackageCounts>) -> Option<String> {
+    if packages.is_empty() {
+        return Some(EMPTY_PACKAGE_MAP.to_owned());
+    }
     let mut parts = Vec::with_capacity(packages.len());
     for (name, counts) in packages {
         if !package_token(name) || counts.run > counts.listed {
@@ -82,7 +85,7 @@ fn parse_package_counts(text: &str) -> Option<BTreeMap<String, PackageCounts>> {
         return None;
     }
     let mut packages = BTreeMap::new();
-    if text.is_empty() {
+    if text.is_empty() || text == EMPTY_PACKAGE_MAP {
         return Some(packages);
     }
     for token in text.split(' ') {
@@ -161,45 +164,21 @@ impl Verdict {
     }
 }
 
-fn record(out: &mut Verdict, plan: &PlanOutput, job: &JobId, message: String) {
-    if plan.advisory.contains(job) {
-        out.warnings.push(message);
-    } else {
-        out.problems.push(message);
-    }
-}
-
-fn judge(
-    out: &mut Verdict,
-    plan: &PlanOutput,
-    job: &JobId,
-    scheduled: bool,
-    result: Option<&JobResult>,
-) {
+fn judge(out: &mut Verdict, job: &JobId, scheduled: bool, result: Option<&JobResult>) {
     match (scheduled, result) {
         (_, None) => out.problems.push(format!("{job} has no result in needs")),
         (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
-        (true, Some(other)) => record(
-            out,
-            plan,
-            job,
-            format!(
-                "{job} was scheduled by the plan and its result is {}",
-                other.name()
-            ),
-        ),
+        (true, Some(other)) => out.problems.push(format!(
+            "{job} was scheduled by the plan and its result is {}",
+            other.name()
+        )),
         (false, Some(JobResult::Success)) => out
             .warnings
             .push(format!("{job} ran although the plan did not schedule it")),
-        (false, Some(other)) => record(
-            out,
-            plan,
-            job,
-            format!(
-                "{job} was not scheduled by the plan and its result is {}",
-                other.name()
-            ),
-        ),
+        (false, Some(other)) => out.problems.push(format!(
+            "{job} was not scheduled by the plan and its result is {}",
+            other.name()
+        )),
     }
 }
 
@@ -228,7 +207,7 @@ pub fn verdict(
             .to_owned(),
             shown.to_owned(),
         ));
-        judge(&mut out, plan, job, *scheduled, result);
+        judge(&mut out, job, *scheduled, result);
     }
     for (slug, jobs) in &plan.test_lanes {
         let counts: Vec<Option<TestCounts>> = jobs
@@ -245,22 +224,22 @@ pub fn verdict(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
+            let lane_empty = counts
+                .iter()
+                .flatten()
+                .all(|job| job.listed == 0 && job.run == 0 && job.ignored.unwrap_or(0) == 0);
             for job in counts.iter().flatten() {
-                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                if job.listed == 0
+                    && job.run == 0
+                    && job.ignored.unwrap_or(0) == 0
+                    && (!job.packages.is_empty() || lane_empty)
+                {
                     out.problems.push(format!(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
                 }
             }
-            // The default job and the group jobs each run part of one package:
-            // `run` adds up, and `listed` is the most any job saw.
-            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
-            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
-                let total = lane.entry(name).or_default();
-                total.run = total.run.saturating_add(package.run);
-                total.listed = total.listed.max(package.listed);
-            }
-            for (name, package) in lane {
+            for (name, package) in lane_package_totals(counts.iter().flatten()) {
                 if package.listed > 0 && package.run == 0 {
                     out.problems.push(format!(
                         "package {name} of {slug} listed {} tests and ran none",
@@ -272,6 +251,18 @@ pub fn verdict(
     }
     out.passed = out.problems.is_empty();
     out
+}
+
+fn lane_package_totals<'a>(
+    jobs: impl Iterator<Item = &'a TestCounts>,
+) -> BTreeMap<&'a str, PackageCounts> {
+    let mut totals: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+    for (name, package) in jobs.flat_map(|job| &job.packages) {
+        let total = totals.entry(name).or_default();
+        total.run = total.run.saturating_add(package.run);
+        total.listed = total.listed.max(package.listed);
+    }
+    totals
 }
 
 #[must_use]

@@ -1,15 +1,19 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Velnor V1: propose ALL updates (major + minor/patch) as reviewed changes; never merge, never touch tool inputs.",
+  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; the workflows velnor-gen writes under .github/workflows are ignored, so only the hand-maintained repository-checks.yml gets action-pin updates.",
   "extends": ["config:recommended"],
-  "enabledManagers": ["cargo", "github-actions"],
+  "enabledManagers": ["cargo", "github-actions", "mise", "custom.regex"],
   "ignorePaths": [
     "generator/samples/**",
     "**/expected/**",
     "**/goldens/**",
     "**/golden/**",
     "fixtures/**",
-    ".github/workflows/**",
+    ".github/workflows/qualification.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/rust-cache-trim.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/tag-ruleset-drift.yml",
     ".github/actions/**"
   ],
   "cargo": {
@@ -18,7 +22,34 @@
   "github-actions": {
     "enabled": true
   },
+  "mise": {
+    "enabled": true,
+    "managerFilePatterns": ["/^mise\\.toml$/", "/^\\.velnor/mise\\.toml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Action pins recorded in the source version policy: name, version tag and full commit SHA of each [[actions]] entry.",
+      "managerFilePatterns": ["/^\\.velnor/version-policy\\.toml$/"],
+      "matchStrings": [
+        "name = \"(?<packageName>[^/\"]+/[^/\"]+)(?:/[^\"]*)?\"\\nversion = \"(?<currentValue>v[^\"]+)\"\\nsha = \"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "{{{packageName}}}"
+    }
+  ],
   "packageRules": [
+    {
+      "description": "Generated workflows pin jdx/mise-action with a sha256. Renovate ignores those files. A version-only bump of jdx/mise would fail checksum verification, so this package stays disabled.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["jdx/mise"],
+      "enabled": false
+    },
+    {
+      "description": "Action pins in the version policy wait 14 days after a release (see eligible_on in .velnor/version-policy.toml and scripts/pins-eligible.sh), so Renovate does not propose a release sooner.",
+      "matchManagers": ["custom.regex"],
+      "minimumReleaseAge": "14 days"
+    },
     {
       "description": "Cargo majors need explicit migration review (VER-3.2: incompatible = migration, never silent).",
       "matchManagers": ["cargo"],
@@ -33,10 +64,29 @@
       "groupName": "cargo minor/patch"
     },
     {
-      "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4). Defense-in-depth: mise is not in enabledManagers, so this rule only bites if mise is ever enabled.",
+      "description": "The Rust toolchain and the MBX wrapper are qualified by the owner and mirrored in rust-toolchain.toml and the version policy, so Renovate leaves them alone.",
       "matchManagers": ["mise"],
-      "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
+      "matchPackageNames": ["rust", "mr-boxington"],
       "enabled": false
+    },
+    {
+      "description": "A bump of a Mise pin is a reviewed change: mise.lock, .velnor/mise.lock and the version policy are refreshed by hand in the same pull request (docs/implemented/update-procedure.md).",
+      "matchManagers": ["mise", "custom.regex"],
+      "labels": ["dependencies", "needs-lock-refresh"]
+    },
+    {
+      "description": "release-coupled: bumped by the tools release only. velnor-gen is pinned exactly in crates/velnor-ci so the release moves both together.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["velnor-gen"],
+      "matchFileNames": ["crates/velnor-ci/Cargo.toml"],
+      "enabled": false
+    },
+    {
+      "description": "der must stay at 0.7.x in velnor-runner-attestation: x509-cert 0.2.x and cms use der 0.7, so a der 0.8 bump breaks Certificate::from_der (main did not compile after #1956). der moves together with x509-cert and cms; re-pin only when both ship a der 0.8 release.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["der"],
+      "matchFileNames": ["crates/velnor-runner-attestation/Cargo.toml"],
+      "allowedVersions": "<0.8"
     },
     {
       "description": "x509-cert 0.3 makes tbs_certificate private (E0616); upgrading is a code change, so hold 0.2.x until that lands.",
@@ -46,8 +96,8 @@
     },
     {
       "description": "The alint pin is a reviewed policy pin; changes need policy review.",
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["asamarts/alint"],
+      "matchManagers": ["mise"],
+      "matchPackageNames": ["asamarts/alint", "github:asamarts/alint"],
       "labels": ["dependencies", "policy-review"]
     }
   ],

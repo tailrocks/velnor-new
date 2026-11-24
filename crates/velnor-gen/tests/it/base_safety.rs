@@ -45,6 +45,7 @@ fn target_publication_waits_for_the_compile_input_audit_in_every_shape() -> Test
                 let saved = step(lane, "Save the target cache").ok_or("save")?;
                 assert!(
                     saved.contains("success()")
+                        || saved.contains("steps.build_1.outcome == ''success''")
                         || saved.contains("steps.audit.outcome == ''success''"),
                     "{saved}"
                 );

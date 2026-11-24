@@ -45,7 +45,7 @@ failure still blocks promotion and never increases its five-minute limit.
 ### Configurable job timeout amendment (2026-10-19)
 
 The repository owner requested a configurable crate-job timeout after hosted
-consumer CI (ChainArgos java-monorepo, scale set temporarily disabled) canceled
+consumer CI (example-org example-repo-2, scale set temporarily disabled) canceled
 every cold Rust crate job at five minutes: checkout took about 1.5 minutes and
 Clippy about 2.2 minutes before test compilation. This supersedes the
 five-minute maximum above for general workflow jobs while keeping five minutes
@@ -62,7 +62,7 @@ the configured value and the ten-minute ceiling. Control jobs keep the default. 
 
 ### One job per crate amendment (2026-10-19)
 
-The repository owner made a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps)
+The repository owner made a former hard decision (removed in #608)
 that supersedes the lint, tests and docs phases above: each crate owns one
 `Rust / <crate>` job that prepares and builds once, then runs Format, Clippy,
 Documentation, tests and doctests as parallel GitHub steps. The phases

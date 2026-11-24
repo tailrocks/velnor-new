@@ -9,10 +9,10 @@ use super::delta_snapshot::{self as snapshot, BASELINE, MANIFEST, Manifest, Snap
 use super::delta_tree as tree;
 use crate::delta_cli::{DeltaArgs, DeltaCommand};
 use crate::error::CiError;
+use crate::escape::{command_line, escape};
 
 pub(super) const LIMIT: u64 = 500_000_000;
 const MARKER: &str = ".velnor/delta-marker";
-const INPUTS: &str = ".velnor/inputs.tsv";
 
 pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
     let args = match &command {
@@ -32,7 +32,8 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
                 identity.as_deref().unwrap_or_default()
             ))?;
             Ok(format!(
-                "delta base: {base}\n{}",
+                "delta base: {}\n{}",
+                escape(&base, false),
                 if identity.is_err() {
                     "::notice::source identity unavailable; saving no delta\n"
                 } else {
@@ -48,16 +49,22 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
 fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     super::delta_paths::staging(&args.staging_dir)?;
     if let Err(error) = safe_path(&args.target_dir) {
-        return Ok(format!(
-            "::notice::{}; skipping delta reuse\n",
-            cleanup(&args.staging_dir, &error)
+        return Ok(command_line(
+            "notice",
+            &format!(
+                "{}; skipping delta reuse",
+                cleanup(&args.staging_dir, &error)
+            ),
         ));
     }
     let cutoff = snapshot::now_ns()?;
-    let baseline = snapshot::capture(&args.target_dir, base).and_then(|baseline| {
-        snapshot::validate_times(&baseline.nodes, cutoff)?;
-        Ok(baseline)
-    });
+    let recorded = snapshot::recorded_inventory(&args.target_dir);
+    let baseline = snapshot::capture(&args.target_dir, base, recorded.as_ref(), cutoff).and_then(
+        |(baseline, read)| {
+            snapshot::validate_times(&baseline.nodes, cutoff)?;
+            Ok((baseline, read))
+        },
+    );
     let manifest = snapshot::read::<Manifest>(&args.staging_dir.join(MANIFEST));
     let mut report = if let Err(error) = &baseline {
         cold(&args.target_dir, error)?
@@ -84,8 +91,11 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     };
     tree::remove_node(&args.staging_dir)?;
     snapshot::replace(&args.target_dir.join(MARKER), Some(b""))?;
+    if let Ok((baseline, read)) = &baseline {
+        report = format!("{report}read {read} of {} base files\n", baseline.files());
+    }
     let bytes = baseline
-        .and_then(|baseline| snapshot::encode(&baseline))
+        .and_then(|(baseline, _)| snapshot::encode(&baseline))
         .ok();
     snapshot::replace(&args.target_dir.join(BASELINE), bytes.as_deref())?;
     if bytes.is_none() {
@@ -97,7 +107,8 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
 fn cold(target: &Path, error: &CiError) -> Result<String, CiError> {
     tree::remove_node(target)?;
     Ok(format!(
-        "delta apply failed: {error}; removed 1 cached target directories and building cold\n"
+        "delta apply failed: {}; removed 1 cached target directories and building cold\n",
+        escape(&error.to_string(), false)
     ))
 }
 
@@ -117,7 +128,10 @@ fn compiled(args: &DeltaArgs) -> bool {
 
 fn decline(reason: &str) -> Result<String, CiError> {
     super::append_outputs("save=false\n")?;
-    Ok(format!("::notice::{reason}; saving no delta\n"))
+    Ok(command_line(
+        "notice",
+        &format!("{reason}; saving no delta"),
+    ))
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
@@ -133,7 +147,8 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let inputs = match super::input_snapshot::verify(root, &args.target_dir.join(INPUTS)) {
+    let name = crate::inputs::inputs_file(&super::input_scopes::git_prefix(root)?);
+    let inputs = match super::input_snapshot::verify(root, &args.target_dir.join(&name)) {
         Ok(inputs) => inputs,
         Err(error) => return decline(&error.to_string()),
     };
@@ -151,8 +166,8 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         }
         _ => return decline("no valid base inventory"),
     };
-    let manifest = match select(args, base, &baseline, cutoff, inputs) {
-        Ok(manifest) => manifest,
+    let (manifest, read, files) = match select(args, base, &baseline, cutoff, inputs) {
+        Ok(selected) => selected,
         Err(error) => return decline(&error.to_string()),
     };
     let bytes = match snapshot::encode(&manifest) {
@@ -165,19 +180,25 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         .fold(0_u64, |size, node| size.saturating_add(node.size()))
         .saturating_add(bytes.len() as u64);
     if size > LIMIT {
-        return decline("delta exceeds its byte limit");
+        return decline(&over_limit(size).to_string());
     }
     if let Err(error) = materialize(args, &manifest, &bytes, cutoff) {
         return decline(&cleanup(&args.staging_dir, &error));
     }
     super::append_outputs("save=true\n")?;
     Ok(format!(
-        "staged {} cumulative delta files, {size} bytes\n",
+        "staged {} cumulative delta files, {size} bytes; read {read} of {files} files\n",
         manifest
             .nodes
             .values()
             .filter(|node| !node.directory())
             .count()
+    ))
+}
+
+fn over_limit(size: u64) -> CiError {
+    CiError::new(format!(
+        "delta of {size} bytes exceeds the {LIMIT} byte limit"
     ))
 }
 
@@ -208,9 +229,10 @@ fn select(
     baseline: &Snapshot,
     cutoff: u64,
     inputs: super::input_snapshot::VerifiedInputs,
-) -> Result<Manifest, CiError> {
+) -> Result<(Manifest, usize, usize), CiError> {
     let mut current = BTreeMap::new();
     let mut size = 0_u64;
+    let (mut read, mut files) = (0, 0);
     for path in tree::paths(&args.target_dir)? {
         let full = args.target_dir.join(&path);
         let stat = snapshot::stat(&full)?;
@@ -224,17 +246,25 @@ fn select(
         if !stat.directory() && known_changed {
             let minimum = (&path, &stat);
             let overhead = snapshot::encode(&minimum)?.len() as u64;
-            if size.saturating_add(stat.size()).saturating_add(overhead) > LIMIT {
-                return Err(CiError::new("delta exceeds its byte limit"));
+            let attempted = size.saturating_add(stat.size()).saturating_add(overhead);
+            if attempted > LIMIT {
+                return Err(over_limit(attempted));
             }
         }
-        let node = snapshot::identity(&full)?;
-        if path == Path::new(INPUTS) || original != Some(&node) {
+        let changed = snapshot::change_time(&full)?;
+        let node = if let Some(node) = baseline.unchanged(&path, &stat, changed) {
+            node.clone()
+        } else {
+            read += usize::from(!stat.directory());
+            snapshot::identity(&full)?
+        };
+        files += usize::from(!stat.directory());
+        if path == inputs.name || original != Some(&node) {
             size = size.saturating_add(node.size());
         }
         current.insert(path, node);
     }
-    if !matches!(current.get(Path::new(INPUTS)), Some(snapshot::Node::File { digest, .. }) if *digest == inputs.digest)
+    if !matches!(current.get(&inputs.name), Some(snapshot::Node::File { digest, .. }) if *digest == inputs.digest)
     {
         return Err(CiError::new(
             "saved inputs changed after source verification",
@@ -253,7 +283,7 @@ fn select(
     let mut nodes: BTreeMap<_, _> = current
         .iter()
         .filter(|(path, node)| {
-            path.as_path() == Path::new(INPUTS) || baseline.nodes.get(*path) != Some(*node)
+            path.as_path() == inputs.name || baseline.nodes.get(*path) != Some(*node)
         })
         .map(|(path, node)| (path.clone(), node.clone()))
         .collect();
@@ -264,12 +294,13 @@ fn select(
             }
         }
     }
-    Ok(Manifest {
+    let manifest = Manifest {
         base: base.to_owned(),
         nodes,
         removed,
         sources: inputs.sources,
-    })
+    };
+    Ok((manifest, read, files))
 }
 
 pub(super) fn safe_path(path: &Path) -> Result<(), CiError> {

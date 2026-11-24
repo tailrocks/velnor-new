@@ -20,8 +20,9 @@ pub fn read_recorded_checkout(path: &Path) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
     let mut view = read_tracked(&root)?;
     add_manifests(&mut view, |paths| read_files(&root, paths))?;
-    let mut recorded = read_files(&root, &[METADATA_PATH])?;
-    view.rust_metadata = recorded_metadata(&view, recorded.remove(&METADATA_PATH).as_deref())
+    let recorded = read_files(&root, &[METADATA_PATH])?;
+    view.rust_metadata = recorded_metadata(&view, recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(Error::MetadataFile)?;
+    view.files.extend(recorded);
     Ok(Checkout { root, view })
 }

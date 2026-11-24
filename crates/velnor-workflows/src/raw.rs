@@ -18,7 +18,9 @@ pub(crate) struct RawWorkflow {
     pub(crate) file: String,
     pub(crate) name: String,
     pub(crate) runner: Option<String>,
+    pub(crate) hosted: Option<bool>,
     pub(crate) fork_runner: Option<String>,
+    pub(crate) trusted_runner: Option<String>,
     pub(crate) hosted_runner: Option<String>,
     pub(crate) scale_set_runner: Option<String>,
     #[serde(rename = "if")]
@@ -35,8 +37,6 @@ pub(crate) struct RawWorkflow {
     pub(crate) case: Vec<RawCase>,
 }
 
-/// One qualification case: its steps run once on the hosted runner and once on
-/// the scale-set runner, in the modes it lists.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawCase {
@@ -158,6 +158,9 @@ pub(crate) struct RawJob {
     #[serde(default)]
     pub(crate) helper: bool,
     pub(crate) runner: Option<String>,
+    pub(crate) hosted: Option<bool>,
+    #[serde(default)]
+    pub(crate) runner_labels: BTreeMap<String, bool>,
     pub(crate) environment: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
     pub(crate) concurrency: Option<RawConcurrency>,
@@ -184,6 +187,8 @@ pub(crate) struct RawJob {
 pub(crate) struct RawMatrix {
     pub(crate) from_output: Option<String>,
     pub(crate) axes: Option<BTreeMap<String, Vec<String>>>,
+    #[serde(default)]
+    pub(crate) include: Vec<BTreeMap<String, String>>,
     pub(crate) fail_fast: Option<bool>,
     pub(crate) max_parallel: Option<u16>,
 }
@@ -202,6 +207,7 @@ pub(crate) struct RawStep {
     pub(crate) with: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) continue_on_error: bool,
+    pub(crate) working_directory: Option<String>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
 }

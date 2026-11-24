@@ -36,7 +36,7 @@ campaign ([contract](hosted-cache-qualification-contract.md)): the campaign's
 dispatch inputs and predecessor resolver are part of generated `ci.yml`
 under `velnor-repository-v1`, not a separate workflow file.
 
-Every generated workflow file declares top-level `cache-mode: read`. Job-level `cache-mode: write` appears only on the named cache writers (`tools-producer-*`, `providers-producer-*`, `sources-producer`, and the four `qualification.yml` cache jobs that run only when dispatched from a non-default branch); `generate` fails on any other job-level write, on a writer without its trusted gate, and on a writer that runs task code or a `uses:` outside the writer allowlist.
+A job with no `cache-mode` key gets GitHub's default, and on a trusted trigger that default is `write`, so the renderer never leaves the key out: every generated job declares `cache-mode` at job level. A generated job that saves to the Actions cache service (an `actions/cache/save` step: the tools, target, sources and delta families of the Rust CI lanes) renders `cache-mode: write`; every other job renders `read`, which permits restores and denies saves, and a delete over the REST API (the trim jobs) is not gated by it. GitHub accepts only the literals `read`, `write`, `write-only` and `none`, not an expression, so the mode holds for every event of the job and the event gate sits on each save step (the default branch with a push, schedule or dispatch, or a pull request from the same repository for the per-PR delta). The exception is a job that calls a reusable workflow with `uses`, which has no key of its own because GitHub documents none for a caller job (its callee jobs carry theirs). A declared job takes its mode from `cache_mode` in `.velnor/workflows.toml`; a write there must be gated off the default branch, and a declared job that saves with `cache` or `cache-save` must declare it (`generate` refuses both omissions, `velnor-workflows` `job_env.rs` and `job_limits.rs`). Today the declared writers are the four `qualification.yml` cache jobs (`empty-cache-hosted`, `empty-cache-scale-set`, `cache-scale-set`, `mbx-cache-write-hosted`), dispatch-only and gated off the default branch, so test writes never pollute the cache of the default branch. No generated file sets a workflow-level `cache-mode`; only the hand-maintained `.github/workflows/ci.yml` sets `cache-mode: read` at the top. The test `cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default` checks every sample and the repository's own generated workflows: each non-call job carries a mode, a job with a save step writes, a write has a save step or a declaration, and each save step of a generated write job carries a gate that keeps a fork pull request out.
 
 `publish.yml` is the tag-driven publication workflow (see the
 [package publication contract](package-publication-contract.md)); it is absent
@@ -59,7 +59,7 @@ block (least privilege for its role); see [workflow
 > Amendment 2026-09-30: the consumer release scope ([release
 > §11](release-contract.md)) overrides the earlier blanket
 > prohibition on consumer release emission. `consumer-v1` MUST emit
-> `release.yml` plus `.github/release-plz.toml` and
+> `release.yml` plus `release-plz.toml` and
 > `.github/release-plz-bootstrap.toml` when
 > `[stacks.rust.release].enabled = true`, and MUST emit none of them
 > otherwise.
@@ -113,9 +113,9 @@ none of their workflows; successful generation retires their prior marked files.
 | .github/jactionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
-| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation except the hand-written `.github/workflows/release-rust-ci-tools.yml` and a regular file directly in `.github/workflows/` whose first line is the velnor-gen header, which are preserved; generation refuses to overwrite a velnor-gen file |
+| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation except a regular file directly in `.github/workflows/` whose first line is the velnor-gen header, which is preserved; generation refuses to overwrite a velnor-gen file |
 | .github/dco.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only when `[dco]` is configured; a file whose first line carries the Velnor generated marker is owned (replaced, or retired when `[dco]` is removed); an unmarked file stays repository-owned and makes generation refuse to overwrite it |
-| .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
+| release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
 
@@ -235,7 +235,7 @@ configuration, and findings are fixed in the generator. Every generated lint
 before any write) checks the same files, the `hk` `Builtins.jactionlint`
 set: `.github/workflows/*.y*ml`, `.github/actions/**/action.y*ml` and
 `.github/dependabot.y*ml`, with `--strict-exit --no-online
---shellcheck=shellcheck --pyflakes=`. A marked `.github/actionlint.yaml` from
+--shellcheck=shellcheck --pyflakes=`. A marked `.github/jactionlint.yaml` from
 an older generator is retired by the next generation; an unmarked one is
 repository content and is preserved.
 
@@ -263,11 +263,8 @@ the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
 successful generation no longer emits them. The workflows namespace is
-generator-owned with two exceptions. The first is
-`.github/workflows/release-rust-ci-tools.yml`, the hand-written workflow that
-releases the Rust CI tools, which generation preserves like any unmanaged
-entry. The second is every regular file directly in `.github/workflows/`
-whose first line is the velnor-gen header: the line is
+generator-owned with one exception: every regular file directly in
+`.github/workflows/` whose first line is the velnor-gen header: the line is
 `# Generated by velnor-gen.` alone or followed by a space, ending in LF or
 CRLF. velnor-gen owns that file. A file in a subdirectory is not a velnor-gen
 file, because GitHub runs no workflow from there. Generation leaves it in place,
@@ -299,7 +296,7 @@ that behavior):
 ```toml
 [github]
 unmanaged = "deny"                 # "allow" (default) | "warn" | "deny"
-allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
+allow = ["CODEOWNERS", ".github/ISSUE_TEMPLATE"]
 ```
 
 - An unmanaged entry is any file, symbolic link or empty directory under

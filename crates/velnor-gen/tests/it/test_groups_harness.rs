@@ -8,8 +8,7 @@ use crate::facts::{TestResult, package, repo};
 use crate::pipeline::{HELPER_LOCK, workflow};
 
 const MANIFEST: &str = "[package]\nname = \"a\"\n[[test]]\nname = \"custom\"\nharness = false\n";
-const NEXTEST_MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 const GROUP: &str = "[[test_groups]]\nname = 'db'\nfilter = 'package(a) and test(~db_)'\n";
 
 #[test]
@@ -23,7 +22,7 @@ fn a_group_and_the_default_job_both_leave_out_the_harness_that_cargo_test_runs()
             ("custom", TargetKind::Test, true),
         ],
     )?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", "0.1.82", 1);
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", "0.1.90", 1);
     let text = workflow(&repo(
         vec![("Cargo.toml", vec![a])],
         &[

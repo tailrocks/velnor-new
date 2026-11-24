@@ -71,7 +71,7 @@ fn progress_and_artifact_count_once(base: &Repo) -> Result<(), Box<dyn std::erro
 fn package_identity_is_preserved(base: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     let both = base.fork("report-lib-test-artifacts");
     let artifacts = package_identity_artifacts(&both)?;
-    fs::remove_file(both.root().join("target").join(SNAPSHOT))?;
+    fs::remove_file(both.root().join("target").join(snapshot_file("")))?;
     let metrics = observation(&both, &[], &artifacts)?;
     assert_eq!(metrics.invocations[0].compilations.len(), 3, "{metrics:?}");
     assert_eq!(

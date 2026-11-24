@@ -1,20 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use velnor_gen::io::read_files;
-use velnor_model::{LOCK_OUTPUT_PREFIX, RepoPath, RootSlug, ToolPins, Toolchain};
+use velnor_model::{LOCK_OUTPUT_PREFIX, MisePlatform, RepoPath, RootSlug, ToolPins, Toolchain};
 use velnor_rust::{
-    BUILD_DRIVER, CONFIG_PATH, CompatInputs, METADATA_PATH, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML,
+    CONFIG_PATH, CompatInputs, METADATA_PATH, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, build_driver,
     build_profile, ci_debuginfo, compat, lock_key, mise_files, recorded_members, tool_pins,
     toolchain,
 };
 
-use super::build_inputs::{image_identity, release_of, repository_profile};
+use super::build_inputs::{image_or_cold, release_of, repository_profile};
 use super::{append_outputs, append_to, current_dir};
+use crate::cli::PrepareArgs;
 use crate::error::CiError;
 use crate::setup::{
     Missing, check_tools, env_lines, missing_toolchain, output_lines, parse_reported,
@@ -25,51 +26,66 @@ const CARGO_DIRECTORY: &str = ".cargo";
 const CARGO_CONFIG: &str = "config.toml";
 pub(super) const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
 
-pub(super) fn prepare() -> Result<String, CiError> {
+pub(super) fn prepare(args: &PrepareArgs) -> Result<String, CiError> {
     let root = current_dir()?;
     let repo_profile = repository_profile(&root)?;
     let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
     let files = read_files(&root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
     let debuginfo = ci_debuginfo(&files).map_err(|e| CiError::new(e.to_string()))?;
+    let declared = read_files(&root, &[TOOLCHAIN_PLAIN, TOOLCHAIN_TOML])
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let declared = toolchain(&declared)
+        .map_err(|e| CiError::new(e.to_string()))?
+        .filter(|declared| declared.path.is_none());
+    // Before any rustup or rustc call: the rustup proxy installs a missing channel on the first one.
+    if let Some(channel) = declared
+        .as_ref()
+        .and_then(|declared| declared.channel.as_deref())
+    {
+        record_missing_channel(channel);
+    }
     if !pins.tools.is_empty() {
         check_pinned_tools(&root, &pins)?;
     }
-    let declared = read_files(&root, &[TOOLCHAIN_PLAIN, TOOLCHAIN_TOML])
-        .map_err(|e| CiError::new(e.to_string()))?;
-    if let Some(declared) = toolchain(&declared)
-        .map_err(|e| CiError::new(e.to_string()))?
-        .filter(|declared| declared.path.is_none())
-    {
+    if let Some(declared) = declared {
         install_declared(&root, &declared)?;
     }
     let rustc_verbose = rustc_verbose()?;
     let profile = build_profile(debuginfo, release_of(&rustc_verbose)?);
+    let (image, cold_notice) = image_or_cold();
     let inputs = CompatInputs {
         rustc_verbose,
         target: env_text("CARGO_BUILD_TARGET"),
         profile: profile.clone(),
         rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
         workspace: root.display().to_string(),
-        driver: BUILD_DRIVER.to_owned(),
+        driver: build_driver(cargo_on_path().as_deref()).to_owned(),
         repo_profile,
-        image: image_identity()?,
+        image,
+        mbx_share_out_dir: env_text("MBX_SHARE_OUT_DIR"),
     };
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
-    append_outputs(&output_lines(&digest))?;
-    append_outputs(&lock_output_lines(&root)?)?;
-    Ok(String::new())
+    append_outputs(&output_lines(&digest, !cold_notice.is_empty()))?;
+    append_outputs(&lock_output_lines(&root, args)?)?;
+    Ok(cold_notice)
 }
 
-fn lock_output_lines(root: &Path) -> Result<String, CiError> {
+fn lock_output_lines(root: &Path, args: &PrepareArgs) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let members = recorded_members(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
     let owned: BTreeSet<String> = members.values().flatten().cloned().collect();
+    let wanted = wanted_roots(&members, args)?;
     members
         .keys()
+        .filter(|manifest| {
+            wanted
+                .as_ref()
+                .is_none_or(|slugs| slugs.contains(&RootSlug::of(manifest)))
+        })
         .map(|manifest| {
             let lock = manifest.sibling(&RepoPath::from_static("Cargo.lock"));
             let mut read = read_files(root, std::slice::from_ref(&lock))
@@ -81,6 +97,34 @@ fn lock_output_lines(root: &Path) -> Result<String, CiError> {
             ))
         })
         .collect()
+}
+
+fn wanted_roots(
+    members: &BTreeMap<RepoPath, BTreeSet<String>>,
+    args: &PrepareArgs,
+) -> Result<Option<BTreeSet<RootSlug>>, CiError> {
+    if args.no_locks {
+        return Ok(Some(BTreeSet::new()));
+    }
+    if args.lock_roots.is_empty() {
+        return Ok(None);
+    }
+    let recorded: BTreeSet<RootSlug> = members.keys().map(RootSlug::of).collect();
+    args.lock_roots
+        .iter()
+        .map(|name| {
+            RootSlug::new(name.as_str())
+                .ok()
+                .filter(|slug| recorded.contains(slug))
+                .ok_or_else(|| {
+                    CiError::new(format!(
+                        "--lock-root {name} is not a Cargo root recorded in {METADATA_PATH}; recorded roots: {}",
+                        recorded.iter().map(RootSlug::as_str).collect::<Vec<_>>().join(", ")
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()
+        .map(Some)
 }
 
 fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
@@ -98,7 +142,7 @@ fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
     check_tools(
         pins,
         &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
-        std::env::consts::OS,
+        MisePlatform::new(std::env::consts::OS, std::env::consts::ARCH),
     )
 }
 
@@ -124,9 +168,59 @@ fn install_declared(root: &std::path::Path, declared: &Toolchain) -> Result<(), 
             let mut args = vec![kind, "add"];
             args.extend(names.iter().map(String::as_str));
             tool_output(root, "rustup", &args)?;
+            record_installs(names.iter().map(|name| format!("{kind} {name}")));
         }
     }
     survey()?.ensure_none()
+}
+
+/// Records a declared channel that is not on disk yet, because rustup installs it on the first
+/// rustc or cargo call and that install would otherwise be invisible to the report.
+fn record_missing_channel(channel: &str) {
+    if channel_on_disk(channel) == Some(false) {
+        record_installs(std::iter::once(format!("toolchain {channel}")));
+    }
+}
+
+/// Whether `$RUSTUP_HOME/toolchains` holds a `<channel>-<host>` directory. It reads the directory
+/// instead of running `rustup`, so the check costs no process. `None` when the rustup home is unknown.
+fn channel_on_disk(channel: &str) -> Option<bool> {
+    let home = std::env::var_os("RUSTUP_HOME")
+        .filter(|home| !home.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .filter(|home| !home.is_empty())
+                .map(|home| std::path::PathBuf::from(home).join(".rustup"))
+        })?;
+    let prefix = format!("{channel}-");
+    match std::fs::read_dir(home.join("toolchains")) {
+        Ok(entries) => Some(entries.flatten().any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&prefix))
+        })),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_) => None,
+    }
+}
+
+/// The report step reads these to tell a toolchain install that a tools cache hit should have
+/// made unnecessary. Recording is best effort: it never fails `prepare`.
+fn record_installs(installs: impl Iterator<Item = String>) {
+    use std::io::Write;
+    let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
+        return;
+    };
+    let mut text = installs.collect::<Vec<_>>().join("\n");
+    text.push('\n');
+    std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(Path::new(&temp).join(crate::waste_evidence::TOOLCHAIN_INSTALLS))
+        .and_then(|mut file| file.write_all(text.as_bytes()))
+        .ok();
 }
 
 fn tool_output(root: &std::path::Path, program: &str, args: &[&str]) -> Result<String, CiError> {
@@ -156,6 +250,14 @@ fn host_triple(root: &std::path::Path) -> Result<String, CiError> {
 pub(super) fn check_metadata() -> Result<String, CiError> {
     velnor_gen::io::check_metadata(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
     Ok(String::new())
+}
+
+/// The `cargo` that `PATH` resolves to, as the job's cargo calls will run it.
+fn cargo_on_path() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join("cargo"))
+        .find(|candidate| candidate.is_file())
 }
 
 fn env_text(name: &str) -> Option<String> {

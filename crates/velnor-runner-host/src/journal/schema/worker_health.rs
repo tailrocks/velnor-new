@@ -51,7 +51,7 @@ const REVISION_INSERT: &str = "CREATE TRIGGER local_worker_exits_revision_insert
 const REVISION_UPDATE: &str = "CREATE TRIGGER local_worker_exits_revision_update AFTER UPDATE ON local_worker_exits BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END";
 const REVISION_DELETE: &str = "CREATE TRIGGER local_worker_exits_revision_delete AFTER DELETE ON local_worker_exits BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END";
 
-const OBJECTS: [(&str, &str, &str); 8] = [
+const OBJECTS: &[(&str, &str, &str)] = &[
     ("table", "local_worker_exits", TABLE),
     ("index", "local_worker_exits_connection_observed", INDEX),
     ("trigger", "local_worker_exit_insert_guard", INSERT_GUARD),
@@ -75,7 +75,7 @@ const OBJECTS: [(&str, &str, &str); 8] = [
 ];
 
 pub(super) async fn migrate_v40_to_v41(conn: &turso::Connection) -> Result<(), HostError> {
-    for (_, _, sql) in OBJECTS {
+    for &(_, _, sql) in OBJECTS {
         conn.execute(sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -87,7 +87,7 @@ pub(super) async fn migrate_v40_to_v41(conn: &turso::Connection) -> Result<(), H
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    for (kind, name, expected) in OBJECTS {
+    for &(kind, name, expected) in OBJECTS {
         validate_object(conn, kind, name, expected).await?;
     }
     validate_rows(conn).await

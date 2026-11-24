@@ -186,7 +186,7 @@ closed set of actions. On a generator-first foundation there is a shorter and sa
   generated from `.velnor/workflows.toml` with 24 cases that pair a hosted and a scale-set job; a
   third leg, `native`, joins each pair.
 - **What still needs the Actions protocol.** Hand-written workflows and other repositories on the
-  cluster (the ChainArgos and jackin scale sets, B§0.2). GitHub Official serves them. A
+  cluster (the example-org and jackin scale sets, B§0.2). GitHub Official serves them. A
   protocol-speaking native executor becomes an optional later stream, decided by the owner.
 
 ---

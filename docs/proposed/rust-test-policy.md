@@ -26,8 +26,14 @@ Integration tests SHOULD use a small declared entry point, such as
 `tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
 Cargo test binary per case file. Doctests are off: every lib sets
 `doctest = false` and the `no-doctests` alint rule fails on a doc fence
-(see
-[hard decision 1](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps)).
+(see former hard decision 1, removed in #608).
+The scanner follows rustdoc's Markdown rules for indented code. An indented line
+after a prose line continues that paragraph and is not a doctest; a blank line,
+heading or thematic break before it starts a code block, and so does a list
+marker followed by five or more spaces (`-     code`). Doc attribute values are
+decoded for Rust string escapes. Fences split with `concat!` are not evaluated:
+that evasion is left to code review (decision #2344), because evaluating
+`concat!` is a larger scanner change with its own false-positive risk.
 If a package gains a doctest target, doctests MUST run in a separate gate
 because Nextest does not execute them, and the generator adds that lane.
 

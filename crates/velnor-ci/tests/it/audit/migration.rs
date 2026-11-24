@@ -6,6 +6,8 @@ mod targets;
 use std::fs;
 use std::process::Output;
 
+use velnor_test_support::real_cargo;
+
 use super::{audit, command, own_units, workspace_below_the_root};
 use crate::io::Repo;
 
@@ -19,7 +21,7 @@ enum InputDirectory {
 
 fn cargo_project(input: InputDirectory) -> Repo {
     let repo = Repo::new("audit-build-migration");
-    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write("mise.toml", &crate::toolchain::mise_rust_pin());
     repo.write(
         "rust/Cargo.toml",
         "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
@@ -57,13 +59,13 @@ fn cargo_project(input: InputDirectory) -> Repo {
     repo
 }
 
-fn build(repo: &Repo, wrapped: bool) -> Output {
+pub(super) fn build(repo: &Repo, wrapped: bool) -> Output {
     let mut command = if wrapped {
         let mut command = command(env!("CARGO_BIN_EXE_velnor-ci"));
         command.args(["inputs", "build", "--", "cargo"]);
         command
     } else {
-        command("cargo")
+        command(real_cargo())
     };
     command
         .current_dir(repo.root().join("rust"))
@@ -146,8 +148,47 @@ fn declared_out_dir_inputs_survive_compiler_discovery_invalidation() {
     assert_fresh(&repo, "");
 }
 
+/// The cargo-nextest that the repository's mise.toml pins must be installed in the
+/// mise data directory. Without it the `cargo-nextest` shim fails with an opaque
+/// "not a valid shim" error, so the test names the pin and the fix instead.
+fn pinned_nextest_problem(data_dir: Option<&std::path::Path>) -> Option<String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut probe = std::process::Command::new("mise");
+    probe
+        .args(["which", "cargo-nextest"])
+        .current_dir(&root)
+        .env("MISE_GLOBAL_CONFIG_FILE", root.join("mise.toml"))
+        .env("MISE_TRUSTED_CONFIG_PATHS", &root);
+    if let Some(data_dir) = data_dir {
+        probe.env("MISE_DATA_DIR", data_dir);
+    }
+    let output = probe
+        .output()
+        .unwrap_or_else(|e| unreachable!("cannot run mise: {e}"));
+    (!output.status.success()).then(|| {
+        "cargo-nextest pinned in mise.toml is not installed in the mise data directory: \
+         run `mise install` in the repository root, then rerun the test"
+            .to_owned()
+    })
+}
+
+#[test]
+fn nextest_discovery_names_the_missing_pin_before_running() {
+    let data_dir = velnor_test_support::ScratchDir::new(
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join("nextest-discovery-empty-mise-data"),
+    );
+    let problem = pinned_nextest_problem(Some(data_dir.path()));
+    let problem = problem.expect("an empty mise data directory has no pinned cargo-nextest");
+    assert!(problem.contains("mise.toml"), "{problem}");
+    assert!(problem.contains("`mise install`"), "{problem}");
+}
+
 #[test]
 fn nextest_discovery_compiles_first_and_executes_the_tests_once() {
+    if let Some(problem) = pinned_nextest_problem(None) {
+        panic!("{problem}");
+    }
     let repo = cargo_project(InputDirectory::Generated);
     repo.write("rust/src/lib.rs", r#"#[test]
 fn records_execution() {
@@ -156,8 +197,12 @@ fn records_execution() {
     std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap().write_all(b"run").unwrap();
 }
 "#);
+    let pinned = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mise.toml");
     let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_remove("NEXTEST_PROFILE")
+        .env_remove("MISE_NO_CONFIG")
+        .env("MISE_GLOBAL_CONFIG_FILE", &pinned)
+        .env("MISE_TRUSTED_CONFIG_PATHS", repo.root())
         .current_dir(repo.root().join("rust"))
         .args([
             "inputs",
@@ -183,24 +228,29 @@ fn records_execution() {
     assert_fresh(&repo, "");
 }
 
-fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
-    fs::read_dir(repo.root().join("rust/target/debug/build"))
+pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
+    fs::read_dir(repo.root().join("rust/target/debug/build").join(package))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(&format!("{package}-"))
-                && entry.path().join("output").is_file()
+        .map(|hash| {
+            hash.unwrap_or_else(|e| unreachable!("{e}"))
+                .path()
+                .join("run/stdout")
         })
+        .find(|output| output.is_file())
         .unwrap_or_else(|| unreachable!("missing {package} output"))
-        .path()
-        .join("output")
 }
 
-#[test]
-fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+pub(super) fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
+    command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .env_remove("CARGO_ALIAS_XT")
+        .current_dir(repo.root().join("rust"))
+        .args(["inputs", "build", "--"])
+        .args(cargo)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(super) fn app_and_lib_project() -> Repo {
     let repo = cargo_project(InputDirectory::Shared);
     repo.write("rust/Cargo.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n");
     repo.write(
@@ -220,6 +270,15 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
 "#,
     );
     repo.write("rust/Cargo.lock", "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"lib\"\nversion = \"0.1.0\"\n");
+    repo
+}
+
+pub(super) const APP_SELECTION: [&str; 6] =
+    ["cargo", "build", "-p", "app", "--all-targets", "--offline"];
+
+#[test]
+fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+    let repo = app_and_lib_project();
     let plain = build(&repo, false);
     assert!(plain.status.success(), "{plain:?}");
     let app = package_output(&repo, "app");
@@ -234,23 +293,7 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
     };
     let before_app = identity(&app);
     let before_lib = identity(&lib);
-    let partial = || {
-        command(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root().join("rust"))
-            .args([
-                "inputs",
-                "build",
-                "--",
-                "cargo",
-                "build",
-                "-p",
-                "app",
-                "--all-targets",
-                "--offline",
-            ])
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    };
+    let partial = || wrapped_build(&repo, &APP_SELECTION);
     let refused = partial();
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(
@@ -299,7 +342,7 @@ fn compiler_discovery_with(prefix: &[&str]) {
 
 #[test]
 fn a_cargo_toolchain_override_keeps_compiler_discovery_enabled() {
-    compiler_discovery_with(&["+1.99.1"]);
+    compiler_discovery_with(&[format!("+{}", crate::toolchain::pinned_channel()).as_str()]);
 }
 
 #[test]

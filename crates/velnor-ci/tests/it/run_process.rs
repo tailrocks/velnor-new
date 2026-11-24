@@ -1,18 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
-    if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    dir
-}
+use crate::run::scratch;
 
 struct Flaky {
     chunks: Vec<std::io::Result<Vec<u8>>>,
@@ -59,7 +50,7 @@ fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_writ
     );
     let output = Command::new("sh")
         .args(["-c", &script])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(output.status.code(), Some(7), "{output:?}");
@@ -94,7 +85,7 @@ fn forwards(signal: &str, code: i32) {
     );
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", &script])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .stdout(Stdio::piped())
         .process_group(0)
         .spawn()
@@ -133,10 +124,12 @@ fn forwards(signal: &str, code: i32) {
 mod tests_run {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::{Path, PathBuf};
-    use std::process::{Command, Output};
+    use std::path::Path;
+    use std::process::Output;
+    use std::time::{Duration, SystemTime};
 
     use super::scratch;
+    use crate::run_nextest::without_built;
 
     const BOLD: &str = "\u{1b}[1m";
     const RESET: &str = "\u{1b}[0m";
@@ -151,7 +144,11 @@ mod tests_run {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
 
-    fn run_with_output(name: &str, script: &str, command: &[&str]) -> (Output, String, PathBuf) {
+    fn run_with_output(
+        name: &str,
+        script: &str,
+        command: &[&str],
+    ) -> (Output, String, velnor_test_support::ScratchDir) {
         let (output, written, temp, _) = execute_nextest(name, script, command, None);
         (output, written, temp)
     }
@@ -161,34 +158,46 @@ mod tests_run {
         script: &str,
         command: &[&str],
         grace_ms: Option<&str>,
-    ) -> (Output, String, PathBuf, std::time::Duration) {
-        let started = std::time::Instant::now();
+    ) -> (Output, String, velnor_test_support::ScratchDir, SystemTime) {
         let temp = scratch(name);
         fake_nextest(&temp, script);
         let outputs = temp.join("github-output");
         fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+        let cargo_home = temp.join("cargo-home");
+        fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
         let path = format!(
             "{}:{}",
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        let mut child = crate::run::velnor_ci_run();
         child
             .arg("run")
             .arg("--")
             .args(command)
-            .env("RUNNER_TEMP", &temp)
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", &outputs)
+            .env("CARGO_HOME", &cargo_home)
             .env("PATH", path);
         if let Some(grace_ms) = grace_ms {
             child.env("VELNOR_CI_RUN_PUMP_GRACE_MS", grace_ms);
         }
         let output = child.output().unwrap_or_else(|e| unreachable!("{e}"));
+        let returned = SystemTime::now();
         let written = fs::read_to_string(&outputs).unwrap_or_default();
-        (output, written, temp, started.elapsed())
+        (output, written, temp, returned)
     }
 
-    const NEXTEST_RUN: [&str; 6] = [
+    // Time velnor-ci spent after the fake nextest exited. The script touches
+    // `exited` as its last act, so start-up under load does not count.
+    fn after_exit(temp: &Path, returned: SystemTime) -> Duration {
+        let exited = fs::metadata(temp.join("exited"))
+            .and_then(|meta| meta.modified())
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        returned.duration_since(exited).unwrap_or_default()
+    }
+
+    const NEXTEST_RUN: &[&str] = &[
         "cargo-nextest",
         "nextest",
         "run",
@@ -202,9 +211,9 @@ mod tests_run {
         let split = format!(
             "{{ printf '     Summary [   0.020s] {BOLD}7'; sleep 0.3; printf '{RESET} tests run: 7 passed, 0 skipped\\n'; }} >&2"
         );
-        let (output, written, _) = run_with_output("tests-run-split", &split, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-split", &split, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=7\ntests_listed=7\n");
+        assert_eq!(without_built(&written), "existing=1\ntests_run=7\n");
     }
 
     #[test]
@@ -212,37 +221,37 @@ mod tests_run {
         let script = format!(
             "echo '     Summary [   1.200s] {BOLD}5{RESET} tests run: 3 passed, {BOLD}2{RESET} failed, 0 skipped' >&2; exit 100"
         );
-        let (output, written, _) = run_with_output("tests-run-failed", &script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-failed", &script, NEXTEST_RUN);
         assert_eq!(output.status.code(), Some(100));
-        assert_eq!(written, "existing=1\ntests_run=5\ntests_listed=5\n");
+        assert_eq!(without_built(&written), "existing=1\ntests_run=5\n");
     }
 
     #[test]
     fn run_reports_a_run_without_tests_as_zero() {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
-        let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-zero", script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=0\n");
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\n");
     }
 
     #[test]
-    fn run_reports_the_skipped_tests_as_listed_when_a_filter_ran_none() {
+    fn run_reports_no_listed_count_from_the_summary_when_a_filter_ran_none() {
         let script = format!(
             "echo '     Summary [   0.001s] {BOLD}0{RESET} tests run: 0 passed, {BOLD}4{RESET} skipped' >&2"
         );
-        let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-filtered", &script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=4\n");
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\n");
     }
 
     #[test]
-    fn run_lists_run_plus_skipped_and_leaves_listed_out_without_a_skipped_count() {
+    fn run_never_derives_a_listed_count_from_the_skipped_tests_of_the_summary() {
         let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
-        let (_, written, _) = run_with_output("tests-run-mixed", mixed, &NEXTEST_RUN);
-        assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=8\n");
+        let (_, written, _) = run_with_output("tests-run-mixed", mixed, NEXTEST_RUN);
+        assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
         let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
-        let (_, written, _) = run_with_output("tests-run-bare", bare, &NEXTEST_RUN);
-        assert_eq!(written, "existing=1\ntests_run=3\n");
+        let (_, written, _) = run_with_output("tests-run-bare", bare, NEXTEST_RUN);
+        assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
     }
 
     #[test]
@@ -269,30 +278,35 @@ mod tests_run {
         for (name, script, command) in cases {
             let (_, written, _) =
                 run_with_output(&format!("tests-run-no-{name}"), script, &command);
-            assert_eq!(written, "existing=1\n", "{name}");
+            assert_eq!(without_built(&written), "existing=1\n", "{name}");
         }
     }
 
     #[test]
     fn run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open() {
+        // Output stays on the pipe: the background `sleep` holds the summary pipe,
+        // and that is the behaviour under test.
         let script = "echo '     Summary [   0.001s] 3 tests run: 3 passed, 0 skipped' >&2\n\
 sleep 30 &\n\
+touch \"$RUNNER_TEMP/exited\"\n\
 exit 0";
-        let (output, written, _, elapsed) =
-            execute_nextest("tests-run-held", script, &NEXTEST_RUN, Some("300"));
+        let (output, written, temp, returned) =
+            execute_nextest("tests-run-held", script, NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(0), "{output:?}");
-        assert_eq!(written, "existing=1\n");
-        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
+        assert_eq!(without_built(&written), "existing=1\n");
+        let elapsed = after_exit(&temp, returned);
+        assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }
 
     #[test]
     fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
-        let script = "sleep 30 &\nexit 9";
-        let (output, written, _, elapsed) =
-            execute_nextest("tests-run-held-empty", script, &NEXTEST_RUN, Some("300"));
+        let script = "sleep 30 &\ntouch \"$RUNNER_TEMP/exited\"\nexit 9";
+        let (output, written, temp, returned) =
+            execute_nextest("tests-run-held-empty", script, NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(9), "{output:?}");
-        assert_eq!(written, "existing=1\n");
-        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
+        assert_eq!(without_built(&written), "existing=1\n");
+        let elapsed = after_exit(&temp, returned);
+        assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }
 
     #[test]
@@ -307,11 +321,11 @@ exit 0";
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let output = crate::run::velnor_ci_run()
             .arg("run")
             .arg("--")
             .args(NEXTEST_RUN)
-            .env("RUNNER_TEMP", &temp)
+            .env("RUNNER_TEMP", temp.path())
             .env_remove("GITHUB_OUTPUT")
             .env("PATH", path)
             .output()

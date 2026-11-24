@@ -19,7 +19,7 @@ use crate::release_fixture::release_view;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const RUNS_ON_FENCE: &str = "github.event.pull_request.head.repo.full_name == github.repository";
-const EVENTS: [&str; 3] = ["pull_request", "pull_request_target", "workflow_call"];
+const EVENTS: &[&str] = &["pull_request", "pull_request_target", "workflow_call"];
 
 fn github_hosted(label: &str) -> bool {
     ["ubuntu-", "macos-", "windows-"].iter().any(|family| {
@@ -37,10 +37,32 @@ fn fenced(job: &serde_json::Value) -> bool {
     }
     match &job["runs-on"] {
         serde_json::Value::String(label) => {
-            github_hosted(label) || label.contains(RUNS_ON_FENCE) || condition.contains(FENCE)
+            github_hosted(label)
+                || label.contains(RUNS_ON_FENCE)
+                || condition.contains(FENCE)
+                || matrix_hosted(job, label)
         }
         _ => condition.contains(FENCE),
     }
+}
+
+/// `runs-on: ${{ matrix.<axis> }}` where every value of the axis is a hosted label.
+fn matrix_hosted(job: &serde_json::Value, label: &str) -> bool {
+    let Some(axis) = label
+        .strip_prefix("${{ matrix.")
+        .and_then(|rest| rest.strip_suffix(" }}"))
+    else {
+        return false;
+    };
+    let matrix = &job["strategy"]["matrix"];
+    let listed = matrix[axis].as_array().into_iter().flatten();
+    let included = matrix["include"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get(axis));
+    let values: Vec<&str> = listed.chain(included).filter_map(|v| v.as_str()).collect();
+    !values.is_empty() && values.into_iter().all(github_hosted)
 }
 
 fn triggers(workflow: &serde_json::Value) -> Vec<String> {
@@ -170,8 +192,8 @@ id = "call-declared"
 uses = "leaf"
 
 [[workflow]]
-file = "ci"
-name = "CI"
+file = "checks"
+name = "Checks"
 runner = "velnor-linux-x64"
 
 [workflow.on.pull_request]
@@ -215,7 +237,7 @@ fn every_job_kind_that_a_pull_request_reaches_is_fenced_on_a_self_hosted_runner(
             KINDS.as_bytes().to_vec(),
         );
         let files = rendered(&view)?;
-        for path in ["rust-ci", "shared", "ci"] {
+        for path in ["ci", "shared", "checks"] {
             assert!(
                 files.contains_key(&format!(".github/workflows/{path}.yml")),
                 "{shape}: {path} not rendered: {:?}",

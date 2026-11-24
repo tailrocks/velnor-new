@@ -2,7 +2,7 @@
 
 Note: crate paths below that name `crates/velnor-actions-*` and the `plan-v1`/`merge-v1` operations describe the retired engine (deleted in #1459). `velnor-ci` implements the selection now; the policy is unchanged.
 
-Hard decision: [3. Pull requests test only what they affect](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
+Former hard decision 3 (pull requests test only what they affect) was removed with the engine's Rust path in #608.
 
 A pull request runs only the crate jobs its change can affect. The other crate
 jobs are skipped as whole jobs: no runner, checkout, tool setup, cache restore,
@@ -59,7 +59,13 @@ records a stable `*:all_changed` or `*:selecting_all` warning:
   (`comparison_unavailable:resolve_graph:<root>:<reason>:all_changed`);
 - a tracked symlink owned by a package that escapes the repository, dangles, or
   loops (`symlink_unbounded:<path>:<reason>:all_changed`);
-- any changed path no rule below claims (`unclassified_files:all_changed`).
+- any changed path no rule below claims (`unclassified_files:all_changed`);
+- a Git older than 2.42 when the plan must read base manifests
+  (`git_too_old:all_changed`): the planner reads them with NUL-framed
+  `git cat-file -Z --batch`, so paths that contain a line feed are read
+  exactly. Git 2.42 is the minimum for that read. A change that needs no base
+  manifest, such as one that only touches configured non-inputs, stays precise
+  on an older Git.
 
 A change to a **declared tool version** selects everything
 (`project_tool_config_changed:all_changed`): generated CI runs the versions
@@ -190,7 +196,7 @@ it does, the read scan below forces the package on every pull request.
 ```toml
 [[stacks.rust.inputs]]
 globs = ["backend/eth-model/src/main/proto/**", "backend/tailrocks-type/src/main/proto/**"]
-packages = ["eth-processor-app"]
+packages = ["example-repo-14"]
 
 [[stacks.rust.inputs]]
 globs = ["scripts/lightdash-migration/evidence/**"]
@@ -316,41 +322,6 @@ matrix entry; every obligation names a planned job.
   crate report uploads use `overwrite: true` so a re-run replaces the failed
   attempt's report.
 
-## Container image jobs
-
-`image-<id>-<platform>` build jobs ([image publication
-contract](../proposed/image-publication-contract.md)) own no obligations, so
-they are planned from what an image build reads instead of from Rust
-ownership. `plan.jobs` lists each image job with the image's disposition, the
-same `not_affected_jobs` output gates the job (`needs: [plan]`, the shared
-`!contains(...)` condition) and `Required` folds it with the table below. An
-image job owns no obligation or matrix entry (`image-` prefix); `Plan::validate`
-rejects one that does.
-
-An image on an affected-mode event (`pull_request`, fork, local) is selected
-when any of these holds, and otherwise `not_affected`:
-
-- a changed path is one of its Dockerfiles, a `.dockerignore` (in the context
-  root or beside the Dockerfile), or a path a context `COPY`/`ADD` source
-  names (the static Dockerfile parse; a glob claims the directory before its
-  first wildcard, `.` claims the whole context);
-- its Dockerfile contains any `--mount` (it can read any context path), which
-  claims the whole context;
-- for `prebuilt.kind = "cargo_bin"`, its package is in the affected package
-  set, so a changed dependency, declared input or package file selects the
-  image exactly as it selects the crate job; an undiscovered package selects;
-- the classification broadened for a global-config path (`.velnor/**`,
-  `.github/**`, an outside-project path) or the comparison is unknown (missing
-  or stale base, git failure, dirty worktree, declared tool version change).
-
-Rust-only broadening (an unowned file, `Cargo.lock`, root `Cargo.toml`, a
-tool-config file) does not select a plain image: an image's inputs are fully
-described by its own claims, so editing documentation never rebuilds it. It
-does select a `cargo_bin` image, because the broadening marks every package
-affected and the prebuilt compile is Rust work. An unreadable or
-unanalyzable Dockerfile selects the image. Pushes, merge groups and
-qualification runs never skip an image (`not_affected_on_full_event`).
-
 ## Required verdict
 
 The protected check `Required` is the `required-gate` job. It needs only the
@@ -378,7 +349,7 @@ The required verdict compares each crate job's plan disposition with its observe
 | plan missing, invalid, or failed | any | fail (`planning_failed`) |
 | any `not_affected` work on a full-run event | any | fail (`not_affected_on_full_event`) |
 
-Image build jobs use the same table. Jobs the plan does not list (plan,
+Jobs the plan does not list (plan,
 actionlint, named checks, OpenTofu roots) keep the existing rule: skipped is
 never success. `fetch-reports-v1` downloads
 only the artifacts of matrix entries, which exist only for `run` jobs.

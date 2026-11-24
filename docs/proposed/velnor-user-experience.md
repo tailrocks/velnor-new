@@ -174,7 +174,7 @@ The Kubernetes manifests live outside this repository, and host deployments stay
 | Mirrors | Per worker and per site | A Git mirror on every worker; a crates mirror (it exists today) and an image registry mirror per site |
 | Official runner image | Kept | The reference executor, and the executor when you choose it |
 
-ARC's velnor-new scale set goes only after the last job type moves (Q9). ChainArgos and jackin keep
+ARC's velnor-new scale set goes only after the last job type moves (Q9). example-org and jackin keep
 their ARC scale sets.
 
 ### 3.3 On a Mac

@@ -11,28 +11,34 @@ pub enum JobCondition {
     Lane(RootSlug),
     Group(RootSlug, JobId),
     Policy,
+    Lint(RootSlug),
     Schedule,
     ScheduleOrPush,
     ScheduleOrDispatch,
     ScheduleOrPushOrDispatch,
     DefaultBranchPush,
-    Advisory,
+    MergeGroupNotPassed,
 }
 
 impl JobCondition {
     pub fn parse(text: &str) -> Result<Self, String> {
         match text {
             "policy" => Ok(Self::Policy),
+            "not-merge-group-passed" => Ok(Self::MergeGroupNotPassed),
             "schedule" => Ok(Self::Schedule),
             "schedule-or-dispatch" => Ok(Self::ScheduleOrDispatch),
             "schedule-or-push-or-dispatch" => Ok(Self::ScheduleOrPushOrDispatch),
             "schedule-or-push" => Ok(Self::ScheduleOrPush),
             "default-branch-push" => Ok(Self::DefaultBranchPush),
-            "advisory" => Ok(Self::Advisory),
             other => other
                 .strip_prefix("lane:")
                 .and_then(|slug| RootSlug::new(slug).ok())
                 .map(Self::Lane)
+                .or_else(|| {
+                    RootSlug::new(other.strip_prefix("lint:")?)
+                        .ok()
+                        .map(Self::Lint)
+                })
                 .or_else(|| {
                     let (slug, name) = other.strip_prefix("group:")?.split_once(':')?;
                     Some(Self::Group(
@@ -51,12 +57,13 @@ impl fmt::Display for JobCondition {
             Self::Lane(slug) => write!(f, "lane:{slug}"),
             Self::Group(slug, name) => write!(f, "group:{slug}:{name}"),
             Self::Policy => f.write_str("policy"),
+            Self::Lint(slug) => write!(f, "lint:{slug}"),
             Self::Schedule => f.write_str("schedule"),
             Self::ScheduleOrDispatch => f.write_str("schedule-or-dispatch"),
             Self::ScheduleOrPushOrDispatch => f.write_str("schedule-or-push-or-dispatch"),
             Self::ScheduleOrPush => f.write_str("schedule-or-push"),
             Self::DefaultBranchPush => f.write_str("default-branch-push"),
-            Self::Advisory => f.write_str("advisory"),
+            Self::MergeGroupNotPassed => f.write_str("not-merge-group-passed"),
         }
     }
 }

@@ -48,8 +48,7 @@ actions).**
   `default` is empty too.
 - `github-env` is a `default` rule. An unsafe `$GITHUB_ENV` write on a
   `pull_request_target` workflow is reported by both tools, and is suppressed
-  by the same `# zizmor: ignore[github-env]` annotation
-  (`impl_schema2_binary_preview_lint.rs` runs the pinned binary).
+  by the same `# zizmor: ignore[github-env]` annotation.
 - The zizmor auditor-persona classes (`undocumented-permissions`,
   `anonymous-definition`, `secrets-outside-env`, `concurrency-limits`) are
   `pedantic` rules in jactionlint. Velnor never ran that persona.

@@ -31,7 +31,7 @@ pub(crate) fn rust_roots(
         .filter(|(manifest, metadata)| !metadata.members.is_empty() && !excluded(config, manifest))
         .collect();
     if candidates.is_empty() {
-        return Err(DetectError::NoRustRoot);
+        return Ok((Vec::new(), BTreeMap::new()));
     }
     let owner: BTreeMap<&RepoPath, &RepoPath> = candidates
         .iter()
@@ -136,7 +136,7 @@ fn nextest_ci_profile(view: &RepoView, manifest: &RepoPath) -> bool {
         })
 }
 
-const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
+const CARGO_CONFIGS: &[&str] = &[".cargo/config.toml", ".cargo/config"];
 
 pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     CARGO_CONFIGS.iter().any(|name| {
@@ -245,7 +245,7 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     Ok(())
 }
 
-const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
+const CHECKED_ENV: &[&str] = &["CLIPPY", "RUST", "CARGO"];
 
 fn patches(
     bytes: &[u8],
@@ -325,6 +325,7 @@ fn member(
 ) -> Result<RustMember, DetectError> {
     Ok(RustMember {
         name: package.name.clone(),
+        version: package.version.clone(),
         manifest: package.manifest.clone(),
         directory: package.manifest.parent(),
         dependencies: package

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -11,16 +11,15 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{
-    METADATA_PATH, build_script_sources, manifests, metadata_roots, reduce_metadata, wanted_files,
-};
+use velnor_model::{RepoPath, RepoView, SAMPLES};
+use velnor_rust::METADATA_PATH;
 
 mod check;
 mod error;
 mod identity;
 mod pin;
 pub use identity::repository_name;
+mod read;
 mod recorded;
 mod ruleset;
 mod sample;
@@ -29,17 +28,18 @@ mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
 use crate::{Drift, check_tag, notes, plan_generate};
-use check::cargo_metadata;
 pub use check::check_metadata;
 pub use error::Error;
-use pin::pin_helper;
-pub use pin::write_lock;
+use pin::{check_lock, pin_helper};
+pub use pin::{lock_root, retry_download, write_lock};
+pub use read::{add_manifests, read_files, view_of};
+use read::{read_tracked, read_view, regular_file};
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
-    recording_of, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SampleWriteOutcome, record_sample, recorded_files, recording_of,
+    relocate_metadata, write_sample,
 };
-use tracked::tracked;
+use tracked::tracked_sizes;
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
@@ -88,7 +88,6 @@ fn finish(result: Result<String, Error>) -> Exit {
     }
 }
 
-#[must_use]
 pub fn main() -> Exit {
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
@@ -116,10 +115,10 @@ pub fn main() -> Exit {
             return ruleset::drift(&cli.root, live);
         }
         Command::SuggestGroups => return suggest(&cli.root),
-        Command::Generate | Command::Check => {}
+        Command::Generate | Command::Check { .. } => {}
     }
     match execute(&cli) {
-        Ok(drifts) if cli.command == Command::Check && !drifts.is_empty() => {
+        Ok(drifts) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
             for drift in &drifts {
                 eprintln!("{drift}");
             }
@@ -173,6 +172,9 @@ fn suggest(path: &Path) -> Exit {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
+    if let Command::Check { verify_release } = &cli.command {
+        check_lock(&root, *verify_release)?;
+    }
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
     let workflows = read_files(&root, &wanted)?;
@@ -183,6 +185,11 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
             .map_err(Error::Generate)?;
     if cli.command == Command::Generate {
         for note in notes(&view).map_err(Error::Generate)? {
+            eprintln!("velnor-gen: note: {note}");
+        }
+        if let Some(note) =
+            crate::sparse_note(&view, &tracked_sizes(&root, &view)).map_err(Error::Generate)?
+        {
             eprintln!("velnor-gen: note: {note}");
         }
     }
@@ -271,118 +278,48 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     Ok(Checkout { root, view })
 }
 
-type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
-
-fn is_rust_source(path: &str) -> bool {
-    Path::new(path)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-}
-
-fn view_from(
-    root: &Path,
-    tracked_paths: BTreeSet<RepoPath>,
-    symlinks: BTreeSet<RepoPath>,
-) -> Result<RepoView, Error> {
-    let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
-        .into_iter()
-        .filter(|path| !(symlinks.contains(path) && is_rust_source(path.as_str())))
-        .collect();
-    Ok(RepoView {
-        repository: identity::repository_name(root),
-        files: read_files(root, &wanted)?,
-        tracked_paths,
-        symlinks,
-        rust_metadata: BTreeMap::new(),
-    })
-}
-
-fn read_tracked(root: &Path) -> Result<RepoView, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_from(root, tracked_paths, symlinks)
-}
-
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_of(root, tracked_paths, symlinks, keep_metadata)
-}
-
-pub fn view_of(
-    root: &Path,
-    tracked_paths: BTreeSet<RepoPath>,
-    symlinks: BTreeSet<RepoPath>,
-    keep_metadata: bool,
-) -> Result<Recorded, Error> {
-    let mut view = view_from(root, tracked_paths, symlinks)?;
-    let mut recorded = BTreeMap::new();
-    for manifest in metadata_roots(&view).map_err(Error::Detect)? {
-        let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
-            *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
-        });
-        if known {
-            continue;
-        }
-        let output = cargo_metadata(root, &manifest)?;
-        let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
-        if keep_metadata {
-            recorded.insert(workspace.clone(), output);
-        }
-        view.rust_metadata.insert(workspace, metadata);
-    }
-    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
-    view.files.extend(read_files(root, &roots)?);
-    for source in build_script_sources(&view) {
-        view.files
-            .extend(read_files(root, std::slice::from_ref(&source))?);
-    }
-    add_manifests(&mut view, |paths| read_files(root, paths))?;
-    Ok((view, recorded))
-}
-
-pub fn add_manifests(
-    view: &mut RepoView,
-    read: impl FnOnce(&[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error>,
-) -> Result<(), Error> {
-    for (manifest, bytes) in read(&manifests(&view.tracked_paths))? {
-        view.files.entry(manifest).or_insert(bytes);
-    }
-    Ok(())
-}
-
-pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {
-    let mut files = BTreeMap::new();
-    for path in paths {
-        if let Some(file) = regular_file(root, path)? {
-            let bytes = fs::read(&file).map_err(|e| Error::File(file, e))?;
-            files.insert(path.clone(), bytes);
-        }
-    }
-    Ok(files)
-}
-
-fn regular_file(root: &Path, path: &RepoPath) -> Result<Option<PathBuf>, Error> {
-    let parts: Vec<&str> = path.as_str().split('/').collect();
-    let mut current = root.to_path_buf();
-    for (index, part) in parts.iter().enumerate() {
-        current.push(part);
-        let metadata = match fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(Error::File(current, error)),
-        };
-        let last = index + 1 == parts.len();
-        if (last && !metadata.is_file()) || (!last && !metadata.is_dir()) {
-            return Err(Error::NotRegular(path.clone()));
-        }
-    }
-    Ok(Some(current))
-}
-
 fn program(directory: &Path, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {
+    run(
+        Process::new(name).args(args).current_dir(directory),
+        name,
+        args,
+    )
+}
+
+/// Runs a program that evaluates the checkout's mise config (the mise `cargo`
+/// wrapper). mise refuses a config it does not trust, so the child also gets
+/// `root` appended to `MISE_TRUSTED_CONFIG_PATHS`. Only this child sees the
+/// value; the repository it trusts is the one velnor-gen was pointed at.
+fn program_trusting(
+    directory: &Path,
+    root: &Path,
+    name: &str,
+    args: &[&OsStr],
+) -> Result<Vec<u8>, Error> {
+    if root.as_os_str().as_encoded_bytes().contains(&b':') {
+        return Err(Error::Repository(format!(
+            "{} contains ':', so it cannot be added to MISE_TRUSTED_CONFIG_PATHS",
+            root.display()
+        )));
+    }
+    let mut trusted = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS").unwrap_or_default();
+    if !trusted.is_empty() {
+        trusted.push(":");
+    }
+    trusted.push(root);
+    run(
+        Process::new(name)
+            .args(args)
+            .current_dir(directory)
+            .env("MISE_TRUSTED_CONFIG_PATHS", trusted),
+        name,
+        args,
+    )
+}
+
+fn run(command: &mut Process, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {
     let label = format!("{name} {}", args[0].display());
-    let output = Process::new(name)
-        .args(args)
-        .current_dir(directory)
+    let output = command
         .output()
         .map_err(|error| Error::Program(label.clone(), error.to_string()))?;
     if output.status.success() {

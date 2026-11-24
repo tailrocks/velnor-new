@@ -4,8 +4,7 @@
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::io;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use clap::Parser;
 use velnor_local::cli::{Cli, Command};
@@ -15,7 +14,8 @@ use velnor_local::io::doctor::{inspect, require_local};
 use velnor_local::io::env::Engine;
 use velnor_local::pairs::Limits;
 
-use crate::support::temp_dir;
+use crate::support::{host_binary, temp_dir};
+use velnor_test_support::ScratchDir;
 
 const GIB: u64 = 1 << 30;
 
@@ -46,7 +46,7 @@ impl Engine for Docker {
     }
 }
 
-const ALL: [&str; 6] = [
+const ALL: &[&str] = &[
     "velnor-local/runner-server",
     "velnor-local/runner",
     "velnor-local/cache-server",
@@ -60,29 +60,21 @@ fn docker(without: &[&str]) -> Docker {
         info: Some("OrbStack|aarch64"),
         memory: Some("17179869184"),
         context: true,
-        endpoint: "unix:///Users/me/.orbstack/run/docker.sock",
+        endpoint: "unix:///srv/me/.orbstack/run/docker.sock",
         images: ALL
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|tag| !without.contains(tag))
             .collect(),
     }
 }
 
-fn host(name: &str, local_mode: bool) -> PathBuf {
-    let path = temp_dir(name).join("velnor-host");
-    let status = if local_mode { 0 } else { 2 };
-    std::fs::write(&path, format!("#!/bin/sh\nexit {status}\n"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    path
+async fn report(docker: &Docker, host: &ScratchDir) -> (Vec<Part>, String) {
+    let path = host.join("velnor-host");
+    report_at(docker, &path, Limits::default().runner_memory_bytes).await
 }
 
-async fn report(docker: &Docker, host: &Path) -> (Vec<Part>, String) {
-    report_with(docker, host, Limits::default().runner_memory_bytes).await
-}
-
-async fn report_with(docker: &Docker, host: &Path, runner_memory: u64) -> (Vec<Part>, String) {
+async fn report_at(docker: &Docker, host: &Path, runner_memory: u64) -> (Vec<Part>, String) {
     let parts = inspect(docker, Some(host), runner_memory).await;
     let text = render(&parts);
     (parts, text)
@@ -90,19 +82,19 @@ async fn report_with(docker: &Docker, host: &Path, runner_memory: u64) -> (Vec<P
 
 #[tokio::test]
 async fn everything_present_prints_ok_for_every_part_and_is_healthy() {
-    let (parts, text) = report(&docker(&[]), &host("doctor-ok", true)).await;
+    let (parts, text) = report(&docker(&[]), &host_binary("doctor-ok", true)).await;
     assert!(healthy(&parts), "{text}");
     assert_eq!(text.lines().count(), 5, "{text}");
     assert!(text.lines().all(|line| line.starts_with("ok ")), "{text}");
     assert!(
-        text.contains("docker: OrbStack, linux/arm64, unix:///Users/me/.orbstack/run/docker.sock"),
+        text.contains("docker: OrbStack, linux/arm64, unix:///srv/me/.orbstack/run/docker.sock"),
         "{text}"
     );
 }
 
 #[tokio::test]
 async fn missing_pair_images_print_miss_with_the_build_fix_and_are_unhealthy() {
-    let (parts, text) = report(&docker(&TARGETS), &host("doctor-pairs", true)).await;
+    let (parts, text) = report(&docker(TARGETS), &host_binary("doctor-pairs", true)).await;
     assert!(!healthy(&parts), "{text}");
     let miss: Vec<&str> = text
         .lines()
@@ -117,7 +109,7 @@ async fn missing_pair_images_print_miss_with_the_build_fix_and_are_unhealthy() {
 async fn a_missing_stand_in_image_names_its_docker_build() {
     let (parts, text) = report(
         &docker(&["velnor-local/runner-server"]),
-        &host("doctor-standin", true),
+        &host_binary("doctor-standin", true),
     )
     .await;
     assert!(!healthy(&parts), "{text}");
@@ -133,7 +125,7 @@ async fn a_missing_stand_in_image_names_its_docker_build() {
 
 #[tokio::test]
 async fn a_host_without_local_mode_or_without_a_file_is_a_miss_with_the_build_fix() {
-    let plain = host("doctor-release", false);
+    let plain = host_binary("doctor-release", false);
     let (parts, text) = report(&docker(&[]), &plain).await;
     assert!(!healthy(&parts), "{text}");
     assert!(text.contains("miss  velnor-host with local mode"), "{text}");
@@ -152,7 +144,7 @@ async fn unreachable_docker_and_other_architectures_are_misses() {
         endpoint: "unix:///var/run/docker.sock",
         images: BTreeSet::new(),
     };
-    let (parts, text) = report(&down, &host("doctor-down", true)).await;
+    let (parts, text) = report(&down, &host_binary("doctor-down", true)).await;
     assert!(!healthy(&parts), "{text}");
     assert!(text.contains("miss  docker"), "{text}");
     assert!(
@@ -171,7 +163,7 @@ async fn unreachable_docker_and_other_architectures_are_misses() {
         info: Some("Docker Desktop|x86_64"),
         ..docker(&[])
     };
-    let (parts, text) = report(&amd, &host("doctor-amd", true)).await;
+    let (parts, text) = report(&amd, &host_binary("doctor-amd", true)).await;
     assert!(!healthy(&parts), "{text}");
     assert!(text.contains("miss  docker: Docker, linux/amd64"), "{text}");
 }
@@ -212,7 +204,7 @@ async fn an_unreadable_docker_context_is_a_miss_with_the_docker_fix() {
         context: false,
         ..docker(&[])
     };
-    let (parts, text) = report(&blind, &host("doctor-context", true)).await;
+    let (parts, text) = report(&blind, &host_binary("doctor-context", true)).await;
     assert!(!healthy(&parts), "{text}");
     assert!(
         text.contains("miss  docker: context not readable"),
@@ -226,7 +218,12 @@ async fn an_unreadable_docker_context_is_a_miss_with_the_docker_fix() {
 
 #[tokio::test]
 async fn an_explicit_missing_host_names_that_path_in_the_fix() {
-    let (parts, text) = report(&docker(&[]), Path::new("/nonexistent/velnor-host")).await;
+    let (parts, text) = report_at(
+        &docker(&[]),
+        Path::new("/nonexistent/velnor-host"),
+        Limits::default().runner_memory_bytes,
+    )
+    .await;
     assert!(!healthy(&parts), "{text}");
     assert!(
         text.contains(
@@ -243,7 +240,7 @@ async fn a_vm_of_8_gib_cannot_hold_a_default_pair_and_the_fix_names_orbstack() {
         memory: Some("8589934592"),
         ..docker(&[])
     };
-    let (parts, text) = report(&small, &host("doctor-vm-small", true)).await;
+    let (parts, text) = report(&small, &host_binary("doctor-vm-small", true)).await;
     assert!(!healthy(&parts), "{text}");
     let miss: Vec<&str> = text
         .lines()
@@ -262,14 +259,19 @@ async fn a_vm_of_8_gib_cannot_hold_a_default_pair_and_the_fix_names_orbstack() {
 
 #[tokio::test]
 async fn a_vm_of_16_gib_is_ok_and_a_smaller_runner_memory_flips_the_8_gib_case() {
-    let (parts, text) = report(&docker(&[]), &host("doctor-vm-big", true)).await;
+    let (parts, text) = report(&docker(&[]), &host_binary("doctor-vm-big", true)).await;
     assert!(healthy(&parts), "{text}");
     assert!(text.contains("ok    docker vm memory"), "{text}");
     let small = Docker {
         memory: Some("8589934592"),
         ..docker(&[])
     };
-    let (parts, text) = report_with(&small, &host("doctor-vm-flag", true), 2 * GIB).await;
+    let (parts, text) = report_at(
+        &small,
+        &host_binary("doctor-vm-flag", true).join("velnor-host"),
+        2 * GIB,
+    )
+    .await;
     assert!(healthy(&parts), "{text}");
     assert!(text.contains("ok    docker vm memory"), "{text}");
 }
@@ -281,7 +283,7 @@ async fn an_unreadable_vm_memory_is_unknown_and_not_a_miss() {
             memory,
             ..docker(&[])
         };
-        let (parts, text) = report(&blind, &host("doctor-vm-blind", true)).await;
+        let (parts, text) = report(&blind, &host_binary("doctor-vm-blind", true)).await;
         assert!(healthy(&parts), "{text}");
         assert!(text.contains("n/a   docker vm memory"), "{text}");
         assert!(!text.contains("miss"), "{text}");
@@ -306,7 +308,7 @@ async fn a_remote_docker_endpoint_is_a_miss_with_the_run_it_inside_fix() {
         endpoint: "tcp://10.0.0.5:2375",
         ..docker(&[])
     };
-    let (parts, text) = report(&remote, &host("doctor-remote", true)).await;
+    let (parts, text) = report(&remote, &host_binary("doctor-remote", true)).await;
     assert!(!healthy(&parts), "{text}");
     assert!(
         text.contains("miss  docker: tcp://10.0.0.5:2375 is not a local socket"),
@@ -318,7 +320,7 @@ async fn a_remote_docker_endpoint_is_a_miss_with_the_run_it_inside_fix() {
         info: None,
         ..remote
     };
-    let (_, text) = report(&unreachable, &host("doctor-remote-down", true)).await;
+    let (_, text) = report(&unreachable, &host_binary("doctor-remote-down", true)).await;
     assert!(text.contains("not a local socket"), "{text}");
     assert!(!text.contains("not reachable"), "{text}");
 }
@@ -326,14 +328,14 @@ async fn a_remote_docker_endpoint_is_a_miss_with_the_run_it_inside_fix() {
 #[tokio::test]
 async fn local_unix_sockets_stay_ok() {
     for endpoint in [
-        "unix:///Users/x/.orbstack/run/docker.sock",
+        "unix:///srv/x/.orbstack/run/docker.sock",
         "unix:///var/run/docker.sock",
     ] {
         let local = Docker {
             endpoint,
             ..docker(&[])
         };
-        let (parts, text) = report(&local, &host("doctor-unix", true)).await;
+        let (parts, text) = report(&local, &host_binary("doctor-unix", true)).await;
         assert!(healthy(&parts), "{endpoint}: {text}");
         assert!(text.contains(&format!("linux/arm64, {endpoint}")), "{text}");
         assert!(require_local(&local).await.is_ok(), "{endpoint}");

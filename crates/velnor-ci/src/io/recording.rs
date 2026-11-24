@@ -12,6 +12,27 @@ fn temp(file: &str) -> std::path::PathBuf {
     Path::new(&std::env::var("RUNNER_TEMP").unwrap_or_default()).join(file)
 }
 
+/// The Cargo command that `velnor-ci inputs build [--directory <dir>]... -- <command>` wraps, or
+/// `argv` itself. The wrapper only inventories inputs around the command, so the report, the
+/// cache audit and the Cargo root come from the command it runs.
+pub(super) fn cargo_command(argv: &[String]) -> &[String] {
+    let wrapper = argv
+        .first()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "velnor-ci")
+        && argv.get(1).is_some_and(|word| word == "inputs")
+        && argv.get(2).is_some_and(|word| word == "build");
+    let inner = argv
+        .iter()
+        .position(|word| word == "--")
+        .and_then(|separator| argv.get(separator + 1..))
+        .filter(|inner| !inner.is_empty());
+    match inner {
+        Some(inner) if wrapper => inner,
+        _ => argv,
+    }
+}
+
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
     let execution = execution(argv)?;
     Ok(Invocation {
@@ -42,12 +63,15 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         verified_git_downloads: None,
         restored_target_usable: None,
         artifacts: Vec::new(),
+        build_scripts: Vec::new(),
         progress: Some(Vec::new()),
         capture_complete: false,
         tests: Vec::new(),
         rejected: 0,
         execution,
         target_directory: target_directory(argv)?,
+        dirty: Vec::new(),
+        restored_manifest: None,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {

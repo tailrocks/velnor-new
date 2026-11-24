@@ -11,15 +11,15 @@ use std::process::Command;
 
 use crate::facts::TestResult;
 use crate::lock::locked;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 
 const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
 
-fn steps(text: &str) -> Vec<&str> {
+pub(crate) fn steps(text: &str) -> Vec<&str> {
     text.split("\n      - ").skip(1).collect()
 }
 
-fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
+pub(crate) fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
     steps(text)
         .into_iter()
         .filter(|step| {
@@ -39,7 +39,7 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let mut repo = locked("0.1.93")?;
+    let mut repo = locked("0.1.97")?;
     repo.files.insert(
         RepoPath::new(".velnor/rust-ci.toml")?,
         b"full_run = \"nightly\"\n".to_vec(),
@@ -70,12 +70,8 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");
-    assert_eq!(audited.len(), 2, "{audit}");
-    assert!(
-        audited
-            .iter()
-            .any(|s| s.contains("working-directory: lab\n"))
-    );
+    assert_eq!(audited.len(), 1, "{audit}");
+    assert!(audited.iter().any(|s| s.contains("/lab")));
     assert!(audited.iter().any(|s| !s.contains("working-directory")));
     Ok(())
 }
@@ -95,7 +91,9 @@ fn a_pinned_helper_restores_inputs_once_per_root() -> TestResult {
 
 #[test]
 fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    let mut plain = view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.82")?;
+    let text = workflow(&plain)?;
     assert!(!text.contains("vars."), "{text}");
     assert!(!text.contains("CARGO_LOG"), "{text}");
     assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);
@@ -106,7 +104,9 @@ fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() ->
 
 #[test]
 fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?)?;
+    let mut repo = view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?;
+    pin_helper(&mut repo, "0.1.82")?;
+    let text = workflow(&repo)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
         .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
@@ -230,7 +230,7 @@ fn generate_rejects_a_build_script_that_is_a_filesystem_symlink() -> TestResult 
     git(&root, &["init", "--quiet"])?;
     git(&root, &["add", "--all"])?;
 
-    let cargo = std::path::Path::new(env!("CARGO"));
+    let cargo = velnor_test_support::real_cargo();
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([
         cargo_dir,

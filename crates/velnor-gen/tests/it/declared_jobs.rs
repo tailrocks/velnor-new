@@ -141,7 +141,11 @@ fn a_static_matrix_refuses_unknown_keys_and_a_second_source() -> TestResult {
 
 #[test]
 fn a_hosted_runner_has_no_fork_fence_and_a_self_hosted_one_has() -> TestResult {
-    let hosted = rendered(&workflow("runner = \"ubuntu-24.04\"", ON_PUSH, JOB))?;
+    let hosted = rendered(&workflow(
+        "runner = \"ubuntu-24.04\"\nhosted = true",
+        ON_PUSH,
+        JOB,
+    ))?;
     assert_eq!(
         job(&hosted, "check")?.get("runs-on").and_then(Node::text),
         Some("ubuntu-24.04")
@@ -167,7 +171,7 @@ fn a_job_can_pick_its_own_runner() -> TestResult {
         ON_PUSH,
         &JOB.replace(
             "id = \"check\"\n",
-            "id = \"check\"\nrunner = \"macos-15\"\n",
+            "id = \"check\"\nrunner = \"macos-15\"\nhosted = true\n",
         ),
     );
     let tree = rendered(&config)?;
@@ -211,6 +215,52 @@ fn permissions_are_empty_unless_a_job_names_them() -> TestResult {
             .and_then(Node::text),
         Some("read")
     );
+    Ok(())
+}
+
+#[test]
+fn a_job_can_declare_every_documented_token_scope() -> TestResult {
+    let scoped = rendered(&job_with(
+        "permissions = { models = \"read\", discussions = \"write\", code-quality = \"write\", copilot-requests = \"write\", vulnerability-alerts = \"read\", contents = \"none\" }\n",
+    ))?;
+    for (scope, access) in [
+        ("models", "read"),
+        ("discussions", "write"),
+        ("code-quality", "write"),
+        ("copilot-requests", "write"),
+        ("vulnerability-alerts", "read"),
+        ("contents", "none"),
+    ] {
+        assert_eq!(
+            job(&scoped, "check")?
+                .at(&["permissions", scope])
+                .and_then(Node::text),
+            Some(access),
+            "{scope}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_job_refuses_an_unknown_scope_and_an_access_the_scope_does_not_take() -> TestResult {
+    for (scope, access) in [
+        ("made-up", "read"),
+        ("contents", "admin"),
+        ("id-token", "read"),
+        ("models", "write"),
+        ("copilot-requests", "read"),
+        ("vulnerability-alerts", "write"),
+    ] {
+        let message = refusal(&job_with(&format!(
+            "permissions = {{ {scope} = \"{access}\" }}\n"
+        )))?;
+        assert!(
+            message.contains("permission"),
+            "{scope} {access}: {message}"
+        );
+        assert!(message.contains(scope), "{scope} {access}: {message}");
+    }
     Ok(())
 }
 
@@ -266,6 +316,22 @@ fn the_attest_action_is_pinned_and_never_pushes_to_a_registry() -> TestResult {
 }
 
 #[test]
+fn the_attest_action_needs_contents_read() -> TestResult {
+    for permissions in [
+        "permissions = { id-token = \"write\", attestations = \"write\" }",
+        "permissions = { id-token = \"write\", attestations = \"write\", contents = \"none\" }",
+    ] {
+        let config = ATTEST.replace(
+            "permissions = { id-token = \"write\", attestations = \"write\", contents = \"read\" }",
+            permissions,
+        );
+        let message = refusal(&workflow("", "", &config))?;
+        assert!(message.contains("contents"), "{permissions}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
 fn the_attest_action_needs_its_permissions_and_keeps_its_lock() -> TestResult {
     let without = ATTEST.replace("id-token = \"write\", ", "");
     let message = refusal(&workflow("", "", &without))?;
@@ -273,5 +339,54 @@ fn the_attest_action_needs_its_permissions_and_keeps_its_lock() -> TestResult {
     let pushing = ATTEST.replace("with = { ", "with = { push-to-registry = \"true\", ");
     let message = refusal(&workflow("", "", &pushing))?;
     assert!(message.contains("push-to-registry"), "{message}");
+    Ok(())
+}
+
+fn needs_condition(condition: &str) -> String {
+    workflow(
+        "",
+        "",
+        &format!(
+            "\n[[workflow.job]]\nid = \"first\"\n\n[[workflow.job.step]]\nname = \"First\"\nrun = \"echo ok\"\n\n[[workflow.job]]\nid = \"second\"\nneeds = [\"first\"]\nif = \"{condition}\"\n\n[[workflow.job.step]]\nname = \"Second\"\nrun = \"echo ok\"\n"
+        ),
+    )
+}
+
+#[test]
+fn a_wildcard_needs_reference_must_name_a_real_property() -> TestResult {
+    for condition in [
+        "always() && !contains(needs.*.reslt, 'failure')",
+        "needs.*.anything == 'x'",
+        "needs.*.result.extra == 'x'",
+        "needs.* == 'x'",
+    ] {
+        let message = refusal(&needs_condition(condition))?;
+        assert!(message.contains("needs.*"), "{condition}: {message}");
+    }
+    rendered(&needs_condition(
+        "always() && !contains(needs.*.result, 'failure')",
+    ))?;
+    Ok(())
+}
+
+#[test]
+fn a_matrix_job_cannot_declare_outputs() -> TestResult {
+    let config = |outputs: &str| {
+        workflow(
+            "",
+            "",
+            &format!(
+                "\n[[workflow.job]]\nid = \"build\"\n{outputs}\n[workflow.job.matrix]\naxes = {{ os = [\"a\", \"b\"] }}\n\n[[workflow.job.step]]\nid = \"build\"\nname = \"Build\"\nrun = \"echo ok\"\n"
+            ),
+        )
+    };
+    let message = refusal(&config(
+        "outputs = { digest = \"steps.build.outputs.digest\" }",
+    ))?;
+    assert!(
+        message.contains("matrix") && message.contains("outputs"),
+        "{message}"
+    );
+    rendered(&config(""))?;
     Ok(())
 }

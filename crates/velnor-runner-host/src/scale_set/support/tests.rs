@@ -306,6 +306,38 @@ async fn a_forbidden_create_is_reported_and_can_post_again() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn every_definite_refusal_releases_the_row_and_keeps_its_status() -> TestResult<()> {
+    for status in [400_u16, 401, 404, 422, 429] {
+        let dir = tempfile::tempdir()?;
+        let (outcome, transport, journal) = run(&dir, vec![(status, String::new())]).await?;
+        assert_eq!(
+            outcome,
+            Err(EnsureError::Unexpected {
+                status,
+                step: "runnerscalesets"
+            }),
+            "status {status}"
+        );
+        assert_eq!(transport.seen.len(), 1, "status {status}");
+        assert_eq!(
+            intent_states(&journal).await?,
+            ["prepared"],
+            "status {status}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_server_error_keeps_the_row_uncertain() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(500, String::new())]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_conflict_with_an_empty_lookup_posts_create_again() -> TestResult<()> {
     let dir = tempfile::tempdir()?;
     let empty = r#"{"count":0,"value":[]}"#.to_owned();

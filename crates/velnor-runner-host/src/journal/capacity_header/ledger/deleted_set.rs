@@ -10,12 +10,13 @@ impl HeaderLedger {
         allocation: &HeaderAllocation,
     ) -> Result<(), HeaderLedgerError> {
         let record = self.record_for_allocation_mut(allocation)?;
-        if record.delete_sequence != 0
-            || record.in_flight_delete.is_some()
-            || record.delete_uncertain
+        if record.in_flight_delete.is_some()
+            || (record.delete_sequence != 0 && !record.delete_uncertain)
         {
             return Ok(());
         }
+        record.delete_sequence = 0;
+        record.delete_uncertain = false;
         record.in_flight_poll = None;
         record.state = GenerationState::Observed;
         record.attempt_sequence = record.attempt_sequence.max(1);

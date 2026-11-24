@@ -20,7 +20,7 @@ cancelled
 blocked by a failed prerequisite
 ```
 
-The final gate succeeds only when each obligation is executed successfully, validly reused, or `not_affected` with its crate job skipped exactly as the plan decided ([hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect)). Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, or test shard is a failure or causes conservative execution; it is never implicit success.
+The final gate succeeds only when each obligation is executed successfully, validly reused, or `not_affected` with its crate job skipped exactly as the plan decided (former hard decision 3, removed in #608). Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, or test shard is a failure or causes conservative execution; it is never implicit success.
 
 Use `executed`, `reused`, and `not_affected` as distinct states. MBX compilation reuse is not a task-result hit. `not_affected` is a plan-time decision proven by the plan itself in the same run; it never depends on a historical run. Pushes, merge groups, and qualification runs never produce it.
 
@@ -142,7 +142,7 @@ The generated matrix MUST be derived from this exact plan; matrix jobs MUST NOT 
 ## 5. Not-affected crate jobs
 
 Implemented; see [affected selection](../implemented/affected-selection.md) and
-[hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
+former hard decision 3 (removed in #608).
 The trusted-baseline coverage path (`baseline.json`, `publish-baseline`,
 `covered_tasks` step gates) was removed completely; it is not a second skip
 mechanism.
@@ -169,7 +169,7 @@ there are no obligations.
 
 GitHub `parallel:` runs its child steps concurrently and implicitly joins them. `background: true` launches an identified child that must later be joined with `wait`/`wait-all` or cancelled explicitly. A background step’s outputs and environment changes are unavailable until its wait completes. GitHub allows at most ten concurrent background steps in one job; additional work queues. These constructs are job-step syntax and cannot be placed inside composite actions.
 
-Velnor emits native step concurrency for the checks of one crate job, a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps). It uses only the `background: true` plus `wait-all` spelling: members carry no ids, roles or internal operations, and one generated `wait-all` joins each contiguous group before the next sequential step. Composite actions never contain members. The pinned jactionlint parses and validates these keys natively, every member and the body-less join included, and its `background-step-not-waited` rule checks the join; generation and every lint step run it with no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The `parallel:` sugar is not emitted. Never emulate background work with shell `&`, `wait`, or detached processes. A wait remains a synchronization point, not work to add to child durations.
+Velnor emits native step concurrency for the checks of one crate job, a former hard decision (removed in #608). It uses only the `background: true` plus `wait-all` spelling: members carry no ids, roles or internal operations, and one generated `wait-all` joins each contiguous group before the next sequential step. Composite actions never contain members. The pinned jactionlint parses and validates these keys natively, every member and the body-less join included, and its `background-step-not-waited` rule checks the join; generation and every lint step run it with no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The `parallel:` sugar is not emitted. Never emulate background work with shell `&`, `wait`, or detached processes. A wait remains a synchronization point, not work to add to child durations.
 
 Overlap independent preparation, such as downloading a verified build artifact while pulling a pinned test image. Do not overlap installation with consumers that need the installed tool or environment exports. Restore independent cache layers concurrently only when paths do not overlap. Cache export/save begins only after all writers join.
 

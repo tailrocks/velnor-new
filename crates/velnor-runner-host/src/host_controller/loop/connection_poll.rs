@@ -49,8 +49,12 @@ pub(super) async fn poll_active_connections(
     let mut index = 0;
     while index < connections.len() {
         scale_set_delete::service(&mut connections[index], &context).await?;
-        if let Some(removed) =
-            scale_set_delete::retire_deleted_set_session(&mut connections[index], &context).await?
+        if let Some(removed) = scale_set_delete::retire_deleted_set_session(
+            &mut connections[index],
+            &context,
+            pending_retirements,
+        )
+        .await?
         {
             if removed {
                 connections.remove(index);

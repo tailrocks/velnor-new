@@ -22,15 +22,10 @@ type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const INITIALIZER: &str = "SELECT create_state || '/' || start_state || '/' || result_state || '/' || remove_state || '/' || abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
 const STATES: &str = "SELECT r.state || '/' || i.state FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id WHERE r.id = ?1";
+const HANDOFFS: &str = "SELECT CAST(COUNT(*) AS TEXT) FROM capacity_reservation_storage_handoffs WHERE reservation_id = ?1";
+const FAIL_HANDOFF: &str = "CREATE TRIGGER fail_handoff BEFORE INSERT ON capacity_reservation_storage_handoffs BEGIN SELECT RAISE(ABORT, 'handoff'); END";
 
-async fn failed_handoff(
-    journal: &Journal,
-    docker: &Docker,
-    scope: &ConnectionJournal,
-    fixture: &FixtureDocker,
-    pair: Pair,
-) -> TestResult<StorageInitializationClaim> {
-    seed::initializer(journal, pair, "not_requested", "not_requested").await?;
+async fn claimable(journal: &Journal, pair: Pair) -> TestResult<()> {
     seed::unguarded(
         journal,
         &[
@@ -42,20 +37,9 @@ async fn failed_handoff(
                 "UPDATE capacity_reservation_provisioning_state SET bootstrap_start_state = 'not_requested', runner_container_id = NULL, dind_container_id = NULL WHERE reservation_id = {}",
                 pair.reservation
             ),
-            format!(
-            "UPDATE capacity_reservation_storage_initialization SET create_dispatch_state = 'response_received', start_state = 'started', result_state = 'confirmed', home_device_major = 0, home_device_minor = 1, home_inode = 1, home_mount_id = 1, work_device_major = 0, work_device_minor = 2, work_inode = 2, work_mount_id = 2, metadata_layout_digest = '{}' WHERE reservation_id = {}",
-            "a".repeat(64),
-            pair.reservation
-        ),
         ],
     )
-    .await?;
-    fixture.add_initializer(pair);
-    let _ = docker;
-    scope
-        .storage_initializer_abort_candidate(pair.reservation)
-        .await?
-        .ok_or_else(|| "the confirmed initializer has no claim".into())
+    .await
 }
 
 #[tokio::test]
@@ -64,12 +48,14 @@ async fn a_failed_handoff_records_uncertainty_and_the_next_recovery_removes_only
     let dir = tempfile::tempdir()?;
     let socket = dir.path().join("docker.sock");
     let fixture = FixtureDocker::start(&socket, &[FAILED])?;
+    fixture.script_initializer(FAILED);
     let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
-    let claim = failed_handoff(&journal, &docker, &scope, &fixture, FAILED).await?;
+    claimable(&journal, FAILED).await?;
+    seed::execute(&journal, FAIL_HANDOFF).await?;
     let image = StorageInitializationImage::for_test(
-        &"1".repeat(64),
+        &format!("sha256:{}", "1".repeat(64)),
         &"1".repeat(40),
         RunnerPlatform::LinuxAmd64,
     );
@@ -90,27 +76,27 @@ async fn a_failed_handoff_records_uncertainty_and_the_next_recovery_removes_only
         StorageRole::EngineMetadata,
         &format!("w{}-metadata", FAILED.nonce()),
     );
-    let context = InitializationContext {
-        docker: &docker,
-        journal: &scope,
-        reservation_id: FAILED.reservation,
-        image: &image,
-        limits,
-        metadata: &metadata,
-        deadline: Instant::now() + Duration::from_secs(30),
-        phase: InitializationPhase::Handoff,
-        active_claim: Some(claim),
-        claim_pending: false,
-        response_evidence: None,
-    };
     assert_eq!(
         seed::text(&journal, STATES, FAILED.reservation).await?,
         "reserved/pending"
     );
 
-    context.resolve_failure().await?;
-    context.resolve_failure().await?;
+    let outcome = initialize(
+        &docker,
+        &scope,
+        FAILED.reservation,
+        &image,
+        limits,
+        Duration::from_secs(30),
+        &metadata,
+    )
+    .await;
 
+    assert!(outcome.is_err());
+    assert_eq!(
+        seed::text(&journal, HANDOFFS, FAILED.reservation).await?,
+        "0"
+    );
     assert_eq!(
         seed::text(&journal, STATES, FAILED.reservation).await?,
         "uncertain/uncertain"

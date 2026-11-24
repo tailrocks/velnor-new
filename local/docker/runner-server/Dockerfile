@@ -40,6 +40,18 @@ RUN f=src/Runner.Server/Controllers/MessageController.cs \
     && sed -i 's#await Helper.WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token);#await Task.Delay(-1, CancellationTokenSource.CreateLinkedTokenSource(jobRunningToken, ts.Token, job.CancelRequest.Token).Token);#' $f \
     && grep -q 'await Task.Delay(-1, CancellationTokenSource.CreateLinkedTokenSource(jobRunningToken, ts.Token, job.CancelRequest.Token).Token);' $f \
     && ! grep -q 'WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token)' $f
+# The job's runtime token is a readable JWT that the job's code, its actions and its logs can see. runner.server signs the
+# job's GitHub token into it (`github_token`) and a cache grant of write on every scope (`ac`, Scope "", Permission 3). GitHub's
+# token carries neither as such: the token is a variable of the job, and the cache server derives access from the signed
+# repository, ref and defaultRef (velnor_cache_rules::access_for) and never reads `ac`. Both claims are removed, so the token
+# holds no secret and states no grant that nothing enforces. Exactly one line each is removed; the build fails when one moves.
+RUN f=src/Runner.Server/Controllers/MessageController.cs \
+    && test "$(grep -c 'new Claim("github_token", ' $f)" = 1 \
+    && test "$(grep -c 'new Claim("ac", ' $f)" = 1 \
+    && sed -i -e '/new Claim("github_token", /d' -e '/new Claim("ac", /d' $f \
+    && ! grep -q 'new Claim("github_token"' $f \
+    && ! grep -q 'new Claim("ac"' $f \
+    && grep -q 'new Claim("scp", \$"Actions.Results:{runid}:{job.JobId}"),' $f
 COPY WorkflowObjectConverter.cs src/Runner.Server/Controllers/WorkflowObjectConverter.cs
 RUN cd src && dotnet msbuild dir.proj -t:GenerateConstant \
     && dotnet publish Runner.Client -c Release --no-self-contained -p:BUILD_OS=Any -p:RuntimeFrameworkVersion=8.0.0 -o /out

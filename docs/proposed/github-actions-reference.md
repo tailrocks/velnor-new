@@ -108,6 +108,10 @@ Aggregate workflow status alone never establishes caller authority; verify the e
 The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
 
+### GitHub App installation token mint and revocation
+
+`actions/create-github-app-token` at the pinned commit `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0) declares `post: "dist/post.cjs"` with no `post-if` in [`action.yml`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/action.yml), so its post step runs at the end of every job that ran the main step, with the action's inputs (the private key among them) as `INPUT_*` variables. Its [`lib/post.js`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/lib/post.js) sends `DELETE /installation/token` with the token and only warns when that request fails. Its [`lib/get-permissions-from-inputs.js`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/lib/get-permissions-from-inputs.js) turns each `permission-<name>` input into the API permission `<name>` with `-` replaced by `_` (so `permission-pull-requests` asks for `pull_requests`), and inherits every App permission when no such input is set. `velnor-ci app-token` takes the API names directly in `--permission=<name>:<access>`, asks for `contents: read` when no flag is given, and never sends an empty permission set. The generated release jobs revoke the token with the same `DELETE /installation/token` request in their last step, sent by `velnor-ci revoke-token` to `github.api_url`. The step does not use `gh`, because `gh help environment` reads `GH_TOKEN` only for github.com and ghe.com hosts and needs `GH_HOST` and `GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server.
+
 ### Reusable workflow signer identity
 
 The [GitHub CLI attestation verifier](https://cli.github.com/manual/gh_attestation_verify)
@@ -204,12 +208,13 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - `background: true` on a `run` or `uses` step starts it asynchronously; the job continues to the next step. A composite action may run as a background step but cannot declare background steps or `parallel:` internally.
   - `wait` (one id or a list) and `wait-all` (no arguments) block until the referenced or all active background steps finish; neither accepts `if:` and both always run. Outputs and environment changes of a background step become visible only after a wait that includes it.
   - A failed background step fails the next `wait`/`wait-all` that includes it (unless the step sets `continue-on-error`); the coordinator merges member results into the wait step's result, so later default-`success()` steps are skipped while `always()` steps still run. An implicit `wait-all` runs before post-job cleanup for unjoined members.
+  - Post steps run only after every regular step. In `src/Runner.Worker/StepsRunner.cs` (v2.338.0, tag commit `197ca027b9`, lines 57-74) the loop runs while `JobSteps` is non-empty; only when it is empty does it run the safety-net `WaitForUnwaitedStepsAsync` and then move the `PostJobSteps` stack onto the queue. An action's post step is registered by `ExecutionContext.RegisterPostJobStep` in `src/Runner.Worker/ActionRunner.cs:136`. So a composite or JavaScript action's post handler (for example `jdx/mr-boxington-action`, which runs `mbx cache export`) starts after the last regular step, background steps included.
   - Background steps are linked to the job cancellation token, so job `timeout-minutes` and run cancellation cancel them. `cancel` terminates one member (SIGTERM, then SIGKILL after a 7.5 s grace).
   - At most 10 background steps of one job run concurrently (`DefaultMaxBackgroundSteps = 10`); additional members queue until a slot is free.
   - `parallel:` is sugar for a group of background steps followed by a wait.
 - **Velnor Implementation**:
   - `Step::parallel` in `velnor-actions-contract` marks a member of a contiguous group; members may not carry an id, a typed role or an internal operation. `velnor-actions-workflow-renderer` (`parallel_steps`) renders each member with `background: true` and joins each group with one generated `Wait for parallel checks` `wait-all` step; composite renderers, lane sharing and obligation extraction reject or skip parallel members.
-  - Each Rust crate job uses one such group for its checks (see [hard decisions](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps) and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
+  - Each Rust crate job uses one such group for its checks (see the former hard decision 1, removed in #608, and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
   - Pinned `jactionlint` v2.3.0 parses and validates `background:` members and the body-less `wait-all` join natively (rejecting `background: "yes"`, a `wait-all` with `run:`, and a step with neither `run` nor `uses`), so generation-time and CI lint pass no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The superseded actionlint v1.7.12 could not parse the keys (rhysd/actionlint#693). Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
 ### 2. Workflow Execution Protections
@@ -242,7 +247,7 @@ For the private Bun registry fence, the [runner expression implementation](https
     - `read`: permit cache restores and deny saves at the service boundary; pinned-client handling is specified below.
     - `write-only`: write cache entries without restoring existing entries.
     - `none`: disable all cache reads and writes.
-  - Whether `cache-mode` accepts `${{ }}` expressions is UNCONFIRMED: the workflow-syntax and dependency-caching pages list only the four literals. Details and the enforcement and default rules are in entry 5 below.
+  - `cache-mode` does not accept `${{ }}` expressions: a workflow file with one is rejected by GitHub (a run with zero jobs and the file path as its title, velnor-lab#383, probe-cache-mode-expr.yml), as the workflow-syntax and dependency-caching pages imply by listing only the four literals. Details and the enforcement and default rules are in entry 5 below.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
@@ -280,7 +285,7 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 
 - Search tries an exact primary key, partial primary-key matches and ordered restore-key prefixes within the current branch before repeating on the default branch. For multiple partial matches, newest means creation time, not last access.
 - Matching order is a documented service contract; the client only sends keys and version. A partial match requires payload reconciliation before use.
-- The pinned client permits at most ten total keys, at most 512 characters per key and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
+- The [pinned toolkit 6.1.0 client](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/cache.ts#L81-L93) permits at most ten total keys (`keys.length > 10`) and, in its `checkKey`, at most 512 JavaScript `key.length` units per key (UTF-16 code units, so a non-BMP character counts as two) and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
 - `cache-hit` proves only an exact primary-key match, never validity, completeness or current-source validation.
 
 #### 5.4 Cache scope and trust
@@ -296,7 +301,8 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 - Trusted triggers default to `write` and restricted low-trust triggers to `read`. The documented default does not establish `pull_request` behavior; use explicit Velnor policy.
 - Pinned toolkit 6.1.0 does not inspect `ACTIONS_CACHE_MODE`. A denied save still attempts reservation and emits a warning; denied restore uses its generic failure path. Do not mistake service denial for skipped client work.
 - A reusable workflow cannot exceed its caller's explicit mode; without one, a callee can request `write`. Explicit write access on a restricted trigger restores poisoning risk.
-- Expression support remains unqualified: the platform references list literals, and pinned `jactionlint` rejects expressions. Velnor must use qualified syntax.
+- Expressions are rejected (see entry 3), so a job has one mode for every event; per-event limits belong on the save steps.
+- Observed on a same-repository pull request (velnor-lab#383): under `cache-mode: read`, `actions/cache/restore` hit, `actions/cache/save` logged the warning `Failed to save: Unable to reserve cache with key ... cache write denied: token has no writable scopes` and succeeded, and a REST `DELETE /actions/caches` with `actions: write` still deleted an entry. The mode gates the cache service token, not the REST API.
 
 #### 5.6 Compression and archive construction
 
@@ -751,6 +757,29 @@ The [Rules API](https://docs.github.com/en/rest/repos/rules) returns the effecti
 
 ## Generated Rust CI workflow events and concurrency
 
+### Literal action inputs
+
+Action inputs can contain repository paths whose bytes resemble Actions expressions.
+The generator represents these paths as JSON strings passed to `fromJSON` inside
+a single-quoted expression string. JSON escapes protect the JSON string, and
+doubled apostrophes protect the expression string.
+The runner's [template reader](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTObjectTemplating/ObjectTemplating/TemplateReader.cs#L493-L540)
+ignores closing expression braces inside quoted strings.
+The [`fromJSON` function](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/FromJson.cs#L11-L21)
+parses the JSON value, and the evaluator creates a
+[string token](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTObjectTemplating/ObjectTemplating/Tokens/TemplateToken.cs#L52-L82).
+The [action runner](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/ActionRunner.cs#L174-L185)
+receives evaluated input strings without a second template evaluation.
+Expression results therefore remain literal input values.
+The runner's [expression parser](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionParser.cs#L441-L445)
+enforces the [21,000-character expression limit](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionConstants.cs#L28-L33).
+
+Large helper path lists use hex-encoded UTF-8 paths in JSON environment values.
+The shell command contains only the fixed environment-variable name.
+The helper decodes the complete specification before changing files.
+
+### Workflow events and concurrency
+
 The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
 serializes nested mappings with two spaces per level, LF newlines, a space after
 each colon, and commas between entries. The Required gate's environment size
@@ -770,7 +799,7 @@ These behaviors are GitHub service semantics, so the runner source does not defi
 
 ### Generated Rust pull-request delta isolation
 
-[GitHub's cache restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache) scope a `pull_request` cache to `refs/pull/N/merge`; the base branch and other pull requests cannot restore it. Delta keys form their own `dlt` family beside the `tools`, `src` and `tgt` families of the shared key layout: the family tag is the second segment of every key and restore prefix, so a delta key is never equal to, and never a prefix of, a base key. They also encode the PR number explicitly and retain it in every restore prefix. No generated PR or merge-group job receives `actions: write`.
+[GitHub's cache restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache) scope a `pull_request` cache to `refs/pull/N/merge`; the base branch and other pull requests cannot restore it. Delta keys form their own `dlt` family beside the `tools`, `src`, `tgt`, `private-src` and `private-tgt` families of the shared and private key layouts: the family tag follows `velnor-` in every key and restore prefix, so a delta key is never equal to, and never a prefix of, a base key. They also encode the PR number explicitly and retain it in every restore prefix. No generated PR or merge-group job receives `actions: write`.
 
 The [`workflow_run` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run) requires its workflow file on the default branch and can grant write permissions after an unprivileged workflow finishes. The generated cleanup workflow uses that trusted source, installs only the locked released helper, and executes no checkout, project command, cache restore or artifact from the triggering run. Its helper independently validates the completed workflow run and same-repository PR identities before deleting only that PR's older delta caches.
 
@@ -798,3 +827,10 @@ or network access. Admission checks the same-run producer identity, artifact
 digest, source locks, size and expiry. An unavailable metadata response takes
 the generator release qualifier's existing source-fetch fallback. The mandatory
 warm qualification fails if it cannot fetch or admit the source artifact.
+
+## Lowercase hexadecimal `hashFiles` digests
+
+The runner's [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
+prints `result.digest('hex')`, which is lowercase hexadecimal. Cache maintenance
+classifies a tools anchor key only when its lock hash is lowercase, so a runner
+implementation that emitted another casing would leave its anchors unclassified.

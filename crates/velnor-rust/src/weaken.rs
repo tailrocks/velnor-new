@@ -4,7 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
+use velnor_model::{
+    ChangeSet, DenyCheck, DenyLane, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot,
+    Weakening,
+};
 
 use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
@@ -17,7 +20,7 @@ use crate::weaken_targets::targets;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
-const COMPILER_KEYS: [&str; 4] = [
+const COMPILER_KEYS: &[&str] = &[
     "rustc-wrapper",
     "rustc-workspace-wrapper",
     "rustc",
@@ -120,6 +123,40 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                 found.extend(globs("non_inputs", &config.non_inputs, &|glob| {
                     format!("stops a change to {glob} from selecting any package")
                 }));
+                if config.docs_run == DocsRun::PostMerge {
+                    found.push(make(
+                        "docs = \"post_merge\"".to_owned(),
+                        "skips Documentation on pull requests and in the merge queue, so a rustdoc failure is found only after the merge".to_owned(),
+                    ));
+                }
+                if config.check_alone_run == DocsRun::PostMerge {
+                    found.push(make(
+                        "check_alone = \"post_merge\"".to_owned(),
+                        "skips the per-crate alone checks on pull requests and in the merge queue, so a missing feature declaration is found only after the merge".to_owned(),
+                    ));
+                }
+                if config.mbx == MbxMode::Off {
+                    found.push(make(
+                        "cache.mbx = false".to_owned(),
+                        "runs cargo outside mbx, so no compiler results are shared and the mise cargo wrapper is not checked".to_owned(),
+                    ));
+                }
+                if let Some(policy) = config.policy.as_ref() {
+                    if policy.deny == DenyLane::Off {
+                        found.push(make(
+                            "[policy] deny = false".to_owned(),
+                            "turns off the cargo-deny policy, so advisories, bans, licenses and sources are not checked".to_owned(),
+                        ));
+                    }
+                    if let Some(checks) = &policy.deny_checks {
+                        for check in DenyCheck::ALL.iter().copied().filter(|check| !checks.contains(check)) {
+                            found.push(make(
+                                format!("[policy] deny_checks omits {}", check.name()),
+                                "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
+                            ));
+                        }
+                    }
+                }
                 found
             },
         );
@@ -208,7 +245,7 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     let build = parsed.get("build").and_then(Value::as_table);
-    for key in COMPILER_KEYS {
+    for key in COMPILER_KEYS.iter().copied() {
         if let Some(value) = build.and_then(|build| build.get(key)) {
             if key.ends_with("wrapper") && value.as_str() == Some("") {
                 continue;
@@ -304,6 +341,7 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .into_iter()
         .flatten()
         .filter(|(name, _)| matches!(name.as_str(), "rustc" | "rustdoc") || cargo_tool(name))
+        .filter(|(name, wrapper)| !standard_mbx(name, wrapper))
         .map(|(name, wrapper)| {
             let command = wrapper
                 .get("command")
@@ -322,4 +360,11 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 
 fn cargo_tool(name: &str) -> bool {
     name == "cargo" || name.starts_with("cargo-")
+}
+
+/// The owner standard MBX layout (`mise.toml`: `[wrappers.cargo]` with exactly
+/// `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`). Any other key,
+/// value or command is a different wrapper and stays named.
+fn standard_mbx(name: &str, wrapper: &Value) -> bool {
+    name == "cargo" && crate::mbx_layout::standard_wrapper(wrapper)
 }

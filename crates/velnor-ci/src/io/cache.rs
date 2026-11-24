@@ -5,8 +5,13 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::cache_limits::{budget_bytes_from, max_age_days_from};
+use super::cache_prune::prune;
+use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
+use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
+use crate::escape::{command_line, escape};
 use crate::github::Repo;
 use crate::logscan::scan;
 use crate::time::date_text;
@@ -16,6 +21,7 @@ const INCREMENTAL: &str = "incremental";
 const MAX_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const REF_VARIABLE: &str = "GITHUB_REF";
+const SOURCES_RESTORED_VARIABLE: &str = "VELNOR_SOURCES_RESTORED";
 
 #[derive(Debug)]
 pub struct Decision {
@@ -30,7 +36,7 @@ pub fn decide(
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
     let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
-    decide_counts(&counts, target, archive, now_seconds, None)
+    decide_counts(&counts, target, archive, now_seconds, None, None)
 }
 
 pub(super) fn decide_counts(
@@ -39,6 +45,7 @@ pub(super) fn decide_counts(
     archive: Option<&Path>,
     now_seconds: i64,
     budget_bytes: Option<u64>,
+    used: Option<&UsedUnits>,
 ) -> Result<Decision, CiError> {
     if !should_save(counts) {
         return Ok(Decision {
@@ -47,18 +54,26 @@ pub(super) fn decide_counts(
                 .to_owned(),
         });
     }
+    let before = directory_size(target)?;
     let removed = remove_incremental(target)?;
     if let Some(archive) = archive {
         remove_file(archive)?;
     }
+    let pruned = prune(target, used)?;
     let size = directory_size(target)?;
+    let basis = if used.is_some() {
+        "this run's dependency units"
+    } else {
+        "no complete record of this run's units"
+    };
+    let pruning = format!(
+        "pruned from {before} bytes to {size} bytes, keeping {basis}; removed {}",
+        pruned.describe()
+    );
     if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
         return Ok(Decision {
             save: false,
-            report: format!(
-                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing\n",
-                target.display()
-            ),
+            report: over_budget(target, size, budget, &pruning),
         });
     }
     let born = target.join(BORN_FILE);
@@ -73,9 +88,15 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories\n",
-            counts.crates_compiled(),
-            target.display(),
+            "{}\n",
+            escape(
+                &format!(
+                    "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}",
+                    counts.crates_compiled(),
+                    target.display(),
+                ),
+                false,
+            )
         ),
     })
 }
@@ -91,7 +112,7 @@ fn remove_file(path: &Path) -> Result<(), CiError> {
     }
 }
 
-fn entries(dir: &Path) -> Result<Vec<fs::DirEntry>, CiError> {
+pub(super) fn entries(dir: &Path) -> Result<Vec<fs::DirEntry>, CiError> {
     fs::read_dir(dir)
         .and_then(Iterator::collect)
         .map_err(|e| CiError::new(format!("cannot traverse {}: {e}", dir.display())))
@@ -140,7 +161,7 @@ fn remove_incremental_child(dir: &Path) -> Result<u64, CiError> {
     Ok(1)
 }
 
-fn directory_size(dir: &Path) -> Result<u64, CiError> {
+pub(super) fn directory_size(dir: &Path) -> Result<u64, CiError> {
     let mut size = 0;
     for entry in entries(dir)? {
         let kind = entry.file_type().map_err(|e| CiError::new(e.to_string()))?;
@@ -166,23 +187,26 @@ pub struct Expiry {
 }
 
 pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry, CiError> {
-    let Some(days) = std::env::var(MAX_AGE_VARIABLE)
-        .ok()
-        .and_then(|text| text.trim().parse::<u64>().ok())
-        .filter(|days| *days > 0)
-    else {
+    let Some(days) = max_age_days_from(std::env::var_os(MAX_AGE_VARIABLE).as_deref())? else {
         return Ok(Expiry {
             expired: false,
             report: String::new(),
         });
     };
-    let mut removed = Vec::new();
+    let mut expired = Vec::new();
     for target in targets {
         let born = match fs::read_to_string(target.join(BORN_FILE)) {
             Ok(born) if born_expired(&born, now_seconds, days) => born.trim().to_owned(),
             Err(_) if target.is_dir() => "unknown".to_owned(),
             Ok(_) | Err(_) => continue,
         };
+        expired.push((target, born));
+    }
+    for (target, _) in &expired {
+        check_removal_target(target)?;
+    }
+    let mut removed = Vec::new();
+    for (target, born) in expired {
         fs::remove_dir_all(target)
             .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
         removed.push(format!("{} (born {born})", target.display()));
@@ -215,5 +239,118 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         prefix,
         keep.unwrap_or(KEEP_NEWEST),
         super::now_seconds(),
+    )
+}
+
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    budget_bytes_from(std::env::var_os("VELNOR_CACHE_BUDGET_BYTES").as_deref())
+}
+
+pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {
+    let (target, archive) = super::inputs_batch::cache_paths(args)?;
+    let root = super::current_dir()?;
+    let target = super::cache_paths::validated(&root, &target)?;
+    let temp = std::env::var_os("RUNNER_TEMP")
+        .filter(|dir| !dir.is_empty())
+        .ok_or_else(|| {
+            CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+        })?;
+    let log_path = Path::new(&temp).join("velnor-run.log");
+    let log = fs::read(&log_path)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+    let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
+        .unwrap_or_else(|| args.manifest_path.clone());
+    let deadline = crate::public_probe::Deadline::after(std::time::Duration::from_secs(
+        args.public_probe_seconds,
+    ));
+    let admission =
+        super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
+    let sources_restored = std::env::var(SOURCES_RESTORED_VARIABLE).is_ok_and(|hit| hit == "true");
+    let leak = (admission.refusal.is_none() && !sources_restored)
+        .then(super::cache_credentials::leak)
+        .flatten();
+    let sources = admission.refusal.is_none() && leak.is_none();
+    let (probe_log, mismatch) = (admission.log, admission.mismatch);
+    let decision = if let Some(reason) = admission.refusal {
+        Decision {
+            save: false,
+            report: reason,
+        }
+    } else if let Some(linked) = linked_target_notice(&target) {
+        Decision {
+            save: false,
+            report: linked,
+        }
+    } else {
+        let recorded = super::activity::invocations()?;
+        let counts = super::activity::activity(recorded.as_deref())?
+            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        let used = recorded.as_deref().and_then(UsedUnits::from_invocations);
+        let decision = decide_counts(
+            &counts,
+            &target,
+            archive.as_deref(),
+            super::now_seconds(),
+            budget_limit()?,
+            used.as_ref(),
+        )?;
+        match &leak {
+            Some(why) => Decision {
+                report: format!(
+                    "{}the sources cache is not saved because a credential could be inside it: {why}\n",
+                    decision.report
+                ),
+                ..decision
+            },
+            None => decision,
+        }
+    };
+    super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
+    if let Some(mismatch) = mismatch {
+        return Err(CiError::new(format!(
+            "{probe_log}{}{mismatch}",
+            decision.report
+        )));
+    }
+    let mut report = probe_log + &decision.report;
+    if decision.save
+        && let Err(error) = super::delta_snapshot::record_inventory(&target)
+    {
+        super::delta_snapshot::forget_inventory(&target)?;
+        report = format!(
+            "{report}{}",
+            command_line(
+                "notice",
+                &format!("{error}; pull requests will read the whole restored base")
+            )
+        );
+    }
+    Ok(report)
+}
+
+fn linked_target_notice(target: &Path) -> Option<String> {
+    fs::symlink_metadata(target)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_symlink())?;
+    let leads_to = fs::canonicalize(target).map_or_else(
+        |_| "an unresolved directory".to_owned(),
+        |resolved| resolved.display().to_string(),
+    );
+    Some(command_line(
+        "notice",
+        &format!(
+            "{} is a link to {leads_to}; saving it would archive the link, not the build directory, and a fresh runner would restore a dangling link; saving nothing (turn off mbx managed target views with `mbx settings set target.views false` on lanes that save this cache)",
+            target.display()
+        ),
+    ))
+}
+
+fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {
+    command_line(
+        "notice",
+        &format!(
+            "{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})",
+            target.display()
+        ),
     )
 }

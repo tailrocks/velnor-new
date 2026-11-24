@@ -139,7 +139,7 @@ fn a_build_checks_that_the_tag_it_built_is_the_commit_the_gate_verified() -> Tes
     let all = steps(build);
     assert_eq!(all[0].get("id").and_then(Node::text), Some("source"));
     assert!(uses(&all[0]).is_some_and(|u| u.starts_with("actions/checkout@")));
-    let check = &all[1];
+    let check = &all[2];
     assert_eq!(
         run(check),
         "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\""

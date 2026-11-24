@@ -6,7 +6,7 @@
 //! `VELNOR_REQUEST_FILE`. The bytes equal what the legacy `write-request-v1` writes.
 
 pub(crate) mod canonical;
-mod lanes;
+pub(crate) mod lanes;
 mod qualification;
 
 use serde_json::{Map, Value, json};

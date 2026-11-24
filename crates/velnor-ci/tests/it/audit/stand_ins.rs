@@ -7,7 +7,7 @@ use crate::io::Repo;
 
 use super::{audit, own_units, unit, workspace_below_the_root};
 
-const STAND_INS: [(&str, &str); 3] = [
+const STAND_INS: &[(&str, &str)] = &[
     ("rust/target/release", "test-lib-lib"),
     ("rust/target/x86_64-unknown-linux-gnu/debug", "test-lib-lib"),
     ("rust/target/debug", "lib-lib"),
@@ -73,7 +73,7 @@ fn a_library_unit_of_another_kind_does_not_stand_in_for_a_missing_test_harness_u
 #[test]
 fn a_partial_build_for_a_target_triple_refuses_until_that_triple_is_removed() {
     let repo = without_the_lib_test_harness_unit();
-    place_stand_ins(&repo, &STAND_INS);
+    place_stand_ins(&repo, STAND_INS);
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     unit(
         &repo,

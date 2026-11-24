@@ -7,9 +7,11 @@ use velnor_model::RepoPath;
 use crate::base_save::pinned;
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
-use crate::gh_expr::evaluate;
 use crate::pr_ci::{LABEL_CONFIG, label_workflow, render};
-use crate::pr_ci_sim::{Event, context, edited, labeled, outcome, pull, state, strings};
+use crate::pr_ci_sim::{
+    Event, context, converted_to_draft, edited, labeled, outcome, pull, state, strings,
+};
+use velnor_test_support::gh_expr::evaluate;
 
 #[test]
 fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -> TestResult {
@@ -24,10 +26,18 @@ fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -
 }
 
 fn group(tree: &Json, event: &Event) -> Result<String, Box<dyn std::error::Error>> {
+    expanded(tree, "/concurrency/group", event)
+}
+
+fn expanded(
+    tree: &Json,
+    pointer: &str,
+    event: &Event,
+) -> Result<String, Box<dyn std::error::Error>> {
     let template = tree
-        .pointer("/concurrency/group")
+        .pointer(pointer)
         .and_then(Json::as_str)
-        .ok_or("no group")?;
+        .ok_or_else(|| format!("no {pointer}"))?;
     let results = std::collections::BTreeMap::new();
     let resolve = context(event, &results, &[]);
     let mut out = String::new();
@@ -60,7 +70,7 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
             "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}"
         )
     );
-    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
     assert!(
         !always
             .pointer("/concurrency/group")
@@ -70,10 +80,39 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
     Ok(())
 }
 
+#[test]
+fn an_ignored_event_cannot_publish_a_check_named_required() -> TestResult {
+    let tree = label_workflow()?;
+    let name = |event: &Event| expanded(&tree, "/jobs/required/name", event);
+    for event in [
+        pull(false, &[]),
+        pull(false, &["ci:run"]),
+        labeled("ci:run", &["ci:run"]),
+        labeled("ci:auto", &["ci:auto"]),
+        edited(true, &[]),
+    ] {
+        assert_eq!(name(&event)?, "Required");
+    }
+    for event in [
+        labeled("bug", &["bug", "ci:run"]),
+        edited(false, &["ci:run"]),
+    ] {
+        let shown = name(&event)?;
+        assert_ne!(shown, "Required");
+        assert!(shown.starts_with("Required"), "{shown}");
+    }
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
+    assert_eq!(
+        always.pointer("/jobs/required/name").and_then(Json::as_str),
+        Some("Required")
+    );
+    Ok(())
+}
+
 fn every_generated_workflow(
     config: &str,
 ) -> Result<Vec<(String, Json)>, Box<dyn std::error::Error>> {
-    let mut view = pinned("0.1.86", config)?;
+    let mut view = pinned("0.1.88", config)?;
     for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let path = RepoPath::new(path)?;
         view.tracked_paths.insert(path.clone());
@@ -100,7 +139,7 @@ fn every_generated_workflow_that_verifies_a_pull_request_also_runs_on_the_merge_
             .iter()
             .map(|(path, _)| path.as_str())
             .collect::<Vec<_>>(),
-        [".github/workflows/rust-ci.yml"],
+        [".github/workflows/ci.yml"],
         "a new verifying workflow needs a label-mode merge_group check: {:?}",
         files.iter().map(|(path, _)| path).collect::<Vec<_>>()
     );
@@ -126,7 +165,7 @@ fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_pu
             "{id} waits for the label removal"
         );
     }
-    assert!(jobs["ci-run-label"].get("needs").is_none());
+    assert_eq!(strings(jobs["ci-run-label"].get("needs")), ["required"]);
     let (started, verdict) = outcome(&tree, &pull(false, &["ci:run"]), &[])?;
     assert_eq!(state(&started, "ci-run-label"), "success");
     assert_eq!(state(&started, "rust-test"), "success");
@@ -136,6 +175,17 @@ fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_pu
     assert_eq!(state(&next, "rust-lint"), "success");
     assert_eq!(state(&next, "rust-test"), "skipped");
     assert!(!verdict.steps.iter().any(|step| step == "velnor-ci gate"));
+    Ok(())
+}
+
+#[test]
+fn the_label_stays_until_the_required_check_of_the_full_run_has_succeeded() -> TestResult {
+    let tree = label_workflow()?;
+    let (failed, _) = outcome(&tree, &pull(false, &["ci:run"]), &["required"])?;
+    assert_eq!(state(&failed, "required"), "failure");
+    assert_eq!(state(&failed, "ci-run-label"), "skipped");
+    let (passed, _) = outcome(&tree, &pull(false, &["ci:run"]), &[])?;
+    assert_eq!(state(&passed, "ci-run-label"), "success");
     Ok(())
 }
 
@@ -170,6 +220,24 @@ fn a_base_retarget_runs_what_the_labels_request_and_shares_the_pull_request_grou
             if full { "success" } else { "skipped" },
             "{labels:?}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn converting_a_requested_run_to_draft_starts_a_run_in_its_group_that_runs_nothing() -> TestResult {
+    let tree = label_workflow()?;
+    assert!(
+        strings(tree.pointer("/on/pull_request/types"))
+            .iter()
+            .any(|kind| kind == "converted_to_draft")
+    );
+    let running = group(&tree, &pull(false, &["ci:run"]))?;
+    let converted = converted_to_draft(&["ci:run"]);
+    assert_eq!(group(&tree, &converted)?, running);
+    let (results, _) = outcome(&tree, &converted, &[])?;
+    for (job, result) in results.iter().filter(|(job, _)| job.as_str() != "required") {
+        assert_eq!(result, "skipped", "{job}");
     }
     Ok(())
 }

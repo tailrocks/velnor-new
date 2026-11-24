@@ -24,6 +24,7 @@ pub use job_authority::{
     ApprovedJobAuthorityPolicy, JobAuthorityRole, build_job_authority_policy_json,
 };
 pub use keychain_reference::KeychainReference;
+pub(crate) use keychain_reference::off_runtime;
 pub use platform::RunnerPlatform;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
@@ -294,10 +295,9 @@ fn validate_connections(connections: &[RepositoryConnection]) -> Result<(), Host
 }
 
 fn unix_endpoint(endpoint: &str) -> bool {
-    let Some(path) = endpoint.strip_prefix("unix://") else {
-        return false;
-    };
-    path.starts_with('/')
-        && path.len() > 1
-        && !path.chars().any(|ch| ch.is_control() || ch.is_whitespace())
+    endpoint.starts_with("unix://")
+        && !endpoint
+            .chars()
+            .any(|ch| ch.is_control() || ch.is_whitespace())
+        && crate::docker_client::unix_socket_path(endpoint).is_ok()
 }

@@ -174,7 +174,7 @@ async fn a_binary_that_cannot_run_in_the_runner_or_cannot_be_mounted_starts_noth
         wrong_arch,
         colon,
         oversize,
-        dir.clone(),
+        dir.to_path_buf(),
         dir.join("missing"),
     ];
     for case in cases {

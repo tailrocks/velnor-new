@@ -35,7 +35,7 @@ Confidence tags: [C] read from code at the cited path; [D] stated in a doc (not 
 2. **Production CI for velnor-new itself runs on ARC, not on velnor-host.** Evidence pack
    (`docs/research/velnor-runner-2026-11/evidence.md:21-22, 533-553`) [M, snapshot 2026-11-18]: Hetzner k3s,
    5 workers (96 threads, ~125 GiB), Go `gha-runner-scale-set` chart 0.15.1 + controller in `arc-systems`,
-   three scale sets (tailrocks max 60, ChainArgos 60, jackin 40), each runner pod = official runner
+   three scale sets (tailrocks max 60, example-org 60, jackin 40), each runner pod = official runner
    container (`ghcr.io/tailrocks/velnor-ci-runner:2026-11-16.2`) + privileged `docker:dind` sidecar, all
    volumes `emptyDir`. velnor-new's generated `rust-ci.yml` targets label `ubuntu-26.04-scale-set` for
    same-repo events and falls back to `ubuntu-latest` for fork PRs (`.github/workflows/rust-ci.yml:57`,
@@ -76,7 +76,7 @@ Confidence tags: [C] read from code at the cited path; [D] stated in a doc (not 
 
 | # | Process | Where it runs | Language | Status | Evidence |
 |---|---|---|---|---|---|
-| P1 | ARC controller + 3 listener pods (`gha-runner-scale-set-controller` 0.15.1) | k3s ns `arc-systems` | Go (upstream) | PRODUCTION for tailrocks/ChainArgos/jackin | `evidence.md:536` [M] |
+| P1 | ARC controller + 3 listener pods (`gha-runner-scale-set-controller` 0.15.1) | k3s ns `arc-systems` | Go (upstream) | PRODUCTION for tailrocks/example-org/jackin | `evidence.md:536` [M] |
 | P2 | ARC runner pod: official runner (`/usr/local/bin/velnor-runner-start`) + privileged `docker:dind` init-sidecar; emptyDir work/tmp/sock; requests 2 CPU/4Gi, mem limit 32Gi, no CPU limit | k3s ns `arc-runners*` | C# runner + Go dockerd | PRODUCTION; executes velnor-new CI jobs | `evidence.md:551-562` [M] |
 | P3 | `crates-mirror` nginx DaemonSet (200 GB hostPath proxy cache of index.crates.io/static.crates.io, HTTPS 8443) | k3s ns `velnor-system` | nginx | PRODUCTION (opt-in via `[crates_mirror]`) | `evidence.md:574-576`; `.velnor/rust-ci.toml:24-27` |
 | P4 | `velnor-host daemon run` (scale-set listener + dispatcher + launcher + journal + IPC controller, single process, per-user macOS LaunchAgent) | one Mac host, one Docker engine | Rust | BUILT; live gates not passed; no evidence of use on 11-20 | `crates/velnor-runner-cli/src/args.rs:106-231`; `docs/proposed/macos-scaleset-runner.md:104-106`; checklist rows G4/G7/G8 |
@@ -94,7 +94,7 @@ a GitHub App webhook receiver, or a daemon an agent can call.
 
 ### 1.2 Who executes jobs today
 
-- **Production (velnor-new CI, ChainArgos, jackin):** the official runner in ARC pods (P2). Job
+- **Production (velnor-new CI, example-org, jackin):** the official runner in ARC pods (P2). Job
   selection, scaling, JIT minting, listener long-poll are done by ARC's Go listener (P1) [M].
 - **Mac (`velnor-host`) path:** the official runner in a pair container; Velnor owns only the outside
   (listener, admission, ownership, cleanup). `docs/proposed/macos-scaleset-runner.md:37-39`,
@@ -582,7 +582,7 @@ in code (design doc may exist). "Design doc" refers to `docs/proposed/velnor-run
 ## 7. Unknowns and cautions
 
 - Whether `velnor-host` currently serves any queue anywhere: UNKNOWN; last recorded live evidence is
-  2026-10 (ChainArgos on a Mac, G6 launchd PASS, G4/G7/G8 not).
+  2026-10 (example-org on a Mac, G6 launchd PASS, G4/G7/G8 not).
 - ARC scale-set settings, node tuning and the `VELNOR_MBX_SHARED_DIR` export are out-of-repo; the only
   in-repo observation is the 2026-11-18 evidence snapshot. The `ubuntu-26.04-scale-set` label used by
   `rust-ci.yml` is served by ARC per that snapshot (evidence.md:40, 541-544 label `[velnor]` +

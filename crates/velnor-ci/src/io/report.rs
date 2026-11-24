@@ -5,7 +5,7 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, restore_notices, waste};
 use crate::report_caches::{CachePlan, observe_caches};
 use crate::telemetry::{INVOCATIONS, Invocation};
 use serde_json::Value;
@@ -93,6 +93,12 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         tests_run: env("VELNOR_TESTS_RUN").parse().ok(),
         diagnostics: Vec::new(),
         verification_errors: invocation_errors,
+        mbx: crate::waste_evidence::MbxEvidence::default(),
+        toolchain_installs: Vec::new(),
+        privacy_unavailable: crate::report_caches::privacy_unavailable(
+            &steps,
+            std::env::var("VELNOR_REPORT_PLAN_MODE").ok().as_deref(),
+        ),
         violations: Vec::new(),
     };
     metrics.invocations.retain(|invocation| {
@@ -115,6 +121,8 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .push(format!("Download provenance unavailable: {error}"));
     }
     activity_metrics(&mut metrics, &log_bytes);
+    super::report_sparse::collect_hints(&mut metrics, &log_bytes);
+    super::report_waste::collect_local(&mut metrics, &log_bytes, Path::new(&env("RUNNER_TEMP")));
     metrics.violations = waste(&metrics);
     let summary = metrics.summary();
     fs::write(
@@ -140,6 +148,7 @@ fn api_metrics(metrics: &mut LaneMetrics) -> Result<(), CiError> {
     let attempt = env("GITHUB_RUN_ATTEMPT")
         .parse()
         .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
+    let mut job_started = None;
     for page in 1.. {
         let jobs: ApiJobs = json(&github.get(&jobs_path(&repo, run, attempt, page))?)?;
         if let Some(job) = jobs
@@ -147,18 +156,15 @@ fn api_metrics(metrics: &mut LaneMetrics) -> Result<(), CiError> {
             .iter()
             .find(|job| job.name == metrics.job_name.as_deref().unwrap_or(&metrics.lane))
         {
-            metrics.first_cargo_seconds = job
-                .started_at
-                .as_deref()
-                .and_then(crate::time::parse_utc)
-                .and_then(|start| {
-                    metrics
-                        .invocations
-                        .iter()
-                        .map(|invocation| invocation.started_at)
-                        .min()
-                        .and_then(|first| first.checked_sub(u64::try_from(start).ok()?))
-                });
+            job_started = job.started_at.as_deref().and_then(crate::time::parse_utc);
+            metrics.first_cargo_seconds = job_started.and_then(|start| {
+                metrics
+                    .invocations
+                    .iter()
+                    .map(|invocation| invocation.started_at)
+                    .min()
+                    .and_then(|first| first.checked_sub(u64::try_from(start).ok()?))
+            });
         }
         if jobs.jobs.len() < 100 {
             break;
@@ -169,20 +175,44 @@ fn api_metrics(metrics: &mut LaneMetrics) -> Result<(), CiError> {
             .diagnostics
             .push("Job start to first cargo is unavailable".to_owned());
     }
-    cache_metrics(metrics, &github, &repo)
+    cache_metrics(metrics, &github, &repo, job_started)
 }
 
 fn cache_metrics(
     metrics: &mut LaneMetrics,
     github: &impl GitHub,
     repo: &Repo,
+    job_started: Option<i64>,
 ) -> Result<(), CiError> {
     for cache in &mut metrics.caches {
+        if let Some(start) = job_started
+            && cache.family == "sources"
+            && cache.hit == crate::report::Hit::Miss
+            && !cache.requested_key.is_empty()
+        {
+            let listing: Value = json(&github.get(&format!(
+                "/repos/{repo}/actions/caches?key={}&per_page=100",
+                crate::cache::encode(&cache.requested_key)
+            ))?)?;
+            cache.entry_before_job =
+                super::report_waste::entry_before_job(cache, &listing, &readable_refs(), start);
+        }
         let saving = cache.save != SaveOutcome::NotAttempted;
+        if saving && cache.saved_key.as_deref() == Some("") {
+            cache.bytes = None;
+            cache.save = SaveOutcome::Failed;
+            metrics
+                .diagnostics
+                .push("Saved cache key unavailable".to_owned());
+            continue;
+        }
         let key = if saving {
-            &cache.requested_key
+            cache
+                .saved_key
+                .as_deref()
+                .unwrap_or(cache.requested_key.as_str())
         } else if let Some(key) = &cache.matched_key {
-            key
+            key.as_str()
         } else {
             continue;
         };
@@ -217,6 +247,17 @@ fn cache_metrics(
     Ok(())
 }
 
+fn readable_refs() -> Vec<String> {
+    let mut refs = vec![env("GITHUB_REF")];
+    refs.extend(
+        [env("GITHUB_BASE_REF"), env("VELNOR_REPORT_DEFAULT_BRANCH")]
+            .into_iter()
+            .filter(|branch| !branch.is_empty())
+            .map(|branch| format!("refs/heads/{branch}")),
+    );
+    refs
+}
+
 fn inventory_entry<'a>(
     listing: &'a Value,
     key: &str,
@@ -227,15 +268,11 @@ fn inventory_entry<'a>(
     if listing["total_count"].as_u64() != u64::try_from(entries.len()).ok() {
         return Err(unknown());
     }
-    let mut refs = vec![env("GITHUB_REF")];
-    if !saving {
-        refs.extend(
-            [env("GITHUB_BASE_REF"), env("VELNOR_REPORT_DEFAULT_BRANCH")]
-                .into_iter()
-                .filter(|branch| !branch.is_empty())
-                .map(|branch| format!("refs/heads/{branch}")),
-        );
-    }
+    let refs = if saving {
+        vec![env("GITHUB_REF")]
+    } else {
+        readable_refs()
+    };
     let mut eligible = entries.iter().filter(|entry| {
         entry["key"].as_str() == Some(key)
             && entry["ref"]
@@ -285,7 +322,11 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
             &format!("## {}\n\n{}", lane.lane, lane.summary()),
         )?;
     }
-    check(&lanes)
+    let verdict = check(&lanes);
+    if verdict.is_err() {
+        print!("{}", restore_notices(&lanes));
+    }
+    verdict
 }
 fn find_metrics(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), CiError> {
     if !directory.exists() {

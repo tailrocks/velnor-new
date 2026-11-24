@@ -44,10 +44,12 @@ pub(crate) fn files() -> ReleaseFiles {
         cargo_manifests: None,
         cargo_manifest_texts: BTreeMap::new(),
         bin_targets: None,
+        tracked_paths: None,
         rust_metadata: None,
         workflow_names: None,
         push_workflows: None,
         mise_lock: MISE_LOCK.to_owned(),
+        mbx_opt_out: false,
     }
 }
 

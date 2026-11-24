@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
+use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
-use crate::lint_tools::applies;
-use crate::mise_lock::{is_rustup_tool, lock_platform, prebuilt_platforms};
+use crate::mise_lock::{is_rustup_tool, locked_tools};
+use crate::mise_options::option_value;
+use crate::mise_template::render_versions;
 use crate::toml_file::table;
 
 pub static MISE_CONFIGS: [RepoPath; 2] = [
@@ -17,19 +18,20 @@ pub static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static(".mise.toml"),
 ];
 pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
-const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
+const RUST_TOOLS: &[&str] = &["rust", "core:rust"];
+const NEXTEST_SELECTORS: &[&str] = &["cargo-nextest", "nextest-rs/nextest"];
 
-type Versions = BTreeMap<String, Vec<Request>>;
+type Versions = BTreeMap<String, Vec<ToolRequest>>;
 
-#[derive(Clone)]
-struct Request {
-    version: String,
-    os: Option<Vec<String>>,
+fn plain(version: String) -> ToolRequest {
+    ToolRequest {
+        version,
+        ..ToolRequest::default()
+    }
 }
 
-fn plain(version: String) -> Request {
-    Request { version, os: None }
+pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Option<Vec<ToolRequest>>, Reason> {
+    Ok(versions(bytes)?.remove(tool))
 }
 
 #[must_use]
@@ -52,12 +54,11 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
         validate_config(config, bytes)?;
     }
-    let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
-        Some(lock) => (
-            versions(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
-            prebuilt_platforms(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
-        ),
-        None => Default::default(),
+    let mut locked = match files.get(&MISE_LOCK) {
+        Some(lock) => {
+            locked_tools(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?
+        }
+        None => BTreeMap::new(),
     };
     Ok(ToolPins {
         locked_file: files.contains_key(&MISE_LOCK),
@@ -68,23 +69,8 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
         tools: requested
             .into_iter()
             .map(|(name, requested)| {
-                let locked = locked
-                    .remove(&name)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|request| request.version)
-                    .collect();
-                let (requested, os_filters) = split_requests(&requested);
-                let prebuilt = prebuilt.remove(&name).unwrap_or_default();
-                (
-                    name,
-                    ToolPin {
-                        requested,
-                        locked,
-                        os_filters,
-                        prebuilt,
-                    },
-                )
+                let locked = locked.remove(&name).unwrap_or_default();
+                (name, ToolPin { requested, locked })
             })
             .collect(),
     })
@@ -125,7 +111,13 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     let templates = parsed
         .iter()
         .filter(|(key, _)| !matches!(key.as_str(), "tasks" | "task_templates"))
-        .any(|(_, value)| has_template(value));
+        .any(|(key, value)| {
+            if ["tools", "vars"].contains(&key.as_str()) {
+                runs_exec(value)
+            } else {
+                has_template(value)
+            }
+        });
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
@@ -154,8 +146,23 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 }
 
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
-
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    check_pinned_tools(facts, true, None)
+}
+
+pub fn check_lint_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    check_pinned_tools(
+        facts,
+        false,
+        crate::lint_jobs::lint_only_tools(facts).as_ref(),
+    )
+}
+
+fn check_pinned_tools(
+    facts: &RepoFacts,
+    mbx: bool,
+    only: Option<&BTreeSet<String>>,
+) -> Result<(), DetectError> {
     if !facts.tools.locked_file {
         return Err(DetectError::MiseLockRequired { path: MISE_LOCK });
     }
@@ -179,7 +186,10 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         .iter()
         .filter(|name| facts.tools.tools.contains_key(**name))
         .count();
-    if rust_pins != 1 || selectors > 1 || rust_pin.is_some_and(|pin| !pin.os_filters.is_empty()) {
+    if rust_pins != 1
+        || selectors > 1
+        || rust_pin.is_some_and(|pin| pin.requested.iter().any(|request| request.os.is_some()))
+    {
         return Err(DetectError::invalid(
             facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
             Reason::InvalidValue {
@@ -188,7 +198,10 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             },
         ));
     }
-    check_prebuilt(facts)?;
+    check_prebuilt(facts, only)?;
+    if mbx {
+        crate::mbx_pin::check_mbx_pin(facts)?;
+    }
     let tested = facts
         .rust_roots
         .iter()
@@ -199,23 +212,43 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
         });
     }
-    Ok(())
+    if mbx {
+        crate::mbx_layout::check_pin(facts)
+    } else {
+        Ok(())
+    }
 }
 
-fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
-    let Some(platform) = lock_platform(&facts.config.runner) else {
+fn check_prebuilt(facts: &RepoFacts, only: Option<&BTreeSet<String>>) -> Result<(), DetectError> {
+    let Some(platform) = MisePlatform::runner(facts.config.runner.as_str()) else {
         return Ok(());
     };
-    let source_built = facts.tools.tools.iter().find(|(name, pin)| {
-        !is_rustup_tool(name) && applies(pin, Some(platform)) && !pin.prebuilt.contains(platform)
-    });
-    match source_built {
-        Some((tool, _)) => Err(DetectError::ToolNotPrebuilt {
-            tool: tool.clone(),
-            platform: platform.to_owned(),
-        }),
-        None => Ok(()),
+    let key = platform.lock_key();
+    for (name, pin) in &facts.tools.tools {
+        if is_rustup_tool(name) || only.is_some_and(|wanted| !wanted.contains(name)) {
+            continue;
+        }
+        let rows = pin.locked_on(platform).map_err(|value| {
+            DetectError::invalid(
+                &MISE_LOCK,
+                Reason::InvalidValue {
+                    key: "tools",
+                    value: format!("{name}: {value}"),
+                },
+            )
+        })?;
+        let needed = pin
+            .requested
+            .iter()
+            .any(|request| request.applies_on(platform));
+        if needed && (rows.is_empty() || rows.iter().any(|row| !row.prebuilt.contains(&key))) {
+            return Err(DetectError::ToolNotPrebuilt {
+                tool: name.clone(),
+                platform: key,
+            });
+        }
     }
+    Ok(())
 }
 
 fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
@@ -230,12 +263,13 @@ fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
         .get(rust_tool(&facts.tools)?)?
         .requested
         .first()?;
-    (*pinned != channel).then(|| (channel, pinned.clone()))
+    (pinned.version != channel).then(|| (channel, pinned.version.clone()))
 }
 
 pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
     RUST_TOOLS
-        .into_iter()
+        .iter()
+        .copied()
         .find(|name| pins.tools.contains_key(*name))
 }
 
@@ -244,6 +278,15 @@ fn has_template(value: &Value) -> bool {
         Value::String(text) => text.contains("{{") || text.contains("{%"),
         Value::Array(items) => items.iter().any(has_template),
         Value::Table(items) => items.values().any(has_template),
+        _ => false,
+    }
+}
+
+fn runs_exec(value: &Value) -> bool {
+    match value {
+        Value::String(text) => has_template(value) && text.contains("exec("),
+        Value::Array(items) => items.iter().any(runs_exec),
+        Value::Table(items) => items.values().any(runs_exec),
         _ => false,
     }
 }
@@ -257,12 +300,13 @@ fn runs_a_command(value: &Value) -> bool {
 }
 
 fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
-    match table(bytes)?.get("tools") {
+    let parsed = table(bytes)?;
+    let mut versions = match parsed.get("tools") {
         None => Ok(Versions::new()),
         Some(Value::Table(tools)) => tools
             .iter()
             .map(|(name, value)| {
-                version_list(value)
+                version_list(value, name)
                     .map(|list| (name.clone(), list))
                     .ok_or_else(|| Reason::InvalidValue {
                         key: "tools",
@@ -274,25 +318,9 @@ fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
             key: "tools",
             value: other.to_string(),
         }),
-    }
-}
-
-fn split_requests(requests: &[Request]) -> (Vec<String>, BTreeMap<String, Vec<String>>) {
-    let versions: Vec<String> = requests.iter().map(|r| r.version.clone()).collect();
-    let mut filters: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for version in &versions {
-        let own: Vec<&Request> = requests.iter().filter(|r| &r.version == version).collect();
-        if own.iter().all(|r| r.os.is_some()) {
-            let mut names: Vec<String> = own
-                .iter()
-                .flat_map(|r| r.os.clone().unwrap_or_default())
-                .collect();
-            names.sort();
-            names.dedup();
-            filters.insert(version.clone(), names);
-        }
-    }
-    (versions, filters)
+    }?;
+    render_versions(&mut versions, &parsed, bytes)?;
+    Ok(versions)
 }
 
 fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
@@ -308,22 +336,48 @@ fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
     }
 }
 
-fn version_list(value: &Value) -> Option<Vec<Request>> {
+fn version_list(value: &Value, name: &str) -> Option<Vec<ToolRequest>> {
+    let rust = RUST_TOOLS.contains(&name);
     match value {
         Value::String(version) => Some(vec![plain(version.clone())]),
         Value::Array(items) => items
             .iter()
-            .map(version_list)
+            .map(|value| version_list(value, name))
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
         Value::Table(entry) => {
             let mut list = entry
                 .get("version")
-                .map_or_else(|| source_request(entry), version_list)?;
+                .map_or_else(|| source_request(entry), |value| version_list(value, name))?;
             if let Some(names) = os_names(entry) {
                 for request in &mut list {
                     request.os.get_or_insert_with(|| names.clone());
                 }
+            }
+            let options: BTreeMap<_, _> = entry
+                .iter()
+                .filter(|(key, _)| {
+                    !([
+                        "version",
+                        "os",
+                        "ref",
+                        "path",
+                        "prefix",
+                        "depends",
+                        "install_env",
+                        "lazy",
+                        "lazy_bins",
+                        "auto_update",
+                    ]
+                    .contains(&key.as_str())
+                        || (rust && key.as_str() == "mr_boxington"))
+                })
+                .filter_map(|(key, value)| {
+                    option_value(name, key, value, rust).map(|value| (key.clone(), value))
+                })
+                .collect();
+            for request in &mut list {
+                request.options.extend(options.clone());
             }
             Some(list)
         }
@@ -331,7 +385,7 @@ fn version_list(value: &Value) -> Option<Vec<Request>> {
     }
 }
 
-fn source_request(entry: &toml::Table) -> Option<Vec<Request>> {
+fn source_request(entry: &toml::Table) -> Option<Vec<ToolRequest>> {
     ["ref", "path", "prefix"].iter().find_map(|key| {
         entry
             .get(*key)

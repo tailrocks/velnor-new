@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, RootSlug, StepKind};
+use velnor_model::{
+    CargoCommand, EMPTY_PACKAGE_MAP, Job, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
 
 use crate::cargo::reports_tests;
 
@@ -10,6 +13,7 @@ pub(crate) const TEST_STEP_ID: &str = "test";
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Tests {
     lanes: Vec<RootSlug>,
+    skippable: bool,
 }
 
 impl Tests {
@@ -28,13 +32,48 @@ impl Tests {
                 lanes.push(plan.slug.clone());
             }
         }
-        Self { lanes }
+        let skippable = job.steps.iter().any(|step| {
+            matches!(
+                &step.kind,
+                StepKind::Cargo(CargoCommand::NextestFeatures { packages, reports: true, .. })
+                    if !packages.is_empty()
+            )
+        });
+        Self { lanes, skippable }
+    }
+
+    fn read(&self, id: &str, name: &str) -> String {
+        let output = format!("steps.{id}.outputs.{name}");
+        if !self.skippable {
+            return format!("${{{{ {output} }}}}");
+        }
+        if [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
+            return format!("${{{{ {output} || '0' }}}}");
+        }
+        if name == TESTS_BY_PACKAGE_OUTPUT {
+            return format!("${{{{ {output} || '{EMPTY_PACKAGE_MAP}' }}}}");
+        }
+        format!("${{{{ {output} }}}}")
     }
 
     pub(crate) fn id(&self, slug: Option<&RootSlug>) -> String {
         match (self.lanes.len() > 1, slug) {
             (true, Some(slug)) => format!("{TEST_STEP_ID}_{slug}"),
             _ => TEST_STEP_ID.to_owned(),
+        }
+    }
+
+    /// Whether a test step of the job failed, as a `${{ }}` body that stands in an `&&` chain; none without test steps.
+    pub(crate) fn failed(&self) -> Option<String> {
+        let ids = self
+            .lanes
+            .iter()
+            .map(|slug| format!("steps.{}.outcome == 'failure'", self.id(Some(slug))))
+            .collect::<Vec<_>>();
+        match ids.as_slice() {
+            [] => None,
+            [only] => Some(only.clone()),
+            _ => Some(format!("({})", ids.join(" || "))),
         }
     }
 
@@ -50,14 +89,11 @@ impl Tests {
                 .map(|slug| {
                     (
                         format!("{name}_{slug}"),
-                        format!("${{{{ steps.{TEST_STEP_ID}_{slug}.outputs.{name} }}}}"),
+                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name),
                     )
                 })
                 .collect();
         }
-        vec![(
-            name.to_owned(),
-            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-        )]
+        vec![(name.to_owned(), self.read(TEST_STEP_ID, name))]
     }
 }

@@ -11,7 +11,7 @@ pub enum CacheMode {
 }
 
 impl CacheMode {
-    pub const NAMES: [&'static str; 4] = ["read", "write", "write-only", "none"];
+    pub const NAMES: &[&'static str] = &["read", "write", "write-only", "none"];
 
     #[must_use]
     pub fn parse(name: &str) -> Option<Self> {

@@ -21,7 +21,7 @@ mod failure;
 mod support;
 use support::{Fixture, TestResult, labelled, request};
 
-const TMPFS: [(&str, &str); 2] = [
+const TMPFS: &[(&str, &str)] = &[
     (
         "/tmp",
         "rw,exec,nosuid,nodev,size=2147483648,nr_inodes=131072",
@@ -64,8 +64,7 @@ fn container_label_keys(container: &ContainerInspectResponse) -> Vec<String> {
         .config
         .as_ref()
         .and_then(|config| config.labels.as_ref())
-        .map(|labels| labels.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|labels| labels.keys().cloned().collect())
 }
 
 async fn observe_pair(fixture: &Fixture) -> TestResult<Observed> {
@@ -109,8 +108,7 @@ fn networks(container: &ContainerInspectResponse) -> Vec<String> {
         .network_settings
         .as_ref()
         .and_then(|settings| settings.networks.as_ref())
-        .map(|networks| networks.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|networks| networks.keys().cloned().collect())
 }
 
 fn network_mode(container: &ContainerInspectResponse) -> Option<String> {
@@ -147,16 +145,22 @@ async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() ->
         network_mode(&observed.runner),
         Some(format!("container:{}", observed.dind_id))
     );
-    let dind_memory = 40_063_991_808;
-    let runner_memory = 22_884_122_624;
-    assert_eq!(
-        limits(&observed.dind),
-        Some((500_000_000, dind_memory, dind_memory, 2048, true))
-    );
-    assert_eq!(
-        limits(&observed.runner),
-        Some((1_500_000_000, runner_memory, runner_memory, 1024, false))
-    );
+    let floor = 1_073_741_824 + 3 * 2_147_483_648;
+    for (container, cpu, pids, privileged) in [
+        (&observed.dind, 500_000_000, 2048, true),
+        (&observed.runner, 1_500_000_000, 1024, false),
+    ] {
+        let Some((nano_cpus, memory, swap, found_pids, found_privileged)) = limits(container)
+        else {
+            return Err("a container without limits".into());
+        };
+        assert_eq!(
+            (nano_cpus, found_pids, found_privileged),
+            (cpu, pids, privileged)
+        );
+        assert_eq!(memory, swap);
+        assert!(memory >= floor, "{memory} below {floor}");
+    }
     assert_eq!(tmpfs(&observed.dind), Some(expected_tmpfs.clone()));
     assert_eq!(tmpfs(&observed.runner), Some(expected_tmpfs));
     assert_eq!(

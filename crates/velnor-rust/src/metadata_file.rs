@@ -138,7 +138,7 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
 
-fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
+pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
         .get(&LOCK_PATH)
         .and_then(|bytes| parse_lock(bytes).ok())
@@ -264,8 +264,8 @@ pub fn recorded_metadata(
     Ok(known)
 }
 
-const DISCOVERED_FILES: [&str; 3] = ["build.rs", "src/lib.rs", "src/main.rs"];
-const DISCOVERED_FOLDERS: [&str; 4] = ["src/bin", "tests", "examples", "benches"];
+const DISCOVERED_FILES: &[&str] = &["build.rs", "src/lib.rs", "src/main.rs"];
+const DISCOVERED_FOLDERS: &[&str] = &["src/bin", "tests", "examples", "benches"];
 
 fn discovered(relative: &str) -> bool {
     DISCOVERED_FILES.contains(&relative)

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,7 +17,13 @@ use crate::error::CiError;
 
 pub(super) const BASELINE: &str = ".velnor/delta-baseline.json";
 pub(super) const MANIFEST: &str = "manifest.json";
+/// The base inventory a default-branch run saves inside the base cache.
+pub(super) const INVENTORY: &str = ".velnor/delta-inventory.json";
 const METADATA_LIMIT: u64 = 16 * 1024 * 1024;
+const INVENTORY_LIMIT: u64 = 128 * 1024 * 1024;
+/// A file changed within this long before an inventory was taken is read again: a coarse
+/// file-system clock can give a later rewrite the same change time.
+const RACY_NS: u64 = 2_000_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
@@ -80,6 +86,32 @@ pub(super) fn validate_times(nodes: &BTreeMap<PathBuf, Node>, cutoff: u64) -> Re
 pub(super) struct Snapshot {
     pub base: String,
     pub nodes: BTreeMap<PathBuf, Node>,
+    /// Inode change time of each file when it was inventoried. A rewrite always moves it, even
+    /// one that restores the size and modification time, so a file whose change time is
+    /// unchanged still holds the recorded bytes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub changed: BTreeMap<PathBuf, u64>,
+    /// When the inventory began; change times closer to it than `RACY_NS` prove nothing.
+    #[serde(default)]
+    pub taken: u64,
+}
+
+impl Snapshot {
+    pub(super) fn files(&self) -> usize {
+        self.nodes.values().filter(|node| !node.directory()).count()
+    }
+
+    /// The recorded node of a file that provably still holds the recorded bytes, so the
+    /// caller need not read it: size, time, mode and change time all match, and the change
+    /// time is old enough that a later rewrite could not share it.
+    pub(super) fn unchanged(&self, path: &Path, current: &Node, changed: u64) -> Option<&Node> {
+        let recorded = self.nodes.get(path)?;
+        let same = matches!((recorded, current), (Node::File { .. }, Node::File { .. }))
+            && recorded.size() == current.size()
+            && recorded.metadata() == current.metadata();
+        let at = *self.changed.get(path)?;
+        (same && at == changed && at.saturating_add(RACY_NS) <= self.taken).then_some(recorded)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,15 +123,94 @@ pub(super) struct Manifest {
     pub sources: super::delta_source::SourceSnapshot,
 }
 
-pub(super) fn capture(root: &Path, base: &str) -> Result<Snapshot, CiError> {
-    let nodes = super::delta_tree::paths(root)?
-        .into_iter()
-        .map(|path| identity(&root.join(&path)).map(|node| (path, node)))
-        .collect::<Result<_, _>>()?;
-    Ok(Snapshot {
+/// Inventories `root`, started at `taken`. A file whose size, time and mode match the same
+/// path in `known` keeps its recorded digest instead of being read again; any other file is
+/// hashed. Also returns how many files were read.
+pub(super) fn capture(
+    root: &Path,
+    base: &str,
+    known: Option<&Snapshot>,
+    taken: u64,
+) -> Result<(Snapshot, usize), CiError> {
+    let mut snapshot = Snapshot {
         base: base.to_owned(),
-        nodes,
-    })
+        nodes: BTreeMap::new(),
+        changed: BTreeMap::new(),
+        taken,
+    };
+    let mut read = 0;
+    for path in super::delta_tree::paths(root)? {
+        let full = root.join(&path);
+        let changed = change_time(&full)?;
+        let recorded = known.and_then(|known| known.nodes.get(&path));
+        let (node, hashed) = identity_reusing(&full, recorded)?;
+        read += usize::from(hashed);
+        if !node.directory() {
+            snapshot.changed.insert(path.clone(), changed);
+        }
+        snapshot.nodes.insert(path, node);
+    }
+    Ok((snapshot, read))
+}
+
+/// The inode change time of `path`, which a user cannot set.
+pub(super) fn change_time(path: &Path) -> Result<u64, CiError> {
+    let metadata = fs::symlink_metadata(path).map_err(|e| failure(path, &e))?;
+    u64::try_from(i128::from(metadata.ctime()) * 1_000_000_000 + i128::from(metadata.ctime_nsec()))
+        .map_err(|_| CiError::new("change time is out of range"))
+}
+
+fn identity_reusing(path: &Path, recorded: Option<&Node>) -> Result<(Node, bool), CiError> {
+    let current = stat(path)?;
+    if let (
+        Node::File {
+            size,
+            modified,
+            mode,
+            ..
+        },
+        Some(Node::File {
+            size: old_size,
+            modified: old_modified,
+            mode: old_mode,
+            digest,
+        }),
+    ) = (&current, recorded)
+        && (size, modified, mode) == (old_size, old_modified, old_mode)
+    {
+        return Ok((
+            Node::File {
+                size: *size,
+                modified: *modified,
+                mode: *mode,
+                digest: *digest,
+            },
+            false,
+        ));
+    }
+    Ok((identity(path)?, !current.directory()))
+}
+
+/// Records the digest of every file of a base that is about to be saved, so a pull request
+/// that restores the base does not read the whole tree again before its first Cargo command.
+pub(super) fn record_inventory(target: &Path) -> Result<(), CiError> {
+    let (mut inventory, _) = capture(target, "", None, 0)?;
+    inventory.changed.clear();
+    let bytes = serde_json::to_vec(&inventory).map_err(|e| CiError::new(e.to_string()))?;
+    if bytes.len() as u64 > INVENTORY_LIMIT {
+        return Err(CiError::new("the base inventory exceeds its size limit"));
+    }
+    replace(&target.join(INVENTORY), Some(&bytes))
+}
+
+/// The inventory saved with the base, or `None` when it is absent or unusable; the caller
+/// then reads every file.
+pub(super) fn recorded_inventory(target: &Path) -> Option<Snapshot> {
+    read_bounded(&target.join(INVENTORY), INVENTORY_LIMIT).ok()
+}
+
+pub(super) fn forget_inventory(target: &Path) -> Result<(), CiError> {
+    replace(&target.join(INVENTORY), None)
 }
 
 pub(super) fn identity(path: &Path) -> Result<Node, CiError> {
@@ -159,15 +270,19 @@ pub(super) fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, CiError> {
 }
 
 pub(super) fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, CiError> {
+    read_bounded(path, METADATA_LIMIT)
+}
+
+fn read_bounded<T: for<'de> Deserialize<'de>>(path: &Path, limit: u64) -> Result<T, CiError> {
     safe_path(path)?;
     let metadata = fs::symlink_metadata(path).map_err(|e| failure(path, &e))?;
-    if !metadata.is_file() || metadata.len() > METADATA_LIMIT {
+    if !metadata.is_file() || metadata.len() > limit {
         return Err(CiError::new(
             "delta metadata must be a bounded regular file",
         ));
     }
     let file = fs::File::open(path).map_err(|e| failure(path, &e))?;
-    serde_json::from_slice(&super::read_limited(file, METADATA_LIMIT)?)
+    serde_json::from_slice(&super::read_limited(file, limit)?)
         .map_err(|e| CiError::new(format!("invalid delta metadata: {e}")))
 }
 
@@ -193,7 +308,7 @@ pub(super) fn validate(path: &Path) -> Result<(), CiError> {
         || path
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
-        || (path.starts_with(".velnor") && path != Path::new(".velnor/inputs.tsv"))
+        || (path.starts_with(".velnor") && !crate::inputs::is_inputs_file(path))
     {
         return Err(CiError::new(format!(
             "invalid delta relative path {}",

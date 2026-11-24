@@ -104,6 +104,18 @@ pub fn tag_of(pattern: &str, version: &str) -> Result<PlainName, CiError> {
     PlainName::tag(&pattern.replace(VERSION, version))
 }
 
+pub fn require_pushed(tag: &PlainName, pushed: &str) -> Result<(), CiError> {
+    if tag.as_str() == pushed {
+        Ok(())
+    } else {
+        Err(CiError::new(format!(
+            "the pushed tag {} is not the family tag {} of the package versions",
+            pushed.escape_debug(),
+            tag.as_str()
+        )))
+    }
+}
+
 fn releases(github: &dyn GitHub, repo: &Repo, tag: &str) -> Result<Vec<ApiRelease>, CiError> {
     let mut found = Vec::new();
     for page in 1.. {

@@ -9,7 +9,7 @@ use velnor_rust::{Need, decide};
 use crate::facts::TestResult;
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
-const MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.18.4\"\ncargo-machete = \"0.9.1\"\n";
+const MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.18.4\"\ncargo-machete = \"0.9.1\"\n";
 
 fn rendered() -> Result<String, Box<dyn std::error::Error>> {
     let mut view = view(&["Cargo.toml"], None)?;

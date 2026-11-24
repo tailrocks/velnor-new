@@ -16,14 +16,12 @@ const MAX_BINDING_BYTES: u64 = 1_048_576;
 const MAX_DRAIN_PROOF_BYTES: u64 = MAX_BINDING_BYTES + 33;
 const MAX_SIDECARS: usize = 4096;
 
-#[path = "retirement/github_absence.rs"]
-mod github_absence;
-
-pub(crate) use github_absence::{
-    AbsenceProofs, read_absence_proofs, record_absence, recorded_pairs,
-};
 #[cfg(test)]
-pub(crate) use github_absence::{fixture_config, removed_fixture};
+#[path = "retirement/fixtures.rs"]
+mod fixtures;
+
+#[cfg(test)]
+pub(crate) use fixtures::{fixture_config, removed_fixture};
 
 pub(super) fn removed_bindings(
     state: &Path,
@@ -87,7 +85,7 @@ pub(super) fn removed_bindings(
     Ok(bindings)
 }
 
-pub(super) fn proof_is_current(
+pub(crate) fn proof_is_current(
     state: &Path,
     binding: &RepositoryConnection,
 ) -> Result<bool, HostError> {

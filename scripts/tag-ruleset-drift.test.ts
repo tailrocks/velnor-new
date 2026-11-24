@@ -3,6 +3,7 @@
 "use strict";
 import { expect, test } from "bun:test";
 import { TOML, YAML } from "bun";
+import { checkTagRulesets, tagPushFamilyPatterns } from "./tag-ruleset-drift.mjs";
 import recorded from "../fixtures/tag-ruleset-drift/protect-tags.json";
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected a mapping");
@@ -12,15 +13,13 @@ function array(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw new Error("Expected a sequence");
   return value;
 }
-const workflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/release-rust-ci-tools.yml", import.meta.url)).text()));
+const workflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/release.yml", import.meta.url)).text()));
 const jobs = object(workflow.jobs);
-const drift = object(jobs["tag-ruleset-drift"]);
+const driftWorkflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/tag-ruleset-drift.yml", import.meta.url)).text()));
+const driftJobs = object(driftWorkflow.jobs);
+const drift = object(driftJobs["tag-ruleset-drift"]);
 const steps = array(drift.steps).map(object);
-const step = steps.find(value => value.name === "Check tag immutability rulesets");
-if (!step) throw new Error("Tag ruleset drift step is missing");
-const inputs = object(step.with);
-if (typeof inputs.script !== "string") throw new Error("Drift script is missing");
-const execute = new Function("github", "context", "process", `return (async () => {${inputs.script}\n})();`);
+const checkout = steps[0], step = steps[1];
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
 const releaseRefs = ["refs/tags/rust-ci-v*", "refs/tags/velnor-ci-v*", "refs/tags/velnor-gen-v*"] satisfies [string, string, string];
@@ -45,7 +44,11 @@ async function run({ rulesets = [baseline(), release()], token = "admin-read-tok
       return { data };
     },
   };
-  await execute(github, { repo: { owner: "tailrocks", repo: "velnor-new" } }, { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } });
+  const getOctokit = (auth: string) => {
+    expect(auth).toBe(token);
+    return github;
+  };
+  await checkTagRulesets({ context: { repo: { owner: "tailrocks", repo: "velnor-new" } }, process: { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } }, getOctokit });
   return detailed;
 }
 test("the recorded protection and pinned release app prove the expected tag policy", async () => {
@@ -145,50 +148,99 @@ test("API failures and absent owner credentials fail the check", async () => {
   await expect(run({ failure: "detail" })).rejects.toThrow("Detail unavailable");
   await expect(run({ token: "" })).rejects.toThrow("Provision TAG_RULESET_ADMIN_READ_TOKEN");
 });
-test("daily and manual checks isolate the credential from release and checkout code", () => {
-  const events = object(workflow.on);
-  expect(object(array(events.schedule)[0]).cron).toBe("23 4 * * *");
-  expect(Object.hasOwn(events, "workflow_dispatch")).toBe(true);
-  expect(drift.if).toBe("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
-  expect(drift).toMatchObject({ permissions: {}, "timeout-minutes": 5 });
-  expect(steps).toHaveLength(1);
-  expect(step.uses).toBe("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3");
-  expect(inputs["github-token"]).toBe("${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}");
-  expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: inputs["github-token"] });
-  expect(object(jobs.gate).if).toBe("github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))");
+test("the manual check isolates the credential from release and checkout code", () => {
+  expect(driftWorkflow.on).toEqual({ workflow_dispatch: {}, schedule: [{ cron: "23 4 * * *" }] });
+  expect(driftWorkflow.permissions).toEqual({});
+  expect(Object.keys(driftJobs)).toEqual(["tag-ruleset-drift"]);
+  expect(drift.if).toBe("${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}");
+  expect(drift).toMatchObject({ permissions: { contents: "read" }, "timeout-minutes": 5 });
+  expect(steps).toHaveLength(2);
+  expect(object(checkout.with)["persist-credentials"]).toBe(false);
+  expect(checkout.env).toBeUndefined();
+  expect(step.run).toBe("node scripts/tag-ruleset-drift.mjs");
+  expect(step.uses).toBeUndefined();
+  expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY: "${{ github.repository }}" });
+  expect(Object.hasOwn(object(workflow.on), "schedule")).toBe(false);
+  expect(object(jobs.gate).if).toBe("${{ github.ref_type == 'tag' }}");
+  expect(object(jobs.gate).needs).toBeUndefined();
   for (const [id, job] of Object.entries(jobs)) {
-    if (id === "tag-ruleset-drift") continue;
     expect(JSON.stringify(job)).not.toContain("TAG_RULESET_ADMIN_READ_TOKEN");
-    if (id !== "gate") {
-      expect(object(job).needs).toBe(new Map(Object.entries({ build: "gate", checksums: "build", release: "checksums" })).get(id));
-      expect(object(job).if).toBeUndefined();
-    }
+    if (id !== "gate") expect(JSON.stringify(object(job).needs)).toContain("gate");
   }
 });
-test("the maintenance check provisions the project's pinned Bun in its isolated tool environment", async () => {
-  const config = object(TOML.parse(await Bun.file(new URL("../.velnor/config.toml", import.meta.url)).text()));
+test("the maintenance task runs this test with the project's pinned Bun", async () => {
   const mise = object(TOML.parse(await Bun.file(new URL("../mise.toml", import.meta.url)).text()));
-  const maintenance = array(config.checks).map(object).find(check => check.id === "maintenance-helpers");
-  if (!maintenance) throw new Error("maintenance-helpers check is missing");
-  const selected = array(maintenance.tools);
-  const bun = array(config.qualified_tools).map(object).find(tool => selected.includes(tool.id) && object(tool.backend).tool === "bun");
-  if (!bun) throw new Error("maintenance-helpers must select a qualified Bun runtime");
-  expect(bun.version).toBe(object(mise.tools).bun);
-  const linux = array(bun.platforms).map(object).find(platform => platform.platform === "linux_x64");
-  if (!linux) throw new Error("Bun must be qualified for the maintenance runner");
-  expect(array(linux.executables).map(object)).toContainEqual(expect.objectContaining({ name: "bun", path: "bun", probe: { kind: "version", expected: object(mise.tools).bun } }));
+  expect(typeof object(mise.tools).bun).toBe("string");
+  const task = object(object(mise.tasks)["test-maintenance-helpers"]);
+  expect(String(task.run)).toContain("bun test ./scripts/tag-ruleset-drift.test.ts");
+});
+const environmentRoute = "GET /repos/{owner}/{repo}/environments/{environment_name}";
+const policiesRoute = `${environmentRoute}/deployment-branch-policies`;
+type Policy = { name: string; type: "branch" | "tag" };
+type Environment = { deployment_branch_policy: null | { protected_branches: boolean; custom_branch_policies: boolean }; policies?: Policy[]; total?: number };
+const custom = { protected_branches: false, custom_branch_policies: true };
+async function runEnvironment(environment: Environment, releaseToml: string) {
+  const calls: string[] = [];
+  const rulesets = [baseline(), release()];
+  const github = {
+    async paginate() { return rulesets.map(({ id, name, target }) => ({ id, name, target })); },
+    async request(route: string, parameters: { owner: string; repo: string; environment_name?: string; ruleset_id?: number }) {
+      calls.push(route);
+      if (route.endsWith("/rulesets/{ruleset_id}")) return { data: rulesets.find(rule => rule.id === parameters.ruleset_id) };
+      if (route === environmentRoute) {
+        expect(parameters).toEqual({ owner: "tailrocks", repo: "velnor-new", environment_name: "release" });
+        return { data: { name: "release", deployment_branch_policy: environment.deployment_branch_policy } };
+      }
+      expect(route).toBe(policiesRoute);
+      expect(parameters).toMatchObject({ owner: "tailrocks", repo: "velnor-new", environment_name: "release" });
+      const branch_policies = environment.policies ?? [];
+      return { data: { total_count: environment.total ?? branch_policies.length, branch_policies } };
+    },
+  };
+  const process = { env: { TAG_RULESET_ADMIN_READ_TOKEN: "admin-read-token" } };
+  const context = { repo: { owner: "tailrocks", repo: "velnor-new" } };
+  await checkTagRulesets({ context, process, getOctokit: () => github, releaseToml }).catch(error => { throw Object.assign(error, { calls }); });
+  return calls;
+}
+const tagPush = 'family_tag = "tools-v{{ version }}"\nfamily_trigger = "tag_push"\n\n[[binaries]]\npackage = "velnor-ci"\n';
+const rulesetDetails = Array<string>(2).fill("GET /repos/{owner}/{repo}/rulesets/{ruleset_id}");
+const basics: Policy[] = [{ name: "main", type: "branch" }];
+test("the checked-in release.toml names the tools-v* family tag pattern", async () => {
+  const toml = await Bun.file(new URL("../.velnor/release.toml", import.meta.url)).text();
+  expect(tagPushFamilyPatterns(toml)).toEqual(["tools-v*"]);
+  expect(tagPushFamilyPatterns('family_tag = "x-v{{ version }}"\n')).toEqual([]);
+  expect(tagPushFamilyPatterns('# family_tag = "x-v"\nfamily_trigger = "tag_push"\n')).toEqual([]);
+});
+test("a release environment that allows the family tag pattern passes", async () => {
+  const calls = await runEnvironment({ deployment_branch_policy: custom, policies: [...basics, { name: "tools-v*", type: "tag" }] }, tagPush);
+  expect(calls).toEqual([environmentRoute, policiesRoute, ...rulesetDetails]);
+});
+test("a release environment without the family tag policy fails with a clear message", async () => {
+  for (const policies of [basics, [...basics, { name: "tools-v*", type: "branch" } satisfies Policy], [...basics, { name: "other-v*", type: "tag" } satisfies Policy], []]) {
+    await expect(runEnvironment({ deployment_branch_policy: custom, policies }, tagPush)).rejects.toThrow("deployment policies must allow the tag pattern tools-v*");
+  }
+});
+test("an environment limited to protected branches fails and an unrestricted one passes", async () => {
+  await expect(runEnvironment({ deployment_branch_policy: { protected_branches: true, custom_branch_policies: false } }, tagPush)).rejects.toThrow("allows only protected branches");
+  expect(await runEnvironment({ deployment_branch_policy: null }, tagPush)).toEqual([environmentRoute, ...rulesetDetails]);
+});
+test("an incomplete policy page cannot prove the tag policy", async () => {
+  await expect(runEnvironment({ deployment_branch_policy: custom, policies: basics, total: 120 }, tagPush)).rejects.toThrow("page through them");
+});
+test("a release.toml without a tag_push family never reads the environment", async () => {
+  expect(await runEnvironment({ deployment_branch_policy: custom }, 'family_tag = "tools-v{{ version }}"\n')).toEqual(rulesetDetails);
 });
 
 function matchesTagFilter(pattern: string, tag: string): boolean {
   return new RegExp(`^${pattern.replace(/[.]/g, "\\.").replace(/\*/g, "[^/]*")}$`).test(tag);
 }
-test("the release workflow runs on rust-ci-v and tools-v tags and on no other release tag", () => {
+test("the release workflow runs on tools-v tags and on no other release tag", () => {
   const tags = array(object(object(workflow.on).push).tags);
-  expect(tags).toEqual(["rust-ci-v*", "tools-v*"]);
-  for (const tag of ["rust-ci-v0.1.84", "tools-v0.1.85"]) {
+  expect(tags).toEqual(["tools-v*"]);
+  for (const tag of ["tools-v0.1.85"]) {
     expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(true);
   }
-  for (const tag of ["v0.1.85", "runner-v0.1.85", "actions-v0.1.85", "velnor-ci-v0.1.85", "velnor-gen-v0.1.85"]) {
+  for (const tag of ["v0.1.85", "rust-ci-v0.1.84", "runner-v0.1.85", "actions-v0.1.85", "velnor-ci-v0.1.85", "velnor-gen-v0.1.85"]) {
     expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(false);
   }
 });

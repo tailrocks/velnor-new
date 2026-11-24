@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
-use velnor_model::{CompileInputs, PackageName, RepoPath};
+use velnor_model::{CompileInputs, InputOwner, PackageName, RepoPath};
 
 use crate::error::{DetectError, Reason};
 
 pub const INPUTS_LOCK: RepoPath = RepoPath::from_static(".velnor/rust-inputs.lock");
+/// The first `velnor-ci` that reads a lock line naming its package's manifest.
+pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 101);
 const REPOSITORY: &str = ".";
 
 #[must_use]
@@ -100,17 +103,117 @@ pub fn normalize(path: &Path) -> PathBuf {
     full
 }
 
+/// Most symbolic links one resolution follows before it reports a loop.
+const MAX_LINKS: usize = 40;
+
+/// One step of a path, in the order a resolution walks it.
+enum Step {
+    Root(OsString),
+    Name(OsString),
+    Parent,
+}
+
+/// The steps of `path`, last step first, so that `Vec::pop` yields them in order.
+fn steps(path: &Path) -> Vec<Step> {
+    let mut steps: Vec<Step> = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Prefix(_) | Component::RootDir => {
+                Some(Step::Root(component.as_os_str().to_owned()))
+            }
+            Component::Normal(name) => Some(Step::Name(name.to_owned())),
+            Component::ParentDir => Some(Step::Parent),
+            Component::CurDir => None,
+        })
+        .collect();
+    steps.reverse();
+    steps
+}
+
+/// `fs::canonicalize` for a path that may not exist yet.
+///
+/// Relative input is made absolute against the current directory first. The
+/// components are then walked in order, so each `..` is applied to the real
+/// directory reached so far, as the OS applies it. A component with no entry
+/// at all keeps its lexical form, because nothing below a missing entry can be
+/// a symbolic link. A dangling symbolic link resolves to its target. A loop, and
+/// any other error such as a permission failure, is returned rather than guessed.
+pub fn resolve(path: &Path) -> std::io::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut pending = steps(&absolute);
+    let mut resolved = PathBuf::new();
+    let mut links = 0;
+    while let Some(step) = pending.pop() {
+        let name = match step {
+            Step::Root(root) => {
+                resolved.push(root);
+                continue;
+            }
+            Step::Parent => {
+                resolved.pop();
+                continue;
+            }
+            Step::Name(name) => name,
+        };
+        let candidate = resolved.join(&name);
+        match std::fs::canonicalize(&candidate) {
+            Ok(real) => resolved = real,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match std::fs::symlink_metadata(&candidate) {
+                    Ok(meta) if meta.file_type().is_symlink() => {
+                        links += 1;
+                        if links > MAX_LINKS {
+                            return Err(std::io::Error::other("too many levels of symbolic links"));
+                        }
+                        pending.extend(steps(&std::fs::read_link(&candidate)?));
+                    }
+                    Ok(_) => return Err(error),
+                    Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => {
+                        resolved = candidate;
+                    }
+                    Err(other) => return Err(other),
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(resolved)
+}
+
 #[must_use]
 pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs {
     found
         .iter()
-        .filter_map(|(path, packages)| {
-            let missing: BTreeSet<PackageName> = packages
+        .filter_map(|(path, owners)| {
+            let missing: BTreeSet<InputOwner> = owners
                 .iter()
-                .filter(|package| !listed.get(path).is_some_and(|l| l.contains(*package)))
+                .filter(|owner| {
+                    !listed
+                        .get(path)
+                        .is_some_and(|l| l.iter().any(|entry| entry.same_package(owner)))
+                })
                 .cloned()
                 .collect();
             (!missing.is_empty()).then(|| (path.clone(), missing))
+        })
+        .collect()
+}
+
+/// The inputs with every manifest dropped: the name-only lines a velnor-ci before 0.1.101 reads.
+#[must_use]
+pub fn without_identity(inputs: &CompileInputs) -> CompileInputs {
+    inputs
+        .iter()
+        .map(|(path, owners)| {
+            let named = owners
+                .iter()
+                .map(|owner| InputOwner::named(owner.name.clone()))
+                .collect();
+            (path.clone(), named)
         })
         .collect()
 }
@@ -119,13 +222,34 @@ pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs 
 pub fn format_inputs_lock(inputs: &CompileInputs) -> String {
     inputs
         .iter()
-        .flat_map(|(path, packages)| {
-            packages.iter().map(move |package| match path {
-                Some(path) => format!("{path}\t{package}\n"),
-                None => format!("{REPOSITORY}\t{package}\n"),
+        .flat_map(|(path, owners)| {
+            owners.iter().map(move |owner| {
+                let path = path.as_ref().map_or(REPOSITORY, RepoPath::as_str);
+                match &owner.manifest {
+                    Some(manifest) => format!("{path}\t{}\t{manifest}\n", owner.name),
+                    None => format!("{path}\t{}\n", owner.name),
+                }
             })
         })
         .collect()
+}
+
+/// The lock text a velnor-ci pinned in the repository can read: manifests only if `identified`.
+#[must_use]
+pub fn inputs_lock_text(inputs: &CompileInputs, identified: bool) -> String {
+    if identified {
+        format_inputs_lock(inputs)
+    } else {
+        format_inputs_lock(&without_identity(inputs))
+    }
+}
+
+/// Whether any line of the lock carries a manifest, which a velnor-ci before 0.1.101 refuses.
+#[must_use]
+pub fn lock_is_identified(bytes: &[u8]) -> bool {
+    bytes
+        .split(|byte| *byte == b'\n')
+        .any(|line| line.split(|byte| *byte == b'\t').count() >= 3)
 }
 
 pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
@@ -133,15 +257,23 @@ pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
     let text = std::str::from_utf8(bytes).map_err(|_| invalid(Reason::NotUtf8))?;
     let mut inputs: CompileInputs = BTreeMap::new();
     for (index, line) in text.lines().enumerate() {
-        let entry = line.split_once('\t').and_then(|(path, package)| {
+        let entry = line.split_once('\t').and_then(|(path, rest)| {
             let path = match path {
                 REPOSITORY => None,
                 path => Some(RepoPath::new(path).ok()?),
             };
-            Some((path, PackageName::new(package).ok()?))
+            let (package, manifest) = match rest.split_once('\t') {
+                Some((package, manifest)) => (package, Some(RepoPath::new(manifest).ok()?)),
+                None => (rest, None),
+            };
+            let owner = InputOwner {
+                name: PackageName::new(package).ok()?,
+                manifest,
+            };
+            Some((path, owner))
         });
-        let (path, package) = entry.ok_or_else(|| invalid(Reason::LockLine(index + 1)))?;
-        inputs.entry(path).or_default().insert(package);
+        let (path, owner) = entry.ok_or_else(|| invalid(Reason::LockLine(index + 1)))?;
+        inputs.entry(path).or_default().insert(owner);
     }
     Ok(inputs)
 }

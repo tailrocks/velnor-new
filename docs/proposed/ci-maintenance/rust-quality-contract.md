@@ -42,7 +42,6 @@ crates/
   velnor-actions-workflow-renderer/
   velnor-actions-orchestrator/
   velnor-actions-cli/
-  velnor-actions-freshness/   # repository-only freshness maintenance
   velnor-actions-tofu/
 # Optional, repository-owned, read-only Velnor inputs:
 rust-toolchain.toml
@@ -51,15 +50,15 @@ mise.lock
 ```
 
 All first-party Rust packages MUST be under `crates/`; root MUST be virtual with
-exactly the eight product package names below plus repository-only member `velnor-actions-freshness`
-and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
+exactly the eight product package names below plus utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
 no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
 Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; jactionlint metadata belongs to `velnor-actions-actionlint`.
-Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
-results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
-helper enters V1 Rust task derivation or the product crate matrix. The
+Pin freshness is not a workspace member: Renovate (`renovate.json`, #1779)
+owns pin updates, and the former `velnor-actions-freshness` and
+`velnor-freshness` crates were deleted with the old engine (#1747). Scripts
+provision archive guard, which does not enter V1 Rust task derivation or the product crate matrix. The
 canonical Velnor repository uses the existing named-Mise-check contract to
-run both helper packages' Rust test suites as one required
+run the helper package's Rust test suite as a required
 `maintenance-helpers` repository-quality check; ordinary ConsumerV1
 configurations do not declare this repository-owned check. Alint enforces only configured
 generic file/path, required-file, and line-count rules.
@@ -78,13 +77,11 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details and process creation/control, except the read-only `rustix::process::geteuid()` caller-owner lookup in the private generation-stage validator |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
-| `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
 | `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes; repository-only golden collection | V1 stack behavior, task derivation, workflow generation, or product dependencies |
 
-Both repository-only members are outside the eight-product V1 task graph. The
-CLI private gate consumes freshness at runtime, repository scripts provision
-archive guard, and the orchestrator links only archive guard's bounded, pure
-OCI validation API. Freshness stays outside the product dependency graph.
+The repository-only archive guard is outside the eight-product V1 task graph.
+Repository scripts provision it, and the orchestrator links only its bounded,
+pure OCI validation API.
 Archive validation remains pure. Its repository-only golden collector MAY
 reuse `velnor-actions-mise`'s bounded process-group owner for candidate version,
 plan, generation, output-binding, guard-fingerprint, and fixture-Git commands;
@@ -136,17 +133,17 @@ stack-neutral choice between `consumer-v1` and `velnor-repository-v1`.
 The workspace MUST use Rust 2024 and resolver 3. Gate 0 MUST select the latest
 patched stable release then available and record it. The historical
 2026-09-27 research snapshot used Rust 1.98.1 with MSRV 1.98; the current
-qualified toolchain is Rust 1.99.1 with MSRV 1.99. Never use a placeholder
+qualified toolchain is Rust 1.100.0 with MSRV 1.100. Never use a placeholder
 MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-archive-guard", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-freshness", "crates/velnor-actions-tofu"]
+members = ["crates/velnor-actions-contract", "crates/velnor-archive-guard", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 ```
 
 Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
@@ -255,7 +252,7 @@ optional heavyweight dependency, platform separation, stable API, or measured
 rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
 platform, or process crates. Do not create wrapper or `utils` crates only to
 meet a count. The allowed dependency directions are architectural requirements
-reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` regex rule over `crates/**/src/**/*.rs`.
+reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` rule (a token scanner, `scripts/no-doctests.py`) over `crates/**/src/**/*.rs`.
 
 Timeless principles (spec §3.2): separation of concerns per §1,
 `pub(crate)` by default, one authoritative implementation, KISS/YAGNI (no
@@ -345,12 +342,17 @@ MSRV, behavior, and build cost; do not hand-write a regex parser for HCL.
 
 Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
-`alint` job. The job MUST use the configured Alint action, defaulting to the
-full-SHA pin (repository-structure alint, distinct
-from workflow-syntax jactionlint):
+`alint` job. The job MUST install Alint through mise from the pin in
+`mise.toml`, `"github:asamarts/alint" = "v0.23.0"`, whose release assets are
+digest-locked in `mise.lock`. The tag `v0.23.0` resolves to commit
+`465e70c48ec13774c8cb3bb58856b58b71e3a93d`. The job then runs Alint as
+repository-structure checking, distinct from workflow-syntax jactionlint:
 
 ```yaml
-- uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3 # v0.22.1
+- uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+  with:
+    install_args: 'github:asamarts/alint'
+- run: alint --format github --config .alint.yml --fail-on-warning check .
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

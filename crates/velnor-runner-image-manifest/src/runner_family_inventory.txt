@@ -1,12 +1,5 @@
 .mise-version
 .velnor/config.toml
-.velnor/qualification/homebrew/formula-spec.json
-.velnor/qualification/homebrew/jackin/cutover-author-policy.json
-.velnor/qualification/homebrew/jackin/transition.json
-.velnor/qualification/homebrew/preview-a-source-admission.json
-.velnor/qualification/homebrew/preview-a.json
-.velnor/qualification/homebrew/preview-d.json
-.velnor/qualification/homebrew/preview-plan.json
 .velnor/runner.lock
 .velnor/version-policy.toml
 Cargo.lock
@@ -16,6 +9,7 @@ crates/velnor-archive-guard/build.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
+crates/velnor-archive-guard/build_support/archive_guard_watch.rs
 crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs
 crates/velnor-archive-guard/src/lib.rs
 crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract.rs

@@ -6,8 +6,8 @@
 use crate::run::scratch;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::path::Path;
+use std::process::Output;
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
 pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
@@ -15,6 +15,9 @@ pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
     let program = directory.join("cargo-nextest");
     let mut script = String::from("#!/bin/sh\nif [ \"$2\" = list ]; then\n");
     script.push_str("printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n");
+    script.push_str(
+        "p=; for a in \"$@\"; do d=; [ \"$p\" = --extract-to ] && d=$a; case $a in --extract-to=*) d=${a#--extract-to=};; esac; [ -n \"$d\" ] && [ -d \"$d\" ] && : > \"$RUNNER_TEMP/list-dest-existed\"; p=$a; done\n",
+    );
     script.push_str("echo 'Summary [   0.001s] 99 tests run: 99 passed, 0 skipped' >&2\n");
     script.push_str("printf '%s\\n' '");
     script.push_str(list_json);
@@ -79,9 +82,22 @@ pub(crate) fn run_with_output(
     run: &str,
     list_json: &str,
     command: &[&str],
-) -> (Output, String, PathBuf) {
+) -> (Output, String, velnor_test_support::ScratchDir) {
     let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
     (output, written, temp)
+}
+/// The step output without the `built=` line, which a nextest run writes once its
+/// build is known. Counts are what the held-pipe tests assert are withheld.
+pub(crate) fn without_built(written: &str) -> String {
+    let mut kept = String::new();
+    for line in written.lines().filter(|line| !line.starts_with("built=")) {
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
+}
+pub(crate) fn archive_in(directory: &Path) {
+    fs::write(directory.join("a.tar.zst"), b"").unwrap_or_else(|e| unreachable!("{e}"));
 }
 pub(crate) fn execute_nextest(
     name: &str,
@@ -89,9 +105,15 @@ pub(crate) fn execute_nextest(
     list_json: &str,
     command: &[&str],
     grace_ms: Option<&str>,
-) -> (Output, String, PathBuf, std::time::Duration) {
+) -> (
+    Output,
+    String,
+    velnor_test_support::ScratchDir,
+    std::time::Duration,
+) {
     let started = std::time::Instant::now();
     let temp = scratch(name);
+    archive_in(&temp);
     fake_nextest(&temp, run, list_json);
     let outputs = temp.join("github-output");
     fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
@@ -100,12 +122,13 @@ pub(crate) fn execute_nextest(
         temp.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut child = crate::run::velnor_ci_run();
     child
         .arg("run")
         .arg("--")
         .args(command)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_OUTPUT", &outputs)
         .env("PATH", path);
     if let Some(grace_ms) = grace_ms {
@@ -115,7 +138,7 @@ pub(crate) fn execute_nextest(
     let written = fs::read_to_string(&outputs).unwrap_or_default();
     (output, written, temp, started.elapsed())
 }
-pub(crate) const NEXTEST_RUN: [&str; 6] = [
+pub(crate) const NEXTEST_RUN: &[&str] = &[
     "cargo-nextest",
     "nextest",
     "run",
@@ -150,11 +173,11 @@ fn run_appends_the_number_of_tests_nextest_ran_to_the_step_output() {
         "{{ printf '     Summary [   0.020s] {BOLD}7'; sleep 0.3; printf '{RESET} tests run: 7 passed, 0 skipped\\n'; }} >&2"
     );
     let seven = listed(&[("kept", &["a", "b", "c", "d", "e", "f", "g"])]);
-    let (output, written, _) = run_with_output("tests-run-split", &split, &seven, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-split", &split, &seven, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=7\ntests_listed=7\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=7\ntests_listed=7\ntests_ignored=0\n"
     );
 }
 
@@ -164,11 +187,11 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
         "echo '     Summary [   1.200s] {BOLD}5{RESET} tests run: 3 passed, {BOLD}2{RESET} failed, 0 skipped' >&2; exit 100"
     );
     let five = listed(&[("kept", &["a", "b", "c", "d", "e"])]);
-    let (output, written, _) = run_with_output("tests-run-failed", &script, &five, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-failed", &script, &five, NEXTEST_RUN);
     assert_eq!(output.status.code(), Some(100));
     assert_eq!(
         written,
-        "existing=1\ntests_run=5\ntests_listed=5\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=5\ntests_listed=5\ntests_ignored=0\n"
     );
 }
 
@@ -176,11 +199,11 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
 fn run_reports_a_run_without_tests_as_zero() {
     let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
     let none = listed(&[]);
-    let (output, written, _) = run_with_output("tests-run-zero", script, &none, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-zero", script, &none, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package={}\n"
     );
 }
 
@@ -191,11 +214,11 @@ SKIP [         ] (───) gone only
  Summary [   0.001s] 0 tests run: 0 passed, 1 skipped
 END";
     let (output, written, _) =
-        run_with_output("tests-run-filtered", script, EXCLUDED_LIST, &NEXTEST_RUN);
+        run_with_output("tests-run-filtered", script, EXCLUDED_LIST, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=1\ntests_ignored=0\ntests_by_package=gone=0/1\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=1\ntests_ignored=0\ntests_by_package=gone=0/1\n"
     );
 }
 
@@ -207,10 +230,10 @@ PASS [   0.012s] kept beta
  Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
 END";
     let two = listed(&[("kept", &["alpha", "beta"])]);
-    let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -224,10 +247,10 @@ PASS [   0.012s] (1/2) kept alpha
    FLAKY 2/3 [   0.016s] (2/2) kept beta
 END";
     let two = listed(&[("kept", &["alpha", "beta"])]);
-    let (_, written, _) = run_with_output("tests-run-retry", script, &two, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-retry", script, &two, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -238,10 +261,10 @@ PASS [   0.012s] (1/1) café t::ok
  Summary [   0.012s] 1 test run: 1 passed, 0 skipped
 END";
     let one = listed(&[("café", &["t::ok"])]);
-    let (_, written, _) = run_with_output("tests-run-unicode", script, &one, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-unicode", script, &one, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
     );
 }
 
@@ -252,10 +275,10 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
         "{{ printf '        PASS [   0.012s] (1/1) kept {name}\\n'; echo '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped'; }} >&2"
     );
     let one = listed(&[("kept", &["x"])]);
-    let (_, written, _) = run_with_output("tests-run-long", &script, &one, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-long", &script, &one, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
 
@@ -263,16 +286,16 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
 fn run_counts_runnable_tests_when_the_log_has_no_status_lines() {
     let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
     let three = listed(&[("kept", &["a", "b", "c"])]);
-    let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
     );
     let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
-    let (_, written, _) = run_with_output("tests-run-bare", bare, &three, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-bare", bare, &three, NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
     );
 }
 
@@ -300,7 +323,7 @@ fn run_writes_no_count_for_other_commands_or_a_run_that_printed_no_summary() {
     for (name, script, command) in cases {
         let (_, written, _) =
             run_with_output(&format!("tests-run-no-{name}"), script, "", &command);
-        assert_eq!(written, "existing=1\n", "{name}");
+        assert_eq!(without_built(&written), "existing=1\n", "{name}");
     }
 }
 
@@ -317,10 +340,29 @@ test alpha ... ok\n\
  Summary [   0.012s] 1 test run: 1 passed, 0 skipped\n\
 END";
     let one = listed(&[("kept", &["alpha"])]);
-    let (output, written, _) = run_with_output("tests-run-captured", script, &one, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-captured", script, &one, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+    );
+}
+
+#[test]
+fn run_counts_a_run_whose_setup_script_printed_status_lines() {
+    let script = r"cat >&2 <<'END'
+    Starting 2 tests across 1 binary
+     SETUP [      1/1] prepull-images: bash .config/nextest-prepull-images.sh
+nextest-prepull-images: pulling postgres:18-alpine
+ SETUP PASS [   9.804s] prepull-images: bash .config/nextest-prepull-images.sh
+        PASS [   0.012s] (1/2) kept alpha
+        PASS [   0.012s] (2/2) kept beta
+     Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
+END";
+    let two = listed(&[("kept", &["alpha", "beta"])]);
+    let (_, written, _) = run_with_output("tests-run-setup-script", script, &two, NEXTEST_RUN);
+    assert_eq!(
+        written,
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }

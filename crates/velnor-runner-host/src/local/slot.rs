@@ -351,8 +351,9 @@ async fn wait_exit(docker: &bollard::Docker, id: &str) -> Result<(), HostError> 
     let mut waiting = docker.wait_container(id, None::<WaitContainerOptions>);
     match waiting.next().await {
         Some(Ok(response)) if response.status_code == 0 && response.error.is_none() => Ok(()),
-        Some(Ok(_)) => Err(HostError::RunnerExited),
-        Some(Err(DockerError::DockerContainerWaitError { .. })) => Err(HostError::RunnerExited),
+        Some(Ok(_) | Err(DockerError::DockerContainerWaitError { .. })) => {
+            Err(HostError::RunnerExited)
+        }
         Some(Err(_)) | None => Err(HostError::Docker),
     }
 }

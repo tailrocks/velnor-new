@@ -47,6 +47,7 @@ fn the_local_runner_turns_the_crates_mirror_off_and_keeps_the_production_environ
     )?;
     let env = runner.config.env.unwrap_or_default();
     assert!(env.iter().any(|item| item == "VELNOR_CRATES_MIRROR=off"));
+    assert!(env.iter().any(|item| item == "MISE_SKILLS_FETCH=false"));
     assert!(env.iter().any(|item| item.starts_with("DOCKER_HOST=")));
     assert!(
         env.iter()

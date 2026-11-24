@@ -68,7 +68,7 @@ impl Check {
             Self::Plain => [
                 "Runner mode plain: job-start check: none (plain containers).",
                 "Executed: every step of every job above except actions/checkout, by GitHub's official runner in linux/arm64 containers.",
-                "Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.",
+                "Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 26.04 runner image.",
                 "Not exercised: velnor-host pairs, the job-start check, scale set acquire, GitHub JIT, journal, GitHub runner deletion proof.",
             ],
             Self::Pairs(_) => [
@@ -107,6 +107,14 @@ pub fn verdict(
         lines.push(format!("  {}", outcome.line()));
         lines.extend(check.under(outcome).iter().map(|job| format!("    {job}")));
         lines.extend(outcome.caches.iter().map(|cache| format!("    {cache}")));
+        if let Some(tail) = &outcome.client_log {
+            lines
+                .push("    Runner.Client log, last lines (no job of this run started):".to_owned());
+            if tail.is_empty() {
+                lines.push("      (the log is empty)".to_owned());
+            }
+            lines.extend(tail.iter().map(|line| format!("      {line}")));
+        }
     }
     let stray = check.stray(outcomes);
     if !stray.is_empty() {

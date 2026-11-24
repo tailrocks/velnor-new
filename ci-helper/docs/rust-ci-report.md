@@ -10,13 +10,29 @@ The top-level report and policy structs reject unknown fields. Nested Cargo
 artifact records tolerate additional upstream fields. Change the schema
 deliberately when changing this contract.
 
+Producer and checker always share one helper pin. Each job that produces a lane
+report and the `Cache` checker install one exact `velnor-ci` version, with
+checksums. The `Cache` job reads only the `ci-metrics-*` artifacts of the same
+run, so a lane report is never read by a different helper version. A change
+that only a reader of the same version sees, such as making a field optional,
+keeps schema 1. Bump the schema when a report can outlive its producer's pin,
+for example when a stored baseline or another run's artifact is read.
+
 ## Lane fields
 
 - `lane` identifies the job; `caches` describes each cache family and root.
-- Cache keys include `requested_key` and `matched_key`; `hit` is `exact`,
+- Cache keys include `requested_key`, `matched_key` and `saved_key`, the key a
+  save ran under. `saved_key` has three states: absent, when the plan names no
+  `save_key_step` or no save was attempted; a nonempty string, when the named
+  step recorded its `key` output; and `""`, when a save was attempted under a
+  `save_key_step` but that step recorded no key. The checker treats `""` as
+  unavailable and fails that save as unverifiable. `hit` is `exact`,
   `fallback`, or `miss`. `bytes` is the archive byte count, or `null` when the
   API cannot establish it. `usable` and `usable_same_lock` describe restored
   target data. `save` is `not_attempted`, `saved`, `failed`, or `unknown`.
+  `save_step` names the save step of a cache the job renders a save for. It is
+  absent when the job renders none, and `not_generated` gives the reason a base
+  cache is not generated.
 - `invocations` records Cargo `argv`, root, normalized configuration, start
   time, elapsed seconds, output offsets, compilation evidence, downloads,
   compiler artifacts, progress, test timings, capture status, and execution
@@ -56,7 +72,9 @@ for the compiler-artifact and build-script records used as input evidence.
 ## Producer and enforcement
 
 `VELNOR_REPORT_CACHES` supplies an array of cache plans. Each plan contains
-only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`.
+`family`, `root` (a Cargo root or `null`), and `restore_step`, plus the optional
+`save_step`, `save_key_step` and `not_generated` fields described under lane
+fields.
 Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before
@@ -96,6 +114,12 @@ package and available configuration context. Three such observations in one
 context make the check fail verification, because it cannot prove that Cargo
 respected the compilation limit. This is uncertainty rather than proof that
 one identical unit compiled three times.
+An identical unit compiled twice in one job fails the check, and so does one
+compiled in two jobs that run the same kind of command. The lint job and the
+test-archive job of the split (`cargo clippy`/`check`/`doc` against `cargo build`/
+`test`/`nextest archive`) are parallel by design, each with its own target cache,
+so both compile the host units that the two commands build alike: proc-macro
+crates and the crates only they need. That pair is not a violation.
 Named target selectors and command purpose distinguish fallback observations,
 so separate test or binary targets do not become repeated compilations of one
 unit. Unhashed documentation outputs cannot establish compiler identity and

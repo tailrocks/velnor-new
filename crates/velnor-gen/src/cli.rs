@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-gen",
-    about = "Generate the Rust CI workflow of a repository"
+    about = "Generate the CI workflow of a repository"
 )]
 pub struct Cli {
     #[arg(
@@ -26,8 +26,16 @@ pub struct Cli {
 pub enum Command {
     #[command(about = "Write the generated files and remove the ones no longer generated")]
     Generate,
-    #[command(about = "Exit 1 when a generated file differs from what generate would write")]
-    Check,
+    #[command(
+        about = "Exit 1 when a generated file differs from what generate would write, or when the lock's velnor-gen entry is inconsistent with itself and with this binary"
+    )]
+    Check {
+        #[arg(
+            long,
+            help = "Also download the lock's release and compare every digest and the commit with what it publishes (needs the network)"
+        )]
+        verify_release: bool,
+    },
     #[command(
         about = "Download SHA256SUMS and COMMIT of a release and write .velnor/rust-ci.lock for it"
     )]

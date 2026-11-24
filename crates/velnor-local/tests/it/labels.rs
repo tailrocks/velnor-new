@@ -94,3 +94,10 @@ async fn the_override_reaches_the_api_stub_only_when_asked() {
     let stub = api_stub_command("environment-job-cache-admin", true).await;
     assert!(stub.contains("--job-cache-admin"), "{stub}");
 }
+
+#[tokio::test]
+async fn the_api_stub_reads_the_driver_ledger_from_the_authority_folder_read_only() {
+    let stub = api_stub_command("environment-ledger", false).await;
+    assert!(stub.contains("--ledger /authority"), "{stub}");
+    assert!(stub.contains("/authority:/authority:ro"), "{stub}");
+}

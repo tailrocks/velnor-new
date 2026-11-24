@@ -167,3 +167,30 @@ async fn authority_does_not_report_cleanup_when_the_verification_inventory_is_ma
     assert_eq!(status, 502);
     assert_ne!(reply["cleaned_up"], json!(true), "{reply}");
 }
+
+#[test]
+fn a_listed_agent_with_an_unusable_id_makes_the_inventory_malformed() {
+    use velnor_local::authority::{MalformedInventory, agent_id};
+    for listing in [
+        r#"{"value":[{"name":"velnor-x-jit-1"}]}"#,
+        r#"{"value":[{"name":"velnor-x-jit-1","id":"9"}]}"#,
+        r#"{"value":[{"name":"velnor-x-jit-1","id":-1}]}"#,
+    ] {
+        assert_eq!(
+            agent_id(listing.as_bytes(), "velnor-x-jit-1"),
+            Err(MalformedInventory),
+            "{listing}"
+        );
+    }
+    assert_eq!(
+        agent_id(br#"{"value":[{"name":"other","id":3}]}"#, "velnor-x-jit-1"),
+        Ok(None)
+    );
+    assert_eq!(
+        agent_id(
+            br#"{"value":[{"name":"velnor-x-jit-1","id":9}]}"#,
+            "velnor-x-jit-1"
+        ),
+        Ok(Some(9))
+    );
+}

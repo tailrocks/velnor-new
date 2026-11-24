@@ -145,7 +145,7 @@ fn recording(
     code: u8,
     args: &[&str],
 ) -> Result<(ExitStatus, Value), Box<dyn std::error::Error>> {
-    let temp = std::env::temp_dir().join(format!("velnor-archives-{}-{name}", std::process::id()));
+    let temp = crate::scratch_path("velnor-archives", name);
     let fixture = crate::run_capture::fixture(&temp, true, false)?;
     let program = if args.is_empty() {
         fixture.clone()
@@ -183,8 +183,8 @@ fn recording(
         .args(["run", "--"])
         .arg(&program)
         .args(args)
-        .current_dir(&temp)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("ARCHIVE", &archive)
         .env("CACHE", &cache)
         .env("HOME", temp.join("home"))
@@ -204,6 +204,5 @@ fn recording(
     let output = command.output()?;
     let text = fs::read_to_string(temp.join("velnor-invocations.jsonl"))?;
     let invocation = serde_json::from_str(text.trim())?;
-    fs::remove_dir_all(temp)?;
     Ok((output.status, invocation))
 }

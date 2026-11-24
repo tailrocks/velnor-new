@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::Deserialize;
-use velnor_model::Platform;
+use velnor_model::{Platform, token_permission_accesses, token_permission_accesses_prose};
 
 use crate::error::ReleaseError;
 use crate::plan::BinaryPlan;
@@ -13,23 +13,6 @@ use crate::velnor_config::refuse_expressions;
 
 const DEFAULT_CHECK_TIMEOUT_MINUTES: u16 = 30;
 const MAX_TIMEOUT_MINUTES: u16 = 360;
-const SCOPES: [&str; 15] = [
-    "actions",
-    "artifact-metadata",
-    "attestations",
-    "checks",
-    "contents",
-    "deployments",
-    "id-token",
-    "issues",
-    "models",
-    "packages",
-    "pages",
-    "pull-requests",
-    "security-events",
-    "statuses",
-    "discussions",
-];
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -111,9 +94,18 @@ fn permissions_of(
     let invalid = |problem| ReleaseError::InvalidCheck(name.to_owned(), problem);
     let mut all = declared;
     for (scope, access) in &all {
-        if !SCOPES.contains(&scope.as_str()) || !matches!(access.as_str(), "read" | "write") {
+        let Some(accesses) = token_permission_accesses(scope) else {
             return Err(invalid(CheckProblem::UnknownPermission(scope.clone())));
+        };
+        if !accesses.contains(&access.as_str()) {
+            return Err(invalid(CheckProblem::InvalidAccess {
+                scope: scope.clone(),
+                access: access.clone(),
+            }));
         }
+    }
+    if all.get("id-token").is_some_and(|access| access == "write") {
+        return Err(invalid(CheckProblem::WritesIdToken));
     }
     if all.get("contents").is_some_and(|access| access == "write") {
         return Err(invalid(CheckProblem::WritesContents));
@@ -133,6 +125,12 @@ fn artifacts_of(
     for name in &check.artifacts {
         let artifact = artifact_of(name, binaries)
             .ok_or_else(|| invalid(CheckProblem::UnknownArtifact(name.clone())))?;
+        if binaries.iter().any(|binary| {
+            binary.package == artifact.package
+                && binary.optional_platforms.contains(&artifact.platform)
+        }) {
+            return Err(invalid(CheckProblem::OptionalArtifact(name.clone())));
+        }
         if !artifacts.contains(&artifact) {
             artifacts.push(artifact);
         }
@@ -225,9 +223,12 @@ pub enum CheckProblem {
     UnknownNeed(String),
     PublishWithoutArtifacts,
     UnknownArtifact(String),
+    OptionalArtifact(String),
     ArtifactsBeforeTag,
     WritesContents,
+    WritesIdToken,
     UnknownPermission(String),
+    InvalidAccess { scope: String, access: String },
     NeedsALaterStage(String),
     Empty(&'static str),
     TimeoutOutOfRange,
@@ -249,11 +250,23 @@ impl fmt::Display for CheckProblem {
                 f,
                 "artifact {name:?} is not <package>-<platform> of a [[binaries]] entry"
             ),
+            Self::OptionalArtifact(name) => write!(
+                f,
+                "artifact {name:?} is optional, so a check that runs before publish cannot require it"
+            ),
             Self::ArtifactsBeforeTag => {
                 f.write_str("names artifacts, which exist only when it runs before publish")
             }
             Self::WritesContents => f.write_str(
                 "asks for contents: write, which a job that runs repository code must not hold",
+            ),
+            Self::WritesIdToken => f.write_str(
+                "asks for id-token: write, which a job that runs repository code must not hold",
+            ),
+            Self::InvalidAccess { scope, access } => write!(
+                f,
+                "permission {scope}: {access:?} is not valid; {}",
+                token_permission_accesses_prose(scope)
             ),
             Self::NeedsALaterStage(name) => write!(
                 f,
@@ -263,10 +276,9 @@ impl fmt::Display for CheckProblem {
             Self::TimeoutOutOfRange => {
                 write!(f, "timeout_minutes must be from 1 to {MAX_TIMEOUT_MINUTES}")
             }
-            Self::UnknownPermission(scope) => write!(
-                f,
-                "permission {scope:?} is not a GitHub token scope with read or write access"
-            ),
+            Self::UnknownPermission(scope) => {
+                write!(f, "permission {scope:?} is not a GitHub token scope")
+            }
         }
     }
 }

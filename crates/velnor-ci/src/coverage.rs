@@ -61,6 +61,20 @@ pub struct Unit {
     pub source: RepoPath,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MoreInputs {
+    pub changed: usize,
+    pub unproven: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RunGap {
+    Stale { input: String, more: MoreInputs },
+    Unproven { input: String, more: MoreInputs },
+    Older,
+    Uncompiled,
+}
+
 #[derive(Debug, Default)]
 pub struct Built {
     pub units: BTreeSet<Unit>,
@@ -68,6 +82,7 @@ pub struct Built {
     pub scripts: BTreeSet<(String, RepoPath)>,
     pub builders: BTreeSet<(String, PackageName)>,
     pub orphans: BTreeSet<(String, String, Fingerprint)>,
+    pub run_gaps: BTreeMap<(String, String, String), RunGap>,
     pub placed: BTreeSet<String>,
 }
 
@@ -198,17 +213,52 @@ fn orphans<'b>(
         .iter()
         .filter(move |(at, package, _)| at == configuration && owned.contains(package.as_str()))
         .map(|(_, package, fingerprint)| {
-            format!(
-                "{package} target {} ({})",
-                fingerprint.target,
-                match fingerprint.kind {
-                    UnitKind::Normal => "normal unit with a cargo fingerprint and no dep-info",
-                    UnitKind::Harness =>
-                        "test harness unit with a cargo fingerprint and no dep-info",
-                    UnitKind::Run => "build script run with a cargo fingerprint and no output",
+            let what = match fingerprint.kind {
+                UnitKind::Normal => "normal unit with a cargo fingerprint and no dep-info",
+                UnitKind::Harness => "test harness unit with a cargo fingerprint and no dep-info",
+                UnitKind::Run => {
+                    let gap = built.run_gaps.get(&(
+                        configuration.to_owned(),
+                        package.clone(),
+                        fingerprint.target.clone(),
+                    ));
+                    return format!(
+                        "{package} target  ({})",
+                        run_reason(gap, &fingerprint.target)
+                    );
                 }
-            )
+            };
+            format!("{package} target {} ({what})", fingerprint.target)
         })
+}
+
+fn run_reason(gap: Option<&RunGap>, unit: &str) -> String {
+    match gap {
+        Some(RunGap::Stale { input, more }) => format!(
+            "output stale: input {input} changed after it ran{} (unit {unit}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\"",
+            more_suffix(more.changed, "changed", more.unproven, "unproven")
+        ),
+        Some(RunGap::Unproven { input, more }) => format!(
+            "output not proven current: freshness could not be proven for input {input}{} (unit {unit}); rebuild the target through velnor-ci inputs build",
+            more_suffix(more.unproven, "unproven", more.changed, "changed")
+        ),
+        Some(RunGap::Older) => format!("output older than its build script (unit {unit})"),
+        Some(RunGap::Uncompiled) => format!(
+            "build script run without a current dep-info of its compile (unit {unit}); its inputs are unknown, so a replayed or restored run is not credited; delete this package's build directories under build/ and rebuild through velnor-ci inputs build"
+        ),
+        None => {
+            format!("build script run with a cargo fingerprint and no output file (unit {unit})")
+        }
+    }
+}
+
+fn more_suffix(same: usize, same_word: &str, other: usize, other_word: &str) -> String {
+    match (same, other) {
+        (0, 0) => String::new(),
+        (n, 0) => format!(", and {n} more"),
+        (0, m) => format!(", and {m} more {other_word}"),
+        (n, m) => format!(", and {n} more {same_word}, {m} more {other_word}"),
+    }
 }
 
 fn missing(group: &Group<'_>, configuration: &str, built: &Built) -> Option<String> {

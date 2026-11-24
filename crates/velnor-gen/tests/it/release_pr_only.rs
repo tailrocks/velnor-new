@@ -59,7 +59,7 @@ fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> T
         .ok_or("exemptions require a release App token")?;
     assert_eq!(
         app.get("uses").and_then(Node::text),
-        Some("actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc")
+        Some("actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510")
     );
     for (input, value) in [
         ("client-id", "${{ secrets.RELEASE_APP_ID }}"),
@@ -106,8 +106,7 @@ fn pr_only_checks_refuse_old_helpers_and_workflow_expressions() {
     ] {
         let error = render(helper, config)
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(
             error.contains("pr_only_checks") && error.contains(reason),
             "{error}"

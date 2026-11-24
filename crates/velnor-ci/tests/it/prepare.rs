@@ -5,18 +5,19 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use velnor_test_support::real_cargo;
 
 pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 pub(crate) fn scratch_root(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()))
+    crate::scratch_name("velnor-ci-prepare", name)
 }
 
-pub(crate) fn scratch(name: &str) -> PathBuf {
-    let dir = scratch_root(name);
+pub(crate) fn scratch(name: &str) -> velnor_test_support::ScratchDir {
+    let dir = velnor_test_support::ScratchDir::adopt(scratch_root(name));
     if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     }
     fs::create_dir_all(dir.join("checkout")).unwrap_or_else(|e| unreachable!("{e}"));
     let git = Command::new("git")
@@ -66,6 +67,7 @@ pub(crate) type Populate = Box<dyn Fn(&Path) + Send + Sync>;
 #[derive(PartialEq, Eq)]
 pub(crate) enum OsRelease {
     Fixture,
+    #[cfg(not(target_os = "linux"))]
     Platform,
 }
 
@@ -84,6 +86,9 @@ pub(crate) struct Setup {
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
     pub os_release: OsRelease,
+    pub cargo_home: Option<std::ffi::OsString>,
+    pub rustup_home: Option<PathBuf>,
+    pub args: Vec<&'static str>,
 }
 
 impl Setup {
@@ -103,6 +108,9 @@ impl Setup {
             release: "1.99.1",
             env: Vec::new(),
             os_release: OsRelease::Fixture,
+            cargo_home: None,
+            rustup_home: None,
+            args: Vec::new(),
         }
     }
 }
@@ -114,6 +122,7 @@ pub(crate) struct Run {
     pub outputs: String,
     pub cargo_config: String,
     pub velnor_config: String,
+    pub owned: Option<velnor_test_support::ScratchDir>,
 }
 
 fn replace_text(path: &Path, body: &str) {
@@ -157,10 +166,10 @@ fn write_os_release(dir: &Path) -> PathBuf {
     path
 }
 
-fn prepare_in(dir: &Path, setup: &Setup) -> Run {
+pub(crate) fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
-    let cargo_home = dir.join("cargo-home");
+    let cargo_home = dir.join(setup.cargo_home.as_deref().unwrap_or("cargo-home".as_ref()));
     fs::create_dir_all(checkout.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
     if let Some(text) = setup.repo_cargo_config {
@@ -215,14 +224,19 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .arg("prepare")
+        .args(&setup.args)
         .current_dir(&checkout)
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("CARGO_HOME", &cargo_home)
+        .env("RUNNER_TEMP", dir)
         .env("GITHUB_ENV", &env_file)
         .env("GITHUB_OUTPUT", &outputs);
     if setup.os_release == OsRelease::Fixture {
         command.env("VELNOR_OS_RELEASE", write_os_release(dir));
+    }
+    if let Some(home) = &setup.rustup_home {
+        command.env("RUSTUP_HOME", home);
     }
     for (name, value) in &setup.env {
         command.env(name, value);
@@ -236,11 +250,15 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         outputs: read(&outputs),
         cargo_config: read(&cargo_home.join("config.toml")),
         velnor_config: read(&dir.join(".cargo/config.toml")),
+        owned: None,
     }
 }
 
 pub(crate) fn prepare(name: &str, setup: &Setup) -> Run {
-    prepare_in(&scratch(name), setup)
+    let dir = scratch(name);
+    let mut run = prepare_in(&dir, setup);
+    run.owned = Some(dir);
+    run
 }
 
 pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> Run {
@@ -266,7 +284,7 @@ pub(crate) fn output<'a>(run: &'a Run, name: &str) -> &'a str {
 }
 
 fn effective(dir: &Path) -> Output {
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let cargo = real_cargo();
     Command::new(cargo)
         .args(["-Zunstable-options", "config", "get", "profile.dev"])
         .current_dir(dir.join("checkout"))

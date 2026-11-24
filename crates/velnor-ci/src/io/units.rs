@@ -1,25 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Deserialize;
-use velnor_model::PackageName;
-use velnor_rust::normalize;
+use velnor_rust::NESTED_ROOTS_FOLDER;
 
-use super::audit::Audit;
-use crate::coverage::{Fingerprint, HOST, UnitKind};
+use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
+mod build_dir;
+mod built;
+mod fill;
+#[cfg(test)]
+mod layout_tests;
+#[cfg(test)]
+mod limit_tests;
+mod metadata;
+#[cfg(test)]
+mod owner_tests;
+mod separation;
+mod workspace;
+
+pub(super) use build_dir::refuse_arguments;
+pub(super) use metadata::{MetadataInvocation, own_workspace, workspace};
+pub(super) use separation::{apart, outside_tracked};
+pub(super) use workspace::{Roots, unit_files_apart};
+
 const MAX_TARGET_DEPTH: usize = 64;
-const MAX_TARGET_DIRECTORIES: usize = 4096;
+/// A target directory after a full build and test run holds one directory per
+/// build script and per unit (`build/<crate>-<hash>`, `.fingerprint/<crate>-<hash>`),
+/// so a multi-package workspace passes 4096 easily. The bound only stops a
+/// hostile or runaway tree, so it sits far above any real one.
+const MAX_TARGET_DIRECTORIES: usize = 1_000_000;
+/// The largest value `VELNOR_TARGET_MAX_DIRECTORIES` may raise the bound to.
+const TARGET_DIRECTORIES_CEILING: usize = 10_000_000;
+const MAX_TARGET_DIRECTORIES_VARIABLE: &str = "VELNOR_TARGET_MAX_DIRECTORIES";
 
 #[derive(Deserialize)]
+#[serde(from = "workspace::Printed")]
 pub(super) struct Workspace {
-    pub(super) workspace_root: PathBuf,
+    pub(super) root: PathBuf,
     pub(super) target_directory: PathBuf,
+    pub(super) build_directory: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,7 +56,7 @@ pub(super) enum UnitFile {
         name: String,
     },
     DepInfo {
-        configuration: Option<String>,
+        configuration: String,
         hash: Option<String>,
         stem: String,
     },
@@ -51,9 +76,52 @@ pub(super) enum UnitFile {
 }
 
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    unit_files_within(target, directory_limit()?)
+}
+
+fn directory_limit() -> Result<usize, CiError> {
+    limit_from(std::env::var_os(MAX_TARGET_DIRECTORIES_VARIABLE).as_deref())
+}
+
+fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
+    let Some(value) = value.filter(|value| !value.is_empty()) else {
+        return Ok(MAX_TARGET_DIRECTORIES);
+    };
+    value
+        .to_str()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|limit| (1..=TARGET_DIRECTORIES_CEILING).contains(limit))
+        .ok_or_else(|| {
+            CiError::new(format!(
+                "{MAX_TARGET_DIRECTORIES_VARIABLE} must be a number from 1 to {TARGET_DIRECTORIES_CEILING}, not \"{}\"",
+                value.display()
+            ))
+        })
+}
+
+fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    let Scanned {
+        found,
+        built,
+        artifacts,
+    } = scan(target, limit, None)?;
+    built::refuse_without_units(target, built, &found)?;
+    built::refuse_orphan(target, &found, &artifacts)?;
+    Ok(found)
+}
+
+struct Scanned {
+    found: Vec<(UnitFile, PathBuf)>,
+    built: bool,
+    artifacts: Vec<PathBuf>,
+}
+
+fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
+    let mut artifacts = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
+    let mut built = false;
     while let Some((directory, depth)) = pending.pop() {
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -65,6 +133,7 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
                 )));
             }
         };
+        let mut places_outputs = None;
         for entry in entries {
             let entry = entry
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
@@ -72,18 +141,22 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
             let kind = entry
                 .file_type()
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+            if kind.is_dir() && skip == Some(path.as_path()) {
+                continue;
+            }
             if kind.is_dir() && entry.file_name() != "incremental" {
+                if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
+                    // The build folders of the Cargo roots below this one, each audited as its own root.
+                    continue;
+                }
                 if depth >= MAX_TARGET_DEPTH {
                     return Err(CiError::new(format!(
                         "target directory depth exceeds {MAX_TARGET_DEPTH} at {}",
                         path.display()
                     )));
                 }
-                if directories == MAX_TARGET_DIRECTORIES {
-                    return Err(CiError::new(format!(
-                        "target directory traversal exceeds {MAX_TARGET_DIRECTORIES} directories at {}",
-                        path.display()
-                    )));
+                if directories == limit {
+                    return Err(directory_limit_exceeded(&path, limit));
                 }
                 directories += 1;
                 pending.push((path, depth + 1));
@@ -91,13 +164,39 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
                 .strip_prefix(target)
                 .ok()
                 .and_then(unit_file)
-                .filter(|_| kind.is_file())
+                .filter(|_| kind.is_file() && !built::generated(&path))
             {
                 found.push((unit, path));
+            } else if kind.is_file() && built::output(&entry.file_name()) {
+                built = true;
+                if built::artifact(&entry.file_name())
+                    && !built::generated(&path)
+                    && *places_outputs
+                        .get_or_insert_with(|| built::places_outputs(&directory, target))
+                {
+                    artifacts.push(path);
+                }
             }
         }
     }
-    Ok(found)
+    Ok(Scanned {
+        found,
+        built,
+        artifacts,
+    })
+}
+
+fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
+    if limit >= TARGET_DIRECTORIES_CEILING {
+        return CiError::new(format!(
+            "target directory traversal exceeds {limit} directories at {}; reduce or split the target tree",
+            path.display()
+        ));
+    }
+    CiError::new(format!(
+        "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
+        path.display()
+    ))
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -111,6 +210,9 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
             name: (*directory).to_owned(),
             root: *name == ".rustc_info.json",
         });
+    }
+    if let Some(unit) = unit_in_new_layout(folders, name) {
+        return Some(unit);
     }
     let configuration = |depth: usize| {
         folders
@@ -145,15 +247,60 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
         _ => {
             let stem = name.strip_suffix(".d")?;
             let hash = split(stem).map(|(_, hash)| hash.to_owned());
-            let placed = folders
+            let folder = folders
                 .last()
-                .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
-            (hash.is_some() || folders.last() == Some(&"deps")).then(|| UnitFile::DepInfo {
-                configuration: configuration(1).filter(|_| placed),
+                .copied()
+                .filter(|folder| matches!(*folder, "deps" | "examples"))?;
+            let configuration =
+                configuration(1).filter(|configuration| !configuration.is_empty())?;
+            (hash.is_some() || folder == "deps").then(|| UnitFile::DepInfo {
+                configuration,
                 hash,
                 stem: stem.to_owned(),
             })
         }
+    }
+}
+
+/// A file of a unit in the layout Cargo 1.100 writes: `<configuration>/build/<package>/<hash>/`
+/// with the unit's `fingerprint`, its `out` files (outputs and dep-info), and for the run of a
+/// build script its `run` folder, whose `stdout` is what older Cargo wrote to `output`.
+fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
+    let [configuration @ .., "build", package, hash, kind] = folders else {
+        return None;
+    };
+    if configuration.is_empty() || !is_hash(hash) {
+        return None;
+    }
+    let configuration = configuration.join("/");
+    let (package, hash) = ((*package).to_owned(), (*hash).to_owned());
+    match (*kind, name) {
+        ("fingerprint", _) => Some(UnitFile::Fingerprint {
+            configuration,
+            package,
+            hash,
+            name: name.to_owned(),
+        }),
+        ("run", "stdout") => Some(UnitFile::BuildOutput {
+            configuration,
+            package,
+            hash,
+        }),
+        ("out", _) => {
+            let stem = name.strip_suffix(".d")?;
+            if stem.starts_with("build_script_") {
+                return Some(UnitFile::Script {
+                    profile: profile(&configuration).to_owned(),
+                    package,
+                });
+            }
+            Some(UnitFile::DepInfo {
+                configuration,
+                hash: Some(hash),
+                stem: stem.to_owned(),
+            })
+        }
+        _ => None,
     }
 }
 
@@ -171,195 +318,4 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
-}
-
-pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
-    let directories: Vec<PathBuf> = workspaces
-        .iter()
-        .map(|w| {
-            fs::canonicalize(&w.target_directory).unwrap_or_else(|_| normalize(&w.target_directory))
-        })
-        .collect();
-    for (outer, holder) in directories.iter().enumerate() {
-        for (inner, held) in directories.iter().enumerate() {
-            if outer == inner || !held.starts_with(holder) {
-                continue;
-            }
-            let grouped = held == holder
-                && shared
-                    .iter()
-                    .any(|group| group.contains(&outer) && group.contains(&inner));
-            if !grouped {
-                return Err(CiError::new(format!(
-                    "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
-                    holder.display(),
-                    workspaces[outer].workspace_root.display(),
-                    held.display(),
-                    workspaces[inner].workspace_root.display()
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
-pub(super) struct MetadataInvocation<'a> {
-    pub(super) executable: &'a str,
-    pub(super) arguments: &'a [String],
-    pub(super) directory: &'a Path,
-}
-
-pub(super) fn workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, false)
-}
-
-pub(super) fn own_workspace(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, true)
-}
-
-fn metadata(
-    manifest: &Path,
-    invocation: Option<&MetadataInvocation<'_>>,
-    own_target: bool,
-) -> Result<Workspace, CiError> {
-    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
-    if let Some(invocation) = invocation {
-        command
-            .args(invocation.arguments)
-            .current_dir(invocation.directory);
-    } else {
-        command.current_dir(manifest.parent().unwrap_or(manifest));
-    }
-    if own_target {
-        command.env_remove("CARGO_TARGET_DIR");
-    }
-    let output = command
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-        ])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
-}
-
-impl Audit<'_> {
-    pub(super) fn fingerprint(
-        &mut self,
-        index: usize,
-        configuration: String,
-        package: String,
-        hash: String,
-        name: &str,
-    ) {
-        if let Some(fingerprint) = Fingerprint::parse(name) {
-            if fingerprint.kind == UnitKind::Normal {
-                self.names.insert(
-                    (index, configuration.clone(), fingerprint.target.clone()),
-                    (package.clone(), fingerprint.clone()),
-                );
-            }
-            self.fingerprints.insert(
-                (index, configuration.clone(), hash.clone()),
-                (package.clone(), fingerprint),
-            );
-        }
-        if let Ok(package) = PackageName::new(package) {
-            if name.starts_with("lib-") {
-                self.built[index].libraries.insert((configuration, package));
-            } else if name.starts_with("build-script-") && !name.contains('.') {
-                self.built[index].builders.insert((configuration, package));
-            } else if name.starts_with("run-") && !name.contains('.') {
-                self.runs
-                    .insert((index, configuration, hash), package.to_string());
-            }
-        }
-    }
-
-    pub(super) fn directory(&mut self, index: usize, name: String, root: bool) {
-        if root {
-            self.rooted.insert((index, name));
-        } else {
-            self.placed.insert((index, name));
-        }
-    }
-
-    pub(super) fn script(
-        &mut self,
-        workspace: &Path,
-        indices: &[usize],
-        file: &Path,
-        profile: &str,
-        package: &str,
-    ) -> Result<(), CiError> {
-        let Some((source, built)) = self.dep_info(workspace, indices[0], file, Some(package))?
-        else {
-            return Ok(());
-        };
-        for index in indices {
-            if profile == HOST {
-                self.built[*index]
-                    .scripts
-                    .insert((package.to_owned(), source.clone()));
-            }
-            self.scripts
-                .entry((*index, profile.to_owned(), package.to_owned()))
-                .or_default()
-                .entry(source.clone())
-                .and_modify(|compiled| *compiled = (*compiled).min(built))
-                .or_insert(built);
-        }
-        Ok(())
-    }
-
-    pub(super) fn orphans(&mut self) {
-        for ((index, configuration, hash), (package, fingerprint)) in &self.fingerprints {
-            let key = |name: &String| (*index, configuration.clone(), name.clone());
-            if !self.present.contains(&key(hash))
-                && !self.present.contains(&key(&fingerprint.target))
-            {
-                self.built[*index].orphans.insert((
-                    configuration.clone(),
-                    package.clone(),
-                    fingerprint.clone(),
-                ));
-            }
-        }
-        for ((index, configuration, hash), package) in &self.runs {
-            let key = (*index, configuration.clone(), hash.clone());
-            if !self.present.contains(&key) {
-                self.built[*index].orphans.insert((
-                    configuration.clone(),
-                    package.clone(),
-                    Fingerprint {
-                        kind: UnitKind::Run,
-                        target: String::new(),
-                    },
-                ));
-            }
-        }
-        for (index, name) in &self.placed {
-            if !self.rooted.contains(&(*index, name.clone())) {
-                self.built[*index].placed.insert(name.clone());
-            }
-        }
-    }
 }

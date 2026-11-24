@@ -15,10 +15,11 @@ use velnor_runner_host::{
 use super::connect_authority as authority;
 use super::connect_config::sample_config;
 use super::connection_state::{
-    admission_lock, config_lock, connect_write_error, connection_binding_snapshot,
-    connection_drain_marker, connection_drain_proof, connection_lifecycle_lock,
-    connection_reactivation_proof, has_reactivation_proof, persist_host, read_connection_snapshot,
-    read_host, same_connection_identity, store_token, write_reactivation_proof,
+    admission_lock, config_lock, connect_write_error, connection_absence_record,
+    connection_binding_snapshot, connection_drain_marker, connection_drain_proof,
+    connection_lifecycle_lock, connection_reactivation_proof, has_reactivation_proof, persist_host,
+    read_connection_snapshot, read_host, same_connection_identity, store_token,
+    write_reactivation_proof,
 };
 use super::marker::{marker_token, remove_marker_if_matches, remove_marker_path};
 
@@ -279,7 +280,7 @@ where
     write_reactivation_proof(state, connection, token).map_err(connect_write_error)
 }
 
-fn persist_reconnected(
+pub(super) fn persist_reconnected(
     state: &Path,
     text: &str,
     connection: &RepositoryConnection,
@@ -294,12 +295,11 @@ fn persist_reconnected(
     if !remove_marker_if_matches(marker_path, token).map_err(connect_write_error)? {
         return Err(ConnectError::Rejected);
     }
-    let snapshot_path = connection_binding_snapshot(state, &connection.connection_id);
-    let proof_path = connection_reactivation_proof(state, &connection.connection_id);
-    let drain_proof_path = connection_drain_proof(state, &connection.connection_id);
-    let _snapshot_cleanup = remove_marker_path(&snapshot_path);
-    let _proof_cleanup = remove_marker_path(&proof_path);
-    let _drain_proof_cleanup = remove_marker_path(&drain_proof_path);
+    let id = &connection.connection_id;
+    let _snapshot_cleanup = remove_marker_path(&connection_binding_snapshot(state, id));
+    let _proof_cleanup = remove_marker_path(&connection_reactivation_proof(state, id));
+    let _drain_proof_cleanup = remove_marker_path(&connection_drain_proof(state, id));
+    let _absence_cleanup = remove_marker_path(&connection_absence_record(state, id));
     Ok(())
 }
 

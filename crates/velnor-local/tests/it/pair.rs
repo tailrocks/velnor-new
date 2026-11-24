@@ -66,7 +66,7 @@ fn output(files: &[(&str, &str)]) -> String {
         })
 }
 
-const ALL: [(&str, &str); 3] = [
+const ALL: &[(&str, &str)] = &[
     (".runner", r#"{"agentName":"x"}"#),
     (".credentials", r#"{"scheme":"OAuth"}"#),
     (".credentials_rsaparams", r#"{"d":"AQAB"}"#),
@@ -150,7 +150,7 @@ fn the_image_plan_names_the_lock_entry_that_is_missing() {
 #[tokio::test]
 async fn a_minted_jit_packs_the_three_files_registration_wrote() {
     let dir = temp_dir("pair-mint");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -163,7 +163,7 @@ async fn a_minted_jit_packs_the_three_files_registration_wrote() {
             .unwrap_or_else(|e| unreachable!("{e}")),
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    for (name, content) in ALL {
+    for &(name, content) in ALL {
         let packed = files[name].as_str().unwrap_or_default();
         assert_eq!(
             STANDARD.decode(packed).unwrap_or_default(),
@@ -243,7 +243,7 @@ async fn concurrent_jit_writes_to_one_path_all_succeed() {
             .unwrap_or_default()
             .starts_with("jit-")
     );
-    let names = std::fs::read_dir(&dir).map_or(0, Iterator::count);
+    let names = std::fs::read_dir(dir.path()).map_or(0, Iterator::count);
     assert_eq!(names, 1);
 }
 
@@ -313,9 +313,11 @@ async fn build_refuses_a_checkout_whose_images_would_not_match_head() {
     git(&["commit", "-q", "-m", "x"]);
     std::fs::write(root.join("crates/velnor-runner-host/lib.rs"), "b")
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let refused =
-        velnor_local::io::pair::build(velnor_local::cli::BuildArgs { root: root.clone() }).await;
-    let message = refused.err().map(|e| e.to_string()).unwrap_or_default();
+    let refused = velnor_local::io::pair::build(velnor_local::cli::BuildArgs {
+        root: root.to_path_buf(),
+    })
+    .await;
+    let message = refused.err().map_or_default(|e| e.to_string());
     assert!(
         message.contains("crates/velnor-runner-host/lib.rs"),
         "{message}"
@@ -331,7 +333,7 @@ async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registe
         .unwrap_or_else(|e| unreachable!("{e}"));
     let failure = mint(&env, Side::Trusted).await.err();
     let call = docker.calls().concat().join(" ");
-    let name = failure.map(|failure| failure.name).unwrap_or_default();
+    let name = failure.map_or_default(|failure| failure.name);
     assert!(name.starts_with(&format!("{}-jit-", env.name)), "{name}");
     assert!(call.contains(&format!("--name {name}")), "{call}");
 }
@@ -340,7 +342,7 @@ async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registe
 async fn a_minted_runner_registers_the_extra_labels_after_the_built_in_ones() {
     let built_in = velnor_local::jit::labels(&[]);
     let dir = temp_dir("pair-mint-labels");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -359,7 +361,7 @@ async fn a_minted_runner_registers_the_extra_labels_after_the_built_in_ones() {
 async fn a_minted_runner_without_extra_labels_registers_the_built_in_ones_only() {
     let built_in = velnor_local::jit::labels(&[]);
     let dir = temp_dir("pair-mint-no-labels");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));

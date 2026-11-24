@@ -12,6 +12,8 @@ use tokio::sync::Notify;
 use super::TestResult;
 use super::seed::{CONNECTION_ID, ENGINE_ID, Pair};
 
+#[path = "fixture/attach.rs"]
+mod attach;
 #[path = "fixture/barriers.rs"]
 mod barriers;
 #[path = "fixture/http.rs"]
@@ -25,6 +27,7 @@ struct Container {
     name: String,
     labels: Value,
     running: bool,
+    fresh: bool,
     inspection: Option<Value>,
 }
 
@@ -40,6 +43,7 @@ struct State {
     deletes: BTreeMap<String, Arc<barriers::DeleteGate>>,
     read_gate: Option<String>,
     read_gate_hits: usize,
+    scripted: BTreeMap<String, Pair>,
 }
 
 pub(crate) struct FixtureDocker {
@@ -63,6 +67,7 @@ impl FixtureDocker {
                         name: format!("w{}-{role}", pair.nonce()),
                         labels: json!({"io.velnor.managed": "true", "io.velnor.reservation-id": reservation, "io.velnor.operation-id": operation, "io.velnor.connection-id": CONNECTION_ID, "io.velnor.role": role, "io.velnor.image.kind": role, "org.opencontainers.image.title": "ubuntu"}),
                         running: true,
+                        fresh: false,
                         inspection: None,
                     },
                 );
@@ -102,9 +107,14 @@ impl FixtureDocker {
                 name: pair.helper_name(),
                 labels: json!({"velnor.role": "storage-initializer", "velnor.operation": format!("{}-1", pair.reservation - 1)}),
                 running: false,
+                fresh: false,
                 inspection: Some(initializer::inspection(pair)),
             },
         );
+    }
+
+    pub(crate) fn script_initializer(&self, pair: Pair) {
+        lock(&self.state).scripted.insert(pair.helper_name(), pair);
     }
 
     pub(crate) fn delay_create(&self, kind: &str, name: &str, id: &str) -> CreateBarrier {

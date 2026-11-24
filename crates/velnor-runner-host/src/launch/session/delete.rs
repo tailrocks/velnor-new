@@ -19,7 +19,7 @@ pub(crate) async fn delete_removed_connection_session(
     delete_removed_connection_session_with(
         link.transport(),
         admin_token.expose(),
-        session,
+        &session.session_id,
         scoped,
         session_intent_id,
         allocation,
@@ -30,13 +30,12 @@ pub(crate) async fn delete_removed_connection_session(
 pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
-    session: &QueueSession,
+    session_id: &str,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
 ) -> SessionDeleteOutcome {
-    if allocation.connection_id() != scoped.connection_id()
-        || allocation.session_id() != session.session_id
+    if allocation.connection_id() != scoped.connection_id() || allocation.session_id() != session_id
     {
         return SessionDeleteOutcome::NotReady;
     }
@@ -71,7 +70,7 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         allocation,
         scoped,
         allocation.scale_set_id(),
-        &session.session_id,
+        session_id,
     ) else {
         return SessionDeleteOutcome::Held;
     };
@@ -86,7 +85,7 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
 
 pub(crate) async fn retire_session_of_deleted_set(
     link: &mut Link,
-    session: &QueueSession,
+    session_id: &str,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
 ) -> Option<SessionDeleteOutcome> {
@@ -94,7 +93,7 @@ pub(crate) async fn retire_session_of_deleted_set(
     retire_session_of_deleted_set_with(
         link.transport(),
         admin_token.expose(),
-        session,
+        session_id,
         scoped,
         session_intent_id,
     )
@@ -104,7 +103,7 @@ pub(crate) async fn retire_session_of_deleted_set(
 pub(super) async fn retire_session_of_deleted_set_with<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
-    session: &QueueSession,
+    session_id: &str,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
 ) -> Option<SessionDeleteOutcome> {
@@ -126,7 +125,7 @@ pub(super) async fn retire_session_of_deleted_set_with<T: Transport + ?Sized>(
         delete_removed_connection_session_with(
             transport,
             admin_token,
-            session,
+            session_id,
             scoped,
             session_intent_id,
             &allocation,

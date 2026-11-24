@@ -4,20 +4,86 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, FullRun, Job, PermissionScope, Permissions, PrCi, PullRequestType, RepoFacts, Step,
-    StepKind, Triggers, When,
+    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_STEP_HELPER, Concurrency, FullRun,
+    GateNeed, Job, JobId, PermissionScope, Permissions, PlanFrom, PrCi, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, SelectionName, Step, StepKind, Triggers,
+    WORKFLOW_NAME, When, WorkflowPlan,
 };
 
-use crate::plan::{BUDGET_JOB, CHECKOUT_DEPTH, job, step};
+use crate::lane::PLAN_JOB;
+use crate::plan::{BUDGET_JOB, CHECKOUT_DEPTH, RUST_JOB, job, step};
 use crate::schedule::schedule;
+use crate::units::Unit;
 
 const BUDGET_RUNS: usize = 10;
 const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 
-pub(crate) fn budget_job(facts: &RepoFacts) -> Option<Job> {
+fn names_selection(facts: &RepoFacts) -> bool {
+    facts.config.budget.is_some_and(|budget| budget.enabled())
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(BUDGET_MODES_HELPER))
+}
+
+fn names_selection_in_step(facts: &RepoFacts) -> bool {
+    names_selection(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(BUDGET_STEP_HELPER))
+}
+
+/// The job whose steps run `velnor-ci plan`.
+pub(crate) fn plan_job_id(single: bool) -> JobId {
+    if single { RUST_JOB } else { PLAN_JOB }
+}
+
+pub(crate) fn expose_selection(facts: &RepoFacts, jobs: &mut [Job], single: bool, units: &[Unit]) {
+    if !names_selection(facts) {
+        return;
+    }
+    let plan = plan_job_id(single);
+    if let Some(job) = jobs.iter_mut().find(|job| job.id == plan) {
+        job.plan_outputs.extend(
+            units
+                .iter()
+                .map(|unit| (unit.gate.clone(), GateNeed::Selected)),
+        );
+        job.plan_outputs.sort();
+        job.plan_outputs.dedup();
+    }
+}
+
+fn selection_name(facts: &RepoFacts, jobs: &[Job], plan: &JobId) -> Option<SelectionName> {
+    if !names_selection(facts) {
+        return None;
+    }
+    let roots: Vec<RootSlug> = jobs
+        .iter()
+        .find(|job| &job.id == plan)?
+        .plan_outputs
+        .iter()
+        .filter(|(_, need)| *need == GateNeed::Selected)
+        .map(|(slug, _)| slug.clone())
+        .collect();
+    (!roots.is_empty()).then(|| SelectionName {
+        plan: plan.clone(),
+        roots,
+    })
+}
+
+pub(crate) fn budget_job(
+    facts: &RepoFacts,
+    jobs: &[Job],
+    single: bool,
+    after: &JobId,
+) -> Option<Job> {
     if !facts.config.budget.is_some_and(|budget| budget.enabled()) {
         return None;
     }
+    let selection = selection_name(facts, jobs, &plan_job_id(single));
+    let in_step = names_selection_in_step(facts);
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
@@ -28,13 +94,29 @@ pub(crate) fn budget_job(facts: &RepoFacts) -> Option<Job> {
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    steps.push(step(StepKind::Budget {
+        last: BUDGET_RUNS,
+        selection: selection.clone().filter(|_| in_step),
+    }));
+    // A push the merge queue already tested skips its work and finishes in
+    // seconds, so it is no sample of what its selection costs: the job does not
+    // run for it.
+    let skipped_after_queue =
+        facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed;
+    let plan = plan_job_id(single);
+    let mut needs = vec![after.clone()];
+    if skipped_after_queue || selection.is_some() {
+        needs.push(plan.clone());
+    }
     Some(Job {
-        name: Some("Speed budget".to_owned()),
+        name: Some(BUDGET_JOB_NAME.to_owned()),
+        needs,
+        skip_after_merge_group: skipped_after_queue.then_some(PlanFrom::Job(plan)),
+        selection_name: selection.filter(|_| !in_step),
         when: if facts.config.full_run == FullRun::Off {
-            When::DefaultBranchPush
+            When::DefaultBranchPushAfterNeeds
         } else {
-            When::Scheduled
+            When::ScheduledOrDefaultBranchPushAfterNeeds
         },
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Read),
@@ -51,9 +133,7 @@ pub(crate) fn triggers(facts: &RepoFacts) -> Triggers {
         pull_request: PullRequestType::ALL
             .into_iter()
             .chain(
-                facts
-                    .config
-                    .skip_draft_pull_requests
+                (facts.config.skip_draft_pull_requests || facts.config.pr_ci == PrCi::Label)
                     .then_some(PullRequestType::ConvertedToDraft),
             )
             .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
@@ -62,6 +142,22 @@ pub(crate) fn triggers(facts: &RepoFacts) -> Triggers {
         merge_group: true,
         schedule: schedule(facts),
         workflow_dispatch: true,
+    }
+}
+
+pub(crate) fn workflow(facts: &RepoFacts, jobs: Vec<Job>) -> WorkflowPlan {
+    WorkflowPlan {
+        name: WORKFLOW_NAME.to_owned(),
+        triggers: triggers(facts),
+        concurrency: match facts.config.pr_ci {
+            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
+            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
+        },
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
+        hosted_runners: facts.config.hosted_runners.clone(),
+        trusted_runners: facts.config.trusted_runners.clone(),
+        jobs,
     }
 }
 

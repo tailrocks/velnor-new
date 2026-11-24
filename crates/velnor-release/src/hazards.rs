@@ -23,7 +23,7 @@ pub fn refuse_external_commands(file: &str, text: &str) -> Result<(), String> {
     }
 }
 
-const PROGRAM_KEYS: [&str; 3] = ["rustc-wrapper", "rustc-workspace-wrapper", "rustc"];
+const PROGRAM_KEYS: &[&str] = &["rustc-wrapper", "rustc-workspace-wrapper", "rustc"];
 
 fn program_key(value: &Value) -> Option<&'static str> {
     match value {
@@ -169,7 +169,7 @@ fn names_nightly(text: &str) -> bool {
     channel.is_some_and(|channel| channel.starts_with("nightly"))
 }
 
-const STABILIZED_CARGO_FEATURES: [&str; 7] = [
+const STABILIZED_CARGO_FEATURES: &[&str] = &[
     "edition2024",
     "workspace-inheritance",
     "named-profiles",

@@ -3,9 +3,10 @@
 
 use std::fs::{self, Permissions};
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 
-use velnor_ci::io::{restore_inputs, save_inputs};
+use velnor_ci::io::{break_time_ties, restore_inputs, save_inputs};
 
 use crate::io::Repo;
 
@@ -30,8 +31,7 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     for path in before {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.write("src/main.rs", "fn main() { println!(\"changed\"); }\n");
@@ -43,8 +43,8 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     for path in before.iter().chain(&["src/new.rs"]) {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(repo.mtime("data/greeting.txt"), built);
@@ -68,15 +68,14 @@ fn a_saved_file_that_sparse_checkout_left_out_is_counted_not_an_error() {
     for path in [".gitignore", "src/lib.rs", "assets/data.txt"] {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.git(&["update-index", "-q", "--refresh"]);
     repo.git(&["sparse-checkout", "set", "--no-cone", "/src/"]);
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert!(!repo.root().join("assets/data.txt").exists());
     assert_eq!(repo.mtime("src/lib.rs"), built);
@@ -96,8 +95,7 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
     for path in [".gitignore", "src/lib.rs", "assets/data.txt"] {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.write(".gitattributes", "*.txt text eol=crlf\n");
     repo.commit();
@@ -116,8 +114,8 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
     ] {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("assets/data.txt"), checkout);
     assert_eq!(repo.mtime("src/lib.rs"), built);
@@ -138,8 +136,7 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     for (path, mode) in [("tools/run.sh", 0o755), ("keys/key.txt", 0o600)] {
         fs::set_permissions(repo.root().join(path), Permissions::from_mode(mode))
@@ -149,8 +146,8 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("tools/run.sh"), checkout);
     assert_eq!(repo.mtime("keys/key.txt"), checkout);
@@ -180,25 +177,30 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    let saved = save_inputs(&workspace, std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let saved =
+        save_inputs(&workspace, Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(&workspace, std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        restore_inputs(&workspace, Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
-    assert!(workspace.join("target/.velnor/inputs.tsv").is_file());
+    let snapshot = Path::new("target").join(velnor_ci::inputs::inputs_file("rust/"));
+    assert!(workspace.join(&snapshot).is_file());
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
     assert_eq!(repo.mtime("shared/src/lib.rs"), built);
     assert_eq!(repo.mtime("other/src/lib.rs"), checkout);
     assert_eq!(repo.mtime(".gitignore"), checkout);
+    let saved_report = format!(
+        "saved 2 tracked files and 0 symlinks to {}; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+        snapshot.display()
+    );
     assert_eq!(
         (saved.as_str(), report.as_str()),
         (
-            "saved 2 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+            saved_report.as_str(),
             "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
         )
     );
@@ -216,14 +218,13 @@ fn a_nested_root_reading_the_repository_root_keeps_the_times_of_files_outside_it
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(&workspace, std::path::Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(&workspace, Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    restore_inputs(&workspace, std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    restore_inputs(&workspace, Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
     assert_eq!(repo.mtime("other/src/lib.rs"), built);
@@ -242,12 +243,12 @@ fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
     for path in paths {
         repo.set_mtime(path, first);
     }
-    save_inputs(&repo.root().join("one"), std::path::Path::new("target"))
+    save_inputs(&repo.root().join("one"), Path::new("target"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     for path in paths {
         repo.set_mtime(path, second);
     }
-    save_inputs(&repo.root().join("two"), std::path::Path::new("target"))
+    save_inputs(&repo.root().join("two"), Path::new("target"))
         .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
@@ -255,7 +256,7 @@ fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
         repo.set_mtime(path, checkout);
     }
     for root in ["one", "two"] {
-        restore_inputs(&repo.root().join(root), std::path::Path::new("target"))
+        restore_inputs(&repo.root().join(root), Path::new("target"))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     assert_eq!(repo.mtime("one/src/lib.rs"), first);
@@ -263,86 +264,93 @@ fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
 }
 
 #[test]
-fn a_retargeted_symlink_restores_nothing() {
-    let repo = Repo::new("symlink");
+fn restore_without_saved_inputs_refuses_cached_artifacts_and_changes_no_sources() {
+    let repo = Repo::new("cold");
     repo.write("src/lib.rs", "pub fn one() {}\n");
-    repo.write_all(&[("data/a.txt", "a\n"), ("data/b.txt", "b\n")]);
-    repo.link("data/a.txt", "data/link.txt");
-    let paths = [".gitignore", "src/lib.rs", "data/a.txt", "data/b.txt"];
-    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
-    for path in paths {
-        repo.set_mtime(path, built);
-    }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-
-    fs::remove_file(repo.root().join("data/link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
-    repo.link("data/b.txt", "data/link.txt");
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
-    for path in paths {
-        repo.set_mtime(path, checkout);
-    }
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-
-    assert_eq!(repo.mtime("data/a.txt"), checkout);
-    assert_eq!(repo.mtime("data/b.txt"), checkout);
+    repo.set_mtime("src/lib.rs", checkout);
+    let report = restore_inputs(repo.root(), Path::new("target"))
+        .err()
+        .unwrap_or_else(|| unreachable!("missing snapshot was accepted"))
+        .to_string();
     assert_eq!(repo.mtime("src/lib.rs"), checkout);
     assert_eq!(
         report,
-        "restored nothing: 1 tracked symlinks are new, changed or deleted since the save\n"
+        "no target/.velnor/inputs.tsv; cannot restore cached inputs"
     );
 }
 
 #[test]
-fn an_unchanged_symlink_does_not_block_restore() {
-    let repo = Repo::new("symlink-same");
-    repo.write("data/a.txt", "a\n");
-    repo.link("data/a.txt", "data/link.txt");
-    let paths = [".gitignore", "data/a.txt"];
-    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
-    for path in paths {
-        repo.set_mtime(path, built);
+fn files_that_share_a_modification_time_get_distinct_ones_so_cargo_never_picks_the_newest_by_chance()
+ {
+    let repo = Repo::new("ties");
+    for path in ["build.rs", "src/lib.rs", "src/main.rs", "other.txt"] {
+        repo.write(path, "x\n");
     }
-    save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-
-    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
-    for path in paths {
-        repo.set_mtime(path, checkout);
+    let tied = UNIX_EPOCH + Duration::new(1_700_000_000, 193_657_627);
+    let alone = UNIX_EPOCH + Duration::new(1_700_000_100, 5);
+    for path in [".gitignore", "build.rs", "src/lib.rs", "src/main.rs"] {
+        repo.set_mtime(path, tied);
     }
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-
-    assert_eq!(repo.mtime("data/a.txt"), built);
+    repo.set_mtime("other.txt", alone);
+    let report = break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         report,
-        "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
+        "gave 3 tracked files a modification time no other tracked file has, out of 5\n"
+    );
+    assert_eq!(repo.mtime(".gitignore"), tied);
+    assert_eq!(repo.mtime("other.txt"), alone);
+    let step = Duration::from_nanos(1_000);
+    assert_eq!(repo.mtime("build.rs"), tied - step);
+    assert_eq!(repo.mtime("src/lib.rs"), tied - 2 * step);
+    assert_eq!(repo.mtime("src/main.rs"), tied - 3 * step);
+    let again = break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        again,
+        "gave 0 tracked files a modification time no other tracked file has, out of 5\n"
     );
 }
 
 #[test]
-fn a_symlink_the_file_cannot_hold_means_nothing_is_saved() {
-    let repo = Repo::new("symlink-odd");
-    repo.write("data/a.txt", "a\n");
-    repo.link("data/a.txt", "data/odd\tlink");
-    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
-    repo.set_mtime("data/a.txt", built);
-    let saved = save_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-
-    repo.git(&["rm", "--quiet", "--force", "data/odd\tlink"]);
+fn restore_then_tie_breaking_leaves_the_restored_times_of_distinct_files_alone() {
+    let repo = Repo::new("ties-after-restore");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("build.rs", "fn main() {}\n");
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+    let later = UNIX_EPOCH + Duration::new(1_700_000_000, 223_456_789);
+    repo.set_mtime(".gitignore", built);
+    repo.set_mtime("src/lib.rs", later);
+    repo.set_mtime("build.rs", built - Duration::from_secs(1));
+    save_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
-    repo.set_mtime("data/a.txt", checkout);
-    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    for path in [".gitignore", "src/lib.rs", "build.rs"] {
+        repo.set_mtime(path, checkout);
+    }
+    restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(repo.mtime("src/lib.rs"), later);
+    assert_eq!(repo.mtime(".gitignore"), built);
+    assert_eq!(repo.mtime("build.rs"), built - Duration::from_secs(1));
+}
 
-    assert_eq!(repo.mtime("data/a.txt"), checkout);
+#[test]
+fn the_restored_command_prints_its_report_and_only_writes_the_expiry_output() {
+    let repo = Repo::new("restored-command");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(repo.root())
+        .env("GITHUB_ENV", repo.root().join("env"))
+        .env("GITHUB_OUTPUT", repo.root().join("output"))
+        .env_remove("VELNOR_BASE_MAX_AGE_DAYS")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("gave "));
+    assert_eq!(output.stderr.len(), 0);
+    assert!(!repo.root().join("env").exists());
     assert_eq!(
-        (saved.as_str(), report.as_str()),
-        (
-            "saved nothing: 1 tracked symlinks have a path or target the file cannot hold, so restore finds no saved inputs\n",
-            "no target/.velnor/inputs.tsv; nothing restored (cold run)\n"
-        )
+        std::fs::read_to_string(repo.root().join("output")).unwrap_or_default(),
+        "expired=false\n"
     );
 }

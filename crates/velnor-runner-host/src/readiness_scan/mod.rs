@@ -61,16 +61,20 @@ pub fn controller_readiness(state: &Path) -> Readiness {
 }
 
 async fn assess(state: &Path, deadline: tokio::time::Instant) -> Readiness {
-    assess_with(state, deadline, credential_present).await
+    assess_with(state, deadline, |reference| {
+        credential_present(reference, deadline)
+    })
+    .await
 }
 
-async fn assess_with<F>(
+async fn assess_with<F, Fut>(
     state: &Path,
     deadline: tokio::time::Instant,
     has_credential: F,
 ) -> Readiness
 where
-    F: FnMut(&KeychainReference) -> bool,
+    F: FnMut(KeychainReference) -> Fut,
+    Fut: Future<Output = bool>,
 {
     match std::fs::symlink_metadata(state) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -95,7 +99,7 @@ where
     let mut has_credential = has_credential;
     let mut missing_credential = false;
     for connection in config.connections() {
-        if !has_credential(&connection.credential_ref) {
+        if !has_credential(connection.credential_ref.clone()).await {
             eprintln!(
                 "readiness=waiting_for_credentials connection_id={}",
                 connection.connection_id
@@ -104,7 +108,7 @@ where
         }
     }
     match config.release_read_credential_ref() {
-        Some(reference) if !has_credential(reference) => {
+        Some(reference) if !has_credential(reference.clone()).await => {
             eprintln!("readiness=waiting_for_credentials credential=release_read");
             missing_credential = true;
         }
@@ -195,8 +199,8 @@ pub(crate) fn controller_config(state: &Path) -> Option<(HostConfig, String)> {
     }
 }
 
-fn credential_present(reference: &KeychainReference) -> bool {
-    let Ok(secret) = reference.load() else {
+async fn credential_present(reference: KeychainReference, deadline: tokio::time::Instant) -> bool {
+    let Ok(secret) = reference.load_until(deadline).await else {
         return false;
     };
     let Ok(text) = std::str::from_utf8(secret.as_slice()) else {

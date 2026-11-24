@@ -12,6 +12,7 @@ fn root(nanos: u128) -> RootPlan {
         inherited: Vec::new(),
         publish_budget_nanos: nanos,
         workspace_tags: Vec::new(),
+        version_groups: std::collections::BTreeMap::new(),
     }
 }
 

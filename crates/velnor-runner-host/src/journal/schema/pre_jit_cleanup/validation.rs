@@ -7,8 +7,8 @@ use super::{
     CREATE_SPEC_NO_DELETE, CREATE_SPEC_NO_UPDATE, CREATE_SPECS, HostError, INSERT_GUARD, NO_DELETE,
     NO_UPDATE, PROBE_INSERT_GUARD, PROBE_NO_DELETE, PROBE_NO_UPDATE, PROBES, PROGRESS,
     PROGRESS_INSERT_GUARD, PROGRESS_NO_DELETE, PROGRESS_UPDATE_GUARD, PROGRESS_UPDATE_GUARD_V53,
-    SETTLEMENT, SETTLEMENT_INSERT_GUARD, SETTLEMENT_NO_DELETE, SETTLEMENT_NO_UPDATE,
-    SETTLEMENT_POOL, SETTLEMENT_POOL_INSERT_GUARD, SETTLEMENT_POOL_NO_DELETE,
+    PROGRESS_UPDATE_GUARD_V54, SETTLEMENT, SETTLEMENT_INSERT_GUARD, SETTLEMENT_NO_DELETE,
+    SETTLEMENT_NO_UPDATE, SETTLEMENT_POOL, SETTLEMENT_POOL_INSERT_GUARD, SETTLEMENT_POOL_NO_DELETE,
     SETTLEMENT_POOL_NO_UPDATE, TABLE,
 };
 
@@ -177,6 +177,7 @@ async fn validate_progress_update_guard(connection: &turso::Connection) -> Resul
     let normalized = normalize(&actual);
     let version = super::super::journal_version(connection).await?;
     let accepted = normalized == normalize(PROGRESS_UPDATE_GUARD)
+        || (version < 60 && normalized == normalize(PROGRESS_UPDATE_GUARD_V54))
         || (version < 54 && normalized == normalize(PROGRESS_UPDATE_GUARD_V53));
     if !accepted {
         return Err(HostError::Journal);

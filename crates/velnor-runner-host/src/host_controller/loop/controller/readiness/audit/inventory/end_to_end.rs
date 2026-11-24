@@ -5,6 +5,8 @@
 mod engine;
 #[path = "end_to_end/refresh.rs"]
 mod refresh;
+#[path = "end_to_end/runtime.rs"]
+mod runtime;
 #[path = "end_to_end/seed.rs"]
 mod seed;
 
@@ -13,6 +15,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use super::super::super::RefreshDependencies;
+use super::super::RemoteAuditFuture;
 use super::{SettlingAges, audit_inventory_with_remote};
 use crate::config::HostConfig;
 use crate::error::HostError;
@@ -49,7 +52,7 @@ async fn world(containers: BTreeMap<String, Value>) -> TestResult<World> {
 }
 
 async fn readiness(world: &World) -> Result<Option<String>, HostError> {
-    let remote_present = |_: &_, _: Option<&_>, _: i64| Ok(true);
+    let remote_present = |_, _, _| -> RemoteAuditFuture { Box::pin(async { Ok(true) }) };
     audit_inventory_with_remote(
         &world.docker,
         &world.journal,

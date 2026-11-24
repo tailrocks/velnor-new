@@ -1,24 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, github_hosted};
+use velnor_model::HelperRelease;
 use velnor_workflows::{
-    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, MatrixSource, Step, Workflow,
-    WorkflowsPlan,
+    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, Matrix, MatrixSource, Step,
+    Workflow, WorkflowsPlan,
 };
 
 use crate::gate::all_conditions;
-use crate::pinned_actions::{ACTIONS_CACHE, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction};
+use crate::pinned_actions::{
+    ACTIONS_CACHE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction,
+};
+use crate::release_steps::APP_TOKEN_COMMIT;
 use crate::reusable_on::on;
+use crate::rules::APP_TOKEN_ACTION;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
-    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, RuleViolation, Value,
+    check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
     UPLOAD_ARTIFACT, install_helper,
 };
-use crate::workflow::{SAME_REPOSITORY, yaml_concurrency, yaml_job};
+use crate::workflow::{SAME_REPOSITORY, ShellcheckMarks, yaml_concurrency, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 const SELF_REPOSITORY_IGNORE: &str = "zizmor: ignore[self-repository]";
@@ -69,17 +74,16 @@ fn render_one(
             rendered
                 .jobs
                 .iter()
-                .map(|job| (job.id.clone(), yaml_job(job)))
+                .map(|job| (job.id.clone(), yaml_job(job, ShellcheckMarks::Jobs)))
                 .collect(),
         ),
     ));
-    let file = crate::header::seal(REUSABLE_HEADER, &emit(&document));
+    let file = crate::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![crate::rule_messages::size_report::too_large(
+            &format!(".github/workflows/{}.yml", workflow.file),
+            &file,
+        )]);
     }
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }
@@ -91,6 +95,22 @@ fn rendered_concurrency(concurrency: &Concurrency) -> RenderedConcurrency {
     }
 }
 
+fn trusted_runner(workflow: &Workflow, job: &Job) -> Option<RenderedTrusted> {
+    let pool = workflow.trusted.as_ref()?;
+    let names_pool = |label: &str| label.eq_ignore_ascii_case(&pool.replaces);
+    let on_pool = match &job.matrix_runner {
+        Some(runner) => runner
+            .labels
+            .iter()
+            .any(|(label, hosted)| !hosted && names_pool(label)),
+        None => names_pool(job.runner.as_ref().unwrap_or(&workflow.runner)) && !job.hosted,
+    };
+    on_pool.then(|| RenderedTrusted {
+        label: pool.label.clone(),
+        replaces: pool.replaces.clone(),
+    })
+}
+
 fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> RenderedJob {
     let installs = job.helper.then(|| install_helper(helper));
     let runs_on = job.runner.as_ref().unwrap_or(&workflow.runner).clone();
@@ -100,7 +120,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
         needs: job.needs.clone(),
         condition: call_fence(
             job,
-            condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            matrix_output_guard(
+                job,
+                condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            ),
         ),
         concurrency: job.concurrency.as_ref().map(rendered_concurrency),
         environment: job.environment.clone(),
@@ -110,7 +133,9 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .iter()
             .flat_map(|call| call_values(&call.with))
             .collect(),
-        fork_runner: (!github_hosted(&runs_on)).then(|| workflow.fork_runner.clone()),
+        runs_on_axis: job.matrix_runner.as_ref().map(|runner| runner.axis.clone()),
+        fork_runner: (!job.hosted).then(|| workflow.fork_runner.clone()),
+        trusted_runner: trusted_runner(workflow, job),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job
@@ -126,7 +151,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
                 } => {
                     RenderedMatrixSource::Output(format!("needs.{from_job}.outputs.{from_output}"))
                 }
-                MatrixSource::Axes(axes) => RenderedMatrixSource::Axes(axes.clone()),
+                MatrixSource::Axes { axes, include } => RenderedMatrixSource::Axes {
+                    axes: axes.clone(),
+                    include: include.clone(),
+                },
             },
             fail_fast: matrix.fail_fast,
             max_parallel: matrix.max_parallel,
@@ -178,6 +206,27 @@ fn condition(workflow: Option<&str>, job: Option<&str>) -> Option<String> {
     }
 }
 
+/// `fromJSON` of an output that was never set fails the run while the matrix is expanded, so the
+/// job waits for a non-empty output.
+fn matrix_output_guard(job: &Job, condition: Option<String>) -> Option<String> {
+    let Some(Matrix {
+        source: MatrixSource::Output {
+            from_job,
+            from_output,
+        },
+        ..
+    }) = &job.matrix
+    else {
+        return condition;
+    };
+    all_conditions(
+        Some(format!(
+            "${{{{ needs.{from_job}.outputs.{from_output} != '' }}}}"
+        )),
+        condition,
+    )
+}
+
 /// A call job has no `runs-on` to put the fork fallback on, and the callee may run on a
 /// self-hosted runner, so a pull request from a fork skips the call.
 fn call_fence(job: &Job, condition: Option<String>) -> Option<String> {
@@ -225,6 +274,11 @@ fn pin(action: Action) -> String {
         Action::Cache => return pinned(ACTIONS_CACHE),
         Action::GithubScript => return pinned(GITHUB_SCRIPT),
         Action::MrBoxington => return pinned(MR_BOXINGTON),
+        Action::DockerLogin => return pinned(DOCKER_LOGIN),
+        Action::DockerBuildPush => return pinned(DOCKER_BUILD_PUSH),
+        Action::CreateGithubAppToken => {
+            return format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}");
+        }
     };
     fixed.to_owned()
 }
@@ -269,6 +323,7 @@ fn rendered_step(step: &Step) -> RenderedStep {
             .as_deref()
             .map(|condition| format!("${{{{ {condition} }}}}")),
         continue_on_error: step.continue_on_error,
+        working_directory: step.working_directory.clone(),
         uses,
         uses_comment,
         with: values(&step.with)

@@ -8,7 +8,7 @@ use base64::engine::general_purpose::STANDARD;
 
 const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
 
-pub const FILES: [&str; 3] = [".runner", ".credentials", ".credentials_rsaparams"];
+pub const FILES: &[&str] = &[".runner", ".credentials", ".credentials_rsaparams"];
 
 #[must_use]
 pub fn labels(extra: &[String]) -> String {
@@ -49,7 +49,7 @@ pub fn pack(output: &str) -> Result<String, String> {
             .map_err(|error| format!("{file} is not base64: {error}"))?;
         files.insert(file, content);
     }
-    for file in FILES {
+    for file in FILES.iter().copied() {
         if !files.contains_key(file) {
             return Err(format!("registration wrote no {file}"));
         }

@@ -6,6 +6,7 @@ use std::error::Error;
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{PackageName, RepoPath};
 use velnor_release::ReleaseError;
+use velnor_rust::{DetectError, Reason};
 
 use crate::release_fixture::{APP, Root, app, jobs, release_view, steps};
 use crate::yaml_tree::Node;
@@ -111,9 +112,7 @@ fn release_plz_pinned_only_in_the_dot_mise_file_is_accepted_and_checked() -> Tes
     );
     assert!(matches!(
         expected_files(&view),
-        Err(GenerateError::Release(
-            ReleaseError::ReleasePlzLockMismatch { .. }
-        ))
+        Err(GenerateError::Detect(DetectError::Invalid { path, reason: Reason::InvalidValue { key: "tools", value } })) if path.as_str() == "mise.lock" && value.contains("release-plz") && value.contains("0.4.2") && value.contains("no unambiguous locked version")
     ));
     Ok(())
 }

@@ -33,7 +33,8 @@ impl Reason {
                 "test_groups or test_lane names the root {root}, which belongs to a workspace group; a workspace group runs one job set for its roots, so split the root's tests another way or take the root out of the group"
             ),
             Self::GroupHelper => f.write_str(
-                "workspace_groups needs velnor-ci 0.1.86 or later, which writes the plan output of every group; run `velnor-gen pin-helper 0.1.86`",
+                // helper-gate: first in tools-v0.1.96 via 61067c17fc
+                "workspace_groups needs velnor-ci 0.1.96 or later, which writes the plan output of every group; run `velnor-gen pin-helper 0.1.96`",
             ),
             Self::GroupShape => f.write_str(
                 "workspace_groups cannot be used with shape = \"groups\": a group's roots share one job, and the groups shape needs one archive and one test job per workspace; use shape = \"lint-test\" or leave the shape out",

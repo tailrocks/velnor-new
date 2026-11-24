@@ -15,7 +15,7 @@ filter = 'package(package-0) and test(/^db_/)'
 needs = ['docker']
 test_threads = 2
 timeout_minutes = 45
-runner = 'ubuntu-24.04'
+runner = 'velnor-box'
 ";
 
 pub(crate) const SHELL: &str = "[[test_groups]]
@@ -37,7 +37,7 @@ pub(crate) fn view_with(
 }
 
 pub(crate) fn rendered(config: &str) -> Result<Value, Box<dyn std::error::Error>> {
-    let text = workflow(&view_with(&["Cargo.toml"], config, "0.1.82")?)?;
+    let text = workflow(&view_with(&["Cargo.toml"], config, "0.1.90")?)?;
     Ok(document(&text)?)
 }
 
@@ -45,7 +45,7 @@ pub(crate) fn rejection(config: &str) -> Result<String, Box<dyn std::error::Erro
     let error = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)
     .err()
     .ok_or("the configuration was accepted")?;
@@ -94,7 +94,7 @@ pub(crate) fn needs(job: &Value) -> Vec<&str> {
 #[test]
 fn the_test_groups_table_parses_every_field() -> TestResult {
     let both = format!("{DATABASE}\n{SHELL}");
-    let facts = detect(&view_with(&["Cargo.toml"], &both, "0.1.82")?)?;
+    let facts = detect(&view_with(&["Cargo.toml"], &both, "0.1.90")?)?;
     let groups = &facts.config.test_groups;
     assert_eq!(groups.len(), 2);
     assert_eq!(groups[0].name.as_str(), "database");
@@ -104,7 +104,7 @@ fn the_test_groups_table_parses_every_field() -> TestResult {
     assert_eq!(groups[0].timeout_minutes, Some(45));
     assert_eq!(
         groups[0].runner.as_ref().map(ToString::to_string),
-        Some("ubuntu-24.04".to_owned())
+        Some("velnor-box".to_owned())
     );
     assert_eq!(groups[0].root, GroupRoot::OnlyRoot);
     assert_eq!(groups[1].needs, [TestNeed::Cargo]);
@@ -119,7 +119,7 @@ fn a_group_names_its_root_by_folder_or_dot() -> TestResult {
     let facts = detect(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     assert_eq!(
         facts.config.test_groups[0].root,
@@ -209,13 +209,28 @@ fn two_groups_with_the_same_name_in_one_root_are_refused() -> TestResult {
 }
 
 #[test]
+fn two_groups_whose_output_names_collide_across_roots_are_refused() -> TestResult {
+    let config = "[[test_groups]]\nname = 'b_group_c'\nfilter = 'all()'\nroot = 'a'\n\n[[test_groups]]\nname = 'c'\nfilter = 'all()'\nroot = 'a_group_b'\n";
+    let error = workflow(&view_with(
+        &["a/Cargo.toml", "a_group_b/Cargo.toml"],
+        config,
+        "0.1.90",
+    )?)
+    .err()
+    .ok_or("two groups sharing one step output were accepted")?
+    .to_string();
+    assert!(error.contains("test_groups.name"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn a_pinned_helper_older_than_the_groups_release_refuses_the_table() -> TestResult {
     let error = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.81")?)
         .err()
         .ok_or("an old helper was accepted")?
         .to_string();
     assert!(
-        error.contains("0.1.81") && error.contains("0.1.82") && error.contains("test_groups"),
+        error.contains("0.1.81") && error.contains("0.1.90") && error.contains("test_groups"),
         "{error}"
     );
     workflow(&view_with(&["Cargo.toml"], "", "0.1.81")?)?;

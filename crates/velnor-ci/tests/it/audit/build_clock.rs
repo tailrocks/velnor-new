@@ -7,6 +7,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use super::{audit, command, own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
+use velnor_test_support::real_cargo_str;
 
 const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
 
@@ -20,7 +21,7 @@ use std::time::{Duration, UNIX_EPOCH};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "metadata") {
-        std::process::exit(std::process::Command::new("cargo").args(&args).status().unwrap().code().unwrap_or(1));
+        std::process::exit(std::process::Command::new("@CARGO@").args(&args).status().unwrap().code().unwrap_or(1));
     }
     let marker = fs::read_dir("target/.velnor-input-inventories").unwrap()
         .map(|entry| entry.unwrap().path())
@@ -52,7 +53,8 @@ fn main() {
     fs::write(output, text).unwrap();
     File::options().write(true).open(output).unwrap().set_times(FileTimes::new().set_modified(modified)).unwrap();
 }
-"#);
+"#
+    .replace("@CARGO@", &real_cargo_str()).as_str());
     let compiled = command("rustc")
         .current_dir(repo.root())
         .args(["--edition=2024", "driver/cargo.rs", "-o", "driver/cargo"])

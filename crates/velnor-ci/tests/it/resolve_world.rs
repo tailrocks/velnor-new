@@ -9,12 +9,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use crate::support::fresh_dir;
-
+use crate::resolve_template::{Template, shared_template};
 use crate::resolve_wire::zip_of;
 pub(crate) use crate::resolve_wire::{
     artifact_route, branch_route, digest_b3, list_route, repo_route, run_route, sha256, zip_route,
@@ -22,11 +21,10 @@ pub(crate) use crate::resolve_wire::{
 };
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
-pub(crate) const WORKFLOW: &str = ".github/workflows/ci.yml";
+pub(crate) const WORKFLOW: &str = ".github/workflows/repository-checks.yml";
 pub(crate) const ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
 pub(crate) const MEMBER: &str = "qualification-cache-receipt.json";
 const CURRENT_RUN: u64 = 2001;
-static TEMPLATE: OnceLock<(PathBuf, Shas)> = OnceLock::new();
 
 pub(crate) fn data_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/resolve_qualification")
@@ -64,19 +62,10 @@ pub(crate) fn make_repo(dir: &Path) -> Shas {
     }
 }
 
-/// The repository `repo.sh` builds, made once and copied for every case.
-fn template() -> &'static (PathBuf, Shas) {
-    TEMPLATE.get_or_init(|| {
-        let dir = fresh_dir("velnor-ci-resolve", "template").join("repo");
-        let shas = make_repo(&dir);
-        (dir, shas)
-    })
-}
-
-pub(crate) fn copy_repo(dest: &Path) {
+pub(crate) fn copy_repo(world: &World, dest: &Path) {
     let copied = Command::new("cp")
         .arg("-R")
-        .arg(format!("{}/.", template().0.display()))
+        .arg(format!("{}/.", world.template.root.join("repo").display()))
         .arg(dest)
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -87,6 +76,7 @@ pub(crate) fn copy_repo(dest: &Path) {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Quirk {
     RequestIsASymlink,
+    RequestIsAFifo,
     AdmissionAlreadyStaged,
     VelnorDirectoryIsASymlink,
     NotARepository,
@@ -113,10 +103,11 @@ impl Node {
     }
 }
 
-type Edit = Box<dyn Fn(&mut Node)>;
+type Edit = Box<dyn Fn(&mut Node) + Send>;
 
 /// Everything outside the repository a case reads, and the ways a case can differ.
 pub(crate) struct World {
+    template: Arc<Template>,
     pub(crate) shas: Shas,
     pub(crate) request: Value,
     pub(crate) payload: Value,
@@ -159,7 +150,8 @@ impl World {
     /// A `phase` dispatch with its predecessors: warm has the cold run, third the warm and cold,
     /// `useful_delta` the third, warm and cold.
     pub(crate) fn new(phase: &str) -> Self {
-        let shas = template().1.clone();
+        let template = shared_template();
+        let shas = template.shas.clone();
         let phases: &[&str] = match phase {
             "warm" => &["cold"],
             "third" => &["warm", "cold"],
@@ -212,6 +204,7 @@ impl World {
         .map(|(key, value)| (key.to_owned(), value))
         .collect();
         Self {
+            template,
             request: json!({
                 "base": null, "event": "qualification", "head": source, "op": "plan-v1",
                 "qualification": context, "repository": REPO, "root": ".", "schema": 1
@@ -261,8 +254,12 @@ impl World {
         }
     }
 
+    pub(crate) fn template_repo(&self) -> PathBuf {
+        self.template.root.join("repo")
+    }
+
     /// Change node `index` after its link to its predecessor is set and before it is packed.
-    pub(crate) fn edit(&mut self, index: usize, change: impl Fn(&mut Node) + 'static) {
+    pub(crate) fn edit(&mut self, index: usize, change: impl Fn(&mut Node) + Send + 'static) {
         self.edits.push((index, Box::new(change)));
     }
 

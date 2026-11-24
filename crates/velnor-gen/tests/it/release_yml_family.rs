@@ -16,9 +16,9 @@ use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+pub(crate) const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
 
-fn release_plz(root: &Root, release: bool) -> String {
+pub(crate) fn release_plz(root: &Root, release: bool) -> String {
     release_plz_tagged(root, release, "{{ package }}-v{{ version }}")
 }
 
@@ -43,8 +43,7 @@ fn render_family_tagged(
     app_tag: &str,
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.83").into_bytes());
+    crate::release_fixture::pin_at_least(&mut view, "0.1.85")?;
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         release_plz_tagged(&APP, release, app_tag).into_bytes(),
@@ -122,12 +121,36 @@ fn family_builds_check_out_the_family_tag_and_refuse_another_commit() -> TestRes
             Some("refs/tags/${{ needs.family.outputs.tag }}"),
             "{id}"
         );
-        let check = all[1].get("run").and_then(Node::text).ok_or("no check")?;
+        let check = all[2].get("run").and_then(Node::text).ok_or("no check")?;
         assert!(check.contains("\"$CHECKED_OUT\" = \"$VERIFIED\""), "{id}");
         assert!(check.contains("\"$FAMILY\" = \"$VERIFIED\""), "{id}");
         let condition = build.get("if").and_then(Node::text).ok_or("no if")?;
         assert!(
             condition.contains("needs.family.outputs.build == 'true'"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn family_builds_stamp_the_verified_commit_into_the_binaries() -> TestResult {
+    let tree = family()?;
+    for (id, build) in jobs(&tree)?
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("build-"))
+    {
+        let cargo = steps(build)
+            .iter()
+            .find(|step| {
+                step.get("run")
+                    .and_then(Node::text)
+                    .is_some_and(|run| run.starts_with("cargo build"))
+            })
+            .ok_or("no cargo build step")?;
+        assert_eq!(
+            cargo.at(&["env", "VELNOR_COMMIT"]).and_then(Node::text),
+            Some("${{ github.sha }}"),
             "{id}"
         );
     }
@@ -171,7 +194,7 @@ fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
     }
     assert!(matches!(
         expected_release(&view),
-        Err(GenerateError::FamilyTagHelperTooOld(_))
+        Err(GenerateError::ConfigKeyHelperTooOld { .. })
     ));
     Ok(())
 }
@@ -222,5 +245,127 @@ fn the_group_prefixed_family_tag_is_still_refused_when_a_release_plz_root_uses_i
     );
     let apart = render_family_tagged(FAMILY, false, "app-v{{ version }}")?;
     assert!(apart.is_ok(), "a distinct release-plz tag must pass");
+    Ok(())
+}
+
+const SINGLE: &str = "family_tag = \"tools-v{{ version }}\"\n";
+
+fn single(binaries: &str) -> Result<Node, Box<dyn Error>> {
+    render_family(&format!("{SINGLE}{binaries}"), false)?.map_err(Into::into)
+}
+
+#[test]
+fn a_raw_family_build_records_the_family_tag_in_the_provenance() -> TestResult {
+    let tree =
+        single("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nplatforms = [\"linux-x64\"]\n")?;
+    let build = job(&tree, "build-app-linux-x64")?;
+    let record = steps(build)
+        .iter()
+        .find(|step| {
+            step.get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.contains("provenance.json"))
+        })
+        .ok_or("no provenance step")?;
+    assert_eq!(
+        record.at(&["env", "TAG"]).and_then(Node::text),
+        Some("${{ needs.family.outputs.tag }}")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_raw_family_release_lists_and_publishes_the_sidecars() -> TestResult {
+    let tree =
+        single("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nplatforms = [\"linux-x64\"]\n")?;
+    for id in ["sums-family", "publish-family"] {
+        let last = runs(job(&tree, id)?).last().copied().ok_or("no command")?;
+        for file in [
+            "app-linux-x64",
+            "app-linux-x64.sha256",
+            "app-linux-x64.provenance.json",
+        ] {
+            assert!(last.contains(file), "{id}: {file} missing from {last}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_family_binary_may_bundle_bins_files_and_name_its_assets() -> TestResult {
+    let tree = single(
+        "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nbins = [{ bin = \"rg\" }]\ninclude = [\"LICENSE\"]\nasset_name = \"{{ bin }}_{{ platform }}\"\n",
+    )?;
+    let commands = runs(job(&tree, "build-app-linux-x64")?);
+    assert!(commands.iter().any(|run| {
+        run.starts_with("cargo build") && run.contains("--package app --bin app --bin rg --target")
+    }));
+    assert!(commands.iter().any(|run| run.starts_with(
+        "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
+    )), "{commands:?}");
+    let publish = runs(job(&tree, "publish-family")?)
+        .last()
+        .copied()
+        .ok_or("no publish")?;
+    assert!(publish.ends_with("app_linux-x64.tar.gz"), "{publish}");
+    Ok(())
+}
+
+#[test]
+fn a_family_release_runs_its_checks_before_the_tag_and_before_the_publish() -> TestResult {
+    let tree = single(
+        "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\n[[checks]]\nname = \"Lint\"\nrun = \"bash lint.sh\"\n[[checks]]\nname = \"Qualify\"\nrun = \"bash qualify.sh\"\nbefore = \"publish\"\nartifacts = [\"app-linux-x64\"]\n",
+    )?;
+    let needs = |id: &str| -> Result<Vec<String>, Box<dyn Error>> {
+        Ok(job(&tree, id)?
+            .get("needs")
+            .map(Node::texts)
+            .ok_or("no needs")?
+            .into_iter()
+            .map(str::to_owned)
+            .collect())
+    };
+    assert!(needs("family")?.contains(&"check-lint".to_owned()));
+    assert!(needs("tag")?.contains(&"check-lint".to_owned()));
+    let qualify = needs("check-qualify")?;
+    assert!(qualify.contains(&"family".to_owned()));
+    assert!(qualify.contains(&"build-app-linux-x64".to_owned()));
+    assert!(!qualify.contains(&"tag".to_owned()));
+    let condition = job(&tree, "check-qualify")?
+        .get("if")
+        .and_then(Node::text)
+        .ok_or("no if")?;
+    assert!(condition.contains("needs.family.outputs.build == 'true'"));
+    assert!(!condition.contains("needs.tag.outputs"));
+    assert!(needs("publish-family")?.contains(&"check-qualify".to_owned()));
+    Ok(())
+}
+
+#[test]
+fn a_family_asset_name_may_carry_the_version_of_the_family_tag() -> TestResult {
+    let tree = single(
+        "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nasset_name = \"{{ bin }}-{{ version }}-{{ platform }}\"\n",
+    )?;
+    let version = "echo \"version=${TAG#tools-v}\" >> \"$GITHUB_OUTPUT\"";
+    for id in ["build-app-linux-x64", "sums-family", "publish-family"] {
+        let all = steps(job(&tree, id)?);
+        let reader = all
+            .iter()
+            .find(|step| step.get("run").and_then(Node::text) == Some(version))
+            .ok_or_else(|| format!("{id}: no version step"))?;
+        assert_eq!(
+            reader.at(&["env", "TAG"]).and_then(Node::text),
+            Some("${{ needs.family.outputs.tag }}"),
+            "{id}"
+        );
+    }
+    let publish = runs(job(&tree, "publish-family")?)
+        .last()
+        .copied()
+        .ok_or("no publish")?;
+    assert!(
+        publish.ends_with("\"app-${VERSION}-linux-x64.tar.gz\""),
+        "{publish}"
+    );
     Ok(())
 }

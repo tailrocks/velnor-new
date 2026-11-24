@@ -37,5 +37,8 @@ impl CleanupProof {
 }
 
 fn full_container_id(id: &str) -> bool {
-    id.len() == CONTAINER_ID_LEN && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    id.len() == CONTAINER_ID_LEN
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }

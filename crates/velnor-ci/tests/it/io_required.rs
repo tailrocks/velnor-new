@@ -118,6 +118,55 @@ fn every_fail_closed_case_exits_1_and_names_the_reason() {
 }
 
 #[test]
+fn a_shard_without_a_package_map_fails_even_while_another_shard_ran_some() {
+    let spec = "--plan rust-plan --job rust-plan=always --job rust-test-a=lane:root --job rust-test-b=lane:root --tests rust-test-a=root --tests rust-test-b=root";
+    let needs = r#"{"rust-plan":{"result":"success","outputs":{"rust_root_mode":"some","rust_root_tests":"run"}},"rust-test-a":{"result":"success","outputs":{"tests_run":"4","tests_listed":"4","tests_ignored":"0","tests_by_package":"pkg=4/4"}},"rust-test-b":{"result":"success","outputs":{"tests_run":"0","tests_listed":"0","tests_ignored":"0"}}}"#;
+    let (output, summary) = gate_with("shard-empty", spec, Some(needs));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("tests_by_package is missing or malformed in a test job of root"),
+        "{stderr}"
+    );
+    assert!(summary.contains("**Required: FAIL**"), "{summary}");
+}
+
+#[test]
+fn a_shard_that_reports_the_empty_map_passes_while_another_shard_ran_some() {
+    let spec = "--plan rust-plan --job rust-plan=always --job rust-test-a=lane:root --job rust-test-b=lane:root --tests rust-test-a=root --tests rust-test-b=root";
+    let needs = r#"{"rust-plan":{"result":"success","outputs":{"rust_root_mode":"some","rust_root_tests":"run"}},"rust-test-a":{"result":"success","outputs":{"tests_run":"4","tests_listed":"4","tests_ignored":"0","tests_by_package":"pkg=4/4"}},"rust-test-b":{"result":"success","outputs":{"tests_run":"0","tests_listed":"0","tests_ignored":"0","tests_by_package":"{}"}}}"#;
+    let (output, summary) = gate_with("shard-explicit-empty", spec, Some(needs));
+    assert!(output.status.success(), "{output:?}");
+    assert!(summary.contains("**Required: pass**"), "{summary}");
+}
+
+#[test]
+fn a_lone_job_that_listed_and_ran_no_tests_fails_without_its_package_map() {
+    let needs = r#"{"rust-plan":{"result":"success","outputs":{"rust_root_mode":"some","rust_root_tests":"run"}},"rust-test":{"result":"success","outputs":{"tests_run":"0","tests_listed":"0","tests_ignored":"0"}}}"#;
+    let (output, summary) = gate("lone-empty", Some(needs));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("tests_by_package is missing or malformed in a test job of root"),
+        "{stderr}"
+    );
+    assert!(summary.contains("**Required: FAIL**"), "{summary}");
+}
+
+#[test]
+fn a_lone_job_that_reports_the_empty_map_fails_as_a_zero_test_lane() {
+    let needs = r#"{"rust-plan":{"result":"success","outputs":{"rust_root_mode":"some","rust_root_tests":"run"}},"rust-test":{"result":"success","outputs":{"tests_run":"0","tests_listed":"0","tests_ignored":"0","tests_by_package":"{}"}}}"#;
+    let (output, summary) = gate("lone-explicit-empty", Some(needs));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("a test job of root listed no tests and ran none"),
+        "{stderr}"
+    );
+    assert!(summary.contains("**Required: FAIL**"), "{summary}");
+}
+
+#[test]
 fn a_missing_needs_variable_fails() {
     let (output, _) = gate("no-needs", None);
     assert_eq!(output.status.code(), Some(1), "{output:?}");
@@ -142,50 +191,4 @@ fn a_missing_or_malformed_spec_fails_before_anything_passes() {
         let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(output.status.code(), Some(1), "{spec:?}: {output:?}");
     }
-}
-
-fn budget_needs(result: &str) -> String {
-    format!(
-        r#"{{"rust-plan":{{"result":"success","outputs":{{"rust_root_mode":"some","rust_root_tests":"run"}}}},"rust-test":{{"result":"success","outputs":{{"tests_run":"7","tests_listed":"7","tests_by_package":"pkg=7/7"}}}},"rust-budget":{{"result":"{result}","outputs":{{"budget_pr_wall_seconds":"300","budget_main_wall_seconds":"600","budget_runner_seconds":"1800","budget_setup_seconds":"60","run_wall_seconds":"420","run_runner_seconds":"900"}}}}}}"#
-    )
-}
-
-const BUDGET_SPEC: &str = "--plan rust-plan --job rust-plan=always --job rust-test=lane:root --tests rust-test=root --job rust-budget=advisory";
-
-#[test]
-fn the_gate_prints_the_budget_next_to_the_current_run() {
-    let (output, summary) = gate_with("budget", BUDGET_SPEC, Some(&budget_needs("success")));
-    assert!(output.status.success(), "{output:?}");
-    assert!(summary.contains("**Speed budget**"), "{summary}");
-    assert!(
-        summary.contains("| Wall seconds | 420s | 300s |"),
-        "{summary}"
-    );
-    assert!(
-        summary.contains("| Runner seconds | 900s | 1800s |"),
-        "{summary}"
-    );
-}
-
-#[test]
-fn the_gate_prints_no_budget_when_the_budget_job_did_not_run() {
-    let skipped = needs("success", "success", "7", "7")
-        .replace(
-            "\"rust-test\":{\"result\":\"success\"",
-            "\"rust-budget\":{\"result\":\"skipped\",\"outputs\":{}},\"rust-test\":{\"result\":\"success\"",
-        );
-    let (output, summary) = gate_with("no-budget", BUDGET_SPEC, Some(&skipped));
-    assert!(output.status.success(), "{output:?}");
-    assert!(!summary.contains("Speed budget"), "{summary}");
-}
-
-#[test]
-fn a_failed_budget_job_does_not_fail_the_required_check() {
-    let (output, summary) = gate_with("budget-failed", BUDGET_SPEC, Some(&budget_needs("failure")));
-    assert!(output.status.success(), "{output:?}");
-    assert!(
-        summary
-            .contains("warning: rust-budget was scheduled by the plan and its result is failure"),
-        "{summary}"
-    );
 }

@@ -12,7 +12,8 @@ use super::Driver;
 use super::refusal::CANCEL_GRACE;
 use crate::cli::RunnerMode;
 use crate::io::authority::Runners;
-use crate::io::env::{Engine, Environment, STANDIN_IMAGE, words};
+use crate::io::env::{Engine, Environment, STANDIN_IMAGE, client_log_tail, words};
+use crate::io::job_logs;
 use crate::io::probe::request;
 use crate::io::supervisor::await_replacement;
 use crate::pairs::{DECISIONS, consumed_agents};
@@ -46,6 +47,38 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             .await
             .ok_or_else(|| io::Error::other(format!("runner.server does not answer {path}")))?;
         serde_json::from_slice(&bytes).map_err(io::Error::other)
+    }
+
+    async fn save_job_logs(&self, run: u64, payload: &Value) -> io::Result<()> {
+        let values = crate::conformance::run_values(payload);
+        let runs = self.env.dir.join("runs");
+        fs::create_dir_all(&runs).await?;
+        fs::write(
+            runs.join(format!("{run}.json")),
+            serde_json::to_string(&values).map_err(io::Error::other)?,
+        )
+        .await?;
+        let path = format!("/_apis/v1/Message?runid={run}");
+        let jobs: Vec<standin::Job> = self.get(Side::Trusted, &path).await?;
+        let ids: Vec<u64> = jobs.iter().map(|job| job.request_id).collect();
+        let stub = self.addresses.stub_url.trim_start_matches("http://");
+        let logs = self.env.dir.join("logs");
+        let missing = job_logs::save(
+            stub,
+            &self.addresses.token,
+            &self.args.repository,
+            run,
+            &ids,
+            &logs,
+        )
+        .await?;
+        if !missing.is_empty() {
+            println!(
+                "velnor-local {}: no step log from the API stub for jobs {missing:?} of run {run}",
+                self.tag
+            );
+        }
+        Ok(())
     }
 
     pub(super) async fn send(
@@ -118,13 +151,22 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
                 );
                 continue;
             }
-            let outcome = self.outcome(run, side).await?;
+            let id = run.id;
+            let mut outcome = self.outcome(run, side).await?;
+            if outcome.trusted && outcome.started.is_none() {
+                outcome.client_log = Some(client_log_tail(&log).await?);
+            }
             println!("velnor-local {}: {}", self.tag, outcome.line());
             self.outcomes.push(outcome);
+            if side == Side::Trusted {
+                self.save_job_logs(id, payload).await?;
+            }
         }
         if !succeeded && !created {
+            let tail = client_log_tail(&log).await?;
             return Err(io::Error::other(format!(
-                "Runner.Client failed; see logs/{name}.log"
+                "Runner.Client failed; see logs/{name}.log, last lines:\n{}",
+                tail.join("\n")
             )));
         }
         Ok(())

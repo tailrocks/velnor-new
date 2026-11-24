@@ -1,17 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedStep, Rule, Value};
+use crate::release_steps::APP_TOKEN_COMMIT;
+use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Rule, Value};
 
-/// An action that velnor-gen accepts at exactly one commit.
-///
-/// `tag` is the release the commit was resolved from; it appears in a trailing
-/// comment of the rendered `uses` line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PinnedAction {
     pub action: &'static str,
     pub commit: &'static str,
     pub tag: &'static str,
+}
+
+impl PinnedAction {
+    #[must_use]
+    pub fn step(&self, name: String) -> RenderedStep {
+        RenderedStep {
+            name,
+            uses: Some(format!("{}@{}", self.action, self.commit)),
+            uses_comment: Some(self.tag.to_owned()),
+            ..RenderedStep::default()
+        }
+    }
 }
 
 pub const ATTEST_BUILD_PROVENANCE: PinnedAction = PinnedAction {
@@ -44,8 +53,6 @@ pub const MR_BOXINGTON: PinnedAction = PinnedAction {
     commit: "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
     tag: "v1.7.3",
 };
-/// The combined cache action, at the same commit as `actions/cache/restore`
-/// and `actions/cache/save`.
 pub const ACTIONS_CACHE: PinnedAction = PinnedAction {
     action: "actions/cache",
     commit: "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -68,7 +75,7 @@ enum Shape {
     KeyedReferences,
 }
 
-const CREDENTIAL_INPUTS: [(&str, &str, Shape); 4] = [
+const CREDENTIAL_INPUTS: [(&str, &str, Shape); 5] = [
     (DOCKER_LOGIN.action, "password", Shape::Reference),
     (DOCKER_BUILD_PUSH.action, "github-token", Shape::Reference),
     (DOCKER_BUILD_PUSH.action, "secrets", Shape::KeyedReferences),
@@ -77,15 +84,21 @@ const CREDENTIAL_INPUTS: [(&str, &str, Shape); 4] = [
         "github-token",
         Shape::Reference,
     ),
+    (GITHUB_SCRIPT.action, "github-token", Shape::Reference),
 ];
 
 pub(crate) fn pin_rules(action: &str, reference: &str, rules: &mut Vec<Rule>) {
-    if let Some(pin) = PINNED_ACTIONS.iter().find(|pin| pin.action == action)
-        && reference != pin.commit
+    let pinned = PINNED_ACTIONS
+        .iter()
+        .map(|pin| (pin.action, pin.commit))
+        .chain([(APP_TOKEN_ACTION, APP_TOKEN_COMMIT)])
+        .find(|(name, _)| *name == action);
+    if let Some((_, commit)) = pinned
+        && reference != commit
     {
         rules.push(Rule::ActionPinMismatch {
             action: action.to_owned(),
-            commit: pin.commit,
+            commit,
         });
     }
 }

@@ -14,6 +14,11 @@ fn one_job(header: &str, steps: &str) -> String {
     )
 }
 
+/// The header of a job that saves: a write mode, kept off the default branch.
+fn writer() -> String {
+    format!("cache_mode = \"write\"\nif = \"{GATE}\"\n")
+}
+
 fn run_step() -> &'static str {
     "[[workflow.job.step]]\nname = \"Check\"\nrun = \"echo ok\"\n"
 }
@@ -75,7 +80,11 @@ fn a_job_cache_mode_is_written_as_the_github_key() -> TestResult {
         assert!(at("cache-mode") < at("steps"), "{keys:?}");
     }
     let plain = rendered(&one_job("", run_step()))?;
-    assert!(job(&plain, "check")?.get("cache-mode").is_none());
+    assert_eq!(
+        job(&plain, "check")?.get("cache-mode").and_then(Node::text),
+        Some("read"),
+        "an undeclared job must not be left to the default, which is write on a trusted trigger"
+    );
     Ok(())
 }
 
@@ -124,7 +133,7 @@ fn the_cache_actions_render_at_their_pins() -> TestResult {
         with_step("cache-restore", "{ path = \"a\", key = \"k\" }"),
         with_step("cache", "{ path = \"a\", key = \"k\" }"),
     );
-    let tree = rendered(&one_job("", &steps))?;
+    let tree = rendered(&one_job(&writer(), &steps))?;
     let uses: Vec<&str> = job(&tree, "check")?
         .get("steps")
         .ok_or("no steps")?
@@ -148,7 +157,7 @@ fn the_cache_actions_render_at_their_pins() -> TestResult {
 fn a_with_value_may_interpolate_the_run_and_job_identity() -> TestResult {
     let key = "g4-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
     let config = one_job(
-        "",
+        &writer(),
         &with_step(
             "cache-save",
             &format!("{{ path = \"a b/c\", key = \"{key}\" }}"),
@@ -220,17 +229,109 @@ fn a_cache_key_is_measured_with_the_longest_job_id_and_attempt_it_can_hold() -> 
     for uses in ["cache", "cache-save", "cache-restore"] {
         let key = format!("{padding}-${{{{ github.job }}}}-${{{{ github.run_attempt }}}}");
         let config = one_job(
-            "",
+            &writer(),
             &with_step(uses, &format!("{{ path = \"a\", key = \"{key}\" }}")),
         );
         let message = refusal(&config)?;
         assert!(message.contains("cache key"), "{uses}: {message}");
         let short = format!("{}-${{{{ github.job }}}}", "k".repeat(300));
         let config = one_job(
-            "",
+            &writer(),
             &with_step(uses, &format!("{{ path = \"a\", key = \"{short}\" }}")),
         );
         rendered(&config)?;
     }
+    Ok(())
+}
+
+#[test]
+fn a_job_that_saves_must_declare_a_writing_cache_mode() -> TestResult {
+    for uses in ["cache", "cache-save"] {
+        let step = with_step(uses, "{ path = \"a\", key = \"k\" }");
+        for header in ["", "cache_mode = \"read\"\n", "cache_mode = \"none\"\n"] {
+            let message = refusal(&one_job(header, &step))?;
+            assert!(
+                message.contains("check") && message.contains("cache_mode \"write\""),
+                "{uses} {header:?}: {message}"
+            );
+        }
+        rendered(&one_job(&writer(), &step))?;
+    }
+    let restore = with_step("cache-restore", "{ path = \"a\", key = \"k\" }");
+    rendered(&one_job("", &restore))?;
+    Ok(())
+}
+
+/// A workflow that runs on `on`, with one job of `header` and `steps`.
+fn workflow_on(on: &str, header: &str, steps: &str) -> String {
+    workflow(
+        "",
+        on,
+        &format!("\n[[workflow.job]]\nid = \"check\"\n{header}\n{steps}"),
+    )
+}
+
+const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
+const PULL_REQUEST: &str = "[workflow.on.pull_request]\ntypes = [\"opened\", \"synchronize\"]\n";
+
+fn mbx(with: &str) -> String {
+    with_step("mr-boxington", with)
+}
+
+#[test]
+fn a_job_whose_only_saver_is_mbx_on_the_github_backend_writes() -> TestResult {
+    for with in [
+        "{ backend = \"github\" }",
+        "{ backend = \"github\", github-cache-mode = \"objects\" }",
+        "{ github-cache-mode = \"objects\" }",
+    ] {
+        let config = workflow_on(PUSH, "", &mbx(with));
+        let tree = rendered(&config)?;
+        assert_eq!(
+            job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+            Some("write"),
+            "{with}: the mbx github save needs a writing cache-mode"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_mbx_step_on_a_non_github_backend_does_not_make_a_writer() -> TestResult {
+    for backend in ["local", "remote"] {
+        let config = workflow_on(PUSH, "", &mbx(&format!("{{ backend = \"{backend}\" }}")));
+        let tree = rendered(&config)?;
+        assert_eq!(
+            job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+            Some("read"),
+            "{backend}: the job does not save to the Actions cache service"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_mbx_github_save_in_a_pull_request_job_stays_read() -> TestResult {
+    let config = workflow_on(PULL_REQUEST, "", &mbx("{ backend = \"github\" }"));
+    let tree = rendered(&config)?;
+    assert_eq!(
+        job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+        Some("read")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_saving_mbx_job_that_declares_read_is_refused() -> TestResult {
+    let config = workflow_on(
+        PUSH,
+        "cache_mode = \"read\"\n",
+        &mbx("{ backend = \"github\" }"),
+    );
+    let message = refusal(&config)?;
+    assert!(
+        message.contains("check") && message.contains("cache_mode \"write\""),
+        "{message}"
+    );
     Ok(())
 }

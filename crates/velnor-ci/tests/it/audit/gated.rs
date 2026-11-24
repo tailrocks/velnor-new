@@ -205,6 +205,18 @@ fn an_ordinary_edge_that_holds_for_the_build_target_not_the_host_needs_its_host_
 }
 
 #[test]
+fn a_path_dependency_behind_a_target_edge_is_required_for_the_built_target() {
+    let output = audit(
+        &behind_a_target_edge("rust/target/x86_64-pc-windows-gnu/debug"),
+        &["--write"],
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("path dependency mid (mid/Cargo.toml"),
+        "{output:?}"
+    );
+}
+
+#[test]
 fn an_ordinary_edge_that_holds_for_no_built_platform_needs_no_host_units() {
     passes(&behind_a_target_edge(TRIPLE));
 }
@@ -274,7 +286,11 @@ fn audit_with_rustc(repo: &Repo, script: &str) -> std::process::Output {
 
 #[test]
 fn a_rustc_that_prints_no_host_triple_fails_the_audit() {
-    let output = audit_with_rustc(&direct(INACTIVE), "#!/bin/sh\necho 'release: 1.99.1'\n");
+    let script = format!(
+        "#!/bin/sh\necho 'release: {}'\n",
+        crate::toolchain::pinned_channel()
+    );
+    let output = audit_with_rustc(&direct(INACTIVE), &script);
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("no host triple"),

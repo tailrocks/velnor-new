@@ -6,11 +6,26 @@ use std::fmt;
 
 use crate::ids::{PackageName, RepoPath};
 
-pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rust-ci.yml");
+pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/ci.yml");
+pub const WORKFLOW_NAME: &str = "CI";
+pub const CACHE_TRIM_WORKFLOW_PATH: RepoPath =
+    RepoPath::from_static(".github/workflows/rust-cache-trim.yml");
 pub const RELEASE_WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/release.yml");
 pub const RELEASE_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/release.toml");
 pub const WORKFLOWS_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/workflows.toml");
 pub const RELEASE_PLZ_FILE: &str = "release-plz.toml";
+/// Recorded sample checkouts: data under this folder, never roots of the checkout that holds it.
+pub const SAMPLES: &str = "generator/samples";
+
+impl RepoPath {
+    /// Whether the path is inside the recorded samples folder.
+    #[must_use]
+    pub fn in_samples(&self) -> bool {
+        self.as_str()
+            .strip_prefix(SAMPLES)
+            .is_some_and(|rest| rest.starts_with('/'))
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChangeSet {
@@ -101,6 +116,7 @@ pub enum SkipReason {
     NoDoctestLibrary,
     NoFencedDocs,
     NoDocs,
+    PostMergeOnly,
 }
 
 impl fmt::Display for SkipReason {
@@ -111,6 +127,9 @@ impl fmt::Display for SkipReason {
                 "no doc comment has a code fence and no doc attribute sets the text"
             }
             Self::NoDocs => "no doc comment or doc attribute exists",
+            Self::PostMergeOnly => {
+                "docs = \"post_merge\" in .velnor/rust-ci.toml runs it only after the merge"
+            }
         })
     }
 }

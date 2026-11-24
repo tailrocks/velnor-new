@@ -12,7 +12,7 @@ use crate::support::{Stub, temp_dir};
 const PINNED: &str = "/repos/tailrocks/velnor-new/tarball/1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 const UPSTREAM: &str = "https://api.github.com/repos/tailrocks/velnor-new/tarball/1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 const MOUNTED: &str = "/opt/velnor/local/velnor-ci";
-const LOCAL_MARKERS: [&str; 4] = [
+const LOCAL_MARKERS: &[&str] = &[
     "/opt/velnor/local",
     "VELNOR_LOCAL",
     "local-mode",
@@ -28,14 +28,15 @@ fn stub(name: &str, local: bool) -> Stub {
     let repo = temp_dir(&format!("{name}-repo"));
     let state = temp_dir(&format!("{name}-state"));
     let cache = temp_dir(&format!("{name}-cache"));
-    if local {
+    let stub = if local {
         Stub::local_setup(&repo, &state, &cache)
     } else {
         Stub::new(&repo, &state, &cache)
-    }
+    };
+    stub.keeping(vec![repo, state, cache])
 }
 
-fn unpacked(name: &str, tarball: &[u8]) -> PathBuf {
+fn unpacked(name: &str, tarball: &[u8]) -> velnor_test_support::ScratchDir {
     let dir = temp_dir(name);
     let file = dir.join("action.tar.gz");
     std::fs::write(&file, tarball).unwrap_or_else(|e| unreachable!("{e}"));
@@ -49,7 +50,7 @@ fn unpacked(name: &str, tarball: &[u8]) -> PathBuf {
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(status.success(), "tar rejected the tarball");
-    out
+    dir
 }
 
 fn single_top(out: &Path) -> PathBuf {
@@ -83,7 +84,7 @@ fn input_names(action: &str) -> Vec<String> {
 #[test]
 fn the_production_action_has_no_local_binary_path() {
     let action = production_action();
-    for marker in LOCAL_MARKERS {
+    for marker in LOCAL_MARKERS.iter().copied() {
         assert!(
             !action.contains(marker),
             "production action.yml mentions {marker}"
@@ -96,7 +97,8 @@ async fn in_local_mode_the_stub_serves_the_local_variant_of_the_pinned_action() 
     let stub = stub("local-setup-on", true);
     let reply = stub.get(PINNED).await;
     assert_eq!(reply.status, 200);
-    let out = unpacked("local-setup-on-unpacked", &reply.body);
+    let unpacked_dir = unpacked("local-setup-on-unpacked", &reply.body);
+    let out = unpacked_dir.join("out");
     let top = single_top(&out);
     let served = std::fs::read_to_string(top.join("actions/setup-velnor/action.yml"))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -149,7 +151,7 @@ fn the_variant_declares_the_inputs_of_the_production_action() {
 }
 
 struct Job {
-    dir: PathBuf,
+    dir: velnor_test_support::ScratchDir,
     mounted: PathBuf,
     script: String,
 }

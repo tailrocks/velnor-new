@@ -307,7 +307,7 @@ impl velnor_local::io::env::Engine for Published {
     }
 }
 
-async fn service_up_after(delay: std::time::Duration) -> String {
+async fn service_up_after(ready: tokio::time::Instant) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -315,7 +315,6 @@ async fn service_up_after(delay: std::time::Duration) -> String {
     let address = listener
         .local_addr()
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let ready = tokio::time::Instant::now() + delay;
     tokio::spawn(async move {
         loop {
             let Ok((mut stream, _)) = listener.accept().await else {
@@ -339,9 +338,8 @@ async fn service_up_after(delay: std::time::Duration) -> String {
 #[tokio::test]
 async fn up_waits_for_runner_server_and_the_cache_even_when_no_plain_runner_starts() {
     let dir = temp_dir("environment-pair-ready");
-    let delay = std::time::Duration::from_millis(700);
-    let started = tokio::time::Instant::now();
-    let address = service_up_after(delay).await;
+    let ready = tokio::time::Instant::now() + std::time::Duration::from_millis(700);
+    let address = service_up_after(ready).await;
     let env = Environment::at(&dir, Published(address))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -350,7 +348,7 @@ async fn up_waits_for_runner_server_and_the_cache_even_when_no_plain_runner_star
     let up = env.up(&dir, &args).await;
     assert!(up.is_ok(), "{:?}", up.err());
     assert!(
-        started.elapsed() >= delay,
+        tokio::time::Instant::now() >= ready,
         "up returned before the service answered"
     );
 }

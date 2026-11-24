@@ -165,7 +165,18 @@ fn row(id: i64, state: IntentState) -> IntentRow {
 }
 
 fn lines(rows: &[IntentRow], docker: &[String], github: &GithubObservation) -> Vec<String> {
-    hold::hold_lines(rows, docker, github)
+    hold::hold_lines(rows, docker, &[], github)
+}
+
+#[test]
+fn a_docker_confirmed_absent_container_is_held_as_absent_not_unconfirmed() {
+    let mut done = row(3, IntentState::Done);
+    done.docker_id = Some("3f12ab99c0de5566".to_owned());
+    let absent = ["3f12ab99c0de5566".to_owned()];
+    let github = GithubObservation::listed(Ok(Vec::new()));
+    let out = hold::hold_lines(&[done], &[], &absent, &github);
+    assert_eq!(out.len(), 1);
+    assert!(out[0].contains("why=\"container absent, cleanup not proven\""));
 }
 
 #[test]

@@ -49,7 +49,11 @@ pub(crate) fn read_entries(root: &Path) -> Result<ManifestInputs, Box<dyn Error>
     })
 }
 
-pub(crate) fn fingerprint(root: &Path) -> Result<(String, Vec<PathBuf>), Box<dyn Error>> {
+pub(crate) type Absent = (String, PathBuf);
+
+pub(crate) type Inputs = (String, Vec<PathBuf>, Vec<Absent>);
+
+pub(crate) fn fingerprint(root: &Path) -> Result<Inputs, Box<dyn Error>> {
     let root_path = root.to_path_buf();
     let ManifestInputs {
         root,
@@ -59,6 +63,7 @@ pub(crate) fn fingerprint(root: &Path) -> Result<(String, Vec<PathBuf>), Box<dyn
     let mut digest = Sha256::new();
     update(&mut digest, MANIFEST, &manifest);
     let mut watched = vec![root_path.join(MANIFEST)];
+    let mut absent = Vec::new();
     let mut seen = HashSet::new();
     let mut total = u64::try_from(manifest.len())?;
     for entry in entries {
@@ -85,6 +90,7 @@ pub(crate) fn fingerprint(root: &Path) -> Result<(String, Vec<PathBuf>), Box<dyn
                     &entry.path,
                     &mut digest,
                     &mut watched,
+                    &mut absent,
                     &mut total,
                 )?;
             }
@@ -110,7 +116,7 @@ pub(crate) fn fingerprint(root: &Path) -> Result<(String, Vec<PathBuf>), Box<dyn
         use std::fmt::Write as _;
         let _format_result = write!(fingerprint, "{byte:02x}");
     }
-    Ok((fingerprint, watched))
+    Ok((fingerprint, watched, absent))
 }
 
 fn parse_manifest(bytes: &[u8]) -> Result<Vec<Entry>, Box<dyn Error>> {
@@ -170,24 +176,38 @@ fn update_optional(
     relative: &str,
     digest: &mut Sha256,
     watched: &mut Vec<PathBuf>,
+    absent: &mut Vec<Absent>,
     total: &mut u64,
 ) -> Result<(), Box<dyn Error>> {
     safe_relative(relative)?;
-    watched.push(root_path.join(relative));
     match read_file(root, relative, FILE_LIMIT) {
         Ok(bytes) => {
+            watched.push(root_path.join(relative));
             add_total(total, bytes.len())?;
             digest.update(relative.as_bytes());
             digest.update([0, 1]);
             digest.update(bytes);
         }
         Err(error) if filesystem::is_not_found(error.as_ref()) => {
+            let nearest = nearest_existing_directory(root_path, relative);
+            watched.push(nearest.clone());
+            absent.push((relative.to_owned(), nearest));
             digest.update(relative.as_bytes());
             digest.update([0, 0]);
         }
         Err(error) => return Err(error),
     }
     Ok(())
+}
+
+fn nearest_existing_directory(root_path: &Path, relative: &str) -> PathBuf {
+    let mut candidate = root_path.join(relative);
+    while candidate != root_path && !candidate.is_dir() {
+        if !candidate.pop() {
+            break;
+        }
+    }
+    candidate
 }
 
 fn add_total(total: &mut u64, length: usize) -> Result<(), Box<dyn Error>> {

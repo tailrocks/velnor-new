@@ -3,19 +3,20 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
+
+use velnor_test_support::{is_mirror_wrapper, real_cargo};
 
 const PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 
-struct Checkout(PathBuf);
+struct Checkout(velnor_test_support::ScratchDir);
 
 impl Checkout {
     fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("velnor-ci-manifests-{}-{name}", std::process::id()));
-        fs::remove_dir_all(&dir).ok();
-        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        let dir = crate::scratch_path("velnor-ci-manifests", name);
+        fs::remove_dir_all(dir.path()).ok();
+        fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
         Self(dir)
     }
 
@@ -58,7 +59,7 @@ impl Checkout {
             .args(files)
             .arg("--manifests")
             .args(extra)
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .env_remove("RUSTUP_TOOLCHAIN");
         if let Some(toolchain) = toolchain {
             command.env("RUSTUP_TOOLCHAIN", toolchain);
@@ -81,10 +82,12 @@ impl Checkout {
     }
 }
 
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).ok();
-    }
+/// The search path the stub hands to the real cargo: the job's own, minus every folder whose
+/// `cargo` is the crates-mirror wrapper, so no lookup by name can reach the wrapper.
+fn exec_path() -> std::ffi::OsString {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let kept = std::env::split_paths(&path).filter(|dir| !is_mirror_wrapper(&dir.join("cargo")));
+    std::env::join_paths(kept).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn refused(checkout: &Checkout, files: &[&str], needle: &str) {
@@ -129,14 +132,11 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
     ))
     .unwrap_or_else(|e| unreachable!("{e}"));
-    let cargo = std::env::split_paths(&search)
-        .map(|dir| dir.join("cargo"))
-        .find(|path| {
-            path.metadata().is_ok_and(|metadata| {
-                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-            })
-        })
-        .unwrap_or_else(|| unreachable!("cargo is not on PATH"));
+    // Neither the `CARGO` variable nor the cargo path compiled into this test, as is: a CI
+    // job that configured the crates mirror has `CARGO` set to the mirror wrapper while this
+    // test is compiled and run, so both name the wrapper, which would forward back into this
+    // stub forever (each round prepends to PATH until exec fails with E2BIG).
+    let cargo = real_cargo();
     let stub = checkout.0.join("bin/cargo");
     checkout
         .write(
@@ -149,7 +149,7 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .write("release-plz.toml", PLZ)
         .write(
             "bin/cargo",
-            "#!/bin/sh\nif [ \"${RUSTC_WRAPPER+x}\" = x ]; then touch \"$VELNOR_TEST_WRAPPER_MARKER\"; fi\nexec \"$VELNOR_TEST_REAL_CARGO\" \"$@\"\n",
+            "#!/bin/sh\nif [ \"${RUSTC_WRAPPER+x}\" = x ]; then touch \"$VELNOR_TEST_WRAPPER_MARKER\"; fi\nPATH=\"$VELNOR_TEST_EXEC_PATH\"\nexport PATH\nexec \"$VELNOR_TEST_REAL_CARGO\" \"$@\"\n",
         );
     fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -160,12 +160,18 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
     let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["release", "check-config", "release-plz.toml", "--manifests"])
-        .current_dir(&checkout.0)
+        .current_dir(checkout.0.path())
         .env("RUSTUP_TOOLCHAIN", toolchain)
         .env("RUSTC_WRAPPER", "must-be-removed")
         .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
         .env("VELNOR_TEST_REAL_CARGO", cargo)
+        .env("VELNOR_TEST_EXEC_PATH", exec_path())
         .env("PATH", path)
+        .env_remove("CARGO")
+        .env_remove("VELNOR_CARGO_CONFIG")
+        .env_remove("VELNOR_CARGO_WRAPPER")
+        .env_remove("VELNOR_CARGO_REAL")
+        .env_remove("VELNOR_CARGO_RUSTUP")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
@@ -198,7 +204,7 @@ fn a_cargo_config_hazard_is_refused_before_cargo_metadata_runs() {
     .unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["release", "check-config", "release-plz.toml", "--manifests"])
-        .current_dir(&checkout.0)
+        .current_dir(checkout.0.path())
         .env("RUSTUP_TOOLCHAIN", "stable")
         .env("PATH", path)
         .output()

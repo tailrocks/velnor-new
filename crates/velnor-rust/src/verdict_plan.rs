@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_model::{
     GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, VerdictSpec,
@@ -21,7 +21,6 @@ pub struct Need {
 pub struct PlanOutput {
     pub planned: BTreeMap<JobId, bool>,
     pub test_lanes: BTreeMap<RootSlug, Vec<JobId>>,
-    pub advisory: BTreeSet<JobId>,
 }
 
 impl PlanOutput {
@@ -48,9 +47,10 @@ impl PlanOutput {
                 ))
             }
         };
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
         let mut planned = BTreeMap::new();
         let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
-        let mut advisory = BTreeSet::new();
         for job in &spec.jobs {
             let mut holds = true;
             for condition in &job.when {
@@ -70,6 +70,9 @@ impl PlanOutput {
                     JobCondition::Group(slug, name) => {
                         flag(group_output_name(slug, name), "run", "skip")?
                     }
+                    JobCondition::Lint(slug) => {
+                        flag(GateNeed::Lint.output_name(slug), "run", "skip")?
+                    }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");
                         let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
@@ -85,11 +88,8 @@ impl PlanOutput {
                     }
                     JobCondition::ScheduleOrPush => event_is(event, &[SCHEDULE, PUSH])?,
                     JobCondition::DefaultBranchPush => event_is(event, &[PUSH])?,
-                    JobCondition::Advisory => true,
+                    JobCondition::MergeGroupNotPassed => !merge_group_ran,
                 };
-            }
-            if job.when.contains(&JobCondition::Advisory) {
-                advisory.insert(job.id.clone());
             }
             planned.insert(job.id.clone(), holds);
             for slug in &job.tests {
@@ -100,13 +100,10 @@ impl PlanOutput {
                 }
             }
         }
-        let merge_group_ran = event == Some(PUSH)
-            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
         test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,
-            advisory,
         })
     }
 }
@@ -116,4 +113,34 @@ fn event_is(event: Option<&str>, names: &[&str]) -> Result<bool, String> {
         .filter(|name| !name.is_empty())
         .map(|name| names.contains(&name))
         .ok_or_else(|| "GITHUB_EVENT_NAME is not set".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_model::{JobCondition, VerdictJob};
+
+    use super::*;
+
+    fn planned(skip: &str, event: &str) -> bool {
+        let job = JobId::from_static("rust-test-default");
+        let spec = VerdictSpec {
+            plan: JobId::from_static("rust-plan"),
+            jobs: vec![VerdictJob {
+                id: job.clone(),
+                when: vec![JobCondition::MergeGroupNotPassed],
+                tests: Vec::new(),
+            }],
+        };
+        let outputs = BTreeMap::from([(MERGE_GROUP_SKIP_OUTPUT.to_owned(), skip.to_owned())]);
+        PlanOutput::resolve(&spec, &outputs, Some(event))
+            .expect("the spec resolves")
+            .planned[&job]
+    }
+
+    #[test]
+    fn a_job_skipped_after_a_passed_queue_run_is_not_planned() {
+        assert!(!planned("true", "push"));
+        assert!(planned("false", "push"));
+        assert!(planned("true", "pull_request"));
+    }
 }

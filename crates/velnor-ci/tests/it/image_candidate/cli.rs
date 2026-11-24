@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::process::Command;
@@ -17,7 +19,7 @@ use crate::support::fresh_dir;
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 struct Candidate {
-    dir: PathBuf,
+    dir: velnor_test_support::ScratchDir,
 }
 
 impl Candidate {
@@ -66,6 +68,14 @@ impl Candidate {
     }
 
     fn run(&self, env: &[(&str, Option<&str>)]) -> (bool, String, String) {
+        self.run_with(env, &[])
+    }
+
+    fn run_with(
+        &self,
+        env: &[(&str, Option<&str>)],
+        raw: &[(&str, &[u8])],
+    ) -> (bool, String, String) {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command
             .env_clear()
@@ -96,6 +106,9 @@ impl Candidate {
             }
         }
         command.envs(vars);
+        for (name, value) in raw {
+            command.env(name, OsStr::from_bytes(value));
+        }
         let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
         (
             output.status.success(),
@@ -106,12 +119,6 @@ impl Candidate {
 
     fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
-    }
-}
-
-impl Drop for Candidate {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.dir).ok();
     }
 }
 
@@ -138,6 +145,20 @@ fn an_attested_candidate_whose_record_matches_everything_passes() {
 }
 
 #[test]
+fn a_non_utf8_environment_entry_is_ignored_unless_a_needed_variable_holds_it() {
+    let candidate = Candidate::new("non-utf8-env", &archive());
+    let (ok, _, stderr) = candidate.run_with(&[], &[("GITHUB_UNRELATED", b"\xff\xfe")]);
+    assert!(ok, "{stderr}");
+    let (ok, _, stderr) =
+        candidate.run_with(&[("GITHUB_REF", None)], &[("GITHUB_REF", b"refs/\xff")]);
+    assert!(!ok);
+    assert!(
+        stderr.contains("GitHub source ref is missing or incorrect."),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn an_archive_whose_bytes_changed_after_the_record_was_written_is_refused() {
     let candidate = Candidate::new("digest", &archive());
     let mut changed = archive();
@@ -146,6 +167,17 @@ fn an_archive_whose_bytes_changed_after_the_record_was_written_is_refused() {
     assert_eq!(
         refusal(&candidate, &[]),
         "Candidate archive is not the same as the archive in its record."
+    );
+}
+
+#[test]
+fn an_archive_whose_image_revision_is_not_the_record_commit_is_refused() {
+    let mut other = spec(vec![(plain_layer(), LAYER)]);
+    other.revision = Some("b".repeat(40));
+    let candidate = Candidate::new("revision", &build(&other).archive());
+    assert_eq!(
+        refusal(&candidate, &[]),
+        "OCI image configuration revision label is not the source commit."
     );
 }
 

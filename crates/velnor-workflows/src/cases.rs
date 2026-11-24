@@ -3,18 +3,14 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::github_hosted;
-
 use crate::check::runner_label_of;
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::is_identifier;
+use crate::expression::{bare, is_identifier};
 use crate::plan::{InputKind, Triggers};
 use crate::raw::{RawCase, RawJob};
 
 const MODE_INPUT: &str = "mode";
 
-/// Expands every case into a hosted job and a scale-set job that share the
-/// steps and are selected by the same `inputs.mode` condition.
 pub(crate) fn cases(
     file: &str,
     hosted: Option<&str>,
@@ -26,8 +22,13 @@ pub(crate) fn cases(
         return Ok(Vec::new());
     }
     let options = mode_options(file, triggers)?;
-    let hosted = pair_runner(file, "hosted_runner", hosted, true)?;
-    let scale_set = pair_runner(file, "scale_set_runner", scale_set, false)?;
+    let hosted = pair_runner(file, "hosted_runner", hosted)?;
+    let scale_set = pair_runner(file, "scale_set_runner", scale_set)?;
+    if hosted.eq_ignore_ascii_case(&scale_set) {
+        return refuse(format!(
+            "the hosted_runner and the scale_set_runner of {file} are both {hosted}, but one label is either hosted or self-hosted"
+        ));
+    }
     let mut seen: Vec<String> = Vec::new();
     let mut jobs = Vec::new();
     for case in raw {
@@ -54,25 +55,11 @@ fn mode_options<'a>(file: &str, triggers: &'a Triggers) -> Result<&'a [String], 
     }
 }
 
-fn pair_runner(
-    file: &str,
-    key: &str,
-    label: Option<&str>,
-    hosted: bool,
-) -> Result<String, WorkflowsError> {
+fn pair_runner(file: &str, key: &str, label: Option<&str>) -> Result<String, WorkflowsError> {
     let Some(label) = label else {
         return refuse(format!("the cases of {file} need {key}"));
     };
-    let label = runner_label_of(file, label)?;
-    if github_hosted(&label) != hosted {
-        let kind = if hosted {
-            "GitHub-hosted"
-        } else {
-            "not GitHub-hosted"
-        };
-        return refuse(format!("the {key} {label} of {file} must be {kind}"));
-    }
-    Ok(label)
+    runner_label_of(file, label)
 }
 
 fn pair(
@@ -101,21 +88,23 @@ fn pair(
     }
     let selected = modes
         .iter()
-        .map(|mode| format!("{MODE_INPUT_REF} == '{mode}'"))
+        .map(|mode| format!("{MODE_INPUT_REF} == '{}'", mode.replace('\'', "''")))
         .collect::<Vec<_>>()
         .join(" || ");
     let condition = match &case.condition {
-        Some(extra) => format!("({selected}) && ({extra})"),
+        Some(extra) => format!("({selected}) && ({})", bare(extra)),
         None => selected,
     };
     let title = case.title.clone().unwrap_or_else(|| id.clone());
-    let job = |suffix: &str, label: &str, runner: &str| RawJob {
+    let job = |suffix: &str, label: &str, runner: &str, hosted: bool| RawJob {
         id: format!("{id}-{suffix}"),
         name: Some(format!("{title} / {label}")),
         needs: Vec::new(),
         condition: Some(condition.clone()),
         helper: false,
         runner: Some(runner.to_owned()),
+        hosted: Some(hosted),
+        runner_labels: BTreeMap::new(),
         environment: None,
         timeout_minutes: case.timeout_minutes,
         concurrency: None,
@@ -131,8 +120,8 @@ fn pair(
         step: case.step.clone(),
     };
     Ok([
-        job("hosted", "GitHub hosted", hosted),
-        job("scale-set", "Velnor Scale Set", scale_set),
+        job("hosted", "GitHub hosted", hosted, true),
+        job("scale-set", "Velnor Scale Set", scale_set, false),
     ])
 }
 

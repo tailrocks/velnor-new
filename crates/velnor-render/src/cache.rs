@@ -1,14 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheKeySegment, CachePath, LOCK_OUTPUT_PREFIX, RepoPath};
+use velnor_model::{CacheKey, CacheKeySegment, CachePath, Job, LOCK_OUTPUT_PREFIX, RepoPath};
 
 use crate::gate::SOURCES_LOCKS_STEP;
+use crate::rules::{RenderedStep, Value};
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
+
+/// The `cache-mode` of a generated job that saves to the Actions cache service: `write`, which
+/// `read` would deny at the service. GitHub accepts only the four literals, not an expression, so
+/// the mode holds for every event of the job; each save step carries its own event gate (the
+/// default branch, or a pull request from the same repository). A job that only restores or
+/// deletes over the REST API gets none here, so the renderer writes `read`.
+pub(crate) fn saving_mode(job: &Job) -> Option<String> {
+    job.steps
+        .iter()
+        .any(|step| step.kind.saves_to_cache_service())
+        .then(|| "write".to_owned())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedKey {
     pub key: String,
@@ -42,6 +56,7 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),
             CacheKeySegment::PullRequest => "pr${{ github.event.pull_request.number }}".to_owned(),
+            CacheKeySegment::ToolsAnchor(anchor) => crate::tools_steps::anchor_expression(anchor),
             CacheKeySegment::DeltaBase(root) => {
                 format!("${{{{ steps.delta_base_{root}.outputs.base8 }}}}")
             }
@@ -119,7 +134,50 @@ pub(crate) fn path_text(path: &CachePath) -> String {
         CachePath::CargoRegistryIndex => "~/.cargo/registry/index".to_owned(),
         CachePath::CargoRegistryCache => "~/.cargo/registry/cache".to_owned(),
         CachePath::CargoGitDb => "~/.cargo/git/db".to_owned(),
-        CachePath::Target(directory) => directory.to_string(),
+        CachePath::Target(directory) => glob_literal(directory.as_str()),
         CachePath::Delta(root) => root.delta_dir(),
+    }
+}
+
+pub(crate) fn action_path(text: &str) -> Value {
+    if !text.contains("${{") {
+        return Value::Text(text.to_owned());
+    }
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('\'', "''")
+        .replace("${{", "\\u0024{{");
+    Value::Expr(format!("${{{{ fromJSON('\"{escaped}\"') }}}}"))
+}
+
+pub(crate) fn cache_step(
+    action: &str,
+    verb: &str,
+    key: &CacheKey,
+    fallbacks: bool,
+) -> RenderedStep {
+    let rendered = render_key(key);
+    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
+    let mut with = vec![
+        ("path".to_owned(), action_path(&paths.join("\n"))),
+        ("key".to_owned(), Value::Expr(rendered.key)),
+    ];
+    if fallbacks && !rendered.restore_keys.is_empty() {
+        with.push((
+            "restore-keys".to_owned(),
+            Value::Expr(rendered.restore_keys.join("\n")),
+        ));
+    }
+    RenderedStep {
+        id: Some(crate::report::cache_id(key, fallbacks)),
+        name: format!("{verb} the {} cache", key.family()),
+        uses: Some(action.to_owned()),
+        continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
+        with,
+        ..RenderedStep::default()
     }
 }

@@ -1,8 +1,7 @@
 # Native Rust crate jobs
 
 Each Rust package/configuration owns exactly one generated job,
-`Rust / <crate>` (`rust-<crate>`). This is a
-[hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps);
+`Rust / <crate>` (`rust-<crate>`). This was a former hard decision (removed in #608);
 it replaces the 0.1.20 Lint/Tests/Documentation phase jobs completely. There
 is no per-phase job, phase suffix, phase type or cross-phase gate left.
 
@@ -69,7 +68,7 @@ documentation and doctests lane records twice, first over a dependency skeleton 
 `MBX_BUILD_SCRIPT_EXECUTION=1` and then over the real members at `0` (the
 switch between the phases deletes the first phase's task reports, which the
 controller writes once per task), records the producer marker, and exports one
-bundle that the `State seal` job saves and attests ([cache decisions](../proposed/cache-decisions.md) 1 to 3).
+bundle. The job that saved and attested it has been removed.
 MBX shares
 one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"

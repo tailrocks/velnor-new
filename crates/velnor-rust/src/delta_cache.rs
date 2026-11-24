@@ -58,7 +58,10 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         Step {
             directory: root.manifest.parent(),
             when: When::SaveDelta,
-            ..step(StepKind::InputsSave(root.target_dir.clone()))
+            ..step(StepKind::InputsSave {
+                target: root.target_dir.clone(),
+                cli: crate::base_cache::inputs_cli(facts),
+            })
         },
         Step {
             when: When::SaveDelta,
@@ -72,6 +75,7 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         },
         Step {
             when: When::SaveDeltaDecided,
+            skip_when_cold: crate::base_cache::checks_saves(facts),
             ..step(StepKind::CacheSave(CacheKey::Delta {
                 job: job.clone(),
                 root: cache_root,
@@ -94,8 +98,5 @@ fn supported(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> bool {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(DELTA_HELPER))
-        && root.target_dir
-            == root
-                .manifest
-                .sibling(&velnor_model::RepoPath::from_static("target"))
+        && crate::target_dir::is_default(root)
 }

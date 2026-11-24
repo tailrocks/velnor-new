@@ -126,7 +126,8 @@ async fn audit_connection(
             .await?
             .ok_or(HostError::Ownership)?;
         audit_started_pair(docker, binding, selected, &row, &identity).await?;
-        let remote_present = remote_audit(binding, row.runner.as_ref(), poll.scale_set_id())?;
+        let remote_present =
+            remote_audit(binding.clone(), row.runner.clone(), poll.scale_set_id()).await?;
         inventory.admit(
             remote_present,
             InventoryEntry::started(

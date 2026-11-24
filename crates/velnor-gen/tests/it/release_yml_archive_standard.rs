@@ -13,12 +13,13 @@ use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const TRIPLES: [(&str, &str); 3] = [
+const TRIPLES: &[(&str, &str)] = &[
     ("linux-x64", "x86_64-unknown-linux-musl"),
     ("linux-arm64", "aarch64-unknown-linux-musl"),
     ("macos-arm64", "aarch64-apple-darwin"),
 ];
 
+const REPRODUCIBLE: &str = "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner ";
 const DEFAULT: &str = "[[binaries]]\npackage = \"app\"\n";
 const SIDECARS: &str = "[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n";
 const HOST: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"macos-arm64\", \"linux-x64\"]\nattest = true\nchecksum_files = \"sha256\"\nbins = [{ bin = \"rg\" }]\ninclude = [\"LICENSE\", \"NOTICE\"]\n";
@@ -70,19 +71,18 @@ fn refused(config: &str) -> Option<ReleaseError> {
 #[test]
 fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResult {
     let (_, tree) = render(&[APP], Some(DEFAULT))?;
-    for (platform, triple) in TRIPLES {
+    for &(platform, triple) in TRIPLES {
         let build = job(&tree, &format!("build-app-{platform}"))?;
-        let pack = runs(build)
-            .into_iter()
-            .find(|run| run.starts_with("tar "))
-            .ok_or("no pack step")?;
-        assert_eq!(
-            pack,
+        let commands = runs(build);
+        let pack = if platform.starts_with("linux") {
             format!(
-                "tar -czf {} -C target/{triple}/release app",
+                "tar {REPRODUCIBLE}-czf {} -C target/{triple}/release app",
                 archive(triple)
             )
-        );
+        } else {
+            "COPYFILE_DISABLE=1 tar -cf \"$RUNNER_TEMP/pack.tar\" -n --uid 0 --gid 0 --uname '' --gname '' --no-xattrs --no-mac-metadata -C \"$RUNNER_TEMP/pack\" app".to_owned()
+        };
+        assert!(commands.contains(&pack.as_str()), "{commands:?}");
         let upload = steps(build).last().ok_or("no steps")?;
         assert_eq!(
             upload.at(&["with", "path"]).and_then(Node::text),
@@ -90,7 +90,7 @@ fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResul
         );
     }
     let publish = runs(job(&tree, "publish-app")?)[0].to_owned();
-    for (_, triple) in TRIPLES {
+    for &(_, triple) in TRIPLES {
         assert!(
             publish.contains(&format!(" {}", archive(triple))),
             "{publish}"
@@ -106,6 +106,40 @@ fn sha256sums_lists_exactly_the_archives_by_default() -> TestResult {
     let want: BTreeSet<String> = TRIPLES.iter().map(|(_, triple)| archive(triple)).collect();
     assert_eq!(summed(&tree)?, want);
     assert!(!tree_text(&tree).contains(".sha256"));
+    Ok(())
+}
+
+#[test]
+fn archives_are_packed_reproducibly() -> TestResult {
+    let (_, tree) = render(&[APP], Some(DEFAULT))?;
+    let pack = runs(job(&tree, "build-app-linux-x64")?)
+        .into_iter()
+        .find(|run| run.starts_with("tar "))
+        .ok_or("no pack step")?;
+    for flag in [
+        "--sort=name",
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+    ] {
+        assert!(pack.contains(flag), "{pack}");
+    }
+    Ok(())
+}
+
+#[test]
+fn macos_archives_are_packed_reproducibly() -> TestResult {
+    let (_, tree) = render(&[APP], Some(HOST))?;
+    let text = runs(job(&tree, "build-app-macos-arm64")?).join("\n");
+    for line in [
+        "TZ=UTC touch -h -t 197001010000 \"$RUNNER_TEMP/pack/LICENSE\" \"$RUNNER_TEMP/pack/NOTICE\" \"$RUNNER_TEMP/pack/app\" \"$RUNNER_TEMP/pack/rg\"",
+        "COPYFILE_DISABLE=1 tar -cf \"$RUNNER_TEMP/pack.tar\" -n --uid 0 --gid 0 --uname '' --gname '' --no-xattrs --no-mac-metadata -C \"$RUNNER_TEMP/pack\" LICENSE NOTICE app rg",
+        "gzip -n -c \"$RUNNER_TEMP/pack.tar\" > app-aarch64-apple-darwin.tar.gz",
+    ] {
+        assert!(text.contains(line), "{text}");
+    }
+    assert!(!text.contains("-czf"), "{text}");
     Ok(())
 }
 
@@ -137,7 +171,7 @@ fn tree_text(tree: &Node) -> String {
 #[test]
 fn checksum_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> TestResult {
     let (_, tree) = render(&[APP], Some(SIDECARS))?;
-    for (platform, triple) in TRIPLES {
+    for &(platform, triple) in TRIPLES {
         let build = job(&tree, &format!("build-app-{platform}"))?;
         let name = archive(triple);
         let tool = if platform == "macos-arm64" {
@@ -148,7 +182,7 @@ fn checksum_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> T
         let commands = runs(build);
         let pack = commands
             .iter()
-            .position(|run| run.starts_with("tar "))
+            .position(|run| run.starts_with("tar ") || run.starts_with("gzip "))
             .ok_or("no pack step")?;
         assert_eq!(commands[pack + 1], format!("{tool} {name} > {name}.sha256"));
         let upload = steps(build).last().ok_or("no steps")?;
@@ -207,13 +241,10 @@ fn attestation_covers_every_archive_sidecar_and_the_sums_file() -> TestResult {
 #[test]
 fn a_velnor_host_shaped_archive_holds_the_binary_the_helper_license_and_notice() -> TestResult {
     let (_, tree) = render(&[APP], Some(HOST))?;
-    let pack = runs(job(&tree, "build-app-macos-arm64")?)
-        .into_iter()
-        .find(|run| run.starts_with("tar "))
-        .ok_or("no pack step")?;
-    assert_eq!(
-        pack,
-        "tar -czf app-aarch64-apple-darwin.tar.gz -C target/aarch64-apple-darwin/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE -C \"$GITHUB_WORKSPACE\" NOTICE"
+    let text = runs(job(&tree, "build-app-macos-arm64")?).join("\n");
+    assert!(
+        text.contains("cp -p target/aarch64-apple-darwin/release/app target/aarch64-apple-darwin/release/rg \"$GITHUB_WORKSPACE/LICENSE\" \"$GITHUB_WORKSPACE/NOTICE\" \"$RUNNER_TEMP/pack/\""),
+        "{text}"
     );
     let want: BTreeSet<String> = [
         "app-aarch64-apple-darwin.tar.gz",
@@ -243,7 +274,7 @@ fn an_archive_may_name_the_gnu_target() -> TestResult {
     let commands = runs(build);
     assert!(commands.contains(&"rustup target add aarch64-unknown-linux-gnu"));
     assert!(commands.contains(
-        &"tar -czf app-aarch64-unknown-linux-gnu.tar.gz -C target/aarch64-unknown-linux-gnu/release app"
+        &"tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app-aarch64-unknown-linux-gnu.tar.gz -C target/aarch64-unknown-linux-gnu/release app"
     ));
     assert!(!commands.iter().any(|run| run.contains("musl")));
     Ok(())
@@ -258,7 +289,7 @@ fn an_explicit_asset_name_still_replaces_the_triple_name() -> TestResult {
         ),
     )?;
     assert!(runs(job(&tree, "build-app-linux-x64")?).contains(
-        &"tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
+        &"tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
     ));
     Ok(())
 }
@@ -287,7 +318,7 @@ fn a_versioned_name_gets_its_sidecar_in_the_stage_folder_with_the_version_bound(
     );
     assert_eq!(
         step.get("working-directory").and_then(Node::text),
-        Some("stage")
+        Some("${{ runner.temp }}/stage")
     );
     assert_eq!(
         step.at(&["env", "VERSION"]).and_then(Node::text),

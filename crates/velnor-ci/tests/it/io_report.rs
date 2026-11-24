@@ -6,7 +6,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::{Command, Output};
-use velnor_ci::inputs::{RESTORE_WITNESS, SNAPSHOT};
+use velnor_ci::inputs::{snapshot_file, witness_file};
 use velnor_ci::report::LaneMetrics;
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
@@ -59,13 +59,16 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     repo.git(&["add", "."]);
     assert!(cli(&repo, &["inputs", "save"]).status.success());
     assert!(cli(&repo, &["inputs", "restore"]).status.success());
-    let before = fs::read(repo.root().join("target").join(SNAPSHOT))?;
-    let witness = fs::read(repo.root().join("target").join(RESTORE_WITNESS))?;
+    let before = fs::read(repo.root().join("target").join(snapshot_file("")))?;
+    let witness = fs::read(repo.root().join("target").join(witness_file("")))?;
     repo.write("src/lib.rs", "pub fn changed() {}\n");
     assert!(cli(&repo, &["inputs", "save"]).status.success());
-    assert_eq!(fs::read(repo.root().join("target").join(SNAPSHOT))?, before);
     assert_eq!(
-        fs::read(repo.root().join("target").join(RESTORE_WITNESS))?,
+        fs::read(repo.root().join("target").join(snapshot_file("")))?,
+        before
+    );
+    assert_eq!(
+        fs::read(repo.root().join("target").join(witness_file("")))?,
         witness
     );
     let fixture = repo.root().join("cargo-fixture");
@@ -303,6 +306,16 @@ fn interrupted_output(repo: &Repo) -> Result<String, Box<dyn std::error::Error>>
     Ok(script)
 }
 
+fn without_mbx_layout(text: &str) -> String {
+    text.split("\n[wrappers.cargo]")
+        .next()
+        .unwrap_or_default()
+        .replace(", mr_boxington = true", "")
+        .trim_end()
+        .to_owned()
+        + "\n"
+}
+
 fn metadata_inputs(repo: &Repo) -> ResultTest {
     let samples = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../generator/samples");
     for (from, to) in [
@@ -313,16 +326,39 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
             ".velnor/rust-ci.lock",
         ),
     ] {
-        repo.write(to, &fs::read_to_string(samples.join(from))?);
+        let text = fs::read_to_string(samples.join(from))?;
+        repo.write(
+            to,
+            &if to == "mise.toml" {
+                without_mbx_layout(&text)
+            } else {
+                text
+            },
+        );
     }
     Ok(())
 }
 
 mod api;
+mod build_failure;
 mod evidence;
+mod failing_check;
+mod mbx_reports;
+mod mbx_reports_budget;
+mod mbx_reports_child_env;
+mod mbx_reports_followups;
+mod mbx_reports_sessions;
+mod mbx_socket;
+mod not_generated;
 mod policy;
 mod provenance;
+mod saved_key;
+mod saved_key_failure;
 mod target_identity;
+mod waste;
+mod waste_mbx;
+mod waste_mbx_cut;
+mod wrapped;
 
 pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new(name);

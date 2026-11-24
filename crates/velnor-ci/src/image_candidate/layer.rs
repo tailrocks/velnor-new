@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 use std::io::{self, BufReader, Read};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use super::members::GzipMembers;
 
@@ -23,16 +24,69 @@ pub struct Layer {
     pub blob_sha: String,
 }
 
+#[derive(Debug)]
+pub struct Budget {
+    bytes: AtomicU64,
+    members: AtomicUsize,
+}
+
+impl Budget {
+    #[must_use]
+    pub fn new(bytes: u64, members: usize) -> Self {
+        Self {
+            bytes: AtomicU64::new(bytes),
+            members: AtomicUsize::new(members),
+        }
+    }
+
+    fn take_bytes(&self, count: u64) -> bool {
+        let left = self
+            .bytes
+            .update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                left.saturating_sub(count)
+            });
+        left >= count
+    }
+
+    fn take_member(&self) -> bool {
+        self.members
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+    }
+}
+
+struct Metered<'a, R> {
+    inner: R,
+    budget: &'a Budget,
+}
+
+impl<R: Read> Read for Metered<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let count = self.inner.read(buf)?;
+        if self.budget.take_bytes(count as u64) {
+            Ok(count)
+        } else {
+            Err(io::Error::new(io::ErrorKind::FileTooLarge, "size limit"))
+        }
+    }
+}
+
 pub fn scan(
     source: impl Read,
     gzip: bool,
     byte_limit: u64,
     member_limit: usize,
 ) -> Result<Layer, CiError> {
+    scan_shared(source, gzip, &Budget::new(byte_limit, member_limit))
+}
+
+pub fn scan_shared(source: impl Read, gzip: bool, budget: &Budget) -> Result<Layer, CiError> {
     if gzip {
         let mut compressed = Hashing::new(source, u64::MAX);
         let decoder = GzipMembers::new(BufReader::with_capacity(DRAIN, &mut compressed));
-        let (diff_id, size, members) = scan_tar(decoder, byte_limit, member_limit)?;
+        let (diff_id, size, members) = scan_tar(decoder, budget)?;
         let (blob_sha, _) = compressed.finish();
         Ok(Layer {
             diff_id,
@@ -41,7 +95,7 @@ pub fn scan(
             blob_sha,
         })
     } else {
-        let (diff_id, size, members) = scan_tar(source, byte_limit, member_limit)?;
+        let (diff_id, size, members) = scan_tar(source, budget)?;
         Ok(Layer {
             blob_sha: diff_id.clone(),
             diff_id,
@@ -51,18 +105,18 @@ pub fn scan(
     }
 }
 
-fn scan_tar(
-    stream: impl Read,
-    byte_limit: u64,
-    member_limit: usize,
-) -> Result<(String, u64, usize), CiError> {
-    let mut tar = TarReader::new(Hashing::new(stream, byte_limit));
+fn scan_tar(stream: impl Read, budget: &Budget) -> Result<(String, u64, usize), CiError> {
+    let metered = Metered {
+        inner: stream,
+        budget,
+    };
+    let mut tar = TarReader::new(Hashing::new(metered, u64::MAX));
     let empty = || CiError::new(NOT_TAR);
     let mut paths: HashSet<Vec<u8>> = HashSet::new();
     loop {
         match tar.next_entry() {
             Ok(Some(entry)) => {
-                if paths.len() + 1 > member_limit {
+                if !budget.take_member() {
                     return Err(CiError::new("OCI layer has too many paths."));
                 }
                 let normalized = layer_path(&entry.name)?;

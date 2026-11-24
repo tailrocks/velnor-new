@@ -9,17 +9,22 @@ use std::process::Command;
 use clap::Parser;
 use velnor_ci::cli::{Cli, Command as CiCommand, SourcesCommand};
 use velnor_model::{
-    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel,
-    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug,
+    RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
-fn rendered_run(manifests: &[&str]) -> String {
+pub(crate) fn plan(
+    manifests: &[&str],
+    runs_on: &str,
+    hosted: &[&str],
+    trusted_runners: velnor_model::TrustedRunners,
+) -> WorkflowPlan {
     let manifests = manifests
         .iter()
         .map(|manifest| RepoPath::new(*manifest).unwrap_or_else(|e| unreachable!("{e}")))
         .collect();
-    let plan = WorkflowPlan {
+    WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
             pull_request: vec![PullRequestType::Opened],
@@ -31,6 +36,13 @@ fn rendered_run(manifests: &[&str]) -> String {
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
+        hosted_runners: velnor_model::HostedRunners::new(
+            hosted
+                .iter()
+                .map(|label| RunnerLabel::new(*label).unwrap_or_else(|e| unreachable!("{e}")))
+                .collect(),
+        ),
+        trusted_runners,
         jobs: vec![Job {
             id: JobId::new("rust").unwrap_or_else(|e| unreachable!("{e}")),
             name: None,
@@ -38,11 +50,17 @@ fn rendered_run(manifests: &[&str]) -> String {
             needs: Vec::new(),
             when: When::Success,
             pr: PrRun::Always,
-            runs_on: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
+            runs_on: RunnerLabel::new(runs_on).unwrap_or_else(|e| unreachable!("{e}")),
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            anchor_key_output: false,
+            build_record: BuildRecord::Unrecorded,
+            chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
+            selection_name: None,
             gate: None,
+            skip_after_merge_group: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             steps: vec![Step {
@@ -55,13 +73,26 @@ fn rendered_run(manifests: &[&str]) -> String {
                 target_dir: None,
                 when: When::FetchSources,
                 pr: PrRun::Always,
-                skip_on_draft: false,
                 skip_after_merge_group: None,
+                skip_when_cold: false,
+                private_repo: false,
+                hosted_only: false,
+                any_gate: Vec::new(),
                 gate: None,
                 reads: None,
+                setup_order: SetupOrder::Unordered,
             }],
         }],
-    };
+    }
+}
+
+fn rendered_run(manifests: &[&str]) -> String {
+    let plan = plan(
+        manifests,
+        "ubuntu-latest",
+        &["ubuntu-latest"],
+        velnor_model::TrustedRunners::default(),
+    );
     let files = render(&plan).unwrap_or_else(|e| unreachable!("{e:?}"));
     let text = files
         .get(&WORKFLOW_PATH)

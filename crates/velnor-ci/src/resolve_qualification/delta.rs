@@ -1,19 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The source delta of a `useful_delta` run: what git says changed from the predecessor's
-//! source to this run's source, after proving the first is an ancestor of the second.
-
+use std::io::ErrorKind;
 use std::path::Path;
 use std::process::Command;
+use std::time::Duration;
 
 use super::types::SourceDelta;
 use super::validate::{canonical_bytes, digest_b3};
+use crate::bounded::capture;
 use crate::error::CiError;
 use crate::write_request::internal;
 
 const MAX_CHANGED_PATHS: usize = 256;
 const MAX_DIFF_BYTES: usize = 1_048_576;
+
+const GIT_TIMEOUT: Duration = Duration::from_secs(600);
 
 struct Output {
     success: bool,
@@ -27,14 +29,18 @@ fn git(root: &Path, args: &[&str]) -> Result<Output, CiError> {
             command.env_remove(name);
         }
     }
-    let output = command
-        .current_dir(root)
-        .args(args)
-        .output()
-        .map_err(|_| internal("qualification_git"))?;
+    let limit = u64::try_from(MAX_DIFF_BYTES).unwrap_or(u64::MAX);
+    let captured =
+        capture(command.current_dir(root).args(args), limit, GIT_TIMEOUT).map_err(|error| {
+            internal(if error.kind() == ErrorKind::TimedOut {
+                "qualification_git_timeout"
+            } else {
+                "qualification_git"
+            })
+        })?;
     Ok(Output {
-        success: output.status.success(),
-        stdout: output.stdout,
+        success: captured.success,
+        stdout: captured.stdout,
     })
 }
 

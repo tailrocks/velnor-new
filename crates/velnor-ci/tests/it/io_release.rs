@@ -17,7 +17,9 @@ use crate::release_fake::{FakeReleases, REPO, TAG, all_files, published_digests}
 use crate::release_record::{CI, NOTHING};
 use crate::support::fresh_dir;
 
-struct Dir(PathBuf);
+mod optional;
+
+struct Dir(velnor_test_support::ScratchDir);
 
 impl Dir {
     fn new(name: &str) -> Self {
@@ -28,12 +30,6 @@ impl Dir {
         let path = self.0.join(name);
         fs::write(&path, text).unwrap_or_else(|e| unreachable!("{e}"));
         path
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -132,12 +128,13 @@ fn publish(api: &Path, dir: &Dir) -> Output {
 
 #[test]
 fn a_folder_named_by_pid_alone_is_not_removed_by_a_new_dir() {
-    let leftover =
-        Dir(std::env::temp_dir().join(format!("velnor-ci-release-{}-publish", std::process::id())));
-    fs::create_dir_all(&leftover.0).unwrap_or_else(|e| unreachable!("{e}"));
+    let leftover = Dir(velnor_test_support::ScratchDir::adopt(
+        std::env::temp_dir().join(format!("velnor-ci-release-{}-publish", std::process::id())),
+    ));
+    fs::create_dir_all(leftover.0.path()).unwrap_or_else(|e| unreachable!("{e}"));
     leftover.write("marker.txt", "left behind\n");
     let dir = Dir::new("publish");
-    assert_ne!(dir.0, leftover.0);
+    assert_ne!(dir.0.path(), leftover.0.path());
     assert!(leftover.0.join("marker.txt").is_file());
 }
 
@@ -170,6 +167,32 @@ fn release_record_appends_one_line_per_released_package_to_github_output() {
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_default(),
         "ready=true\nvelnor-ci=velnor-ci-v0.1.80\n"
+    );
+}
+
+#[test]
+fn release_record_reads_version_groups_from_release_plz_toml() {
+    let plz = "[workspace]\nrelease = false\nrelease_always = false\nsemver_check = false\ngit_only = true\ngit_release_draft = true\n\n[[package]]\nname = \"velnor-ci\"\nrelease = true\ngit_tag_name = \"tools-v{{ version }}\"\nversion_group = \"tools\"\n\n[[package]]\nname = \"velnor-gen\"\nrelease = true\ngit_tag_name = \"tools-v{{ version }}\"\nversion_group = \"tools\"\ngit_tag_enable = false\ngit_release_enable = false\n";
+    let both = r#"{"releases":[{"package_name":"velnor-ci","prs":[],"tag":"tools-v0.1.97","version":"0.1.97"},{"package_name":"velnor-gen","prs":[],"tag":"tools-v0.1.97","version":"0.1.97"}]}"#;
+    let dir = Dir::new("record-groups");
+    let tools = dir.write("tools.json", both);
+    let config = dir.write("release-plz.toml", plz);
+    let outputs = dir.write("github-output", "");
+    let tools = tools.to_string_lossy();
+    let config = config.to_string_lossy();
+    let without = velnor_ci(
+        &["release", "record", &tools],
+        &[("GITHUB_OUTPUT", &outputs)],
+    );
+    assert_eq!(without.status.code(), Some(1), "{without:?}");
+    let grouped = velnor_ci(
+        &["release", "record", &tools, "--version-groups", &config],
+        &[("GITHUB_OUTPUT", &outputs)],
+    );
+    assert_eq!(grouped.status.code(), Some(0), "{grouped:?}");
+    assert_eq!(
+        fs::read_to_string(&outputs).unwrap_or_default(),
+        "velnor-ci=tools-v0.1.97\nvelnor-gen=tools-v0.1.97\n"
     );
 }
 

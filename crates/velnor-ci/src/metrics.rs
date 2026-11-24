@@ -34,6 +34,10 @@ pub struct JobMetrics {
     pub setup_seconds: Option<u64>,
     pub steps: Vec<StepMetrics>,
     pub log: LogScan,
+    /// The job's log had a different number of top-level step groups than the
+    /// job has steps, so no step got its own log scan.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub step_logs_unmatched: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

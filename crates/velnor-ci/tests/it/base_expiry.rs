@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -74,9 +76,90 @@ fn restored_reports_an_unreadable_age_as_expired() {
 }
 
 #[test]
+fn expiry_refuses_nested_checkouts_before_removing_any_target() {
+    for born in [Some(today(8)), None] {
+        let repo = built("expiry-nested-checkout", born.as_deref());
+        repo.write_unstaged("safe/.velnor/born", &today(8));
+        repo.write_unstaged("safe/sentinel", "safe cache\n");
+        repo.write_unstaged("target/nested/keep", "nested source\n");
+        repo.git(&["-C", "target/nested", "init", "--quiet"]);
+        repo.git(&["-C", "target/nested", "add", "keep"]);
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["restored", "--target-dir", "safe", "--target-dir", "target"])
+            .current_dir(repo.root())
+            .env("VELNOR_BASE_MAX_AGE_DAYS", "7")
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(!output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("contains Git checkout"),
+            "{output:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(repo.root().join("target/nested/keep")).unwrap_or_default(),
+            "nested source\n"
+        );
+        assert!(repo.root().join("target/nested/.git").is_dir());
+        assert_eq!(
+            fs::read_to_string(repo.root().join("safe/sentinel")).unwrap_or_default(),
+            "safe cache\n"
+        );
+        assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+    }
+}
+
+#[test]
+fn restored_refuses_a_max_age_that_is_not_unicode_and_keeps_the_base() {
+    let repo = built("report-non-unicode-age", Some(&today(8)));
+    let outputs = repo.root().join("github-output");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(repo.root())
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("VELNOR_BASE_MAX_AGE_DAYS", OsStr::from_bytes(b"\xff"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("VELNOR_BASE_MAX_AGE_DAYS"),
+        "{output:?}"
+    );
+    assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+}
+
+#[test]
+fn restored_refuses_a_malformed_max_age_and_keeps_the_base() {
+    for (index, value) in ["seven", "-1", "99999999999999999999999"]
+        .into_iter()
+        .enumerate()
+    {
+        let repo = built(&format!("report-malformed-age-{index}"), Some(&today(8)));
+        let outputs = repo.root().join("github-output");
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .arg("restored")
+            .current_dir(repo.root())
+            .env("GITHUB_OUTPUT", &outputs)
+            .env("VELNOR_BASE_MAX_AGE_DAYS", value)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{value}: {output:?}");
+        assert!(
+            stderr.contains("VELNOR_BASE_MAX_AGE_DAYS must be a whole number of days"),
+            "{value}: {stderr}"
+        );
+        assert!(stderr.contains(&format!("{value:?}")), "{value}: {stderr}");
+        assert!(
+            repo.root().join("target/debug/deps/libapp.rlib").is_file(),
+            "{value}"
+        );
+    }
+}
+
+#[test]
 fn restored_reports_no_expiry_without_a_limit_or_a_build_directory() {
     let repo = built("report-unlimited", Some("2020-01-01\n"));
-    for days in [None, Some("0")] {
+    for days in [None, Some("0"), Some("")] {
         assert_eq!(restored(&repo, days).1, "expired=false\n");
     }
     let bare = Repo::new("report-bare");
@@ -143,4 +226,13 @@ fn plan_full_selects_everything_on_an_affected_only_push_and_plain_plan_does_not
     let chosen = selected(&full);
     assert!(!chosen.contains("none"), "{chosen}");
     assert!(chosen.contains("all:"), "{chosen}");
+}
+
+#[test]
+fn restored_trims_a_padded_max_age_before_reading_it() {
+    let repo = built("report-padded-age", Some(&today(8)));
+    let (output, written) = restored(&repo, Some(" 7 "));
+    assert!(output.status.success());
+    assert_eq!(written, "expired=true\n");
+    assert!(!repo.root().join("target").exists());
 }

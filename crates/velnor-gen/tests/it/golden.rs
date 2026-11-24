@@ -12,7 +12,7 @@ use similar::TextDiff;
 use velnor_gen::expected_with_notes;
 use velnor_gen::io::{Error as IoError, SAMPLE_REPOSITORY};
 use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
-use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
+use velnor_rust::{is_rust_source, manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -116,7 +116,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         .chain(manifests(&tracked_paths))
         .collect();
     for link in &symlinks {
-        if wanted.contains(link) {
+        if wanted.contains(link) && !is_rust_source(link) {
             return Err(Box::new(IoError::NotRegular(link.clone())));
         }
     }
@@ -144,6 +144,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         files,
         tracked_paths,
         symlinks,
+        gitlinks: BTreeSet::default(),
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {
@@ -230,7 +231,7 @@ fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
 
 #[test]
 fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
-    let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
+    let path = RepoPath::new(".github/workflows/ci.yml")?;
     let empty = BTreeMap::from([(path.clone(), String::new())]);
     assert_eq!(mismatches("s", &empty, &BTreeMap::new()).len(), 1);
     assert_eq!(
@@ -246,10 +247,8 @@ fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
     let invalid = BTreeMap::from([(path.clone(), vec![0xff])]);
     assert_eq!(mismatches("s", &text, &invalid).len(), 1);
     let same = BTreeMap::from([(path, b"a\n".to_vec())]);
-    let generated = BTreeMap::from([(
-        RepoPath::new(".github/workflows/rust-ci.yml")?,
-        "a\n".to_owned(),
-    )]);
+    let generated =
+        BTreeMap::from([(RepoPath::new(".github/workflows/ci.yml")?, "a\n".to_owned())]);
     assert_eq!(mismatches("s", &generated, &same).len(), 0);
     Ok(())
 }

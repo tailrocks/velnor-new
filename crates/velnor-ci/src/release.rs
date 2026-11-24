@@ -68,8 +68,33 @@ struct PackageRelease {
     tag: String,
 }
 
+/// The package -> group map of the `release-plz.toml` of each root, one
+/// `(root, text)` per file; a group's name is made unique across roots.
+pub fn version_groups(files: &[(String, String)]) -> Result<BTreeMap<String, String>, CiError> {
+    let mut groups = BTreeMap::new();
+    for (root, text) in files {
+        let found = velnor_release::release_version_groups(root, text)
+            .map_err(|e| CiError::new(e.to_string()))?;
+        groups.extend(
+            found
+                .into_iter()
+                .map(|(package, group)| (package, format!("{root}:{group}"))),
+        );
+    }
+    Ok(groups)
+}
+
 pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
-    Ok(tag_lines(&recorded(outputs)?))
+    record_in_groups(outputs, &BTreeMap::new())
+}
+
+/// `groups` maps a package to the release-plz `version_group` it follows (the
+/// group's name, made unique across roots by the caller).
+pub fn record_in_groups(
+    outputs: &[(String, String)],
+    groups: &BTreeMap<String, String>,
+) -> Result<String, CiError> {
+    Ok(tag_lines(&recorded_in_groups(outputs, groups)?))
 }
 
 #[must_use]
@@ -80,8 +105,16 @@ pub fn tag_lines(tags: &BTreeMap<PlainName, PlainName>) -> String {
 }
 
 pub fn recorded(outputs: &[(String, String)]) -> Result<BTreeMap<PlainName, PlainName>, CiError> {
+    recorded_in_groups(outputs, &BTreeMap::new())
+}
+
+pub fn recorded_in_groups(
+    outputs: &[(String, String)],
+    groups: &BTreeMap<String, String>,
+) -> Result<BTreeMap<PlainName, PlainName>, CiError> {
     let mut tags: BTreeMap<PlainName, PlainName> = BTreeMap::new();
     let mut packages: BTreeMap<PlainName, PlainName> = BTreeMap::new();
+    let mut group_tags: BTreeMap<&str, (PlainName, PlainName)> = BTreeMap::new();
     for (file, text) in outputs {
         let output: ReleasePlzOutput = serde_json::from_str(text).map_err(|e| {
             CiError::new(format!(
@@ -96,10 +129,29 @@ pub fn recorded(outputs: &[(String, String)]) -> Result<BTreeMap<PlainName, Plai
                     "release-plz released package {package} twice, as {other} and as {tag}"
                 )));
             }
-            if let Some(other) = packages.insert(tag.clone(), package.clone()) {
+            let group = groups.get(package.as_str()).map(String::as_str);
+            if let Some(group) = group
+                && let Some((other, other_tag)) = group_tags.get(group)
+                && *other_tag != tag
+            {
+                return Err(CiError::new(format!(
+                    "release-plz released {other} and {package} of one version group as {other_tag} and as {tag}"
+                )));
+            }
+            if let Some(other) = packages.get(&tag)
+                && !(group.is_some() && groups.get(other.as_str()).map(String::as_str) == group)
+            {
                 return Err(CiError::new(format!(
                     "release-plz released {other} and {package} with the same tag {tag}"
                 )));
+            }
+            packages
+                .entry(tag.clone())
+                .or_insert_with(|| package.clone());
+            if let Some(group) = group {
+                group_tags
+                    .entry(group)
+                    .or_insert_with(|| (package.clone(), tag.clone()));
             }
         }
     }

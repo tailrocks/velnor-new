@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-min_version = "2026.10.18"
+min_version = "2026.11.10"
 
 [tools]
 # Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
@@ -10,31 +10,38 @@ min_version = "2026.10.18"
 # rustup-only tools read only the file, and generation fails on drift. Generated CI reads every version in this table
 # at run time (hard decision 4); clean checkouts resolve MBX from this file
 # via `mise install`, never globally.
-rust = { version = "1.99.1", profile = "minimal", components = [
+rust = { version = "1.100.0", profile = "minimal", components = [
   "clippy",
   "rustfmt",
 ], targets = [
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
 ], mr_boxington = true }
-mr-boxington = { version = "1.29.2", workflow = "release.yml@refs/heads/main" }
-bun = "1.4.4"
-hk = "2.8.0"
-cargo-binstall = "1.26.0"
+mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
+bun = "1.4.5"
+hk = "2.13.0"
+cargo-binstall = "1.28.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
 # and hk's check-only jactionlint step runs the same binaries locally.
 jactionlint = "2.6.0"
 shellcheck = "0.11.0"
+minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
+# Repository policy (.alint.yml): the generated Alint job installs this pin.
+"github:asamarts/alint" = "v0.23.0"
+# jactionlint checks the script of every actions/github-script step with node on PATH.
+node = "26.13.1"
+# Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.
+python = "3.15.2"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
-kingfisher = "2.14.0"
-betterleaks = "1.9.0"
+kingfisher = "v2.20.0"
+betterleaks = "v1.10.1"
 gitleaks = "8.30.1"
-rumdl = "0.3.0"
-cargo-deny = "0.20.2"
-"github:bnjbvr/cargo-machete" = "0.9.2"
-opentofu = "1.13.9"
+rumdl = "v0.3.6"
+cargo-deny = "0.22.1"
+"github:bnjbvr/cargo-machete" = "v0.10.1"
+opentofu = "1.13.10"
 # Release PRs and tags: release-plz.toml at the repository root (the tools and
 # runner groups); velnor-gen reads this pin when it plans releases.
 "aqua:release-plz/release-plz" = "0.4.3"
@@ -71,10 +78,49 @@ for EXPECTED in generator/samples/*/expected; do
   fi
   cp -R "$EXPECTED/." "$SAMPLE"
   git -C "$SAMPLE" init -q
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  # The repository's config supplies the self-hosted runner labels (velnor,
+  # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
+'''
+
+[tasks.lint-parity-verify-candidate]
+description = "Run the unit tests of the parity verifier and of the hosted-phase MBX summary parser"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+python3 -m unittest scripts/test_parity_verify_candidate.py
+python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
+python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
+'''
+
+[tasks.validate-hk]
+description = "Validate hk.pkl: fail when hk cannot load the config"
+run = "hk validate --deny-warnings"
+
+[tasks.test-no-doctests-rule]
+description = "Check the alint no-doctests rule against doctest fixtures: every bypass form must fail, plain prose must pass"
+run = "bash scripts/test-no-doctests-rule.sh"
+
+[tasks.test-no-absolute-local-paths-rule]
+description = "Check the alint no-absolute-local-paths rule against path fixtures: home, root and scratch paths must fail, GitHub runner paths and placeholders must pass"
+run = "bash scripts/test-no-absolute-local-paths-rule.sh"
+
+[tasks.test-mise-binary-digests]
+description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; CI requires minisign, elsewhere a missing minisign skips"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
 '''
 
 [tasks.test-maintenance-helpers]
@@ -85,6 +131,13 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
+printf "maintenance-phase: mise-binary-digests\n"
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"

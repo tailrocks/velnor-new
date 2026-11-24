@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use velnor_model::RepoPath;
-use velnor_render::{Owner, owner_of};
+use velnor_render::{Owner, lf_normalized, owner_of};
 use velnor_rust::METADATA_PATH;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ impl fmt::Display for Drift {
             ),
             Self::Unmarked(path) => write!(
                 f,
-                "{path} has no generated header and no generator owns it; delete it or generate it"
+                "{path} has no generated header and no generator owns it; delete it, generate it, or list it under external_workflows in .velnor/rust-ci.toml"
             ),
         }
     }
@@ -52,7 +52,7 @@ impl fmt::Display for Drift {
 pub fn drift(
     expected: &BTreeMap<RepoPath, String>,
     workflows: &BTreeMap<RepoPath, Vec<u8>>,
-    engine_configured: bool,
+    external: &BTreeSet<RepoPath>,
 ) -> Vec<Drift> {
     let paths: BTreeSet<&RepoPath> = expected.keys().chain(workflows.keys()).collect();
     paths
@@ -63,16 +63,16 @@ pub fn drift(
             }
             (None, Some(_)) if *path == METADATA_PATH => Some(Drift::Stale(path.clone())),
             (Some(want), Some(have)) => match owner_of(have) {
-                Owner::VelnorGen if want.as_bytes() == have.as_slice() => None,
-                Owner::VelnorGen | Owner::Forged => Some(Drift::Changed(path.clone())),
-                Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
+                Owner::VelnorGen if want.as_bytes() == lf_normalized(have).as_ref() => None,
+                Owner::VelnorGen => Some(Drift::Changed(path.clone())),
+                Owner::Forged | Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
             },
             (Some(_), None) => Some(Drift::Missing(path.clone())),
             (None, Some(have)) => match owner_of(have) {
                 Owner::VelnorGen => Some(Drift::Stale(path.clone())),
                 Owner::Forged => Some(Drift::Foreign(path.clone())),
                 Owner::Engine => None,
-                Owner::Nobody => (!engine_configured).then(|| Drift::Unmarked(path.clone())),
+                Owner::Nobody => (!external.contains(path)).then(|| Drift::Unmarked(path.clone())),
             },
             (None, None) => None,
         })

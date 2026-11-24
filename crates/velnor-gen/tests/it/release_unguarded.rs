@@ -16,8 +16,7 @@ use velnor_rust::LOCK_PATH;
 fn text(view: &RepoView, path: &RepoPath) -> String {
     view.files
         .get(path)
-        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
-        .unwrap_or_default()
+        .map_or_default(|bytes| String::from_utf8_lossy(bytes).into_owned())
 }
 
 fn helper(view: &RepoView) -> Result<HelperRelease, Box<dyn Error>> {
@@ -75,12 +74,8 @@ pub(crate) fn expected_release_nested(
     if !helper.version().at_least(velnor_gen::HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(helper.version().clone()));
     }
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
-        return Err(GenerateError::FamilyTagHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
-    let mut files = render_release(&plan, &helper, "main").map_err(GenerateError::Rules)?;
+    velnor_gen::check_config_keys(view, helper.version())?;
+    let mut files = render_release(&plan, &helper, "main", None).map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);
     Ok(files)
 }

@@ -45,7 +45,13 @@ fn checked_out(root: &Path, expected: Option<&str>) -> Result<(), CiError> {
     }
     let dirty = git(
         root,
-        &["status", "--porcelain=v1", "-z", "--untracked-files=no"],
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=no",
+            "--ignore-submodules=none",
+        ],
     )?;
     if !dirty.is_empty() {
         return Err(CiError::new(

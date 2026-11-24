@@ -1,0 +1,59 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use super::identity::buildx_version;
+use crate::error::CiError;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Lock {
+    pub buildx_version: String,
+    pub buildx_sha256: Option<String>,
+    pub docker_binary_sha256: Option<String>,
+    pub docker_arm64_binary_sha256: Option<String>,
+}
+
+impl Lock {
+    pub fn docker_client_sha256(&self, arch: &str) -> Result<&str, CiError> {
+        let (key, value) = match arch {
+            "x86_64" => ("docker_binary_sha256", &self.docker_binary_sha256),
+            "aarch64" => (
+                "docker_arm64_binary_sha256",
+                &self.docker_arm64_binary_sha256,
+            ),
+            other => return fail(format!("runner.lock pins no Docker client for {other}")),
+        };
+        value
+            .as_deref()
+            .ok_or_else(|| CiError::new(format!("runner.lock: {key} is missing")))
+    }
+}
+
+fn fail<T>(message: impl Into<String>) -> Result<T, CiError> {
+    Err(CiError::new(message))
+}
+
+pub fn parse_lock(text: &str) -> Result<Lock, CiError> {
+    let table: toml::Table =
+        toml::from_str(text).map_err(|error| CiError::new(format!("runner.lock: {error}")))?;
+    let field = |name: &str| table.get(name).and_then(toml::Value::as_str);
+    let Some(version) = field("buildx_version") else {
+        return fail("runner.lock: buildx_version is missing");
+    };
+    Ok(Lock {
+        buildx_version: version.to_owned(),
+        buildx_sha256: field("buildx_sha256").map(str::to_owned),
+        docker_binary_sha256: field("docker_binary_sha256").map(str::to_owned),
+        docker_arm64_binary_sha256: field("docker_arm64_binary_sha256").map(str::to_owned),
+    })
+}
+
+pub fn banner(output: &str, lock: &Lock) -> Result<String, CiError> {
+    let banner = output.trim();
+    if banner.is_empty() {
+        return fail("Docker Buildx output has no version.");
+    }
+    if buildx_version(banner) != Some(lock.buildx_version.as_str()) {
+        return fail("Docker Buildx version is not the same as the value in .velnor/runner.lock.");
+    }
+    Ok(banner.to_owned())
+}

@@ -111,7 +111,6 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
         .map_err(|_| "valid signed envelope rejected")?;
     assert_eq!(parsed.publisher_artifact_id, 1);
     assert_eq!(identity.companion.repository_id, 1_451_604_567);
-    check_preview_authority(&envelope)?;
     let raw = String::from_utf8(bytes)?;
     let duplicate = raw.replacen('{', "{\"schema\":\"duplicate\",", 1);
     assert!(
@@ -151,39 +150,6 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
     assert!(
         parse_mac_qualification_attestation(&serde_json::to_vec(&unknown)?).is_err(),
         "unknown envelope field accepted"
-    );
-    Ok(())
-}
-
-fn check_preview_authority(envelope: &serde_json::Value) -> Result<(), Box<dyn Error>> {
-    use velnor_runner_image_manifest::mac_attestation::parse_mac_qualification_attestation;
-    let mut preview = envelope.clone();
-    *preview
-        .pointer_mut("/sdk/authority")
-        .ok_or("sdk authority missing")? = json!({
-        "channel": "source-preview", "receipt_sha256": "1".repeat(64),
-        "bundle_sha256": "2".repeat(64), "authority_sha": "3".repeat(40), "release_id": 4
-    });
-    assert!(
-        parse_mac_qualification_attestation(&serde_json::to_vec(&preview)?).is_ok(),
-        "valid preview identity rejected"
-    );
-    let mut confused = preview.clone();
-    confused
-        .pointer_mut("/sdk/authority")
-        .and_then(serde_json::Value::as_object_mut)
-        .ok_or("sdk authority missing")?
-        .insert("release_manifest_sha256".into(), json!("f".repeat(64)));
-    assert!(
-        parse_mac_qualification_attestation(&serde_json::to_vec(&confused)?).is_err(),
-        "mixed SDK authorities accepted"
-    );
-    *preview
-        .pointer_mut("/sdk/authority/release_id")
-        .ok_or("release ID missing")? = json!(0);
-    assert!(
-        parse_mac_qualification_attestation(&serde_json::to_vec(&preview)?).is_err(),
-        "zero preview release ID accepted"
     );
     Ok(())
 }

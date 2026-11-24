@@ -1,5 +1,10 @@
 [tools]
-rust = "1.99.1"
+mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
+rust = { version = "1.99.1", mr_boxington = true }
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.151"
 cargo-deny = "0.18.5"
 "github:bnjbvr/cargo-machete" = "0.9.1"
+
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }

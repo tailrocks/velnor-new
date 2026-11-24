@@ -13,7 +13,7 @@ use crate::yaml_tree::document;
 
 /// Jobs whose commands are a call of a checked-in script under `qualification/`: velnor-gen
 /// refuses a multi-line `run`, a loop, a pipe, a `shell` key and a job `env`.
-pub(super) const SCRIPTED: [&str; 10] = [
+pub(super) const SCRIPTED: &[&str] = &[
     "mbx-cache-write-hosted",
     "mbx-cache-read-hosted",
     "ports-a-hosted",
@@ -163,7 +163,7 @@ fn scripted_jobs_call_scripts_that_exist_with_a_phase_they_have() -> TestResult 
     let workflow = generated()?;
     let jobs = jobs_of(&workflow)?;
     let mut called = BTreeSet::new();
-    for id in SCRIPTED {
+    for id in SCRIPTED.iter().copied() {
         let job = jobs.get(id).ok_or(format!("{id}: no such job"))?;
         let mut calls = 0;
         for step in job
@@ -212,5 +212,117 @@ fn the_mbx_script_parses_and_refuses_an_unknown_phase() -> TestResult {
         .output()?;
     assert_eq!(unknown.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("no-such-phase"));
+    Ok(())
+}
+
+/// Jobs whose only step is `exit 1`: a dispatch that matches one of them fails the run.
+fn failing_jobs(workflow: &Value) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut conditions = Vec::new();
+    for job in jobs_of(workflow)?.values() {
+        let exits = job
+            .get("steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|step| step.get("run").map(text).as_deref() == Some("exit 1"));
+        if exits {
+            conditions.push(job.get("if").map(text).ok_or("failing job: no if")?);
+        }
+    }
+    Ok(conditions)
+}
+
+#[test]
+fn a_mode_that_no_job_runs_fails_the_run_instead_of_skipping_every_job() -> TestResult {
+    let workflow = generated()?;
+    let offered: BTreeSet<String> = workflow
+        .pointer("/on/workflow_dispatch/inputs/mode/options")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(text)
+        .collect();
+    let guarded = failing_jobs(&workflow)?
+        .iter()
+        .any(|condition| condition.contains("!(") && modes(condition) == offered);
+    assert!(
+        guarded,
+        "no job fails the run when inputs.mode is none of the offered modes"
+    );
+    Ok(())
+}
+
+#[test]
+fn stable_sources_outside_a_non_default_branch_fails_the_run() -> TestResult {
+    let workflow = generated()?;
+    let guarded = failing_jobs(&workflow)?.iter().any(|condition| {
+        condition.contains("inputs.mode == 'stable-sources'")
+            && condition.contains("github.event.repository.default_branch")
+    });
+    assert!(
+        guarded,
+        "no job fails the run for stable-sources on the default branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_cancel_service_run_cancels_its_own_run_mid_step_and_a_check_job_asserts_the_cancel()
+-> TestResult {
+    let workflow = generated()?;
+    let jobs = jobs_of(&workflow)?;
+    let cancel_jobs = ["cancel-service-hosted", "cancel-service-scale-set"];
+    for id in cancel_jobs {
+        let job = jobs.get(id).ok_or(format!("{id}: no such job"))?;
+        assert_eq!(
+            job.pointer("/permissions/actions"),
+            Some(&Value::from("write")),
+            "{id}: must hold actions: write to cancel its own run"
+        );
+        let runs: Vec<String> = job
+            .get("steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|step| step.get("run").map(text))
+            .collect();
+        assert!(
+            runs.iter()
+                .any(|run| run.contains("/actions/runs/$GITHUB_RUN_ID/cancel")),
+            "{id}: never cancels its own run"
+        );
+        assert!(
+            runs.iter().any(|run| run == "exit 1"),
+            "{id}: a run that is never cancelled must fail, not pass"
+        );
+        assert!(
+            !text(job).contains("sleep 900"),
+            "{id}: sleeps past its own timeout, so the timeout cancels it instead"
+        );
+    }
+    let check = jobs
+        .get("cancel-service-check")
+        .ok_or("cancel-service-check: no such job")?;
+    let needs = text(check.get("needs").unwrap_or(&Value::Null));
+    for id in cancel_jobs {
+        assert!(
+            needs.contains(id),
+            "cancel-service-check does not wait for {id}"
+        );
+    }
+    assert!(
+        text(check.get("if").unwrap_or(&Value::Null)).contains("always()"),
+        "cancel-service-check must run after the cancelled jobs"
+    );
+    let check_runs = text(check.get("steps").unwrap_or(&Value::Null));
+    assert!(
+        check_runs.contains("bash qualification/cancel-service-check.sh"),
+        "cancel-service-check calls no checker"
+    );
+    let checker = read("qualification/cancel-service-check.sh")?;
+    assert!(
+        checker.contains("cancelled") && checker.contains("240"),
+        "cancel-service-check.sh does not assert an explicit cancel under the timeout"
+    );
     Ok(())
 }

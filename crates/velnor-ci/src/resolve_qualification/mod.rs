@@ -13,7 +13,7 @@ mod chain;
 mod delta;
 mod request;
 mod shape;
-mod strict;
+pub(crate) mod strict;
 mod types;
 mod validate;
 

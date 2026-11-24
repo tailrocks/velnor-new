@@ -9,7 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use std::time::Duration;
+
+use crate::support::{fresh_dir, make_fifo, output_within};
 
 fn cases() -> Vec<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/write_request");
@@ -102,7 +104,6 @@ fn check(case: &Path, by_flags: bool) {
         );
         assert!(!request.exists(), "{name} left a request file");
     }
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -159,7 +160,6 @@ fn an_existing_request_is_never_overwritten() {
             .unwrap_or_else(|e| unreachable!("{e}")),
         first
     );
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn a_request_outside_runner_temp_or_through_a_symlink_is_refused() {
     let elsewhere = fresh_dir("velnor-ci-write-request", "elsewhere");
     let outside = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_clear()
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_EVENT_NAME", read(&case.join("event_name")))
         .env("GITHUB_EVENT_PATH", case.join("payload.json"))
         .args(["write-request", "--output"])
@@ -177,14 +177,12 @@ fn a_request_outside_runner_temp_or_through_a_symlink_is_refused() {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(String::from_utf8_lossy(&outside.stderr).contains("anchor_escape"));
-    std::os::unix::fs::symlink(&elsewhere, temp.join("velnor"))
+    std::os::unix::fs::symlink(elsewhere.path(), temp.join("velnor"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let linked = run_case(&case, &temp, false);
     assert!(!linked.status.success());
     assert!(String::from_utf8_lossy(&linked.stderr).contains("symlink_refused"));
     assert!(!elsewhere.join("request").exists());
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -195,18 +193,41 @@ fn a_payload_that_is_a_symlink_is_refused() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_clear()
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_EVENT_NAME", "push")
         .env("GITHUB_EVENT_PATH", &link)
         .arg("write-request")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("unreadable_event_payload"));
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_payload_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let temp = fresh_dir("velnor-ci-write-request", "payload-fifo");
+    let fifo = temp.join("event.json");
+    make_fifo(&fifo);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", &fifo)
+        .arg("write-request");
+    let output = output_within(&mut command, Duration::from_secs(20));
+    let stderr = output.map(|output| String::from_utf8_lossy(&output.stderr).into_owned());
+    assert!(
+        stderr
+            .as_deref()
+            .is_some_and(|text| text.contains("unreadable_event_payload")),
+        "{stderr:?}"
+    );
 }
 
 #[test]
 fn no_runner_temp_or_payload_is_named_in_the_error() {
+    let runner_temp = crate::scratch_path("velnor-ci-write-request", "no-payload");
+    fs::create_dir_all(runner_temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     for (temp, event_path, code) in [
         (false, true, "missing_runner_temp"),
         (true, false, "missing_event_payload"),
@@ -214,7 +235,7 @@ fn no_runner_temp_or_payload_is_named_in_the_error() {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command.env_clear().arg("write-request");
         if temp {
-            command.env("RUNNER_TEMP", std::env::temp_dir());
+            command.env("RUNNER_TEMP", runner_temp.path());
         }
         if event_path {
             command.env("GITHUB_EVENT_PATH", "/nonexistent");

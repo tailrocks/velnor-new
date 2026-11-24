@@ -1,14 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use crate::{
+    config::RepositoryConnection,
     error::HostError,
     launch::{SessionDeleteOutcome, retire_session_of_deleted_set},
     listen::Secret,
     scale_set::delete::{ScaleSetDeleteOutcome, run_created_delete},
 };
 
-use super::{ConnectionPollContext, PreparedConnection};
+use super::{
+    ConnectionPollContext, PreparedConnection,
+    credentials::{RESTORE_ATTEMPT_DEADLINE, RESTORE_RETRY, restore_link_before_deadline},
+};
 
 pub(super) async fn service(
     prepared: &mut PreparedConnection,
@@ -48,18 +54,21 @@ pub(super) async fn service(
 pub(super) async fn retire_deleted_set_session(
     prepared: &mut PreparedConnection,
     context: &ConnectionPollContext<'_>,
+    pending_retirements: &[RepositoryConnection],
 ) -> Result<Option<bool>, HostError> {
-    let Some(credentials) = prepared.credentials.as_mut() else {
-        return Ok(None);
+    let outcome = match prepared.credentials.as_mut() {
+        Some(credentials) => {
+            retire_session_of_deleted_set(
+                &mut credentials.link,
+                &credentials.session.session_id,
+                &prepared.scope,
+                prepared.session_intent,
+            )
+            .await
+        }
+        None => retire_without_credentials(prepared, context, pending_retirements).await,
     };
-    let Some(outcome) = retire_session_of_deleted_set(
-        &mut credentials.link,
-        &credentials.session,
-        &prepared.scope,
-        prepared.session_intent,
-    )
-    .await
-    else {
+    let Some(outcome) = outcome else {
         return Ok(None);
     };
     context
@@ -78,4 +87,61 @@ pub(super) async fn retire_deleted_set_session(
         );
     }
     Ok(Some(outcome == SessionDeleteOutcome::Deleted))
+}
+
+async fn retire_without_credentials(
+    prepared: &mut PreparedConnection,
+    context: &ConnectionPollContext<'_>,
+    pending_retirements: &[RepositoryConnection],
+) -> Option<SessionDeleteOutcome> {
+    let configured = context
+        .config
+        .connection(&prepared.binding.connection_id)
+        .is_some();
+    if !configured
+        && !pending_retirements
+            .iter()
+            .any(|binding| prepared.is_for(binding))
+    {
+        return None;
+    }
+    if !prepared
+        .scope
+        .scale_set_recorded_deleted(prepared.set_id)
+        .await
+        .ok()?
+    {
+        return None;
+    }
+    let session_id = prepared
+        .scope
+        .session_header_allocation(prepared.session_intent)
+        .await
+        .ok()?
+        .session_id()
+        .to_owned();
+    if prepared
+        .restore_retry_at
+        .is_some_and(|at| tokio::time::Instant::now().into_std() < at)
+    {
+        return Some(SessionDeleteOutcome::NotReady);
+    }
+    let deadline = tokio::time::Instant::now() + RESTORE_ATTEMPT_DEADLINE;
+    let restored = restore_link_before_deadline(prepared, context, deadline).await;
+    let Ok((mut link, _pat, restored_set_id)) = restored else {
+        prepared.restore_retry_at = Some(Instant::now() + RESTORE_RETRY);
+        return Some(SessionDeleteOutcome::NotReady);
+    };
+    if restored_set_id != prepared.set_id {
+        prepared.restore_retry_at = Some(Instant::now() + RESTORE_RETRY);
+        return Some(SessionDeleteOutcome::NotReady);
+    }
+    prepared.restore_retry_at = None;
+    retire_session_of_deleted_set(
+        &mut link,
+        &session_id,
+        &prepared.scope,
+        prepared.session_intent,
+    )
+    .await
 }

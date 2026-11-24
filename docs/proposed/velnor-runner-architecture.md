@@ -1028,7 +1028,7 @@ the label then mostly finds the work done. The gate's meaning and decisions 1–
 [M, snapshot] unless marked. The deployment manifests live outside this repository, and host
 deployments stay operator-run (`docs/host-deployment-decision.md`).
 
-- **Today.** Hetzner k3s with five workers. ARC runs three scale sets (tailrocks, ChainArgos, jackin);
+- **Today.** Hetzner k3s with five workers. ARC runs three scale sets (tailrocks, example-org, jackin);
   each runner pod is the official runner plus a privileged Docker-in-Docker sidecar. velnor-new's CI
   runs there on the label `ubuntu-26.04-scale-set`.
 - **Role, after Q1.** k3s deploys the dispatchers, node agents, site services, RustFS and mirrors, and
@@ -1039,7 +1039,7 @@ deployments stay operator-run (`docs/host-deployment-decision.md`).
   plus A1's slot. Priorities: merge > gate > PR = other organisations' CI > batch; only batch is
   preempted.
 - **Sites.** Each site has its own dispatcher, node agents and RustFS cluster. A request executes in
-  one site (DE to FI is 35 ms over WireGuard). ChainArgos and jackin keep their ARC scale sets.
+  one site (DE to FI is 35 ms over WireGuard). example-org and jackin keep their ARC scale sets.
 
 ## 11. Delivery
 

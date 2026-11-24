@@ -38,8 +38,7 @@ name = "shadow"
 harness = false
 "#;
 
-const NEXTEST_MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 fn view(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut a = package(
@@ -231,7 +230,7 @@ fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> Tes
     let lane =
         "[[test_lane]]\nroot = '.'\nfeatures = ['x']\npackages = ['a']\nfilter = 'test(~a)'\n";
     let mut repo = view(Some(lane))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.86")?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.93")?;
     let text = workflow(&repo)?;
     let step = text
         .lines()

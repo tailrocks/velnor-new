@@ -63,3 +63,19 @@ pub(super) fn lane_inventory(text: &str) -> Result<Value, CiError> {
         serde_json::from_str(text).map_err(|_| internal("malformed_lane_inventory"))?;
     serde_json::to_value(inventory).map_err(|_| internal("malformed_lane_inventory"))
 }
+
+pub(crate) fn check_request_fields(request: &Value) -> Result<(), serde_json::Error> {
+    if let Some(named) = request
+        .get("named_check_lanes")
+        .filter(|value| !value.is_null())
+    {
+        serde_json::from_value::<BTreeMap<String, Vec<NamedCheckLane>>>(named.clone())?;
+    }
+    if let Some(inventory) = request
+        .get("lane_inventory")
+        .filter(|value| !value.is_null())
+    {
+        serde_json::from_value::<Inventory>(inventory.clone())?;
+    }
+    Ok(())
+}

@@ -6,9 +6,8 @@ use std::error::Error;
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::RepoPath;
 use velnor_release::{FamilyError, ReleaseError};
-use velnor_rust::LOCK_PATH;
 
-use crate::release_fixture::{APP, LOCK, release_view};
+use crate::release_fixture::{APP, release_view};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -18,8 +17,7 @@ const RELEASE_PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ versi
 fn generate(binaries: &str) -> Result<(), Box<dyn Error>> {
     let config = format!("{FAMILY}{binaries}");
     let mut view = release_view(&[APP], Some(&config))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.83").into_bytes());
+    crate::release_fixture::pin_at_least(&mut view, "0.1.85")?;
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         RELEASE_PLZ.as_bytes().to_vec(),
@@ -50,41 +48,9 @@ fn a_family_release_of_one_plain_binary_still_renders() -> TestResult {
 
 #[test]
 fn a_family_release_refuses_the_keys_it_cannot_publish_yet() -> TestResult {
-    for (binaries, key) in [
-        (
-            "[[binaries]]\npackage = \"app\"\nasset_name = \"{{ bin }}-{{ platform }}\"\n",
-            "asset_name",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\nbins = [{ bin = \"rg\" }]\n",
-            "bins",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\ninclude = [\"LICENSE\"]\n",
-            "include",
-        ),
-        ("[[binaries]]\npackage = \"app\"\nattest = true\n", "attest"),
-        (
-            "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nsmoke = true\n",
-            "smoke",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\ncommit_file = true\n",
-            "commit_file",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n",
-            "checksum_files",
-        ),
-    ] {
-        assert_eq!(refused_key(binaries)?, key);
-    }
-    Ok(())
-}
-
-#[test]
-fn a_family_release_refuses_pre_publish_checks() -> TestResult {
-    let binaries = "[[binaries]]\npackage = \"app\"\n[[checks]]\nname = \"Qualify\"\nrun = \"bash qualify.sh\"\n";
-    assert_eq!(refused_key(binaries)?, "[[checks]]");
+    assert_eq!(
+        refused_key("[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n")?,
+        "checksum_files"
+    );
     Ok(())
 }

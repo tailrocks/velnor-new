@@ -3,24 +3,25 @@
 
 use std::collections::BTreeMap;
 use std::io::{self, Read};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::{Value, json};
 
 use super::archive::{Blob, Scanned};
 use super::hashing::sha256_hex;
 use super::json::{is_digest, parse, uint};
-use super::layer::{Layer, scan as scan_layer};
 use crate::error::CiError;
+
+mod layers;
+use layers::{check_layers, diff_ids};
 
 const MAX_UNCOMPRESSED: u64 = 4 << 30;
 const MAX_LAYER_MEMBERS: usize = 1_000_000;
 const MAX_METADATA_BLOB: u64 = 64 << 20;
+const REVISION_LABEL: &str = "org.opencontainers.image.revision";
 const MANIFEST_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 const INDEX_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 const CONFIG_TYPE: &str = "application/vnd.oci.image.config.v1+json";
-const LAYER_TYPES: [&str; 4] = [
+const LAYER_TYPES: &[&str] = &[
     "application/vnd.oci.image.layer.v1.tar",
     "application/vnd.oci.image.layer.v1.tar+gzip",
     "application/vnd.oci.image.layer.nondistributable.v1.tar",
@@ -247,7 +248,7 @@ fn read_graph(scan: &Scanned, source: &dyn BlobSource) -> Result<Graph, CiError>
     })
 }
 
-pub fn verify(scan: &Scanned, source: &dyn BlobSource) -> Result<Value, CiError> {
+pub fn verify(scan: &Scanned, source: &dyn BlobSource, revision: &str) -> Result<Value, CiError> {
     let Graph {
         described,
         manifest_raw,
@@ -274,6 +275,9 @@ pub fn verify(scan: &Scanned, source: &dyn BlobSource) -> Result<Value, CiError>
     {
         return fail("OCI image configuration platform is not linux/amd64.");
     }
+    if config_data["config"]["Labels"][REVISION_LABEL] != revision {
+        return fail("OCI image configuration revision label is not the source commit.");
+    }
     let diff_ids = diff_ids(&config_data, entries.len())?;
     check_layers(scan, source, &entries, &diff_ids)?;
     for hex in referenced.keys() {
@@ -292,109 +296,4 @@ pub fn verify(scan: &Scanned, source: &dyn BlobSource) -> Result<Value, CiError>
         "image_configuration_size_bytes": config_raw.len(),
         "layer_digests": entries.iter().map(|entry| entry.digest.clone()).collect::<Vec<_>>(),
     }))
-}
-
-fn diff_ids(config: &Value, layers: usize) -> Result<Vec<String>, CiError> {
-    let ids = config
-        .get("rootfs")
-        .filter(|rootfs| rootfs.get("type") == Some(&json!("layers")))
-        .and_then(|rootfs| rootfs.get("diff_ids"))
-        .and_then(Value::as_array)
-        .filter(|ids| ids.len() == layers && ids.iter().all(is_digest));
-    match ids {
-        Some(ids) => Ok(ids
-            .iter()
-            .map(|id| id.as_str().unwrap_or_default().to_owned())
-            .collect()),
-        None => fail("OCI image configuration has incorrect DiffID data for its manifest layers."),
-    }
-}
-
-fn check_layers(
-    scan: &Scanned,
-    source: &dyn BlobSource,
-    entries: &[Descriptor],
-    diff_ids: &[String],
-) -> Result<(), CiError> {
-    let results = run_layers(scan, source, entries);
-    let mut bytes: u64 = 0;
-    let mut members: usize = 0;
-    for ((entry, expected), result) in entries.iter().zip(diff_ids).zip(results) {
-        let layer = result?;
-        if format!("sha256:{}", layer.diff_id) != *expected {
-            return fail(
-                "OCI layer DiffID is not the same as the digest of its uncompressed bytes.",
-            );
-        }
-        if layer.blob_sha != scan.blobs[&entry.hex].sha {
-            return fail(
-                "OCI blob bytes are not the same as the bytes identified by their descriptor.",
-            );
-        }
-        if members + layer.members > MAX_LAYER_MEMBERS {
-            return fail("OCI image has too many layer paths.");
-        }
-        if bytes + layer.size > MAX_UNCOMPRESSED {
-            return fail("OCI image layers exceed their uncompressed size limit.");
-        }
-        bytes += layer.size;
-        members += layer.members;
-    }
-    Ok(())
-}
-
-fn run_layers(
-    scan: &Scanned,
-    source: &dyn BlobSource,
-    entries: &[Descriptor],
-) -> Vec<Result<Layer, CiError>> {
-    let slots: Vec<Mutex<Option<Result<Layer, CiError>>>> =
-        entries.iter().map(|_| Mutex::new(None)).collect();
-    let next = AtomicUsize::new(0);
-    let workers = std::thread::available_parallelism()
-        .map_or(1, std::num::NonZero::get)
-        .min(4)
-        .min(entries.len());
-    std::thread::scope(|scope| {
-        for _ in 0..workers {
-            scope.spawn(|| {
-                loop {
-                    let index = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(entry) = entries.get(index) else {
-                        break;
-                    };
-                    let outcome = one_layer(scan, source, entry);
-                    if let Ok(mut slot) = slots[index].lock() {
-                        *slot = Some(outcome);
-                    }
-                }
-            });
-        }
-    });
-    slots
-        .into_iter()
-        .map(|slot| {
-            slot.into_inner()
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| fail("OCI layer was not checked."))
-        })
-        .collect()
-}
-
-fn one_layer(
-    scan: &Scanned,
-    source: &dyn BlobSource,
-    entry: &Descriptor,
-) -> Result<Layer, CiError> {
-    let blob = &scan.blobs[&entry.hex];
-    let stream = source
-        .open(blob)
-        .map_err(|_| CiError::new("Cannot read OCI archive."))?;
-    scan_layer(
-        stream,
-        entry.media_type.ends_with("+gzip"),
-        MAX_UNCOMPRESSED,
-        MAX_LAYER_MEMBERS,
-    )
 }

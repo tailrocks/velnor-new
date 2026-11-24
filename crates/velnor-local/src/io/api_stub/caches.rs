@@ -4,38 +4,66 @@
 //! The GitHub cache API: listing and deleting `actions/caches` from the cache server's index, and
 //! the check of who may call it from the job port.
 
-use hyper::Request;
+use hyper::HeaderMap;
 use hyper::header::AUTHORIZATION;
 use serde_json::json;
 use tokio::fs;
 
 use super::{ApiStub, Call};
+use crate::authority::{RUNS_PATH, dispatched};
+use crate::io::authority::read_ledger;
 use crate::io::reply::Reply;
-use crate::io::{
-    Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
-};
+use crate::io::{lock_index, now, read_index, recover_tombstones, remove_if_present, write_index};
 use crate::rest::{self, DEFAULT_PER_PAGE, MAX_PER_PAGE, Page};
+use crate::side::Side;
+use crate::standin::Run;
 use crate::token::{self, Level};
 
 impl ApiStub {
     /// GitHub lets a job list caches with `actions: read` and delete them with `actions: write`.
     /// Here the job proves it with the signed grant that is its `github.token`; any failure to
-    /// prove it is a refusal.
-    pub(super) fn job_may_administer(&self, request: &Request<Body>, level: Level) -> bool {
+    /// prove it is a refusal. The grant counts only for a run that the driver's ledger admits on
+    /// the trusted side under an event that is not a pull request, whatever event the run claims.
+    pub(super) async fn job_may_administer(
+        &self,
+        headers: &HeaderMap,
+        path: &str,
+        level: Level,
+    ) -> bool {
         if self.config.job_cache_admin {
             return true;
         }
         let Some(key) = &self.config.token_key else {
             return false;
         };
-        let bearer = request
-            .headers()
+        let bearer = headers
             .get(AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.strip_prefix("Bearer "));
-        bearer
+        let Some(grant) = bearer
             .and_then(|token| token::verify_job_grant(token, key, now()).ok())
-            .is_some_and(|grant| grant.allows(&rest::repository(request.uri().path()), level))
+            .filter(|grant| grant.allows(&rest::repository(path), level))
+        else {
+            return false;
+        };
+        match grant.runid.parse() {
+            Ok(run) => self.ledger_admits(run).await,
+            Err(_) => false,
+        }
+    }
+
+    async fn ledger_admits(&self, run: u64) -> bool {
+        let Some(folder) = &self.config.ledger else {
+            return false;
+        };
+        let (Ok(entries), Some(runs)) = (
+            read_ledger(folder).await,
+            self.standin::<Vec<Run>>(RUNS_PATH).await,
+        ) else {
+            return false;
+        };
+        dispatched(&entries, Side::Trusted, &runs, run)
+            .is_some_and(|entry| !entry.event.starts_with("pull_request"))
     }
 
     pub(super) async fn cache_list(&self, call: &Call<'_>) -> Reply {

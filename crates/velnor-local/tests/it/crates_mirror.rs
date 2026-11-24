@@ -15,7 +15,7 @@ async fn every_plain_runner_turns_the_crates_mirror_off_and_nothing_else_does() 
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let args = EnvironmentArgs {
-        dir: dir.clone(),
+        dir: dir.to_path_buf(),
         fork_runners: 1,
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
@@ -30,6 +30,11 @@ async fn every_plain_runner_turns_the_crates_mirror_off_and_nothing_else_does() 
         runners += usize::from(is_runner);
         assert_eq!(
             after(call, "-e").contains(&"VELNOR_CRATES_MIRROR=off"),
+            is_runner,
+            "{name}"
+        );
+        assert_eq!(
+            after(call, "-e").contains(&"MISE_SKILLS_FETCH=false"),
             is_runner,
             "{name}"
         );

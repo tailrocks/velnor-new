@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_local::pairs::{Decision, consumed_agents, decisions, refused_among};
-use velnor_local::scenario::Outcome;
+use velnor_local::scenario::{Metrics, Outcome};
 use velnor_local::verdict::{Check, conclude, verdict};
 
 const ADMITTED: &str = r#"{"pair":"trusted-1","side":"trusted","agent":"a1","allow":true,"reason":null,"ledger":"1-push","run_id":1,"attempt":1,"job":"ci","event":"push","ref":"refs/heads/main","sha":"abc"}"#;
@@ -17,15 +17,16 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
         event: "push".to_owned(),
         conclusion: "success",
         started: Some(112),
-        metrics: Err(String::new()),
+        metrics: Metrics::Failed(String::new()),
         caches: Vec::new(),
         trusted,
+        client_log: None,
     }
 }
 
 fn passing(id: u64, trusted: bool) -> Outcome {
     Outcome {
-        metrics: Ok(std::path::PathBuf::new()),
+        metrics: Metrics::Written(std::path::PathBuf::new()),
         ..outcome(id, trusted)
     }
 }
@@ -165,4 +166,31 @@ fn every_agent_that_took_a_job_start_decision_is_consumed_even_when_refused() {
     assert_eq!(consumed.into_iter().collect::<Vec<_>>(), ["a1", "a2", "a3"]);
     assert!(consumed_agents("").is_ok_and(|none| none.is_empty()));
     assert!(consumed_agents("{not json").is_err());
+}
+
+#[test]
+fn the_plain_verdict_names_the_ubuntu_release_of_the_runner_dockerfile() {
+    let dockerfile = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../local/docker/runner/Dockerfile"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let release = dockerfile
+        .lines()
+        .find_map(|line| line.strip_prefix("FROM ubuntu:"))
+        .and_then(|base| base.split('@').next())
+        .unwrap_or_else(|| unreachable!("no ubuntu base in the runner Dockerfile"));
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &Check::Plain,
+        velnor_local::authority::WARNING,
+    );
+    assert!(
+        text.contains(&format!(
+            "every Ubuntu label ran on the one Ubuntu {release} runner image"
+        )),
+        "{text}"
+    );
 }

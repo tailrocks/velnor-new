@@ -148,6 +148,38 @@ fn a_manifest_the_file_does_not_list_is_named_unless_the_config_excludes_it() ->
 }
 
 #[test]
+fn a_manifest_under_the_samples_folder_is_recorded_data_not_a_root() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let mut grown = files.clone();
+    for manifest in [
+        "generator/samples/app/view/Cargo.toml",
+        "generator/samples/app/view/crates/core/Cargo.toml",
+    ] {
+        grown.tracked_paths.insert(path(manifest)?);
+        grown.files.insert(path(manifest)?, b"# sample\n".to_vec());
+    }
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    grown
+        .tracked_paths
+        .insert(path("generator/samples-x/Cargo.toml")?);
+    grown.files.insert(
+        path("generator/samples-x/Cargo.toml")?,
+        b"# real\n".to_vec(),
+    );
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes())),
+        Err(MetadataFileError::Unlisted(path(
+            "generator/samples-x/Cargo.toml"
+        )?))
+    );
+    Ok(())
+}
+
+#[test]
 fn a_missing_or_unreadable_file_asks_for_generate() -> TestResult {
     let files = two_workspaces()?;
     let text = recorded(&files)?;
@@ -177,23 +209,26 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     let generated = generated_files(&files)?;
     assert_eq!(
         generated.keys().cloned().collect::<Vec<_>>(),
-        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
+        [path(".github/workflows/ci.yml")?, METADATA_PATH]
     );
     let on_disk = generated
         .iter()
         .map(|(path, text)| (path.clone(), text.clone().into_bytes()))
         .collect();
-    assert_eq!(drift(&generated, &on_disk, false), []);
+    assert_eq!(
+        drift(&generated, &on_disk, &std::collections::BTreeSet::new()),
+        []
+    );
     let mut changed = on_disk.clone();
     changed.insert(METADATA_PATH, b"{}".to_vec());
     assert_eq!(
-        drift(&generated, &changed, false),
+        drift(&generated, &changed, &std::collections::BTreeSet::new()),
         [Drift::Changed(METADATA_PATH)]
     );
     let mut missing = on_disk;
     missing.remove(&METADATA_PATH);
     assert_eq!(
-        drift(&generated, &missing, false),
+        drift(&generated, &missing, &std::collections::BTreeSet::new()),
         [Drift::Missing(METADATA_PATH)]
     );
     Ok(())

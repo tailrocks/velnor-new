@@ -248,15 +248,14 @@ fn check_job_running(command: &str) -> String {
 fn a_velnor_ci_command_is_refused_without_helper_however_it_is_written() -> TestResult {
     for command in [
         "velnor-ci check",
-        "./velnor-ci check",
-        "target/release/velnor-ci check",
         "/usr/local/bin/velnor-ci check",
+        "../velnor-ci check",
         "env velnor-ci check",
         "env FOO=1 velnor-ci check",
         "VAR=1 velnor-ci check",
         "A=1 B=2 velnor-ci check",
         "'velnor-ci' check",
-        "\"./velnor-ci\" check",
+        "\"/usr/bin/velnor-ci\" check",
         "A=\"x y\" velnor-ci check",
     ] {
         let message = refusal(&check_job_running(command))
@@ -274,8 +273,33 @@ fn a_command_that_only_mentions_velnor_ci_needs_no_helper() -> TestResult {
         "cargo run -p velnor-ci -- check",
         "velnor-cix check",
         "./velnor-ci-extra check",
+        "./velnor-ci check",
+        "target/release/velnor-ci check",
     ] {
         rendered(&check_job_running(command)).map_err(|error| format!("{command:?}: {error}"))?;
     }
+    Ok(())
+}
+
+#[test]
+fn an_oversized_reusable_workflow_is_refused_with_its_file_and_largest_jobs() -> TestResult {
+    let arguments = "x".repeat(1900);
+    let mut config = CONFIG.to_owned();
+    for index in 0..300 {
+        config.extend([
+            "\n[[workflow.job.step]]\nname = \"Check ",
+            &index.to_string(),
+            "\"\nrun = \"velnor-ci check-metadata ",
+            &arguments,
+            "\"\n",
+        ]);
+    }
+    let message = refusal(&config)?;
+    assert!(message.contains("above 500000 bytes"), "{message}");
+    assert!(
+        message.contains(&format!("{FILE} has 2 jobs; the largest are check ")),
+        "{message}"
+    );
+    assert!(message.contains(", plan "), "{message}");
     Ok(())
 }

@@ -116,6 +116,41 @@ async fn a_recorded_stand_in_run_is_served_as_the_run_jobs_and_log_velnor_ci_col
 }
 
 #[tokio::test]
+async fn the_probe_lists_its_job_with_per_page_and_reads_the_log_from_the_stub() {
+    let stub = recorded_standin(
+        &recorded_json("workflow-runs"),
+        &recorded_json("jobs"),
+        &recorded_json("timeline"),
+    );
+    let listed = stub
+        .call(
+            "GET",
+            "/repos/tailrocks/velnor-lab/actions/runs/2/jobs?per_page=100",
+        )
+        .await;
+    assert_eq!(listed.status, 200);
+    let job = listed.json()["jobs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|job| job["name"] == "ci")
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(job["id"], 2);
+    let log = stub
+        .call(
+            "GET",
+            &format!(
+                "/repos/tailrocks/velnor-lab/actions/jobs/{}/logs",
+                job["id"]
+            ),
+        )
+        .await;
+    assert_eq!(log.status, 200);
+    assert!(String::from_utf8_lossy(&log.body).contains("log 12\n"));
+}
+
+#[tokio::test]
 async fn a_run_is_reported_with_its_latest_attempt_and_a_broken_workflow_by_its_file() {
     let mut jobs = recorded_json("jobs");
     let mut second = jobs[0].clone();

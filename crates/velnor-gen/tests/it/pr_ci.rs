@@ -14,8 +14,8 @@ pub(crate) const LABEL_CONFIG: &str = "pr_ci = \"label\"\nshape = \"lint-test\"\
 const GATE: &str = "velnor-ci gate";
 const LENIENT: &str = "Fail when a Rust job failed or was cancelled";
 const NOTICE: &str = "Note that CI is not requested on a draft pull request";
-const QUICK_JOBS: [&str; 3] = ["rust-plan", "rust-lint", "policy"];
-const FULL_JOBS: [&str; 1] = ["rust-test"];
+const QUICK_JOBS: &[&str] = &["rust-plan", "rust-lint", "policy"];
+const FULL_JOBS: &[&str] = &["rust-test"];
 const RESET: &str = "ci-run-label";
 
 pub(crate) fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -30,7 +30,7 @@ pub(crate) fn render(version: &str, config: &str) -> Result<String, Box<dyn std:
 
 pub(crate) fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(&render(
-        "0.1.86",
+        "0.1.88",
         LABEL_CONFIG,
     )?)?)
 }
@@ -38,8 +38,8 @@ pub(crate) fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
 #[test]
 fn an_unset_pr_ci_renders_the_same_workflow_as_always_and_none_of_the_label_machinery() -> TestResult
 {
-    let unset = render("0.1.86", "shape = \"lint-test\"\n")?;
-    let always = render("0.1.86", "shape = \"lint-test\"\npr_ci = \"always\"\n")?;
+    let unset = render("0.1.88", "shape = \"lint-test\"\n")?;
+    let always = render("0.1.88", "shape = \"lint-test\"\npr_ci = \"always\"\n")?;
     assert_eq!(unset, always);
     for word in ["labeled", "ci:run", "ci:auto", RESET, "draft"] {
         assert!(!unset.contains(word), "{word}");
@@ -48,7 +48,7 @@ fn an_unset_pr_ci_renders_the_same_workflow_as_always_and_none_of_the_label_mach
 }
 
 #[test]
-fn the_label_mode_starts_on_exactly_the_default_types_plus_labeled_and_keeps_edited_for_a_base_retarget()
+fn the_label_mode_starts_on_exactly_the_default_types_plus_draft_conversion_and_labeled_and_keeps_edited_for_a_base_retarget()
 -> TestResult {
     let tree = label_workflow()?;
     assert_eq!(
@@ -59,6 +59,7 @@ fn the_label_mode_starts_on_exactly_the_default_types_plus_labeled_and_keeps_edi
             "reopened",
             "ready_for_review",
             "edited",
+            "converted_to_draft",
             "labeled"
         ]
     );
@@ -81,7 +82,11 @@ enum Runs {
 
 impl Runs {
     fn jobs(self) -> (Vec<&'static str>, Vec<&'static str>) {
-        let everything: Vec<&str> = QUICK_JOBS.into_iter().chain(FULL_JOBS).collect();
+        let everything: Vec<&str> = QUICK_JOBS
+            .iter()
+            .copied()
+            .chain(FULL_JOBS.iter().copied())
+            .collect();
         match self {
             Self::Nothing => (Vec::new(), everything),
             Self::Quick => (QUICK_JOBS.to_vec(), FULL_JOBS.to_vec()),
@@ -95,7 +100,7 @@ impl Runs {
             Self::Quick => Vec::new(),
             Self::Everything => vec![
                 "Resolve released helper tools",
-                "Install velnor-ci 0.1.86",
+                "Install velnor-ci 0.1.88",
                 "Install the released helper launcher",
                 GATE,
             ],
@@ -216,7 +221,7 @@ fn a_failure_in_the_quick_set_fails_required_and_the_full_run_leaves_the_verdict
 #[test]
 fn required_on_a_merge_group_or_a_push_to_main_needs_every_lane_and_allows_no_skip() -> TestResult {
     let label = label_workflow()?;
-    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
     let needs = strings(label.pointer("/jobs/required/needs"));
     let expected: Vec<String> = label
         .get("jobs")
@@ -263,7 +268,7 @@ fn required_on_a_merge_group_or_a_push_to_main_needs_every_lane_and_allows_no_sk
                 event.name
             );
         }
-        for job in QUICK_JOBS.into_iter().chain(FULL_JOBS) {
+        for job in QUICK_JOBS.iter().copied().chain(FULL_JOBS.iter().copied()) {
             assert_eq!(state(&results, job), "success", "{} {job}", event.name);
         }
         assert!(verdict.steps.iter().any(|step| step == GATE));
@@ -296,9 +301,10 @@ fn only_the_label_removal_job_can_write_pull_requests_and_it_runs_no_pull_reques
         reset.get("permissions"),
         Some(&serde_json::json!({"pull-requests": "write"}))
     );
-    assert!(
-        reset.get("needs").is_none(),
-        "the removal job starts at once"
+    assert_eq!(
+        strings(reset.get("needs")),
+        ["required"],
+        "the removal job waits for Required and nothing else"
     );
     let steps = reset
         .get("steps")
@@ -317,19 +323,19 @@ fn pr_ci_label_is_refused_with_skip_draft_an_unknown_value_or_a_helper_that_does
     let refused =
         |version: &str, config: &str| render(version, config).err().map(|e| e.to_string());
     let both = refused(
-        "0.1.86",
+        "0.1.88",
         "pr_ci = \"label\"\nskip_draft_pull_requests = true\n",
     );
     assert!(both.is_some_and(|text| text.contains("skip_draft_pull_requests")));
-    let unknown = refused("0.1.86", "pr_ci = \"sometimes\"\n");
+    let unknown = refused("0.1.88", "pr_ci = \"sometimes\"\n");
     assert!(unknown.is_some_and(|text| text.contains("pr_ci")));
-    assert!(render("0.1.86", LABEL_CONFIG).is_ok());
+    assert!(render("0.1.88", LABEL_CONFIG).is_ok());
     assert!(render("0.1.81", "shape = \"lint-test\"\n").is_ok());
 }
 
 #[test]
 fn a_one_job_workflow_lints_a_ready_pull_request_and_tests_only_on_request() -> TestResult {
-    let text = render("0.1.86", "pr_ci = \"label\"\nshape = \"one-job\"\n")?;
+    let text = render("0.1.88", "pr_ci = \"label\"\nshape = \"one-job\"\n")?;
     let tree = crate::yaml_tree::document(&text)?;
     let steps = tree
         .pointer("/jobs/rust/steps")
@@ -373,10 +379,12 @@ fn a_one_job_workflow_lints_a_ready_pull_request_and_tests_only_on_request() -> 
 
 #[test]
 fn no_released_helper_gets_label_mode_because_none_parses_the_pr_ci_key() {
-    for released in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
+    for released in [
+        "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.86", "0.1.87",
+    ] {
         let refusal = render(released, LABEL_CONFIG).err().map(|e| e.to_string());
         assert!(
-            refusal.is_some_and(|text| text.contains("pin velnor-ci 0.1.86 or later")),
+            refusal.is_some_and(|text| text.contains("pin velnor-ci 0.1.88 or later")),
             "velnor-ci {released} must be refused"
         );
         assert!(

@@ -25,7 +25,13 @@ fn a_group_renders_as_a_test_job_with_its_own_limits_and_steps() -> TestResult {
         ["rust-test", "rust-test-database", "rust-test-default"]
     );
     let group = job(&workflow, "rust-test-database")?;
-    assert_eq!(group["runs-on"], "ubuntu-24.04");
+    let runs_on = group["runs-on"].as_str().unwrap_or_default();
+    assert!(
+        runs_on.contains("head.repo.full_name == github.repository")
+            && runs_on.contains("'velnor-box'")
+            && runs_on.contains("'ubuntu-latest'"),
+        "{runs_on}"
+    );
     assert_eq!(group["timeout-minutes"], 45);
     assert!(needs(group).contains(&"rust-plan") && needs(group).contains(&"rust-test"));
     let run = run_of(group, "Test")?;
@@ -144,7 +150,7 @@ fn every_test_job_reports_its_tests_and_the_cache_check_waits_for_it() -> TestRe
 
 #[test]
 fn the_required_gate_covers_every_group_job() -> TestResult {
-    let text = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.82")?)?;
+    let text = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.90")?)?;
     let tree = document(&text)?;
     let required = job(&tree, "required")?;
     assert!(
@@ -170,7 +176,7 @@ fn every_group_has_a_job_per_root_and_a_name_cannot_collide_with_a_root() -> Tes
     let text = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     let tree = document(&text)?;
     for id in [
@@ -264,7 +270,7 @@ fn the_check_runs_in_the_root_of_the_groups_it_compares() -> TestResult {
     let text = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     let tree = document(&text)?;
     let lab = step(job(&tree, "rust-test-lab")?, "velnor-ci test-groups check")?;

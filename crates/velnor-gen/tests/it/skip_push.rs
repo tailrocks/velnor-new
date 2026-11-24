@@ -5,7 +5,7 @@ use serde_json::Value;
 use velnor_gen::expected_with_notes;
 use velnor_model::RepoView;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const KNOB: &[u8] = b"[ci]\nskip_push_after_merge_group = true\n";
@@ -18,10 +18,7 @@ fn repo(
     helper: &str,
 ) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(roots, config)?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 
@@ -45,7 +42,9 @@ fn condition(job: &Value, name: &str) -> String {
 
 #[test]
 fn knob_off_or_false_leaves_the_workflow_byte_identical() -> TestResult {
-    let base = workflow(&view(&["Cargo.toml"], None)?)?;
+    let mut plain = view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.88")?;
+    let base = workflow(&plain)?;
     let off = workflow(&view(
         &["Cargo.toml"],
         Some(b"[ci]\nskip_push_after_merge_group = false\n"),
@@ -58,13 +57,17 @@ fn knob_off_or_false_leaves_the_workflow_byte_identical() -> TestResult {
 
 #[test]
 fn knob_needs_a_helper_that_knows_the_command() -> TestResult {
-    let old = repo(&["Cargo.toml"], Some(KNOB), "0.1.81")?;
-    let error = expected_with_notes(&old)
-        .err()
-        .ok_or("accepted")?
-        .to_string();
-    assert!(error.contains("pin-helper 0.1.82"), "{error}");
-    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.82")?)?;
+    for older in [
+        "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.87", "0.1.88", "0.1.101",
+    ] {
+        let old = repo(&["Cargo.toml"], Some(KNOB), older)?;
+        let error = expected_with_notes(&old)
+            .err()
+            .ok_or(format!("{older} accepted"))?
+            .to_string();
+        assert!(error.contains("pin-helper 0.1.103"), "{older}: {error}");
+    }
+    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.103")?)?;
     Ok(())
 }
 
@@ -73,7 +76,7 @@ fn unknown_ci_key_is_refused() -> TestResult {
     let bad = repo(
         &["Cargo.toml"],
         Some(b"[ci]\nskip_everything = true\n"),
-        "0.1.82",
+        "0.1.88",
     )?;
     assert!(expected_with_notes(&bad).is_err());
     Ok(())
@@ -81,7 +84,7 @@ fn unknown_ci_key_is_refused() -> TestResult {
 
 #[test]
 fn single_job_asks_the_helper_after_the_plan_and_skips_only_checks() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.82")?)?;
+    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.103")?)?;
     let all = jobs(&text)?;
     let job = &all["rust"];
     let names: Vec<&str> = job["steps"]
@@ -120,6 +123,7 @@ fn single_job_asks_the_helper_after_the_plan_and_skips_only_checks() -> TestResu
         assert!(!condition(job, kept).contains("merge_group"), "{kept}");
     }
     assert!(!text.contains("rust-plan"), "{text}");
+    assert!(!waived_on_push(&all["required"]), "{text}");
     Ok(())
 }
 
@@ -128,7 +132,7 @@ fn planned_lanes_read_the_plan_job_flag_and_cache_jobs_keep_running() -> TestRes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.82",
+        "0.1.103",
     )?)?;
     let all = jobs(&text)?;
     let plan = &all["rust-plan"];
@@ -157,7 +161,23 @@ fn planned_lanes_read_the_plan_job_flag_and_cache_jobs_keep_running() -> TestRes
     assert!(skipped >= 4, "{text}");
     let required = &all["required"];
     assert!(step(required, "velnor-ci gate").is_some(), "{required}");
+    assert!(!waived_on_push(required), "{required}");
     Ok(())
+}
+
+/// True when the job or any of its steps has a condition that mentions the
+/// queue-run skip. The gate must never carry one, or a skipped push would
+/// pass without running the gate.
+fn waived_on_push(job: &Value) -> bool {
+    let mentions = |text: Option<&str>| {
+        text.is_some_and(|text| text.contains("merge_group") || text.contains("skip_push"))
+    };
+    mentions(job["if"].as_str())
+        || job["steps"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|step| mentions(step["if"].as_str()))
 }
 
 #[test]
@@ -165,9 +185,9 @@ fn the_plan_job_holds_actions_read_only_and_nothing_gains_actions_write() -> Tes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.82",
+        "0.1.103",
     )?)?;
-    let base = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], None, "0.1.82")?)?;
+    let base = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], None, "0.1.88")?)?;
     let (all, before) = (jobs(&text)?, jobs(&base)?);
     assert_eq!(
         all["rust-plan"]["permissions"]
@@ -182,6 +202,26 @@ fn the_plan_job_holds_actions_read_only_and_nothing_gains_actions_write() -> Tes
             before[id]["permissions"]["actions"] == "write",
             "{id}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_archive_consumer_job_is_not_started_after_a_passed_queue_run() -> TestResult {
+    let config: &[u8] =
+        b"[ci]\nskip_push_after_merge_group = true\n\n[[test_groups]]\nname = 'lab'\nroot = '.'\nfilter = 'all()'\n";
+    let all = jobs(&workflow(&repo(&["Cargo.toml"], Some(config), "0.1.103")?)?)?;
+    let consumers: Vec<&str> = all
+        .as_object()
+        .ok_or("jobs")?
+        .keys()
+        .filter(|id| id.starts_with("rust-test-"))
+        .map(String::as_str)
+        .collect();
+    assert!(consumers.contains(&"rust-test-lab"), "{consumers:?}");
+    for id in consumers {
+        let when = all[id]["if"].as_str().unwrap_or_default();
+        assert!(when.contains(PLANNED_SKIP), "{id}: {when}");
     }
     Ok(())
 }

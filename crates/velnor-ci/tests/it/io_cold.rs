@@ -7,10 +7,12 @@ use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
 
 use velnor_ci::io::{break_time_ties_with, cold_on_failure, every_root_target};
+use velnor_model::RepoPath;
+use velnor_rust::default_folder;
 
 use crate::io::Repo;
 
-fn helper(repo: &Repo, args: &[&str]) -> Output {
+pub(crate) fn helper(repo: &Repo, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(args)
         .current_dir(repo.root())
@@ -18,7 +20,13 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn stale_target(repo: &Repo, relative: &str) {
+/// The default target folder of a nested root (`target/velnor-roots/<slug>`, #2004/#2081).
+pub(crate) fn nested_target(manifest: &str) -> String {
+    let manifest = RepoPath::new(manifest).unwrap_or_else(|e| unreachable!("{e}"));
+    default_folder(&manifest).as_str().to_owned()
+}
+
+pub(crate) fn stale_target(repo: &Repo, relative: &str) {
     repo.write_unstaged(
         &format!("{relative}/debug/.fingerprint/stale/lib-stale"),
         "x",
@@ -58,8 +66,9 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
     for path in [".gitignore", "build.rs", "src/lib.rs"] {
         repo.set_mtime(path, tied);
     }
+    let app_target = nested_target("app/Cargo.toml");
     stale_target(&repo, "target");
-    stale_target(&repo, "app/target");
+    stale_target(&repo, &app_target);
     let report = cold_on_failure(
         &every_root_target(repo.root()).unwrap_or_else(|e| unreachable!("{e}")),
         "restored",
@@ -72,11 +81,11 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
     );
     assert!(report.contains("building cold"), "{report}");
     assert!(!repo.root().join("target").exists());
-    assert!(!repo.root().join("app/target").exists());
+    assert!(!repo.root().join(&app_target).exists());
 }
 
 #[test]
-fn a_non_utf8_tracked_path_makes_restored_a_cold_build() {
+fn a_non_utf8_tracked_path_outside_target_allows_verified_cold_deletion() {
     let repo = Repo::new("cold-non-utf8");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let blob = Command::new("git")
@@ -101,43 +110,208 @@ fn a_non_utf8_tracked_path_makes_restored_a_cold_build() {
     stale_target(&repo, "target");
     let output = helper(&repo, &["restored"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "{stdout}");
+    assert!(output.status.success(), "{output:?}");
     assert!(stdout.contains("not valid UTF-8"), "{stdout}");
     assert!(stdout.contains("building cold"), "{stdout}");
     assert!(!repo.root().join("target").exists());
+    assert_eq!(
+        std::fs::read(repo.root().join("src/lib.rs")).unwrap_or_default(),
+        b"pub fn one() {}\n"
+    );
+    repo.git(&["ls-files", "--error-unmatch", "src/lib.rs"]);
+}
+
+fn reject_target_under_tracked_cache_link(destination: &str, spelling: &str, operation: &str) {
+    let repo = Repo::new("cold-tracked-cache-link");
+    let external = (destination == "external").then(|| Repo::new("cold-external-cache"));
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let source_time = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    repo.set_mtime("src/lib.rs", source_time);
+    let cache = external.as_ref().map_or_else(
+        || repo.root().join("cache-real"),
+        |repo| repo.root().join("cache"),
+    );
+    std::fs::create_dir_all(cache.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(cache.join("target/stale"), b"cached artifact\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(cache.join("sibling-sentinel"), b"sibling artifact\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&cache, repo.root().join("cache"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--force", "cache"]);
+    if spelling.starts_with("alias/") {
+        std::os::unix::fs::symlink("cache", repo.root().join("alias"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let index =
+        std::fs::read(repo.root().join(".git/index")).unwrap_or_else(|e| unreachable!("{e}"));
+    let source =
+        std::fs::read(repo.root().join("src/lib.rs")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = helper(&repo, &["inputs", operation, "--target-dir", spelling]);
+    assert_eq!(
+        std::fs::read(cache.join("target/stale")).unwrap_or_default(),
+        b"cached artifact\n",
+        "{destination} {spelling} {operation}"
+    );
+    assert_eq!(
+        std::fs::read(cache.join("sibling-sentinel")).unwrap_or_default(),
+        b"sibling artifact\n",
+        "{destination} {spelling} {operation}"
+    );
+    assert!(
+        !output.status.success(),
+        "{destination} {spelling} {operation}: {output:?}"
+    );
+    assert_eq!(
+        std::fs::read_link(repo.root().join("cache")).ok(),
+        Some(cache.clone())
+    );
+    assert_eq!(
+        std::fs::read_link(repo.root().join("alias")).ok(),
+        spelling
+            .starts_with("alias/")
+            .then(|| std::path::PathBuf::from("cache"))
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join(".git/index")).ok(),
+        Some(index)
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("src/lib.rs")).ok(),
+        Some(source)
+    );
+    assert_eq!(repo.mtime("src/lib.rs"), source_time);
+    assert!(!cache.join("target/.velnor/inputs.tsv").exists());
 }
 
 #[test]
-fn a_corrupt_git_index_fails_restored_instead_of_a_partial_cold_build() {
-    let repo = Repo::new("cold-corrupt-index");
-    repo.write("src/lib.rs", "pub fn one() {}\n");
-    repo.write("app/Cargo.toml", "[package]\n");
-    stale_target(&repo, "target");
-    stale_target(&repo, "app/target");
-    std::fs::write(repo.root().join(".git/index"), b"not an index")
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let output = helper(&repo, &["restored"]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stdout}{stderr}");
-    assert!(!stdout.contains("building cold"), "{stdout}");
-    assert!(stderr.contains("tracked Cargo manifests"), "{stderr}");
+fn missing_snapshot_restore_rejects_external_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("external", "cache/target", "restore");
 }
 
 #[test]
-fn restored_without_git_on_the_path_fails_instead_of_a_partial_cold_build() {
-    let repo = Repo::new("cold-no-git");
-    repo.write("src/lib.rs", "pub fn one() {}\n");
-    repo.write("rust/Cargo.toml", "[package]\n");
-    stale_target(&repo, "rust/target");
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .arg("restored")
-        .current_dir(repo.root())
-        .env("PATH", "")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+fn missing_snapshot_restore_rejects_internal_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("internal", "cache/target", "restore");
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_external_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("external", "alias/target", "restore");
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_internal_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("internal", "alias/target", "restore");
+}
+
+#[test]
+fn save_rejects_external_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("external", "cache/target", "save");
+}
+
+#[test]
+fn save_rejects_internal_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("internal", "cache/target", "save");
+}
+
+#[test]
+fn save_rejects_external_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("external", "alias/target", "save");
+}
+
+#[test]
+fn save_rejects_internal_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("internal", "alias/target", "save");
+}
+
+#[test]
+fn a_missing_snapshot_removes_the_target_and_preserves_every_other_file() {
+    for target in ["target", "cache/target"] {
+        let local = Repo::new("cold-local-cache");
+        local.write("src/lib.rs", "pub fn one() {}\n");
+        let source_time = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        local.set_mtime("src/lib.rs", source_time);
+        local.write_unstaged(&format!("{target}/stale"), "cached artifact\n");
+        local.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+        let output = helper(&local, &["inputs", "restore", "--target-dir", target]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{output:?}");
+        assert!(!local.root().join(target).exists(), "{stdout}");
+        assert!(stdout.contains("building cold"), "{stdout}");
+        assert_eq!(
+            std::fs::read(local.root().join("src/lib.rs")).unwrap_or_default(),
+            b"pub fn one() {}\n"
+        );
+        assert_eq!(local.mtime("src/lib.rs"), source_time);
+        assert_eq!(
+            std::fs::read(local.root().join("cache/sibling-sentinel")).unwrap_or_default(),
+            b"sibling artifact\n"
+        );
+        assert!(
+            !local
+                .root()
+                .join(target)
+                .join(".velnor/inputs.tsv")
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn a_mismatched_snapshot_removes_only_its_target() {
+    let repo = Repo::new("cold-mismatched");
+    repo.write(".gitignore", "/target/\n/cache/\n");
+    repo.write_all(&[("data/a.txt", "a\n"), ("data/b.txt", "b\n")]);
+    repo.link("data/a.txt", "data/link.txt");
+    let saved = helper(&repo, &["inputs", "save", "--target-dir", "cache/target"]);
+    assert!(saved.status.success(), "{saved:?}");
+    repo.write_unstaged("cache/target/stale", "cached artifact\n");
+    repo.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+    std::fs::remove_file(repo.root().join("data/link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.link("data/b.txt", "data/link.txt");
+    let output = helper(
+        &repo,
+        &["inputs", "restore", "--target-dir", "cache/target"],
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!output.status.success(), "{stdout}");
-    assert!(!stdout.contains("building cold"), "{stdout}");
-    assert!(repo.root().join("rust/target").exists());
+    assert!(output.status.success(), "{output:?}");
+    assert!(!repo.root().join("cache/target").exists());
+    assert!(
+        stdout.contains("tracked symlinks are new, changed or deleted"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("building cold"), "{stdout}");
+    assert_eq!(
+        std::fs::read_link(repo.root().join("data/link.txt")).ok(),
+        Some("b.txt".into())
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("data/b.txt")).unwrap_or_default(),
+        b"b\n"
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("cache/sibling-sentinel")).unwrap_or_default(),
+        b"sibling artifact\n"
+    );
+}
+
+#[test]
+fn a_nested_root_without_recorded_metadata_cold_cleans_its_folder_below_the_repository_target() {
+    let repo = Repo::new("cold-nested-fallback");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write(
+        "tool/Cargo.toml",
+        "[package]\nname = 'tool'\nversion = '0.1.0'\nedition = '2024'\n",
+    );
+    stale_target(&repo, "target/velnor-roots/tool");
+    stale_target(&repo, "tool/target");
+    let report = cold_on_failure(
+        &every_root_target(repo.root()).unwrap_or_else(|e| unreachable!("{e}")),
+        "restored",
+        || Err(velnor_ci::error::CiError::new("forced for the test")),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("building cold"), "{report}");
+    assert!(!repo.root().join("target/velnor-roots/tool").exists());
+    assert!(repo.root().join("tool/target/debug").exists());
 }

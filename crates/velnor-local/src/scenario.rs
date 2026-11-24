@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::process::Output;
 
 use serde::Deserialize;
+
+mod paths;
+pub use paths::{inside, link_inside, overlapping, with_path};
 
 pub const DEFAULT_BRANCH: &str = "{default}";
 
@@ -14,6 +19,8 @@ pub struct Scenario {
     pub description: String,
     #[serde(default)]
     pub fresh_cache: bool,
+    #[serde(default)]
+    pub not_modelled: String,
     pub steps: Vec<Step>,
 }
 
@@ -95,6 +102,17 @@ impl Scenario {
     #[must_use]
     pub fn keeps_cache(&self, fresh_cache: bool) -> bool {
         !fresh_cache && !self.fresh_cache
+    }
+
+    pub fn refuse_unmodelled(&self) -> Result<(), String> {
+        if self.not_modelled.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "not modelled locally: {}; the run would wait for it, so it is refused instead",
+                self.not_modelled
+            ))
+        }
     }
 
     #[must_use]
@@ -186,11 +204,33 @@ pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
     Some((format!("{package}@{version}"), next))
 }
 
+/// What the velnor-ci report of one run came to. Only `Failed` fails the run:
+/// a velnor-ci that is not installed is a warning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Metrics {
+    Written(PathBuf),
+    NotFound,
+    Failed(String),
+}
+
+/// Maps the result of running `velnor-ci bench collect` to its report.
 #[must_use]
-pub fn with_path(list: Option<&str>, path: &str) -> String {
-    match list {
-        Some(list) if !list.is_empty() => format!("{list}:{path}"),
-        _ => path.to_owned(),
+pub fn metrics_of(
+    program: &Path,
+    collected: io::Result<Output>,
+    written: bool,
+    path: PathBuf,
+) -> Metrics {
+    match collected {
+        Ok(done) if done.status.success() && written => Metrics::Written(path),
+        Ok(done) if done.status.success() => Metrics::Failed(format!(
+            "{} exited 0 but wrote no {}",
+            program.display(),
+            path.display()
+        )),
+        Ok(done) => Metrics::Failed(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Metrics::NotFound,
+        Err(error) => Metrics::Failed(format!("{}: {error}", program.display())),
     }
 }
 
@@ -201,9 +241,10 @@ pub struct Outcome {
     pub event: String,
     pub conclusion: &'static str,
     pub started: Option<u64>,
-    pub metrics: Result<PathBuf, String>,
+    pub metrics: Metrics,
     pub caches: Vec<String>,
     pub trusted: bool,
+    pub client_log: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,47 +278,27 @@ pub fn restores(journal: &str, run: u64, jobs: &[crate::standin::Job]) -> Vec<St
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success" && (self.metrics.is_ok() || !self.trusted)
+        self.conclusion == "success"
+            && (!self.trusted || !matches!(self.metrics, Metrics::Failed(_)))
     }
 
     #[must_use]
     pub fn line(&self) -> String {
-        let metrics = match &self.metrics {
-            Ok(path) => format!("metrics {}", path.display()),
-            Err(_) if !self.trusted => {
+        let metrics = match (&self.metrics, self.trusted) {
+            (Metrics::Written(path), _) => format!("metrics {}", path.display()),
+            (_, false) => {
                 "untrusted, so no metrics file: the API stub cannot see its stand-in".to_owned()
             }
-            Err(error) => format!("no metrics file: {error}"),
+            (Metrics::NotFound, true) => {
+                "warning: velnor-ci not found; skipping the report".to_owned()
+            }
+            (Metrics::Failed(error), true) => format!("no metrics file: {error}"),
         };
         format!(
             "run {} {} ({}): {}, {metrics}",
             self.id, self.workflow, self.event, self.conclusion
         )
     }
-}
-
-#[must_use]
-pub fn link_inside(link: &Path, target: &Path) -> bool {
-    let mut depth = link.components().count().saturating_sub(1);
-    for part in target.components() {
-        match part {
-            Component::Normal(_) => depth += 1,
-            Component::CurDir => {}
-            Component::ParentDir if depth > 0 => depth -= 1,
-            _ => return false,
-        }
-    }
-    true
-}
-
-#[must_use]
-pub fn overlapping(state: &Path, checkout: &Path) -> bool {
-    state.starts_with(checkout) || checkout.starts_with(state)
-}
-
-#[must_use]
-pub fn inside(root: &Path, dir: &Path) -> bool {
-    dir.starts_with(root)
 }
 
 pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, PathBuf)>, String> {

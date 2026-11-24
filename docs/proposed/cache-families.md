@@ -95,9 +95,9 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the union and suite bundles apart.
-- Units are the key schema of decision 2. `union` is written only by the
-  non-crate `State seal` job of a root (protected default-branch pushes only,
-  outside `Required`) from the bytes of that root's `State producer` job; crate
+- Units are the key schema of decision 2. `union` is written only by a
+  non-crate job of a root (protected default-branch pushes only,
+  outside `Required`) from the bytes that root's build produced; crate
   jobs restore it read-only and never mark a producer, export or save. No job
   writes a `suite` entry, because a suite bundle binds the root workspace and
   not the manifest the suite selects.
@@ -123,7 +123,7 @@ Each spec carries `ceiling_bytes` (largest stored entry; a save that would
 exceed it is refused and reported as `over_ceiling`; the state family reports `over_stored` or `over_extracted`) and `retained_entries`
 (newest entries kept per unit; older exact keys are pruned per family by the
 `Cache prune` workflow, [decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
-A test sums the reference repository (ChainArgos: four Bun roots, two OpenTofu
+A test sums the reference repository (example-org: four Bun roots, two OpenTofu
 roots, one Playwright version, one dbt project, one requirements file, one collection set, one Cargo workspace bundle, plus a 1.5 GiB allowance for the tools layer)
 and fails when it exceeds 85 % of the 10 GiB quota.
 

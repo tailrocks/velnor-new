@@ -3,7 +3,7 @@
 
 use std::io::Cursor;
 
-use velnor_ci::image_candidate::layer::scan;
+use velnor_ci::image_candidate::layer::{Budget, scan, scan_shared};
 
 use super::fixture::{gzip, member, plain_layer, tar};
 
@@ -34,6 +34,13 @@ fn a_gzip_layer_with_zero_padding_or_several_members_is_accepted() {
     let mut split = gzip(&layer[..512]);
     split.extend(gzip(&layer[512..]));
     assert_eq!(refused(&split, true), "ACCEPTED");
+}
+
+#[test]
+fn a_gzip_layer_that_starts_with_zero_padding_is_refused() {
+    let mut padded = vec![0; 8];
+    padded.extend(gzip(&plain_layer()));
+    assert_eq!(refused(&padded, true), "OCI layer is not a tar archive.");
 }
 
 #[test]
@@ -130,4 +137,24 @@ fn a_member_with_a_size_field_that_is_not_a_number_is_refused() {
         refused(&layer, false),
         "Tar archive has an incorrect member size."
     );
+}
+
+#[test]
+fn layers_draw_on_one_size_budget_and_one_path_budget() {
+    let layer = plain_layer();
+    let sized = Budget::new(layer.len() as u64 * 3 / 2, 10);
+    assert!(scan_shared(Cursor::new(gzip(&layer)), true, &sized).is_ok());
+    let second = scan_shared(Cursor::new(gzip(&layer)), true, &sized)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        second.as_deref(),
+        Some("OCI image layers exceed their uncompressed size limit.")
+    );
+    let counted = Budget::new(1 << 30, 1);
+    assert!(scan_shared(Cursor::new(layer.clone()), false, &counted).is_ok());
+    let second = scan_shared(Cursor::new(layer), false, &counted)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(second.as_deref(), Some("OCI layer has too many paths."));
 }

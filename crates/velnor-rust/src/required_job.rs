@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot,
-    RustSelection, Step, StepKind, VerdictJob, VerdictSpec, When,
+    GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, RustSelection,
+    Step, StepKind, VerdictJob, VerdictSpec, When,
 };
 
 use crate::harness::uses_nextest;
@@ -13,15 +13,15 @@ use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, job, step};
 use crate::required_size::needs_max_bytes;
 
-const VERDICT_JOB: JobId = JobId::from_static("required");
+pub(crate) const VERDICT_JOB: JobId = JobId::from_static("required");
 
 fn tests_lane(job: &Job) -> Vec<RootSlug> {
     job.steps
         .iter()
         .filter_map(|step| match &step.kind {
-            StepKind::Cargo(
-                CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
-            ) => step.reads.as_ref().map(|plan| plan.slug.clone()),
+            StepKind::Cargo(command) if command.reports_tests() => {
+                step.reads.as_ref().map(|plan| plan.slug.clone())
+            }
             _ => None,
         })
         .collect()
@@ -41,19 +41,29 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
                 )
                 .collect(),
             GateNeed::Policy => vec![JobCondition::Policy],
+            GateNeed::Lint => vec![JobCondition::Lint(gate.slug.clone())],
             _ => Vec::new(),
         })
         .collect();
+    let skip = job
+        .skip_after_merge_group
+        .as_ref()
+        .map(|_| JobCondition::MergeGroupNotPassed);
     let when = match job.when {
         When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
         When::Scheduled => Some(JobCondition::Schedule),
-        When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
-        When::DefaultBranchPush => Some(JobCondition::DefaultBranchPush),
+        When::ScheduledOrPush | When::ScheduledOrDefaultBranchPushAfterNeeds => {
+            Some(JobCondition::ScheduleOrPush)
+        }
+        When::DefaultBranchPush | When::DefaultBranchPushAfterNeeds => {
+            Some(JobCondition::DefaultBranchPush)
+        }
         When::Success
         | When::NotCancelled
         | When::NotCancelledPostMerge
         | When::Finalizer
+        | When::FinalizerAfterProducer
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
@@ -64,14 +74,17 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::BaseExpired
         | When::SavingRun
         | When::Always
+        | When::Failure
         | When::CacheDebug
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal
         | When::SaveToolsUnlessLocal
-        | When::SaveToolsOnDefaultBranch => None,
+        | When::LookupToolsOnNodeHit
+        | When::PrimeToolsFromNetwork
+        | When::SaveToolsOnDefaultBranch
+        | When::SaveVerifiedTools(_) => None,
     };
-    let advisory = (job.id == crate::plan::BUDGET_JOB).then_some(JobCondition::Advisory);
-    gate.into_iter().chain(when).chain(advisory).collect()
+    gate.into_iter().chain(when).chain(skip).collect()
 }
 
 pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {

@@ -21,7 +21,8 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
     let tracked = super::inputs::tracked_paths(directory)?;
     let tracked_paths = tracked
         .paths
-        .into_iter()
+        .iter()
+        .filter_map(|path| path.to_str())
         .map(RepoPath::new)
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(ci)?;
@@ -57,6 +58,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         files: velnor_gen::io::read_files(&tracked.top, &wanted).map_err(ci)?,
         tracked_paths,
         symlinks,
+        gitlinks: super::inputs::gitlinks(&tracked.top)?,
         rust_metadata: BTreeMap::new(),
     };
     velnor_gen::io::add_manifests(&mut view, |paths| {

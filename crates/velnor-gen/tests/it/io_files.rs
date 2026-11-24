@@ -3,8 +3,9 @@
 
 use std::fs;
 
-use velnor_gen::io::{Error as IoError, add_manifests, manifest_file, write_lock};
+use velnor_gen::io::{Error as IoError, add_manifests, lock_root, manifest_file, write_lock};
 use velnor_model::{RepoPath, RepoView};
+use velnor_rust::LOCK_PATH;
 
 use crate::io::{Scratch, TestResult, write};
 
@@ -63,6 +64,24 @@ fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic
     let result = write_lock(&file_link.repo(), "pinned\n");
     assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     assert_eq!(fs::read_to_string(&target)?, "theirs\n");
+    Ok(())
+}
+
+#[test]
+fn pin_helper_writes_the_lock_under_the_root_it_is_given_even_inside_another_repository()
+-> TestResult {
+    let outer = Scratch::new("pin-root-outer")?;
+    fs::create_dir_all(outer.repo().join(".git"))?;
+    let sample = outer.repo().join("generator/samples/sample/view");
+    fs::create_dir_all(&sample)?;
+    let root = lock_root(&sample)?;
+    assert_eq!(root, fs::canonicalize(&sample)?);
+    write_lock(&root, "version = \"0.1.95\"\n")?;
+    assert_eq!(
+        fs::read_to_string(sample.join(LOCK_PATH.as_str()))?,
+        "version = \"0.1.95\"\n"
+    );
+    assert!(!outer.repo().join(LOCK_PATH.as_str()).exists());
     Ok(())
 }
 

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath, RustMember};
+use velnor_model::{CompileInputs, InputOwner, PackageName, RepoFacts, RepoPath, RustMember};
 
 use crate::select::{claims, relative};
 
@@ -35,6 +35,10 @@ impl Owner<'_> {
     #[must_use]
     pub fn directory(&self) -> Option<&RepoPath> {
         self.directory.as_ref()
+    }
+
+    fn input(&self) -> InputOwner {
+        InputOwner::at(self.name.clone(), self.manifest.clone())
     }
 
     fn claims(&self, path: &RepoPath) -> bool {
@@ -123,6 +127,14 @@ impl<'f> Owners<'f> {
     }
 
     #[must_use]
+    pub fn is_target_source(&self, package: Option<&str>, source: &RepoPath) -> bool {
+        self.units.iter().any(|unit| {
+            package.is_none_or(|name| unit.name.is_some_and(|own| own.as_str() == name))
+                && unit.sources.contains(&source)
+        })
+    }
+
+    #[must_use]
     pub fn of(&self, package: Option<&str>, source: &RepoPath) -> Vec<Owner<'f>> {
         let named = package.map_or_else(Vec::new, |name| self.named(name, source));
         if !named.is_empty() {
@@ -143,8 +155,7 @@ impl<'f> Owners<'f> {
                 .iter()
                 .filter(|unit| relative(unit.directory.as_ref(), source).is_some())
                 .max_by_key(|unit| unit.directory.as_ref().map_or(0, |d| d.as_str().len()))
-                .map(|unit| unit.owners.clone())
-                .unwrap_or_default();
+                .map_or_default(|unit| unit.owners.clone());
         };
         match self.units.iter().find(|unit| unit.directory == package) {
             Some(unit) => unit.owners.clone(),
@@ -225,7 +236,7 @@ pub fn add_reads(
     for read in reads {
         let Some(read) = read else {
             if !tracked.iter().all(|path| owner.claims(path)) {
-                found.entry(None).or_default().insert(owner.name().clone());
+                found.entry(None).or_default().insert(owner.input());
             }
             continue;
         };
@@ -248,7 +259,7 @@ pub fn add_reads(
             found
                 .entry(Some(read.clone()))
                 .or_default()
-                .insert(owner.name().clone());
+                .insert(owner.input());
         }
     }
 }

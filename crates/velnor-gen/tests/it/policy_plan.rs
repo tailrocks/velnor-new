@@ -24,7 +24,7 @@ fn one_root_policy_workflow_plans_once_and_starts_the_policy_job_only_for_a_poli
     assert!(!policy.contains("velnor-ci plan"), "{policy}");
     assert!(
         policy.contains(
-            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust.result == ''success'' && (needs.rust.outputs.rust_deny == ''run'' || needs.rust.outputs.rust_machete == ''run'')) }}'\n"
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && (needs.rust.outputs.rust_deny == ''run'' || needs.rust.outputs.rust_machete == ''run'')) }}'\n"
         ),
         "{policy}"
     );

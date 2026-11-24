@@ -44,6 +44,9 @@ pub struct ApiStubConfig {
     /// signed by it (`actions: write`, no pull request event) may list and delete the caches of
     /// its repository. Without it no job is granted.
     pub token_key: Option<Vec<u8>>,
+    /// The authority folder that holds the driver's ledger. A grant counts only for a run the
+    /// ledger admits on the trusted side; without it no job is granted.
+    pub ledger: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -80,7 +83,9 @@ impl ApiStub {
             _ => None,
         };
         if let Some(level) = needed
-            && !self.job_may_administer(&request, level)
+            && !self
+                .job_may_administer(request.headers(), request.uri().path(), level)
+                .await
         {
             return super::json_response(
                 403,

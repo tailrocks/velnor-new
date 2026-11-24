@@ -23,7 +23,8 @@ use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub use engine::{DockerCli, Engine};
 pub(super) use engine::{program, words};
 pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
-const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off";
+const CLIENT_LOG_LINES: usize = 20;
+const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off -e MISE_SKILLS_FETCH=false";
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
 #[derive(Debug)]
@@ -53,6 +54,12 @@ impl Addresses {
 
 fn strs(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
+}
+
+pub async fn client_log_tail(log: &Path) -> io::Result<Vec<String>> {
+    let text = fs::read_to_string(log).await?;
+    let lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    Ok(lines[lines.len().saturating_sub(CLIENT_LOG_LINES)..].to_vec())
 }
 
 impl<E: Engine> Environment<E> {
@@ -150,6 +157,7 @@ impl<E: Engine> Environment<E> {
         local: &LocalCi,
     ) -> io::Result<Addresses> {
         super::pair::private_folder(&self.dir.join("keys")).await?;
+        super::pair::private_folder(&self.dir.join("authority")).await?;
         for directory in ["cache", "api"] {
             fs::create_dir_all(self.dir.join(directory)).await?;
         }
@@ -165,10 +173,12 @@ impl<E: Engine> Environment<E> {
         let der = mount("keys/token.pub.der", "/keys/token.pub.der:ro");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
+        let ledger = mount("authority", "/authority:ro");
         self.side("", args.containers(args.runners), local).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
-             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der",
+             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der \
+             --ledger /authority",
         );
         let mounts = [
             "-v",
@@ -181,6 +191,8 @@ impl<E: Engine> Environment<E> {
             &data,
             "-v",
             &control,
+            "-v",
+            &ledger,
             LOCAL_IMAGE,
         ];
         let branch = ["--default-branch", &args.default_branch];

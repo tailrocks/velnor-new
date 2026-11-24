@@ -5,26 +5,31 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
-use crate::bundle::{ExtraBin, check_targets};
+use crate::bundle::ExtraBin;
 use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
-use crate::error_family::FamilyError;
-use crate::family::{FamilyPlan, plan_binaries_and_family};
+use crate::family::{FamilyPlan, check_trigger, plan_binaries_and_family};
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
     toolchain_path,
 };
 use crate::lock_version::check_versions;
-use crate::members::{
-    check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
-};
+use crate::members::{check_inventory, check_registries, inherited_packages, settle_publishing};
 use crate::mise;
 use crate::reality::check_reality;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
-use crate::tag::{PACKAGE_WILDCARD, TagPattern};
-use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
-use crate::velnor_config::{BinaryFormat, Checksum, Libc, VelnorConfig, parse};
+use crate::shipped::check_shipped;
+use crate::tag::TagPattern;
+use crate::timeout::publish_budget;
+use crate::velnor_config::{BinaryFormat, Checksum, Libc, parse};
+
+mod binaries;
+mod checks;
+
+pub(crate) use binaries::plan_binaries;
+pub(crate) use checks::check_unique;
+pub use checks::{check_publish_budget, check_release_plz_configs};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -37,10 +42,12 @@ pub struct ReleaseFiles {
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
+    pub tracked_paths: Option<BTreeSet<String>>,
     pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
     pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
+    pub mbx_opt_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +59,7 @@ pub struct RootPlan {
     pub inherited: Vec<String>,
     pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
+    pub version_groups: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +68,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub optional_platforms: Vec<Platform>,
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
     pub format: BinaryFormat,
@@ -85,94 +94,9 @@ pub struct ReleasePlan {
     pub release_plz_version: String,
     pub release_plz_url: String,
     pub release_plz_sha256: String,
-}
-
-pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
-    let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
-    for config in configs {
-        for package in &config.packages {
-            tags.entry(&package.tag_pattern)
-                .or_default()
-                .push(package.name.clone());
-        }
-        for pattern in config
-            .workspace_tags
-            .iter()
-            .filter(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
-        {
-            tags.entry(pattern)
-                .or_default()
-                .push(format!("[workspace] of {}", config.root));
-        }
-    }
-    if let Some((pattern, packages)) = tags.into_iter().find(|(_, names)| names.len() > 1) {
-        return Err(ReleaseError::DuplicateTagPattern {
-            pattern: pattern.as_str().to_owned(),
-            packages,
-        });
-    }
-    let mut all: Vec<(&str, &TagPattern, Option<&str>)> = Vec::new();
-    for config in configs {
-        let root = config.root.as_str();
-        all.extend(
-            config
-                .packages
-                .iter()
-                .map(|package| (root, &package.tag_pattern, Some(package.name.as_str()))),
-        );
-        all.extend(
-            config
-                .workspace_tags
-                .iter()
-                .filter(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
-                .map(|pattern| (root, pattern, None)),
-        );
-    }
-    for (index, (root, pattern, name)) in all.iter().enumerate() {
-        for (other_root, other_pattern, other_name) in &all[index + 1..] {
-            let same_root = root == other_root;
-            if let (Some(name), Some(other_name)) = (name, other_name)
-                && name == other_name
-            {
-                return Err(ReleaseError::DuplicatePackageName {
-                    package: (*name).to_owned(),
-                    roots: vec![(*root).to_owned(), (*other_root).to_owned()],
-                });
-            }
-            let both_listed = name.is_some() && other_name.is_some();
-            if (both_listed || !same_root) && other_pattern.may_collide(pattern) {
-                return Err(ReleaseError::TagsMayCollide {
-                    first: pattern.as_str().to_owned(),
-                    second: other_pattern.as_str().to_owned(),
-                });
-            }
-        }
-    }
-    check_prefixes(configs)
-}
-
-fn check_prefixes(configs: &[RootConfig]) -> Result<(), ReleaseError> {
-    let prefixes: Vec<(&str, &str)> = configs
-        .iter()
-        .map(|config| (config.pr_branch_prefix.as_str(), config.root.as_str()))
-        .collect();
-    for (index, (prefix, root)) in prefixes.iter().enumerate() {
-        if let Some((other, other_root)) = prefixes[index + 1..]
-            .iter()
-            .find(|(other, _)| other.starts_with(prefix) || prefix.starts_with(other))
-        {
-            let shorter = if prefix.len() <= other.len() {
-                prefix
-            } else {
-                other
-            };
-            return Err(ReleaseError::DuplicatePrBranchPrefix {
-                prefix: (*shorter).to_owned(),
-                roots: vec![(*root).to_owned(), (*other_root).to_owned()],
-            });
-        }
-    }
-    Ok(())
+    /// The repository declares MBX as its cargo wrapper, so every release
+    /// job that runs cargo sets up the mise tools first.
+    pub mbx: bool,
 }
 
 pub(crate) fn read_all(files: &[(String, String)]) -> Result<Vec<RootConfig>, String> {
@@ -180,10 +104,6 @@ pub(crate) fn read_all(files: &[(String, String)]) -> Result<Vec<RootConfig>, St
         .iter()
         .map(|(file, text)| read(root_of(file), text).map_err(|error| format!("{file}: {error}")))
         .collect()
-}
-
-pub fn check_release_plz_configs(files: &[(String, String)]) -> Result<(), String> {
-    check_unique(&read_all(files)?).map_err(|error| error.to_string())
 }
 
 fn config_reaches(file: &str, root: &str) -> bool {
@@ -210,55 +130,6 @@ pub(crate) fn manifest_of(root: &str) -> String {
     }
 }
 
-pub(crate) fn plan_binaries(
-    config: &VelnorConfig,
-    configs: &[RootConfig],
-    files: &ReleaseFiles,
-) -> Result<Vec<BinaryPlan>, ReleaseError> {
-    let mut binaries = Vec::new();
-    for binary in &config.binaries {
-        let (root, tag_pattern) = configs
-            .iter()
-            .find_map(|candidate| {
-                let listed = candidate
-                    .packages
-                    .iter()
-                    .find(|package| package.name == binary.package)
-                    .map(|package| package.tag_pattern.clone());
-                let inherited = || {
-                    let (_, workspace) = owner(&candidate.root, files.rust_metadata.as_ref()?)?;
-                    inherited_tag(candidate, workspace, &binary.package)
-                };
-                listed
-                    .or_else(inherited)
-                    .map(|pattern| (candidate.root.clone(), pattern))
-            })
-            .ok_or_else(|| ReleaseError::BinaryNotReleased {
-                package: binary.package.clone(),
-            })?;
-        check_targets(binary, &manifest_of(&root), files)?;
-        binaries.push(BinaryPlan {
-            package: binary.package.clone(),
-            bin: binary.bin.clone(),
-            root,
-            platforms: binary.platforms.clone(),
-            extra_bins: binary.bins.clone(),
-            include: binary.include.clone(),
-            format: binary.format,
-            libc: binary.libc,
-            attest: binary.attest,
-            smoke: binary.smoke,
-            commit_file: binary.commit_file,
-            checksum_files: binary.checksum_files,
-            member_digests: binary.member_digests,
-            profile: binary.profile.clone(),
-            asset_name: crate::asset_name::checked(binary, &tag_pattern)?,
-            tag_pattern,
-        });
-    }
-    Ok(binaries)
-}
-
 #[must_use]
 pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
     let nanos = roots.iter().fold(0u128, |total, root| {
@@ -282,6 +153,11 @@ fn plan_roots(
                 root: config.root,
                 pr_branch_prefix: config.pr_branch_prefix,
                 publishes_to_crates_io: config.publishes_to_crates_io,
+                version_groups: config
+                    .packages
+                    .iter()
+                    .filter_map(|package| Some((package.name.clone(), package.group.clone()?)))
+                    .collect(),
                 packages: config
                     .packages
                     .into_iter()
@@ -291,15 +167,6 @@ fn plan_roots(
             }
         })
         .collect()
-}
-
-pub fn check_publish_budget(roots: &[RootPlan]) -> Result<(), ReleaseError> {
-    let minutes = publish_budget_minutes(roots);
-    let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
-    if minutes > limit {
-        return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
-    }
-    Ok(())
 }
 
 impl ReleasePlan {
@@ -364,11 +231,12 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
-        if family.is_some() && !config.checks.is_empty() {
-            return Err(FamilyError::Unsupported { key: "[[checks]]" }.into());
+        if let Some(metadata) = &files.rust_metadata {
+            check_shipped(&config.binaries, &configs, metadata)?;
         }
         let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
+        check_trigger(family.as_ref(), &roots)?;
         Ok(ReleasePlan {
             roots,
             after: config.after,
@@ -379,6 +247,7 @@ impl ReleasePlan {
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,
             release_plz_sha256: release_plz.sha256,
+            mbx: !files.mbx_opt_out && mise::declares_mbx(&files.mise_tomls),
         })
     }
 }

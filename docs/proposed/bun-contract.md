@@ -2,10 +2,10 @@
 
 Status: adopted per the split brief; the owner may revisit. Hard decision:
 [decision 6](../hard-decisions.md). Origin: stack item B, PW and N of the
-ChainArgos split design (section 3 and 4.2). Every choice marked
+example-org split design (section 3 and 4.2). Every choice marked
 *(refinement)* departs from the design text and is recorded here.
 
-Bun workspaces (the ChainArgos frontend, documentation portal, event catalog
+Bun workspaces (the example-org frontend, documentation portal, event catalog
 and prototypes) get one generated job per workspace member. The adapter crate
 is `velnor-actions-bun`; it reads text and launches nothing.
 
@@ -17,14 +17,14 @@ roots = ["frontend"]                       # required, sorted, unique; "." is th
 timeout_minutes = 10                       # 1..=360; default workflow.crate_timeout_minutes
 scripts = ["typecheck", "lint", "test", "build"]   # default; intersected with each member's scripts
 
-[stacks.bun.members."@chainargos/ui"]
+[stacks.bun.members."@example-org/example-repo-18"]
 scripts = ["typecheck", "lint", "test"]    # replaces the list; every name must exist in package.json
 browsers = ["chromium"]                    # sorted, unique; chromium | firefox | webkit
 timeout_minutes = 30                       # 1..=360; this member's job only
 
 [[stacks.bun.inputs]]
 globs = ["frontend/packages/*/src/**"]
-members = ["chainargos-docs"]
+members = ["example-org-docs"]
 complete = true
 ```
 
@@ -37,7 +37,7 @@ admitted.
 A member job's timeout resolves most specific first: the member's
 `timeout_minutes`, then `[stacks.bun] timeout_minutes`, then
 `workflow.crate_timeout_minutes`. A member value outside `1..=360` fails with
-`bad_timeout:<n>:expected_1..=360`, never clamped (hard decision 2); see
+`bad_timeout:<n>:expected_1..=360`, never clamped (former hard decision 2, removed in #608); see
 [job timeout limits](../implemented/job-timeout-limits.md).
 
 *(refinement)* `roots` is required rather than detected. The design detects
@@ -221,7 +221,7 @@ before its separate registry phase. Maven bundles are not Bun inputs. The
 repositories with `contents:read` and `metadata:read`); the organization variable
 `VELNOR_DEPS_APP_ID` and secret `VELNOR_DEPS_APP_PRIVATE_KEY` are set.
 
-## Affected selection (hard decision 3)
+## Affected selection (former hard decision 3, removed in #608)
 
 A member is selected by a changed path in its directory (the deepest member
 directory owns a nested path), by a file all members of the workspace share

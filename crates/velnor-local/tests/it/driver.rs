@@ -211,6 +211,7 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "probe-token",
             "scheduled-run",
             "story",
+            "velnor-new",
             "warm"
         ]
     );
@@ -346,8 +347,8 @@ fn the_copy_is_added_to_the_mise_ignored_paths_the_user_already_has() {
     assert_eq!(with_path(None, "/state/repo"), "/state/repo");
     assert_eq!(with_path(Some(""), "/state/repo"), "/state/repo");
     assert_eq!(
-        with_path(Some("/home/u/mise.toml"), "/state/repo"),
-        "/home/u/mise.toml:/state/repo"
+        with_path(Some("/srv/u/mise.toml"), "/state/repo"),
+        "/srv/u/mise.toml:/state/repo"
     );
 }
 
@@ -386,4 +387,14 @@ fn a_pull_request_from_a_fork_names_the_fork_as_its_head_repository() {
             .unwrap_or_else(|e| unreachable!("{e}"))
             .has_fork()
     );
+}
+
+#[test]
+fn the_needs_result_probe_is_refused_as_not_modelled_locally() {
+    let probe = Scenario::parse(&read("scenarios/probe-needs-result.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refusal = probe
+        .refuse_unmodelled()
+        .expect_err("the probe waits for a cancellation the stand-in does not deliver");
+    assert!(refusal.contains("not modelled locally"), "{refusal}");
 }

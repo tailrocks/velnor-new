@@ -1,0 +1,354 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use velnor_model::{
+    DependencyKind, MemberDependency, PackageName, RepoPath, RepoView, RustCiConfig, RustMember,
+    RustMetadata, RustPackage, RustRoot,
+};
+
+use crate::cargo_flags::flag_tokens;
+use crate::config::excluded;
+use crate::error::{DetectError, Reason};
+use crate::harness::custom_harnesses;
+use crate::target_dir::target_dir;
+use crate::toml_file::table;
+
+pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
+const NEXTEST_CONFIG: RepoPath = RepoPath::from_static(".config/nextest.toml");
+
+type Candidate<'a> = (&'a RepoPath, &'a RustMetadata);
+pub(crate) type Targets = BTreeMap<PackageName, BTreeSet<RepoPath>>;
+
+pub(crate) fn rust_roots(
+    view: &RepoView,
+    config: &RustCiConfig,
+) -> Result<(Vec<RustRoot>, Targets), DetectError> {
+    let candidates: Vec<Candidate<'_>> = view
+        .rust_metadata
+        .iter()
+        .filter(|(manifest, metadata)| !metadata.members.is_empty() && !excluded(config, manifest))
+        .collect();
+    if candidates.is_empty() {
+        return Err(DetectError::NoRustRoot);
+    }
+    let owner: BTreeMap<&RepoPath, &RepoPath> = candidates
+        .iter()
+        .flat_map(|(root, metadata)| metadata.members.iter().map(|m| (&m.manifest, *root)))
+        .collect();
+    let mut named: Targets = BTreeMap::new();
+    for package in candidates
+        .iter()
+        .flat_map(|(_, metadata)| &metadata.members)
+    {
+        named
+            .entry(package.name.clone())
+            .or_default()
+            .insert(package.manifest.clone());
+    }
+    let mut every = named.clone();
+    let roots = candidates
+        .iter()
+        .map(|(manifest, metadata)| {
+            let lockfile = manifest.sibling(&CARGO_LOCK);
+            if !view.tracked_paths.contains(&lockfile) {
+                return Err(DetectError::MissingLockfile {
+                    path: lockfile,
+                    manifest: (*manifest).clone(),
+                });
+            }
+            let mut targets = named.clone();
+            for (file, bytes, base) in patch_files(view, manifest) {
+                if file != *manifest {
+                    rustdocflags_list(bytes, file)?;
+                }
+                for (name, target) in patches(bytes, file, base.as_ref())? {
+                    every
+                        .entry(name.clone())
+                        .or_default()
+                        .insert(target.clone());
+                    targets.entry(name).or_default().insert(target);
+                }
+            }
+            root(manifest, metadata, &owner, &targets, view)
+        })
+        .collect::<Result<_, _>>()?;
+    Ok((roots, every))
+}
+
+fn root(
+    manifest: &RepoPath,
+    metadata: &RustMetadata,
+    owner: &BTreeMap<&RepoPath, &RepoPath>,
+    targets: &Targets,
+    view: &RepoView,
+) -> Result<RustRoot, DetectError> {
+    let depends_on: BTreeSet<RepoPath> = metadata
+        .members
+        .iter()
+        .flat_map(|package| &package.dependencies)
+        .filter_map(|dependency| owner.get(dependency.manifest.as_ref()?))
+        .filter(|root| **root != manifest)
+        .map(|root| (*root).clone())
+        .collect();
+    let member_manifests: BTreeSet<&RepoPath> = metadata
+        .members
+        .iter()
+        .map(|package| &package.manifest)
+        .collect();
+    let external_dependencies: BTreeSet<PackageName> = metadata
+        .members
+        .iter()
+        .flat_map(|package| &package.dependencies)
+        .filter(|dependency| dependency.kind != DependencyKind::Dev)
+        .filter(|dependency| match &dependency.manifest {
+            Some(manifest) => !member_manifests.contains(manifest),
+            None => true,
+        })
+        .map(|dependency| dependency.name.clone())
+        .collect();
+    let mut members: Vec<RustMember> = metadata
+        .members
+        .iter()
+        .map(|package| member(package, targets, view))
+        .collect::<Result<_, _>>()?;
+    members.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(RustRoot {
+        manifest: manifest.clone(),
+        target_dir: target_dir(view, manifest)?,
+        nextest_ci_profile: nextest_ci_profile(view, manifest),
+        members,
+        depends_on: depends_on.into_iter().collect(),
+        external_dependencies: external_dependencies.into_iter().collect(),
+    })
+}
+
+fn nextest_ci_profile(view: &RepoView, manifest: &RepoPath) -> bool {
+    view.files
+        .get(&manifest.sibling(&NEXTEST_CONFIG))
+        .and_then(|bytes| table(bytes).ok())
+        .is_some_and(|config| {
+            config
+                .get("profile")
+                .and_then(|profiles| profiles.get("ci"))
+                .is_some()
+        })
+}
+
+const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
+
+pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
+    CARGO_CONFIGS.iter().any(|name| {
+        path.as_str() == *name
+            || path
+                .as_str()
+                .strip_suffix(name)
+                .is_some_and(|rest| rest.ends_with('/'))
+    })
+}
+
+pub(crate) fn effective_configs(
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+) -> impl Iterator<Item = (&RepoPath, &Vec<u8>)> {
+    files.iter().filter(|(file, _)| {
+        is_cargo_config(file)
+            && !file
+                .as_str()
+                .strip_suffix(".toml")
+                .and_then(|name| RepoPath::new(name).ok())
+                .is_some_and(|name| files.contains_key(&name))
+    })
+}
+
+pub(crate) fn patch_files<'v>(
+    view: &'v RepoView,
+    manifest: &RepoPath,
+) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
+    let folder = manifest.parent();
+    let effective: BTreeSet<&RepoPath> = effective_configs(&view.files)
+        .map(|(file, _)| file)
+        .collect();
+    view.files
+        .iter()
+        .filter_map(|(file, bytes)| {
+            if file == manifest {
+                return Some((file, bytes.as_slice(), folder.clone()));
+            }
+            if !effective.contains(file) {
+                return None;
+            }
+            let base = file.parent().and_then(|cargo| cargo.parent());
+            let applies = match (&base, &folder) {
+                (None, _) => true,
+                (Some(_), None) => false,
+                (Some(base), Some(folder)) => {
+                    folder == base || folder.as_str().starts_with(&format!("{base}/"))
+                }
+            };
+            applies.then_some((file, bytes.as_slice(), base))
+        })
+        .collect()
+}
+
+fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
+    let table = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+    let flags = table
+        .get("build")
+        .and_then(|build| build.get("rustdocflags"));
+    let per_target = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|targets| {
+            targets
+                .values()
+                .any(|target| target.get("rustdocflags").is_some())
+        });
+    if flags.is_some_and(toml::Value::is_str) || per_target {
+        return Err(DetectError::invalid(file, Reason::RustdocflagsString));
+    }
+    if table.contains_key("include") {
+        return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+    }
+    let build = table.get("build").into_iter();
+    let targets = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|targets| targets.values());
+    let caps = build
+        .chain(targets)
+        .flat_map(|section| [section.get("rustflags"), section.get("rustdocflags")])
+        .flatten()
+        .any(|flags| {
+            let text = flags.to_string();
+            text.contains("cap-lints")
+                || text.contains("force-warn")
+                || flag_tokens(flags)
+                    .iter()
+                    .any(|token| token.starts_with('@'))
+        });
+    if caps {
+        return Err(DetectError::invalid(file, Reason::CapLints));
+    }
+    let env = table.get("env").and_then(toml::Value::as_table);
+    if let Some(name) = env.into_iter().flatten().find_map(|(name, value)| {
+        let forced = value
+            .get("force")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        let checked = CHECKED_ENV.iter().any(|prefix| name.starts_with(prefix));
+        (forced || checked).then(|| name.clone())
+    }) {
+        return Err(DetectError::invalid(file, Reason::CargoEnv(name)));
+    }
+    Ok(())
+}
+
+const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
+
+fn patches(
+    bytes: &[u8],
+    manifest: &RepoPath,
+    base: Option<&RepoPath>,
+) -> Result<Vec<(PackageName, RepoPath)>, DetectError> {
+    let invalid = |key: String| DetectError::invalid(manifest, Reason::InvalidPatch(key));
+    let table = table(bytes).map_err(|reason| DetectError::invalid(manifest, reason))?;
+    let Some(patch) = table.get("patch") else {
+        return Ok(Vec::new());
+    };
+    let sources = patch
+        .as_table()
+        .ok_or_else(|| invalid("patch".to_owned()))?;
+    let mut found = Vec::new();
+    for (source, entries) in sources {
+        let entries = entries
+            .as_table()
+            .ok_or_else(|| invalid(format!("patch.{source}")))?;
+        for (name, entry) in entries {
+            let key = format!("patch.{source}.{name}");
+            let entry = entry.as_table().ok_or_else(|| invalid(key.clone()))?;
+            let Some(folder) = entry.get("path") else {
+                continue;
+            };
+            let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
+            if rooted(folder) {
+                return Err(invalid(key));
+            }
+            let package = match entry.get("package") {
+                Some(package) => package.as_str().ok_or_else(|| invalid(key.clone()))?,
+                None => name.as_str(),
+            };
+            let name = PackageName::new(package).map_err(|_| invalid(key.clone()))?;
+            if let Some(target) = within(base, folder) {
+                found.push((name, RepoPath::new(target).map_err(|_| invalid(key))?));
+            }
+        }
+    }
+    Ok(found)
+}
+
+fn rooted(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    path.starts_with(['/', '\\'])
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
+}
+
+pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
+    let mut segments = resolve(base, relative)?;
+    segments.push("Cargo.toml");
+    Some(segments.join("/"))
+}
+
+pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
+    if rooted(relative) {
+        return None;
+    }
+    let mut segments: Vec<&str> =
+        base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
+    for segment in relative.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            other => segments.push(other),
+        }
+    }
+    Some(segments)
+}
+
+fn member(
+    package: &RustPackage,
+    targets: &Targets,
+    view: &RepoView,
+) -> Result<RustMember, DetectError> {
+    Ok(RustMember {
+        name: package.name.clone(),
+        manifest: package.manifest.clone(),
+        directory: package.manifest.parent(),
+        dependencies: package
+            .dependencies
+            .iter()
+            .flat_map(|dependency| {
+                let manifests: BTreeSet<RepoPath> = match &dependency.manifest {
+                    Some(manifest) => BTreeSet::from([manifest.clone()]),
+                    None => targets.get(&dependency.name).cloned().unwrap_or_default(),
+                };
+                manifests.into_iter().map(|manifest| MemberDependency {
+                    name: dependency.name.clone(),
+                    kind: dependency.kind,
+                    platform: dependency.platform.clone(),
+                    optional: dependency.optional,
+                    manifest,
+                })
+            })
+            .collect(),
+        targets: package.targets.clone(),
+        custom_harnesses: custom_harnesses(view, package)?,
+    })
+}
+
+pub(crate) fn is_cargo_lock(path: &RepoPath) -> bool {
+    path.as_str().rsplit('/').next() == Some(CARGO_LOCK.as_str())
+}

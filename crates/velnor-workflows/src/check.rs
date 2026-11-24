@@ -3,41 +3,27 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::github_hosted;
+use velnor_model::looks_github_hosted;
 
-use crate::call::{call, rank, refuse_step_keys};
+use crate::call::call;
 use crate::cases::cases;
+use crate::check_jobs::{
+    check_outputs, declared_access, job_shape, needed_outputs, output, require_permissions,
+};
 use crate::check_step::step;
 use crate::concurrency::{concurrency, refuse_shared_group};
 use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::{Level, Scope, check_condition, is_identifier};
+use crate::expression::{Level, Scope, check_condition};
 use crate::job_env::{JobExtras, job_env};
+use crate::job_limits;
 use crate::matrix::matrix;
-use crate::plan::{
-    Body, Concurrency, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers,
-    Workflow,
-};
+use crate::plan::{Concurrency, DEFAULT_RUNNER, Job, Step, Triggers, Workflow};
 use crate::raw::{RawJob, RawStep, RawWorkflow};
+use crate::secret_events::untrusted;
 use crate::triggers::triggers;
 
-const RESERVED_FILES: [&str; 2] = ["rust-ci", "release"];
-const PERMISSION_SCOPES: [&str; 13] = [
-    "actions",
-    "artifact-metadata",
-    "attestations",
-    "checks",
-    "contents",
-    "deployments",
-    "id-token",
-    "issues",
-    "packages",
-    "pages",
-    "pull-requests",
-    "security-events",
-    "statuses",
-];
-const MAX_TIMEOUT_MINUTES: u16 = 360;
+const RESERVED_FILES: &[&str] = &["ci", "release"];
 
 pub(crate) struct Context<'a> {
     pub(crate) file: &'a str,
@@ -46,10 +32,12 @@ pub(crate) struct Context<'a> {
     pub(crate) workflows: &'a [Workflow],
     pub(crate) triggers: &'a Triggers,
     pub(crate) concurrency: Option<&'a Concurrency>,
+    pub(crate) runner: &'a str,
+    pub(crate) hosted: bool,
 }
 
 pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
-    let file = raw.file;
+    let file = raw.file.clone();
     let valid_file = !file.is_empty()
         && file
             .bytes()
@@ -70,12 +58,19 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
     }
     let runner = runner_label_of(&file, raw.runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
     let fork_runner = runner_label_of(&file, raw.fork_runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
-    if !github_hosted(&fork_runner) {
+    if !looks_github_hosted(&fork_runner) {
         return refuse(format!(
             "the fork_runner {fork_runner} of {file} must be a GitHub-hosted runner, because it runs code of pull requests from forks"
         ));
     }
+    let hosted = crate::hosting::resolve(
+        &format!("the workflow {file}"),
+        &runner,
+        raw.hosted.or(raw.runner.is_none().then_some(true)),
+    )?;
+    let trusted = crate::trusted::pool(&file, &runner, &fork_runner, hosted, &raw)?;
     let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
+    crate::trusted::not_reusable(&file, trusted.as_ref(), &triggers)?;
     let input_names: Vec<&str> = triggers
         .workflow_call
         .iter()
@@ -94,6 +89,8 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         workflows: earlier,
         triggers: &triggers,
         concurrency: workflow_concurrency.as_ref(),
+        runner: &runner,
+        hosted,
     };
     let mut jobs: Vec<Job> = Vec::new();
     let mut raw_jobs = cases(
@@ -113,6 +110,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
             "the workflow {file} needs at least one [[workflow.job]]"
         ));
     }
+    job_limits::containers_on_linux(&runner, &fork_runner, &jobs)?;
     if let Some(call) = &triggers.workflow_call {
         check_outputs(&file, &call.outputs, &jobs)?;
     }
@@ -122,7 +120,9 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
             .map(|text| crate::expression::bare(&text).to_owned()),
         name: raw.name,
         runner,
+        hosted,
         fork_runner,
+        trusted,
         concurrency: workflow_concurrency,
         triggers,
         jobs,
@@ -143,72 +143,19 @@ pub(crate) fn runner_label_of(file: &str, label: &str) -> Result<String, Workflo
     Ok(label.to_owned())
 }
 
-fn check_outputs(file: &str, outputs: &[Output], jobs: &[Job]) -> Result<(), WorkflowsError> {
-    for (index, output) in outputs.iter().enumerate() {
-        let declared = jobs
-            .iter()
-            .find(|job| job.id == output.from_job)
-            .is_some_and(|job| job.output_names().any(|name| name == output.from_output));
-        if !declared || outputs[..index].iter().any(|seen| seen.name == output.name) {
-            return refuse(format!(
-                "the workflow output {} of {file} must be a unique name with value <job>.<output> of a declared job output",
-                output.name
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
-    let id = &raw.id;
-    if !is_identifier(id, true) || earlier.iter().any(|seen| seen.id == *id) {
-        return refuse(format!("the job id {id:?} is not a unique identifier"));
-    }
-    for need in &raw.needs {
-        if !earlier.iter().any(|seen| &seen.id == need) {
-            return refuse(format!(
-                "job {id} needs {need}, which is not declared before it"
-            ));
-        }
-    }
-    if raw.uses.is_some() {
-        refuse_step_keys(raw)?;
-    } else if raw.step.is_empty() {
-        return refuse(format!("job {id} needs at least one [[workflow.job.step]]"));
-    }
-    let timeout_minutes = raw.timeout_minutes.unwrap_or(DEFAULT_TIMEOUT_MINUTES);
-    if timeout_minutes == 0 || timeout_minutes > MAX_TIMEOUT_MINUTES {
-        return refuse(format!(
-            "job {id} timeout_minutes must be 1 to {MAX_TIMEOUT_MINUTES}"
-        ));
-    }
-    Ok(timeout_minutes)
-}
-
-fn needed_outputs<'a>(needs: &[String], earlier: &'a [Job]) -> Vec<(&'a str, &'a str)> {
-    earlier
-        .iter()
-        .filter(|seen| needs.contains(&seen.id))
-        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
-        .collect()
-}
-
-fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
+fn job(mut raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
+    let matrix = raw
+        .matrix
+        .take()
+        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
+        .transpose()?;
+    let chosen = crate::hosting::of_job(ctx, &id, &raw, matrix.as_ref())?;
     let job_concurrency = raw
         .concurrency
         .map(|raw| concurrency(&format!("job {id}"), raw))
-        .transpose()?;
-    let runner = raw
-        .runner
-        .as_deref()
-        .map(|label| runner_label_of(ctx.file, label))
-        .transpose()?;
-    let matrix = raw
-        .matrix
-        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
         .transpose()?;
     let needed_outputs = needed_outputs(&raw.needs, earlier);
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
@@ -221,6 +168,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
         events: ctx.triggers.events(),
+        untrusted_events: untrusted(ctx.triggers, [ctx.condition, raw.condition.as_deref()]),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let JobExtras { env, cache_mode } = job_env(
@@ -228,12 +176,15 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         (&raw.env, raw.cache_mode.as_deref()),
         [condition.as_deref(), ctx.condition],
     )?;
+    let has_container = raw.container.is_some();
     let mut job = Job {
         name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
         helper: raw.helper,
-        runner,
+        runner: chosen.runner,
+        matrix_runner: chosen.matrix_runner,
+        hosted: chosen.hosted,
         environment: raw.environment.clone(),
         timeout_minutes,
         concurrency: job_concurrency,
@@ -243,7 +194,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         outputs: Vec::new(),
         matrix,
         container: raw.container.map(|raw| container(&id, raw)).transpose()?,
-        services: services(&id, raw.service)?,
+        services: services(&id, raw.service, has_container)?,
         steps: Vec::new(),
         call: None,
         id,
@@ -271,6 +222,12 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
     if !raw.with.is_empty() {
         return refuse(format!("job {} sets with without uses", job.id));
     }
+    if job.matrix.is_some() && !raw.outputs.is_empty() {
+        return refuse(format!(
+            "job {} sets outputs on a matrix job; every matrix child would write the same output name and the last to finish would win, so outputs are not allowed there",
+            job.id
+        ));
+    }
     scope.level = Level::Step;
     fill_steps(&mut job, raw.step, raw.outputs, &mut scope)?;
     Ok(job)
@@ -289,6 +246,15 @@ fn fill_steps(
         steps.push(checked);
     }
     require_permissions(&job.id, &steps, &job.permissions)?;
+    job_limits::write_token(&job.id, &steps, &job.permissions)?;
+    let saving_job = scope
+        .events
+        .iter()
+        .any(|event| matches!(*event, "push" | "schedule"));
+    job.cache_mode = job_limits::saves_need_write(&job.id, &steps, job.cache_mode, saving_job)?;
+    if scope.events != ["workflow_dispatch"] {
+        job_limits::secret_without_write(&job.id, &steps, &job.permissions)?;
+    }
     job.outputs = outputs
         .into_iter()
         .map(|(name, value)| Ok((name.clone(), output(&job.id, &name, &value, &steps)?)))
@@ -309,64 +275,4 @@ fn scope_conditions(
     }
     own.map(|condition| check_condition(condition, scope))
         .transpose()
-}
-
-fn require_permissions(
-    job: &str,
-    steps: &[Step],
-    permissions: &[(String, String)],
-) -> Result<(), WorkflowsError> {
-    for step in steps {
-        let Body::Uses(action) = &step.body else {
-            continue;
-        };
-        for (scope, access) in action.needs_permissions() {
-            let granted = permissions
-                .iter()
-                .any(|(name, level)| name == scope && rank(level) >= rank(access));
-            if !granted {
-                return refuse(format!(
-                    "job {job} uses {}, which needs the permission {scope} = {access:?}; declare it on the job",
-                    step.name
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn declared_access(
-    id: &str,
-    permissions: &BTreeMap<String, String>,
-    environment: Option<&str>,
-) -> Result<(), WorkflowsError> {
-    for (scope, access) in permissions {
-        let level = matches!(access.as_str(), "read" | "write" | "none")
-            && !(scope == "id-token" && access == "read");
-        if !PERMISSION_SCOPES.contains(&scope.as_str()) || !level {
-            return refuse(format!(
-                "job {id} permission {scope} = {access:?} is not a known scope with read, write or none (id-token has no read)"
-            ));
-        }
-    }
-    if environment.is_some_and(|name| name.trim().is_empty()) {
-        return refuse(format!("job {id} environment must not be empty"));
-    }
-    Ok(())
-}
-
-fn output(job: &str, name: &str, value: &str, steps: &[Step]) -> Result<String, WorkflowsError> {
-    let reference = value.split('.').collect::<Vec<_>>();
-    let known = match reference.as_slice() {
-        ["steps", step, "outputs", output] => {
-            is_identifier(output, true) && steps.iter().any(|seen| seen.id.as_deref() == Some(step))
-        }
-        _ => false,
-    };
-    if !is_identifier(name, true) || !known {
-        return refuse(format!(
-            "job {job} output {name} must be steps.<id of a step of the job>.outputs.<name>, got {value:?}"
-        ));
-    }
-    Ok(value.to_owned())
 }

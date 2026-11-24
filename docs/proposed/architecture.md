@@ -16,7 +16,7 @@ Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual
 Velnor Actions is a stack-generic GitHub Actions workflow generator. V1 registers
 the `rust` and `tofu` detectors; the architecture keeps stack analysis, Mise integration,
 generic workflow rendering, and orchestration in separate packages. Runner execution
-and supervision live in the nested `crates/velnor-runner-*` workspace under
+and supervision live in the `crates/velnor-runner-*` crates of the root workspace under
 `docs/proposed/macos-scaleset-runner.md`.
 
 Cargo dependency direction (`A -> B` means “A depends on B”):
@@ -192,7 +192,6 @@ ignore = [] # example override: ["rust"] disables Rust planning/generation
 configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo" # optional sticky override: "cargo" | "mbx"
 # test_runner = "cargo_test" # optional sticky override: "cargo_test" | "cargo_nextest"
-# compiled_state = "off" # default "union"; "off" emits no state producer or state seal jobs
 # seed_parallel_targets = true # opt-in missing parallel target copies; default false
 # clippy_all_features = true # opt-in: Clippy alone runs `--all-features`; default false
 # [[stacks.rust.configurations]] all_features = true # opt-in: every compiling task runs `--all-features`

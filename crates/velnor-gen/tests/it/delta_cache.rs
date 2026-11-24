@@ -48,7 +48,7 @@ fn config_for(version: &str) -> &'static str {
 }
 
 /// The oldest helper the generator accepts: it has no delta command, so the lane gets no delta steps.
-const OLDEST_HELPER: &str = "0.1.81";
+pub(crate) const OLDEST_HELPER: &str = "0.1.81";
 
 #[test]
 fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -> TestResult {
@@ -268,8 +268,23 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
 }
 
 #[test]
+fn a_helper_before_the_post_merge_cleanup_fix_gets_no_cleanup_workflow() -> TestResult {
+    // tools-v0.1.101 fails `cache trim-deltas` once its PR has merged (d56256c182).
+    let files = expected_files(&pinned("0.1.101", "")?)?;
+    assert!(
+        !files.contains_key(&velnor_render::DELTA_CLEANUP_PATH),
+        "a 0.1.101 pin rendered the cleanup workflow"
+    );
+    Ok(())
+}
+
+#[test]
 fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags() -> TestResult {
-    for (version, source) in [(OLDEST_HELPER, false), ("0.1.95", false), ("0.1.95", true)] {
+    for (version, source) in [
+        (OLDEST_HELPER, false),
+        ("0.1.102", false),
+        ("0.1.102", true),
+    ] {
         let repo = if source {
             source_repo(version)?
         } else {
@@ -294,7 +309,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             "{cleanup}"
         );
         assert!(cleanup.contains("cancel-in-progress: false"), "{cleanup}");
-        assert!(cleanup.contains("- Rust CI"), "{cleanup}");
+        assert!(cleanup.contains("- CI"), "{cleanup}");
         assert!(cleanup.contains("- completed"), "{cleanup}");
         assert!(cleanup.contains("  rust-trim:"), "{cleanup}");
         assert!(cleanup.contains("actions: write"), "{cleanup}");
@@ -303,8 +318,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             .find(|line| line.starts_with("    if: "))
             .ok_or("no cleanup condition")?;
         assert!(
-            condition
-                .contains("github.event.workflow_run.path == ''.github/workflows/rust-ci.yml''"),
+            condition.contains("github.event.workflow_run.path == ''.github/workflows/ci.yml''"),
             "{condition}"
         );
         assert!(
@@ -313,7 +327,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             ),
             "{cleanup}"
         );
-        assert!(cleanup.contains("Install velnor-ci 0.1.95"), "{cleanup}");
+        assert!(cleanup.contains("Install velnor-ci 0.1.102"), "{cleanup}");
         assert!(
             cleanup.contains("velnor-ci cache trim-deltas --run-id \"$RUN_ID\""),
             "{cleanup}"
@@ -329,55 +343,6 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             assert!(!cleanup.contains(forbidden), "{forbidden}: {cleanup}");
         }
     }
-    Ok(())
-}
-
-#[test]
-fn a_workspace_with_many_crates_stages_its_delta_through_one_package_variable() -> TestResult {
-    let repo = crate::golden::load(&crate::golden::samples().join("lab-150"))?;
-    let repo = with_helper(repo, "0.1.93", "0.1.95")?;
-    let files = expected_files(&repo)?;
-    let text = files
-        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
-        .ok_or("no rust-ci workflow")?;
-    let stage = step(text, "velnor-ci delta stage").ok_or("no delta stage")?;
-    assert!(!stage.contains("--package"), "{stage}");
-    let packages: Vec<&str> = stage
-        .lines()
-        .skip_while(|line| !line.trim_start().starts_with("VELNOR_DELTA_PACKAGES:"))
-        .skip(1)
-        .take_while(|line| line.starts_with("            "))
-        .map(str::trim)
-        .collect();
-    assert!(packages.contains(&"app"), "{stage}");
-    assert!(packages.contains(&"grow-149"), "{stage}");
-    Ok(())
-}
-
-/// Re-pins a sample's helper lock to a release the sample does not lock itself.
-fn with_helper(
-    mut repo: RepoView,
-    from: &str,
-    to: &str,
-) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
-    if !text.contains(from) {
-        return Err(format!("the sample lock does not pin {from}").into());
-    }
-    repo.files.insert(lock, text.replace(from, to).into_bytes());
-    Ok(repo)
-}
-
-#[test]
-fn a_workspace_locked_at_0_1_93_renders_no_delta_steps() -> TestResult {
-    let repo = crate::golden::load(&crate::golden::samples().join("lab-150"))?;
-    let files = expected_files(&repo)?;
-    let text = files
-        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
-        .ok_or("no rust-ci workflow")?;
-    assert!(!text.contains("velnor-ci delta"), "{text}");
-    assert!(!text.contains("the delta cache"), "{text}");
     Ok(())
 }
 
@@ -398,26 +363,5 @@ fn source_identity(lane: &str) -> Result<(), Box<dyn std::error::Error>> {
         stage.contains("${{ steps.delta_base_root.outputs.source_identity }}"),
         "{stage}"
     );
-    Ok(())
-}
-
-#[test]
-fn delta_steps_need_a_helper_that_has_the_delta_command() -> TestResult {
-    let old = workflow(&pinned(OLDEST_HELPER, "")?)?;
-    assert!(!old.contains("velnor-ci delta"), "{old}");
-    assert!(!old.contains("velnor-dlt-"), "{old}");
-    let new = workflow(&pinned("0.1.95", "")?)?;
-    assert!(new.contains("velnor-ci delta prepare"), "{new}");
-    assert!(new.contains("Restore the delta cache"), "{new}");
-    Ok(())
-}
-
-#[test]
-fn helper_0_1_94_gets_no_delta_steps_and_0_1_95_gets_them() -> TestResult {
-    let refused = workflow(&pinned("0.1.94", "")?)?;
-    assert!(!refused.contains("velnor-ci delta"), "{refused}");
-    assert!(!refused.contains("the delta cache"), "{refused}");
-    let accepted = workflow(&pinned("0.1.95", "")?)?;
-    assert!(accepted.contains("velnor-ci delta prepare"), "{accepted}");
     Ok(())
 }

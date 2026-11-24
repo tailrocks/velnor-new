@@ -4,7 +4,12 @@
 use crate::cache_mode::CacheMode;
 use crate::check::workflow;
 use crate::error::{WorkflowsError, refuse};
+use crate::matrix_runner::MatrixRunner;
 use crate::raw::RawFile;
+
+mod action;
+
+pub use action::Action;
 
 pub(crate) const DEFAULT_RUNNER: &str = "ubuntu-latest";
 pub(crate) const DEFAULT_TIMEOUT_MINUTES: u16 = 30;
@@ -19,11 +24,20 @@ pub struct Workflow {
     pub file: String,
     pub name: String,
     pub runner: String,
+    /// True only when `hosted = true` was declared for `runner`.
+    pub hosted: bool,
     pub fork_runner: String,
+    pub trusted: Option<TrustedPool>,
     pub condition: Option<String>,
     pub concurrency: Option<Concurrency>,
     pub triggers: Triggers,
     pub jobs: Vec<Job>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedPool {
+    pub label: String,
+    pub replaces: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,6 +154,11 @@ pub struct Job {
     pub condition: Option<String>,
     pub helper: bool,
     pub runner: Option<String>,
+    /// Set instead of `runner` when `runs-on` reads a matrix axis.
+    pub matrix_runner: Option<MatrixRunner>,
+    /// True only when the runner of this job is declared `hosted = true`, or, for a matrix
+    /// runner, when every label of the axis is.
+    pub hosted: bool,
     pub environment: Option<String>,
     pub timeout_minutes: u16,
     pub concurrency: Option<Concurrency>,
@@ -211,7 +230,10 @@ pub enum MatrixSource {
         from_job: String,
         from_output: String,
     },
-    Axes(Vec<(String, Vec<String>)>),
+    Axes {
+        axes: Vec<(String, Vec<String>)>,
+        include: Vec<Vec<(String, String)>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +244,7 @@ pub struct Step {
     pub body: Body,
     pub with: Vec<(String, Env)>,
     pub continue_on_error: bool,
+    pub working_directory: Option<String>,
     pub env: Vec<(String, Env)>,
 }
 
@@ -243,7 +266,7 @@ pub enum LocalAction {
 }
 
 impl LocalAction {
-    pub const PATHS: [&'static str; 3] = [
+    pub const PATHS: &[&'static str] = &[
         "./qualification/actions/post-fail",
         "./qualification/actions/docker",
         "./qualification/actions/composite",
@@ -265,78 +288,6 @@ impl LocalAction {
             Self::PostFail => Self::PATHS[0],
             Self::Docker => Self::PATHS[1],
             Self::Composite => Self::PATHS[2],
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
-    Checkout,
-    Mise,
-    UploadArtifact,
-    DownloadArtifact,
-    Cache,
-    CacheRestore,
-    CacheSave,
-    AttestBuildProvenance,
-    GithubScript,
-    MrBoxington,
-}
-
-impl Action {
-    pub const NAMES: [&'static str; 10] = [
-        "checkout",
-        "mise",
-        "upload-artifact",
-        "download-artifact",
-        "cache",
-        "cache-restore",
-        "cache-save",
-        "attest",
-        "github-script",
-        "mr-boxington",
-    ];
-
-    #[must_use]
-    pub fn parse(name: &str) -> Option<Self> {
-        Some(match name {
-            "checkout" => Self::Checkout,
-            "mise" => Self::Mise,
-            "upload-artifact" => Self::UploadArtifact,
-            "download-artifact" => Self::DownloadArtifact,
-            "cache" => Self::Cache,
-            "cache-restore" => Self::CacheRestore,
-            "cache-save" => Self::CacheSave,
-            "attest" => Self::AttestBuildProvenance,
-            "github-script" => Self::GithubScript,
-            "mr-boxington" => Self::MrBoxington,
-            _ => return None,
-        })
-    }
-
-    #[must_use]
-    pub fn locked_off(self) -> &'static [&'static str] {
-        match self {
-            Self::Checkout => &["persist-credentials"],
-            Self::Mise => &["cache", "cache_save"],
-            Self::AttestBuildProvenance => &["push-to-registry"],
-            Self::UploadArtifact
-            | Self::DownloadArtifact
-            | Self::Cache
-            | Self::CacheRestore
-            | Self::CacheSave
-            | Self::GithubScript
-            | Self::MrBoxington => &[],
-        }
-    }
-
-    /// The job permissions the action cannot run without.
-    #[must_use]
-    pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
-        match self {
-            Self::Checkout => &[("contents", "read")],
-            Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
-            _ => &[],
         }
     }
 }
@@ -366,6 +317,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::trusted::reserved_across(&workflows)?;
         crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }

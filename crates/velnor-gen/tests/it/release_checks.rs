@@ -7,7 +7,7 @@ use velnor_gen::{GenerateError, expected_files};
 use velnor_release::{CheckProblem, ReleaseError};
 use velnor_render::{Rule, RuleViolation};
 
-use crate::release_fixture::{APP, TOOLS, jobs, release_view, render, steps, uses};
+use crate::release_fixture::{APP, TOOLS, jobs, release_view, render, render_pinned, steps, uses};
 use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::Node;
 
@@ -119,8 +119,8 @@ fn checks_chain_through_needs_and_pick_their_runner() -> TestResult {
 
 #[test]
 fn a_repository_without_checks_renders_the_same_workflow() -> TestResult {
-    let (plain, tree) = render(&[APP], Some(BINARY))?;
-    let (empty, _) = render(&[APP], Some(&format!("checks = []\n{BINARY}")))?;
+    let (plain, tree) = render_pinned(&[APP], Some(BINARY), "0.1.90")?;
+    let (empty, _) = render_pinned(&[APP], Some(&format!("checks = []\n{BINARY}")), "0.1.90")?;
     assert_eq!(plain, empty);
     assert!(jobs(&tree)?.iter().all(|(id, _)| !id.starts_with("check-")));
     Ok(())
@@ -204,5 +204,87 @@ fn checks_work_for_a_second_root_binary() -> TestResult {
             .ok_or("no needs")?
             .contains(&"check-q")
     );
+    Ok(())
+}
+
+#[test]
+fn a_check_may_not_hold_id_token_write_and_id_token_has_no_read() -> TestResult {
+    for (access, expected) in [
+        ("write", CheckProblem::WritesIdToken),
+        (
+            "read",
+            CheckProblem::InvalidAccess {
+                scope: "id-token".to_owned(),
+                access: "read".to_owned(),
+            },
+        ),
+    ] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\nid-token = \"{access}\"\n"
+        );
+        assert_eq!(problem(&checks)?, Some(expected), "{access}");
+    }
+    let none = "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\nid-token = \"none\"\n";
+    assert_eq!(problem(none)?, None);
+    Ok(())
+}
+
+#[test]
+fn a_check_accepts_the_token_scopes_github_added_with_the_access_each_takes() -> TestResult {
+    for (scope, access) in [
+        ("code-quality", "read"),
+        ("copilot-requests", "write"),
+        ("vulnerability-alerts", "read"),
+        ("models", "read"),
+        ("discussions", "write"),
+    ] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"{access}\"\n"
+        );
+        assert_eq!(problem(&checks)?, None, "{scope}");
+    }
+    for (scope, access) in [
+        ("copilot-requests", "read"),
+        ("vulnerability-alerts", "write"),
+        ("models", "write"),
+    ] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"{access}\"\n"
+        );
+        assert_eq!(
+            problem(&checks)?,
+            Some(CheckProblem::InvalidAccess {
+                scope: scope.to_owned(),
+                access: access.to_owned(),
+            }),
+            "{scope}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn two_artifacts_that_publish_the_same_file_name_cannot_share_a_dist_folder() -> TestResult {
+    let binaries = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\nasset_name = \"{{ platform }}\"\n[[binaries]]\npackage = \"tools\"\nasset_name = \"{{ platform }}\"\n";
+    let check = "[[checks]]\nname = \"q\"\nrun = \"bash q.sh\"\nbefore = \"publish\"\nartifacts = [\"app-linux-x64\", \"tools-linux-x64\"]\n";
+    let error = render(&[APP, TOOLS], Some(&format!("{binaries}{check}")))
+        .err()
+        .ok_or("two artifacts with one file name rendered")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<GenerateError>(),
+            Some(GenerateError::Rules(violations))
+                if violations.iter().any(|RuleViolation { job, rule, .. }| {
+                    job == "check-q" && matches!(rule, Rule::DistFileCollision(file) if file == "linux-x64.tar.gz")
+                })
+        ),
+        "{error}"
+    );
+    render(&[APP, TOOLS], Some(binaries))?;
+    let apart = binaries.replace(
+        "package = \"tools\"\nasset_name = \"{{ platform }}\"",
+        "package = \"tools\"\nasset_name = \"t-{{ platform }}\"",
+    );
+    render(&[APP, TOOLS], Some(&format!("{apart}{check}")))?;
     Ok(())
 }

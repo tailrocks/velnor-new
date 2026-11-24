@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The glob dialect of `stacks.rust.inputs` and the directory globs of `stacks.rust.non_inputs`,
-//! as the legacy planner reads them.
-
 const ANY_DIRECTORY: &str = "*";
 const DIRECTORY_TAIL: &str = "/**";
 
@@ -113,7 +110,6 @@ fn class_hit(items: &[char], target: char) -> bool {
     false
 }
 
-/// Whether a `stacks.rust.non_inputs` glob (a directory prefix ending in `/**`) covers the path.
 pub(super) fn non_input_covers(glob: &str, path: &str) -> bool {
     let Some(prefix) = directory_prefix(glob) else {
         return false;

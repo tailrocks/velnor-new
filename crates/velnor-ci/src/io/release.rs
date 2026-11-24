@@ -8,16 +8,20 @@ use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
 use super::registry::CratesIo;
-use crate::cli::{CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs};
+use crate::cli::{
+    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, VerifyListedArgs,
+};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
     CargoPathEntry, PlainName, check_branch_prefixes, check_cargo_discovery, check_config,
-    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
+    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded_in_groups, tag_lines,
+    version_groups,
 };
 use crate::release_commit::tagged_commits;
-use crate::release_family::{family_tag, lines, tag_of, version_of};
+use crate::release_family::{family_tag, lines, require_pushed, tag_of, version_of};
+use crate::release_listed::{Listing, listing};
 use crate::release_preflight::check_release_source;
 use crate::release_published::check_published_tagged;
 use crate::release_recover::recover;
@@ -48,6 +52,9 @@ pub(super) fn run_family_tag(args: &FamilyTagArgs) -> Result<String, CiError> {
         })
         .collect::<Result<Vec<_>, CiError>>()?;
     let tag = tag_of(&args.tag_pattern, &version_of(&metadata, &args.packages)?)?;
+    if let Some(pushed) = &args.pushed_tag {
+        require_pushed(&tag, pushed)?;
+    }
     let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
     let outcome = family_tag(
         &github,
@@ -70,7 +77,7 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let mut tags = recorded(&outputs)?;
+    let mut tags = recorded_in_groups(&outputs, &read_version_groups(&args.version_groups)?)?;
     let mut lines = String::new();
     if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
@@ -94,6 +101,22 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     }
     super::append_outputs(&lines)?;
     Ok(lines)
+}
+
+fn read_version_groups(
+    configs: &[std::path::PathBuf],
+) -> Result<BTreeMap<String, String>, CiError> {
+    let top = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let files = configs
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map(|text| (root_of(&top, path), text))
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    version_groups(&files)
 }
 
 fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>, CiError> {
@@ -233,7 +256,7 @@ fn root_of(top: &Path, file: &Path) -> String {
         .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())
 }
 
-const CONFIG_ENTRIES: [(&str, bool); 3] = [
+const CONFIG_ENTRIES: &[(&str, bool)] = &[
     (".cargo", false),
     (".cargo/config", true),
     (".cargo/config.toml", true),
@@ -254,7 +277,7 @@ fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
         if !directory.as_os_str().is_empty() {
             entries.extend(entry(directory, &here, false)?);
         }
-        for (name, with_text) in CONFIG_ENTRIES {
+        for &(name, with_text) in CONFIG_ENTRIES {
             entries.extend(entry(&directory.join(name), &here.join(name), with_text)?);
         }
     }
@@ -291,6 +314,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
     for name in args
         .files
         .iter()
+        .chain(&args.optional_assets)
         .map(PlainName::as_str)
         .chain(read.iter().copied())
     {
@@ -312,6 +336,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         tag: args.tag.clone(),
         app: args.app.clone(),
         names: args.files.clone(),
+        optional: args.optional_assets.clone(),
         files,
         assetless: args.no_files,
     };
@@ -320,4 +345,35 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         &repo,
         &request,
     )
+}
+
+pub(super) fn run_verify_listed(args: &VerifyListedArgs) -> Result<String, CiError> {
+    let sums = fs::read(args.dir.join(SUMS))
+        .map_err(|error| CiError::new(format!("cannot read {SUMS}: {error}")))?;
+    let name = args.file.as_str();
+    let present = args
+        .dir
+        .join(name)
+        .try_exists()
+        .map_err(|error| CiError::new(format!("cannot read {name}: {error}")))?;
+    if listing(&sums, name, present)? == Listing::Unlisted {
+        return Ok(format!(
+            "skipped optional {name}: {SUMS} does not list it\n"
+        ));
+    }
+    let (program, rest) = args
+        .command
+        .split_first()
+        .ok_or_else(|| CiError::new("name a command to run"))?;
+    let status = std::process::Command::new(program)
+        .args(rest)
+        .status()
+        .map_err(|error| CiError::new(format!("cannot run {program}: {error}")))?;
+    if status.success() {
+        Ok(format!("verified optional {name}\n"))
+    } else {
+        Err(CiError::new(format!(
+            "{program} failed for {name}: {status}"
+        )))
+    }
 }

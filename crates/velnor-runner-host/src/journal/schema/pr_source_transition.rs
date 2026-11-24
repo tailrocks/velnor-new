@@ -13,7 +13,7 @@ const EVENT_INSERT_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS pr_source_transit
 const EVENT_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS pr_source_transition_events_no_update BEFORE UPDATE ON pr_source_transition_events BEGIN SELECT RAISE(ABORT, 'source transition event is immutable'); END";
 const EVENT_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS pr_source_transition_events_no_delete BEFORE DELETE ON pr_source_transition_events BEGIN SELECT RAISE(ABORT, 'source transition event is retained'); END";
 
-const OBJECTS: [(&str, &str, &str); 5] = [
+const OBJECTS: &[(&str, &str, &str)] = &[
     ("table", "pr_source_transitions", PLAN_TABLE),
     ("table", "pr_source_transition_events", EVENT_TABLE),
     ("trigger", "pr_source_transitions_no_update", PLAN_NO_UPDATE),
@@ -24,19 +24,19 @@ const OBJECTS: [(&str, &str, &str); 5] = [
         EVENT_INSERT_GUARD,
     ),
 ];
-const EVENT_IMMUTABILITY: [(&str, &str); 2] = [
+const EVENT_IMMUTABILITY: &[(&str, &str)] = &[
     ("pr_source_transition_events_no_update", EVENT_NO_UPDATE),
     ("pr_source_transition_events_no_delete", EVENT_NO_DELETE),
 ];
 
 pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), HostError> {
-    for (_, _, ddl) in OBJECTS {
+    for &(_, _, ddl) in OBJECTS {
         connection
             .execute(ddl, ())
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    for (_, ddl) in EVENT_IMMUTABILITY {
+    for &(_, ddl) in EVENT_IMMUTABILITY {
         connection
             .execute(ddl, ())
             .await
@@ -46,10 +46,10 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
 }
 
 pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostError> {
-    for (kind, name, expected) in OBJECTS {
+    for &(kind, name, expected) in OBJECTS {
         validate_object(connection, kind, name, expected).await?;
     }
-    for (name, expected) in EVENT_IMMUTABILITY {
+    for &(name, expected) in EVENT_IMMUTABILITY {
         validate_object(connection, "trigger", name, expected).await?;
     }
     validate_sequences(connection).await

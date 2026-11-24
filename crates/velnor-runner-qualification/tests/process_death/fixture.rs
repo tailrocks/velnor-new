@@ -18,6 +18,8 @@ struct State {
     journal_path: Option<PathBuf>,
     delete_snapshot: Option<Value>,
     swap_volume_after_get: Option<Value>,
+    foreign_label_on_create: bool,
+    rename_after_inspect: bool,
 }
 
 fn reply(mut stream: &UnixStream, status: &str, value: Value) {
@@ -101,9 +103,13 @@ fn serve(mut stream: UnixStream, state: Arc<Mutex<State>>) {
         let body: Value =
             serde_json::from_slice(&bytes[header_end + 4..header_end + 4 + length]).unwrap();
         let mut locked = state.lock().unwrap();
+        let mut labels = body["Labels"].clone();
+        if locked.foreign_label_on_create {
+            labels["io.velnor.runner-image-qualifier.run"] = json!("wrong");
+        }
         locked.resources.insert(
             name.clone(),
-            json!({"Id":ID,"Name":format!("/{name}"),"Config":{"Labels":body["Labels"]}}),
+            json!({"Id":ID,"Name":format!("/{name}"),"Config":{"Labels":labels}}),
         );
         locked.accepted = Some(name);
         let block = locked.block_create;
@@ -174,6 +180,13 @@ fn serve(mut stream: UnixStream, state: Arc<Mutex<State>>) {
                 drop(locked);
                 std::thread::sleep(Duration::from_secs(30));
                 return;
+            }
+            if locked.rename_after_inspect && key.as_deref() == Some(name) {
+                locked.rename_after_inspect = false;
+                let value = locked.resources[name].clone();
+                let moved = locked.resources.remove(name).unwrap();
+                locked.resources.insert(format!("moved-{name}"), moved);
+                return reply(&stream, "200 OK", value);
             }
             return match key {
                 Some(key) => reply(&stream, "200 OK", locked.resources[&key].clone()),

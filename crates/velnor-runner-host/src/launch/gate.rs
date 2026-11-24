@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-
 use zeroize::Zeroizing;
 
 use crate::config::{HostConfig, RepositoryConnection};
 use crate::error::HostError;
-use crate::host_controller::{AbsenceProofs, connection_pat, read_absence_proofs};
+use crate::host_controller::connection_pat;
 use crate::journal::Journal;
 use crate::reconcile::{IntentRow, Reconcile, before_advertise, occupies};
 use crate::scale_set::{EnsureError, observe_scale_set_runners};
 use bollard::Docker;
 
-use super::inspect::container_running;
+use super::inspect::{ContainerObservation, observe_container};
 
 #[must_use]
 pub(crate) fn gate_line(decision: &Reconcile) -> String {
@@ -60,16 +58,10 @@ pub(crate) async fn evaluate_gate(
     journal: &Journal,
     docker: &Docker,
     config: &HostConfig,
-    state: &Path,
 ) -> Result<GateReport, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     let config = config.clone();
-    let state: PathBuf = state.to_path_buf();
-    evaluate_rows(rows, docker, move |rows| {
-        let proofs = read_absence_proofs(&state, &config);
-        observe_github(rows, &config, &proofs)
-    })
-    .await
+    evaluate_rows(rows, docker, move |rows| observe_github(rows, &config)).await
 }
 
 /// Runs the blocking GitHub half (HTTPS and the keychain read) off the async runtime, so a slow
@@ -82,14 +74,14 @@ async fn evaluate_rows<F>(
 where
     F: FnOnce(&[IntentRow]) -> GithubObservation + Send + 'static,
 {
-    let observed_docker = running_ids(&rows, docker).await?;
+    let (observed_docker, absent_docker) = running_ids(&rows, docker).await?;
     let for_github = rows.clone();
     let github = tokio::task::spawn_blocking(move || github(&for_github))
         .await
         .unwrap_or_else(|_| {
             GithubObservation::failed("GitHub observation aborted", &all_sets(&rows))
         });
-    let hold_lines = hold::hold_lines(&rows, &observed_docker, &github);
+    let hold_lines = hold::hold_lines(&rows, &observed_docker, &absent_docker, &github);
     let decision = decide(&rows, &observed_docker, github.runners);
     Ok(GateReport {
         decision,
@@ -136,19 +128,6 @@ fn scale_sets_to_observe(rows: &[IntentRow]) -> Result<BTreeSet<i64>, EnsureErro
     Ok(sets)
 }
 
-/// A removed connection has no binding left to list its scale set. Its rows release only when its
-/// removal flow recorded that every runner it left in the set was deregistered and confirmed
-/// absent on GitHub; a removed connection without that record stays unobservable and held.
-fn prove_removed(rows: &[IntentRow], pending: &mut BTreeSet<i64>, proofs: &AbsenceProofs) {
-    pending.retain(|set| {
-        !rows
-            .iter()
-            .filter(|row| !row.cleanup_proven && row.scale_set_id == Some(*set))
-            .filter_map(|row| row.github_runner_id.as_deref().filter(|id| !id.is_empty()))
-            .all(|runner| proofs.proves(*set, runner))
-    });
-}
-
 type ListRunners = fn(&str, &RepositoryConnection, i64) -> Result<Option<Vec<String>>, EnsureError>;
 
 /// Where the gate's GitHub half gets credentials and listings. Tests swap in stubs.
@@ -162,18 +141,13 @@ const LIVE: GithubSources = GithubSources {
     list: observe_scale_set_runners,
 };
 
-fn observe_github(
-    rows: &[IntentRow],
-    config: &HostConfig,
-    proofs: &AbsenceProofs,
-) -> GithubObservation {
-    observe_with(rows, config, proofs, &LIVE)
+fn observe_github(rows: &[IntentRow], config: &HostConfig) -> GithubObservation {
+    observe_with(rows, config, &LIVE)
 }
 
 fn observe_with(
     rows: &[IntentRow],
     config: &HostConfig,
-    proofs: &AbsenceProofs,
     sources: &GithubSources,
 ) -> GithubObservation {
     let mut pending = match scale_sets_to_observe(rows) {
@@ -185,7 +159,6 @@ fn observe_with(
             };
         }
     };
-    prove_removed(rows, &mut pending, proofs);
     let mut observed = Vec::new();
     let mut credential_gap = None;
     for binding in config.connections() {
@@ -238,17 +211,23 @@ fn owned_ids(rows: &[IntentRow]) -> Vec<&str> {
         .collect()
 }
 
-async fn running_ids(rows: &[IntentRow], docker: &Docker) -> Result<Vec<String>, EnsureError> {
+async fn running_ids(
+    rows: &[IntentRow],
+    docker: &Docker,
+) -> Result<(Vec<String>, Vec<String>), EnsureError> {
     let mut running = Vec::new();
+    let mut absent = Vec::new();
     for row in rows {
         let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
             continue;
         };
-        if container_running(docker, id).await? {
-            running.push(id.to_owned());
+        match observe_container(docker, id).await? {
+            ContainerObservation::Live => running.push(id.to_owned()),
+            ContainerObservation::Absent => absent.push(id.to_owned()),
+            ContainerObservation::Stopped => {}
         }
     }
-    Ok(running)
+    Ok((running, absent))
 }
 
 fn map_journal(error: HostError) -> EnsureError {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{WorkflowsError, refuse};
+use crate::functions::check_functions;
 
 /// Where an expression is written, which decides the contexts it may read.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -24,6 +25,8 @@ pub(crate) struct Scope<'a> {
     pub(crate) steps: Vec<String>,
     /// The events of the workflow, as `Triggers::events` lists them.
     pub(crate) events: Vec<&'static str>,
+    /// The events that forbid a secret, as `secret_events::untrusted` lists them.
+    pub(crate) untrusted_events: Vec<&'static str>,
 }
 
 pub(crate) fn is_identifier(text: &str, dashes: bool) -> bool {
@@ -46,8 +49,9 @@ pub(crate) fn bare(text: &str) -> &str {
         .map_or(text, str::trim)
 }
 
-fn references(expression: &str) -> Vec<String> {
+fn scan(expression: &str) -> (Vec<String>, Vec<String>) {
     let mut found = Vec::new();
+    let mut functions = Vec::new();
     let mut token = String::new();
     let mut quoted = false;
     let characters: Vec<char> = expression.chars().chain(std::iter::once(' ')).collect();
@@ -64,22 +68,27 @@ fn references(expression: &str) -> Vec<String> {
             .find(|next| !next.is_whitespace())
             .is_some_and(|next| *next == '(' && !quoted);
         let literal = matches!(token.as_str(), "true" | "false" | "null");
-        if token.starts_with(|first: char| first.is_ascii_alphabetic() || first == '_')
-            && !calls
-            && !literal
-        {
-            found.push(token.clone());
+        if token.starts_with(|first: char| first.is_ascii_alphabetic() || first == '_') {
+            if calls {
+                functions.push(token.clone());
+            } else if !literal {
+                found.push(token.clone());
+            }
         }
         token.clear();
     }
-    found
+    (found, functions)
 }
 
 fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
     let parts: Vec<&str> = reference.split('.').collect();
     let part = |index: usize| parts.get(index).copied().unwrap_or("");
     match part(0) {
-        "needs" if condition && part(1) == "*" => true,
+        "needs" if condition && part(1) == "*" => match parts.as_slice() {
+            [_, _, "result"] => true,
+            [_, _, "outputs", output] => is_identifier(output, true),
+            _ => false,
+        },
         "needs" => {
             scope.needs.iter().any(|need| need == part(1))
                 && match parts.as_slice() {
@@ -117,7 +126,7 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
     }
 }
 
-const SECRET_PLACE: &str = "a secret may be read only as the whole value of a step env entry, in a workflow that runs on workflow_dispatch alone";
+const SECRET_PLACE: &str = "a secret may be read only as the whole value of a step env entry, in a workflow that runs on workflow_dispatch, schedule and push to tags only (a push to branches too when the job if or the workflow if contains the default branch gate)";
 
 fn is_secret(reference: &str) -> bool {
     reference
@@ -144,10 +153,10 @@ fn secret_in(
             "the expression {inner} reads {reference}, which is not allowed here; {SECRET_PLACE}"
         ));
     }
-    if scope.events != ["workflow_dispatch"] {
+    if !scope.untrusted_events.is_empty() {
         return refuse(format!(
             "the expression {inner} reads {reference}, but this workflow runs on {}; {SECRET_PLACE}",
-            scope.events.join(", ")
+            scope.untrusted_events.join(", ")
         ));
     }
     let named = reference.strip_prefix("secrets.").is_some_and(secret_name);
@@ -185,7 +194,8 @@ fn check_in(value: &str, scope: &Scope<'_>, in_env: bool) -> Result<(), Workflow
             "the value {value:?} embeds an expression; a value is either plain text or exactly one expression"
         ));
     };
-    let references = references(inner);
+    let (references, functions) = scan(inner);
+    check_functions(inner, &functions, scope, false)?;
     if let Some(secret) = references.iter().find(|reference| is_secret(reference)) {
         return secret_in(inner, secret, scope, in_env);
     }
@@ -210,7 +220,9 @@ pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, 
             "the condition {value:?} must be one expression, with or without ${{{{ }}}}"
         ));
     }
-    match references(inner)
+    let (references, functions) = scan(inner);
+    check_functions(inner, &functions, scope, true)?;
+    match references
         .into_iter()
         .find(|reference| !allowed(reference, scope, true))
     {
@@ -219,9 +231,9 @@ pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, 
     }
 }
 
-pub(crate) const WITH_INTERPOLATIONS: [&str; 3] =
-    ["github.run_id", "github.run_attempt", "github.job"];
-pub(crate) const ENV_INTERPOLATIONS: [&str; 1] = ["github.workspace"];
+pub(crate) const WITH_INTERPOLATIONS: &[&str] =
+    &["github.run_id", "github.run_attempt", "github.job"];
+pub(crate) const ENV_INTERPOLATIONS: &[&str] = &["github.workspace"];
 
 pub(crate) fn check_interpolated(
     what: &str,
@@ -246,3 +258,4 @@ pub(crate) fn check_interpolated(
     }
     Ok(())
 }
+pub(crate) use crate::expression_type::result_type;

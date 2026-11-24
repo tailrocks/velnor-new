@@ -4,14 +4,15 @@
 //! Runs one world through `velnor-ci resolve-qualification` against a local fake API, or through
 //! the legacy engine against a fake `mise` that answers `gh api` from the same recorded answers.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 
 use crate::resolve_world::{Quirk, World, copy_repo, data_dir, sha256};
 use crate::support::fresh_dir;
@@ -72,7 +73,7 @@ fn sanitize(route: &str) -> String {
 /// Lay the world out under a fresh directory: the repository, `$RUNNER_TEMP` with the request,
 /// the event payload.
 struct Laid {
-    root: PathBuf,
+    root: velnor_test_support::ScratchDir,
     repo: PathBuf,
     temp: PathBuf,
     payload: PathBuf,
@@ -96,6 +97,8 @@ fn lay(world: &World, request_name: &str) -> Laid {
         fs::write(root.join("target.json"), &bytes).unwrap_or_else(|e| unreachable!("{e}"));
         std::os::unix::fs::symlink(root.join("target.json"), &request)
             .unwrap_or_else(|e| unreachable!("{e}"));
+    } else if world.quirk == Some(Quirk::RequestIsAFifo) {
+        crate::support::make_fifo(&request);
     } else {
         fs::write(&request, &bytes).unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -138,74 +141,92 @@ fn context_env(world: &World, command: &mut Command) {
 type Log = Arc<Mutex<Vec<String>>>;
 
 /// A local HTTP server answering GETs from the world's API answers; every path asked for is
-/// logged. It answers 404 for a route the world does not hold.
+/// logged. It answers 404 for a route the world does not hold. It stops listening once no caller
+/// holds the log, so its listener and thread end with the run that started them.
 fn serve(world: &World) -> (String, Log) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+    listener
+        .set_nonblocking(true)
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let address = listener
         .local_addr()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let answers = world.api.clone();
     let log: Log = Arc::default();
-    let seen = Arc::clone(&log);
+    let seen = Arc::downgrade(&log);
     std::thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let mut reader = BufReader::new(&stream);
-            let mut line = String::new();
-            if reader.read_line(&mut line).is_err() {
-                continue;
-            }
-            loop {
-                let mut header = String::new();
-                if reader.read_line(&mut header).unwrap_or(0) <= 2 {
-                    break;
+        while seen.strong_count() > 0 {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    if stream.set_nonblocking(false).is_ok() {
+                        answer(&stream, &answers, &seen);
+                    }
                 }
+                Err(_) => std::thread::sleep(Duration::from_millis(5)),
             }
-            let path = line
-                .split_whitespace()
-                .nth(1)
-                .unwrap_or("")
-                .trim_start_matches('/')
-                .to_owned();
-            seen.lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(path.clone());
-            let mut stream = &stream;
-            let reply = match answers.get(&path) {
-                Some(body) => {
-                    let head = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    stream
-                        .write_all(head.as_bytes())
-                        .and_then(|()| stream.write_all(body))
-                }
-                None => stream.write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                ),
-            };
-            drop(reply);
         }
     });
     (format!("http://{address}"), log)
 }
 
+fn answer(
+    stream: &TcpStream,
+    answers: &BTreeMap<String, Vec<u8>>,
+    seen: &Weak<Mutex<Vec<String>>>,
+) {
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    if reader.read_line(&mut line).is_err() {
+        return;
+    }
+    loop {
+        let mut header = String::new();
+        if reader.read_line(&mut header).unwrap_or(0) <= 2 {
+            break;
+        }
+    }
+    let path = line
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("")
+        .trim_start_matches('/')
+        .to_owned();
+    if let Some(log) = seen.upgrade() {
+        log.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(path.clone());
+    }
+    let mut writer = stream;
+    let reply = match answers.get(&path) {
+        Some(body) => {
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            writer
+                .write_all(head.as_bytes())
+                .and_then(|()| writer.write_all(body))
+        }
+        None => writer
+            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+    };
+    drop(reply);
+}
+
 pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
+    let template = world.template_repo();
     let (api, log) = serve(world);
-    if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
-    }
     let mut command = Command::new(bin);
     command
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            template.as_path()
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
@@ -222,16 +243,14 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         command.arg("--request").arg(&laid.request);
     }
     let output = timed(&mut command);
-    let outcome = Outcome {
+    Outcome {
         error: error_of(&output),
         requests: log
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone(),
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
 }
 
 /// The legacy engine in the same world. The legacy preparation wants an installed release; the
@@ -240,7 +259,7 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-request.json");
     if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
+        copy_repo(world, &laid.repo);
     }
     let bin_dir = laid.root.join("bin");
     let api_dir = laid.root.join("api");
@@ -272,11 +291,11 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     command
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()))
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            laid.repo.as_path()
         })
         .env("RUNNER_TEMP", &laid.temp)
         .env("VELNOR_INTERNAL_OP", "resolve-qualification-v1")
@@ -291,13 +310,25 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     }
     let output = timed(&mut command);
     let requests = fs::read_to_string(api_dir.join("requests.log"))
-        .map(|text| text.lines().map(str::to_owned).collect())
-        .unwrap_or_default();
-    let outcome = Outcome {
+        .map_or_default(|text| text.lines().map(str::to_owned).collect());
+    Outcome {
         error: error_of(&output),
         requests,
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
+}
+
+#[test]
+fn the_answer_server_stops_listening_once_nobody_holds_its_log() {
+    let (url, log) = serve(&World::new("warm"));
+    drop(log);
+    let address = url.trim_start_matches("http://");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(address).is_ok() {
+        assert!(
+            Instant::now() < deadline,
+            "{url} still accepts connections after its log was dropped"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }

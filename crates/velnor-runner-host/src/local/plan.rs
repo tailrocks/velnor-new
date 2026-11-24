@@ -15,8 +15,7 @@ use super::storage::Sizes;
 pub const MARKER: &str = "velnor-local";
 const MAX_PLAN_BYTES: u64 = 64 * 1024;
 const MAX_PAIRS_PER_SIDE: u32 = 64;
-const FORBIDDEN_STATE_FILES: [&str; 4] =
-    ["host.toml", "daemon.lock", "admission.lock", "launch.db"];
+const FORBIDDEN_STATE_FILES: &[&str] = &["host.toml", "daemon.lock", "admission.lock", "launch.db"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]

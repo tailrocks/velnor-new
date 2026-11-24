@@ -6,7 +6,7 @@ use std::error::Error;
 use velnor_gen::GenerateError;
 use velnor_release::ReleaseError;
 
-use crate::release_fixture::{APP, jobs, render, steps};
+use crate::release_fixture::{APP, jobs, render, render_pinned, steps};
 use crate::release_tagged_commit::render_with;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::Node;
@@ -84,7 +84,7 @@ fn smoke_runs_the_staged_asset_from_the_stage_folder_when_the_name_has_the_versi
     for step in &smoke {
         assert_eq!(
             step.get("working-directory").and_then(Node::text),
-            Some("stage")
+            Some("${{ runner.temp }}/stage")
         );
     }
     assert_eq!(
@@ -120,11 +120,26 @@ fn smoke_run_values_have_no_expression_and_take_the_tag_from_env() -> TestResult
 }
 
 #[test]
-fn smoke_on_an_archive_binary_is_refused() {
-    assert!(matches!(
-        refused("[[binaries]]\npackage = \"app\"\nsmoke = true\n"),
-        Some(ReleaseError::KeyNeedsFormat { key: "smoke", .. })
-    ));
+fn smoke_on_an_archive_binary_runs_the_built_binary_before_packing() -> TestResult {
+    let (_, tree) = render(
+        &[APP],
+        Some("[[binaries]]\npackage = \"app\"\nsmoke = true\n"),
+    )?;
+    let commands = runs(job(&tree, "build-app-linux-x64")?);
+    let run = commands
+        .iter()
+        .position(|run| *run == "target/x86_64-unknown-linux-musl/release/app --version")
+        .ok_or("no run")?;
+    let pack = commands
+        .iter()
+        .position(|run| run.starts_with("tar ") && run.contains(" -czf "))
+        .ok_or("no pack")?;
+    assert_eq!(
+        commands[run + 1],
+        "target/x86_64-unknown-linux-musl/release/app check-tag \"$TAG\""
+    );
+    assert!(run + 1 < pack);
+    Ok(())
 }
 
 #[test]
@@ -181,7 +196,7 @@ fn musl_needs_a_linux_platform() {
 
 #[test]
 fn commit_file_publishes_the_tag_commit_as_an_asset_listed_in_the_checksums() -> TestResult {
-    let tree = render_with("0.1.81", &[APP], COMMIT)?;
+    let tree = render_with("0.1.92", &[APP], COMMIT)?;
     let sums = job(&tree, "sums-app")?;
     let record = steps(sums)
         .iter()
@@ -231,20 +246,22 @@ fn commit_file_records_the_commit_the_tag_job_recorded() -> TestResult {
 
 #[test]
 fn without_the_keys_the_workflow_is_byte_identical() -> TestResult {
-    let (plain, _) = render(&[APP], Some(RAW))?;
-    let (explicit, _) = render(
+    let (plain, _) = render_pinned(&[APP], Some(RAW), "0.1.92")?;
+    let (explicit, _) = render_pinned(
         &[APP],
         Some(&RAW.replace(
             "format = \"raw\"\n",
             "format = \"raw\"\ntarget = \"gnu\"\nsmoke = false\ncommit_file = false\n",
         )),
+        "0.1.92",
     )?;
     assert_eq!(plain, explicit);
     let archive = "[[binaries]]\npackage = \"app\"\n";
-    let (plain, _) = render(&[APP], Some(archive))?;
-    let (explicit, _) = render(
+    let (plain, _) = render_pinned(&[APP], Some(archive), "0.1.92")?;
+    let (explicit, _) = render_pinned(
         &[APP],
         Some(&format!("{archive}smoke = false\ncommit_file = false\n")),
+        "0.1.92",
     )?;
     assert_eq!(plain, explicit);
     Ok(())

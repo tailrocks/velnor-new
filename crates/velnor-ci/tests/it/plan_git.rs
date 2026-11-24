@@ -25,10 +25,20 @@ fn git(repo: &Repo, args: &[&str]) {
 }
 
 fn merged_pull_request(name: &str, edit: impl FnOnce(&Repo)) -> Repo {
+    merged_pull_request_over(name, |_| (), edit)
+}
+
+fn merged_pull_request_over(
+    name: &str,
+    base: impl FnOnce(&Repo),
+    edit: impl FnOnce(&Repo),
+) -> Repo {
     let repo = plan_repo(name);
     repo.write("a/src/old.rs", "pub fn old() {}\n");
     repo.write("tools/src/gone.rs", "pub fn gone() {}\n");
     repo.write("Cargo.lock", &plan_lock("1.0.5"));
+    base(&repo);
+    repo.git(&["add", "--all"]);
     repo.commit();
     repo.git(&["branch", "-M", "main"]);
     repo.git(&["checkout", "--quiet", "-b", "topic"]);
@@ -228,4 +238,84 @@ fn the_outputs_a_job_reads_from_git_name_only_the_changed_packages_and_skip_poli
         text.contains("rust_deny=skip\nrust_machete=skip\n"),
         "{text}"
     );
+}
+
+#[test]
+fn a_dirty_file_in_a_submodule_that_gitmodules_ignores_selects_everything() {
+    let submodule = plan_repo("git-submodule-source");
+    submodule.write("lib.rs", "pub fn inner() {}\n");
+    submodule.commit();
+    let source = submodule.root().display().to_string();
+    let repo = merged_pull_request_over(
+        "git-submodule",
+        |repo| {
+            repo.git(&[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "--quiet",
+                &source,
+                "vendor/inner",
+            ]);
+            repo.git(&[
+                "config",
+                "--file",
+                ".gitmodules",
+                "submodule.vendor/inner.ignore",
+                "all",
+            ]);
+        },
+        |repo| repo.write("docs/readme.md", "docs\n"),
+    );
+    let clean = pull_request(&repo);
+    assert!(clean.status.success(), "{clean:?}");
+    assert_eq!(
+        selected(&clean),
+        "Cargo.toml: none\ntools/Cargo.toml: none\n"
+    );
+    repo.write_unstaged("vendor/inner/lib.rs", "pub fn tampered() {}\n");
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn an_empty_pull_request_diff_runs_the_policy_lanes_when_gate_on_plan_is_set() {
+    let repo = plan_repo("git-empty-policy");
+    repo.write(
+        "mise.toml",
+        "[tools]\nrust = \"1.99.1\"\n\"cargo:cargo-machete\" = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n",
+    );
+    repo.write("deny.toml", "");
+    repo.write(".velnor/rust-ci.toml", "[policy]\ngate_on_plan = true\n");
+    repo.commit();
+    repo.git(&["branch", "-M", "main"]);
+    repo.git(&["checkout", "--quiet", "-b", "topic"]);
+    git(
+        &repo,
+        &["commit", "--allow-empty", "--quiet", "--message", "topic"],
+    );
+    repo.git(&["checkout", "--quiet", "main"]);
+    repo.write("a/src/later.rs", "pub fn later() {}\n");
+    repo.commit();
+    git(
+        &repo,
+        &["merge", "--quiet", "--no-ff", "--message", "merge", "topic"],
+    );
+    let head = rev(&repo, "HEAD");
+    let output = plan_command(&repo)
+        .arg("plan")
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_EVENT_PATH", event(&repo, "main"))
+        .env("GITHUB_SHA", &head)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let lanes: String = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| line.starts_with("rust_deny=") || line.starts_with("rust_machete="))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    assert_eq!(lanes, "rust_deny=run\nrust_machete=run\n");
 }

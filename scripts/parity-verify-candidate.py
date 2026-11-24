@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-import bz2, copy, gzip, hashlib, importlib.util, io, json, lzma, os, subprocess, sys
+import bz2, copy, gzip, hashlib, importlib.util, io, json, lzma, os, re, subprocess, sys
 import tarfile, tempfile, zlib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 LEGACY = REPO / "images/job/ubuntu-26.04/candidate/candidate.py"
-BINARY = sys.argv[1]
 spec = importlib.util.spec_from_file_location("legacy_candidate", LEGACY)
 legacy = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = legacy
@@ -43,15 +42,16 @@ def tar_of(members, fmt=tarfile.PAX_FORMAT, end=True):
                 info.pax_headers = rest[0]
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
+        members_only = buffer.getvalue()
     raw = buffer.getvalue()
-    return raw if end else raw[:-10240] if len(raw) > 10240 else raw
+    return raw if end else members_only
 
 
 def oci(layers, diff_ids=None, platform=None, config_extra=None, manifest_extra=None, layout=None, index_extra=None, entries_extra=()):
     blobs = [(media, data) for data, media in layers]
     diffs = diff_ids if diff_ids is not None else [
         dg(gzip.decompress(d) if m.endswith("+gzip") else d) for d, m in layers]
-    config = {"architecture": "amd64", "os": "linux", "rootfs": {"type": "layers", "diff_ids": diffs}}
+    config = {"architecture": "amd64", "os": "linux", "config": {"Labels": {legacy.REVISION_LABEL: SHA}}, "rootfs": {"type": "layers", "diff_ids": diffs}}
     config.update(config_extra or {})
     config_raw = jb(config)
     manifest = {
@@ -179,6 +179,10 @@ def cases():
     add("config wrong os", oci([(BASE_GZ, LAYER_GZ)], config_extra={"os": "windows"}))
     add("config wrong arch", oci([(BASE_GZ, LAYER_GZ)], config_extra={"architecture": "arm64"}))
     add("config rootfs wrong type", oci([(BASE_GZ, LAYER_GZ)], config_extra={"rootfs": {"type": "x", "diff_ids": [dg(BASE_TAR)]}}))
+    add("config revision label other commit", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {"Labels": {legacy.REVISION_LABEL: "b" * 40}}}))
+    add("config revision label empty", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {"Labels": {legacy.REVISION_LABEL: ""}}}))
+    add("config labels missing", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": {}}))
+    add("config section not an object", oci([(BASE_GZ, LAYER_GZ)], config_extra={"config": "x"}))
     es = oci([(BASE_GZ, LAYER_GZ)])
     add("changed blob bytes", [(n, corrupt(d, 20) if n.startswith("blobs/") and d == BASE_GZ else d) for n, d in es])
     add("extra blob", es + [("blobs/sha256/" + "e" * 64, b"x")])
@@ -264,6 +268,9 @@ def cases():
         ("build force compression false", ["build", "force_compression"], False, False),
         ("build force compression 1", ["build", "force_compression"], 1, False),
         ("build arguments", ["build", "arguments"], ["--x"], False),
+        ("build arguments empty", ["build", "arguments"], [], False),
+        ("build arguments other commit", ["build", "arguments"], ["VELNOR_SOURCE_SHA=" + "b" * 40], False),
+        ("build arguments extra", ["build", "arguments"], [f"VELNOR_SOURCE_SHA={SHA}", "--x"], False),
         ("archive sha wrong", ["archive", "sha256"], "0" * 64, False),
         ("archive sha upper", ["archive", "sha256"], "A" * 64, False),
         ("archive size wrong", ["archive", "size_bytes"], 1, False),
@@ -349,6 +356,64 @@ def run(cmd, env):
     return done.returncode, done.stdout, done.stderr
 
 
+UNBOUND_OCI = {
+    "archive_index_digest": "0" * 64, "archive_index_size_bytes": 1,
+    "platform_manifest_digest": "sha256:" + "0" * 64, "platform_manifest_size_bytes": 1,
+    "image_configuration_digest": "sha256:" + "0" * 64, "image_configuration_size_bytes": 1,
+    "layer_digests": ["sha256:" + "0" * 64],
+}
+
+
+def bind_oci(archive):
+    try:
+        return legacy.verify_oci_archive(archive, SHA)
+    except Exception:
+        return copy.deepcopy(UNBOUND_OCI)
+
+
+def missing_input(path):
+    return r".+/" + re.escape(path) + r": No such file or directory \(os error 2\)"
+
+
+# case name -> (regex the Rust message must fullmatch, why the texts differ)
+MESSAGE_DIFFS = {
+    "layer member size base256 big": (
+        re.escape("Tar archive has an incorrect member size."),
+        "both refuse the base-256 member size; Rust names the bad size field, legacy reports a generic layer error",
+    ),
+    "outer truncated": (
+        re.escape("Cannot read OCI archive."),
+        "both refuse the truncated archive; the text is Python tarfile's end-of-data message versus Rust's generic read error",
+    ),
+    "root input missing Dockerfile": (
+        missing_input("images/job/ubuntu-26.04/Dockerfile"),
+        "both refuse the missing build input Dockerfile; the text is each runtime's file-not-found message",
+    ),
+    "root input missing README.md": (
+        missing_input("images/job/ubuntu-26.04/README.md"),
+        "both refuse the missing build input README.md; the text is each runtime's file-not-found message",
+    ),
+    "root input missing build-test.sh": (
+        missing_input("images/job/ubuntu-26.04/build-test.sh"),
+        "both refuse the missing build input build-test.sh; the text is each runtime's file-not-found message",
+    ),
+    "root input missing candidate/candidate.py": (
+        missing_input("images/job/ubuntu-26.04/candidate/candidate.py"),
+        "both refuse the missing build input candidate/candidate.py; the text is each runtime's file-not-found message",
+    ),
+    "root input missing runner.lock": (
+        missing_input(".velnor/runner.lock"),
+        "both refuse the missing build input runner.lock; the text is each runtime's file-not-found message",
+    ),
+}
+
+
+def is_allowed_message_diff(name, new_msg):
+    if name not in MESSAGE_DIFFS or not new_msg:
+        return False
+    return re.fullmatch(MESSAGE_DIFFS[name][0], new_msg) is not None
+
+
 def message(stderr, prefix):
     last = [line for line in stderr.strip().splitlines() if line.strip()]
     if last and last[-1].startswith(prefix):
@@ -357,8 +422,8 @@ def message(stderr, prefix):
 
 
 def main():
+    binary = sys.argv[1]
     mismatches, total, message_diffs, stricter = [], 0, [], 0
-    base_archive = None
     for case in cases():
         with tempfile.TemporaryDirectory(prefix="parity-") as tmp:
             tmp = Path(tmp)
@@ -367,14 +432,7 @@ def main():
             archive, record_path = tmp / "candidate.oci.tar", tmp / "candidate.json"
             raw = case["raw"] if case["raw"] is not None else tar_of(case["entries"] or base_entries())
             archive.write_bytes(raw)
-            ref_archive = tmp / "ref.oci.tar"
-            ref_archive.write_bytes(tar_of(base_entries()))
-            try:
-                oci_part = legacy.verify_oci_archive(archive)
-                source_archive = archive
-            except Exception:
-                oci_part = legacy.verify_oci_archive(ref_archive)
-                source_archive = ref_archive
+            oci_part = bind_oci(archive)
             archive_hash, archive_size = legacy._hash_file(archive)
             record = {
                 "schema": legacy.SCHEMA,
@@ -382,7 +440,8 @@ def main():
                 "workflow": {"repository": "tailrocks/velnor-new", "repository_id": 1, "event": "push",
                             "workflow_ref": ENV["GITHUB_WORKFLOW_REF"], "authority_commit": "c" * 40, "run_id": 10, "run_attempt": 2},
                 "platform": "linux/amd64",
-                "build": {"builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64", "arguments": [],
+                "build": {"builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64",
+                          "arguments": [f"VELNOR_SOURCE_SHA={SHA}"],
                           "exporter": "oci", "provenance": "disabled", "compression": "gzip", "force_compression": True},
                 "archive": {"sha256": archive_hash, "size_bytes": archive_size},
                 "oci": oci_part,
@@ -426,20 +485,26 @@ def main():
                 else: env[key] = value
             args = ["--root", str(root), "--archive", str(archive), "--record", str(record_path)]
             old = run([sys.executable, str(LEGACY), "validate"] + args, env)
-            new = run([BINARY, "image", "verify-candidate"] + args, env)
+            new = run([binary, "image", "verify-candidate"] + args, env)
             total += 1
             old_ok, new_ok = old[0] == 0, new[0] == 0
             old_msg, new_msg = message(old[2], "ERROR: "), message(new[2], "velnor-ci: ")
             tag = "ACCEPT" if old_ok else "REJECT"
-            if case["name"] in STRICTER and old_ok and not new_ok:
+            if oci_part == UNBOUND_OCI and (old_ok or new_ok):
+                mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
+                print(f"FAIL-OPEN     {case['name']}: an archive with no OCI graph was accepted")
+            elif case["name"] in STRICTER and old_ok and not new_ok:
                 print(f"stricter      reject {case['name']}: legacy accepts a tar python silently truncates; new refuses")
                 stricter += 1
             elif old_ok != new_ok or (old_ok and old[1] != new[1]):
                 mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
                 print(f"VERDICT-DIFF  {case['name']}: legacy={'accept' if old_ok else 'reject'} new={'accept' if new_ok else 'reject'} | {old_msg or old[2][-120:]!r} | {new_msg!r}")
-            elif not old_ok and old_msg != new_msg:
+            elif not old_ok and old_msg != new_msg and is_allowed_message_diff(case["name"], new_msg):
                 message_diffs.append((case["name"], old_msg, new_msg))
-                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r}")
+                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r} | allowed: {MESSAGE_DIFFS[case['name']][1]}")
+            elif not old_ok and old_msg != new_msg:
+                mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
+                print(f"UNEXPECTED-MSG {case['name']}: legacy={old_msg!r} new={new_msg!r}")
             else:
                 print(f"same          {tag.lower():6} {case['name']}" + (f": {old_msg}" if old_msg else ""))
     print(f"\ncases={total} verdict_mismatches={len(mismatches)} stricter_by_design={stricter} message_diffs={len(message_diffs)}")

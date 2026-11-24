@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::io::TestResult;
+use std::collections::BTreeMap;
 use std::path::Path;
-use velnor_gen::io::relocate_metadata;
+use velnor_gen::io::{SAMPLE_REPOSITORY, recording_of, relocate_metadata};
+use velnor_model::RepoPath;
 
 #[test]
 fn canonical_windows_checkout_relocates_cargo_paths() -> TestResult {
@@ -81,5 +83,29 @@ fn a_colon_inside_a_file_name_is_not_a_path_separator() -> TestResult {
     let value: serde_json::Value =
         serde_json::from_slice(&relocate_metadata(Path::new(r"C:\work\repo"), json)?)?;
     assert_eq!(value["path"], "/repo/dir:name");
+    Ok(())
+}
+
+#[test]
+fn recording_a_repository_never_records_its_own_samples() -> TestResult {
+    let sample = crate::golden::samples().join("single-crate");
+    let mut view = crate::golden::load(&sample)?;
+    let nested = RepoPath::new("generator/samples/old/view/Cargo.toml")?;
+    view.tracked_paths.insert(nested.clone());
+    view.files
+        .insert(nested, b"[package]\nname = \"nested\"\n".to_vec());
+    let recording = recording_of(
+        Path::new(SAMPLE_REPOSITORY),
+        view,
+        BTreeMap::new(),
+        &mut Vec::new(),
+    )?;
+    let recorded = |path: &RepoPath| path.as_str().starts_with("generator/samples/");
+    assert!(!recording.view.keys().any(recorded), "{:?}", recording.view);
+    assert!(
+        !recording.manifests.iter().any(recorded),
+        "{:?}",
+        recording.manifests
+    );
     Ok(())
 }
