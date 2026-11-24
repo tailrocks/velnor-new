@@ -79,6 +79,16 @@ pub(super) fn restore(
     read_only: bool,
     owner: u32,
 ) -> Outcome {
+    restore_with(inputs, dir, read_only, owner, &|| {})
+}
+
+fn restore_with(
+    inputs: &Inputs<'_>,
+    dir: Option<&str>,
+    read_only: bool,
+    owner: u32,
+    copied: &dyn Fn(),
+) -> Outcome {
     if let Err(reason) = check_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
@@ -97,6 +107,7 @@ pub(super) fn restore(
         if !copy_tree(&entry.join(slot(path)), &inputs.home.join(path)) {
             return Outcome::Rejected("a copy failed, so the cache action restores instead");
         }
+        copied();
     }
     Outcome::Restored { from: entry }
 }
@@ -192,6 +203,10 @@ fn sweep(tools: &Path, current: &str) {
 }
 
 pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
+    save_with(inputs, owner, &|| {})
+}
+
+fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
     let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
@@ -253,7 +268,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    let kept = prune(&tools, inputs.key);
+    let kept = prune(&tools, inputs.key, chosen);
     if replaced {
         Outcome::Healed { to: entry, kept }
     } else {
@@ -261,7 +276,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     }
 }
 
-fn prune(tools: &Path, current: &str) -> Vec<String> {
+fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
@@ -274,9 +289,10 @@ fn prune(tools: &Path, current: &str) -> Vec<String> {
         .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    older
+    let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
+    chosen();
+    candidates
         .into_iter()
-        .skip(KEEP_KEYS - 1)
         .filter(|(_, path)| remove_tree(path).is_err())
         .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
         .collect()
@@ -293,3 +309,6 @@ fn plain(name: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;
