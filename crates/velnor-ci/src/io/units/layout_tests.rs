@@ -140,7 +140,7 @@ fn the_old_layout_is_still_read() {
     ));
 }
 
-fn target_with(files: &[&str]) -> std::path::PathBuf {
+pub(super) fn target_with(files: &[&str]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let root = std::env::temp_dir().join(format!(
         "velnor-units-built-{}-{}",
@@ -189,16 +189,22 @@ fn a_target_directory_nothing_was_built_in_is_not_refused() {
 #[test]
 fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
     for layout in [
-        "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
-        "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+        [
+            "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
+            "debug/deps/dep-5c64b2dee9af80ce.d",
+        ],
+        [
+            "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+            "debug/build/dep/5c64b2dee9af80ce/out/dep-5c64b2dee9af80ce.d",
+        ],
     ] {
-        let root = target_with(&[layout, "debug/out/libdep.rlib"]);
+        let root = target_with(&[layout[0], layout[1], "debug/libdep.rlib"]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(
             found.unwrap_or_else(|e| unreachable!("{e}")).len(),
-            1,
-            "{layout}"
+            2,
+            "{layout:?}"
         );
     }
 }
