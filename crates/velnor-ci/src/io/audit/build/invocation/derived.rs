@@ -27,12 +27,17 @@ pub(super) fn refusal(
                     .is_some_and(|rest| rest.starts_with('='))
         })
     });
+    let names_package = words.iter().any(|word| {
+        matches!(*word, "-p" | "--package")
+            || word.starts_with("--package=")
+            || word.starts_with("-p") && word.len() > 2
+    });
     match (program, arguments) {
         ("cargo", ["fix", ..]) => Some(
             "inputs build does not run cargo fix: it edits sources after compiling them, so no receipt of its compile is current; run it outside inputs build",
         ),
-        _ if running && !names_target => Some(
-            "inputs build cannot tell which target cargo run builds; name it with --bin or --example",
+        _ if running && !(names_target && names_package) => Some(
+            "inputs build cannot tell which target cargo run builds; name the package with -p and the target with --bin or --example",
         ),
         _ => None,
     }

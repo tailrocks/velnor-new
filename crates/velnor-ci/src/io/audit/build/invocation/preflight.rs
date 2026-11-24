@@ -41,10 +41,10 @@ fn a_run_is_prepared_by_building_what_it_would_run() {
             "cargo run -p lib --bin tool --release -- --flag",
             "cargo build -p lib --bin tool --release",
         ),
-        ("cargo r --bin tool", "cargo build --bin tool"),
+        ("cargo r -p lib --bin tool", "cargo build -p lib --bin tool"),
         (
-            "cargo --locked -C rust run --example demo",
-            "cargo --locked -C rust build --example demo",
+            "cargo --locked -C rust run -p lib --example demo",
+            "cargo --locked -C rust build -p lib --example demo",
         ),
     ] {
         let invocation = Invocation::new(&words(command));
@@ -82,16 +82,16 @@ fn rustc_rustdoc_and_fix_compile_in_place() {
 fn a_run_preflight_drops_the_positional_arguments_of_the_program() {
     for (command, build) in [
         (
-            "cargo run --offline --bin tool input.txt",
-            "cargo build --offline --bin tool",
+            "cargo run --offline -p lib --bin tool input.txt",
+            "cargo build --offline -p lib --bin tool",
         ),
         (
             "cargo run -p lib --bin tool --features extra data other",
             "cargo build -p lib --bin tool --features extra",
         ),
         (
-            "cargo run --bin=tool --profile dev",
-            "cargo build --bin=tool --profile dev",
+            "cargo run -p=lib --bin=tool --profile dev",
+            "cargo build -p=lib --bin=tool --profile dev",
         ),
     ] {
         let invocation = Invocation::new(&words(command));
@@ -117,6 +117,7 @@ fn a_command_whose_compile_cannot_be_trusted_or_named_is_refused() {
         "cargo fix --lib --allow-no-vcs",
         "cargo run --offline",
         "cargo run -p lib",
+        "cargo run --bin tool",
         "cargo r input.txt",
     ] {
         assert!(
@@ -125,8 +126,8 @@ fn a_command_whose_compile_cannot_be_trusted_or_named_is_refused() {
         );
     }
     for command in [
-        "cargo run --bin tool",
-        "cargo r --example=demo -- input.txt",
+        "cargo run -p lib --bin tool",
+        "cargo r --package=lib --example=demo -- input.txt",
         "cargo build",
     ] {
         assert!(

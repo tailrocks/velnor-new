@@ -117,7 +117,7 @@ fn a_run_that_names_no_target_is_refused() {
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        stderr.contains("name it with --bin or --example"),
+        stderr.contains("name the package with -p and the target with --bin or --example"),
         "{stderr}"
     );
 }
@@ -164,4 +164,16 @@ fn a_cargo_alias_that_runs_a_shell_command_is_refused() {
         stderr.contains("cargo alias xt runs a shell command"),
         "{stderr}"
     );
+}
+
+#[test]
+fn a_bang_argument_of_an_alias_is_not_a_shell_alias() {
+    let repo = project_with_lib_targets();
+    repo.write(
+        "rust/.cargo/config.toml",
+        "[alias]\nxt = \"run -p lib --bin tool --\"\n",
+    );
+    let built = wrapped_build(&repo, &["cargo", "xt", "!foo", "--offline"]);
+    let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(!stderr.contains("runs a shell command"), "{stderr}");
 }

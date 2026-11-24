@@ -26,11 +26,9 @@ pub(in super::super) fn resolve(
     let words: Vec<&str> = command[1..].iter().map(String::as_str).collect();
     let name = subcommand(&words).map_or("", |index| words[index]);
     match expanded {
-        Some(expanded) if expanded.iter().any(|word| word.starts_with('!')) => {
-            Err(CiError::new(format!(
-                "cargo alias {name} runs a shell command; run the command it names outside inputs build"
-            )))
-        }
+        Some(expanded) if shell_alias(&expanded, &words) => Err(CiError::new(format!(
+            "cargo alias {name} runs a shell command; run the command it names outside inputs build"
+        ))),
         Some(expanded) => Ok(std::iter::once(command[0].clone())
             .chain(expanded)
             .collect()),
@@ -38,4 +36,10 @@ pub(in super::super) fn resolve(
             "cannot resolve the cargo alias {name}; run the cargo command it expands to"
         ))),
     }
+}
+
+fn shell_alias(expanded: &[String], words: &[&str]) -> bool {
+    subcommand(words)
+        .and_then(|index| expanded.get(index))
+        .is_some_and(|word| word.starts_with('!'))
 }

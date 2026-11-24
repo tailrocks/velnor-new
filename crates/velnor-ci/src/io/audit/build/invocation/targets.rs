@@ -11,6 +11,8 @@ fn a_command_local_target_dir_is_refused_for_every_subcommand_that_builds() {
         let command: Vec<String> = [
             "cargo",
             subcommand,
+            "-p",
+            "lib",
             "--bin",
             "x",
             "--target-dir",
