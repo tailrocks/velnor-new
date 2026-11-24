@@ -1015,15 +1015,19 @@ class SetupVelnorInstallTests(unittest.TestCase):
         in_flight = cached.parent / f".velnor-ci.evicting.{int(now) - 60}.8.8"
         in_flight.write_bytes(b"quarantine of an eviction that started a minute ago\n")
         os.utime(in_flight, (now - 7200, now - 7200))
-        older_version = cached.parent / ".velnor-ci.evict.4242.9"
-        older_version.write_bytes(b"quarantine of an older setup-velnor version\n")
-        os.utime(older_version, (now - 7200, now - 7200))
+        older_in_flight = cached.parent / ".velnor-ci.evict.4242.9"
+        older_in_flight.write_bytes(b"quarantine an older setup-velnor version touched a minute ago\n")
+        os.utime(older_in_flight, (now - 60, now - 60))
+        older_left = cached.parent / ".velnor-ci.evict.4243.10"
+        older_left.write_bytes(b"quarantine an older setup-velnor version touched two hours ago\n")
+        os.utime(older_left, (now - 7200, now - 7200))
         result = self.install(sha256(self.archive))
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(cached.read_bytes(), self.archive)
         self.assertFalse(abandoned.exists(), "the quarantine of an eviction that started two hours ago was not removed")
         self.assertTrue(in_flight.exists(), "the quarantine of an eviction that started a minute ago was removed")
-        self.assertTrue(older_version.exists(), "a quarantine an older setup-velnor version owns was removed")
+        self.assertTrue(older_in_flight.exists(), "a quarantine an older setup-velnor version touched a minute ago was removed")
+        self.assertFalse(older_left.exists(), "a quarantine an older setup-velnor version touched two hours ago was not removed")
 
     def test_an_eviction_that_starts_while_a_prune_reads_the_clock_survives_the_prune(self):
         cached = self.cached_archive()
