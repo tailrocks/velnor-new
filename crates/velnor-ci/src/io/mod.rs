@@ -109,6 +109,9 @@ use std::{path::Path, process::ExitCode};
 pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target};
+pub use self::image_candidate::publish::{
+    Body, Https, OpenBlob, Registry, Request, Response, Transport,
+};
 pub use self::input_target::{CaseSensitivity, check_input_target_with};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::inputs_batch::restore_inputs_batch_with;

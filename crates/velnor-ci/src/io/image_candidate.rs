@@ -22,6 +22,7 @@ mod build;
 mod docker;
 mod output;
 mod process;
+pub(in crate::io) mod publish;
 mod source;
 
 pub(in crate::io) use build::build;
