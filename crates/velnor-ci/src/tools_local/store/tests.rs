@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::os::unix::fs::MetadataExt;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -302,4 +303,22 @@ fn a_save_that_saw_a_stale_lock_does_not_remove_the_lock_another_job_took_since(
     );
     assert!(quiet(&first) && quiet(&second), "{first:?} {second:?}");
     assert_eq!(listed, ["k3", "k4"]);
+}
+
+#[test]
+fn a_lock_whose_taker_was_killed_is_taken_over_once_it_is_stale_again() {
+    let node = node("killed-taker");
+    node.with_a_killed_jobs_lock();
+    let killed = catch_unwind(AssertUnwindSafe(|| {
+        node.save("k1", true, &|step| {
+            assert_ne!(step, Step::Taken, "killed while taking the lock over");
+        })
+    }));
+    assert!(killed.is_err(), "{killed:?}");
+    aged(&node.entry(".lock-k1"), 2);
+    let healed = node.save("k1", true, &|_| {});
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    let restored = node.restore("k1", &|| {});
+    assert!(restored.hit(), "{restored:?}");
+    assert_eq!(node.listed(), ["k1", "k2"]);
 }

@@ -21,10 +21,11 @@ const LOCK_PREFIX: &str = ".lock-";
 const STALE_AFTER: Duration = Duration::from_hours(1);
 const COPY: &str = "/bin/cp";
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Step {
     Chosen,
     Breaking,
+    Taken,
     Retiring,
 }
 
@@ -136,8 +137,12 @@ fn restore_with(
 }
 
 fn stale(path: &Path) -> bool {
-    fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
+    fs::metadata(path).is_ok_and(|metadata| expired(&metadata))
+}
+
+fn expired(metadata: &fs::Metadata) -> bool {
+    metadata
+        .modified()
         .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_AFTER))
 }
 
@@ -175,23 +180,18 @@ fn sweep(tools: &Path, current: &str, pause: &dyn Fn(Step)) {
     for entry in entries {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        let leftover = name.starts_with(STAGING_PREFIX);
-        if !(leftover || name.starts_with(LOCK_PREFIX))
+        let lock = name.strip_prefix(LOCK_PREFIX);
+        if !(name.starts_with(STAGING_PREFIX) || lock.is_some())
             || entry.file_type().is_ok_and(|kind| kind.is_file())
             || !stale(&entry.path())
         {
             continue;
         }
-        let _held = if leftover {
-            match hold_owners(tools, &name, current, pause) {
-                Some(held) => held,
-                None => continue,
-            }
-        } else {
-            pause(Step::Breaking);
-            Vec::new()
-        };
-        remove_tree(&entry.path()).ok();
+        if let Some(key) = lock {
+            drop(claim(tools, key, pause));
+        } else if let Some(_held) = hold_owners(tools, &name, current, pause) {
+            remove_tree(&entry.path()).ok();
+        }
     }
 }
 
