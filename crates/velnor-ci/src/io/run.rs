@@ -6,12 +6,11 @@ use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nix::sys::signal::{Signal, kill, killpg};
 use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -20,6 +19,7 @@ use velnor_model::BUILT_OUTPUT;
 use super::append_outputs;
 use super::early_list::{EarlyList, StopOnDrop};
 use super::pump::{Capture, pump_counted};
+use super::run_signals::{forward, wait_for_exit};
 use crate::cli::RunArgs;
 use crate::escape::stderr_line;
 use crate::setup::DoctestCount;
@@ -125,9 +125,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let handle = signals.handle();
     let exited = Arc::new(AtomicBool::new(false));
     forward(signals, pid, own_group, early.clone(), Arc::clone(&exited));
-    let status = child.wait();
-    exited.store(true, Ordering::SeqCst);
-    let ended = Instant::now();
+    let (status, ended) = wait_for_exit(&mut child, &exited, early.is_none().then_some(&handle));
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
     if runs_nextest(&args.command) {
@@ -251,32 +249,6 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         (code, format!("cannot run {}: {e}", argv[0]))
     })?;
     Ok((child, own_group))
-}
-
-fn forward(
-    mut signals: Signals,
-    pid: Option<Pid>,
-    own_group: bool,
-    early: Option<Arc<EarlyList>>,
-    exited: Arc<AtomicBool>,
-) {
-    thread::spawn(move || {
-        for received in signals.forever() {
-            if let Some(early) = &early {
-                early.stop("velnor-ci received a signal");
-            }
-            if exited.load(Ordering::SeqCst) {
-                continue;
-            }
-            if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
-                if own_group {
-                    killpg(pid, signal).ok();
-                } else {
-                    kill(pid, signal).ok();
-                }
-            }
-        }
-    });
 }
 
 fn collect(

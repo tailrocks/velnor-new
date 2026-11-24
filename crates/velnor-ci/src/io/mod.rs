@@ -89,6 +89,7 @@ mod restored;
 mod restored_targets;
 mod restored_units;
 mod run;
+mod run_signals;
 mod saved_git_config;
 mod scope_cache;
 mod setup;

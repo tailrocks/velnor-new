@@ -11,7 +11,8 @@ use std::time::Duration;
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
 
-const POLL: Duration = Duration::from_millis(10);
+const POLL_FIRST: Duration = Duration::from_millis(1);
+const POLL_LAST: Duration = Duration::from_millis(10);
 const STDERR_KEPT: u64 = 1 << 20;
 
 #[derive(Default)]
@@ -97,6 +98,7 @@ impl Supervisor {
     }
 
     fn wait(&self) -> io::Result<ExitStatus> {
+        let mut poll = POLL_FIRST;
         loop {
             let polled = self
                 .lock()
@@ -107,7 +109,8 @@ impl Supervisor {
             if let Some(status) = polled {
                 return Ok(status);
             }
-            thread::sleep(POLL);
+            thread::sleep(poll);
+            poll = (poll * 2).min(POLL_LAST);
         }
     }
 

@@ -160,6 +160,7 @@ fn report(reason: &str) {
 }
 
 fn list_matches(argv: &[String], supervisor: Arc<Supervisor>) -> Option<Listing> {
+    let probe = Arc::clone(&supervisor);
     match try_list(
         argv,
         &Environment {
@@ -167,7 +168,7 @@ fn list_matches(argv: &[String], supervisor: Arc<Supervisor>) -> Option<Listing>
             stdout_limit: env_number(STDOUT_LIMIT_VARIABLE).unwrap_or(STDOUT_LIMIT),
             supervisor,
         },
-        &can_execute_from,
+        &move |directory| can_execute_from(directory, &probe),
         &free_bytes,
     ) {
         Ok(listing) => Some(listing),

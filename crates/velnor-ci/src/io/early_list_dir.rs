@@ -5,23 +5,29 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+use super::early_list_child::Supervisor;
 
 const PREFIX: &str = "velnor-nextest-list";
 const PROBE: &str = "velnor-exec-probe";
 const NOT_EXECUTABLE: i32 = 126;
+const PROBE_OUTPUT_LIMIT: u64 = 4096;
 const SHELL: &str = "/bin/sh";
 const PROBE_SCRIPT: &str = "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && /bin/chmod 755 \"$1\" && \"$1\"; status=$?; /bin/rm -f \"$1\"; exit $status";
 
 pub(super) type ExecProbe = dyn Fn(&Path) -> io::Result<bool>;
 
-pub(super) fn can_execute_from(directory: &Path) -> io::Result<bool> {
-    let output = Command::new(SHELL)
+pub(super) fn can_execute_from(directory: &Path, supervisor: &Supervisor) -> io::Result<bool> {
+    let mut command = Command::new(SHELL);
+    command
         .env_clear()
         .args(["-c", PROBE_SCRIPT, PROBE])
-        .arg(directory.join(PROBE))
-        .stdin(Stdio::null())
-        .output()?;
+        .arg(directory.join(PROBE));
+    let output = supervisor.run(&mut command, PROBE_OUTPUT_LIMIT)?;
+    if let Some(reason) = output.stopped {
+        return Err(io::Error::other(reason));
+    }
     match output.status.code() {
         Some(0) => Ok(true),
         Some(NOT_EXECUTABLE) => Ok(false),
@@ -86,7 +92,7 @@ impl Drop for ListDir {
 
 #[cfg(test)]
 mod tests {
-    use super::{ListDir, can_execute_from};
+    use super::{ListDir, Supervisor, can_execute_from};
     use std::ffi::OsString;
     use std::io;
 
@@ -156,7 +162,9 @@ mod tests {
     fn the_real_probe_runs_a_file_from_an_ordinary_directory_and_leaves_nothing() {
         let temp = std::env::temp_dir().join(format!("velnor-list-real-{}", std::process::id()));
         std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(can_execute_from(&temp).unwrap_or_else(|e| unreachable!("{e}")));
+        assert!(
+            can_execute_from(&temp, &Supervisor::default()).unwrap_or_else(|e| unreachable!("{e}"))
+        );
         assert_eq!(std::fs::read_dir(&temp).map(Iterator::count).ok(), Some(0));
         std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -183,7 +191,8 @@ mod tests {
                 let own = temp.join(index.to_string());
                 std::fs::create_dir_all(&own).unwrap_or_else(|e| unreachable!("{e}"));
                 std::thread::spawn(move || {
-                    (0..50).all(|_| matches!(can_execute_from(&own), Ok(true)))
+                    (0..50)
+                        .all(|_| matches!(can_execute_from(&own, &Supervisor::default()), Ok(true)))
                 })
             })
             .collect();
@@ -205,6 +214,18 @@ mod tests {
     #[test]
     fn the_real_probe_fails_loudly_for_a_missing_directory() {
         let missing = std::env::temp_dir().join(format!("velnor-list-gone-{}", std::process::id()));
-        assert!(can_execute_from(&missing).is_err());
+        assert!(can_execute_from(&missing, &Supervisor::default()).is_err());
+    }
+
+    #[test]
+    fn the_real_probe_is_refused_once_the_supervisor_is_stopped() {
+        let temp = std::env::temp_dir().join(format!("velnor-list-stopped-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let supervisor = Supervisor::default();
+        supervisor.stop("stopped for the test");
+        let outcome = can_execute_from(&temp, &supervisor).map_err(|e| e.to_string());
+        assert_eq!(outcome, Err("stopped for the test".to_owned()));
+        assert_eq!(std::fs::read_dir(&temp).map(Iterator::count).ok(), Some(0));
+        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }
