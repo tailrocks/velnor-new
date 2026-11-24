@@ -24,7 +24,7 @@ expect() {
 if [ -n "$(job_if | grep -F "github.event_name == 'merge_group'")" ]; then got=runs; else got=skipped; fi
 expect "helper-gates is selected for the merge_group event" runs "$got"
 
-git_in() { git -C "$work/repo" -c user.name=t -c user.email=t@example.com "$@"; }
+git_in() { git -C "$work/repo" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 mkdir -p "$work/repo/crates/velnor-ci" "$work/repo/crates/velnor-gen/src"
 git init -q "$work/repo"
 printf 'version = "0.1.111"\n' > "$work/repo/crates/velnor-ci/Cargo.toml"
