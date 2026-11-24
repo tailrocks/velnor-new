@@ -17,6 +17,15 @@ pub struct Promotion<'a> {
     pub commit: &'a str,
 }
 
+#[must_use]
+pub fn is_missing(reference: &str, stderr: &str) -> bool {
+    let miss = format!("{reference}: not found").to_ascii_lowercase();
+    stderr.lines().any(|line| {
+        let line = line.trim().to_ascii_lowercase();
+        line.contains("manifest unknown") || (line.starts_with("error: ") && line.ends_with(&miss))
+    })
+}
+
 enum Plan {
     Create { digest: String },
     Present { digest: String },
@@ -95,6 +104,13 @@ pub fn promote(registry: &dyn Registry, promotion: &Promotion<'_>) -> Result<Str
         match plan {
             Plan::Create { digest } => {
                 registry.tag(&format!("{name}@{digest}"), &target)?;
+                let now = registry.digest(&target)?;
+                if now.as_deref() != Some(digest.as_str()) {
+                    return Err(CiError::new(format!(
+                        "{target} was tagged with {digest} and now names {}; another writer moved it, so check the registry before anything else is promoted",
+                        now.as_deref().unwrap_or("nothing")
+                    )));
+                }
                 let _ = writeln!(report, "{target} now names {digest}");
             }
             Plan::Present { digest } => {

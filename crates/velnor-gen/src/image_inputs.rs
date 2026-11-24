@@ -21,7 +21,12 @@ pub(crate) fn check(view: &RepoView, image: &ImageConfig) -> Result<(), ImageErr
         }
         let linked = std::iter::successors(Some(path), RepoPath::parent)
             .any(|part| view.symlinks.contains(&part) || view.gitlinks.contains(&part));
-        if linked {
+        let inside = view
+            .symlinks
+            .iter()
+            .chain(&view.gitlinks)
+            .any(|link| link.as_str().starts_with(&directory));
+        if linked || inside {
             return Err(ImageError::InputLinked {
                 image: image.name.clone(),
                 path: input.clone(),

@@ -4,7 +4,7 @@
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::github::{ApiRule, GitHub, Repo, parse};
+use crate::github::{ApiRule, GitHub, Repo, parse, run_path};
 
 const PAGE: usize = 100;
 const MAX_PAGES: u32 = 5;
@@ -15,6 +15,7 @@ pub struct Release<'a> {
     pub tag: &'a str,
     pub actor: &'a str,
     pub actors: &'a [String],
+    pub run_id: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -30,6 +31,8 @@ struct Ruleset {
     name: String,
     target: String,
     enforcement: String,
+    created_at: Option<String>,
+    updated_at: Option<String>,
     conditions: Option<Conditions>,
     #[serde(default)]
     rules: Vec<ApiRule>,
@@ -48,11 +51,45 @@ struct RefName {
     exclude: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct Run {
+    created_at: String,
+}
+
+fn supported(pattern: &str) -> bool {
+    pattern == "~ALL"
+        || (!pattern.is_empty()
+            && pattern
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_./*?".contains(&byte)))
+}
+
 fn matches(pattern: &str, reference: &str) -> bool {
-    if pattern == "~ALL" {
-        return true;
-    }
-    glob(pattern.as_bytes(), reference.as_bytes())
+    pattern == "~ALL" || glob(pattern.as_bytes(), reference.as_bytes())
+}
+
+fn stamp(text: &str) -> Option<&str> {
+    let shape = b"dddd-dd-ddTdd:dd:ddZ";
+    (text.len() == shape.len()
+        && text.bytes().zip(shape).all(|(byte, kind)| match kind {
+            b'd' => byte.is_ascii_digit(),
+            other => byte == *other,
+        }))
+    .then_some(text)
+}
+
+fn predates(ruleset: &Ruleset, pushed: Option<&str>) -> bool {
+    let changed = ruleset
+        .updated_at
+        .as_deref()
+        .or(ruleset.created_at.as_deref())
+        .and_then(stamp);
+    matches!((changed, pushed.and_then(stamp)), (Some(changed), Some(pushed)) if changed <= pushed)
+}
+
+fn pushed_at(github: &dyn GitHub, repo: &Repo, run_id: u64) -> Result<String, CiError> {
+    let run: Run = parse(&github.get(&run_path(repo, run_id))?, "workflow run")?;
+    Ok(run.created_at)
 }
 
 fn glob(pattern: &[u8], text: &[u8]) -> bool {
@@ -85,6 +122,11 @@ fn protects(ruleset: &Ruleset, reference: &str) -> bool {
     };
     ruleset.target == "tag"
         && ruleset.enforcement == "active"
+        && names
+            .include
+            .iter()
+            .chain(&names.exclude)
+            .all(|glob| supported(glob))
         && names.include.iter().any(|glob| matches(glob, reference))
         && !names.exclude.iter().any(|glob| matches(glob, reference))
         && REQUIRED_RULES
@@ -117,6 +159,7 @@ fn protecting(
     github: &dyn GitHub,
     repo: &Repo,
     reference: &str,
+    pushed: Option<&str>,
 ) -> Result<Option<String>, CiError> {
     for item in listed(github, repo)? {
         if item.target != "tag" || item.enforcement != "active" {
@@ -126,7 +169,7 @@ fn protecting(
             &github.get(&format!("/repos/{repo}/rulesets/{}", item.id))?,
             "tag ruleset",
         )?;
-        if detail.id == item.id && protects(&detail, reference) {
+        if detail.id == item.id && protects(&detail, reference) && predates(&detail, pushed) {
             return Ok(Some(detail.name));
         }
     }
@@ -138,7 +181,12 @@ pub fn authorize(
     repo: &Repo,
     release: &Release<'_>,
 ) -> Result<String, CiError> {
-    let Release { tag, actor, actors } = release;
+    let Release {
+        tag,
+        actor,
+        actors,
+        run_id,
+    } = release;
     if tag.is_empty() || actor.is_empty() {
         return Err(CiError::new("the tag and the actor must not be empty"));
     }
@@ -150,12 +198,13 @@ pub fn authorize(
             "tag {tag} was pushed by {actor}, an allowed release actor\n"
         ));
     }
-    match protecting(github, repo, &format!("refs/tags/{tag}"))? {
+    let pushed = run_id.map(|id| pushed_at(github, repo, id)).transpose()?;
+    match protecting(github, repo, &format!("refs/tags/{tag}"), pushed.as_deref())? {
         Some(name) => Ok(format!(
             "tag {tag} is covered by the active tag ruleset {name}, which forbids creating, moving and deleting it\n"
         )),
         None => Err(CiError::new(format!(
-            "{actor} is not an allowed release actor and no active tag ruleset of {repo} forbids creating, moving and deleting {tag}; list the actor in release_actors or protect the tag with a ruleset (creation, update and deletion rules)"
+            "{actor} is not an allowed release actor and no active tag ruleset of {repo}, last changed before the tag was pushed, forbids creating, moving and deleting {tag}; list the actor in release_actors or protect the tag with a ruleset (creation, update and deletion rules) before the tag is pushed"
         ))),
     }
 }

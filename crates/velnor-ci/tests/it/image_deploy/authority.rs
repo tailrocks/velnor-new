@@ -17,6 +17,12 @@ fn list() -> String {
     )
 }
 
+const RUN: u64 = 99;
+
+fn run_path() -> String {
+    format!("/repos/{}/actions/runs/{RUN}", repo())
+}
+
 fn detail() -> String {
     format!("/repos/{}/rulesets/7", repo())
 }
@@ -38,6 +44,8 @@ fn ruleset(change: impl FnOnce(&mut Value)) -> Value {
         "name": "release tags",
         "target": "tag",
         "enforcement": "active",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
         "conditions": {"ref_name": {"include": ["refs/tags/svc-v*"], "exclude": []}},
         "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}]
     });
@@ -52,10 +60,20 @@ fn api(body: &Value) -> Api {
             json!([{"id": 7, "target": body["target"], "enforcement": body["enforcement"]}]),
         ),
         (detail(), body.clone()),
+        (run_path(), json!({"created_at": "2026-02-01T12:00:00Z"})),
     ]))
 }
 
 fn run(api: &Api, actor: &str, actors: &[&str]) -> Result<String, String> {
+    run_with(api, actor, actors, Some(RUN))
+}
+
+fn run_with(
+    api: &Api,
+    actor: &str,
+    actors: &[&str],
+    run_id: Option<u64>,
+) -> Result<String, String> {
     let actors: Vec<String> = actors.iter().map(|actor| (*actor).to_owned()).collect();
     authorize(
         api,
@@ -64,6 +82,7 @@ fn run(api: &Api, actor: &str, actors: &[&str]) -> Result<String, String> {
             tag: "svc-v1.2.3",
             actor,
             actors: &actors,
+            run_id,
         },
     )
     .map_err(|error| error.to_string())
@@ -109,6 +128,43 @@ fn any_other_actor_needs_an_active_tag_ruleset_that_forbids_creating_moving_and_
         r["conditions"]["ref_name"]["exclude"] = json!(["refs/tags/svc-v1.*"]);
     });
     refuse("no conditions", |r| r["conditions"] = Value::Null);
+    refuse("an exclude class GitHub reads as a pattern", |r| {
+        r["conditions"]["ref_name"]["exclude"] = json!(["refs/tags/svc-v[0-9]*"]);
+    });
+    refuse("an exclude brace GitHub reads as a pattern", |r| {
+        r["conditions"]["ref_name"]["exclude"] = json!(["refs/tags/svc-v{1,2}.*"]);
+    });
+    refuse("an include with a class", |r| {
+        r["conditions"]["ref_name"]["include"] = json!(["refs/tags/svc-v*", "refs/tags/[a-z]*"]);
+    });
+    refuse("the ruleset changed after the push", |r| {
+        r["updated_at"] = json!("2026-02-01T12:00:01Z");
+    });
+    refuse("a ruleset with no change time", |r| {
+        r["updated_at"] = Value::Null;
+        r["created_at"] = Value::Null;
+    });
+    refuse("a change time that is not a UTC stamp", |r| {
+        r["updated_at"] = json!("yesterday");
+    });
+}
+
+#[test]
+fn a_ruleset_that_predates_the_push_vouches_and_an_unknown_push_time_never_does() {
+    let covered = api(&ruleset(|_| {}));
+    assert!(run(&covered, "mallory", &[]).is_ok());
+    let same = api(&ruleset(|r| {
+        r["updated_at"] = json!("2026-02-01T12:00:00Z")
+    }));
+    assert!(run(&same, "mallory", &[]).is_ok());
+    let unknown = run_with(&covered, "mallory", &[], None)
+        .err()
+        .unwrap_or_default();
+    assert!(unknown.contains("no active tag ruleset"), "{unknown}");
+    assert!(run_with(&covered, "ann", &["ann"], None).is_ok());
+    let mut hidden = api(&ruleset(|_| {}));
+    hidden.0.remove(&run_path());
+    assert!(run(&hidden, "mallory", &[]).is_err());
 }
 
 #[test]
