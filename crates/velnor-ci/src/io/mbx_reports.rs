@@ -3,14 +3,23 @@
 
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_session};
 use crate::waste_evidence::MbxSession;
+use nix::errno::Errno;
+use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
+use nix::unistd::Uid;
 use std::collections::BTreeMap;
-use std::fs::{self, OpenOptions};
+use std::ffi::OsStr;
+use std::fs::{self, OpenOptions, TryLockError};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(test)]
+mod tests;
 
 const EXPECTED: &str = "expected";
 const UNRECORDED: &str = "velnor-mbx-reports.unrecorded";
@@ -25,10 +34,63 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-fn inside_session() -> bool {
-    std::env::var_os("MBX_SOCKET")
-        .filter(|socket| !socket.is_empty())
-        .is_some_and(|socket| is_socket(Path::new(&socket)))
+fn inside_session(socket: Option<&OsStr>) -> bool {
+    socket.is_some_and(|socket| !socket.is_empty() && is_live_socket(Path::new(socket)))
+}
+
+fn is_live_socket(path: &Path) -> bool {
+    path.is_absolute() && is_socket(path) && accepts_without_blocking(path)
+}
+
+fn accepts_without_blocking(path: &Path) -> bool {
+    let Ok(address) = UnixAddr::new(path) else {
+        return false;
+    };
+    let Ok(endpoint) = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::empty(),
+        None,
+    ) else {
+        return false;
+    };
+    let endpoint = UnixStream::from(endpoint);
+    if endpoint.set_nonblocking(true).is_err() {
+        return false;
+    }
+    match connect(endpoint.as_raw_fd(), &address) {
+        Ok(()) | Err(Errno::EAGAIN | Errno::EINPROGRESS) => true,
+        Err(Errno::ECONNREFUSED) => session_lease_is_held(path),
+        Err(_) => false,
+    }
+}
+
+const SESSION_LEASE: &str = "owner.lock";
+
+fn session_lease_is_held(socket: &Path) -> bool {
+    lease_held_by(socket, Uid::current().as_raw())
+}
+
+fn lease_held_by(socket: &Path, owner: u32) -> bool {
+    let Some(directory) = socket.parent() else {
+        return false;
+    };
+    let Ok(lease) = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(directory.join(SESSION_LEASE))
+    else {
+        return false;
+    };
+    if !lease
+        .metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.uid() == owner)
+    {
+        return false;
+    }
+    let outcome = lease.try_lock_shared();
+    drop(lease);
+    matches!(outcome, Err(TryLockError::WouldBlock))
 }
 
 fn starts_velnor_ci(argv: &[String]) -> bool {
@@ -42,7 +104,12 @@ pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     if !starts_velnor_ci(argv) {
         command.env_remove(SWITCH);
     }
-    if !enabled() || !reports_session(argv) || inside_session() {
+    let socket = std::env::var_os("MBX_SOCKET");
+    let nested = inside_session(socket.as_deref());
+    if !nested {
+        command.env_remove("MBX_SOCKET");
+    }
+    if !enabled() || nested || !reports_session(argv) {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
@@ -244,16 +311,4 @@ fn read_regular(file: &Path, spent: &mut u64) -> Result<Vec<u8>, String> {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
     }
     Ok(bytes)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::collect;
-    use std::io;
-
-    #[test]
-    fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
-        let entries = std::iter::once(Err(io::Error::other("entry vanished")));
-        assert_eq!(collect(entries).map(|reports| reports.unlisted), Some(1));
-    }
 }

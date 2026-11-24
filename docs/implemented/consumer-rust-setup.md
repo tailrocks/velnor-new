@@ -162,6 +162,21 @@ versions.
   results into registry and workspace units, so the report alone cannot show
   a registry hit rate. Source:
   [`crates/mbx/src/session/stats.rs`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/src/session/stats.rs).
+- A running MBX session exports `MBX_SOCKET`, a stream socket named
+  `cache-agent.sock` in a `mbx-session-*` directory, and holds an exclusive
+  `flock` on `owner.lock` beside it (also exported as `MBX_SESSION_LEASE`).
+  `velnor-ci` keeps an inherited `MBX_SOCKET` only when a nonblocking connect
+  to it succeeds or reports a full queue (`EAGAIN`, `EINPROGRESS`). macOS
+  answers `ECONNREFUSED` both for a live listener with a full backlog and for
+  a socket file left by a killed session, so on `ECONNREFUSED` it tries a
+  nonblocking shared `flock` on `owner.lock` next to the socket, opened
+  read-only without creating it and without following a symlink, and releases
+  the lock at once if it gets it. The lease counts only when it is a regular
+  file owned by the user running `velnor-ci`. A held lock means a live
+  session; an acquired, missing, unreadable, foreign-owned or non-regular
+  lock means a stale socket, which is removed from the child's environment.
+  Linux reports a full queue as `EAGAIN`; the lease check runs on every Unix
+  target.
 
 ### Optional: name `mise.toml` the authority
 
