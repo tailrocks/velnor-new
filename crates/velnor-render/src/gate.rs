@@ -16,7 +16,7 @@ const NOT_CANCELLED: &str = "!cancelled()";
 const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
-const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
+pub(crate) const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
 const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
@@ -204,18 +204,8 @@ pub(crate) fn condition(
             parts.extend(saved_after.is_empty().then(|| "success()".to_owned()));
             parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
-        When::FullAudit => {
-            let expired = if setup == Setup::Before {
-                ""
-            } else {
-                " || steps.restored.outputs.expired == 'true'"
-            };
-            let changed = inputs_changed(gate, setup);
-            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired}{changed})"));
-        }
-        When::FullAuditOrPush => {
-            let changed = inputs_changed(gate, setup);
-            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'{changed})"));
+        When::FullAudit | When::FullAuditOrPush => {
+            parts.push(crate::audit_gate::events(when, gate, setup));
         }
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
@@ -247,25 +237,6 @@ pub(crate) fn condition(
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
     }
-}
-
-fn inputs_changed(gate: Option<&Gate>, setup: Setup) -> String {
-    let Some(gate) = gate.filter(|gate| gate.need == GateNeed::Inputs) else {
-        return String::new();
-    };
-    let read = plan_read(
-        &plan_source(&gate.from),
-        &output(&gate.slug, GateNeed::Inputs),
-        setup,
-    );
-    format!(
-        " || ({IS_PULL_REQUEST} && {} == 'run')",
-        if setup == Setup::Replanned {
-            format!("({read})")
-        } else {
-            read
-        }
-    )
 }
 
 fn has_label(label: &str) -> String {

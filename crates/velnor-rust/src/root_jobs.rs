@@ -6,11 +6,11 @@ mod lanes;
 mod timeouts;
 
 use velnor_model::{
-    CargoCommand, GateNeed, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision,
-    Step, StepKind, When,
+    CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
+    StepKind, When,
 };
 
-use crate::audit_job::{AuditLocation, audit_when, audits_changed_inputs, audits_per_root};
+use crate::audit_job::{AuditLocation, audit_gate, audit_when, audits_per_root};
 use crate::base_cache::{save_steps, saving_run};
 use crate::lane::Lane;
 use crate::members::{Member, check_alone, lint};
@@ -206,14 +206,9 @@ impl RootJobs<'_> {
         } else {
             StepKind::Helper(HelperCommand::InputsAudit)
         };
-        let gate = if audits_changed_inputs(self.facts) {
-            Some(self.lane.gate(GateNeed::Inputs))
-        } else {
-            self.lane.steps()
-        };
         Some(Step {
             when,
-            gate,
+            gate: audit_gate(self.facts, self.lane),
             ..step(kind)
         })
     }

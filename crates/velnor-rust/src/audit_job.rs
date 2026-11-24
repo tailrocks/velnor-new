@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, StepKind,
+    CacheKey, CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, RepoFacts, RootSlug,
+    StepKind,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
@@ -24,12 +25,17 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
 }
 
-pub(crate) fn audits_changed_inputs(facts: &RepoFacts) -> bool {
-    audits_per_root(facts)
+pub(crate) fn audit_gate(facts: &RepoFacts, lane: &Lane) -> Option<Gate> {
+    let changed_inputs = audits_per_root(facts)
         && facts
             .helper
             .as_ref()
-            .is_some_and(|release| release.version().at_least(PULL_REQUEST_INPUTS_HELPER))
+            .is_some_and(|release| release.version().at_least(PULL_REQUEST_INPUTS_HELPER));
+    if changed_inputs {
+        Some(lane.gate(GateNeed::Inputs))
+    } else {
+        lane.steps()
+    }
 }
 
 pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Option<Job> {
