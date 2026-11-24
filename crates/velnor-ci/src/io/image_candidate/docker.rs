@@ -17,7 +17,7 @@ use crate::image_candidate::lock::{Lock, banner};
 
 const QUERY_TIMEOUT: Duration = Duration::from_secs(30);
 const BUILD_TIMEOUT: Duration = Duration::from_mins(30);
-const BINARY_LIMIT: u64 = 1 << 30;
+pub(super) const BINARY_LIMIT: u64 = 1 << 30;
 const PLUGIN: &str = "docker-buildx";
 const SYSTEM_PLUGINS: &[&str] = &[
     "/usr/local/lib/docker/cli-plugins",
@@ -31,7 +31,7 @@ pub(super) struct Isolated {
     pub(super) home: PathBuf,
 }
 
-fn hash_file(path: &Path) -> Result<String, CiError> {
+pub(super) fn hash_file(path: &Path) -> Result<String, CiError> {
     let unreadable = |error: io::Error| CiError::new(format!("{}: {error}", path.display()));
     let mut hashing = Hashing::new(File::open(path).map_err(unreadable)?, BINARY_LIMIT);
     io::copy(&mut hashing, &mut io::sink()).map_err(unreadable)?;
@@ -84,7 +84,7 @@ pub(super) fn isolate(source: &Path, lock: &Lock, context: &Path) -> Result<Isol
     Ok(Isolated { config, home })
 }
 
-fn docker_command(docker: &str, isolated: &Isolated) -> Command {
+fn docker_command(docker: &Path, isolated: &Isolated) -> Command {
     let mut command = Command::new(docker);
     clean_environment(&mut command)
         .env("DOCKER_CONFIG", &isolated.config)
@@ -94,7 +94,7 @@ fn docker_command(docker: &str, isolated: &Isolated) -> Command {
 
 pub(super) fn version(
     runner: &Runner,
-    docker: &str,
+    docker: &Path,
     isolated: &Isolated,
     lock: &Lock,
 ) -> Result<String, CiError> {
@@ -105,7 +105,7 @@ pub(super) fn version(
 
 pub(super) fn build(
     runner: &Runner,
-    docker: &str,
+    docker: &Path,
     root: &Path,
     context: &Path,
     isolated: &Isolated,

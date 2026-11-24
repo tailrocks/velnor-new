@@ -47,7 +47,7 @@ fn git(checkout: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-const DOCKER: &str = r#"#!/bin/sh
+pub(super) const DOCKER: &str = r#"#!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_DIR/docker.log"
 plugin="$DOCKER_CONFIG/cli-plugins/docker-buildx"
 if [ "$1" = "info" ]; then
@@ -100,7 +100,7 @@ const COPY: &str = r#"[ -f "$DOCKER_CONFIG/cli-plugins/docker-buildx" ] || exit 
 cp "$FAKE_DIR/archive.tar" "$dest"
 exit 0"#;
 
-fn executable(path: &Path, data: &[u8]) {
+pub(super) fn executable(path: &Path, data: &[u8]) {
     write(path, data);
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -120,8 +120,9 @@ impl Source {
         write(
             &checkout.join(".velnor/runner.lock"),
             format!(
-                "buildx_version = \"0.38.0\"\nbuildx_sha256 = \"{}\"\n",
-                sha256_hex(GENUINE)
+                "buildx_version = \"0.38.0\"\nbuildx_sha256 = \"{}\"\ndocker_binary_sha256 = \"{docker}\"\ndocker_arm64_binary_sha256 = \"{docker}\"\n",
+                sha256_hex(GENUINE),
+                docker = sha256_hex(DOCKER.as_bytes()),
             ),
         );
         git(&checkout, &["init", "-q"]);
