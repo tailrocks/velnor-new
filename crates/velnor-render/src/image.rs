@@ -8,6 +8,7 @@ use velnor_model::{
 };
 
 use crate::helper_integrity::{defaults, secure_with};
+use crate::image_advance::advance_job;
 use crate::image_build::build_job;
 use crate::image_check::check_job;
 use crate::image_gate::{EXEMPTIONS_JOB, admin_token, exemptions_job, gate_job};
@@ -142,6 +143,7 @@ pub fn render_image(
         for build in &group.members {
             jobs.extend(check_job(workflow, build, &group.id(), &events));
             jobs.push(publish_job(workflow, build, &group.id(), &events));
+            jobs.push(advance_job(workflow, build));
             jobs.push(authority_job(workflow, build, &events));
             jobs.push(promote_job(workflow, build));
         }

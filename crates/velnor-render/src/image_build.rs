@@ -23,6 +23,7 @@ use crate::steps::{CHECKOUT, RUN};
 
 const ARTIFACT_RETENTION_DAYS: u64 = 7;
 pub(crate) const LIVE_OUTPUT: &str = "live";
+const RECHECK_STEP: &str = "recheck";
 
 pub(crate) fn job_id(image: &ImageConfig, part: &str) -> String {
     format!("image-{}-{part}", image.name)
@@ -74,15 +75,34 @@ pub(crate) fn sha_scope() -> &'static str {
 }
 
 pub(crate) fn stands_down() -> RenderedStep {
-    tip(Some(expression(
-        "github.event_name == 'push' && github.run_attempt == 1",
-    )))
+    tip(
+        TIP_STEP,
+        Some(expression(
+            "github.event_name == 'push' && github.run_attempt == 1",
+        )),
+    )
 }
 
-pub(crate) fn only_live(mut step: RenderedStep) -> RenderedStep {
-    let live = format!(
-        "github.event_name != 'push' || github.run_attempt != 1 || steps.{TIP_STEP}.outputs.ready == 'true'"
-    );
+fn rechecks() -> RenderedStep {
+    only_live(tip(
+        RECHECK_STEP,
+        Some(expression(
+            "github.event_name == 'push' && github.run_attempt == 1",
+        )),
+    ))
+}
+
+pub(crate) fn only_live(step: RenderedStep) -> RenderedStep {
+    live_after(step, &[TIP_STEP])
+}
+
+fn live_after(mut step: RenderedStep, checks: &[&str]) -> RenderedStep {
+    let ready = checks
+        .iter()
+        .map(|id| format!("steps.{id}.outputs.ready == 'true'"))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    let live = format!("github.event_name != 'push' || github.run_attempt != 1 || ({ready})");
     let inner = step.condition.as_deref().map(|text| {
         text.strip_prefix("${{ ")
             .and_then(|rest| rest.strip_suffix(" }}"))
@@ -119,7 +139,7 @@ pub(crate) fn build_job(
         outputs: vec![(
             LIVE_OUTPUT.to_owned(),
             format!(
-                "${{{{ github.run_attempt != 1 || steps.{TIP_STEP}.outputs.ready == 'true' }}}}"
+                "${{{{ github.run_attempt != 1 || (steps.{TIP_STEP}.outputs.ready == 'true' && steps.{RECHECK_STEP}.outputs.ready == 'true') }}}}"
             ),
         )],
         id,
@@ -167,6 +187,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
             ),
         ));
     }
+    let before_compile = steps.len();
     steps.push(compile(workflow, group));
     for build in &group.members {
         steps.push(stage(build));
@@ -178,8 +199,15 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
         }
         steps.push(artifact_step);
     }
-    let live = steps.split_off(3);
-    steps.extend(live.into_iter().map(only_live));
+    let after = steps.split_off(before_compile);
+    let between = steps.split_off(3);
+    steps.extend(between.into_iter().map(only_live));
+    steps.push(rechecks());
+    steps.extend(
+        after
+            .into_iter()
+            .map(|step| live_after(step, &[TIP_STEP, RECHECK_STEP])),
+    );
     steps
 }
 

@@ -117,7 +117,8 @@ fn registry_credentials_reach_only_the_publish_and_promote_jobs() -> TestResult 
         let workflow = rendered(name)?;
         for (id, job) in jobs(&workflow)? {
             let text = job.to_string();
-            let privileged = id.ends_with("-publish") || id.ends_with("-promote");
+            let privileged =
+                id.ends_with("-publish") || id.ends_with("-advance") || id.ends_with("-promote");
             assert_eq!(text.contains("DOCKERHUB"), privileged, "{name} {id}");
             assert_eq!(
                 job["environment"] == "images",
@@ -245,8 +246,8 @@ fn the_pushed_image_carries_the_commit_tags_the_source_labels_and_the_declared_a
 }
 
 #[test]
-fn a_second_registry_adds_one_login_and_the_same_two_tags_while_a_single_one_has_one_login()
--> TestResult {
+fn a_second_registry_adds_one_login_and_one_sha_tag_while_a_single_one_has_one_login() -> TestResult
+{
     let plain = rendered("image-plain")?;
     let both = rendered("image-ghcr")?;
     let logins =
@@ -258,7 +259,7 @@ fn a_second_registry_adds_one_login_and_the_same_two_tags_while_a_single_one_has
         .as_str()
         .ok_or("no tags")?
         .to_owned();
-    assert_eq!(tags.lines().count(), 4);
+    assert_eq!(tags.lines().count(), 2);
     assert!(tags.contains("ghcr.io/acme/cluster-svc:sha-${{ github.sha }}"));
     let permissions = &publish["permissions"];
     assert_eq!(permissions["packages"], "write");

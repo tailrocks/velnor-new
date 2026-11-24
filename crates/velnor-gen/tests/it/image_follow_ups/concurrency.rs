@@ -76,6 +76,21 @@ fn a_build_or_gate_of_a_commit_that_is_not_the_tip_stands_down_before_any_expens
                 },
             )?;
             assert!(tip < expensive, "{name} {id}");
+            if id.ends_with("-build") {
+                let again = ordered
+                    .iter()
+                    .position(|step| step["id"] == "recheck")
+                    .ok_or("no recheck")?;
+                assert!(again < expensive, "{name} {id}");
+                for step in &ordered[expensive..] {
+                    let condition = step["if"].as_str().unwrap_or_default();
+                    assert!(
+                        condition.contains("steps.recheck.outputs.ready == 'true'"),
+                        "{name} {id}: {}",
+                        step["name"]
+                    );
+                }
+            }
             for step in &ordered[tip + 1..] {
                 let condition = step["if"].as_str().unwrap_or_default();
                 assert!(
@@ -146,7 +161,7 @@ fn a_release_tag_on_a_commit_without_an_image_fails_with_a_message_naming_the_re
             assert!(
                 explain["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("re-run the push workflow run")),
+                    .is_some_and(|run| run.contains("Re-run all jobs")),
                 "{name} {id}"
             );
             assert!(
@@ -155,7 +170,20 @@ fn a_release_tag_on_a_commit_without_an_image_fails_with_a_message_naming_the_re
                     .is_some_and(|run| run.contains("outcome == 'failure'")),
                 "{name} {id}"
             );
-            assert_eq!(step_named(job, "Stop: no commit image")?["run"], "exit 1");
+            assert_eq!(step_named(job, "Stop: the commit image")?["run"], "exit 1");
+            let tell = step_named(job, "Tell a missing image from a registry error")?;
+            assert!(
+                tell["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("manifest unknown")),
+                "{name} {id}"
+            );
+            assert!(
+                explain["if"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("miss-0.outcome == 'success'")),
+                "{name} {id}"
+            );
         }
     }
     Ok(())

@@ -96,59 +96,38 @@ fn the_pull_request_filter_matches_a_declared_input_file_and_the_dockerfile_spec
 }
 
 #[test]
-fn the_tip_is_checked_right_before_the_push_and_main_moves_only_while_it_holds() -> TestResult {
-    for (name, id) in [
-        ("image-plain", "image-plain-svc-publish"),
-        ("image-ghcr", "image-cluster-svc-publish"),
+fn a_commit_that_is_no_longer_the_tip_says_so_and_never_moves_the_branch_tag() -> TestResult {
+    for (name, publish, advance) in [
+        (
+            "image-plain",
+            "image-plain-svc-publish",
+            "image-plain-svc-advance",
+        ),
+        (
+            "image-ghcr",
+            "image-cluster-svc-publish",
+            "image-cluster-svc-advance",
+        ),
     ] {
         let workflow = rendered(name)?;
-        let publish = &workflow["jobs"][id];
-        let names: Vec<&str> = steps(publish)
-            .iter()
-            .filter_map(|step| step["name"].as_str())
-            .collect();
-        let tip = names
-            .iter()
-            .position(|text| text.starts_with("Check that the commit is still the tip"))
-            .ok_or("no tip step")?;
-        let push = names
-            .iter()
-            .position(|text| text.starts_with("Build and push"))
-            .ok_or("no push step")?;
+        let tags = step_named(&workflow["jobs"][publish], "Build and push")?["with"]["tags"]
+            .as_str()
+            .ok_or("no tags")?
+            .to_owned();
+        assert!(!tags.contains(":main"), "{name}: {tags}");
+        let advance = &workflow["jobs"][advance];
         assert!(
-            names[tip + 1..push]
-                .iter()
-                .all(|text| text.contains("default-branch tag was withheld")),
-            "{name}: only the withheld notices may sit between the check and the push"
-        );
-        assert!(
-            step_named(publish, "Say that the default-branch tag was withheld")?["if"]
+            step_named(advance, "Say that the default-branch tag was withheld")?["if"]
                 .as_str()
                 .is_some_and(|text| text.contains("steps.tip.outputs.ready != 'true'")),
             "{name}"
         );
         assert!(
-            step_named(publish, "Record the digest")?["env"]["BRANCH_TAG"]
-                .as_str()
-                .is_some_and(|text| text.contains("'withheld'")),
-            "{name}"
-        );
-        assert!(
-            step_named(publish, "still the tip")?["run"]
+            step_named(advance, "still the tip")?["run"]
                 .as_str()
                 .is_some_and(|run| run
                     .ends_with("image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip"))
         );
-        let tags = step_named(publish, "Build and push")?["with"]["tags"]
-            .as_str()
-            .ok_or("no tags")?
-            .to_owned();
-        let moving = tags.lines().filter(|line| line.contains(":main")).count();
-        let guarded = tags
-            .lines()
-            .filter(|line| line.contains("steps.tip.outputs.ready == 'true'"))
-            .count();
-        assert!(moving > 0 && moving == guarded, "{name}: {tags}");
     }
     Ok(())
 }

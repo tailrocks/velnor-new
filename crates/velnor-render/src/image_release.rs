@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_model::ImageRegistry;
+
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{job_id, setup_buildx};
 use crate::image_gate::{gate_scopes, gate_step};
@@ -9,7 +11,6 @@ use crate::install_steps::install_helper;
 use crate::release_binaries::command;
 use crate::release_steps::{expression, variables};
 use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
-use velnor_model::ImageRegistry;
 
 const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
 const AUTHORITY_WAIT_SECONDS: u32 = 1200;
@@ -123,7 +124,13 @@ pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) 
 
 fn exists(index: usize, registry: &ImageRegistry) -> Vec<RenderedStep> {
     let id = format!("exists-{index}");
-    let missing = expression(&format!("steps.{id}.outcome == 'failure'"));
+    let miss = format!("miss-{index}");
+    let log = format!("\"$RUNNER_TEMP/inspect-{index}.log\"");
+    let host = registry.host.name();
+    let failed = expression(&format!("steps.{id}.outcome == 'failure'"));
+    let absent = expression(&format!(
+        "steps.{id}.outcome == 'failure' && steps.{miss}.outcome == 'success'"
+    ));
     let env = vec![
         ("IMAGE".to_owned(), Value::Text(registry.reference())),
         (
@@ -137,22 +144,38 @@ fn exists(index: usize, registry: &ImageRegistry) -> Vec<RenderedStep> {
             env: env.clone(),
             continue_on_error: true,
             ..command(
-                format!("Look for the commit image in {}", registry.host.name()),
-                "docker buildx imagetools inspect \"$IMAGE:sha-$COMMIT\"".to_owned(),
+                format!("Look for the commit image in {host}"),
+                format!("docker buildx imagetools inspect \"$IMAGE:sha-$COMMIT\" 2> {log}"),
             )
         },
         RenderedStep {
-            condition: Some(missing.clone()),
+            condition: Some(failed.clone()),
+            ..command(
+                format!("Show the answer of {host}"),
+                format!("cat {log}"),
+            )
+        },
+        RenderedStep {
+            id: Some(miss),
+            condition: Some(failed.clone()),
+            continue_on_error: true,
+            ..command(
+                format!("Tell a missing image from a registry error in {host}"),
+                format!("grep -qiF -e \"not found\" -e \"manifest unknown\" {log}"),
+            )
+        },
+        RenderedStep {
+            condition: Some(absent),
             env,
             ..command(
-                format!("Explain the missing commit image in {}", registry.host.name()),
-                "echo \"::error title=Image::$IMAGE:sha-$COMMIT does not exist because a superseded commit gets no image, so re-run the push workflow run of commit $COMMIT, then re-run this job\"".to_owned(),
+                format!("Explain the missing commit image in {host}"),
+                "echo \"::error title=Image::$IMAGE:sha-$COMMIT does not exist because a superseded commit gets no image, so open the push workflow run of commit $COMMIT, choose Re-run all jobs, then re-run this job\"".to_owned(),
             )
         },
         RenderedStep {
-            condition: Some(missing),
+            condition: Some(failed),
             ..command(
-                format!("Stop: no commit image in {}", registry.host.name()),
+                format!("Stop: the commit image of {host} is missing or unreadable"),
                 "exit 1".to_owned(),
             )
         },

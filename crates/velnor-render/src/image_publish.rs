@@ -16,6 +16,7 @@ const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
 pub(crate) const TIP_STEP: &str = "tip";
+pub(crate) const DIGEST_OUTPUT: &str = "digest";
 
 pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     let mut scopes = vec![("contents", "read")];
@@ -145,24 +146,16 @@ pub(crate) fn login(registry: &ImageRegistry) -> RenderedStep {
     RenderedStep { with, ..step }
 }
 
-fn tags(image: &ImageConfig, branch: &str) -> Value {
+fn tags(image: &ImageConfig) -> Value {
     let lines: Vec<String> = image
         .registries
         .iter()
-        .flat_map(|registry| {
-            let reference = registry.reference();
-            [
-                format!("{reference}:sha-${{{{ github.sha }}}}"),
-                format!(
-                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && '{reference}:{branch}' || '' }}}}"
-                ),
-            ]
-        })
+        .map(|registry| format!("{}:sha-${{{{ github.sha }}}}", registry.reference()))
         .collect();
     Value::Expr(lines.join("\n"))
 }
 
-fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
+fn push(image: &ImageConfig) -> RenderedStep {
     let attested = image.attestations;
     let attestation = |on: &str| {
         if attested {
@@ -183,16 +176,16 @@ fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
             ("push".to_owned(), Value::Bool(true)),
             ("provenance".to_owned(), attestation("mode=max")),
             ("sbom".to_owned(), Value::Bool(attested)),
-            ("tags".to_owned(), tags(image, branch)),
+            ("tags".to_owned(), tags(image)),
             ("labels".to_owned(), labels()),
         ],
         ..DOCKER_BUILD_PUSH.step(format!("Build and push the {} image", image.name))
     }
 }
 
-pub(crate) fn tip(condition: Option<String>) -> RenderedStep {
+pub(crate) fn tip(id: &str, condition: Option<String>) -> RenderedStep {
     RenderedStep {
-        id: Some(TIP_STEP.to_owned()),
+        id: Some(id.to_owned()),
         condition,
         env: variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
@@ -206,33 +199,6 @@ pub(crate) fn tip(condition: Option<String>) -> RenderedStep {
     }
 }
 
-fn withheld(branch: &str) -> Vec<RenderedStep> {
-    let condition = expression(&format!("steps.{TIP_STEP}.outputs.ready != 'true'"));
-    let notice = format!(
-        "echo \"::notice title=Image::the {branch} tag was withheld because this commit is no longer the tip\""
-    );
-    let summary = format!(
-        "echo \"The {branch} tag was withheld: this commit is no longer the tip of {branch}, so only sha-$COMMIT was pushed.\" >> \"$GITHUB_STEP_SUMMARY\""
-    );
-    vec![
-        RenderedStep {
-            condition: Some(condition.clone()),
-            ..command(
-                "Say that the default-branch tag was withheld".to_owned(),
-                notice,
-            )
-        },
-        RenderedStep {
-            condition: Some(condition),
-            env: variables(&[("COMMIT", "${{ github.sha }}")]),
-            ..command(
-                "Record that the default-branch tag was withheld".to_owned(),
-                summary,
-            )
-        },
-    ]
-}
-
 fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
     let reference = format!("{}:sha-${{{{ github.sha }}}}", registry.reference());
     let host = registry.host.name();
@@ -243,17 +209,10 @@ fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
                 "DIGEST".to_owned(),
                 Value::Expr(format!("${{{{ steps.{PUSH_STEP}.outputs.digest }}}}")),
             ),
-            (
-                "BRANCH_TAG".to_owned(),
-                Value::Expr(format!(
-                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && 'pushed' || 'withheld' }}}}"
-                )),
-            ),
         ],
         ..command(
             format!("Record the digest pushed to {host}"),
-            "echo \"$IMAGE $DIGEST (default-branch tag $BRANCH_TAG)\" >> \"$GITHUB_STEP_SUMMARY\""
-                .to_owned(),
+            "echo \"$IMAGE $DIGEST\" >> \"$GITHUB_STEP_SUMMARY\"".to_owned(),
         )
     }]
 }
@@ -275,9 +234,7 @@ pub(crate) fn publish_job(
     steps.push(restore_modes(image));
     steps.push(setup_buildx());
     steps.extend(image.registries.iter().map(login));
-    steps.push(tip(None));
-    steps.extend(withheld(workflow.branch));
-    steps.push(push(image, workflow.branch));
+    steps.push(push(image));
     for registry in &image.registries {
         steps.extend(report(registry));
     }
@@ -287,6 +244,10 @@ pub(crate) fn publish_job(
             cancel_in_progress: false,
         }),
         id: job_id(image, "publish"),
+        outputs: vec![(
+            DIGEST_OUTPUT.to_owned(),
+            format!("${{{{ steps.{PUSH_STEP}.outputs.digest }}}}"),
+        )],
         needs: vec![compile.to_owned(), GATE_JOB.to_owned()],
         condition: Some(expression(&format!(
             "needs.{GATE_JOB}.outputs.ready == 'true' && needs.{compile}.outputs.{LIVE_OUTPUT} == 'true' && {}",

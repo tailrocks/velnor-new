@@ -25,6 +25,7 @@ mod gate_needs;
 mod helper_integrity;
 mod helper_steps;
 mod image;
+mod image_advance;
 mod image_build;
 mod image_check;
 mod image_gate;
