@@ -145,10 +145,19 @@ fn from_helper_0_1_114_the_release_app_key_reaches_only_a_helper_mint_that_every
         );
         assert_eq!(last["run"], "velnor-ci revoke-token", "{job}: {last}");
     }
-    for text in workflows("0.1.114")? {
+    for (index, text) in workflows("0.1.114")?.iter().enumerate() {
         assert!(
             !text.contains("create-github-app-token") && !text.contains("private-key"),
             "an action receives the release App key"
+        );
+        let minting = helpers
+            .keys()
+            .filter(|job| job.starts_with(&format!("{index}/")))
+            .count();
+        assert_eq!(
+            text.matches("secrets.RELEASE_APP_PRIVATE_KEY").count(),
+            minting,
+            "workflow {index}: the release App key is referenced outside the mint steps"
         );
     }
     Ok(())
