@@ -12,6 +12,7 @@ mod cron;
 mod helper;
 mod hosted;
 mod ids;
+mod image;
 mod lint;
 mod mbx;
 mod mbx_config;
@@ -62,6 +63,10 @@ pub use hosted::HostedRunners;
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
+};
+pub use image::{
+    ImageConfig, ImageCredential, ImageHost, ImageOpenssl, ImagePrBuild, ImageRegistry,
+    ImageVisibility,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::{MbxMode, MbxStats};

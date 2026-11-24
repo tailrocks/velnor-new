@@ -221,6 +221,59 @@ Refused at generation time: a missing `sha256` or one that is not 64 lowercase h
 
 **The download.** `velnor-ci fetch-assets` reads `GET /repos/<repo>/releases/tags/<tag>` on the API in `VELNOR_API_URL`, takes the one asset with that exact name, and downloads it by id. The token is not sent to the storage URL that the API redirects to. The bytes go to a new file next to the destination, are hashed while they are written (at most 4 GiB), and are renamed into place only when the SHA-256 equals the configured one; on a mismatch nothing is left. The destination is re-checked in the helper: relative, plain names, and no symbolic link or file on any folder of the path. The token is revoked with `DELETE /installation/token` afterwards, also when a download fails, and a failed revocation fails the step. With a helper before 0.1.112 the token comes from `actions/create-github-app-token`, whose post-job revocation stays on as the backstop for a cancelled job. From 0.1.112 `velnor-ci app-token` mints the token and there is no action and no post step, and the generated workflow has no separate revoke step either, so the backstop for a cancelled job is the token's own expiry (one hour); see **The App private key** above.
 
+## Container images
+
+A project that ships a Docker image of its Rust binaries describes it with one `[[image]]` table per image in `.velnor/rust-ci.toml`, up to four. The generator writes `.github/workflows/image.yml` and nothing else changes when the table is absent. The key needs `velnor-ci` 0.1.116 or later; the generator refuses an older pin. The binaries are compiled outside Docker with `cargo zigbuild`, so the Dockerfile only copies them in.
+
+```toml
+[[image]]
+name = "platform-gateway"          # job ids image-<name>-*, artifact image-<name>, release tag <name>-v<X.Y.Z>
+bins = ["platform-gateway"]        # 1 to 8 binary targets of one Cargo root
+glibc = "2.41"                     # the newest glibc the image may need (default 2.41, Debian trixie)
+openssl = "sysroot"                # none (default), sysroot or vendored
+inputs = ["crates/cluster-migration/migrations"]
+
+[[image.registry]]
+host = "docker.io"
+repository = "chainargos/platform-gateway"
+username = "secrets.DOCKERHUB_USERNAME"
+token = "secrets.DOCKERHUB_TOKEN"
+
+[[image.registry]]                 # optional second registry
+host = "ghcr.io"
+repository = "chainargos/platform-gateway"
+```
+
+| Key | Default | Rule |
+|---|---|---|
+| `name` | required | `[a-z][a-z0-9-]*`, 2 to 40 bytes, unique |
+| `bins` | required | 1 to 8 distinct binary target names; each must be a `bin` target of exactly one package of the Cargo root (name `package` when two packages share a name); a target with `required-features` needs `features` |
+| `package` | none | A package that owns every bin; adds `--package`. Without it, `--package` is added only when every bin belongs to one package |
+| `root` | the only Cargo root | Directory of a detected Cargo root; required when the repository has several |
+| `features`, `default_features` | `[]`, `true` | `--features a,b` and `--no-default-features` |
+| `profile` | `"release"` | `release` renders `--release`, any other name renders `--profile <name>`; `test` and `bench` are refused |
+| `dockerfile`, `context` | `"Dockerfile"`, `"."` | Repository-relative paths of plain names (`[A-Za-z0-9._/-]`, no `.`, `..` or `.git` part) |
+| `stage` | `"dist"` | Directory inside `context` that receives `<stage>/<bin>`; the Dockerfile copies from it. Refused when a tracked file lies under it |
+| `inputs` | `[]` | Paths under `context` that the Dockerfile copies besides the staged binaries. The publish job checks out only the Dockerfile, `.dockerignore` and these paths, and a pull request that touches them builds the image |
+| `glibc` | `"2.41"` | `2.17` to `2.99`. The compile targets `x86_64-unknown-linux-gnu.<glibc>` |
+| `openssl` | `"none"` | `none` with `openssl-sys` in the root's `Cargo.lock` is refused. `sysroot` unpacks the Debian trixie `libssl-dev` and `libssl3t64` packages listed in `.velnor/image-sysroot.lock` and points `X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR` and `..._INCLUDE_DIR` at them. `vendored` adds nothing: the repository enables `openssl/vendored` itself |
+| `pr_build` | `"inputs"` | `inputs`: a pull request builds the image only when it changes the Dockerfile, `.dockerignore`, `inputs`, a `Cargo.toml` or `Cargo.lock`, a toolchain or mise file, `.cargo/`, `.velnor/rust-ci.toml` or lock, the sysroot lock or the workflow; `always` removes the filter; `off` never builds on a pull request. A pull request never pushes |
+| `attestations` | `true` | BuildKit `provenance: mode=max` and `sbom: true` on the pushed image. GitHub artifact attestations are not used |
+| `timeout_minutes` | `45` | 1 to 360, for the build job |
+
+`[[image.registry]]` has one or two entries with distinct `host` values, `docker.io` or `ghcr.io`. `repository` is `namespace/name` in lowercase; for `ghcr.io` the namespace must be the lowercase owner of the repository. A `docker.io` entry needs `username` (`secrets.NAME` or `vars.NAME`) and `token` (`secrets.NAME`), and `visibility` (`private`, the default, or `public`). A `ghcr.io` entry takes no credential key: it logs in as `github.actor` with `github.token` and adds `packages: write` to the jobs that push.
+
+Generation also refuses: a `bins` entry that no package of the root builds; a `root` that is not a Cargo root; `mise.toml` without `zig` and `cargo-zigbuild` (pin both, with checksums in `mise.lock`); a `.github/workflows/image.yml` that a declared workflow also writes; a checkout with no GitHub repository. `external_workflows` must not list `.github/workflows/image.yml`: delete the hand-written file and the entry in the same change.
+
+**Jobs.** For each image the workflow has up to five jobs, and no `workflow_dispatch`, `schedule`, `pull_request_target` or `workflow_run` trigger:
+
+- `image-<name>-build` runs on a push to the default branch and on a same-repository pull request (a fork or a `[bot]` author is skipped). It has `contents: read`, no `environment` and no registry credential. It runs the same prelude as the Rust lanes (the helper, the mbx store, with `mbx_shared_store` the shared host store, the private-dependency token and `velnor-ci fetch`, then the tools install), adds the `x86_64-unknown-linux-gnu` target, optionally unpacks the OpenSSL sysroot, compiles with `velnor-ci run -- cargo zigbuild --locked --target x86_64-unknown-linux-gnu.<glibc>`, and runs `velnor-ci image stage`, which copies the binaries through any `target` link into real files under `<context>/<stage>` and refuses a binary that is not an x86-64 dynamic ELF, whose newest `GLIBC_` version is above `glibc`, that has a library search path outside `$ORIGIN`, or whose libssl and libcrypto dependency disagrees with `openssl`. A pull request then builds the image without pushing; a push uploads the staged directory as the artifact `image-<name>`.
+- `image-<name>-gate` runs on a push to the default branch and runs `velnor-ci image gate`: it waits until every required check of the commit passed, and writes `ready=false` when the commit is no longer the tip of the default branch, so an older commit never publishes after a newer one.
+- `image-<name>-publish` needs the build and the gate, runs in the `images` environment, and is the only job with the registry credentials. It checks out only the Dockerfile and its inputs, downloads the staged binaries, runs `velnor-ci image preflight` (for a private Docker Hub repository: refuse when the repository is missing or public, and skip the push when `sha-<commit>` already exists), logs in, and pushes with `docker/build-push-action` for `linux/amd64` with the tags `sha-<40-hex commit>` and `<default branch>`, the labels `org.opencontainers.image.source` and `org.opencontainers.image.revision`, and the attestations of `attestations`.
+- `image-<name>-authority` and `image-<name>-promote` run on a push of a tag `<name>-vX.Y.Z`. The authority job needs a strict version, the tagged commit on the default branch and green required checks. The promote job, in the `images` environment, runs `docker buildx imagetools create` to add the tag `X.Y.Z` to the digest already pushed as `sha-<commit>`, in each registry. A release tag never rebuilds.
+
+The pull request build runs in the checkout that holds the compile output, so list `target/` in `.dockerignore`; the publish job checks out only the files above and has no `target/`. Create the `images` environment in the repository, restrict it to the default branch and the release tags, and keep the registry credentials as environment secrets, so the environment gates them. `.velnor/image-sysroot.lock` is a TOML file with `version = 1` and one `[[deb]]` table per package (`package`, an `https` `url` of a `.deb` and its lowercase hex `sha256`); take the URLs from a `snapshot.debian.org` timestamp so a superseded package stays downloadable.
+
 ## Workspace groups
 
 A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.

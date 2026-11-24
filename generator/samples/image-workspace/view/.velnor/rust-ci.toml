@@ -1,0 +1,20 @@
+runner = "ubuntu-26.04-scale-set"
+hosted = false
+fork_runner = "ubuntu-latest"
+
+[[image]]
+name = "legacy-grpc-server"
+bins = ["legacy-server", "legacy-migration"]
+root = "backend-rust"
+features = ["tls"]
+dockerfile = "docker/Dockerfile"
+context = "."
+glibc = "2.36"
+openssl = "sysroot"
+pr_build = "inputs"
+
+[[image.registry]]
+host = "docker.io"
+repository = "acme/legacy-grpc-server"
+username = "secrets.DOCKERHUB_USERNAME"
+token = "secrets.DOCKERHUB_TOKEN"

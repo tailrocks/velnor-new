@@ -1,0 +1,16 @@
+runner = "ubuntu-26.04-scale-set"
+hosted = false
+fork_runner = "ubuntu-latest"
+default_branch = "main"
+
+[[image]]
+name = "plain-svc"
+bins = ["plain-svc"]
+pr_build = "always"
+attestations = false
+
+[[image.registry]]
+host = "docker.io"
+repository = "acme/plain-svc"
+username = "secrets.DOCKERHUB_USERNAME"
+token = "secrets.DOCKERHUB_TOKEN"

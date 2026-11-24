@@ -3,8 +3,10 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
 use crate::HELPER_MINIMUM;
+
+const IMAGE_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.92 via 1605e9c34d
@@ -93,6 +95,29 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "full_run", HELPER_MINIMUM),
     gate(RustCi, "helper", HELPER_MINIMUM),
     gate(RustCi, "helper.path", HELPER_MINIMUM),
+    gate_untagged(RustCi, "image", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.attestations", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.bins", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.context", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.default_features", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.dockerfile", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.features", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.glibc", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.inputs", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.name", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.openssl", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.package", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.pr_build", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.profile", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.host", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.repository", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.token", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.username", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.visibility", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.root", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.stage", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.timeout_minutes", IMAGE_HELPER),
     // helper-gate: first in tools-v0.1.99 via 0b991d8ce7
     gate(RustCi, "hosted", (0, 1, 99)),
     gate(RustCi, "inputs", HELPER_MINIMUM),
