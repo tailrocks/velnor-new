@@ -8,8 +8,9 @@ use std::rc::{Rc, Weak};
 use nix::dir::Dir;
 
 use super::handle::{self, Anchor, Climb, Opened, Origin};
+use super::probe::Probe;
 use super::resolve::{RESOLVER_FIXED, Reach};
-use super::walk::{DESCRIPTOR_BUDGET, Pending, Probe, UNTRACKED_LISTING};
+use super::walk::{DESCRIPTOR_BUDGET, Pending, UNTRACKED_LISTING};
 
 const RECENT: usize = 4;
 
@@ -39,7 +40,7 @@ impl<'p, 'a> Held<'p, 'a> {
         let in_use = self.handles.len() + UNTRACKED_LISTING + RESOLVER_FIXED;
         Reach {
             bound: DESCRIPTOR_BUDGET.saturating_sub(in_use),
-            opened: self.probe.opened,
+            opened: self.probe.opened(),
         }
     }
 
@@ -50,7 +51,7 @@ impl<'p, 'a> Held<'p, 'a> {
         };
         Climb {
             anchor,
-            stepped: self.probe.reopened,
+            stepped: self.probe.reopened(),
         }
     }
 
@@ -81,7 +82,7 @@ impl<'p, 'a> Held<'p, 'a> {
         });
         self.handles
             .retain(|retained| retained.handle.strong_count() > 0);
-        while self.handles.len() > self.probe.held {
+        while self.handles.len() > self.probe.held() {
             let released = self.handles.remove(self.victim());
             let end = released.siblings.end.min(pending.len());
             for entry in pending
