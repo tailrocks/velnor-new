@@ -120,6 +120,7 @@ mod helper_warning_cli;
 mod helper_workflow_size;
 mod hosted_key;
 mod image_config;
+mod image_publish_flow;
 mod image_workflow;
 mod key_gates;
 mod lane_guard_steps;
