@@ -91,16 +91,35 @@ fn a_rustdoc_build_selects_its_package() {
 }
 
 #[test]
-fn a_fix_pass_selects_its_package() {
-    rebuilds_the_untrusted_lib(&[
-        "cargo",
-        "fix",
-        "-p",
-        "lib",
-        "--lib",
-        "--allow-no-vcs",
-        "--offline",
-    ]);
+fn a_fix_pass_is_refused() {
+    let repo = project_with_lib_targets();
+    let refused = wrapped_build(
+        &repo,
+        &[
+            "cargo",
+            "fix",
+            "-p",
+            "lib",
+            "--lib",
+            "--allow-no-vcs",
+            "--offline",
+        ],
+    );
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("does not run cargo fix"), "{stderr}");
+}
+
+#[test]
+fn a_run_that_names_no_target_is_refused() {
+    let repo = project_with_lib_targets();
+    let refused = wrapped_build(&repo, &["cargo", "run", "-p", "lib", "--offline"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("name it with --bin or --example"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -130,6 +149,19 @@ fn a_cargo_alias_defined_on_the_command_line_is_refused() {
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
         stderr.contains("cannot resolve the cargo alias xt"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_cargo_alias_that_runs_a_shell_command_is_refused() {
+    let repo = project_with_lib_targets();
+    repo.write("rust/.cargo/config.toml", "[alias]\nxt = \"!echo hi\"\n");
+    let refused = wrapped_build(&repo, &["cargo", "xt"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("cargo alias xt runs a shell command"),
         "{stderr}"
     );
 }

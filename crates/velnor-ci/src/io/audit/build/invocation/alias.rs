@@ -4,7 +4,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
-use super::{CARGO_SUBCOMMANDS, Invocation, subcommand};
+use super::{Invocation, subcommand};
 use crate::error::CiError;
 use crate::io::crates_mirror_alias::expand;
 
@@ -23,14 +23,19 @@ pub(in super::super) fn resolve(
                 .map(|word| word.into_string().ok())
                 .collect::<Option<Vec<String>>>()
         });
-    if let Some(words) = expanded {
-        return Ok(std::iter::once(command[0].clone()).chain(words).collect());
-    }
     let words: Vec<&str> = command[1..].iter().map(String::as_str).collect();
-    match subcommand(&words).map(|index| words[index]) {
-        Some(name) if !CARGO_SUBCOMMANDS.contains(&name) && name != "nextest" => Err(CiError::new(
-            format!("cannot resolve the cargo alias {name}; run the cargo command it expands to"),
-        )),
-        _ => Ok(command.to_vec()),
+    let name = subcommand(&words).map_or("", |index| words[index]);
+    match expanded {
+        Some(expanded) if expanded.iter().any(|word| word.starts_with('!')) => {
+            Err(CiError::new(format!(
+                "cargo alias {name} runs a shell command; run the command it names outside inputs build"
+            )))
+        }
+        Some(expanded) => Ok(std::iter::once(command[0].clone())
+            .chain(expanded)
+            .collect()),
+        None => Err(CiError::new(format!(
+            "cannot resolve the cargo alias {name}; run the cargo command it expands to"
+        ))),
     }
 }

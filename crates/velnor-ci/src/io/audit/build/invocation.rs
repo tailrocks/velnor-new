@@ -14,9 +14,9 @@ pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
 
-const CARGO_SUBCOMMANDS: [&str; 18] = [
+const CARGO_SUBCOMMANDS: [&str; 16] = [
     "build", "b", "check", "c", "clippy", "test", "t", "nextest", "doc", "d", "run", "r", "bench",
-    "rustc", "rustdoc", "fix", "fetch", "metadata",
+    "rustc", "fetch", "metadata",
 ];
 
 pub(super) struct Invocation {
@@ -25,6 +25,7 @@ pub(super) struct Invocation {
     pub(super) compiler: bool,
     pub(super) cargo: bool,
     builds: bool,
+    refusal: Option<&'static str>,
     globals: Vec<String>,
     chdir: Option<PathBuf>,
 }
@@ -95,16 +96,7 @@ impl Invocation {
             (
                 "cargo",
                 [
-                    "build"
-                        | "b"
-                        | "check"
-                        | "c"
-                        | "clippy"
-                        | "doc"
-                        | "d"
-                        | "rustc"
-                        | "rustdoc"
-                        | "fix",
+                    "build" | "b" | "check" | "c" | "clippy" | "doc" | "d" | "rustc" | "rustdoc",
                     ..
                 ]
             ) | ("cargo-clippy", ["clippy", ..])
@@ -115,6 +107,8 @@ impl Invocation {
         let running = matches!((program, arguments), ("cargo", ["run" | "r", ..]));
         let preflight = if running {
             start.map(|start| build_of(command, start))
+        } else if compilation && words.contains(&"--open") {
+            Some(without_open(command))
         } else {
             ((nextest || test && !doctest) && !compiler).then(|| {
                 let end = command
@@ -148,12 +142,14 @@ impl Invocation {
             }
         }
         let chdir = start.and_then(|start| chdir(&words[..start]));
+        let refusal = refusal(program, arguments, running, &words);
         Self {
             command: command.to_vec(),
             preflight,
             compiler,
             cargo: compilation || nextest || test || running,
             builds: compilation || nextest || test || running,
+            refusal,
             globals,
             chdir,
         }
@@ -204,6 +200,9 @@ impl Invocation {
         inherit: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
+        if let Some(refusal) = self.refusal {
+            return Err(CiError::new(refusal));
+        }
         if !self.builds {
             return Ok(());
         }
@@ -265,12 +264,82 @@ impl Invocation {
     }
 }
 
-fn build_of(command: &[String], subcommand: usize) -> Vec<String> {
+fn without_open(command: &[String]) -> Vec<String> {
     let end = command
         .iter()
         .position(|word| word == "--")
         .unwrap_or(command.len());
-    let mut build = command[..end].to_vec();
+    command[..end]
+        .iter()
+        .filter(|word| *word != "--open")
+        .cloned()
+        .collect()
+}
+
+fn refusal(
+    program: &str,
+    arguments: &[&str],
+    running: bool,
+    words: &[&str],
+) -> Option<&'static str> {
+    let names_target = words.iter().any(|word| {
+        ["--bin", "--example"].iter().any(|flag| {
+            word == flag
+                || word
+                    .strip_prefix(flag)
+                    .is_some_and(|rest| rest.starts_with('='))
+        })
+    });
+    match (program, arguments) {
+        ("cargo", ["fix", ..]) => Some(
+            "inputs build does not run cargo fix: it edits sources after compiling them, so no receipt of its compile is current; run it outside inputs build",
+        ),
+        _ if running && !names_target => Some(
+            "inputs build cannot tell which target cargo run builds; name it with --bin or --example",
+        ),
+        _ => None,
+    }
+}
+
+const RUN_VALUED: [&str; 18] = [
+    "-p",
+    "--package",
+    "--bin",
+    "--example",
+    "-F",
+    "--features",
+    "--profile",
+    "--target",
+    "--manifest-path",
+    "--message-format",
+    "-j",
+    "--jobs",
+    "--config",
+    "-Z",
+    "--color",
+    "--target-dir",
+    "--lockfile-path",
+    "--artifact-dir",
+];
+
+fn run_program_arguments(command: &[String], subcommand: usize) -> usize {
+    let mut index = subcommand + 2;
+    while let Some(word) = command.get(index) {
+        if word == "--" || !word.starts_with('-') {
+            return index;
+        }
+        index += if RUN_VALUED.contains(&word.as_str()) {
+            2
+        } else {
+            1
+        };
+    }
+    command.len()
+}
+
+fn build_of(command: &[String], subcommand: usize) -> Vec<String> {
+    let end = run_program_arguments(command, subcommand);
+    let mut build = command[..end.min(command.len())].to_vec();
     "build".clone_into(&mut build[subcommand + 1]);
     build
 }

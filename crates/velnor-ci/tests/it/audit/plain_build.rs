@@ -229,11 +229,8 @@ fn a_build_refused_for_an_unknown_layout_in_a_later_target_saves_nothing_for_an_
 }
 
 #[test]
-fn fix_and_rustdoc_are_audited_where_cargo_dash_c_writes_them() {
-    for subcommand in [
-        &["fix", "--allow-no-vcs", "--allow-dirty", "-p", "lib"][..],
-        &["rustdoc", "-p", "lib"][..],
-    ] {
+fn rustdoc_is_audited_where_cargo_dash_c_writes_it() {
+    for subcommand in [&["rustdoc", "-p", "lib"][..]] {
         let repo = workspace_below_the_root();
         let mut command = vec!["inputs", "build", "--", "cargo", "-Z", "unstable-options"];
         command.extend(["-C", "rust"]);
