@@ -214,6 +214,7 @@ mod present_plan;
 mod present_tools;
 mod private_base_budget;
 mod private_base_caches;
+mod private_base_http;
 mod private_base_order;
 mod private_base_plan_mode;
 mod private_base_prefix;
