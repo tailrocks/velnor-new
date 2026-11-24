@@ -58,12 +58,13 @@ fn seed(repo: &Checkout) {
         format!("build/serde-{SERDE_RUN_HASH}/output"),
         format!("build/serde-{SERDE_RUN_HASH}/out/generated.rs"),
         "deps/libunhashed.rlib".to_owned(),
-        // workspace artifacts, executables and units no cargo command of this run used
+        // path library unit this run used
         format!("deps/libapp-{APP_HASH}.rlib"),
         format!("deps/libapp-{APP_HASH}.rmeta"),
-        format!("deps/app-{APP_HASH}"),
         format!(".fingerprint/app-{APP_HASH}/lib-app.json"),
         format!("build/app-{APP_HASH}/output"),
+        // executables and units no cargo command of this run used
+        format!("deps/app-{APP_HASH}"),
         format!("deps/libold-{OLD_HASH}.rlib"),
         format!(".fingerprint/old-{OLD_HASH}/lib-old.json"),
         format!("build/old-{OLD_HASH}/output"),
@@ -97,6 +98,10 @@ fn kept_dependency_units() -> Vec<String> {
         format!("build/serde-{SERDE_RUN_HASH}/output"),
         format!("build/serde-{SERDE_RUN_HASH}/out/generated.rs"),
         "deps/libunhashed.rlib".to_owned(),
+        format!("deps/libapp-{APP_HASH}.rlib"),
+        format!("deps/libapp-{APP_HASH}.rmeta"),
+        format!(".fingerprint/app-{APP_HASH}/lib-app.json"),
+        format!("build/app-{APP_HASH}/output"),
         ".cargo-lock".to_owned(),
     ]
     .into_iter()
@@ -148,11 +153,7 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
         assert!(exists(&repo, &kept), "{kept} must stay\n{stdout}");
     }
     for gone in [
-        format!("deps/libapp-{APP_HASH}.rlib"),
-        format!("deps/libapp-{APP_HASH}.rmeta"),
         format!("deps/app-{APP_HASH}"),
-        format!(".fingerprint/app-{APP_HASH}"),
-        format!("build/app-{APP_HASH}"),
         format!("deps/libold-{OLD_HASH}.rlib"),
         format!(".fingerprint/old-{OLD_HASH}"),
         format!("build/old-{OLD_HASH}"),
@@ -189,7 +190,7 @@ fn the_size_budget_is_judged_after_the_prune() {
         &"w".repeat(50_000),
     );
     repo.write_unstaged("target/doc/app/big.html", &"d".repeat(50_000));
-    let (output, written) = decide(&repo, &[invocation(true)], Some("10000"));
+    let (output, written) = decide(&repo, &[invocation(true)], Some("80000"));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{stdout}");
     assert_eq!(written, "save=true\nsources=true\n", "{stdout}");

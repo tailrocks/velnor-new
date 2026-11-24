@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What a build directory keeps when it is saved as a base: the dependency units this run used.
-//! Workspace crates rebuild on any code change and are cheap, so their artifacts, test
-//! executables, documentation and units this run did not use are not worth the cache space.
+//! What a build directory keeps when it is saved as a base: the units this run used.
+//! A path crate's library unit stays. Dropping it makes the next warm run rebuild that crate,
+//! and the Cache check reports the rebuild as waste. Test executables, binaries, documentation
+//! and units this run did not use still go.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -66,12 +67,11 @@ pub struct UsedUnits {
     hashes: BTreeSet<String>,
 }
 
-fn is_dependency(package_id: &str) -> bool {
-    PackageIdentity::parse(package_id).is_some_and(|package| {
-        package
-            .source
-            .is_none_or(|source| !source.starts_with("path+"))
-    })
+/// A package id cargo recorded for a unit this run compiled or reused.
+///
+/// Path crates are included. Their library units have to stay in the saved base.
+fn is_recorded(package_id: &str) -> bool {
+    PackageIdentity::parse(package_id).is_some()
 }
 
 impl UsedUnits {
@@ -94,14 +94,14 @@ impl UsedUnits {
             for artifact in invocation
                 .artifacts
                 .iter()
-                .filter(|artifact| is_dependency(&artifact.package_id))
+                .filter(|artifact| is_recorded(&artifact.package_id))
             {
                 used.insert_all(artifact.filenames.iter().map(String::as_str));
             }
             for script in invocation
                 .build_scripts
                 .iter()
-                .filter(|script| is_dependency(&script.package_id))
+                .filter(|script| is_recorded(&script.package_id))
             {
                 let run = Path::new(&script.out_dir).parent();
                 used.insert_all(run.and_then(Path::to_str));
