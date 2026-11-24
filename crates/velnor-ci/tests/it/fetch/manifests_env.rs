@@ -84,5 +84,6 @@ fn a_listed_manifest_that_is_neither_true_nor_false_runs_nothing() -> TestResult
     let output = fetch_listed(&fixture, &api, &[("a/Cargo.toml", "\"maybe\"")]);
     assert!(!output.status.success());
     assert_eq!(fixture.log("cargo.args"), "");
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
     Ok(())
 }

@@ -20,8 +20,8 @@ const FILL: &str = "\"$VELNOR_EXEC\" sources fetch --roots";
 pub(crate) struct Layout {
     pub(crate) roots: Vec<String>,
     pub(crate) config: String,
-    locked: bool,
-    lanes: usize,
+    pub(crate) locked: bool,
+    pub(crate) lanes: usize,
     pub(crate) helper: &'static str,
 }
 

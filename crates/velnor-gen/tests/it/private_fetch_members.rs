@@ -9,7 +9,7 @@ use crate::private_fill_roots::{
     Layout, PULL_REQUEST, PUSH, RELEASE, Run, every_root_on, every_root_on_a_saving_run, fetched,
     grouped_roots_at, lanes, own_roots, quoted_long_roots, selecting,
 };
-use crate::private_sources::private_repo;
+use crate::private_sources::{SECTION, private_repo};
 
 fn the_member_lane(
     layout: &Layout,
@@ -89,5 +89,47 @@ fn a_helper_before_the_manifest_list_fetches_every_grouped_member_on_a_pull_requ
         the_member_lane(&layout, selecting(PULL_REQUEST, "tools_a"))?,
         set(&["tools/a/Cargo.toml", "tools/b/Cargo.toml"])
     );
+    Ok(())
+}
+
+fn many_long_members() -> Layout {
+    let folders: Vec<String> = (0..34)
+        .map(|index| format!("crates/{}{index:02}", "x".repeat(148)))
+        .collect();
+    let quoted: Vec<String> = folders
+        .iter()
+        .map(|folder| format!("\"{folder}\""))
+        .collect();
+    Layout {
+        roots: folders
+            .iter()
+            .map(|folder| format!("{folder}/Cargo.toml"))
+            .collect(),
+        config: format!(
+            "[[workspace_groups]]\nname = 'members'\nroots = [{}]\n{SECTION}",
+            quoted.join(", ")
+        ),
+        locked: false,
+        lanes: 1,
+        helper: "0.1.116",
+    }
+}
+
+#[test]
+fn a_member_list_too_long_for_a_github_expression_fetches_every_member() -> TestResult {
+    let layout = many_long_members();
+    let every: BTreeSet<String> = layout.roots.iter().cloned().collect();
+    for steps in lanes(&layout)? {
+        for step in &steps {
+            let listed = step["env"]["VELNOR_FETCH_MANIFESTS"]
+                .as_str()
+                .unwrap_or_default();
+            assert!(listed.len() <= 21_000, "{} characters", listed.len());
+        }
+        assert_eq!(
+            fetched(&steps, selecting(PULL_REQUEST, "no_member_at_all"))?,
+            vec![every.clone()]
+        );
+    }
     Ok(())
 }

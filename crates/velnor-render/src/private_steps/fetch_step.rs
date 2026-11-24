@@ -3,6 +3,7 @@
 
 use velnor_model::{FetchedManifest, RepoPath};
 
+use crate::expression_length::{MAX_EXPRESSION_CHARACTERS, joined_length};
 use crate::gate::{ON_DEFAULT_BRANCH, gate_parts};
 use crate::helper_steps::hex_path;
 use crate::private_steps::TOKEN_STEP;
@@ -115,8 +116,10 @@ fn pairs(entries: &[Entry<'_>]) -> Value {
         format!("[{}]", items.join(","))
     };
     let text = list(&|entry| entry.when.clone().unwrap_or_else(|| "true".to_owned()));
-    if entries.iter().all(|entry| entry.when.is_none()) {
-        return Value::Text(text);
+    if entries.iter().all(|entry| entry.when.is_none())
+        || joined_length(&text) > MAX_EXPRESSION_CHARACTERS
+    {
+        return Value::Text(list(&|_| "true".to_owned()));
     }
     Value::BoundedExpr {
         max_bytes: list(&|_| "false".to_owned()).len(),

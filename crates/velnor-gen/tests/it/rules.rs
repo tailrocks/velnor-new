@@ -278,6 +278,32 @@ fn a_violation_names_the_job_and_the_step() {
     }));
 }
 
+fn with_env(value: velnor_render::Value) -> RenderedStep {
+    RenderedStep {
+        env: vec![("LIST".to_owned(), value)],
+        ..run("echo")
+    }
+}
+
+#[test]
+fn an_env_value_whose_joined_expression_is_over_github_s_limit_is_refused() {
+    let entries = |count: usize| {
+        (0..count)
+            .map(|index| format!("[\"{index}\",${{{{ github.ref == 'refs/heads/main' || github.run_id != 'x{index}' }}}}]"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let over = velnor_render::Value::Expr(format!("[{}]", entries(400)));
+    let under = velnor_render::Value::Expr(format!("[{}]", entries(40)));
+    let single = velnor_render::Value::Expr("${{ github.ref }}".to_owned());
+    assert!(matches!(
+        violations(with_env(over)).as_slice(),
+        [Rule::ExpressionTooLong(length)] if *length > 21_000
+    ));
+    assert_eq!(violations(with_env(under)), Vec::new());
+    assert_eq!(violations(with_env(single)), Vec::new());
+}
+
 #[test]
 fn a_compliant_workflow_is_accepted() {
     let mut accepted = workflow(uses(PINNED));
