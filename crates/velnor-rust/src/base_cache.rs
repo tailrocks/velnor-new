@@ -42,6 +42,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.112 via e34b20da63
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.113 via f5ced2b48c
 const SOURCES_RESTORED_ENV_HELPER: (u64, u64, u64) = (0, 1, 113);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
