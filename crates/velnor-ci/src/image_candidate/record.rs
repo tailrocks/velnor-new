@@ -14,7 +14,6 @@ pub const INPUT_PATHS: &[&str] = &[
     "images/job/ubuntu-26.04/Dockerfile",
     "images/job/ubuntu-26.04/README.md",
     "images/job/ubuntu-26.04/build-test.sh",
-    "images/job/ubuntu-26.04/candidate/candidate.py",
 ];
 
 fn fail<T>(message: impl Into<String>) -> Result<T, CiError> {
