@@ -175,6 +175,7 @@ fn a_bang_argument_of_an_alias_is_not_a_shell_alias() {
     );
     let built = wrapped_build(&repo, &["cargo", "xt", "!foo", "--offline"]);
     let stderr = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{built:?}");
     assert!(!stderr.contains("runs a shell command"), "{stderr}");
 }
 

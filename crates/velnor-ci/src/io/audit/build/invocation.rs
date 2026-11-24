@@ -13,7 +13,7 @@ mod package_spec;
 mod root;
 mod selection;
 pub(super) use alias::resolve;
-use derived::{build_of, refusal, run_program_arguments, without_open};
+use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
@@ -107,12 +107,13 @@ impl Invocation {
             ) | ("cargo-clippy", ["clippy", ..])
                 | ("cargo" | "cargo-nextest", ["nextest", "archive", ..])
         );
-        let compiler = compilation && !words.contains(&"--open")
+        let doctests = program == "cargo" && runs_doctests(arguments, command);
+        let compiler = compilation && !words.contains(&"--open") && !doctests
             || (nextest || test && !doctest) && words.contains(&"--no-run");
         let running = matches!((program, arguments), ("cargo", ["run" | "r", ..]));
         let preflight = if running {
             start.map(|start| build_of(command, start))
-        } else if compilation && words.contains(&"--open") {
+        } else if compilation && words.contains(&"--open") && !doctests {
             Some(without_open(command))
         } else {
             ((nextest || test && !doctest) && !compiler).then(|| {

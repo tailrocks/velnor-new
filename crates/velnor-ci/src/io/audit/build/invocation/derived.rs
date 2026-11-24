@@ -9,8 +9,17 @@ pub(super) fn without_open(command: &[String]) -> Vec<String> {
     command[..end]
         .iter()
         .filter(|word| *word != "--open")
+        .chain(&command[end..])
         .cloned()
         .collect()
+}
+
+pub(super) fn runs_doctests(arguments: &[&str], command: &[String]) -> bool {
+    matches!(arguments, ["rustdoc", ..])
+        && command
+            .iter()
+            .skip_while(|word| *word != "--")
+            .any(|word| word == "--test")
 }
 
 pub(super) fn refusal(

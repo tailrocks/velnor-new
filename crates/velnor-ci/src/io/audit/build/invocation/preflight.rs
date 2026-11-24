@@ -65,7 +65,7 @@ fn a_bench_is_prepared_like_a_test() {
 }
 
 #[test]
-fn rustc_rustdoc_and_fix_compile_in_place() {
+fn rustc_and_rustdoc_compile_in_place() {
     for command in [
         "cargo rustc -p lib --lib -- -Zunpretty=expanded",
         "cargo rustdoc -p lib",
@@ -145,6 +145,31 @@ fn flags_after_the_first_program_argument_do_not_select_the_run_target() {
     ] {
         assert!(
             Invocation::new(&words(command)).refusal.is_some(),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn an_opened_rustdoc_keeps_the_arguments_it_passes_to_rustdoc() {
+    let invocation = Invocation::new(&words(
+        "cargo rustdoc -p lib --open -- --document-private-items",
+    ));
+    assert_eq!(
+        invocation.preflight,
+        Some(words("cargo rustdoc -p lib -- --document-private-items"))
+    );
+}
+
+#[test]
+fn a_rustdoc_doctest_run_is_never_replayed() {
+    for command in [
+        "cargo rustdoc -p lib --lib -- --test",
+        "cargo rustdoc -p lib --open -- --test",
+    ] {
+        let invocation = Invocation::new(&words(command));
+        assert!(
+            invocation.cargo && !invocation.compiler && invocation.preflight.is_none(),
             "{command}"
         );
     }
