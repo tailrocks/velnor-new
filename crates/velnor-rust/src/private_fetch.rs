@@ -273,6 +273,9 @@ fn manifest(step: &Step) -> RepoPath {
     if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
         return manifest.clone();
     }
+    if let Some(manifest) = &step.manifest {
+        return manifest.clone();
+    }
     step.directory.as_ref().map_or_else(
         || RepoPath::from_static("Cargo.toml"),
         |directory| directory.child("Cargo.toml"),

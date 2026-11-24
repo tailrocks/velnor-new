@@ -7,12 +7,13 @@ use velnor_model::{
 
 use crate::gate::{ON_DEFAULT_BRANCH, SAVING_EVENTS, sources_step};
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
-use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::rules::{APP_TOKEN_ACTION, MAX_RUN_CHARACTERS, RenderedStep, Value};
 use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
+const FETCH_MANIFESTS: &str = "VELNOR_FETCH_MANIFESTS";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
 // helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const RELEASE_HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
@@ -272,27 +273,48 @@ fn fetch(manifests: &[RepoPath]) -> RenderedStep {
 }
 
 fn fetch_paths<'a>(manifests: impl IntoIterator<Item = &'a str>) -> RenderedStep {
+    let mut plain = true;
     let arguments: Vec<String> = manifests
         .into_iter()
-        .map(|manifest| format!("--manifest-path {}", shell_word(manifest)))
+        .map(|manifest| {
+            let word = shell_word(manifest);
+            plain &= word == manifest;
+            format!("--manifest-path {word}")
+        })
         .collect();
+    let arguments = arguments.join(" ");
+    let run = format!("velnor-ci fetch {arguments}");
+    let too_long = crate::helper_integrity::INVOCATION_PREFIX.len() + run.len()
+        - "velnor-ci ".len()
+        > MAX_RUN_CHARACTERS;
+    let (run, listed) = if too_long && plain {
+        (
+            format!("velnor-ci fetch ${FETCH_MANIFESTS}"),
+            Some((FETCH_MANIFESTS.to_owned(), Value::Text(arguments))),
+        )
+    } else {
+        (run, None)
+    };
     RenderedStep {
         name: "Fetch the dependencies, then drop the token".to_owned(),
-        env: vec![
-            (
-                "VELNOR_PRIVATE_TOKEN".to_owned(),
-                Value::Expr(format!("${{{{ steps.{TOKEN_STEP}.outputs.token }}}}")),
-            ),
-            (
-                "VELNOR_API_URL".to_owned(),
-                Value::Expr("${{ github.api_url }}".to_owned()),
-            ),
-            (
-                "VELNOR_SERVER_URL".to_owned(),
-                Value::Expr("${{ github.server_url }}".to_owned()),
-            ),
-        ],
-        run: Some(format!("velnor-ci fetch {}", arguments.join(" "))),
+        env: listed
+            .into_iter()
+            .chain([
+                (
+                    "VELNOR_PRIVATE_TOKEN".to_owned(),
+                    Value::Expr(format!("${{{{ steps.{TOKEN_STEP}.outputs.token }}}}")),
+                ),
+                (
+                    "VELNOR_API_URL".to_owned(),
+                    Value::Expr("${{ github.api_url }}".to_owned()),
+                ),
+                (
+                    "VELNOR_SERVER_URL".to_owned(),
+                    Value::Expr("${{ github.server_url }}".to_owned()),
+                ),
+            ])
+            .collect(),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }
