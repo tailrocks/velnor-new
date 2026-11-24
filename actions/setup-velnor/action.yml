@@ -256,6 +256,7 @@ runs:
           entry=
           if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$archive_file" "$entry" 2> /dev/null && flush "$entry" && clear_entry "$dir/$archive" 2> /dev/null && publish_entry "$entry" "$dir/$archive"; then
             echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
+            prune_quarantine
           else
             [ -z "$entry" ] || rm -f "$entry"
             echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache; this job is not affected"

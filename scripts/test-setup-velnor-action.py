@@ -1041,6 +1041,16 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertTrue(older_in_flight.exists(), "an archive an older setup-velnor version had just moved aside was removed")
         self.assertFalse(older_left.exists(), "a quarantine an older setup-velnor version left two hours ago was not removed")
 
+    def test_a_job_that_publishes_removes_the_quarantine_of_an_eviction_that_died_over_an_hour_ago(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        abandoned = cached.parent / f".velnor-ci.evicting.{int(time.time()) - 7200}.7.7"
+        abandoned.write_bytes(b"quarantine of an eviction that died two hours ago\n")
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(cached.read_bytes(), self.archive)
+        self.assertFalse(abandoned.exists(), "the quarantine of an eviction that died two hours ago survived a publish")
+
     def test_an_eviction_that_starts_while_a_prune_reads_the_clock_survives_the_prune(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
