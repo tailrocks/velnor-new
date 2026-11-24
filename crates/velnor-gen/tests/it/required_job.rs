@@ -144,8 +144,8 @@ fn the_gate_names_every_job_the_verdict_job_needs() -> TestResult {
 #[test]
 fn the_pull_request_audit_of_a_lane_leaves_the_verdict_of_every_job_unchanged() -> TestResult {
     let roots = ["Cargo.toml", "lab/Cargo.toml"];
-    let before = released("0.1.112", &roots)?;
-    let after = released("0.1.113", &roots)?;
+    let before = released("0.1.115", &roots)?;
+    let after = released("0.1.116", &roots)?;
     assert_eq!(gate_line(&after)?, gate_line(&before)?);
     assert_eq!(
         gate_line(&after)?,
