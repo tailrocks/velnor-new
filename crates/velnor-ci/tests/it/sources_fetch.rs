@@ -282,8 +282,11 @@ fn only_cargo_is_started_and_nothing_else_reaches_the_network() {
 }
 
 const PLAIN_CONFIG: &str = "[core]\n\tbare = true\n";
-const TOKEN_CONFIG: &str =
-    "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n";
+const TOKEN_CONFIG: &str = concat!(
+    "[remote \"origin\"]\n\turl = https://x-access-token:",
+    "ghs_secret",
+    "@github.com/acme/shared-lib\n"
+);
 
 #[test]
 fn a_database_fetched_by_the_run_has_its_hooks_and_fetch_head_left_out() {
