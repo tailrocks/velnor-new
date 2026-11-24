@@ -305,6 +305,25 @@ if [ -n "$REAL_SHA256SUM" ]; then exec "$REAL_SHA256SUM" "$@"; fi
 exec "$REAL_SHASUM" -a 256 "$@"
 """
 
+STUB_EVICTION_DURING_CLOCK_READ_DATE = """#!/bin/sh
+calls=$(($(cat "$STUB_DATE_CALLS" 2> /dev/null || echo 0) + 1))
+echo "$calls" > "$STUB_DATE_CALLS"
+if [ "$calls" -eq 2 ]; then
+  now=$("$REAL_DATE" +%s)
+  : > "$STUB_STORE_DIR/.velnor-ci.evicting.$now.5.5"
+  echo $((now - 7200))
+  exit 0
+fi
+exec "$REAL_DATE" "$@"
+"""
+
+STUB_VANISHING_QUARANTINE_TOUCH = """#!/bin/sh
+for arg; do
+  case "$arg" in */.velnor-ci.evicting.*) rm -f -- "$arg"; : > "$STUB_TOUCH_MARK" ;; esac
+done
+exec "$REAL_TOUCH" "$@"
+"""
+
 WATCHED_TOOLS = (
     "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
     "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
@@ -1005,6 +1024,49 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertFalse(abandoned.exists(), "the quarantine of an eviction that started two hours ago was not removed")
         self.assertTrue(in_flight.exists(), "the quarantine of an eviction that started a minute ago was removed")
         self.assertTrue(older_version.exists(), "a quarantine an older setup-velnor version owns was removed")
+
+    def test_an_eviction_that_starts_while_a_prune_reads_the_clock_survives_the_prune(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "date"
+        stub.write_text(STUB_EVICTION_DURING_CLOCK_READ_DATE)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_DATE": shutil.which("date"),
+                "STUB_DATE_CALLS": str(self.root / "date-calls"),
+                "STUB_STORE_DIR": str(cached.parent),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        started = list(cached.parent.glob(".velnor-ci.evicting.*.5.5"))
+        self.assertEqual(len(started), 1, "the quarantine of an eviction that started while a prune read the clock was removed")
+
+    def test_a_quarantine_that_vanishes_before_it_is_kept_is_not_reported_or_kept_as_an_empty_file(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        for name, body in (("mv", STUB_PLANT_QUARANTINE_MV), ("touch", STUB_VANISHING_QUARANTINE_TOUCH)):
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": str(self.mv_compat),
+                "REAL_TOUCH": shutil.which("touch"),
+                "STUB_TOUCH_MARK": str(self.root / "touch-mark"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue((self.root / "touch-mark").exists(), result.output)
+        self.assertEqual(list(cached.parent.glob(".velnor-ci.kept.*")), [], "a quarantine that vanished was kept as an empty file")
+        self.assertNotIn("is kept at", result.output)
 
     def test_an_eviction_hashing_its_quarantine_keeps_it_through_other_jobs_prunes(self):
         cached = self.cached_archive()
