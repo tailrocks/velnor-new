@@ -213,11 +213,11 @@ fn home_owner(home: &Path) -> Result<u32, std::io::Error> {
         .map(|metadata| metadata.uid())
 }
 
-pub fn note_clear(verb: Verb, runner_temp: Option<&Path>, now: i64) {
+pub fn note_clear(verb: Verb, github_env: Option<&Path>, now: i64) {
     if verb == Verb::Clear
-        && let Some(dir) = runner_temp
+        && let Some(file) = github_env
     {
-        crate::restore_clock::record(dir, now).ok();
+        crate::restore_clock::record(file, now).ok();
     }
 }
 
@@ -236,7 +236,11 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
     let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
-    note_clear(verb, runner_temp.as_deref(), crate::time::now_unix());
+    note_clear(
+        verb,
+        var("GITHUB_ENV").map(PathBuf::from).as_deref(),
+        crate::time::now_unix(),
+    );
     let outcome = run(&Inputs {
         verb,
         key,
