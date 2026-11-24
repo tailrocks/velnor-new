@@ -17,18 +17,18 @@ use std::time::{Duration, Instant};
 
 const RECORD_LIST_PID: &str = "echo $$ > \"$RUNNER_TEMP/list-pid\"\n";
 const RECORD_RUN_PID: &str = "echo $$ > \"$RUNNER_TEMP/run-pid\"\n";
-const RUN_START: &str = "echo '    Starting 1 tests across 1 binary' >&2\n";
-const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2\n";
+pub(crate) const RUN_START: &str = "echo '    Starting 1 tests across 1 binary' >&2\n";
+pub(crate) const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2\n";
 const WAIT_FOR_LIST_PID: &str = "i=0\nwhile [ ! -s \"$RUNNER_TEMP/list-pid\" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done\n";
 const WITHHELD: &[&str] = &["tests_listed=", "tests_ignored=", "tests_by_package="];
-const PATIENT: &str = "60000";
-const GRACE_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_GRACE_MS";
+pub(crate) const PATIENT: &str = "60000";
+pub(crate) const GRACE_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_GRACE_MS";
 const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
 const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT_BYTES";
 
-struct Launch {
-    temp: velnor_test_support::ScratchDir,
-    child: Child,
+pub(crate) struct Launch {
+    pub(crate) temp: velnor_test_support::ScratchDir,
+    pub(crate) child: Child,
 }
 
 impl Drop for Launch {
@@ -45,7 +45,7 @@ fn pid_of(child: &Child) -> Pid {
     Pid::from_raw(i32::try_from(child.id()).unwrap_or_else(|e| unreachable!("{e}")))
 }
 
-fn list_pid(temp: &Path) -> Option<Pid> {
+pub(crate) fn list_pid(temp: &Path) -> Option<Pid> {
     list_pid_at(&temp.join("list-pid"))
 }
 
@@ -56,11 +56,11 @@ fn list_pid_at(file: &Path) -> Option<Pid> {
         .map(Pid::from_raw)
 }
 
-fn gone(pid: Pid) -> bool {
+pub(crate) fn gone(pid: Pid) -> bool {
     kill(pid, None) == Err(Errno::ESRCH)
 }
 
-fn launch(name: &str, list: &str, run: &str, environment: &[(&str, &str)]) -> Launch {
+pub(crate) fn launch(name: &str, list: &str, run: &str, environment: &[(&str, &str)]) -> Launch {
     let temp = scratch(name);
     archive_in(temp.path());
     let program = temp.join("cargo-nextest");
@@ -103,7 +103,7 @@ fn launch(name: &str, list: &str, run: &str, environment: &[(&str, &str)]) -> La
     Launch { temp, child }
 }
 
-fn finish(launch: &mut Launch, limit: Duration) -> (bool, String, String) {
+pub(crate) fn finish(launch: &mut Launch, limit: Duration) -> (bool, String, String) {
     let deadline = Instant::now() + limit;
     let exited = loop {
         if launch.child.try_wait().ok().flatten().is_some() {
@@ -127,7 +127,7 @@ fn finish(launch: &mut Launch, limit: Duration) -> (bool, String, String) {
     )
 }
 
-fn assert_withheld(written: &str) {
+pub(crate) fn assert_withheld(written: &str) {
     assert!(written.contains("tests_run=1\n"), "{written}");
     for name in WITHHELD {
         assert!(!written.contains(name), "{name} leaked into {written}");
@@ -242,7 +242,7 @@ fn a_signal_stops_the_list_with_the_run() {
     }
 }
 
-fn wait_for(path: &Path) {
+pub(crate) fn wait_for(path: &Path) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while !path.exists() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(20));
