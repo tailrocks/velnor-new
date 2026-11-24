@@ -163,6 +163,17 @@ fn parse_version(text: &str) -> Option<Partial> {
     })
 }
 
+pub(super) fn named(pattern: &str, name: &str) -> bool {
+    if pattern.contains(['*', '?', '[', ']']) {
+        glob(
+            &pattern.chars().collect::<Vec<_>>(),
+            &name.chars().collect::<Vec<_>>(),
+        )
+    } else {
+        pattern == name
+    }
+}
+
 fn last_segment(address: &str) -> &str {
     address.rsplit('/').next().unwrap_or(address)
 }

@@ -38,19 +38,43 @@ fn assert_refused(stderr: &str, context: &str) {
 
 #[test]
 fn a_package_with_no_target_of_the_named_kind_is_not_selected_by_a_plural_filter() {
-    for filter in [
-        "--bins",
-        "--examples",
-        "--benches",
-        "--bin=y",
-        "--example=y",
-    ] {
+    for filter in ["--bins", "--examples", "--bin=y", "--example=y"] {
         let stderr = stderr_with_untrusted_y(&workspace_with_members(), &["-p", "y", filter]);
         assert_refused(&stderr, filter);
     }
-    for filter in ["--lib", "--tests", "--all-targets"] {
+    for filter in ["--lib", "--tests", "--benches", "--all-targets"] {
         let stderr = stderr_with_untrusted_y(&workspace_with_members(), &["-p", "y", filter]);
         assert_selected(&stderr, filter);
+    }
+}
+
+fn with_a_binary_named_like_the_package() -> Repo {
+    let repo = workspace_with_members();
+    unit(&repo, "y/src/main.rs", "fn main() {}\n");
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn a_singular_target_filter_selects_a_package_only_when_a_target_has_that_name() {
+    for (filter, selected) in [
+        (&["--bin", "missing"][..], false),
+        (&["--bin=missing"], false),
+        (&["--bin", "y"], true),
+        (&["--bin=y"], true),
+        (&["--bin", "y*"], true),
+        (&["--bin", "m*"], false),
+        (&["--bin"], true),
+        (&["--example", "y"], false),
+    ] {
+        let mut selection = vec!["-p", "y"];
+        selection.extend_from_slice(filter);
+        let stderr = stderr_with_untrusted_y(&with_a_binary_named_like_the_package(), &selection);
+        if selected {
+            assert_selected(&stderr, &format!("{filter:?}"));
+        } else {
+            assert_refused(&stderr, &format!("{filter:?}"));
+        }
     }
 }
 

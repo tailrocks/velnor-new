@@ -197,6 +197,47 @@ fn a_build_does_not_select_an_optional_path_dependency_its_features_leave_off() 
     }
 }
 
+fn with_a_renamed_optional_path_dependency() -> Repo {
+    let repo = with_optional_path_dependency();
+    unit(
+        &repo,
+        "other/Cargo.toml",
+        "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[dependencies]\nhelper = { package = \"mid\", path = \"../vendor/mid\", optional = true }\n",
+    );
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn a_renamed_optional_path_dependency_is_enabled_by_its_manifest_key() {
+    let stderr = stderr_of_build_with_untrusted_output_in(
+        &with_a_renamed_optional_path_dependency(),
+        "mid",
+        &["-p", "other", "--features", "helper"],
+    );
+    assert_selected(&stderr, "--features helper");
+    let stderr = stderr_of_build_with_untrusted_output_in(
+        &with_a_renamed_optional_path_dependency(),
+        "mid",
+        &["-p", "other", "--features", "mid"],
+    );
+    assert_refused(&stderr, "--features mid");
+}
+
+#[test]
+fn all_features_enables_the_optional_dependencies_of_the_selected_package_only() {
+    let repo = with_optional_path_dependency();
+    unit(
+        &repo,
+        "vendor/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\", optional = true }\n",
+    );
+    repo.git(&["add", "--all"]);
+    let stderr =
+        stderr_of_build_with_untrusted_output_in(&repo, "leaf", &["-p", "other", "--all-features"]);
+    assert_refused(&stderr, "--all-features leaf");
+}
+
 #[test]
 fn a_run_selects_the_optional_path_dependencies_its_features_enable() {
     let repo = with_optional_path_dependency();

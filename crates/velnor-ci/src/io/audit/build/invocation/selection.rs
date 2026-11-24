@@ -10,7 +10,7 @@ use velnor_model::{
     DependencyKind, MemberDependency, RepoPath, RustMember, TargetKind, UnownedPackage,
 };
 
-use super::package_spec::{Spec, parse};
+use super::package_spec::{Spec, named, parse};
 use super::{Invocation, subcommand};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -75,7 +75,7 @@ impl Invocation {
         });
         let all_features = words.contains(&"--all-features");
         let features = feature_names(&words);
-        let (kinds, harnesses) = wanted(arguments, &words);
+        let wanted = wanted(arguments, &words);
         let workspace = !words.iter().any(|word| target_filter(word))
             && words
                 .iter()
@@ -111,7 +111,7 @@ impl Invocation {
         let chosen: Vec<&RustMember> = members
             .iter()
             .filter(|member| {
-                if !provable || !compiles(member, &kinds, harnesses, all_features) {
+                if !provable || !compiles(member, &wanted, all_features) {
                     false
                 } else if workspace {
                     !excluded
@@ -171,7 +171,7 @@ fn feature_names<'a>(words: &[&'a str]) -> Vec<&'a str> {
 }
 
 fn enables(features: &[&str], member: &RustMember, dependency: &MemberDependency) -> bool {
-    let name = dependency.name.as_str();
+    let name = dependency.feature.as_str();
     features.iter().any(|feature| {
         if *feature == name || feature.strip_prefix("dep:") == Some(name) {
             return true;
@@ -185,56 +185,91 @@ fn enables(features: &[&str], member: &RustMember, dependency: &MemberDependency
     })
 }
 
-fn wanted(arguments: &[&str], words: &[&str]) -> (Vec<TargetKind>, bool) {
+struct Wanted<'a> {
+    kinds: Vec<(TargetKind, Option<&'a str>)>,
+    harnesses: bool,
+}
+
+fn target_name<'a>(words: &[&'a str], index: usize, name: &str) -> Option<&'a str> {
+    let word = words[index];
+    word.strip_prefix(name)
+        .and_then(|rest| rest.strip_prefix('='))
+        .or_else(|| {
+            (word == name)
+                .then(|| words.get(index + 1).copied())
+                .flatten()
+                .filter(|value| !value.starts_with('-'))
+        })
+}
+
+fn wanted<'a>(arguments: &[&str], words: &[&'a str]) -> Wanted<'a> {
     const LIBRARIES: [TargetKind; 2] = [TargetKind::Lib, TargetKind::ProcMacro];
-    let mut kinds = Vec::new();
+    const BENCHED: [TargetKind; 4] = [
+        TargetKind::Lib,
+        TargetKind::ProcMacro,
+        TargetKind::Bin,
+        TargetKind::Bench,
+    ];
+    let mut kinds: Vec<(TargetKind, Option<&str>)> = Vec::new();
     let mut harnesses = false;
-    for word in words {
+    for (index, word) in words.iter().enumerate() {
         if *word == "--all-targets" {
-            kinds.extend(LIBRARIES);
-            kinds.extend([
-                TargetKind::Bin,
-                TargetKind::Test,
-                TargetKind::Bench,
-                TargetKind::Example,
-            ]);
+            kinds.extend(
+                [
+                    TargetKind::Lib,
+                    TargetKind::ProcMacro,
+                    TargetKind::Bin,
+                    TargetKind::Test,
+                    TargetKind::Bench,
+                    TargetKind::Example,
+                ]
+                .map(|kind| (kind, None)),
+            );
             harnesses = true;
         } else if flag(word, &["--lib"]) {
-            kinds.extend(LIBRARIES);
-        } else if flag(word, &["--bins", "--bin"]) {
-            kinds.push(TargetKind::Bin);
-        } else if flag(word, &["--examples", "--example"]) {
-            kinds.push(TargetKind::Example);
-        } else if flag(word, &["--tests", "--test"]) {
-            kinds.push(TargetKind::Test);
+            kinds.extend(LIBRARIES.map(|kind| (kind, None)));
+        } else if *word == "--bins" {
+            kinds.push((TargetKind::Bin, None));
+        } else if flag(word, &["--bin"]) {
+            kinds.push((TargetKind::Bin, target_name(words, index, "--bin")));
+        } else if *word == "--examples" {
+            kinds.push((TargetKind::Example, None));
+        } else if flag(word, &["--example"]) {
+            kinds.push((TargetKind::Example, target_name(words, index, "--example")));
+        } else if *word == "--tests" {
+            kinds.push((TargetKind::Test, None));
             harnesses = true;
-        } else if flag(word, &["--benches", "--bench"]) {
-            kinds.push(TargetKind::Bench);
+        } else if flag(word, &["--test"]) {
+            kinds.push((TargetKind::Test, target_name(words, index, "--test")));
+        } else if *word == "--benches" {
+            kinds.extend(BENCHED.map(|kind| (kind, None)));
+        } else if flag(word, &["--bench"]) {
+            kinds.push((TargetKind::Bench, target_name(words, index, "--bench")));
         }
     }
     if kinds.is_empty() {
-        kinds.extend(LIBRARIES);
-        kinds.push(TargetKind::Bin);
+        kinds.extend(
+            [TargetKind::Lib, TargetKind::ProcMacro, TargetKind::Bin].map(|kind| (kind, None)),
+        );
         match arguments {
             ["test" | "t" | "nextest", ..] => {
-                kinds.extend([TargetKind::Test, TargetKind::Example]);
+                kinds.extend([TargetKind::Test, TargetKind::Example].map(|kind| (kind, None)));
             }
-            ["bench", ..] => kinds.push(TargetKind::Bench),
+            ["bench", ..] => kinds.push((TargetKind::Bench, None)),
             _ => {}
         }
     }
-    (kinds, harnesses)
+    Wanted { kinds, harnesses }
 }
 
-fn compiles(
-    member: &RustMember,
-    kinds: &[TargetKind],
-    harnesses: bool,
-    all_features: bool,
-) -> bool {
+fn compiles(member: &RustMember, wanted: &Wanted<'_>, all_features: bool) -> bool {
     member.targets.iter().any(|target| {
         (all_features || !target.requires_features)
-            && (target.kinds.iter().any(|kind| kinds.contains(kind)) || harnesses && target.tests)
+            && (wanted.harnesses && target.tests
+                || wanted.kinds.iter().any(|(kind, name)| {
+                    target.kinds.contains(kind)
+                        && name.is_none_or(|name| named(name, target.name.as_str()))
+                }))
     })
 }
 
@@ -286,9 +321,11 @@ fn built<'a>(
         } else {
             continue;
         };
-        pending.extend(next.iter().filter(|dependency| {
-            dependency.kind != DependencyKind::Dev && (all_features || !dependency.optional)
-        }));
+        pending.extend(
+            next.iter().filter(|dependency| {
+                dependency.kind != DependencyKind::Dev && !dependency.optional
+            }),
+        );
     }
     packages
 }

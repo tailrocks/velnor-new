@@ -32,6 +32,7 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
             .iter()
             .map(|(package, directory)| MemberDependency {
                 name: name(package),
+                feature: (*package).to_owned(),
                 kind: DependencyKind::Normal,
                 platform: None,
                 optional: false,

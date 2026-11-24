@@ -285,6 +285,7 @@ impl RustMember {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberDependency {
     pub name: PackageName,
+    pub feature: String,
     pub kind: DependencyKind,
     pub platform: Option<String>,
     pub optional: bool,

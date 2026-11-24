@@ -107,6 +107,7 @@ fn package(
                         .dependencies
                         .extend(edges.into_iter().map(|(manifest, name)| MemberDependency {
                             name,
+                            feature: key.to_owned(),
                             kind,
                             platform: platform.clone(),
                             optional: optional(entry),

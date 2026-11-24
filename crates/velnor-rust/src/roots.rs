@@ -338,6 +338,10 @@ fn member(
                 };
                 manifests.into_iter().map(|manifest| MemberDependency {
                     name: dependency.name.clone(),
+                    feature: dependency
+                        .rename
+                        .clone()
+                        .unwrap_or_else(|| dependency.name.to_string()),
                     kind: dependency.kind,
                     platform: dependency.platform.clone(),
                     optional: dependency.optional,
