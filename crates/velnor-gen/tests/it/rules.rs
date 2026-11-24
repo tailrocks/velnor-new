@@ -302,6 +302,13 @@ fn an_env_value_whose_joined_expression_is_over_github_s_limit_is_refused() {
     ));
     assert_eq!(violations(with_env(under)), Vec::new());
     assert_eq!(violations(with_env(single)), Vec::new());
+    let whole =
+        |length: usize| velnor_render::Value::Expr(format!("${{{{ {} }}}}", "a".repeat(length)));
+    assert_eq!(violations(with_env(whole(21_000))), Vec::new());
+    assert!(matches!(
+        violations(with_env(whole(21_001))).as_slice(),
+        [Rule::ExpressionTooLong(21_001)]
+    ));
 }
 
 #[test]
