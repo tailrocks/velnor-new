@@ -115,27 +115,36 @@ fn physical(path: PathBuf) -> PathBuf {
     fs::canonicalize(&path).unwrap_or(path)
 }
 
-fn same(left: &Path, right: &Path) -> bool {
+pub(in crate::io) fn same(left: &Path, right: &Path) -> bool {
     left == right || physical(left.to_path_buf()) == physical(right.to_path_buf())
 }
 
 impl From<Printed> for Workspace {
     fn from(printed: Printed) -> Self {
-        let target_directory = physical(printed.target_directory);
         Self {
             build_directory: printed
                 .build_directory
-                .map_or_else(|| target_directory.clone(), physical),
+                .unwrap_or_else(|| printed.target_directory.clone()),
             root: printed.workspace_root,
-            target_directory,
+            target_directory: printed.target_directory,
         }
     }
 }
 
 impl Workspace {
+    pub(in crate::io) fn shares_build_directory(&self) -> bool {
+        same(&self.build_directory, &self.target_directory)
+    }
+
+    pub(in crate::io) fn same_directories(&self, other: &Self) -> bool {
+        self.root == other.root
+            && same(&self.target_directory, &other.target_directory)
+            && same(&self.build_directory, &other.build_directory)
+    }
+
     pub(in crate::io) fn directories(&self) -> Vec<PathBuf> {
         let mut directories = vec![self.target_directory.clone()];
-        if !same(&self.build_directory, &self.target_directory) {
+        if !self.shares_build_directory() {
             directories.push(self.build_directory.clone());
         }
         directories
@@ -147,7 +156,7 @@ impl Workspace {
         &self,
         workspaces: &[Workspace],
     ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-        if same(&self.target_directory, &self.build_directory) {
+        if self.shares_build_directory() {
             return Roots::new(workspaces).unit_files(&self.build_directory);
         }
         Ok(apart(&self.target_directory, &self.build_directory)?.found)

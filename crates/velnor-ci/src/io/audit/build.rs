@@ -18,7 +18,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{MetadataInvocation, Roots, Workspace, apart, outside_tracked};
+use super::super::units::{Roots, Workspace, apart, outside_tracked};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -54,7 +54,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
     let step = invocation.step(directory);
-    let baseline = MetadataInvocation::at(&step);
+    let baseline = invocation.baseline(&step);
     let workspaces = workspaces(
         &facts,
         &checkout.root,

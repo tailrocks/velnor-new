@@ -38,6 +38,7 @@ mod separate_build;
 mod shared_build;
 mod stale_run;
 mod stand_ins;
+mod toolchain_probe;
 mod tracked_build;
 
 use std::ffi::OsStr;
@@ -53,6 +54,7 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = crate::run::command_without_nextest_environment(program);
     command
         .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
         .env("MBX_SHARE_OUT_DIR", "0")
         .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
@@ -63,6 +65,7 @@ pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
         .env_remove("CARGO_BUILD_BUILD_DIR")
         .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
     command

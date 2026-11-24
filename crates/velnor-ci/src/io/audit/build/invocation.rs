@@ -168,6 +168,30 @@ impl Invocation {
         }
     }
 
+    fn executable(&self) -> &str {
+        if Path::new(&self.command[0])
+            .file_name()
+            .is_some_and(|name| name == "cargo")
+        {
+            self.command[0].as_str()
+        } else {
+            "cargo"
+        }
+    }
+
+    pub(super) fn baseline<'a>(&'a self, directory: &'a Path) -> MetadataInvocation<'a> {
+        let selector = usize::from(
+            self.globals
+                .first()
+                .is_some_and(|word| word.starts_with('+') && word.len() > 1),
+        );
+        MetadataInvocation {
+            executable: self.executable(),
+            arguments: &self.globals[..selector],
+            directory,
+        }
+    }
+
     fn work(&self, directory: &Path) -> PathBuf {
         self.chdir
             .as_ref()
@@ -235,14 +259,7 @@ impl Invocation {
                 .map(String::as_str)
                 .take_while(|word| *word != "--"),
         )?;
-        let executable = if Path::new(&self.command[0])
-            .file_name()
-            .is_some_and(|name| name == "cargo")
-        {
-            self.command[0].as_str()
-        } else {
-            "cargo"
-        };
+        let executable = self.executable();
         let invocation = MetadataInvocation {
             executable,
             arguments: &self.globals,
@@ -259,15 +276,12 @@ impl Invocation {
             let actual = root_workspace(
                 &manifest,
                 Some(if *inherit { &invocation } else { &local }),
-                directory,
+                Some(directory),
                 *inherit,
                 *alone,
                 groups,
             )?;
-            if actual.root != expected.root
-                || actual.target_directory != expected.target_directory
-                || actual.build_directory != expected.build_directory
-            {
+            if !actual.same_directories(expected) {
                 return Err(CiError::new(
                     "Cargo invocation configuration redirects the workspace, target or build directory away from inputs audit; use persistent Cargo configuration, CARGO_TARGET_DIR or CARGO_BUILD_BUILD_DIR for both build and audit",
                 ));

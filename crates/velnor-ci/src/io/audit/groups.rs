@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoFacts;
 use velnor_rust::resolve;
 
-use super::super::units::{MetadataInvocation, Workspace, own_workspace, workspace};
+use super::super::units::{MetadataInvocation, Workspace, own_workspace, same, workspace};
 use super::options::AuditOptions;
 use crate::error::CiError;
 
@@ -53,9 +53,9 @@ pub(super) fn standalone(facts: &RepoFacts) -> Vec<bool> {
 }
 
 pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
-    let mut directories = Vec::new();
+    let mut directories: Vec<PathBuf> = Vec::new();
     for directory in workspaces.iter().flat_map(Workspace::directories) {
-        if !directories.contains(&directory) {
+        if !directories.iter().any(|known| same(known, &directory)) {
             directories.push(directory);
         }
     }
@@ -65,7 +65,7 @@ pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
 pub(super) fn root_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
-    step: &Path,
+    step: Option<&Path>,
     inherit: bool,
     alone: bool,
     groups: &[PathBuf],
@@ -187,7 +187,7 @@ pub(super) fn workspaces(
             root_workspace(
                 &manifest,
                 probe.filter(|_| *stepped),
-                step,
+                (probe.is_none() || *stepped).then_some(step),
                 *inherit,
                 alone,
                 &groups,

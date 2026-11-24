@@ -90,3 +90,29 @@ fn a_target_directory_the_job_names_is_kept() {
         named.display().to_string()
     );
 }
+
+#[test]
+fn a_target_directory_reached_through_a_link_is_handed_to_cargo_as_printed() {
+    let (repo, managed) = prepared();
+    let rust = repo.root().join("rust");
+    fs::rename(rust.join("target"), rust.join("real-target"))
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    std::os::unix::fs::symlink("real-target", rust.join("target"))
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(&rust)
+        .env_remove("CARGO_TARGET_DIR")
+        .env("MANAGED_TARGET", &managed)
+        .args(["inputs", "build", "--"])
+        .arg(repo.root().join("driver/cargo"))
+        .args(["build", "--workspace"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let pinned = fs::read_to_string(rust.join("pinned.txt"))
+        .unwrap_or_else(|error| unreachable!("{error} {built:?}"));
+    assert_eq!(
+        std::path::Path::new(&pinned).file_name(),
+        Some(std::ffi::OsStr::new("target")),
+        "{pinned} {built:?}"
+    );
+}
