@@ -35,6 +35,18 @@ die() {
   exit 1
 }
 
+set_archive() {
+  [ -n "$1" ] || die "empty value for --file"
+  [ -z "$archive" ] || die "repeated --file"
+  archive="$1"
+}
+
+set_chdir() {
+  [ -n "$1" ] || die "empty value for --directory"
+  [ -z "$chdir" ] || die "repeated --directory"
+  chdir="$1"
+}
+
 need() {
   i=$((i + 1))
   if [ "$i" -ge "${#args[@]}" ]; then
@@ -101,17 +113,17 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     -C | --directory)
       need
-      chdir="${args[$i]}"
+      set_chdir "${args[$i]}"
       ;;
     --directory=*)
-      chdir="${arg#--directory=}"
+      set_chdir "${arg#--directory=}"
       ;;
     -f | --file)
       need
-      archive="${args[$i]}"
+      set_archive "${args[$i]}"
       ;;
     --file=*)
-      archive="${arg#--file=}"
+      set_archive "${arg#--file=}"
       ;;
     -z)
       gzip=1
@@ -162,9 +174,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
               value="${args[$i]}"
             fi
             if [ "$flag" = f ]; then
-              archive="$value"
+              set_archive "$value"
             else
-              chdir="$value"
+              set_chdir "$value"
             fi
             if [ "$attached" -eq 1 ]; then
               break
@@ -193,8 +205,11 @@ fi
 if [ "$no_same_owner" -eq 1 ] && [ "$mode" != x ]; then
   die "unsupported option --no-same-owner"
 fi
-if [ "$no_recursion" -eq 1 ] && [ "$mode" = c ]; then
+if [ "$no_recursion" -eq 1 ] && [ "$mode" != x ]; then
   die "unsupported option --no-recursion"
+fi
+if [ $((gzip + zstd)) -gt 1 ] || { [ "$gzip" -eq 1 ] && [ -n "$program" ]; }; then
+  die "conflicting compression options"
 fi
 extract_flags=()
 if [ "$no_same_owner" -eq 1 ]; then

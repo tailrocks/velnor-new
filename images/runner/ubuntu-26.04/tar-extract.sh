@@ -151,6 +151,16 @@ read_gnu_names() {
   rm -f -- "$list"
 }
 
+reject_recursive_selection() {
+  local i
+  [ "$no_recursion" -eq 1 ] && [ "$extract_all" -eq 0 ] || return 0
+  for i in "${!mem_name[@]}"; do
+    if [ "${mem_wanted[$i]}" -eq 1 ] && { [ "${mem_type[$i]}" = 5 ] || [[ "${mem_name[$i]}" == */ ]]; }; then
+      die "unsupported option --no-recursion with directory member ${mem_name[$i]}"
+    fi
+  done
+}
+
 load_members() {
   local -A want=()
   local -A seen=()
@@ -195,6 +205,7 @@ load_members() {
       [ -n "${seen[$path]:-}" ] || die "not found in archive: $path"
     done
   fi
+  reject_recursive_selection
   mark_isolated
   reject_symlink_traversal
 }
@@ -308,14 +319,6 @@ install_member() {
 . "$_velnor_tar_here/tar-extract-plan.sh"
 
 extract_fast() {
-  local i
-  if [ "$no_recursion" -eq 1 ]; then
-    for i in "${!mem_name[@]}"; do
-      if [ "${mem_wanted[$i]}" -eq 1 ] && [ "${mem_type[$i]}" = 5 ]; then
-        die "unsupported option --no-recursion with directory member ${mem_name[$i]}"
-      fi
-    done
-  fi
   if [ -n "$files_from" ]; then
     run_listed
   else
