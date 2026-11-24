@@ -22,8 +22,6 @@ fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
         "build-test.sh kept the real home directory: {seen}"
     );
     for hidden in [
-        "GH_TOKEN",
-        "REGISTRY_PASSWORD",
         "DOCKER_HOST",
         "KUBECONFIG",
         "CARGO_HOME",

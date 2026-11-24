@@ -199,7 +199,7 @@ pub enum ImageCommand {
     )]
     VerifyCandidate(VerifyCandidateArgs),
     #[command(
-        about = "Build the job image candidate: check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, check the Docker Buildx plugin against buildx_version and buildx_sha256 in .velnor/runner.lock, run build-test.sh, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
+        about = "Build the job image candidate: refuse to start, before it runs anything, when its own environment holds a secret-named variable (a name that contains TOKEN, PASSWORD, SECRET, CREDENTIAL, AUTH or KEY in any case, except GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and GIT_AUTHOR_DATE), because build-test.sh can read that environment; check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, check the Docker Buildx plugin against buildx_version and buildx_sha256 in .velnor/runner.lock, run build-test.sh, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
     )]
     Build(BuildArgs),
 }
