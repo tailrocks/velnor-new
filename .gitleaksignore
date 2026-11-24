@@ -32,3 +32,5 @@ docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:69
 docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:114
 docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
 scripts/download-owned-tool-candidate.py:generic-api-key:62
+a0ba608696fb800bd7004f5a3d0d29e063a54b9f:crates/velnor-ci/tests/it/image_publish/location.rs:generic-api-key:127
+a0ba608696fb800bd7004f5a3d0d29e063a54b9f:crates/velnor-ci/tests/it/image_publish/location.rs:generic-api-key:134

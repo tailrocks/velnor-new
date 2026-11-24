@@ -10,14 +10,14 @@ use velnor_ci::image_candidate::archive::{Blob, scan};
 use velnor_ci::image_candidate::hashing::sha256_hex;
 use velnor_ci::image_candidate::oci::{BlobSource, verify};
 
-pub(super) const LAYER: &str = "application/vnd.oci.image.layer.v1.tar";
-pub(super) const LAYER_GZ: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
+pub(crate) const LAYER: &str = "application/vnd.oci.image.layer.v1.tar";
+pub(crate) const LAYER_GZ: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
 
-pub(super) fn digest(data: &[u8]) -> String {
+pub(crate) fn digest(data: &[u8]) -> String {
     format!("sha256:{}", sha256_hex(data))
 }
 
-pub(super) fn header(name: &str, size: usize, kind: u8) -> Vec<u8> {
+pub(crate) fn header(name: &str, size: usize, kind: u8) -> Vec<u8> {
     let mut block = vec![0u8; 512];
     block[..name.len()].copy_from_slice(name.as_bytes());
     block[100..107].copy_from_slice(b"0000644");
@@ -34,14 +34,14 @@ pub(super) fn header(name: &str, size: usize, kind: u8) -> Vec<u8> {
     block
 }
 
-pub(super) fn member(name: &str, data: &[u8], kind: u8) -> Vec<u8> {
+pub(crate) fn member(name: &str, data: &[u8], kind: u8) -> Vec<u8> {
     let mut out = header(name, data.len(), kind);
     out.extend_from_slice(data);
     out.resize(out.len().div_ceil(512) * 512, 0);
     out
 }
 
-pub(super) fn tar(entries: &[(&str, &[u8])]) -> Vec<u8> {
+pub(crate) fn tar(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut out: Vec<u8> = entries
         .iter()
         .flat_map(|(name, data)| member(name, data, b'0'))
@@ -50,7 +50,7 @@ pub(super) fn tar(entries: &[(&str, &[u8])]) -> Vec<u8> {
     out
 }
 
-pub(super) fn gzip(data: &[u8]) -> Vec<u8> {
+pub(crate) fn gzip(data: &[u8]) -> Vec<u8> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder
         .write_all(data)
@@ -58,20 +58,20 @@ pub(super) fn gzip(data: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-pub(super) struct Image {
-    pub(super) entries: Vec<(String, Vec<u8>)>,
+pub(crate) struct Image {
+    pub(crate) entries: Vec<(String, Vec<u8>)>,
 }
 
-pub(super) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub(crate) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-pub(super) struct Spec<'a> {
-    pub(super) layers: Vec<(Vec<u8>, &'a str)>,
-    pub(super) revision: Option<String>,
-    pub(super) diff_ids: Option<Vec<String>>,
-    pub(super) platform: Value,
+pub(crate) struct Spec<'a> {
+    pub(crate) layers: Vec<(Vec<u8>, &'a str)>,
+    pub(crate) revision: Option<String>,
+    pub(crate) diff_ids: Option<Vec<String>>,
+    pub(crate) platform: Value,
 }
 
-pub(super) fn spec(layers: Vec<(Vec<u8>, &str)>) -> Spec<'_> {
+pub(crate) fn spec(layers: Vec<(Vec<u8>, &str)>) -> Spec<'_> {
     Spec {
         layers,
         revision: Some(REVISION.to_owned()),
@@ -80,11 +80,11 @@ pub(super) fn spec(layers: Vec<(Vec<u8>, &str)>) -> Spec<'_> {
     }
 }
 
-pub(super) fn plain_layer() -> Vec<u8> {
+pub(crate) fn plain_layer() -> Vec<u8> {
     tar(&[("job-image", b"job-image-ok")])
 }
 
-pub(super) fn build(spec: &Spec<'_>) -> Image {
+pub(crate) fn build(spec: &Spec<'_>) -> Image {
     let diffs: Vec<String> = spec.diff_ids.clone().unwrap_or_else(|| {
         spec.layers
             .iter()
@@ -140,7 +140,7 @@ pub(super) fn build(spec: &Spec<'_>) -> Image {
     Image { entries }
 }
 
-pub(super) fn gunzip(data: &[u8]) -> Vec<u8> {
+pub(crate) fn gunzip(data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     flate2::read::GzDecoder::new(data)
         .read_to_end(&mut out)
@@ -149,7 +149,7 @@ pub(super) fn gunzip(data: &[u8]) -> Vec<u8> {
 }
 
 impl Image {
-    pub(super) fn archive(&self) -> Vec<u8> {
+    pub(crate) fn archive(&self) -> Vec<u8> {
         let entries: Vec<(&str, &[u8])> = self
             .entries
             .iter()
@@ -158,7 +158,7 @@ impl Image {
         tar(&entries)
     }
 
-    pub(super) fn replace(&mut self, name_of: impl Fn(&[u8]) -> bool, with: &[u8]) {
+    pub(crate) fn replace(&mut self, name_of: impl Fn(&[u8]) -> bool, with: &[u8]) {
         for (_, data) in &mut self.entries {
             if name_of(data) {
                 *data = with.to_vec();
@@ -178,12 +178,16 @@ impl BlobSource for Memory {
     }
 }
 
-pub(super) fn check(archive: &[u8]) -> Result<Value, String> {
-    let scanned = scan(Cursor::new(archive.to_vec())).map_err(|e| e.to_string())?;
-    verify(&scanned, &Memory(archive.to_vec()), REVISION).map_err(|e| e.to_string())
+pub(crate) fn check(archive: &[u8]) -> Result<Value, String> {
+    check_for(archive, REVISION)
 }
 
-pub(super) fn refused(archive: &[u8]) -> String {
+pub(crate) fn check_for(archive: &[u8], revision: &str) -> Result<Value, String> {
+    let scanned = scan(Cursor::new(archive.to_vec())).map_err(|e| e.to_string())?;
+    verify(&scanned, &Memory(archive.to_vec()), revision).map_err(|e| e.to_string())
+}
+
+pub(crate) fn refused(archive: &[u8]) -> String {
     check(archive)
         .err()
         .unwrap_or_else(|| "ACCEPTED".to_owned())

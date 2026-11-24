@@ -60,7 +60,7 @@ fn lexical(path: &Path) -> PathBuf {
     })
 }
 
-fn locate(root: &Path, raw: &Path) -> Result<PathBuf, CiError> {
+pub(super) fn locate(root: &Path, raw: &Path) -> Result<PathBuf, CiError> {
     let requested = if raw.is_absolute() {
         raw.to_path_buf()
     } else {

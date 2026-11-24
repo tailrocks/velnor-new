@@ -202,6 +202,41 @@ pub enum ImageCommand {
         about = "Build the job image candidate: refuse to start, before it runs anything, when its own environment holds a secret-named variable (a name that contains TOKEN, PASSWORD, SECRET, CREDENTIAL, AUTH or KEY in any case, except GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and GIT_AUTHOR_DATE), because build-test.sh can read that environment; check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, check the Docker Buildx plugin against buildx_version and buildx_sha256 in .velnor/runner.lock, run build-test.sh, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
     )]
     Build(BuildArgs),
+    #[command(
+        about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; the checkout is at GITHUB_SHA, which is the tip of main; the candidate record and archive verify against --root; the run has one unexpired candidate artifact; the latest canonical ci.yml push run of the commit succeeded; and `gh attestation verify` passes for the archive and the record with the repository, workflow, ref and commit pinned. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
+    )]
+    Publish(ImagePublishArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ImagePublishArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout; its HEAD must be GITHUB_SHA and its build inputs must hash to the record"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The candidate OCI archive")]
+    pub archive: PathBuf,
+    #[arg(long, help = "The candidate record JSON")]
+    pub record: PathBuf,
+    #[arg(
+        long,
+        help = "Where to write the publication evidence (a new file outside --root)"
+    )]
+    pub result: PathBuf,
+    #[arg(
+        long,
+        default_value = crate::image_publish::gate::DEFAULT_WORKFLOW,
+        help = "The workflow file that may publish, as owner/repo/.github/workflows/<file>; GITHUB_WORKFLOW_REF must be this file at refs/heads/main"
+    )]
+    pub workflow: String,
+    #[arg(
+        long,
+        default_value = crate::image_publish::gate::DEFAULT_EVENT,
+        help = "The event that may publish, workflow_dispatch or push; GITHUB_EVENT_NAME and the attestation trigger must equal it"
+    )]
+    pub event: String,
 }
 
 #[derive(Debug, Args)]

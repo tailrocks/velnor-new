@@ -27,7 +27,7 @@ fn git(runner: &Runner, root: &Path, args: &[&str], limit: u64) -> Result<String
     runner.text_up_to(&mut command, GIT_TIMEOUT, limit)
 }
 
-fn git_line(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
+pub(super) fn git_line(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
     git(runner, root, args, MAX_LINE_BYTES).map(|output| output.trim().to_owned())
 }
 

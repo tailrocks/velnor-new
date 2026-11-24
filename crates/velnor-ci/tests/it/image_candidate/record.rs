@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use velnor_ci::image_candidate::identity::{buildx_version, workflow};
 use velnor_ci::image_candidate::record::{INPUT_PATHS, validate};
 
-pub(super) fn record() -> Value {
+pub(crate) fn record() -> Value {
     let inputs: serde_json::Map<String, Value> = INPUT_PATHS
         .iter()
         .map(|name| ((*name).to_owned(), json!("b".repeat(64))))
