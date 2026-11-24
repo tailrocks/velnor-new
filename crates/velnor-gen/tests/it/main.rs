@@ -18,6 +18,7 @@ mod built_helper_gate;
 mod built_output;
 mod cache_budget;
 mod cache_budget_anchor;
+mod cache_budget_objects;
 mod cache_budget_workflow;
 mod cache_compat;
 mod cache_key_defects;
