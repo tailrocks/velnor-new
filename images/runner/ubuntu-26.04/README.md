@@ -87,7 +87,7 @@ target outside the extract root fails closed. With `-P`, relative symlink
 targets may resolve outside `-C`; an archive member that walks through an
 archive symlink or a symlink already on disk still fails closed. Modes,
 executable bits, directory timestamps, empty directories, and pax paths
-longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
+longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `--gzip`, `--file` and `--directory` are long spellings of `-z`, `-f` and `-C`. An empty or repeated archive or directory, and more than one compression option, fail closed. `--no-same-owner` and `--no-recursion` apply to extract only. `--no-recursion` fails closed when a selected member is a directory. `-v` does not
 change archive bytes. `--strip-components` is unsupported and fails closed.
 Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
