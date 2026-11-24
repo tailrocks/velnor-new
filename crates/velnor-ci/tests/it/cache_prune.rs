@@ -22,6 +22,9 @@ pub(crate) fn artifact(package: &str, kind: &str, file: &str) -> Value {
     record["package_id"] = json!(package);
     record["target"]["kind"] = json!([kind]);
     record["filenames"] = json!([file]);
+    if package.starts_with("path+") {
+        record["manifest_path"] = json!("app/Cargo.toml");
+    }
     record
 }
 

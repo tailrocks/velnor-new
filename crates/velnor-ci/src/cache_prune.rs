@@ -1,14 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What a build directory keeps when it is saved as a base: the units this run used.
-//! A path crate's library unit stays. Dropping it makes the next warm run rebuild that crate,
-//! and the Cache check reports the rebuild as waste. Test executables, binaries, documentation
-//! and units this run did not use still go.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::cargo_artifacts::{CargoArtifact, CargoTarget};
 use crate::cargo_package::PackageIdentity;
 use crate::telemetry::Invocation;
 
@@ -67,11 +63,56 @@ pub struct UsedUnits {
     hashes: BTreeSet<String>,
 }
 
-/// A package id cargo recorded for a unit this run compiled or reused.
-///
-/// Path crates are included. Their library units have to stay in the saved base.
-fn is_recorded(package_id: &str) -> bool {
-    PackageIdentity::parse(package_id).is_some()
+fn keep_artifact(artifact: &CargoArtifact) -> bool {
+    match PackageIdentity::parse(&artifact.package_id) {
+        None => false,
+        Some(package)
+            if package
+                .source
+                .is_some_and(|source| source.starts_with("path+")) =>
+        {
+            library_target(&artifact.target) && manifest_in_checkout(&artifact.manifest_path)
+        }
+        Some(_) => true,
+    }
+}
+
+fn keep_build_script(package_id: &str, kept_path_ids: &BTreeSet<&str>) -> bool {
+    match PackageIdentity::parse(package_id) {
+        None => false,
+        Some(package)
+            if package
+                .source
+                .is_some_and(|source| source.starts_with("path+")) =>
+        {
+            kept_path_ids.contains(package_id)
+        }
+        Some(_) => true,
+    }
+}
+
+fn library_target(target: &CargoTarget) -> bool {
+    const KINDS: &[&str] = &["lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"];
+    target
+        .kind
+        .iter()
+        .chain(target.crate_types.iter())
+        .any(|kind| KINDS.contains(&kind.as_str()))
+}
+
+fn manifest_in_checkout(manifest: &str) -> bool {
+    let path = Path::new(manifest);
+    if manifest.is_empty() || path.components().next() == Some(std::path::Component::ParentDir) {
+        return false;
+    }
+    if path.is_relative() {
+        return true;
+    }
+    let Ok(root) = std::env::current_dir().and_then(|dir| dir.canonicalize()) else {
+        return false;
+    };
+    path.canonicalize()
+        .is_ok_and(|canonical| canonical.starts_with(root))
 }
 
 impl UsedUnits {
@@ -91,17 +132,23 @@ impl UsedUnits {
         }
         let mut used = Self::default();
         for invocation in invocations {
+            let kept_path_ids: BTreeSet<&str> = invocation
+                .artifacts
+                .iter()
+                .filter(|artifact| keep_artifact(artifact))
+                .map(|artifact| artifact.package_id.as_str())
+                .collect();
             for artifact in invocation
                 .artifacts
                 .iter()
-                .filter(|artifact| is_recorded(&artifact.package_id))
+                .filter(|artifact| keep_artifact(artifact))
             {
                 used.insert_all(artifact.filenames.iter().map(String::as_str));
             }
             for script in invocation
                 .build_scripts
                 .iter()
-                .filter(|script| is_recorded(&script.package_id))
+                .filter(|script| keep_build_script(&script.package_id, &kept_path_ids))
             {
                 let run = Path::new(&script.out_dir).parent();
                 used.insert_all(run.and_then(Path::to_str));

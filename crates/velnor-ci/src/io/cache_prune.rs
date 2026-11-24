@@ -51,9 +51,7 @@ impl Removed {
     }
 }
 
-/// Removes from `target` what a later build never reads: documentation, scratch directories,
-/// executables and units this run did not use. Library units this run used stay, including a
-/// path crate, so a build that restores the result finds those units fresh.
+/// Removes documentation, scratch directories, executables, and units this run did not use.
 pub(super) fn prune(target: &Path, used: Option<&UsedUnits>) -> Result<Removed, CiError> {
     let mut removed = Removed::default();
     for entry in entries(target)? {
