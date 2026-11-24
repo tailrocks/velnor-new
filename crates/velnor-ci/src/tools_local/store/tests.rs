@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 
-use super::{restore_with, save_with};
+use super::{Step, restore_with, save_with};
 use crate::tools_local::{Inputs, Outcome, Verb};
 
 const RUSTC: &str = ".rustup/toolchains/stable/rustc";
@@ -59,12 +59,12 @@ impl Node {
         }
     }
 
-    fn save(&self, key: &str, replace: bool, chosen: &dyn Fn()) -> Outcome {
+    fn save(&self, key: &str, replace: bool, pause: &dyn Fn(Step)) -> Outcome {
         let home = self.root.join("home");
         save_with(
             &self.inputs(Verb::Save, key, &home, replace),
             self.owner,
-            chosen,
+            pause,
         )
     }
 
@@ -79,7 +79,7 @@ impl Node {
     }
 
     fn saved_aged(&self, key: &str, hours: u64) {
-        let saved = self.save(key, false, &|| {});
+        let saved = self.save(key, false, &|_| {});
         assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
         fs::File::open(self.entry(key))
             .and_then(|dir| dir.set_modified(SystemTime::now() - Duration::from_hours(hours)))
@@ -94,6 +94,14 @@ impl Node {
             .collect();
         names.sort();
         names
+    }
+}
+
+fn at(step: Step, pause: &dyn Fn()) -> impl Fn(Step) + '_ {
+    move |reached| {
+        if reached == step {
+            pause();
+        }
     }
 }
 
@@ -132,7 +140,7 @@ fn a_save_does_not_prune_an_entry_a_restore_is_copying_and_a_later_save_does() {
     let restored = interleave(
         |pause| node.restore("k1", pause),
         || {
-            let saved = node.save("k3", false, &|| {});
+            let saved = node.save("k3", false, &|_| {});
             let quiet = matches!(&saved, Outcome::Saved { kept, .. } if kept.is_empty());
             assert!(quiet, "{saved:?}");
         },
@@ -141,7 +149,7 @@ fn a_save_does_not_prune_an_entry_a_restore_is_copying_and_a_later_save_does() {
     let rustc = fs::read_to_string(node.root.join("fresh").join(RUSTC));
     assert_eq!(rustc.ok().as_deref(), Some("rustc"));
     assert_eq!(node.listed(), ["k1", "k2", "k3"]);
-    let saved = node.save("k4", false, &|| {});
+    let saved = node.save("k4", false, &|_| {});
     assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
     assert_eq!(node.listed(), ["k3", "k4"]);
 }
@@ -152,9 +160,9 @@ fn a_prune_does_not_remove_the_fresh_entry_a_replacing_save_published_after_the_
     node.saved_aged("k1", 3);
     node.saved_aged("k2", 2);
     let saved = interleave(
-        |pause| node.save("k3", false, pause),
+        |pause| node.save("k3", false, &at(Step::Chosen, pause)),
         || {
-            let healed = node.save("k1", true, &|| {});
+            let healed = node.save("k1", true, &|_| {});
             assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
         },
     );
@@ -177,7 +185,7 @@ fn a_restore_whose_entry_is_replaced_during_the_copy_is_not_a_hit() {
     let restored = interleave(
         |pause| node.restore("k1", pause),
         || {
-            let healed = node.save("k1", true, &|| {});
+            let healed = node.save("k1", true, &|_| {});
             assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
         },
     );
