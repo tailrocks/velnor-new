@@ -17,7 +17,7 @@ const PUBLIC_SOURCES: &[&str] = &[
     "sparse+https://index.crates.io/",
 ];
 
-const HTTP_GIT_HELPER: (u64, u64, u64) = (0, 1, 114);
+const HTTP_GIT_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 const NOT_SAVED: &str =
     "base caches are not saved because this repository has private dependencies";

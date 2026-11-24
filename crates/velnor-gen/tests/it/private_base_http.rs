@@ -22,7 +22,7 @@ fn saves_base_caches(helper: &str, lock: &str) -> Result<bool, Box<dyn std::erro
 
 #[test]
 fn an_http_git_source_gets_the_private_base_caches_from_the_helper_that_admits_it() -> TestResult {
-    assert!(saves_base_caches("0.1.114", HTTP_LOCK)?);
-    assert!(!saves_base_caches("0.1.113", HTTP_LOCK)?);
+    assert!(saves_base_caches("0.1.116", HTTP_LOCK)?);
+    assert!(!saves_base_caches("0.1.115", HTTP_LOCK)?);
     Ok(())
 }
