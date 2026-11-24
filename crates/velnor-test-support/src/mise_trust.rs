@@ -23,7 +23,7 @@ fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
         Err(_) if trusted.iter().any(|entry| dir.starts_with(entry)) => {
             std::env::join_paths(trusted).unwrap_or_else(|error| unreachable!("{error}"))
         }
-        Err(error) => panic!(
+        Err(error) => unreachable!(
             "cannot trust {} for mise: {error}; MISE_TRUSTED_CONFIG_PATHS is a separator-joined list, so use a TMPDIR without the separator",
             dir.display()
         ),
