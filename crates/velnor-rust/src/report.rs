@@ -13,7 +13,9 @@ use velnor_model::{
 
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via d937e8dfc6
 const CACHE_AFTER_PRODUCER_HELPER: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.112 via 9ae30da2fc
 const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {

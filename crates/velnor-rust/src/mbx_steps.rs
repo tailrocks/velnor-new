@@ -8,6 +8,7 @@ use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 534aa8684b
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via 4ed1cf44b7
 pub(crate) const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.111 via 351e1f2a59
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
