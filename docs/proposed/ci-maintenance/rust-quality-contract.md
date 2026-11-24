@@ -133,7 +133,7 @@ stack-neutral choice between `consumer-v1` and `velnor-repository-v1`.
 The workspace MUST use Rust 2024 and resolver 3. Gate 0 MUST select the latest
 patched stable release then available and record it. The historical
 2026-09-27 research snapshot used Rust 1.98.1 with MSRV 1.98; the current
-qualified toolchain is Rust 1.99.1 with MSRV 1.99. Never use a placeholder
+qualified toolchain is Rust 1.100.0 with MSRV 1.100. Never use a placeholder
 MSRV.
 
 ```toml
@@ -143,7 +143,7 @@ resolver = "3"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 ```
 
 Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
