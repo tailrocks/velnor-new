@@ -36,6 +36,13 @@ pub struct Checked {
     pub needed: Vec<String>,
 }
 
+fn stays_under_origin(path: &str) -> bool {
+    path == "$ORIGIN"
+        || path
+            .strip_prefix("$ORIGIN/")
+            .is_some_and(|rest| rest.split('/').all(|part| part != ".."))
+}
+
 fn is_openssl(library: &str) -> bool {
     library.starts_with("libssl.so") || library.starts_with("libcrypto.so")
 }
@@ -74,7 +81,7 @@ fn problems(facts: &ElfFacts, ceiling: Glibc, openssl: Openssl) -> Vec<String> {
                 "it carries an empty library search path component, which makes the loader search the working directory"
                     .to_owned(),
             );
-        } else if !path.starts_with("$ORIGIN") {
+        } else if !stays_under_origin(path) {
             problems.push(format!(
                 "it carries the library search path {path}, which names a place on the build machine"
             ));

@@ -113,7 +113,7 @@ fn a_binary_that_is_not_x86_64_dynamic_or_clean_of_build_machine_paths_is_refuse
     built(
         &root,
         "origin",
-        &Elf::dynamic_x86_64().with_library_path("$ORIGIN/../lib"),
+        &Elf::dynamic_x86_64().with_library_path("$ORIGIN/lib"),
     );
     assert!(stage(&args(&root, "2.41", OpensslMode::None, &["origin"])).is_ok());
 }
@@ -208,6 +208,11 @@ fn an_empty_search_path_component_a_foreign_loader_and_the_relr_marker_are_refus
             "emptypath",
             Elf::dynamic_x86_64().with_library_path(":$ORIGIN/lib"),
             "empty library search path component",
+        ),
+        (
+            "escape",
+            Elf::dynamic_x86_64().with_library_path("$ORIGIN/../../tmp"),
+            "library search path $ORIGIN/../../tmp",
         ),
         (
             "loader",

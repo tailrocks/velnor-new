@@ -286,10 +286,19 @@ fn check_profile(view: &RepoView, image: &ImageConfig, root: &RustRoot) -> Resul
     if matches!(image.profile.as_str(), "release" | "dev") {
         return Ok(());
     }
-    let header = format!("[profile.{}]", image.profile);
-    let defined = view.files.get(&root.manifest).is_some_and(|bytes| {
-        std::str::from_utf8(bytes).is_ok_and(|text| text.lines().any(|line| line.trim() == header))
-    });
+    let defined = view
+        .files
+        .get(&root.manifest)
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+        .and_then(|text| toml::from_str::<toml::Table>(text).ok())
+        .and_then(|manifest| {
+            manifest
+                .get("profile")?
+                .as_table()?
+                .get(&image.profile)
+                .map(toml::Value::is_table)
+        })
+        .unwrap_or(false);
     if defined {
         Ok(())
     } else {

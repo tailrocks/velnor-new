@@ -60,7 +60,7 @@ fn the_sysroot_lock_and_a_custom_profile_must_exist() -> TestResult {
         expected_files(&view),
         Err(GenerateError::Image(ImageError::SysrootLockMissing { .. }))
     ));
-    let view = plain_with(|text| {
+    let mut view = plain_with(|text| {
         text.replace(
             "pr_build = \"always\"",
             "pr_build = \"always\"\nprofile = \"fast\"",
@@ -70,12 +70,19 @@ fn the_sysroot_lock_and_a_custom_profile_must_exist() -> TestResult {
         expected_files(&view),
         Err(GenerateError::Image(ImageError::ProfileUndefined { .. }))
     ));
-    let mut view = view;
     let manifest = RepoPath::new("Cargo.toml")?;
     let text = String::from_utf8(view.files.remove(&manifest).ok_or("no manifest")?)?;
     view.files.insert(
         manifest,
         format!("{text}\n[profile.fast]\ninherits = \"release\"\n").into_bytes(),
+    );
+    assert!(expected_files(&view).is_ok());
+    let manifest = RepoPath::new("Cargo.toml")?;
+    let text = String::from_utf8(view.files.remove(&manifest).ok_or("no manifest")?)?;
+    view.files.insert(
+        manifest,
+        text.replace("[profile.fast]", "[ profile.fast ] # built for images")
+            .into_bytes(),
     );
     assert!(expected_files(&view).is_ok());
     Ok(())
