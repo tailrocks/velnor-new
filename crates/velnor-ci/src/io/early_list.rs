@@ -20,7 +20,7 @@ const GRACE: Duration = Duration::from_secs(60);
 const GRACE_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_GRACE_MS";
 const STOP_GRACE: Duration = Duration::from_secs(5);
 const STDOUT_LIMIT: u64 = 128 << 20;
-const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT";
+const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT_BYTES";
 
 type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
 
@@ -87,7 +87,13 @@ impl EarlyList {
             State::Taken,
         );
         let receiver = match state {
-            State::Running(receiver) => receiver,
+            State::Running(receiver) => {
+                if !wanted {
+                    self.supervisor
+                        .stop("the run's output was incomplete, so the listing was not needed");
+                }
+                receiver
+            }
             State::Idle if wanted => self.spawn(),
             State::Idle => {
                 if let Some(reason) = self.supervisor.reason() {
@@ -123,6 +129,21 @@ impl EarlyList {
         let supervisor = Arc::clone(&self.supervisor);
         thread::spawn(move || sender.send(list_matches(&argv, supervisor)).ok());
         receiver
+    }
+}
+
+pub(super) struct StopOnDrop(Arc<EarlyList>);
+
+impl StopOnDrop {
+    pub(super) fn new(early: &Arc<EarlyList>) -> Self {
+        Self(Arc::clone(early))
+    }
+}
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0
+            .stop("velnor-ci returned before it collected the list");
     }
 }
 

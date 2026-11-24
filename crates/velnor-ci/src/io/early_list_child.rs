@@ -55,15 +55,18 @@ impl Supervisor {
             let status = self.wait();
             (status, stdout.join(), stderr.join())
         });
+        let stopped = {
+            let mut slot = self.lock();
+            slot.child = None;
+            slot.stopped.clone()
+        };
         let stdout = stdout.map_err(|_| io::Error::other("its output reader panicked"))??;
         let stderr = stderr.map_err(|_| io::Error::other("its error reader panicked"))??;
-        let mut slot = self.lock();
-        slot.child = None;
         Ok(Finished {
             status: status?,
             stdout,
             stderr,
-            stopped: slot.stopped.clone(),
+            stopped,
         })
     }
 

@@ -22,7 +22,8 @@ const WAIT_FOR_LIST_PID: &str = "i=0\nwhile [ ! -s \"$RUNNER_TEMP/list-pid\" ] &
 const WITHHELD: &[&str] = &["tests_listed=", "tests_ignored=", "tests_by_package="];
 const PATIENT: &str = "60000";
 const GRACE_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_GRACE_MS";
-const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT";
+const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
+const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT_BYTES";
 
 struct Launch {
     temp: velnor_test_support::ScratchDir,
@@ -215,22 +216,24 @@ fn a_failing_list_that_floods_stderr_is_echoed_bounded() {
 
 #[test]
 fn a_signal_stops_the_list_with_the_run() {
-    for signal in [Signal::SIGTERM, Signal::SIGINT] {
-        let name = format!("early-bound-signal-{}", signal as i32);
-        let mut run = launch(
-            &name,
-            &format!("{RECORD_LIST_PID}exec sleep 300"),
-            &format!("{RUN_START}{WAIT_FOR_LIST_PID}exec sleep 300"),
-            &[(GRACE_VARIABLE, PATIENT)],
-        );
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while list_pid(run.temp.path()).is_none() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(20));
+    for terminal in ["0", "1"] {
+        for signal in [Signal::SIGTERM, Signal::SIGINT] {
+            let name = format!("early-bound-signal-{terminal}-{}", signal as i32);
+            let mut run = launch(
+                &name,
+                &format!("{RECORD_LIST_PID}exec sleep 300"),
+                &format!("{RUN_START}exec sleep 300"),
+                &[(GRACE_VARIABLE, PATIENT), (TERMINAL_VARIABLE, terminal)],
+            );
+            wait_for(&run.temp.join("list-pid"));
+            kill(pid_of(&run.child), signal).ok();
+            let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
+            assert!(
+                exited,
+                "{signal} with terminal {terminal}: velnor-ci outlived the signal: {stderr}"
+            );
+            assert_list_stopped(&run);
         }
-        kill(pid_of(&run.child), signal).ok();
-        let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
-        assert!(exited, "{signal}: velnor-ci outlived the signal: {stderr}");
-        assert_list_stopped(&run);
     }
 }
 
@@ -287,4 +290,38 @@ fn a_signal_before_the_list_starts_is_reported() {
         stderr.contains("velnor-ci: the early nextest list failed: velnor-ci received a signal"),
         "{stderr}"
     );
+}
+
+#[test]
+fn a_list_nobody_waits_for_is_stopped_at_once() {
+    let mut run = launch(
+        "early-bound-unwanted",
+        &format!("{RECORD_LIST_PID}exec sleep 300"),
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}"),
+        &[(GRACE_VARIABLE, PATIENT)],
+    );
+    let (exited, stderr, written) = finish(&mut run, Duration::from_secs(10));
+    assert!(
+        exited,
+        "velnor-ci waited for a listing it discards: {stderr}"
+    );
+    assert!(!written.contains("tests_by_package="), "{written}");
+    assert_list_stopped(&run);
+}
+
+#[test]
+fn a_failure_before_the_list_is_collected_still_stops_it() {
+    let mut run = launch(
+        "early-bound-early-return",
+        &format!("{RECORD_LIST_PID}exec sleep 300"),
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}"),
+        &[
+            (GRACE_VARIABLE, PATIENT),
+            ("GITHUB_OUTPUT", "/nonexistent-directory/output"),
+        ],
+    );
+    let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
+    assert!(exited, "{stderr}");
+    assert!(stderr.contains("cannot write the step output"), "{stderr}");
+    assert_list_stopped(&run);
 }

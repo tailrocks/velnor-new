@@ -18,7 +18,7 @@ use signal_hook::iterator::Signals;
 use velnor_model::BUILT_OUTPUT;
 
 use super::append_outputs;
-use super::early_list::EarlyList;
+use super::early_list::{EarlyList, StopOnDrop};
 use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::escape::stderr_line;
@@ -114,6 +114,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let early = runs_nextest(&args.command).then(|| Arc::new(EarlyList::new(&args.command)));
+    let _stop_early = early.as_ref().map(StopOnDrop::new);
     let Pumps { receiver, slots } = start_pumps(
         &mut child,
         &log,
