@@ -41,10 +41,11 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
                     private.push(format!(
                         "git dependency {name} is not public ({reason}), but Cargo.lock locks it as a public git source; make the repository public again or declare it in [private_sources]\n"
                     ));
+                } else {
+                    log.push(format!(
+                        "::notice::git dependency {name} is not proven public ({reason})\n"
+                    ));
                 }
-                log.push(format!(
-                    "::notice::git dependency {name} is not proven public ({reason})\n"
-                ));
                 false
             }
         };
