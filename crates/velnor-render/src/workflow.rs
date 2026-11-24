@@ -298,6 +298,9 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     if step.continue_on_error {
         items.push(entry("continue-on-error", Yaml::Bool(true)));
     }
+    if let Some(minutes) = step.timeout_minutes {
+        items.push(entry("timeout-minutes", Yaml::Int(u64::from(minutes))));
+    }
     if let Some(uses) = &step.uses {
         let value = match &step.uses_comment {
             Some(comment) => Yaml::Trailed(comment.clone(), Box::new(text(uses))),

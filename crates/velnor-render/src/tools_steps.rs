@@ -197,6 +197,8 @@ fn clear_step() -> RenderedStep {
     }
 }
 
+pub(crate) const SAVE_TIMEOUT_MINUTES: u16 = 30;
+
 pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
@@ -248,6 +250,8 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         id: id.map(str::to_owned),
         name: name.to_owned(),
         continue_on_error: matches!(verb, Verb::SaveChecked | Verb::Prime),
+        timeout_minutes: matches!(verb, Verb::Save | Verb::SaveChecked | Verb::Prime)
+            .then_some(SAVE_TIMEOUT_MINUTES),
         env: vec![(
             "VELNOR_TOOLS_KEY".to_owned(),
             crate::rules::Value::Expr(key),

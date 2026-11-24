@@ -16,6 +16,7 @@ pub struct RenderedStep {
     pub name: String,
     pub condition: Option<String>,
     pub continue_on_error: bool,
+    pub timeout_minutes: Option<u16>,
     pub uses: Option<String>,
     pub uses_comment: Option<String>,
     pub with: Vec<(String, Value)>,

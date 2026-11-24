@@ -153,6 +153,31 @@ fn a_node_hit_on_a_pull_request_neither_looks_up_nor_saves_the_tools() -> TestRe
 }
 
 #[test]
+fn every_node_store_save_step_ends_before_its_key_lock_can_look_stale() -> TestResult {
+    let mut saves = 0;
+    for config in ["mbx_shared_store = true\n", "mbx_shared_store = false\n"] {
+        for helper in ["0.1.89", "0.1.110"] {
+            let text = workflow_for(config, helper)?;
+            for (id, step) in steps_of(&text)? {
+                if step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("tools-local save"))
+                {
+                    saves += 1;
+                    let minutes = step["timeout-minutes"].as_u64();
+                    assert!(
+                        minutes.is_some_and(|m| (1..60).contains(&m)),
+                        "{id} {config:?} {helper}: {step}"
+                    );
+                }
+            }
+        }
+    }
+    assert_ne!(saves, 0);
+    Ok(())
+}
+
+#[test]
 fn a_node_miss_on_the_default_branch_restores_and_saves_the_network_entry_as_before() -> TestResult
 {
     let text = workflow_for("mbx_shared_store = true\n", "0.1.89")?;
