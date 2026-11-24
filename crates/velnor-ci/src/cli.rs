@@ -18,8 +18,8 @@ pub use app_token::AppTokenArgs;
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
-    BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
+    BaseFile, BenchCommand, BudgetArgs, BuildArgs, CheckConfigurationsArgs, CollectArgs,
+    CompareArgs, CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
     QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
     VerifyCandidateArgs,
 };

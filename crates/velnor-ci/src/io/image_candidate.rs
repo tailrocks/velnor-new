@@ -17,6 +17,16 @@ use crate::image_candidate::json::parse;
 use crate::image_candidate::oci::{self, BlobSource};
 use crate::image_candidate::record::{INPUT_PATHS, validate};
 
+mod build;
+mod docker;
+mod output;
+mod process;
+mod source;
+
+pub(in crate::io) use build::build;
+
+const DOCKERFILE_DIR: &str = "images/job/ubuntu-26.04";
+const DOCKERFILE: &str = "images/job/ubuntu-26.04/Dockerfile";
 const MAX_RECORD_BYTES: u64 = 1 << 20;
 const PASS: &str =
     "PASS: Candidate record has the same source inputs and OCI archive identities.\n";
@@ -102,12 +112,15 @@ fn locked_buildx(root: &Path) -> Result<String, CiError> {
         .ok_or_else(|| CiError::new(format!("{}: buildx_version is missing", path.display())))
 }
 
-pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiError> {
-    let env: HashMap<String, String> = std::env::vars_os()
+fn github_env() -> HashMap<String, String> {
+    std::env::vars_os()
         .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(name, _)| name.starts_with("GITHUB_"))
-        .collect();
-    verify_with(args, &env)
+        .collect()
+}
+
+pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiError> {
+    verify_with(args, &github_env())
 }
 
 fn verify_with(
