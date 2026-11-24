@@ -29,6 +29,7 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
+// helper-gate: first in tools-v0.1.112 via e4e4c86f21
 const MBX_SELECTED_STORE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const MBX_STORE_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
