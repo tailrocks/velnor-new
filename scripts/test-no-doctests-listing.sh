@@ -15,7 +15,7 @@ check() {
   mkdir -p "$dir/fx/src"
   cp "$repo/rust-toolchain.toml" "$dir/rust-toolchain.toml"
   printf '[workspace]\nmembers = ["fx"]\nresolver = "3"\n' > "$dir/Cargo.toml"
-  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n\n[features]\n%bon = []\ngated = []\n' "$default_feature" > "$dir/fx/Cargo.toml"
+  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n\n[features]\n%bon = []\ngated = []\n%b' "$default_feature" "${extra_manifest:-}" > "$dir/fx/Cargo.toml"
   printf '%b' "$lib" > "$dir/fx/src/lib.rs"
   printf '%s\nlet x = 1;\n%s\n' "$fence" "$fence" > "$dir/fx/src/fence.md"
   while [ "$#" -ge 2 ]; do
@@ -71,6 +71,8 @@ check plain_block_fence pass '/* ```\n * not a doc\n */\nfn f() {}\n'
 check build_warning     pass 'pub fn f() {}\n' build.rs 'fn main() { println!("cargo:warning=this is not a doctest: test"); }\n'
 check discovery_failure broken 'fn f( {\n'
 check string_fence      pass 'fn f() { let s = "```"; let _ = s; }\n'
+RUSTDOCFLAGS='--test-args foo' check inherited_test_args broken 'pub fn f() {}\n'
+extra_manifest='\n[dependencies]\npm = { path = "../pm" }\n' check proc_macro_prints_doctest_line pass 'pub fn f() {}\npm::noisy!();\n' ../pm/Cargo.toml '[package]\nname = "pm"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\nproc-macro = true\ndoctest = false\n' ../pm/src/lib.rs 'use proc_macro::TokenStream;\n#[proc_macro]\npub fn noisy(_: TokenStream) -> TokenStream {\n    println!("fx/src/lib.rs - f (line 1): test");\n    TokenStream::new()\n}\n'
 passes=3 check three_passes_with_a_default_feature pass 'pub fn f() {}\n'
 default_feature='' passes=2 check two_passes_without_a_default_feature pass 'pub fn f() {}\n'
 default_feature='' check no_default_feature_fence fail '#[cfg(feature = "on")]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
