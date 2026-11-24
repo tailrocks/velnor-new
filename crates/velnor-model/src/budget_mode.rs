@@ -7,7 +7,7 @@ use crate::ids::{JobId, RootSlug};
 /// name of its budget job and applies the per-mode tables of `[budget]`.
 pub const BUDGET_MODES_HELPER: (u64, u64, u64) = (0, 1, 104);
 
-pub const BUDGET_STEP_HELPER: (u64, u64, u64) = (0, 1, 114);
+pub const BUDGET_STEP_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub const BUDGET_JOB_NAME: &str = "Speed budget";
 

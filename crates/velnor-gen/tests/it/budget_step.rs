@@ -12,7 +12,7 @@ use crate::pr_ci_sim::{context_in_mode, other, simulate, strings};
 #[test]
 fn a_pin_that_reads_the_step_names_the_selection_in_a_step_and_keeps_the_job_name_static()
 -> TestResult {
-    let files = budgeted("0.1.114", "[budget]\nmain_wall_seconds = 600\n")?;
+    let files = budgeted("0.1.116", "[budget]\nmain_wall_seconds = 600\n")?;
     let tree = crate::yaml_tree::document(&workflow(&files)?)?;
     let budget = tree
         .pointer("/jobs/rust-budget")
