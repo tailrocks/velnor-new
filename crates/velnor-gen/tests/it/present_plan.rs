@@ -131,8 +131,21 @@ fn a_pinned_ansible_play_follows_lint_ansible() -> TestResult {
         .ok_or("the gate spec lacks ansible")?;
     assert!(always.when.is_empty(), "{always:?}");
 
+    let mut released = play.clone();
+    crate::pipeline::pin_helper(&mut released, "0.1.112")?;
+    let released_workflow = expected_with_notes(&released)?
+        .0
+        .get(&WORKFLOW_PATH)
+        .ok_or("generate did not write .github/workflows/ci.yml")?
+        .clone();
+    let released_if = jobs(&released_workflow)?["ansible"]["if"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!released_if.contains("lint_ansible"), "{released_if}");
+
     let mut pinned = play;
-    crate::pipeline::pin_helper(&mut pinned, "0.1.112")?;
+    crate::pipeline::pin_helper(&mut pinned, "0.1.113")?;
     let workflow = expected_with_notes(&pinned)?
         .0
         .get(&WORKFLOW_PATH)
@@ -219,7 +232,7 @@ fn label_mode_runs_ansible_on_an_unlabeled_ready_pull_request() -> TestResult {
 #[test]
 fn gating_ansible_grows_the_cache_bound() -> TestResult {
     let mut view = crate::pipeline::view(&["Cargo.toml"], None)?;
-    crate::pipeline::pin_helper(&mut view, "0.1.112")?;
+    crate::pipeline::pin_helper(&mut view, "0.1.113")?;
     let core = "0123456789abcdef".repeat(4);
     let lint = "fedcba9876543210".repeat(4);
     let requirements = format!(
@@ -267,7 +280,7 @@ fn a_lint_slug_ansible_beside_a_play_is_refused() -> TestResult {
     let config = "[[lint]]\nkind = 'jactionlint'\nid = 'ansible'\ninputs = ['mise.toml']\n";
     let mut played =
         crate::stacks::ansible_repository("---\n- hosts: all\n", "ansible-configs/site.yml")?;
-    jactionlint(&mut played, config, Some("0.1.112"))?;
+    jactionlint(&mut played, config, Some("0.1.113"))?;
     match expected_with_notes(&played) {
         Err(GenerateError::Detect(DetectError::Invalid {
             path,
@@ -280,7 +293,7 @@ fn a_lint_slug_ansible_beside_a_play_is_refused() -> TestResult {
         other => return Err(format!("{other:?}").into()),
     }
     let mut plain = RepoView::default();
-    jactionlint(&mut plain, config, Some("0.1.112"))?;
+    jactionlint(&mut plain, config, Some("0.1.113"))?;
     let workflow = expected_with_notes(&plain)?.0;
     let text = workflow
         .get(&WORKFLOW_PATH)
