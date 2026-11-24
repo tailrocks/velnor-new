@@ -188,12 +188,19 @@ fn check_stage(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {
         format!("{}/{}", image.context, image.stage)
     };
     let prefix = format!("{stage}/");
+    let ancestors: Vec<&str> = stage
+        .match_indices('/')
+        .map(|(at, _)| &stage[..at])
+        .collect();
     match view
         .tracked_paths
         .iter()
         .chain(view.files.keys())
-        .find(|path| path.as_str().starts_with(&prefix) || path.as_str() == stage)
-    {
+        .find(|path| {
+            path.as_str().starts_with(&prefix)
+                || path.as_str() == stage
+                || ancestors.contains(&path.as_str())
+        }) {
         Some(path) => Err(ImageError::StageTracked {
             image: image.name.clone(),
             path: path.to_string(),

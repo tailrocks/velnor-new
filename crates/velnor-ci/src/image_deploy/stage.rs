@@ -37,6 +37,7 @@ pub struct Checked {
 }
 
 fn stays_under_origin(path: &str) -> bool {
+    let path = path.replacen("${ORIGIN}", "$ORIGIN", 1);
     path == "$ORIGIN"
         || path
             .strip_prefix("$ORIGIN/")

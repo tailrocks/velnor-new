@@ -116,6 +116,14 @@ fn a_binary_that_is_not_x86_64_dynamic_or_clean_of_build_machine_paths_is_refuse
         &Elf::dynamic_x86_64().with_library_path("$ORIGIN/lib"),
     );
     assert!(stage(&args(&root, "2.41", OpensslMode::None, &["origin"])).is_ok());
+    let root = fresh_dir("deploy", "stage-braced");
+    built(
+        &root,
+        "braced",
+        &Elf::dynamic_x86_64().with_library_path("${ORIGIN}/lib"),
+    );
+    let outcome = stage(&args(&root, "2.41", OpensslMode::None, &["braced"]));
+    assert!(outcome.is_ok(), "{outcome:?}");
 }
 
 #[test]

@@ -171,3 +171,21 @@ fn a_tool_pin_must_apply_on_the_runner_platform_the_way_mise_decides() -> TestRe
     assert!(expected_files(&pinned("linux/x64")?).is_ok());
     Ok(())
 }
+
+#[test]
+fn a_tracked_file_at_an_ancestor_of_the_stage_directory_is_refused() -> TestResult {
+    let mut view = crate::image_workflow::edited("image-plain", |text| {
+        text.replace(
+            "name = \"plain-svc\"\n",
+            "name = \"plain-svc\"\nstage = \"assets/dist\"\n",
+        )
+    })?;
+    assert!(expected_files(&view).is_ok());
+    view.tracked_paths
+        .insert(velnor_model::RepoPath::new("assets")?);
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::StageTracked { .. }))
+    ));
+    Ok(())
+}
