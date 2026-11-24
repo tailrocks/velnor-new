@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::process;
-use super::{DOCKERFILE, fail, source_inputs};
+use super::{DOCKERFILE, fail, regular, source_inputs};
 use crate::error::CiError;
 use crate::image_candidate::json::is_hex;
 
@@ -43,6 +43,7 @@ pub(super) fn identity(
     }
     let committed = git(root, &["show", &format!("{head}:{DOCKERFILE}")])?;
     let path = root.join(DOCKERFILE);
+    regular(&path, DOCKERFILE)?;
     let current = fs::read_to_string(&path)
         .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
     if committed != current.trim_end_matches('\n') {

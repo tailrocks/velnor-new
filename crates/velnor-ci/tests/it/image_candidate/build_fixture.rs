@@ -132,8 +132,13 @@ impl Source {
             &checkout.join("images/job/ubuntu-26.04/build-test.sh"),
             format!("#!/usr/bin/env bash\n{body}\n"),
         );
+        self.commit_all("script");
+    }
+
+    pub(super) fn commit_all(&self, message: &str) {
+        let checkout = self.path("checkout");
         git(&checkout, &["add", "-A"]);
-        git(&checkout, &["commit", "-q", "-m", "script"]);
+        git(&checkout, &["commit", "-q", "-m", message]);
     }
 
     pub(super) fn head(&self) -> String {

@@ -47,8 +47,8 @@ fn builds_into_a_local_archive_without_a_registry_or_credentials() {
     let log = source.text("docker.log");
     let calls: Vec<&str> = log.lines().collect();
     assert_eq!(calls.len(), 3, "{log}");
-    assert_eq!(calls[0], "buildx version");
-    assert_eq!(calls[1], "info --format {{json .ClientInfo.Plugins}}");
+    assert_eq!(calls[0], "info --format {{json .ClientInfo.Plugins}}");
+    assert_eq!(calls[1], "buildx version");
     assert!(
         calls[2].starts_with("buildx build --platform linux/amd64 --file "),
         "{}",
@@ -113,6 +113,27 @@ refusal!(
     "Docker Buildx binary is not the same as the value in .velnor/runner.lock.",
     |source| {
         fs::write(source.path("buildx"), "tampered").unwrap_or_default();
+        source.run(&[], &[])
+    }
+);
+
+#[test]
+fn a_tampered_buildx_binary_is_never_run_by_the_buildx_probe() {
+    let source = Source::new("tampered-plugin");
+    fs::write(source.path("buildx"), "tampered").unwrap_or_default();
+    assert!(!source.run(&[], &[]).ok);
+    let log = source.text("docker.log");
+    assert_eq!(log.trim(), "info --format {{json .ClientInfo.Plugins}}");
+}
+
+refusal!(
+    a_recorded_input_that_is_a_symlink_is_refused,
+    "images/job/ubuntu-26.04/README.md must be a regular file.",
+    |source| {
+        let readme = source.path("checkout/images/job/ubuntu-26.04/README.md");
+        fs::remove_file(&readme).unwrap_or_default();
+        std::os::unix::fs::symlink("/dev/zero", &readme).unwrap_or_default();
+        source.commit_all("link");
         source.run(&[], &[])
     }
 );

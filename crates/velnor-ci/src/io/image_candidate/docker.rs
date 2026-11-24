@@ -32,18 +32,14 @@ fn hash_file(path: &Path) -> Result<String, CiError> {
     Ok(hashing.finish().0)
 }
 
+fn query(docker: &str, arguments: &[&str]) -> Result<String, CiError> {
+    let mut command = Command::new(docker);
+    command.args(arguments);
+    process::text(process::clean_environment(&mut command), QUERY_TIMEOUT)
+}
+
 pub(super) fn buildx(docker: &str, lock: &Lock) -> Result<Buildx, CiError> {
-    let banner = lock::banner(
-        &process::text(
-            Command::new(docker).args(["buildx", "version"]),
-            QUERY_TIMEOUT,
-        )?,
-        lock,
-    )?;
-    let info = process::text(
-        Command::new(docker).args(["info", "--format", PLUGIN_FORMAT]),
-        QUERY_TIMEOUT,
-    )?;
+    let info = query(docker, &["info", "--format", PLUGIN_FORMAT])?;
     let plugin = lock::plugin(&info)?;
     let regular = fs::symlink_metadata(&plugin.path).is_ok_and(|meta| meta.is_file());
     if !regular {
@@ -57,6 +53,7 @@ pub(super) fn buildx(docker: &str, lock: &Lock) -> Result<Buildx, CiError> {
             "Docker Buildx plug-in metadata is not the same as the value in .velnor/runner.lock.",
         );
     }
+    let banner = lock::banner(&query(docker, &["buildx", "version"])?, lock)?;
     Ok(Buildx {
         banner,
         binary: plugin.path,

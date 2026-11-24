@@ -28,6 +28,7 @@ pub(in crate::io) use build::build;
 const DOCKERFILE_DIR: &str = "images/job/ubuntu-26.04";
 const DOCKERFILE: &str = "images/job/ubuntu-26.04/Dockerfile";
 const MAX_RECORD_BYTES: u64 = 1 << 20;
+const MAX_INPUT_BYTES: u64 = 1 << 24;
 const PASS: &str =
     "PASS: Candidate record has the same source inputs and OCI archive identities.\n";
 
@@ -93,8 +94,12 @@ fn scan_archive(path: &Path) -> Result<archive::Scanned, CiError> {
 fn source_inputs(root: &Path) -> Result<Value, CiError> {
     let mut inputs = Map::new();
     for name in INPUT_PATHS.iter().copied() {
-        let data = fs::read(root.join(name))
-            .map_err(|error| CiError::new(format!("{}: {error}", root.join(name).display())))?;
+        let path = root.join(name);
+        if regular(&path, name)? > MAX_INPUT_BYTES {
+            return fail(format!("{name} exceeds its size limit."));
+        }
+        let data = fs::read(&path)
+            .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
         inputs.insert(name.to_owned(), Value::String(sha256_hex(&data)));
     }
     Ok(Value::Object(inputs))
