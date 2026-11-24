@@ -114,9 +114,14 @@ fn any_gate(step: &Step, setup: Setup) -> Option<String> {
     Some(terms.join(" && "))
 }
 
-pub(super) fn extra_conditions(step: &Step, setup: Setup, after: &[String]) -> Vec<String> {
+pub(super) fn extra_conditions(
+    step: &Step,
+    setup: Setup,
+    after: &[String],
+    rechecks: crate::private_steps::Rechecks,
+) -> Vec<String> {
     let mut extra = saved_unless_hit(&step.kind);
-    extra.extend(crate::private_steps::repository_conditions(step));
+    extra.extend(crate::private_steps::repository_conditions(step, rechecks));
     extra.extend(after.iter().map(String::as_str).map(setup_not_failed));
     extra.extend(
         step.hosted_only

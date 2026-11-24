@@ -130,6 +130,7 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
+    let rechecks = crate::private_steps::Rechecks::of(&job.steps);
     let verified = job
         .steps
         .iter()
@@ -156,6 +157,7 @@ fn job_steps(
                         .find(|step| step.kind == StepKind::RepositoryPrivacy)
                         .and_then(|step| step.gate.as_ref().or(job.gate.as_ref())),
                     after_setup: after_setup(step, setups),
+                    rechecks,
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
                 let tools_key = matches!(
@@ -192,6 +194,7 @@ struct Around<'a> {
     job_name: Option<&'a str>,
     privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
+    rechecks: crate::private_steps::Rechecks,
 }
 
 fn rendered_steps(
@@ -245,7 +248,7 @@ fn rendered_steps(
                 Value::Expr(plan_modes(gate, setup)),
             ));
         }
-        let extra = extra_conditions(step, setup, &around.after_setup);
+        let extra = extra_conditions(step, setup, &around.after_setup, around.rechecks);
         body.condition = chained_save::combined(
             around.chained,
             step,
@@ -254,7 +257,8 @@ fn rendered_steps(
             around.saved_after,
             body.condition.take(),
         );
-        body.env.extend(crate::private_steps::decide_env(step));
+        body.env
+            .extend(crate::private_steps::decide_env(step, around.rechecks));
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
@@ -364,6 +368,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::MbxOutDirs => crate::mbx_out_dirs::mbx_out_dirs_step(),
         StepKind::RepositoryPrivacy
+        | StepKind::PrivateRecheck(_)
         | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. }

@@ -34,6 +34,7 @@ const INDEX_CACHE: &str = ".cache";
 const REFS: &str = "refs";
 const HEAD: &str = "head";
 const CONFIG: &str = "config";
+const COMMON_DIR: &str = "commondir";
 const OBJECTS: &str = "objects";
 const OBJECT_INFO: &str = "info";
 const OBJECT_PACK: &str = "pack";
@@ -285,7 +286,9 @@ fn has_named(listed: &[fs::DirEntry], wanted: &str, directory: bool, exact: bool
 
 fn is_git_directory(listed: &[fs::DirEntry]) -> bool {
     has_entry(listed, HEAD, false)
-        && (has_entry(listed, CONFIG, false) || has_entry(listed, OBJECTS, true))
+        && (has_entry(listed, CONFIG, false)
+            || has_entry(listed, COMMON_DIR, false)
+            || has_entry(listed, OBJECTS, true))
 }
 
 fn is_repository_in_refs(
@@ -297,7 +300,9 @@ fn is_repository_in_refs(
         return Ok(false);
     }
     Ok(has_object_store(listed, budget)?
-        || (has_exact_entry(listed, CONFIG, false) && !is_ref_value(&directory.join(CONFIG))))
+        || [CONFIG, COMMON_DIR].into_iter().any(|name| {
+            has_exact_entry(listed, name, false) && !is_ref_value(&directory.join(name))
+        }))
 }
 
 fn has_object_store(listed: &[fs::DirEntry], budget: &mut usize) -> Result<bool, String> {

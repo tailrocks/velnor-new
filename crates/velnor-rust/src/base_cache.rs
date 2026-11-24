@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, JobId,
-    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
-    RootSlug, RustRoot, Step, StepKind, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, Publication, RepoFacts,
+    RepoPath, RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::lane::Lane;
@@ -44,6 +44,7 @@ const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.113 via f5ced2b48c
 const SOURCES_RESTORED_ENV_HELPER: (u64, u64, u64) = (0, 1, 113);
+const PRIVATE_RECHECK_HELPER: (u64, u64, u64) = (0, 1, 116);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -267,7 +268,16 @@ pub(crate) fn save_steps(
         host: Host,
         scope: base_scope(facts),
     };
-    let mut steps = vec![
+    let recheck = |publication, when| {
+        (private_base(facts) && has_helper_at_least(facts, PRIVATE_RECHECK_HELPER)).then(|| Step {
+            when,
+            ..step(StepKind::PrivateRecheck(publication))
+        })
+    };
+    let mut steps: Vec<Step> = recheck(Publication::BuildDirectory, When::SaveBase)
+        .into_iter()
+        .collect();
+    steps.extend([
         Step {
             directory: unit.directory(),
             when: When::SaveBase,
@@ -303,9 +313,10 @@ pub(crate) fn save_steps(
             skip_when_cold: checks_saves(facts),
             ..step(StepKind::CacheSave(target))
         },
-    ];
+    ]);
     if sources {
         steps.extend(sources_fetches(facts, cache_root.slug()));
+        steps.extend(recheck(Publication::Sources, When::SaveSources));
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {

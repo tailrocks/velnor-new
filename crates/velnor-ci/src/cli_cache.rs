@@ -19,6 +19,10 @@ pub enum CacheCommand {
     )]
     PrivateRepo,
     #[command(
+        about = "Write private=true to $GITHUB_OUTPUT only when GET /repos/$GITHUB_REPOSITORY on the API in VELNOR_API_URL, sent without any token, answers 404, which means the repository cannot be read anonymously; writes private=false and exits 0 when the repository answers 200 (it is public) or the lookup fails, and then also writes unavailable=true for a failed lookup. It never reads GITHUB_TOKEN, so it can run after steps that execute repository code; the generated workflow runs it right before each private cache save"
+    )]
+    PrivateRecheck,
+    #[command(
         about = "Look up each commit-pinned github.com git dependency of the checkout Cargo.lock files once, with the job GITHUB_TOKEN (sent only to https://api.github.com, never redirected), and write the step output verdicts={\"owner/name\":true} for the lanes of this run; a failed or unproven lookup is recorded as false and does not fail the step, but an answer that says the repository is private (404 or private: true) fails it, naming the repository, within a 10-second budget"
     )]
     PublicSources(PublicSourcesArgs),
