@@ -85,7 +85,7 @@ impl Events<'_> {
     }
 
     pub(crate) fn pull_request() -> &'static str {
-        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')"
+        "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]') && (github.event.action != 'edited' || github.event.changes.base != null)"
     }
 }
 
@@ -195,7 +195,16 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
     if !reaching.is_empty() {
         let mut pull_request = vec![entry(
             "types",
-            names(&["opened", "synchronize", "reopened", "ready_for_review"].map(str::to_owned)),
+            names(
+                &[
+                    "opened",
+                    "synchronize",
+                    "reopened",
+                    "ready_for_review",
+                    "edited",
+                ]
+                .map(str::to_owned),
+            ),
         )];
         if reaching
             .iter()

@@ -94,6 +94,19 @@ fn no_trigger_can_start_an_image_run_by_hand_or_from_another_workflow() -> TestR
             "{name}: {triggers:?}"
         );
         assert_eq!(workflow["permissions"], serde_json::json!({}), "{name}");
+        let types = workflow["on"]["pull_request"]["types"].to_string();
+        assert!(
+            types.contains("edited"),
+            "{name}: a retargeted pull request is checked again"
+        );
+        let build = workflow["jobs"]
+            .as_object()
+            .and_then(|jobs| jobs.iter().find(|(id, _)| id.ends_with("-build")))
+            .map(|(_, job)| job["if"].to_string());
+        assert!(
+            build.is_some_and(|text| text.contains("github.event.changes.base != null")),
+            "{name}"
+        );
     }
     Ok(())
 }
