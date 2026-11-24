@@ -148,6 +148,8 @@ The MBX evidence is advisory and not authenticated. A step that runs in the same
 
 Only `velnor-ci` reads `VELNOR_MBX_REPORTS`, and `velnor-ci` passes it only to a command that is `velnor-ci` itself. Cargo, cargo-nextest and every build script, test and doctest they start run without it, so a `velnor-ci` that a project's test starts gives its Cargo command no report path and adds no session to the job.
 
+A cargo session that `velnor-ci` gave a report path and that left no report makes the session counts incomplete. `report` names it as `MBX stats report missing for N session(s) that were given a report path`, and the `Cache` job fails with `cannot evaluate cache waste`, because the waste evaluation cannot tell work that mbx skipped from work that mbx never saw. A cold run does not cause this: a cold session still writes its report, with misses and no hits. A report that cannot be read, a compiler-work entry in it that cannot be read, and a stats directory that cannot be listed fail the check the same way, as `MBX stats report not understood` or `MBX stats directory or entry could not be read`; the entry is never dropped from the session counts. Sessions that belong to no mbx run in the job, such as those a test suite opens by running `velnor-ci` itself, are the cause to remove: the repository's `.config/nextest.toml` runs every test without `VELNOR_MBX_REPORTS`, and a test that wants reports sets it and its own `RUNNER_TEMP` explicitly.
+
 A registry or git dependency that compiled although its unit was restored is
 not waste when the unit's dep-info (the `.d` file under `deps/` or `out/`) lists
 an absolute file outside `target/` that did not exist when the base was

@@ -148,3 +148,12 @@ fn a_live_enclosing_session_still_hides_the_reports_switch_from_a_foreign_child(
     assert_eq!(fs::read_to_string(&observed)?, "unset");
     Ok(())
 }
+
+#[test]
+fn a_test_process_never_inherits_the_job_switch_that_opens_mbx_report_sessions() {
+    assert_ne!(
+        std::env::var(SWITCH).as_deref(),
+        Ok("true"),
+        "a velnor-ci that a test starts would open sessions in the job's RUNNER_TEMP that no MBX run reports, and Check cache waste fails on them"
+    );
+}
