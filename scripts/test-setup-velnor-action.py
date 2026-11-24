@@ -1023,6 +1023,12 @@ class SetupVelnorInstallTests(unittest.TestCase):
         in_flight = cached.parent / f".velnor-ci.evicting.{int(now) - 60}.8.8"
         in_flight.write_bytes(b"quarantine of an eviction that started a minute ago\n")
         os.utime(in_flight, (now - 7200, now - 7200))
+        far_ahead = cached.parent / f".velnor-ci.evicting.{int(now) + 7200}.11.11"
+        far_ahead.write_bytes(b"quarantine whose start is two hours ahead of this clock\n")
+        near_ahead = cached.parent / f".velnor-ci.evicting.{int(now) + 1800}.12.12"
+        near_ahead.write_bytes(b"quarantine whose start is half an hour ahead of this clock\n")
+        no_start = cached.parent / ".velnor-ci.evicting.x.13.13"
+        no_start.write_bytes(b"quarantine with no start time\n")
         older_in_flight = cached.parent / ".velnor-ci.evict.4242.9"
         older_in_flight.write_bytes(b"archive an older setup-velnor version just moved aside, before its touch\n")
         os.utime(older_in_flight, (now - 7200, now - 7200))
@@ -1038,6 +1044,9 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(cached.read_bytes(), self.archive)
         self.assertFalse(abandoned.exists(), "the quarantine of an eviction that started two hours ago was not removed")
         self.assertTrue(in_flight.exists(), "the quarantine of an eviction that started a minute ago was removed")
+        self.assertFalse(far_ahead.exists(), "a quarantine whose start is two hours ahead was not removed")
+        self.assertTrue(near_ahead.exists(), "a quarantine whose start is half an hour ahead was removed")
+        self.assertFalse(no_start.exists(), "a quarantine with no start time was not removed")
         self.assertTrue(older_in_flight.exists(), "an archive an older setup-velnor version had just moved aside was removed")
         self.assertFalse(older_left.exists(), "a quarantine an older setup-velnor version left two hours ago was not removed")
 
