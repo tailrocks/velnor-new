@@ -13,7 +13,8 @@ use nix::fcntl::{OFlag, openat};
 use nix::sys::stat::{Mode, mkdirat};
 use nix::unistd::symlinkat;
 
-use super::walk::{Budget, Probe, scan_with};
+use super::probe::Probe;
+use super::walk::{Budget, scan_with};
 
 fn looped_root(label: &str) -> PathBuf {
     let root = fs::canonicalize(std::env::temp_dir())
