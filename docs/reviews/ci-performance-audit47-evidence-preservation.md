@@ -4,7 +4,7 @@ Read-only audit refresh, collected 2026-10-04 local date. Exact JSON/TXT/CSV sco
 
 ## Durable evidence
 
-Location: `/Users/donbeave/.codex-example-org2/evidence/velnor-pr12/audit-47-20261004/`.
+Location: `<local-path>`.
 
 Ten collections preserve 37,469 regular files / 3,095,542,884 bytes. Every copied file matches original SHA256 and size. Source inventories before/after copy match. 105 symlinks (87 new B, 18 prior A) recorded with literal target and mode, never followed or materialized. Durable directories 0700, files 0600. Originals retained untouched. Complete path/hash/mode inventory stays private in copy-manifest.json; raw logs/source remain outside Git.
 

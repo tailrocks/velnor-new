@@ -47,8 +47,8 @@ pub enum Outcome {
     Miss,
     Restored { from: PathBuf },
     Rejected(&'static str),
-    Saved { to: PathBuf },
-    Healed { to: PathBuf },
+    Saved { to: PathBuf, kept: Vec<String> },
+    Healed { to: PathBuf, kept: Vec<String> },
     AlreadySaved,
     Busy,
     Failed(&'static str),
@@ -137,7 +137,21 @@ fn this_node() -> String {
 
 #[must_use]
 pub fn message(outcome: &Outcome, node: &str) -> String {
-    format!("{} node={node}\n", describe(outcome))
+    let warnings = kept(outcome).iter().map(|name| {
+        format!(
+            "::warning::node-local tools store kept {name}; it could not be pruned node={node}\n"
+        )
+    });
+    std::iter::once(format!("{} node={node}\n", describe(outcome)))
+        .chain(warnings)
+        .collect()
+}
+
+fn kept(outcome: &Outcome) -> &[String] {
+    match outcome {
+        Outcome::Saved { kept, .. } | Outcome::Healed { kept, .. } => kept,
+        _ => &[],
+    }
 }
 
 fn describe(outcome: &Outcome) -> String {
@@ -156,10 +170,10 @@ fn describe(outcome: &Outcome) -> String {
         Outcome::Rejected(reason) => {
             format!("::warning::node-local tools store ignored ({reason})")
         }
-        Outcome::Saved { to } => {
+        Outcome::Saved { to, .. } => {
             format!("velnor: tools saved to the node store {}", to.display())
         }
-        Outcome::Healed { to } => format!(
+        Outcome::Healed { to, .. } => format!(
             "velnor: replaced the node store entry the tools check discarded {}",
             to.display()
         ),

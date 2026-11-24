@@ -13,9 +13,11 @@ pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts>
             .get(&format!("{name}_{slug}"))
             .or_else(|| need.outputs.get(name))
     };
+    let run = named(TESTS_RUN_OUTPUT);
+    let listed = named(TESTS_LISTED_OUTPUT);
     let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(named(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(named(TESTS_LISTED_OUTPUT)?)?;
+    let run = number(run?)?;
+    let listed = number(listed?)?;
     let summed_run = packages
         .values()
         .try_fold(0u64, |total, package| total.checked_add(package.run))?;

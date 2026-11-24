@@ -68,7 +68,7 @@ mod workflow;
 mod yaml;
 
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
-pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
+pub use crate::delta_cleanup::{DELTA_CLEANUP_HELPER, DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::document::document;
 pub use crate::mise_digest::{MISE_BINARIES, MiseBinary, UnknownMiseVersion, mise_sha256_input};
 pub(crate) use crate::permission_yaml::permission_pairs;

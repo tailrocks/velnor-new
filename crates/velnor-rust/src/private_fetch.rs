@@ -10,6 +10,7 @@ use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 00cab67428
 pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
@@ -274,10 +275,12 @@ fn runs_repository_code(step: &Step) -> bool {
 }
 
 pub(crate) fn compiles(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if !matches!(
-        command,
-        CargoCommand::FmtCheck
-            | CargoCommand::Machete
-            | CargoCommand::NextestRunArchive { .. }
-    ))
+    match &step.kind {
+        StepKind::Cargo(command) => !matches!(
+            command,
+            CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
+        ),
+        StepKind::GeneratorCheck { from_source } => *from_source,
+        _ => false,
+    }
 }

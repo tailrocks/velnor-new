@@ -31,6 +31,7 @@ pub(crate) struct RawLint {
     task: Option<String>,
     tools: Option<Vec<String>>,
     inputs: Option<Vec<String>>,
+    from_source: Option<bool>,
     gate_on_plan: Option<bool>,
 }
 
@@ -137,6 +138,9 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
     }
     let config = path("lint.config", raw.config.clone())?;
     let probe = path("lint.probe", raw.probe.clone())?;
+    if kind != GENERATED_CHECK {
+        foreign(kind, "from_source", raw.from_source.is_some())?;
+    }
     let (kind, id, name) = match kind {
         JACTIONLINT => {
             foreign(kind, "probe", probe.is_some())?;
@@ -180,7 +184,9 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
             foreign(kind, "task", raw.task.is_some())?;
             foreign(kind, "tools", raw.tools.is_some())?;
             (
-                LintKind::GeneratedCheck,
+                LintKind::GeneratedCheck {
+                    from_source: raw.from_source.unwrap_or(false),
+                },
                 GENERATED_CHECK.to_owned(),
                 "Generated workflows".to_owned(),
             )

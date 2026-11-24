@@ -11,7 +11,7 @@ The owner's direction for this round: **be more ambitious. Think bigger and thin
 - The comparison of the eight proposals: `~/.cache/ci-ambition/panel/draft/comparison.md`
 - The evidence pack: `~/.cache/ci-ambition/panel/evidence.md`. Erratum: the Rust toolchain is NOT baked into the runner image (velnor-runners `state/RESULT.md:115`).
 - All eight proposals and reviews, now named: `~/.cache/ci-ambition/panel/draft/proposals/*.md` and `~/.cache/ci-ambition/panel/draft/reviews/*.md`. Your own proposal is among them.
-- Code, read-only: `~/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{velnor-legacy,actions-runner,arc}`. Verify the load-bearing claims you dispute.
+- Code, read-only: `<home>/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{velnor-legacy,actions-runner,arc}`. Verify the load-bearing claims you dispute.
 
 ## What to write
 

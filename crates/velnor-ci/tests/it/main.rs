@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod ansible_select;
 mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;
@@ -17,9 +18,14 @@ mod cache;
 mod cache_budget;
 mod cache_credential_scrub;
 mod cache_credential_scrub_ancestry;
+mod cache_credential_scrub_cargo;
 mod cache_credential_scrub_crates;
+mod cache_credential_scrub_gaps;
 mod cache_credential_scrub_hardening;
+mod cache_credential_scrub_modules;
+mod cache_credential_scrub_submodules;
 mod cache_credential_scrub_tokens;
+mod cache_credential_scrub_trees;
 mod cache_flow;
 mod cache_private_repo;
 mod cache_prune;
@@ -133,6 +139,7 @@ mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
+mod plan_diff_paths;
 mod plan_diff_repo;
 mod plan_git;
 mod plan_main;
@@ -224,6 +231,7 @@ mod timings_setup;
 mod toolchain;
 mod tools_digest;
 mod tools_heal;
+mod tools_heal_leftovers;
 mod tools_home_clear;
 mod tools_local;
 mod tools_verify;

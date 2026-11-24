@@ -1,14 +1,66 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoPath, RepoView, RustCiConfig, RustRoot, ToolPins, Toolchain};
+use velnor_model::{
+    LintKind, RepoPath, RepoView, RustCiConfig, RustMember, RustRoot, TargetKind, ToolPins,
+    Toolchain,
+};
 
-use crate::build_target::{build_targets, check_host_tuple_version};
+use crate::build_target::{build_targets, check_host_tuple_version, supports_host_tuple};
 use crate::config::CONFIG_PATH;
-use crate::detect::HELPER_PACKAGE;
+use crate::detect::{GENERATOR_PACKAGE, HELPER_PACKAGE};
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML};
+
+fn is_generator(member: &RustMember) -> bool {
+    member.name.as_str() == GENERATOR_PACKAGE
+        && member.targets.iter().any(|target| {
+            target.name.as_str() == GENERATOR_PACKAGE
+                && target.kinds.contains(&TargetKind::Bin)
+                && !target.requires_features
+        })
+}
+
+fn generator_members(rust_roots: &[RustRoot]) -> usize {
+    rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .filter(|member| is_generator(member))
+        .count()
+}
+
+pub(crate) fn generator_root(rust_roots: &[RustRoot]) -> Option<&RustRoot> {
+    rust_roots
+        .iter()
+        .find(|root| root.members.iter().any(is_generator))
+}
+
+pub(crate) fn check_packages(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    check_helper_box(config, rust_roots)?;
+    check_generator(config, rust_roots)
+}
+
+pub(crate) fn check_generator(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    let from_source = config
+        .lint
+        .iter()
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { from_source: true }));
+    let found = generator_members(rust_roots);
+    if !from_source || found == 1 {
+        return Ok(());
+    }
+    Err(DetectError::invalid(
+        &CONFIG_PATH,
+        Reason::GeneratorPackage { found },
+    ))
+}
 
 pub(crate) fn check_helper_box(
     config: &RustCiConfig,
@@ -33,19 +85,45 @@ pub(crate) fn check_helper_box(
     }
 }
 
+fn pinned_rust_version<'a>(
+    toolchain: Option<&'a Toolchain>,
+    tools: &'a ToolPins,
+) -> Option<&'a str> {
+    crate::mise::rust_tool(tools)
+        .and_then(|name| tools.tools.get(name))
+        .and_then(|pin| pin.requested.first())
+        .map(|request| request.version.as_str())
+        .or(toolchain.and_then(|pinned| pinned.channel.as_deref().or(pinned.path.as_deref())))
+}
+
+fn check_generator_host_tuple(
+    config: &RustCiConfig,
+    version: Option<&str>,
+) -> Result<(), DetectError> {
+    let from_source = config
+        .lint
+        .iter()
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { from_source: true }));
+    match version {
+        Some(version) if from_source && !supports_host_tuple(version) => Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::GeneratorHostTuple(version.to_owned()),
+        )),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn check_build_targets(
     view: &RepoView,
+    config: &RustCiConfig,
     rust_roots: &[RustRoot],
     toolchain: Option<&Toolchain>,
     tools: &ToolPins,
 ) -> Result<(), DetectError> {
     let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
-    let rust_version = crate::mise::rust_tool(tools)
-        .and_then(|name| tools.tools.get(name))
-        .and_then(|pin| pin.requested.first())
-        .map(|request| request.version.as_str())
-        .or(toolchain.and_then(|pinned| pinned.channel.as_deref().or(pinned.path.as_deref())))
-        .unwrap_or("an unspecified Rust toolchain");
+    let pinned = pinned_rust_version(toolchain, tools);
+    check_generator_host_tuple(config, pinned)?;
+    let rust_version = pinned.unwrap_or("an unspecified Rust toolchain");
     for root in rust_roots {
         check_host_tuple_version(view, &root.manifest, rust_version)?;
         let missing = build_targets(view, &root.manifest)?

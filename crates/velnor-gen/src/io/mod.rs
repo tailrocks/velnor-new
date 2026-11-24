@@ -31,7 +31,7 @@ use crate::{Drift, check_tag, notes, plan_generate};
 pub use check::check_metadata;
 pub use error::Error;
 use pin::{check_lock, pin_helper};
-pub use pin::{lock_root, write_lock};
+pub use pin::{lock_root, retry_download, write_lock};
 pub use read::{add_manifests, read_files, view_of};
 use read::{read_tracked, read_view, regular_file};
 pub use recorded::{read_recorded_checkout, write_metadata};

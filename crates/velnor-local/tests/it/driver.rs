@@ -347,8 +347,8 @@ fn the_copy_is_added_to_the_mise_ignored_paths_the_user_already_has() {
     assert_eq!(with_path(None, "/state/repo"), "/state/repo");
     assert_eq!(with_path(Some(""), "/state/repo"), "/state/repo");
     assert_eq!(
-        with_path(Some("/home/u/mise.toml"), "/state/repo"),
-        "/home/u/mise.toml:/state/repo"
+        with_path(Some("/srv/u/mise.toml"), "/state/repo"),
+        "/srv/u/mise.toml:/state/repo"
     );
 }
 
