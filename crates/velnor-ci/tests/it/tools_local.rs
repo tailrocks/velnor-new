@@ -362,6 +362,7 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         Outcome::Miss,
         Outcome::Restored {
             from: PathBuf::from("/store/tools/k"),
+            leased: false,
         },
         Outcome::Rejected("world-writable"),
         Outcome::Saved {
