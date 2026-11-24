@@ -6,6 +6,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::thread::{Scope, ScopedJoinHandle};
 use std::time::{Duration, SystemTime};
 
 use super::{Step, restore_with, save_with};
@@ -81,9 +82,15 @@ impl Node {
     fn saved_aged(&self, key: &str, hours: u64) {
         let saved = self.save(key, false, &|_| {});
         assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
-        fs::File::open(self.entry(key))
-            .and_then(|dir| dir.set_modified(SystemTime::now() - Duration::from_hours(hours)))
-            .expect("age the entry");
+        aged(&self.entry(key), hours);
+    }
+
+    fn with_a_killed_jobs_lock(&self) {
+        self.saved_aged("k1", 3);
+        self.saved_aged("k2", 2);
+        let lock = self.entry(".lock-k1");
+        fs::create_dir(&lock).expect("leave a killed job's lock");
+        aged(&lock, 2);
     }
 
     fn listed(&self) -> Vec<String> {
@@ -97,6 +104,16 @@ impl Node {
     }
 }
 
+fn aged(path: &Path, hours: u64) {
+    fs::File::open(path)
+        .and_then(|dir| dir.set_modified(SystemTime::now() - Duration::from_hours(hours)))
+        .expect("age the directory");
+}
+
+fn quiet(saved: &Outcome) -> bool {
+    matches!(saved, Outcome::Saved { kept, .. } if kept.is_empty())
+}
+
 fn at(step: Step, pause: &dyn Fn()) -> impl Fn(Step) + '_ {
     move |reached| {
         if reached == step {
@@ -105,30 +122,65 @@ fn at(step: Step, pause: &dyn Fn()) -> impl Fn(Step) + '_ {
     }
 }
 
+struct Paused<'scope, T> {
+    resume: mpsc::Sender<()>,
+    worker: ScopedJoinHandle<'scope, T>,
+}
+
+impl<T> Paused<'_, T> {
+    fn finish(self) -> T {
+        drop(self.resume);
+        self.worker.join().expect("the paused operation panicked")
+    }
+}
+
+fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
+    scope: &'scope Scope<'scope, '_>,
+    operation: impl FnOnce(&dyn Fn()) -> T + Send + 'scope,
+) -> Paused<'scope, T> {
+    let (reached, at_pause) = mpsc::channel();
+    let (resume, resumed) = mpsc::channel::<()>();
+    let worker = scope.spawn(move || {
+        let first = AtomicBool::new(true);
+        operation(&|| {
+            if first.swap(false, Ordering::SeqCst) {
+                reached.send(()).ok();
+                resumed.recv().ok();
+            }
+        })
+    });
+    assert!(
+        at_pause.recv().is_ok(),
+        "ended before its pause: {:?}",
+        worker.join()
+    );
+    Paused { resume, worker }
+}
+
 fn interleave<T: Send + std::fmt::Debug>(
-    paused: impl FnOnce(&dyn Fn()) -> T + Send,
+    operation: impl FnOnce(&dyn Fn()) -> T + Send,
     meanwhile: impl FnOnce(),
 ) -> T {
     std::thread::scope(|scope| {
-        let (reached, at_pause) = mpsc::channel();
-        let (resume, resumed) = mpsc::channel::<()>();
-        let worker = scope.spawn(move || {
-            let first = AtomicBool::new(true);
-            paused(&|| {
-                if first.swap(false, Ordering::SeqCst) {
-                    reached.send(()).ok();
-                    resumed.recv().ok();
-                }
-            })
-        });
-        assert!(
-            at_pause.recv().is_ok(),
-            "ended before its pause: {:?}",
-            worker.join()
-        );
+        let operation = paused(scope, operation);
         meanwhile();
-        drop(resume);
-        worker.join().expect("the paused operation panicked")
+        operation.finish()
+    })
+}
+
+fn heal_k1_seeing_the_stale_lock_while_a_save_prunes_k1(
+    node: &Node,
+    meanwhile: impl FnOnce(),
+) -> (Outcome, Outcome) {
+    std::thread::scope(|scope| {
+        let heal = paused(scope, |pause| {
+            node.save("k1", true, &at(Step::Breaking, pause))
+        });
+        meanwhile();
+        let prune = paused(scope, |pause| {
+            node.save("k3", false, &at(Step::Retiring, pause))
+        });
+        (heal.finish(), prune.finish())
     })
 }
 
@@ -190,4 +242,64 @@ fn a_restore_whose_entry_is_replaced_during_the_copy_is_not_a_hit() {
         },
     );
     assert!(!restored.hit(), "{restored:?}");
+}
+
+#[test]
+fn two_jobs_that_find_the_same_stale_lock_do_not_both_take_the_key() {
+    let node = node("stale-lock");
+    node.with_a_killed_jobs_lock();
+    let (healed, saved) = heal_k1_seeing_the_stale_lock_while_a_save_prunes_k1(&node, || {});
+    let listed = node.listed();
+    assert_eq!(
+        healed,
+        Outcome::Busy,
+        "both held k1, the store lists {listed:?}"
+    );
+    assert!(quiet(&saved), "{saved:?}");
+    assert_eq!(listed, ["k2", "k3"]);
+}
+
+#[test]
+fn a_job_that_saw_a_stale_lock_does_not_take_the_key_after_the_lock_moved() {
+    let node = node("moved-lock");
+    node.with_a_killed_jobs_lock();
+    let grave = node.entry(".staging-k1-0123456789abcdef");
+    let (healed, saved) = heal_k1_seeing_the_stale_lock_while_a_save_prunes_k1(&node, || {
+        fs::rename(node.entry(".lock-k1"), &grave).expect("move the lock to a grave");
+        aged(&grave, 0);
+    });
+    let listed = node.listed();
+    assert_eq!(
+        healed,
+        Outcome::Busy,
+        "both held k1, the store lists {listed:?}"
+    );
+    assert!(quiet(&saved), "{saved:?}");
+    assert_eq!(listed, [".staging-k1-0123456789abcdef", "k2", "k3"]);
+}
+
+#[test]
+fn a_save_that_saw_a_stale_lock_does_not_remove_the_lock_another_job_took_since() {
+    let node = node("swept-lock");
+    node.with_a_killed_jobs_lock();
+    let (first, healed, second) = std::thread::scope(|scope| {
+        let sweep = paused(scope, |pause| {
+            node.save("k3", false, &at(Step::Breaking, pause))
+        });
+        let prune = paused(scope, |pause| {
+            node.save("k4", false, &at(Step::Retiring, pause))
+        });
+        let first = sweep.finish();
+        aged(&node.entry("k4"), 1);
+        let healed = node.save("k1", true, &|_| {});
+        (first, healed, prune.finish())
+    });
+    let listed = node.listed();
+    assert_eq!(
+        healed,
+        Outcome::Busy,
+        "both held k1, the store lists {listed:?}"
+    );
+    assert!(quiet(&first) && quiet(&second), "{first:?} {second:?}");
+    assert_eq!(listed, ["k3", "k4"]);
 }
