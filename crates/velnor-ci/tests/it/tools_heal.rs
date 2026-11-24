@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -14,25 +14,29 @@ use velnor_ci::tools_verify_step::run as verify_step;
 use crate::io::Repo;
 use crate::tools_verify::{Job, context, job, recorded, rustc};
 
-const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
+pub(crate) const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
 
-fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
+pub(crate) fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
+    save_as(store, home, KEY, replace)
+}
+
+pub(crate) fn save_as(store: &Path, home: &Path, key: &str, replace: bool) -> Outcome {
     let store = store.display().to_string();
     run(&Inputs {
         verb: Verb::Save,
-        key: KEY,
+        key,
         event_name: "push",
         git_ref: "refs/heads/main",
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
         replace,
     })
 }
 
-fn poisoned_store(name: &str) -> (Repo, Job, PathBuf) {
+pub(crate) fn poisoned_store(name: &str) -> (Repo, Job, PathBuf) {
     let repo = Repo::empty(name);
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let store = root.join("store");
@@ -100,7 +104,7 @@ fn a_replacement_heals_a_regular_file_left_at_the_entry() {
 
 const READ_ONLY_DIR: &str = ".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin";
 
-fn leftovers(store: &Path) -> Vec<String> {
+pub(crate) fn leftovers(store: &Path) -> Vec<String> {
     let mut names: Vec<_> = fs::read_dir(store.join("tools"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .flatten()
@@ -295,6 +299,7 @@ fn save_in_a_working_directory(name: &str, runner_temp: Option<&str>, marker_dir
         .env("HOME", &home)
         .env("GITHUB_EVENT_NAME", "push")
         .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_REF_PROTECTED", "true")
         .env("GITHUB_EVENT_PATH", &event)
         .env("VELNOR_MBX_SHARED_DIR", &store)
         .env("VELNOR_MBX_SEED_DIR", &store);

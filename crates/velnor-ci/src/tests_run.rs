@@ -115,13 +115,6 @@ pub fn output_lines(counts: TestCounts) -> String {
     lines.join("\n") + "\n"
 }
 
-fn skipped(line: &str) -> Option<u64> {
-    let (_, tail) = line.split_once(" run:")?;
-    tail.split(',')
-        .find_map(|part| part.trim().strip_suffix(" skipped"))
-        .and_then(|count| count.trim().parse().ok())
-}
-
 #[must_use]
 pub(crate) fn list_argv(run: &[String]) -> Option<Vec<String>> {
     let run = nextest_run(run)?;

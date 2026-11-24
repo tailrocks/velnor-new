@@ -242,7 +242,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=1\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=1\ntests_by_package={}\n"
     );
     let verdict = required_verdict(&written).expect("verdict");
     assert!(verdict.passed, "{}", verdict.table());
@@ -258,7 +258,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package={}\n"
     );
     let verdict = required_verdict(&written).expect("verdict");
     assert!(!verdict.passed, "{}", verdict.table());

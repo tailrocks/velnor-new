@@ -128,7 +128,7 @@ fn a_change_reaches_a_member_through_a_package_patched_in_cargo_configuration() 
 #[test]
 fn absolute_patch_paths_are_rejected_and_relative_paths_remain_scoped() -> TestResult {
     for folder in [
-        "/Users/me/proj/crates/mid",
+        "/srv/me/proj/crates/mid",
         "/vendor/mid",
         "/",
         "C:/vendor/mid",

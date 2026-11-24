@@ -17,7 +17,7 @@ use crate::io::unique_id;
 use crate::lock_archive::archive_lock_at;
 use crate::release_symlink::git;
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const CARGO: &str = "#!/bin/sh\ncat \"$(dirname \"$0\")/metadata.json\"\n";
 
 type Edit = fn(&str) -> String;

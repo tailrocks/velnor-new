@@ -30,6 +30,15 @@ fn observation(
     events: &[Value],
     artifacts: &[Value],
 ) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    observation_with(repo, events, artifacts, json!([]))
+}
+
+fn observation_with(
+    repo: &Repo,
+    events: &[Value],
+    artifacts: &[Value],
+    dirty: Value,
+) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
     let root = fs::canonicalize(repo.root())?;
     let mut invocation = crate::report::lane()["invocations"][0].clone();
     invocation["argv"] = json!(["cargo", "check"]);
@@ -37,6 +46,7 @@ fn observation(
     invocation["compilations"] = json!([]);
     invocation["progress"] = json!(events);
     invocation["artifacts"] = json!(artifacts);
+    invocation["dirty"] = dirty;
     fs::write(repo.root().join(INVOCATIONS), format!("{invocation}\n"))?;
     super::report(
         repo,

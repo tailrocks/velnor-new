@@ -13,6 +13,8 @@ pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub const DEFAULT_TOTAL_SECONDS: u64 = 30;
 
+pub const EARLY_PROBE_SECONDS: u64 = 10;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Deadline(Instant);
 

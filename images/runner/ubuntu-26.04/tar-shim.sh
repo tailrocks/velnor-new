@@ -11,6 +11,8 @@ chdir=""
 files_from=""
 gzip=0
 zstd=0
+no_same_owner=0
+no_recursion=0
 program=""
 absolute=0
 posix=0
@@ -31,6 +33,18 @@ fi
 die() {
   printf 'velnor-tar: %s\n' "$1" >&2
   exit 1
+}
+
+set_archive() {
+  [ -n "$1" ] || die "empty value for --file"
+  [ -z "$archive" ] || die "repeated --file"
+  archive="$1"
+}
+
+set_chdir() {
+  [ -n "$1" ] || die "empty value for --directory"
+  [ -z "$chdir" ] || die "repeated --directory"
+  chdir="$1"
 }
 
 need() {
@@ -54,10 +68,19 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --zstd)
       zstd=1
       ;;
+    --gzip)
+      gzip=1
+      ;;
+    --no-same-owner)
+      no_same_owner=1
+      ;;
+    --no-recursion)
+      no_recursion=1
+      ;;
     --posix)
       posix=1
       ;;
-    --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+    --delay-directory-restore | --force-local | --no-same-permissions | --numeric-owner | --overwrite)
       die "unsupported option $arg"
       ;;
     --version)
@@ -88,13 +111,19 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --use-compress-program=*)
       program="${arg#--use-compress-program=}"
       ;;
-    -C)
+    -C | --directory)
       need
-      chdir="${args[$i]}"
+      set_chdir "${args[$i]}"
       ;;
-    -f)
+    --directory=*)
+      set_chdir "${arg#--directory=}"
+      ;;
+    -f | --file)
       need
-      archive="${args[$i]}"
+      set_archive "${args[$i]}"
+      ;;
+    --file=*)
+      set_archive "${arg#--file=}"
       ;;
     -z)
       gzip=1
@@ -145,9 +174,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
               value="${args[$i]}"
             fi
             if [ "$flag" = f ]; then
-              archive="$value"
+              set_archive "$value"
             else
-              chdir="$value"
+              set_chdir "$value"
             fi
             if [ "$attached" -eq 1 ]; then
               break
@@ -172,6 +201,19 @@ done
 
 if [ -z "$mode" ]; then
   die "missing c, x, or t"
+fi
+if [ "$no_same_owner" -eq 1 ] && [ "$mode" != x ]; then
+  die "unsupported option --no-same-owner"
+fi
+if [ "$no_recursion" -eq 1 ] && [ "$mode" != x ]; then
+  die "unsupported option --no-recursion"
+fi
+if [ $((gzip + zstd)) -gt 1 ] || { [ "$gzip" -eq 1 ] && [ -n "$program" ]; }; then
+  die "conflicting compression options"
+fi
+extract_flags=()
+if [ "$no_same_owner" -eq 1 ]; then
+  extract_flags+=(-o)
 fi
 
 files=()
@@ -202,7 +244,7 @@ if [ "${#files[@]}" -gt 0 ]; then
   done
 fi
 
-bb=(busybox tar "$mode")
+bb=(busybox tar "$mode" "${extract_flags[@]}")
 if [ "$gzip" -eq 1 ]; then
   bb+=(-z)
 fi

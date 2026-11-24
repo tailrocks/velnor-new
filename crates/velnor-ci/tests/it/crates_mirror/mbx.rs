@@ -5,17 +5,26 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::LazyLock;
 
 use crate::io::Repo;
 
 use super::fixture::{TestResult, setup, setup_command};
 
 mod alias;
+mod dash_c;
+mod parsing;
 mod scope;
 mod state;
+mod target;
 
 pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
-pub(super) const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.100.0\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
+pub(super) static MBX_DECLARED: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "[tools]\nrust = {{ version = \"{}\", mr_boxington = true }}\n\n[wrappers.cargo]\ncommand = \"mbx\"\n",
+        crate::toolchain::pinned_channel()
+    )
+});
 pub(super) const REFUSED: &str = "mbx is declared but cargo on PATH isn't the mise mbx wrapper";
 const ACTIVE_NATIVE: &[(&str, &str)] = &[("__MISE_ACTIVE_WRAPPERS", r#"["cargo"]"#)];
 
@@ -102,7 +111,7 @@ pub(super) fn wrapper_command(
         command.env("VELNOR_CRATES_MIRROR", "off");
     }
     if mbx_required {
-        fs::write(root.join("mise.toml"), MBX_DECLARED)?;
+        fs::write(root.join("mise.toml"), MBX_DECLARED.as_str())?;
         command.env("VELNOR_CARGO_MBX", "required");
     } else {
         command.env_remove("VELNOR_CARGO_MBX");
@@ -180,7 +189,7 @@ fn undeclared_mbx_keeps_running_a_plain_cargo() -> TestResult {
 fn setup_does_not_record_mbx_when_nothing_declares_it() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-none");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    repo.write_unstaged("mise.toml", &crate::toolchain::mise_rust_pin());
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
@@ -194,7 +203,7 @@ fn setup_does_not_record_mbx_when_nothing_declares_it() -> TestResult {
 fn setup_refuses_two_mise_files_that_both_set_rust_and_exports_no_mbx() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-conflict");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    repo.write_unstaged("mise.toml", &crate::toolchain::mise_rust_pin());
     repo.write_unstaged(".mise/config.toml", "[tools]\nrust = \"1.98.0\"\n");
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
@@ -210,7 +219,7 @@ fn setup_refuses_two_mise_files_that_both_set_rust_and_exports_no_mbx() -> TestR
 #[test]
 fn mirror_off_with_declared_mbx_and_no_cargo_on_path_succeeds() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-off-none");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -266,7 +275,7 @@ fn mirror_job_whose_config_variable_is_cleared_refuses_to_run_cargo() -> TestRes
 #[test]
 fn mirror_off_with_declared_mbx_refuses_a_plain_cargo_at_use_time() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-off-plain");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -286,7 +295,7 @@ fn mirror_off_with_declared_mbx_refuses_a_plain_cargo_at_use_time() -> TestResul
 #[test]
 fn mirror_off_with_declared_mbx_routes_cargo_through_the_forward_shim() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-off-mise");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let mise = mise_wrapper(&repo)?;
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())

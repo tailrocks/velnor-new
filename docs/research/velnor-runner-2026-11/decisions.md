@@ -68,7 +68,7 @@ in the design review. "Same as" marks a merged duplicate.
 |---|---|---|---|---|---|
 | I018 | Classify cache group and trust pool from the scale-set JobAvailable message at offer time. | Gemini 4 Argon | Claude Opus 5.5, GPT-6.2-Astra | Rejected | For placement: an offer has no binding to a runner (`generatejitconfig` takes `{name, workFolder}`, evidence §F.1.3). Its `eventName` is still used to acquire merge-group jobs first. |
 | I019 | Pre-seed ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE with the pinned action tarballs. | Claude Opus 5.5, Claude Fable 5.2, Muse Wonder, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (permanent, landscape ruling L08) | For `velnor-official` in both roles, since decision 20 makes it permanent (the earlier "until the executor cutover" is withdrawn): it removes the action download, about 4.4 s per job (Claude Opus 5.5, measured). After the cutover no action is downloaded (N62). |
-| I020 | Serve the Actions cache (and artifact) protocol from an in-cluster service through the standard env vars. | Claude Fable 5.2, Muse Wonder Full, Gemini 4 Carbon, Gemini 4 Argon | Claude Opus 5.5, GPT-6.2-Sol | Experiment-gated (phase 5) | Only for tools that speak the protocol themselves, such as BuildKit's `type=gha` cache: the native cache and artifact actions talk to cache service v2 and artifacts v4 and accelerate from the node and site stores by digest, so no JavaScript client needs emulation (N62). |
+| I020 | Serve the Actions cache (and artifact) protocol from a service inside the cluster through the standard env vars. | Claude Fable 5.2, Muse Wonder Full, Gemini 4 Carbon, Gemini 4 Argon | Claude Opus 5.5, GPT-6.2-Sol | Experiment-gated (phase 5) | Only for tools that speak the protocol themselves, such as BuildKit's `type=gha` cache: the native cache and artifact actions talk to cache service v2 and artifacts v4 and accelerate from the node and site stores by digest, so no JavaScript client needs emulation (N62). |
 | I021 | Use the official runner's job-started hook to bind trust scope, mount caches and refuse unauthorised jobs. | Claude Opus 5.5, Claude Fable 5.2, Muse Wonder, Gemini 4 Argon | — | Adopted (phases 1–2) | `velnor-job-start-hook` refuses unauthorised jobs under ARC. From phase 3 the dispatcher classifies the job before any pod sees it (N11). |
 | I022 | Send renewjob in parallel with job setup instead of blocking before the worker starts. | Gemini 4 Carbon | — | Rejected | The Listener starts no Worker before the first renewal succeeds (`JobDispatcher.cs:393-405`). One round trip is worth that guarantee. |
 | I023 | Copy GITHUB_EVENT_PATH before background steps to avoid an event.json truncation race. | Gemini 4 Argon | — | Adopted (phase 0) | Verified race: each action step rewrites `event.json` (`ActionRunner.cs:140`, `ExecutionContext.cs:1322-1336`) while a background step parses it (`task_producer.rs:99-106`). One log shows `producer_event_invalid` (Claude Fable 5.2 review). |
@@ -160,7 +160,7 @@ in the design review. "Same as" marks a merged duplicate.
 | I089 | kubelet reservations, memory eviction threshold, pod PID limit and PriorityClasses. | Claude Opus 5.5, Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Muse Wonder, Muse Wonder Full, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (phase 1) | No kube or system reservation and no memory eviction threshold today (evidence §B.1.3). |
 | I090 | Site labels on nodes; keep a run's jobs in one site. | Claude Opus 5.5, Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Muse Wonder, Muse Wonder Full, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (phases 1 and 3) | Labels first; run stickiness with the dispatcher. |
 | I091 | Fork and unknown-trust PRs stay on GitHub-hosted runners until stronger isolation exists. | Claude Opus 5.5, Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Gemini 4 Carbon | Muse Wonder, Muse Wonder Full, Gemini 4 Argon | Rejected | Moot by decision 8: there are no pull requests from forks, so no fork class, no fork-conditional `runs-on` and no hosted fork path. |
-| I092 | Per-org quotas or fair shares for tailrocks, ChainArgos and jackin. | Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Muse Wonder, Muse Wonder Full | — | Adopted (phase 1) | Three orgs share 480 threads; ARC maxima add to 160 runners (evidence §B.3.2). |
+| I092 | Per-org quotas or fair shares for tailrocks, example-org and jackin. | Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Muse Wonder, Muse Wonder Full | — | Adopted (phase 1) | Three orgs share 480 threads; ARC maxima add to 160 runners (evidence §B.3.2). |
 | I093 | HA control plane: add k3s server nodes beside the single velnor-237. | Claude Opus 5.5, Muse Wonder, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (before the executor cutover) | Moved earlier (F-H24, verified: velnor-237 is the only k3s server): losing it stalls pod creation and cleanup in both sites. Once Velnor is the only executor (N57), the executor cutover waits until control-plane and site loss are qualified, with three servers across failure domains or independent admission per site. |
 | I094 | Keep ARC installed as the rollback path; cut over by label on a separate scale set. | Claude Opus 5.5, Claude Fable 5.2, GPT-6.2-Astra, GPT-6.2-Sol, Muse Wonder, Muse Wonder Full, Gemini 4 Argon | — | Rejected | Overturned by the owner's decision (N57, N64): ARC serves velnor-new until the cutover gate passes and is deleted in the cutover change; rollback afterwards is the previous Velnor release, drilled weekly. |
 
@@ -435,7 +435,7 @@ slowdown per job class; fault injection, the switch to the previous release, and
 site loss qualified. Until then its template is fixed: class scale sets, warm pools, honest sizes,
 no dind where Docker is not needed, node mounts. The cutover change deletes ARC's velnor-new scale
 sets; Velnor's dispatcher holds the scale-set sessions from then on (I003), and rollback is the
-previous Velnor release, never ARC (I094 and N24 overturned). ChainArgos and jackin keep their ARC
+previous Velnor release, never ARC (I094 and N24 overturned). example-org and jackin keep their ARC
 until velnor-new's cutover has soaked for four weeks.
 
 **Deciding evidence.** ARC is not slow today: its jobs queue 0.2 min median (evidence §A T4) and an
@@ -578,7 +578,7 @@ concurrent hosted jobs shared across the org. Phase 0 moves every merge-path job
 auxiliary workflows off hosted runners; forks and macOS release builds stay there. A paid plan is
 not needed for this design; it is an owner question.
 
-**Other organisations.** ChainArgos and jackin share the five workers through their own ARC scale
+**Other organisations.** example-org and jackin share the five workers through their own ARC scale
 sets (maxima 60 and 40 against tailrocks' 60). They get guaranteed quotas, separate namespaces and
 stores, and the same priority as velnor-new's PR jobs; only Velnor's batch work (warmer,
 speculation, scheduled runs) is preempted. They stay on ARC until velnor-new's cutover has soaked

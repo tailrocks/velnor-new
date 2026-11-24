@@ -14,6 +14,7 @@ use crate::github::GitHubWrite;
 
 const CLIENT_VARIABLE: &str = "VELNOR_APP_CLIENT_ID";
 const KEY_VARIABLE: &str = "VELNOR_APP_PRIVATE_KEY";
+const TOKEN_VARIABLE: &str = "VELNOR_APP_TOKEN";
 const MINT_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn valid_client_id(id: &str) -> bool {
@@ -52,8 +53,14 @@ pub(super) fn run(args: &AppTokenArgs) -> Result<String, CiError> {
         )));
     }
     let app = super::fetch::api_client(signed_jwt()?.to_string(), MINT_TIMEOUT)?;
-    let token = mint(&app, &args.owner, &args.repositories, &std::thread::sleep)
-        .map_err(|e| e.context("no installation token was created"))?;
+    let token = mint(
+        &app,
+        &args.owner,
+        &args.repositories,
+        &args.permissions,
+        &std::thread::sleep,
+    )
+    .map_err(|e| e.context("no installation token was created"))?;
     drop(app);
     let mut stdout = std::io::stdout().lock();
     let masked = writeln!(stdout, "::add-mask::{}", token.as_str()).and_then(|()| stdout.flush());
@@ -74,9 +81,22 @@ pub(super) fn run(args: &AppTokenArgs) -> Result<String, CiError> {
             Err(_) => error.context("the token could not be revoked; it expires within the hour"),
         });
     }
+    let granted: Vec<String> = args.permissions.iter().map(ToString::to_string).collect();
     Ok(format!(
-        "Created a token that can read the contents of {} repositories of {}\n",
+        "Created a token with {} on {} repositories of {}\n",
+        granted.join(", "),
         args.repositories.len(),
         args.owner
     ))
+}
+
+pub(super) fn revoke() -> Result<String, CiError> {
+    let token = std::env::var(TOKEN_VARIABLE)
+        .ok()
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| CiError::new(format!("set {TOKEN_VARIABLE} to the token to revoke")))?;
+    super::fetch::api_client(token, MINT_TIMEOUT)
+        .and_then(|github| github.delete(super::fetch::REVOKE_PATH))
+        .map_err(|e| e.context("the token could not be revoked; it expires within the hour"))?;
+    Ok("Revoked the App token\n".to_owned())
 }

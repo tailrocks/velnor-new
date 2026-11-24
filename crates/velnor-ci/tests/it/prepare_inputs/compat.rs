@@ -63,9 +63,8 @@ fn compat_follows_the_runner_image() {
 
 #[test]
 fn compat_follows_the_distro_in_os_release() {
+    let dir = velnor_test_support::ScratchDir::new(scratch_root("os-release"));
     let release = |name: &str, body: &str| {
-        let dir = scratch_root("os-release");
-        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
         let path = dir.join(name);
         fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
         let path: &'static str = Box::leak(path.display().to_string().into_boxed_str());

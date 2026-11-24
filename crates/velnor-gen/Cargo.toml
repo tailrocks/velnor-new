@@ -3,7 +3,7 @@
 
 [package]
 name = "velnor-gen"
-version = "0.1.111"
+version = "0.1.115"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -40,4 +40,5 @@ toml.workspace = true
 
 [dev-dependencies]
 similar.workspace = true
+sha2.workspace = true
 velnor-test-support = { version = "=0.0.0", path = "../velnor-test-support" }

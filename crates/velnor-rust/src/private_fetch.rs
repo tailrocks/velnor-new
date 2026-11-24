@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, HelperCommand, Job, PermissionScope,
-    RepoFacts, RepoPath, RootSlug, Step, StepKind, TokenMint, When,
+    Access, CacheKey, CargoCommand, DenyCheck, FetchedManifest, Gate, GateNeed, Job,
+    PermissionScope, PlanFrom, RepoFacts, RepoPath, RootSlug, Step, StepKind, TokenMint, When,
 };
 
 use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 00cab67428
-const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
+const LISTED_MANIFESTS_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
     facts
@@ -31,26 +33,17 @@ pub(crate) fn token_mint(facts: &RepoFacts) -> TokenMint {
     }
 }
 
+fn lists_manifests(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(LISTED_MANIFESTS_HELPER))
+}
+
 pub(crate) fn after_trusted_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| {
-            !matches!(
-                step.kind,
-                StepKind::Checkout { .. }
-                    | StepKind::InstallHelper(_)
-                    | StepKind::Helper(HelperCommand::Plan)
-                    | StepKind::RepositoryPrivacy
-                    | StepKind::PrivateCheck { .. }
-                    | StepKind::ReleaseAssets { .. }
-                    | StepKind::MbxRemote { .. }
-                    | StepKind::MbxPin
-                    | StepKind::MbxPrivate
-                    | StepKind::MbxStore
-                    | StepKind::MbxSeed
-                    | StepKind::CratesMirror(_)
-            )
-        })
+        .position(|step| !step.kind.is_trusted_setup())
         .unwrap_or(steps.len())
 }
 
@@ -67,13 +60,9 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .iter()
             .position(|step| matches!(step.kind, StepKind::TestSetup { .. }))
             .unwrap_or(first);
-        let mut manifests: Vec<RepoPath> = Vec::new();
-        for step in job.steps.iter().filter(|step| compiles(step)) {
-            let manifest = manifest(step);
-            if !manifests.contains(&manifest) {
-                manifests.push(manifest);
-            }
-        }
+        let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
+        let listed = lists_manifests(facts);
+        let manifests = fetched_manifests(&job.steps, listed && gate.is_none());
         let cached: Vec<RootSlug> = job.steps[..first]
             .iter()
             .filter_map(|step| match &step.kind {
@@ -81,8 +70,8 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 _ => None,
             })
             .collect();
+        let (filled, filled_private) = filled(&job.steps, &manifests);
         let when = status(job.steps.iter().filter(|step| compiles(step)));
-        let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
         if early {
             job.steps.splice(
@@ -101,7 +90,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
         {
             kinds.push(StepKind::PrivateCheck {
-                cached: cached.clone(),
+                cached: if early { Vec::new() } else { cached.clone() },
             });
         }
         kinds.extend([
@@ -110,7 +99,13 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 cached: cached.clone(),
                 mint: token_mint(facts),
             },
-            StepKind::PrivateFetch { manifests, cached },
+            StepKind::PrivateFetch {
+                manifests,
+                cached,
+                filled,
+                filled_private,
+                listed,
+            },
         ]);
         if early {
             let at = after_trusted_setup(&job.steps[..first]);
@@ -138,6 +133,48 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .0
             .insert(PermissionScope::PullRequests, Access::Read);
     }
+}
+
+fn fetched_manifests(steps: &[Step], conditional: bool) -> Vec<FetchedManifest> {
+    let mut manifests: Vec<FetchedManifest> = Vec::new();
+    for step in steps.iter().filter(|step| compiles(step)) {
+        let path = manifest(step);
+        let gate = step
+            .gate
+            .clone()
+            .filter(|gate| conditional && gate.from != PlanFrom::ThisJob);
+        match manifests.iter_mut().find(|known| known.path == path) {
+            Some(known) => {
+                known.selected_by = any_gate(known.selected_by.as_ref(), gate.as_ref());
+            }
+            None => manifests.push(FetchedManifest {
+                path,
+                selected_by: gate,
+            }),
+        }
+    }
+    manifests
+}
+
+fn filled(steps: &[Step], built: &[FetchedManifest]) -> (Vec<RepoPath>, bool) {
+    let Some((every, private)) = steps.iter().find_map(|step| match &step.kind {
+        StepKind::SourcesFetchAll { manifests, .. } => Some((manifests, step.private_repo)),
+        _ => None,
+    }) else {
+        return (Vec::new(), false);
+    };
+    let built: Vec<RepoPath> = built.iter().map(|known| known.path.clone()).collect();
+    if every.iter().all(|manifest| built.contains(manifest)) {
+        return (Vec::new(), false);
+    }
+    let mut filled = built.clone();
+    filled.extend(
+        every
+            .iter()
+            .filter(|manifest| !built.contains(manifest))
+            .cloned(),
+    );
+    (filled, private)
 }
 
 fn hoist_sources_restores(steps: &mut Vec<Step>, from: usize, to: usize) -> Vec<Step> {
@@ -263,6 +300,9 @@ fn manifest(step: &Step) -> RepoPath {
     if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
         return manifest.clone();
     }
+    if let Some(manifest) = &step.manifest {
+        return manifest.clone();
+    }
     step.directory.as_ref().map_or_else(
         || RepoPath::from_static("Cargo.toml"),
         |directory| directory.child("Cargo.toml"),
@@ -274,10 +314,12 @@ fn runs_repository_code(step: &Step) -> bool {
 }
 
 pub(crate) fn compiles(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if !matches!(
-        command,
-        CargoCommand::FmtCheck
-            | CargoCommand::Machete
-            | CargoCommand::NextestRunArchive { .. }
-    ))
+    match &step.kind {
+        StepKind::Cargo(command) => !matches!(
+            command,
+            CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
+        ),
+        StepKind::GeneratorCheck { from_source } => *from_source,
+        _ => false,
+    }
 }

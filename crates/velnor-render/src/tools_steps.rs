@@ -10,14 +10,12 @@ use crate::gate::{
     ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
 };
 use crate::rules::{RenderedStep, Value};
+use crate::tools_anchor_steps::{
+    ANCHOR_STEP, READ_STEP, anchor_cache_step, newest_anchor_step, read_step,
+};
 
 const VERIFY_STEP: &str = "toolsverify";
 const RECORD_STEP: &str = "toolsrecord";
-const ANCHOR_STEP: &str = "toolsanchor";
-const READ_STEP: &str = "toolsread";
-const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
-const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
-const ANCHOR_RUN_ATTEMPT: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 
 pub(crate) fn anchor_expression(anchor: &ToolsAnchor) -> String {
     match anchor {
@@ -42,8 +40,8 @@ pub(crate) fn is_anchor_expression(expression: &str) -> bool {
         || expression.ends_with(&format!(".outputs.{ANCHOR_OUTPUT}"))
 }
 
-pub(crate) fn anchor_outputs(steps: &[velnor_model::Step]) -> Vec<(String, String)> {
-    let reads = steps.iter().any(|step| {
+pub(crate) fn anchor_outputs(job: &velnor_model::Job) -> Vec<(String, String)> {
+    let reads = job.steps.iter().any(|step| {
         matches!(
             step.kind,
             velnor_model::StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
@@ -52,16 +50,17 @@ pub(crate) fn anchor_outputs(steps: &[velnor_model::Step]) -> Vec<(String, Strin
     if !reads {
         return Vec::new();
     }
-    vec![
-        (
-            ANCHOR_OUTPUT.to_owned(),
-            anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
-        ),
-        (
+    let mut outputs = vec![(
+        ANCHOR_OUTPUT.to_owned(),
+        anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
+    )];
+    if job.anchor_key_output {
+        outputs.push((
             ANCHOR_KEY_OUTPUT.to_owned(),
             format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),
-        ),
-    ]
+        ));
+    }
+    outputs
 }
 
 fn anchor_key_expression(anchor: &ToolsAnchor) -> String {
@@ -123,74 +122,6 @@ pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
             }
         }
         _ => {}
-    }
-}
-
-fn anchor_prefix() -> String {
-    crate::cache::render_key(&CacheKey::Tools {
-        host: velnor_model::Host,
-        anchor: ToolsAnchor::Unanchored,
-    })
-    .key
-    .replacen("velnor-tools-", "velnor-tools-anchor-", 1)
-}
-
-fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
-    RenderedStep {
-        id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
-        name: format!("{verb} anchor"),
-        shared: true,
-        uses: Some(action.to_owned()),
-        with: vec![
-            ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-            ("key".to_owned(), Value::Expr(anchor_prefix())),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-fn newest_anchor_step(action: &str, find: bool, attempt: bool) -> RenderedStep {
-    let prefix = format!("{}-", anchor_prefix());
-    let run = if attempt {
-        ANCHOR_RUN_ATTEMPT
-    } else {
-        ANCHOR_RUN
-    };
-    let mut with = vec![
-        ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-        ("key".to_owned(), Value::Expr(format!("{prefix}{run}"))),
-    ];
-    if find {
-        with.push(("restore-keys".to_owned(), Value::Expr(prefix)));
-    }
-    RenderedStep {
-        id: find.then(|| ANCHOR_STEP.to_owned()),
-        name: if find {
-            "Find the anchor"
-        } else {
-            "Save anchor"
-        }
-        .to_owned(),
-        shared: true,
-        uses: Some(action.to_owned()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn read_step() -> RenderedStep {
-    RenderedStep {
-        id: Some(READ_STEP.to_owned()),
-        name: "Read the anchor".to_owned(),
-        shared: true,
-        env: vec![(
-            "VELNOR_ANCHOR_MATCHED".to_owned(),
-            Value::Expr(format!(
-                "${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"
-            )),
-        )],
-        run: Some("velnor-ci tools-verify read".to_owned()),
-        ..RenderedStep::default()
     }
 }
 
@@ -289,14 +220,17 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::Prime => ("Prime the node store with the tools", None, "save"),
         Verb::RecordRestore => return tools_restored_step(key),
         Verb::RecordSave => return tools_saved_step(),
+        Verb::RecordSavedKey => return tools_saved_key_step(key),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
             return newest_anchor_step(crate::steps::CACHE_SAVE, false, false);
         }
-        Verb::AnchorSaveAttempt => {
+        Verb::AnchorSaveAttempt if *anchor == ToolsAnchor::Recorded => {
             return newest_anchor_step(crate::steps::CACHE_SAVE, false, true);
         }
-        Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
+        Verb::AnchorSave | Verb::AnchorSaveAttempt => {
+            return anchor_cache_step(crate::steps::CACHE_SAVE, "Save");
+        }
         Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true, false),
         Verb::AnchorFindAttempt => {
             return newest_anchor_step(crate::steps::CACHE_RESTORE, true, true);
@@ -357,6 +291,26 @@ fn tools_restored_step(key: String) -> RenderedStep {
     }
 }
 
+fn tools_saved_key_step(key: String) -> RenderedStep {
+    let network = crate::report::cache_id(
+        &velnor_model::CacheKey::Tools {
+            host: velnor_model::Host,
+            anchor: ToolsAnchor::Unanchored,
+        },
+        false,
+    );
+    RenderedStep {
+        id: Some(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
+        name: "Record the tools cache key".to_owned(),
+        condition: Some(format!(
+            "${{{{ !cancelled() && steps.{network}.outcome != 'skipped' }}}}"
+        )),
+        env: vec![("CACHE_KEY".to_owned(), Value::Expr(key))],
+        run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 /// Fails, without failing the job, when either save failed, so the cache telemetry sees it.
 /// It is skipped when neither save ran, so that the telemetry sees no save attempt.
 fn tools_saved_step() -> RenderedStep {
@@ -390,5 +344,47 @@ fn tools_saved_step() -> RenderedStep {
         )],
         run: Some("velnor-ci cache check --success \"$CACHE_OK\"".to_owned()),
         ..RenderedStep::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_model::{AnchorSource, ToolsAnchor, ToolsLocalVerb};
+
+    use super::tools_local_step;
+
+    #[test]
+    fn an_unrecorded_anchor_saves_by_the_fixed_key_whichever_save_verb_asks() {
+        for anchor in [
+            ToolsAnchor::Unanchored,
+            ToolsAnchor::Restored(AnchorSource::ThisJob),
+        ] {
+            let fixed = tools_local_step(ToolsLocalVerb::AnchorSave, &anchor);
+            assert_eq!(
+                tools_local_step(ToolsLocalVerb::AnchorSaveAttempt, &anchor),
+                fixed
+            );
+        }
+    }
+
+    fn save_key(step: &crate::rules::RenderedStep) -> String {
+        step.with
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                ("key", crate::rules::Value::Expr(key)) => Some(key.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_recorded_anchor_saves_by_the_run_key_or_the_run_attempt_key_as_asked() {
+        let run = tools_local_step(ToolsLocalVerb::AnchorSave, &ToolsAnchor::Recorded);
+        let attempt = tools_local_step(ToolsLocalVerb::AnchorSaveAttempt, &ToolsAnchor::Recorded);
+        assert!(save_key(&run).ends_with("-${{ github.run_id }}-${{ github.job }}"));
+        assert!(
+            save_key(&attempt)
+                .ends_with("-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}")
+        );
     }
 }

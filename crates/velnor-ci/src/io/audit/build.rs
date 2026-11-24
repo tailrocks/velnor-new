@@ -6,6 +6,7 @@ mod declarations;
 mod failure;
 mod generated;
 mod invocation;
+mod outputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -14,17 +15,18 @@ use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::RepoFacts;
+use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
+use super::super::units::{MetadataInvocation, Roots, Workspace, apart, outside_tracked};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
-use invocation::Invocation;
+use invocation::{Invocation, invoked_root, root_directory};
+use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -47,12 +49,21 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
-    let invocation = Invocation::new(&args.command);
+    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
-    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
+    let step = invocation.step(directory);
+    let baseline = MetadataInvocation::at(&step);
+    let workspaces = workspaces(
+        &facts,
+        &checkout.root,
+        &step,
+        Some((&baseline, &location)),
+        &inherit,
+    )?;
     apart(&workspaces, &shared_groups(&facts))?;
+    outside_tracked(&workspaces, &checkout.root, &checkout.view.tracked_paths)?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(
         directory,
@@ -86,8 +97,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed =
-                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
+            let failed = failure::Failure::new(invocation.label(), builder.selection(&invocation));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -119,12 +129,23 @@ impl Builder<'_> {
         )
     }
 
-    fn members(&self) -> BTreeSet<&str> {
-        self.facts
-            .rust_roots
-            .iter()
-            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
-            .collect()
+    fn invoked(&self) -> Option<&RustRoot> {
+        let repository =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
+        invoked_root(&self.facts.rust_roots, &repository, &self.location)
+    }
+
+    fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
+        let root = self.invoked();
+        let members = root.map_or(&[][..], |root| root.members.as_slice());
+        let canonical =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
+        invocation.selection(
+            root.map_or("", |root| root.manifest.as_str()),
+            members,
+            &self.facts.unowned,
+            &[&self.repository, &canonical],
+        )
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
@@ -140,6 +161,9 @@ impl Builder<'_> {
             &self.facts,
             &self.workspaces,
             &self.location,
+            self.invoked()
+                .map(|root| root_directory(root, &self.repository))
+                .as_deref(),
             self.max_entries,
         )
     }
@@ -169,8 +193,8 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command)
-                    .selection(&self.members())
+                let selection = self
+                    .selection(&Invocation::new(command))
                     .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
@@ -178,9 +202,13 @@ impl Builder<'_> {
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(Stop::Refused(outside_selection(
+                    return Err(Stop::Refused(failure::outside_selection(
                         &outside,
-                        failure::earlier_failure(&self.marker_directories(), &outside),
+                        failure::earlier_failure(
+                            &self.marker_directories(),
+                            self.invoked().map_or("", |root| root.manifest.as_str()),
+                            &outside,
+                        ),
                     )));
                 }
                 declarations::invalidate(&declared)?;
@@ -237,8 +265,9 @@ impl Builder<'_> {
 
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
+        let roots = Roots::new(&self.workspaces);
         for directory in &self.directories {
-            for (unit, path) in unchecked_unit_files(directory)? {
+            for (unit, path) in roots.unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -318,7 +347,13 @@ impl Builder<'_> {
         }
         let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
-        for (directory, started) in self.directories.iter().zip(started) {
+        let roots = Roots::new(&self.workspaces);
+        let scanned = self
+            .directories
+            .iter()
+            .map(|directory| roots.scan(directory, status.success()))
+            .collect::<Result<Vec<_>, _>>()?;
+        for ((directory, started), units) in self.directories.iter().zip(started).zip(scanned) {
             let store = directory.join(inventory::STORE);
             let saved = store.join(format!("{digest}.json"));
             if complete && status.success() {
@@ -326,7 +361,7 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unchecked_unit_files(directory)? {
+            for (unit, file) in units {
                 if !output(&unit) {
                     continue;
                 }
@@ -355,43 +390,4 @@ impl Builder<'_> {
         }
         Ok(())
     }
-}
-
-const LISTED_PACKAGES: usize = 20;
-
-fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiError {
-    let mut names: Vec<String> = packages
-        .iter()
-        .take(LISTED_PACKAGES)
-        .map(|package| format!("{package} (build-script output)"))
-        .collect();
-    let more = packages.len().saturating_sub(LISTED_PACKAGES);
-    if more > 0 {
-        names.push(format!("and {more} more"));
-    }
-    let cause = match earlier {
-        Some(command) => format!(
-            "An earlier inputs build failed: `{command}` (failed commands record no receipts); fix that step first"
-        ),
-        None => "This usually means an earlier `velnor-ci inputs build` step in this job failed (failed commands record no receipts); fix that step first. Otherwise prepare inventory first with velnor-ci inputs build -- cargo build --workspace --all-targets, preserving this build's feature, target and profile options".to_owned(),
-    };
-    CiError::new(format!(
-        "untrusted build outputs include packages outside this command's explicit selection: {}. {cause}",
-        names.join(", ")
-    ))
-}
-
-fn output(unit: &UnitFile) -> bool {
-    matches!(
-        unit,
-        UnitFile::BuildOutput { .. } | UnitFile::DepInfo { .. } | UnitFile::Script { .. }
-    )
-}
-
-fn identity(path: &Path) -> Result<(String, SystemTime), CiError> {
-    let bytes = fs::read(path).map_err(|e| CiError::new(e.to_string()))?;
-    let modified = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .map_err(|e| CiError::new(e.to_string()))?;
-    Ok((sha256_hex(&bytes), modified))
 }

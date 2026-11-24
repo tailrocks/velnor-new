@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod ansible_select;
 mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;
@@ -17,9 +18,15 @@ mod cache;
 mod cache_budget;
 mod cache_credential_scrub;
 mod cache_credential_scrub_ancestry;
+mod cache_credential_scrub_cargo;
 mod cache_credential_scrub_crates;
+mod cache_credential_scrub_gaps;
 mod cache_credential_scrub_hardening;
+mod cache_credential_scrub_modules;
+mod cache_credential_scrub_submodules;
 mod cache_credential_scrub_tokens;
+mod cache_credential_scrub_trees;
+mod cache_credential_scrub_unscanned;
 mod cache_flow;
 mod cache_private_repo;
 mod cache_prune;
@@ -27,9 +34,13 @@ mod cache_prune_fresh;
 mod cache_prune_layout;
 mod cache_purge;
 mod cache_retention_flow;
+mod cache_shadowed_config;
+mod cache_sources_restored;
 mod io_cold_foreign;
 mod io_gate;
+mod io_report_privacy;
 mod run_escape;
+mod runtime_gitlink;
 
 mod cache_safety;
 mod cache_upload;
@@ -67,11 +78,13 @@ mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
 mod fetch_unpinned;
+mod fresh_dir_sweep;
 mod gate;
 mod group_runs;
 mod helper_commands;
 mod http_errors;
 mod image_candidate;
+mod image_publish;
 mod inputs;
 mod io;
 mod io_cold;
@@ -93,12 +106,14 @@ mod io_policy;
 mod io_raw_paths;
 mod io_release;
 mod io_report;
+mod io_report_saves;
 mod io_report_slowest;
 mod io_report_sparse;
 mod io_required;
 mod io_required_groups;
 mod io_restore;
 mod io_restore_cargo;
+mod io_restore_cargo_dirs;
 mod io_restore_cold_cargo;
 mod io_restore_links;
 mod io_restore_symlinks;
@@ -127,6 +142,7 @@ mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
+mod plan_diff_paths;
 mod plan_diff_repo;
 mod plan_git;
 mod plan_main;
@@ -173,6 +189,7 @@ mod release_tag_patterns;
 mod release_verify_listed;
 mod report;
 mod report_accounting;
+mod report_relative_doc;
 mod report_split_host_units;
 mod report_waste_categories;
 mod report_waste_mbx;
@@ -181,6 +198,7 @@ mod resolve_cases;
 mod resolve_cases_receipts;
 mod resolve_qualification;
 mod resolve_run;
+mod resolve_template;
 mod resolve_wire;
 mod resolve_world;
 mod rulesets;
@@ -193,6 +211,9 @@ mod run_group;
 mod run_nextest;
 mod run_nextest_archive;
 mod run_nextest_built;
+mod run_nextest_early_bound;
+mod run_nextest_early_escape;
+mod run_nextest_extract;
 mod run_nextest_list;
 mod run_nextest_output;
 mod run_nextest_reconcile;
@@ -214,10 +235,13 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod toolchain;
 mod tools_digest;
 mod tools_heal;
+mod tools_heal_leftovers;
 mod tools_home_clear;
 mod tools_local;
+mod tools_prune;
 mod tools_verify;
 mod tools_verify_anchor;
 mod tools_verify_bounds;
@@ -229,10 +253,14 @@ mod unowned;
 mod version;
 mod write_request;
 
-pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+pub(crate) fn scratch_name(prefix: &str, name: &str) -> std::path::PathBuf {
     let owner = std::thread::current()
         .name()
         .unwrap_or("main")
         .replace("::", "-");
     std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(scratch_name(prefix, name))
 }

@@ -8,7 +8,7 @@ use std::process::Command;
 
 use super::fixture::{TestResult, active_toolchain, mirror_fixture};
 use crate::fetch::{TOKEN, serve};
-use crate::io::Repo;
+use crate::io::{Repo, hang_up};
 
 /// The token fetch passes `--config net.offline=false` after `fetch`. Cargo does
 /// not merge that group with a `--config` given before the subcommand, so the
@@ -68,7 +68,7 @@ fn fetch(repo: &Repo, config: &Path, index: usize) -> TestResult {
         .env("VELNOR_PRIVATE_TOKEN", TOKEN)
         .env("VELNOR_CARGO_CONFIG", config)
         .env("CARGO_HOME", &home)
-        .env("HTTPS_PROXY", "http://127.0.0.1:1")
+        .env("HTTPS_PROXY", hang_up())
         .env("NO_PROXY", "127.0.0.1")
         .output()?;
     assert!(output.status.success(), "{output:?}");

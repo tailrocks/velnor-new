@@ -28,6 +28,7 @@ pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
 pub(crate) const TOOLS_LOOKUP_STEP: &str = "toolslookup";
 pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
 pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
+pub(crate) const TOOLS_SAVED_KEY_STEP: &str = "tools_saved_key";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
@@ -150,7 +151,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
-        When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
+        When::Finalizer | When::FinalizerAfterProducer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
         When::Failure => parts.push("failure()".to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {

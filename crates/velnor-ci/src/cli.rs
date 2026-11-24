@@ -18,9 +18,9 @@ pub use app_token::AppTokenArgs;
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
-    BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
-    QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
+    BaseFile, BenchCommand, BudgetArgs, BuildArgs, CheckConfigurationsArgs, CollectArgs,
+    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, MisePinArgs, PlanArgs, PlanMode,
+    PrepareArgs, QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
     VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
@@ -107,7 +107,7 @@ pub enum Command {
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(
-        about = "Run cargo fetch --locked for each manifest with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
+        about = "Run cargo fetch --locked for each manifest (--manifest-path, or --manifests-env naming a variable of JSON [[hex path, fetch]] pairs, which skips a pair whose fetch is false) with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
     )]
     Fetch(FetchArgs),
     #[command(
@@ -119,19 +119,23 @@ pub enum Command {
     )]
     PrivateTokenAllowed,
     #[command(
-        about = "Create a GitHub App installation token that can only read the contents of the --repository repositories of --owner, and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. Runs no post step: the step that uses the token revokes it"
+        about = "Create a GitHub App installation token for the --repository repositories of --owner with only the --permission permissions (contents:read when none is named), and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. A permission that is not <name>:read or <name>:write, or a name given twice, makes no request. Runs no post step: a later step of the job revokes the token"
     )]
     AppToken(AppTokenArgs),
     #[command(
-        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
+        about = "Revoke the GitHub App installation token in VELNOR_APP_TOKEN with DELETE /installation/token on the API in VELNOR_API_URL, the API that app-token minted it on. An empty or unset VELNOR_APP_TOKEN fails and makes no request"
+    )]
+    RevokeToken,
+    #[command(
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,
     #[command(
-        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it changes nothing and MBX builds cold"
+        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it appends no MBX_CACHE_DIR and MBX builds cold. It never writes MBX_SHARE_OUT_DIR; mbx-store does"
     )]
     MbxSeed,
     #[command(
-        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is a symlink, not absolute or the filesystem root"
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, and (helper 0.1.111 or later) a HOME that is a symlink, dangling or looping included, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),
     #[command(
@@ -139,7 +143,7 @@ pub enum Command {
     )]
     MisePin(MisePinArgs),
     #[command(
-        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> (empty when there is none) to $GITHUB_OUTPUT; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
+        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> to $GITHUB_OUTPUT, anchor=malformed when the anchor file is not a digest, or an empty anchor= when there is none; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false, and prints the malformed-anchor notice even when nothing was restored; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
     )]
     ToolsVerify(ToolsVerifyArgs),
     #[command(
@@ -147,7 +151,7 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
-        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, locked; cargo runs offline when CARGO_NET_OFFLINE is set, as in a job with private sources"
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
@@ -196,7 +200,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum SourcesCommand {
     #[command(
-        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code; after the last fetch it leaves out the hooks, reflogs, remotes, branches, FETCH_HEAD and http-alternates of the saved git databases under $HOME/.cargo and exits 1 when they hold a credential or HOME is not set"
     )]
     Fetch(SourcesFetchArgs),
 }
@@ -217,10 +221,16 @@ pub struct SourcesFetchArgs {
 pub struct FetchArgs {
     #[arg(
         long,
-        required = true,
+        required_unless_present = "manifests_env",
+        conflicts_with = "manifests_env",
         help = "Cargo manifest to fetch; repeat for each Cargo root"
     )]
     pub manifest_path: Vec<PathBuf>,
+    #[arg(
+        long,
+        help = "Environment variable containing JSON [[hex manifest path, fetch]] pairs; a pair whose fetch is false is left out"
+    )]
+    pub manifests_env: Option<String>,
     #[arg(
         long,
         hide = true,

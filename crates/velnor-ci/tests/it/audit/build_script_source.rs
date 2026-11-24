@@ -22,13 +22,14 @@ const TEST: [&str; 3] = ["test", "--workspace", "--locked"];
 
 fn workspace(script: &str) -> Repo {
     let repo = Repo::new("build-script-source");
+    let mise = crate::toolchain::mise_rust_pin();
     let key = if script == "build.rs" {
         String::new()
     } else {
         format!("build = \"{script}\"\n")
     };
     repo.write_all(&[
-        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
+        ("mise.toml", mise.as_str()),
         (
             "Cargo.toml",
             "[workspace]\nmembers = [\"member\"]\nresolver = \"3\"\n",

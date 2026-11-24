@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
+use velnor_model::RepoPath;
 use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
 use super::Workspace;
@@ -53,6 +55,40 @@ pub(in crate::io) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> R
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+pub(in crate::io) fn outside_tracked(
+    workspaces: &[Workspace],
+    repository: &Path,
+    tracked: &BTreeSet<RepoPath>,
+) -> Result<(), CiError> {
+    let resolved = |path: &Path| {
+        resolve(path)
+            .map_err(|error| CiError::new(format!("cannot resolve {}: {error}", path.display())))
+    };
+    let repository = resolved(repository)?;
+    for workspace in workspaces {
+        let Some(build) = workspace.directories().into_iter().nth(1) else {
+            continue;
+        };
+        let build = resolved(&build)?;
+        let inside = build.strip_prefix(&repository).ok();
+        let held = tracked.iter().find(|input| match inside {
+            Some(relative) => {
+                Path::new(input.as_str()).starts_with(relative)
+                    || relative.starts_with(input.as_str())
+            }
+            None => repository.starts_with(&build),
+        });
+        if let Some(input) = held {
+            return Err(CiError::new(format!(
+                "the build directory {} of the Cargo root {} holds the tracked input {input}, so its units cannot be told apart from checkout content; set a build directory outside every tracked path",
+                build.display(),
+                workspace.root.display()
+            )));
         }
     }
     Ok(())

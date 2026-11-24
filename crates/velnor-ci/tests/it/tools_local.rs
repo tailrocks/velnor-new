@@ -53,8 +53,6 @@ fn put(home: &Path) {
 
 fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
     let store = node.root.join("store").display().to_string();
-    let home = node.root.join(home);
-    let owner = fs::metadata(&home).map_or(0, |metadata| metadata.uid());
     run(&Inputs {
         verb,
         key,
@@ -64,11 +62,11 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         } else {
             "refs/pull/1/merge"
         },
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
-        home: &home,
-        owner,
+        home: &node.root.join(home),
         replace: false,
     })
 }
@@ -110,18 +108,17 @@ fn a_push_to_a_non_default_branch_never_saves() {
     put(&node.root.join("home"));
     let store = node.root.join("store").display().to_string();
     let home = node.root.join("home");
-    let owner = fs::metadata(&home).map_or(0, |metadata| metadata.uid());
     for event in ["push", "schedule", "workflow_dispatch"] {
         let outcome = run(&Inputs {
             verb: Verb::Save,
             key: KEY,
             event_name: event,
             git_ref: "refs/heads/feature",
+            ref_protected: true,
             default_branch: Some("main"),
             shared_dir: Some(&store),
             seed_dir: Some(&store),
             home: &home,
-            owner,
             replace: false,
         });
         assert_eq!(outcome, Outcome::Untrusted, "{event}");
@@ -366,10 +363,12 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         Outcome::Miss,
         Outcome::Restored {
             from: PathBuf::from("/store/tools/k"),
+            leased: false,
         },
         Outcome::Rejected("world-writable"),
         Outcome::Saved {
             to: PathBuf::from("/store/tools/k"),
+            kept: Vec::new(),
         },
         Outcome::AlreadySaved,
         Outcome::Busy,
@@ -383,6 +382,19 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         );
         assert_eq!(line.matches('\n').count(), 1, "{outcome:?}: {line:?}");
     }
+    let pruned = Outcome::Saved {
+        to: PathBuf::from("/store/tools/k"),
+        kept: vec!["old-entry".to_owned()],
+    };
+    let text = message(&pruned, "velnor-240");
+    assert_eq!(text.lines().count(), 2, "{text:?}");
+    for line in text.lines() {
+        assert!(line.ends_with(" node=velnor-240"), "{line:?}");
+    }
+    assert!(
+        text.contains("::warning::") && text.contains("old-entry"),
+        "{text:?}"
+    );
     let error = finish(Verb::Save, &Outcome::Failed("x"), "velnor-240").expect_err("failed save");
     assert!(error.to_string().contains("node=velnor-240"), "{error}");
 }
