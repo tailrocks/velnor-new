@@ -6,6 +6,7 @@ use crate::io::Repo;
 use super::{command, placed, unit};
 
 mod descendant;
+mod glob;
 mod package_ids;
 
 const GROUP_LOCK: &str =

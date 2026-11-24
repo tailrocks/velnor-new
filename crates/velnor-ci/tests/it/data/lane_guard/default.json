@@ -17,7 +17,7 @@
     },
     "libdir": {
      "status": "available",
-     "path": "/home/ci/.rustup/toolchains/stable/lib/rustlib/aarch64-apple-darwin/lib"
+     "path": "/srv/ci/.rustup/toolchains/stable/lib/rustlib/aarch64-apple-darwin/lib"
     }
    },
    "targets": []

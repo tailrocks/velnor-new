@@ -742,9 +742,9 @@ Plan	UNKNOWN STEP	2026-10-17T02:38:57.9687083Z There is NO WARRANTY, to the exte
 Plan	UNKNOWN STEP	2026-10-17T02:38:57.9688570Z 
 Plan	UNKNOWN STEP	2026-10-17T02:38:57.9688888Z Written by John Gilmore and Jay Fenlason.
 Plan	UNKNOWN STEP	2026-10-17T02:38:57.9700853Z Using curl to download mise
-Plan	UNKNOWN STEP	2026-10-17T02:38:57.9711004Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64.tar.zst --output /tmp/mise-action-8KjJHT/mise-v2026.10.8-linux-x64.tar.zst
-Plan	UNKNOWN STEP	2026-10-17T02:38:58.6213976Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-8KjJHT/mise-v2026.10.8-linux-x64.tar.zst -C /tmp/mise-action-8KjJHT
-Plan	UNKNOWN STEP	2026-10-17T02:38:58.8434633Z [command]/usr/bin/mv /tmp/mise-action-8KjJHT/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Plan	UNKNOWN STEP	2026-10-17T02:38:57.9711004Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64.tar.zst --output <tmp>/mise-action-8KjJHT/mise-v2026.10.8-linux-x64.tar.zst
+Plan	UNKNOWN STEP	2026-10-17T02:38:58.6213976Z [command]/usr/bin/tar --zstd -xf <tmp>/mise-action-8KjJHT/mise-v2026.10.8-linux-x64.tar.zst -C <tmp>/mise-action-8KjJHT
+Plan	UNKNOWN STEP	2026-10-17T02:38:58.8434633Z [command]/usr/bin/mv <tmp>/mise-action-8KjJHT/mise/bin/mise /home/runner/.local/share/mise/bin/mise
 Plan	UNKNOWN STEP	2026-10-17T02:38:59.0834113Z ##[group]Setting env vars
 Plan	UNKNOWN STEP	2026-10-17T02:38:59.0834382Z Setting MISE_LOG_LEVEL=info
 Plan	UNKNOWN STEP	2026-10-17T02:38:59.0836894Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new

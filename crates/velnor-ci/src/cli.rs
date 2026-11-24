@@ -123,11 +123,11 @@ pub enum Command {
     )]
     AppToken(AppTokenArgs),
     #[command(
-        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,
     #[command(
-        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it changes nothing and MBX builds cold"
+        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it appends no MBX_CACHE_DIR and MBX builds cold. It never writes MBX_SHARE_OUT_DIR; mbx-store does"
     )]
     MbxSeed,
     #[command(
@@ -139,7 +139,7 @@ pub enum Command {
     )]
     MisePin(MisePinArgs),
     #[command(
-        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> (empty when there is none) to $GITHUB_OUTPUT; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
+        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> to $GITHUB_OUTPUT, anchor=malformed when the anchor file is not a digest, or an empty anchor= when there is none; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false, and prints the malformed-anchor notice even when nothing was restored; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
     )]
     ToolsVerify(ToolsVerifyArgs),
     #[command(
@@ -147,7 +147,7 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
-        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, locked; cargo runs offline when CARGO_NET_OFFLINE is set, as in a job with private sources"
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(

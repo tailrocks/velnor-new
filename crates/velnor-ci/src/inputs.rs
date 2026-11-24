@@ -13,6 +13,11 @@ pub fn inputs_file(prefix: &str) -> String {
 }
 
 #[must_use]
+pub fn input_dirs_file(prefix: &str) -> String {
+    prefixed(".velnor/input-dirs", prefix)
+}
+
+#[must_use]
 pub fn snapshot_file(prefix: &str) -> String {
     prefixed(".velnor/restored-inputs", prefix)
 }
@@ -36,11 +41,16 @@ pub fn is_inputs_file(path: &std::path::Path) -> bool {
     else {
         return false;
     };
-    name == "inputs.tsv"
-        || name
-            .strip_prefix("inputs-")
+    ["inputs", "input-dirs"].iter().any(|stem| {
+        name.strip_prefix(stem)
             .and_then(|rest| rest.strip_suffix(".tsv"))
-            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+            .is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.strip_prefix('-').is_some_and(|hash| {
+                        hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+            })
+    })
 }
 
 fn prefixed(stem: &str, prefix: &str) -> String {

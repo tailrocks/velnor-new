@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 mod cleanup_observer_witness;
+mod clock_tick;
 
 mod connection;
 mod current_columns;
@@ -79,7 +80,7 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 60;
+pub(super) const JOURNAL_VERSION: i64 = 61;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 

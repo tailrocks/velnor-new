@@ -39,7 +39,7 @@ fn mode(path: &Path) -> u32 {
 #[tokio::test]
 async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authority() {
     let dir = temp_dir("supervisor-lookalike");
-    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let canonical = std::fs::canonicalize(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let mut decoy: Child = Command::new("/bin/sh")
         .args(["-c", "read line", "supervise", "--dir"])
         .arg(&canonical)
@@ -67,7 +67,7 @@ async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authorit
 #[tokio::test]
 async fn down_stops_the_authority_recorded_at_start_by_its_exact_command() {
     let dir = temp_dir("supervisor-standin");
-    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let canonical = std::fs::canonicalize(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let binary = "/opt/velnor/bin/velnor-local";
     let child = Command::new("/usr/bin/yes")
         .arg0(binary)

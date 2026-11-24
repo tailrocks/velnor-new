@@ -96,7 +96,7 @@ pub(super) fn earlier_failure(
     directories.iter().find_map(|directory| {
         let bytes = fs::read(marker(directory)).ok()?;
         let failure: Failure = serde_json::from_slice(&bytes).ok()?;
-        if Run::current().is_some_and(|current| failure.run.as_ref() != Some(&current)) {
+        if failure.run != Run::current() {
             return None;
         }
         let selection = failure.selection.as_ref()?;

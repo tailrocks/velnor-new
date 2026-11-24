@@ -6,6 +6,7 @@ mod declarations;
 mod failure;
 mod generated;
 mod invocation;
+mod outputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -17,7 +18,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
+use super::super::units::{MetadataInvocation, Roots, Workspace, apart};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -25,6 +26,7 @@ use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::{Invocation, invoked_root, root_directory};
+use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -51,7 +53,15 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
-    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
+    let step = invocation.step(directory);
+    let baseline = MetadataInvocation::at(&step);
+    let workspaces = workspaces(
+        &facts,
+        &checkout.root,
+        &step,
+        Some((&baseline, &location)),
+        &inherit,
+    )?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(
@@ -247,8 +257,9 @@ impl Builder<'_> {
 
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
+        let roots = Roots::new(&self.workspaces);
         for directory in &self.directories {
-            for (unit, path) in unchecked_unit_files(directory)? {
+            for (unit, path) in roots.unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -328,7 +339,13 @@ impl Builder<'_> {
         }
         let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
-        for (directory, started) in self.directories.iter().zip(started) {
+        let roots = Roots::new(&self.workspaces);
+        let scanned = self
+            .directories
+            .iter()
+            .map(|directory| roots.scan(directory, status.success()))
+            .collect::<Result<Vec<_>, _>>()?;
+        for ((directory, started), units) in self.directories.iter().zip(started).zip(scanned) {
             let store = directory.join(inventory::STORE);
             let saved = store.join(format!("{digest}.json"));
             if complete && status.success() {
@@ -336,7 +353,7 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unchecked_unit_files(directory)? {
+            for (unit, file) in units {
                 if !output(&unit) {
                     continue;
                 }
@@ -365,19 +382,4 @@ impl Builder<'_> {
         }
         Ok(())
     }
-}
-
-fn output(unit: &UnitFile) -> bool {
-    matches!(
-        unit,
-        UnitFile::BuildOutput { .. } | UnitFile::DepInfo { .. } | UnitFile::Script { .. }
-    )
-}
-
-fn identity(path: &Path) -> Result<(String, SystemTime), CiError> {
-    let bytes = fs::read(path).map_err(|e| CiError::new(e.to_string()))?;
-    let modified = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .map_err(|e| CiError::new(e.to_string()))?;
-    Ok((sha256_hex(&bytes), modified))
 }

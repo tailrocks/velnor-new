@@ -309,7 +309,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             "{cleanup}"
         );
         assert!(cleanup.contains("cancel-in-progress: false"), "{cleanup}");
-        assert!(cleanup.contains("- Rust CI"), "{cleanup}");
+        assert!(cleanup.contains("- CI"), "{cleanup}");
         assert!(cleanup.contains("- completed"), "{cleanup}");
         assert!(cleanup.contains("  rust-trim:"), "{cleanup}");
         assert!(cleanup.contains("actions: write"), "{cleanup}");
@@ -318,8 +318,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             .find(|line| line.starts_with("    if: "))
             .ok_or("no cleanup condition")?;
         assert!(
-            condition
-                .contains("github.event.workflow_run.path == ''.github/workflows/rust-ci.yml''"),
+            condition.contains("github.event.workflow_run.path == ''.github/workflows/ci.yml''"),
             "{condition}"
         );
         assert!(

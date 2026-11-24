@@ -3,19 +3,29 @@
 
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_session};
 use crate::waste_evidence::MbxSession;
+use nix::errno::Errno;
+use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
+use nix::unistd::Uid;
 use std::collections::BTreeMap;
-use std::fs::{self, OpenOptions};
+use std::ffi::OsStr;
+use std::fs::{self, OpenOptions, TryLockError};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(test)]
+mod tests;
+
 const EXPECTED: &str = "expected";
 const UNRECORDED: &str = "velnor-mbx-reports.unrecorded";
 pub(super) const MAX_SESSIONS: usize = 4096;
 pub(super) const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
+pub(super) const MAX_TOTAL_BYTES: u64 = 32 << 20;
 const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
@@ -24,15 +34,82 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-fn inside_session() -> bool {
-    std::env::var_os("MBX_SOCKET")
-        .filter(|socket| !socket.is_empty())
-        .is_some_and(|socket| is_socket(Path::new(&socket)))
+fn inside_session(socket: Option<&OsStr>) -> bool {
+    socket.is_some_and(|socket| !socket.is_empty() && is_live_socket(Path::new(socket)))
+}
+
+fn is_live_socket(path: &Path) -> bool {
+    path.is_absolute() && is_socket(path) && accepts_without_blocking(path)
+}
+
+fn accepts_without_blocking(path: &Path) -> bool {
+    let Ok(address) = UnixAddr::new(path) else {
+        return false;
+    };
+    let Ok(endpoint) = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::empty(),
+        None,
+    ) else {
+        return false;
+    };
+    let endpoint = UnixStream::from(endpoint);
+    if endpoint.set_nonblocking(true).is_err() {
+        return false;
+    }
+    match connect(endpoint.as_raw_fd(), &address) {
+        Ok(()) | Err(Errno::EAGAIN | Errno::EINPROGRESS) => true,
+        Err(Errno::ECONNREFUSED) => session_lease_is_held(path),
+        Err(_) => false,
+    }
+}
+
+const SESSION_LEASE: &str = "owner.lock";
+
+fn session_lease_is_held(socket: &Path) -> bool {
+    lease_held_by(socket, Uid::current().as_raw())
+}
+
+fn lease_held_by(socket: &Path, owner: u32) -> bool {
+    let Some(directory) = socket.parent() else {
+        return false;
+    };
+    let Ok(lease) = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(directory.join(SESSION_LEASE))
+    else {
+        return false;
+    };
+    if !lease
+        .metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.uid() == owner)
+    {
+        return false;
+    }
+    let outcome = lease.try_lock_shared();
+    drop(lease);
+    matches!(outcome, Err(TryLockError::WouldBlock))
+}
+
+fn starts_velnor_ci(argv: &[String]) -> bool {
+    argv.first()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "velnor-ci")
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled() || !reports_session(argv) || inside_session() {
+    if !starts_velnor_ci(argv) {
+        command.env_remove(SWITCH);
+    }
+    let socket = std::env::var_os("MBX_SOCKET");
+    let nested = inside_session(socket.as_deref());
+    if !nested {
+        command.env_remove("MBX_SOCKET");
+    }
+    if !enabled() || nested || !reports_session(argv) {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
@@ -79,6 +156,29 @@ fn note_unrecorded(temp: &Path) {
     }
 }
 
+pub(super) fn first_session_start(runner_temp: &Path) -> Option<u64> {
+    if !enabled() {
+        return None;
+    }
+    fs::read_dir(runner_temp.join(DIRECTORY))
+        .ok()?
+        .take(MAX_ENTRIES + 1)
+        .flatten()
+        .filter_map(|entry| session_start(&entry.path()))
+        .min()
+}
+
+fn session_start(marker: &Path) -> Option<u64> {
+    if marker.extension()? != EXPECTED {
+        return None;
+    }
+    let (nanos, rest) = marker.file_stem()?.to_str()?.split_at_checked(20)?;
+    if !rest.starts_with('-') || !nanos.bytes().all(|digit| digit.is_ascii_digit()) {
+        return None;
+    }
+    u64::try_from(nanos.parse::<u128>().ok()? / 1_000_000_000).ok()
+}
+
 pub(super) fn unrecorded(runner_temp: &Path) -> Result<u64, String> {
     if !enabled() {
         return Ok(0);
@@ -87,7 +187,7 @@ pub(super) fn unrecorded(runner_temp: &Path) -> Result<u64, String> {
     if fs::symlink_metadata(&file).is_err_and(|error| error.kind() == io::ErrorKind::NotFound) {
         return Ok(0);
     }
-    let bytes = read_regular(&file)?;
+    let bytes = read_regular(&file, &mut 0)?;
     let text = String::from_utf8(bytes).map_err(|_| "not UTF-8".to_owned())?;
     Ok(u64::try_from(text.lines().count()).unwrap_or(u64::MAX))
 }
@@ -157,11 +257,12 @@ fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Re
         unlisted,
         ..Reports::default()
     };
+    let mut spent = 0;
     for (name, session) in found {
         match session.report {
             None if session.marker => reports.missing.push(name),
             None => {}
-            Some(file) => match read_regular(&file).and_then(|bytes| {
+            Some(file) => match read_regular(&file, &mut spent).and_then(|bytes| {
                 if session.marker {
                     parse(&bytes)
                 } else {
@@ -175,11 +276,17 @@ fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Re
                 )),
             },
         }
+        if spent > MAX_TOTAL_BYTES {
+            return Some(Reports {
+                overflowed: true,
+                ..Reports::default()
+            });
+        }
     }
     Some(reports)
 }
 
-fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
+fn read_regular(file: &Path, spent: &mut u64) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(file).map_err(|error| error.to_string())?;
     if !metadata.file_type().is_file() {
         return Err("not a regular file".to_owned());
@@ -197,24 +304,11 @@ fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
         return Err("not a regular file".to_owned());
     }
     let mut bytes = Vec::new();
-    report
-        .take(MAX_REPORT_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+    let read = report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes);
+    *spent = spent.saturating_add(bytes.len() as u64);
+    read.map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_REPORT_BYTES {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
     }
     Ok(bytes)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::collect;
-    use std::io;
-
-    #[test]
-    fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
-        let entries = std::iter::once(Err(io::Error::other("entry vanished")));
-        assert_eq!(collect(entries).map(|reports| reports.unlisted), Some(1));
-    }
 }

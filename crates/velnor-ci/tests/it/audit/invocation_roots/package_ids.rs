@@ -9,7 +9,7 @@ const REFUSAL: &str = "outside this command's explicit selection";
 
 const ROOT: &str = "@ROOT@";
 
-const FORMS: [(&str, &str, bool); 46] = [
+const FORMS: [(&str, &str, bool); 49] = [
     ("x", "x", true),
     ("beta", "beta", true),
     ("x@0.1.0", "x", true),
@@ -60,6 +60,9 @@ const FORMS: [(&str, &str, bool); 46] = [
     ("B*", "beta", false),
     ("b*@0.1", "beta", false),
     ("nomatch*", "beta", false),
+    ("*e*a", "beta", true),
+    ("*t*t", "beta", false),
+    ("b*a*a", "beta", false),
 ];
 
 fn workspace_with_beta() -> Repo {

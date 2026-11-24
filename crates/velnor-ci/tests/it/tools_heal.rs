@@ -14,13 +14,17 @@ use velnor_ci::tools_verify_step::run as verify_step;
 use crate::io::Repo;
 use crate::tools_verify::{Job, context, job, recorded, rustc};
 
-const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
+pub(crate) const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
 
-fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
+pub(crate) fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
+    save_as(store, home, KEY, replace)
+}
+
+pub(crate) fn save_as(store: &Path, home: &Path, key: &str, replace: bool) -> Outcome {
     let store = store.display().to_string();
     run(&Inputs {
         verb: Verb::Save,
-        key: KEY,
+        key,
         event_name: "push",
         git_ref: "refs/heads/main",
         default_branch: Some("main"),
@@ -31,7 +35,7 @@ fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
     })
 }
 
-fn poisoned_store(name: &str) -> (Repo, Job, PathBuf) {
+pub(crate) fn poisoned_store(name: &str) -> (Repo, Job, PathBuf) {
     let repo = Repo::empty(name);
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let store = root.join("store");
@@ -99,7 +103,7 @@ fn a_replacement_heals_a_regular_file_left_at_the_entry() {
 
 const READ_ONLY_DIR: &str = ".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin";
 
-fn leftovers(store: &Path) -> Vec<String> {
+pub(crate) fn leftovers(store: &Path) -> Vec<String> {
     let mut names: Vec<_> = fs::read_dir(store.join("tools"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .flatten()

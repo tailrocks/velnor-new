@@ -123,19 +123,44 @@ fn last_segment(address: &str) -> &str {
 }
 
 fn glob(pattern: &[u8], name: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => name.is_empty(),
-        Some((b'*', rest)) => (0..=name.len()).any(|skip| glob(rest, &name[skip..])),
-        Some((b'?', rest)) => name.split_first().is_some_and(|(_, tail)| glob(rest, tail)),
-        Some((b'[', rest)) => match (class(rest), name.split_first()) {
-            (Some((negated, members, after)), Some((&byte, tail))) => {
-                members_contain(members, byte) != negated && glob(after, tail)
+    let (mut at, mut on) = (0, 0);
+    let mut star: Option<(usize, usize)> = None;
+    loop {
+        match pattern.get(at) {
+            Some(b'*') => {
+                at += 1;
+                star = Some((at, on));
+                continue;
             }
-            _ => false,
-        },
-        Some((&byte, rest)) => name
-            .split_first()
-            .is_some_and(|(&head, tail)| head == byte && glob(rest, tail)),
+            Some(_) if on < name.len() => {
+                if let Some(next) = token(pattern, at, name[on]) {
+                    at = next;
+                    on += 1;
+                    continue;
+                }
+            }
+            None if on == name.len() => return true,
+            _ => {}
+        }
+        match star {
+            Some((resume, from)) if from < name.len() => {
+                star = Some((resume, from + 1));
+                at = resume;
+                on = from + 1;
+            }
+            _ => return false,
+        }
+    }
+}
+
+fn token(pattern: &[u8], at: usize, byte: u8) -> Option<usize> {
+    match pattern[at] {
+        b'?' => Some(at + 1),
+        b'[' => {
+            let (negated, members, after) = class(&pattern[at + 1..])?;
+            (members_contain(members, byte) != negated).then(|| pattern.len() - after.len())
+        }
+        literal => (literal == byte).then_some(at + 1),
     }
 }
 

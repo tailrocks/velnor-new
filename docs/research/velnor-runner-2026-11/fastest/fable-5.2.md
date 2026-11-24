@@ -115,7 +115,7 @@ scripts (`aws-lc-sys`, turso) and 357 crates; one non-reproducible unit "keeps i
 **7. Two witnesses double the flake exposure, and flakes set P90.** *Evidence:* 8.1% false failures
 per run [M] gives 15.5% for a pair (ruling Q12). Any failure blocks and retries are 0, so above 10%
 the P90 verdict is two cycles. The 3% budget is a target; the causes named (CPU starvation, the
-`event.json` race) are hypotheses. ChainArgos and jackin keep ARC pods that burst without CPU
+`event.json` race) are hypotheses. example-org and jackin keep ARC pods that burst without CPU
 limits. *Likelihood:* medium. *Measurement:* 300 rerun pairs under replayed 11-18 load; pass ≤ 3%.
 
 **8. The latency budget assumes a free warm slot.** *Evidence:* four build sandboxes per worker, so

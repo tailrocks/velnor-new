@@ -27,6 +27,7 @@ mod sealed;
 mod selection;
 mod setup_phase;
 mod shape;
+mod step_setup;
 mod steps;
 mod test_group;
 mod token_permission;
@@ -67,7 +68,7 @@ pub use mbx_config::{
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_UNITS, CI_AUTO_LABEL, CI_RUN_LABEL,
-    CargoCommand, Concurrency, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
+    CargoCommand, Concurrency, EMPTY_PACKAGE_MAP, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
     MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun,
     PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
@@ -89,7 +90,7 @@ pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
-    StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
+    StepNeed, WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};

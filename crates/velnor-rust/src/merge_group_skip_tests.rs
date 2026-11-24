@@ -26,6 +26,7 @@ fn job(id: JobId, kinds: Vec<StepKind>) -> Job {
         plan_outputs: Vec::new(),
         group_outputs: Vec::new(),
         reports_ignored: false,
+        anchor_key_output: false,
         build_record: BuildRecord::Unrecorded,
         chained_saves: false,
         mbx_stats: velnor_model::MbxStats::Summary,
@@ -83,6 +84,7 @@ fn build_inputs(build: bool) -> Job {
             name: String::from("setup"),
             run: String::from("true"),
             before_build: true,
+            offline_after_private_fetch: false,
         },
     ];
     if build {
@@ -128,6 +130,7 @@ fn setup_in(directory: &'static str) -> Step {
         name: String::from("setup"),
         run: String::from("true"),
         before_build: true,
+        offline_after_private_fetch: false,
     });
     setup.directory = Some(RepoPath::from_static(directory));
     setup

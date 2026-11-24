@@ -1,0 +1,10 @@
+[[test_setup]]
+root = "."
+name = "Prepare the fixture"
+run = "bash scripts/prepare-fixture.sh"
+
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["fixture"]
+filter = "test(~local::)"

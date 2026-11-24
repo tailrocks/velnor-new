@@ -69,16 +69,38 @@ fn scoped<'a>(key: &'a str, rest: &str, group: &'a str, private: bool) -> &'a st
     }
 }
 
+fn job_id(text: &str) -> bool {
+    let mut bytes = text.bytes();
+    bytes
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+fn anchor_run(run: &str) -> bool {
+    run.is_empty()
+        || run
+            .strip_prefix('-')
+            .and_then(|run| run.split_once('-'))
+            .is_some_and(|(id, rest)| {
+                numeric(id)
+                    && (job_id(rest)
+                        || rest
+                            .split_once('-')
+                            .is_some_and(|(attempt, job)| numeric(attempt) && job_id(job)))
+            })
+}
+
 fn anchor_platform(rest: &str) -> Option<&str> {
     let (platform, rest) = rest.split_once("-mise")?;
     let (version, rest) = rest.split_once('-')?;
     let (lock, run) = rest.split_at_checked(64)?;
-    let run_ok = run.is_empty()
-        || run
-            .strip_prefix('-')
-            .and_then(|run| run.split_once('-'))
-            .is_some_and(|(id, job)| numeric(id) && !job.is_empty());
-    (host(platform) && !version.is_empty() && hex(lock, 64) && run_ok).then_some(platform)
+    (host(platform)
+        && !version.is_empty()
+        && hex(lock, 64)
+        && !lock.bytes().any(|b| b.is_ascii_uppercase())
+        && anchor_run(run))
+    .then_some(platform)
 }
 
 fn classify(key: &str) -> Option<(CacheFamily, &str)> {
@@ -239,7 +261,7 @@ fn tier(
                 4
             })
         }
-        (CacheFamily::Sources, _) if !idle(1) => None,
+        (CacheFamily::Sources | CacheFamily::ToolsAnchor, _) if !idle(1) => None,
         (CacheFamily::Target | CacheFamily::Sources, _) if rank >= 2 => Some(2),
         (CacheFamily::ToolsAnchor, _) if rank >= ANCHOR_GENERATIONS => Some(0),
         (CacheFamily::Tools, _) if rank > 0 && idle(7) => Some(3),

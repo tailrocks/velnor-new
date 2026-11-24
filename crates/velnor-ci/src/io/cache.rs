@@ -21,6 +21,7 @@ const INCREMENTAL: &str = "incremental";
 const MAX_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const REF_VARIABLE: &str = "GITHUB_REF";
+const SOURCES_RESTORED_VARIABLE: &str = "VELNOR_SOURCES_RESTORED";
 
 #[derive(Debug)]
 pub struct Decision {
@@ -264,10 +265,15 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     ));
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
-    let leak = super::cache_credentials::saved_root().map_or_else(
-        || Some("HOME is not set".to_owned()),
-        |home| super::cache_credentials::find(&home),
-    );
+    let sources_restored = std::env::var(SOURCES_RESTORED_VARIABLE).is_ok_and(|hit| hit == "true");
+    let leak = (!sources_restored)
+        .then(|| {
+            super::cache_credentials::saved_root().map_or_else(
+                || Some("HOME is not set".to_owned()),
+                |home| super::cache_credentials::find(&home),
+            )
+        })
+        .flatten();
     let sources = admission.refusal.is_none() && leak.is_none();
     let (probe_log, mismatch) = (admission.log, admission.mismatch);
     let decision = if let Some(reason) = admission.refusal {

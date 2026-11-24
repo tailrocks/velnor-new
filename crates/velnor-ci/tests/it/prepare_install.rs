@@ -118,7 +118,9 @@ fn run_with_toolchains(name: &str, file: &str, installed: &[&str]) -> Run {
         rustup: Some(rustup(AFTER, WITH_WASM)),
     });
     setup.rustup_home = Some(home);
-    prepare_in(&dir, &setup)
+    let mut run = prepare_in(&dir, &setup);
+    run.owned = Some(dir);
+    run
 }
 
 fn recorded_installs(run: &Run) -> String {

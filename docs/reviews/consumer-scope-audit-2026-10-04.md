@@ -9,7 +9,7 @@ heads and 40 open PR heads) for the same ordered set of 46 consumer
 repositories; every ref was accessible and its API SHA matched the scanned
 SHA. Only two open PR heads moved since the earlier packet: Jackin #1111 is
 now `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` (updated
-`2026-10-04T04:14:24Z`) and ChainArgos/java-monorepo #2085 is now
+`2026-10-04T04:14:24Z`) and example-org/example-repo-2 #2085 is now
 `7cbe1db11ccabb463053a93a8a08d33bda418b29` (updated
 `2026-10-04T05:01:14Z`). Their refs are refreshed in the companion CSV;
 all other refs, rows, order, and owner checkpoints are preserved.
@@ -20,7 +20,7 @@ excluded SHAs, `owned-source/`, and `tailrocks/velnor-new@`. The full 31-needle
 R1 set also includes two generic Velnor URL literals, which match expected
 documentation, workflow, and manifest files. The union CSV's generic-path
 counts/classifications for the moved PR rows retain their prior-snapshot
-provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. Java monorepo
+provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. example-repo-2
 inventory: 7,007 text and 5,939 binary files. Binary counts are inventory
 evidence; they do not imply semantic text coverage of binary contents. See
 [the retirement-union refresh](consumer-retirement-union-2026-10-04.md) for
@@ -40,8 +40,8 @@ and digests; source-bound asset attestations; and a byte-identical published
 manifest committed by each consumer at
 `.velnor/release-manifest.json`, followed by exact-artifact regeneration and
 deterministic parity. Three owner holds remain: Velnor-actions-fixture
-disposition/retired hosted triggers; ChainArgos/java-monorepo #2085
-qualification; and ChainArgos/jackin-agent-brown #241 rollout and
+disposition/retired hosted triggers; example-org/example-repo-2 #2085
+qualification; and example-org/example-repo-9 #241 rollout and
 runner/cache qualification. Jackin #1108 remains a separate validator
 checkpoint. No consumer repository or remote GitHub API/data was mutated.
 
@@ -53,19 +53,19 @@ Scope source is open draft PR #12, head c694d8029eb880db639fa89b0589090dd2b15364
 
 Scope has 47 rows including generator and 46 consumers. Its ordered consumer names match repository-evidence.csv and historical Appendix C exactly; no duplicate or set/order delta. Scope provenance says reconstructed from CSV and cross-checked against the historical performance-goal list. Treat it as the active PR candidate input, not independent upstream authority.
 
-GitHub metadata resolved all 46 repositories. Every default branch is main; all current configs, manifests, and CI workflow files were accessible. Four private ChainArgos repos were readable. The only canonicalization is tailrocks/tui-snap to tailrocks/tuiscotti (repository id 1358764452). No repository was inaccessible.
+GitHub metadata resolved all 46 repositories. Every default branch is main; all current configs, manifests, and CI workflow files were accessible. Four private example-org repos were readable. The only canonicalization is tailrocks/tui-snap to tailrocks/tuiscotti (repository id 1358764452). No repository was inaccessible.
 
-The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for Jackin #1111 and ChainArgos/java-monorepo #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
+The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for Jackin #1111 and example-org/example-repo-2 #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
 
 ## Current consumer state
 
-Forty-five manifests pin Velnor Actions 0.1.0 from source c57c700459bbe1549fe7eedcb7d8689585c38986. ChainArgos/java-monorepo alone pins d40868152f7fe0106e3ede858a411f502f00810f with distinct platform digests. No current manifest points to the separate generator-47815c83b9eeadbaf84b741918fffa7ea550da89 release URL; that artifact is old-source evidence, not the consumer target.
+Forty-five manifests pin Velnor Actions 0.1.0 from source c57c700459bbe1549fe7eedcb7d8689585c38986. example-org/example-repo-2 alone pins d40868152f7fe0106e3ede858a411f502f00810f with distinct platform digests. No current manifest points to the separate generator-47815c83b9eeadbaf84b741918fffa7ea550da89 release URL; that artifact is old-source evidence, not the consumer target.
 
 All 46 current ci.yml files stage Velnor acquisition, generation/plan-v1, and velnor-plan artifact publication. This is staged executable evidence; runtime observations are stated only where checked. No velnor-compare or retired owned-source custom behavior was found in the bounded audit.
 
-Fifteen current CI workflows stage the stock MBX action: jackin-project/jackin, tailrocks/termpane, tailrocks/velnor, tailrocks/parallax, tailrocks/parallax-telemetry-playground, tailrocks/velnor-actions-fixture, tailrocks/holla, tailrocks/tracing-request-level, tailrocks/pg-bigdecimal, tailrocks/ruxel, tailrocks/schemalane, tailrocks/tablerock, tailrocks/cloudflare-tofu, ChainArgos/java-monorepo, ChainArgos/cloudflare-tofu. These generic action paths must be preserved or explicitly migrated; no owned-snapshot cache behavior was found.
+Fifteen current CI workflows stage the stock MBX action: jackin-project/jackin, tailrocks/termpane, tailrocks/velnor, tailrocks/parallax, tailrocks/parallax-telemetry-playground, tailrocks/velnor-actions-fixture, tailrocks/holla, tailrocks/tracing-request-level, tailrocks/pg-bigdecimal, tailrocks/ruxel, tailrocks/schemalane, tailrocks/tablerock, tailrocks/cloudflare-tofu, example-org/example-repo-2, example-org/example-repo-10. These generic action paths must be preserved or explicitly migrated; no owned-snapshot cache behavior was found.
 
-CI has no relative local action callers. ChainArgos/java-monorepo invokes its project scripts/Cargo.toml package chainargos-scripts for MBX build/clippy/nextest/doc; this is not a retired Velnor Phase D/Appendix B script. Its extra manual qualification.yml uses local qualification test composites. Termpane also has a Velnor-generated release.yml with workflow_dispatch/release-plz.
+CI has no relative local action callers. example-org/example-repo-2 invokes its project scripts/Cargo.toml package example-org-scripts for MBX build/clippy/nextest/doc; this is not a retired Velnor Phase D/Appendix B script. Its extra manual qualification.yml uses local qualification test composites. Termpane also has a Velnor-generated release.yml with workflow_dispatch/release-plz.
 
 ## Probe method
 
@@ -73,7 +73,7 @@ CI has no relative local action callers. ChainArgos/java-monorepo invokes its pr
 - One GitHub GraphQL snapshot resolved canonical full names and collected each default branch SHA/time, .velnor config/manifest blobs, CI blob/workflow names, privacy, and every current open PR head. Repository contents were accessible for all 46.
 - Cohort reports inspected exact default trees and relevant open-PR heads/diffs. Searches used bounded git grep/rg over fetched files, not GitHub code search alone. Supplemental A-cohort clones matched all ten API heads and were searched with fixed strings.
 - Positive caller classification distinguishes docs/product/test text from staged executable workflows and from runtime invocation. Current plan artifacts are staged in all CI files; log-level runtime evidence is claimed only for the runs recorded in the cohort findings.
-- Direct lane execution was verified from session JSONL /Users/donbeave/.codex/sessions/2026/10/04/rollout-2026-10-04T07-15-47-01a10444-4d87-7111-b1a2-37e5b2fce6b8.jsonl as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
+- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
 
 ## Bounded reference search
 
@@ -147,11 +147,11 @@ Limits: snapshot covers current default heads and open PR heads in the CSV plus 
 | 39 | tailrocks/tailrocks-open-source-skills | 3e51bc5c91949f361ed926d8f760bcb16edef111 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 40 | tailrocks/tailrocks-macos-skills | eb0be5522fe0c1c9c74d41ee354446a011b10c74 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 41 | tailrocks/tailrocks-code-quality-skills | e63a82f28b688a7fada418e615aa9ec0eeec4c04 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
-| 42 | ChainArgos/blockchain-nodes | 0881638712a837bdcb90b3cd811a8a9be3aa8d83 | NO-CHANGE (source); HOLD (fleet usage); staged Velnor plan-v1; stock MBX no; fleet MBX host-env deployment unknown. | Fleet owner; prove host-env deployment. |
-| 43 | ChainArgos/java-monorepo | 0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0 | HOLD (MBX qualification); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #2085 cache qualification; CI uses project scripts/Cargo.toml; manual qualification has local test composites. | ChainArgos cache owner; complete #2085 qualification. |
-| 44 | ChainArgos/jackin-agent-brown | 6b2ac2277103a22b9ae155bc92415ca5ddf05f95 | HOLD (staged rollout); staged Velnor plan-v1; stock MBX no; #241 staged three-provider rollout; plan run did not complete full workflow. | Brown owner; complete #241 rollout and runner/cache qualification. |
-| 45 | ChainArgos/cloudflare-tofu | cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; current stock MBX runtime. | ChainArgos Cloudflare owner; preserve stock MBX path. |
-| 46 | ChainArgos/github-terraform | c8d47ea87a611251f965555dafbd8015f29f303b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
+| 42 | example-org/example-repo-1 | 0881638712a837bdcb90b3cd811a8a9be3aa8d83 | NO-CHANGE (source); HOLD (fleet usage); staged Velnor plan-v1; stock MBX no; fleet MBX host-env deployment unknown. | Fleet owner; prove host-env deployment. |
+| 43 | example-org/example-repo-2 | 0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0 | HOLD (MBX qualification); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #2085 cache qualification; CI uses project scripts/Cargo.toml; manual qualification has local test composites. | example-org cache owner; complete #2085 qualification. |
+| 44 | example-org/example-repo-9 | 6b2ac2277103a22b9ae155bc92415ca5ddf05f95 | HOLD (staged rollout); staged Velnor plan-v1; stock MBX no; #241 staged three-provider rollout; plan run did not complete full workflow. | Brown owner; complete #241 rollout and runner/cache qualification. |
+| 45 | example-org/example-repo-10 | cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; current stock MBX runtime. | example-org Cloudflare owner; preserve stock MBX path. |
+| 46 | example-org/example-repo-5 | c8d47ea87a611251f965555dafbd8015f29f303b | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 
 ## Open holds and blocked probes
 
@@ -162,10 +162,10 @@ Checkpoint for each row: 2026-10-11 UTC. Owner supplies a result tied to exact r
 | H1 Jackin #1108 | Jackin maintainers; separate Jackin 6.1/medium lane | At #1108 head 2990df17e25f30afca84804d9c402abc1ce00231, trace ci-evidence and ci-push-head-ledger through Mise/cargo xtask. Reconcile validator paths .github-gen/velnor-workflow.toml and .github/ci/.github-actions-generator-state plus generator revision 69 against selected ConsumerV1 output. Record disposition of five failed checks from audit snapshot. |
 | H2 Velnor workflow API state | Velnor workflow owner | Reconcile three API workflow records marked active against main 72f0fb14ec8f477fce8a505a624b92837acab85d and #1133 head ef5f10a2b21036de95703c7279e848974ed2dc81. Identify missing paths, stale records, and any dispatch/schedule history. |
 | H3 Fixture contract | Fixture and Velnor owners | At main 1c076c5b5828fb6ba04887885c567da26fe01a69 and merged #172 head e296656c5bc804ea3e1a2dc768243c3ce74179d9, decide whether README/GOAL dual-lane contract remains required. Compare it to deleted hosted-only manual/scheduled workflows and current CI; record owner disposition. |
-| H4 Java MBX qualification | ChainArgos Java/cache owner | Complete #2085 head baa78037a99c89cde1b9c2201be68e80c9755f67 on hosted and scale-set lanes. Verify writer/reader and push-only export with proposed public MBX 1.21.1 action, including cache/disk/inode evidence. Run 37164041817 was incomplete at snapshot. |
-| H5 Brown staged rollout | ChainArgos Brown owner | Complete end-to-end #241 head 092fe1db796367479029d4e94379530f7f5965c0 across three-provider plan/execution. Manual run 35592492823 uploaded a plan but was cancelled overall; verify MBX execution and inspect external Velnor action revision 1048337062ea625fada1b4f7c07f2feed75f60c7. |
-| H6 Fleet host settings | ChainArgos fleet owner | Prove whether config/fleet/velnor-host.env values MBX_GC_MAX_TOTAL_SIZE=50GiB and VELNOR_MBX_GENERATION_BOUND=6 are deployed on fleet hosts and identify active contract. Repository text does not prove deployment. |
-| H7 Stock MBX qualification | Velnor cache owner + affected consumer owners; ChainArgos runtime/cache owner for peak evidence | Fifteen current CI heads use stock MBX. On the exact final immutable Velnor artifact and supported runner family, capture hosted writer/reader reuse and affected ChainArgos peak bytes/inodes. Keep qualification PARTIAL until supported lifecycle/resource evidence passes. |
+| H4 Java MBX qualification | example-org Java/cache owner | Complete #2085 head baa78037a99c89cde1b9c2201be68e80c9755f67 on hosted and scale-set lanes. Verify writer/reader and push-only export with proposed public MBX 1.21.1 action, including cache/disk/inode evidence. Run 37164041817 was incomplete at snapshot. |
+| H5 Brown staged rollout | example-org Brown owner | Complete end-to-end #241 head 092fe1db796367479029d4e94379530f7f5965c0 across three-provider plan/execution. Manual run 35592492823 uploaded a plan but was cancelled overall; verify MBX execution and inspect external Velnor action revision 1048337062ea625fada1b4f7c07f2feed75f60c7. |
+| H6 Fleet host settings | example-org fleet owner | Prove whether config/fleet/velnor-host.env values MBX_GC_MAX_TOTAL_SIZE=50GiB and VELNOR_MBX_GENERATION_BOUND=6 are deployed on fleet hosts and identify active contract. Repository text does not prove deployment. |
+| H7 Stock MBX qualification | Velnor cache owner + affected consumer owners; example-org runtime/cache owner for peak evidence | Fifteen current CI heads use stock MBX. On the exact final immutable Velnor artifact and supported runner family, capture hosted writer/reader reuse and affected example-org peak bytes/inodes. Keep qualification PARTIAL until supported lifecycle/resource evidence passes. |
 | H8 Additional archive refs | Velnor owned-source/archive owner | Fresh union addendum [consumer-retirement-union-2026-10-04.md](consumer-retirement-union-2026-10-04.md) and its per-head CSV completed 2026-10-04 03:11 UTC. It scanned 46 current default heads and 40 open-PR heads for all nine owned-source refs, 18 reviewed/tip/ancestry SHAs (including 3e462… → 7fd109… → 1cde36… → in-scope ac6ceed…), and generic path forms; no exact owned-source ref/SHA hit. This is time-bounded and excludes closed PRs, other branches, and binary payload. Recheck recorded heads before deletion and route for owner review by 2026-10-11 UTC. The 02:27 result remains limited to its original six refs and 15 SHAs. |
 | H9 Final artifact and rollout | Velnor release owner + each consumer owner | Bind final source SHA, supported targets, action/runtime pin, manifest and downloaded asset digests. Then regenerate each consumer twice, record changed-file scope, applicable checks, PR head, and post-merge main run/attempt. Current manifests remain on 0.1.0 sources c57/d408; 478 is not the migration target. |
 

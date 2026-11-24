@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 roots = ["."]
-after = ["CI", "Qualification", "Rust CI"]
+after = ["CI", "Qualification", "Repository checks"]
 family_tag = "tools-v{{ version }}"
 family_trigger = "tag_push"
 checksums_file = "BINARY-SHA256SUMS"

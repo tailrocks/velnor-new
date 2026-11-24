@@ -10,18 +10,22 @@ use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, GitHubWrite, Repo};
 use velnor_ci::io::cache_purge::purge_private;
 
+mod if_public;
 mod running;
 
 struct Api {
     entries: RefCell<Vec<Value>>,
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
-    fail_delete: Option<u64>,
+    fail_deletes: Vec<u64>,
     listings: Cell<usize>,
     arrivals: RefCell<VecDeque<Vec<Value>>>,
     running: RefCell<Vec<(&'static str, u64)>>,
     run_listings: Cell<usize>,
     promoted_to: Option<&'static str>,
+    workflows: RefCell<Vec<&'static str>>,
+    workflows_total: Cell<Option<u64>>,
+    repository: RefCell<Option<Value>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -34,18 +38,40 @@ impl Api {
             entries: RefCell::new(entries),
             asked: RefCell::default(),
             deleted: RefCell::default(),
-            fail_delete: None,
+            fail_deletes: Vec::new(),
             listings: Cell::default(),
             arrivals: RefCell::default(),
             running: RefCell::default(),
             run_listings: Cell::default(),
             promoted_to: None,
+            workflows: RefCell::default(),
+            workflows_total: Cell::default(),
+            repository: RefCell::default(),
         }
     }
 
     fn with_runs(entries: Vec<Value>, runs: &[(&'static str, u64)]) -> Self {
         let api = Self::new(entries);
         *api.running.borrow_mut() = runs.to_vec();
+        api
+    }
+
+    fn with_workflows(entries: Vec<Value>, states: &[&'static str]) -> Self {
+        let api = Self::new(entries);
+        *api.workflows.borrow_mut() = states.to_vec();
+        api
+    }
+
+    fn with_incomplete_workflow_listing(entries: Vec<Value>, listed: &[&'static str]) -> Self {
+        let api = Self::with_workflows(entries, listed);
+        api.workflows_total.set(Some(listed.len() as u64 + 1));
+        api
+    }
+
+    fn with_repository(entries: Vec<Value>, private: bool, visibility: &str) -> Self {
+        let api = Self::new(entries);
+        *api.repository.borrow_mut() =
+            Some(json!({"full_name":"tailrocks/lab","private":private,"visibility":visibility}));
         api
     }
 
@@ -58,6 +84,20 @@ impl Api {
 
 impl GitHub for Api {
     fn get(&self, path: &str) -> Result<String, CiError> {
+        if path == "/repos/tailrocks/lab" {
+            return self
+                .repository
+                .borrow()
+                .as_ref()
+                .map(Value::to_string)
+                .ok_or_else(|| CiError::new("HTTP 500"));
+        }
+        if path.contains("/actions/workflows?") {
+            let states = self.workflows.borrow();
+            let rows: Vec<Value> = states.iter().map(|state| json!({"state": state})).collect();
+            let total = self.workflows_total.get().unwrap_or(rows.len() as u64);
+            return Ok(json!({"total_count":total,"workflows":rows}).to_string());
+        }
         if path.contains("/actions/runs?") {
             let status = path
                 .split("status=")
@@ -118,13 +158,25 @@ impl GitHubWrite for Api {
             .next()
             .and_then(|id| id.parse().ok())
             .ok_or_else(|| CiError::new("invalid id"))?;
-        if self.fail_delete == Some(id) {
+        if self.fail_deletes.contains(&id) {
             return Err(CiError::new("HTTP 403"));
         }
         self.deleted.borrow_mut().push(id);
         self.entries.borrow_mut().retain(|entry| entry["id"] != id);
         Ok(())
     }
+}
+
+fn failed_ids(error: &CiError) -> Vec<u64> {
+    error
+        .to_string()
+        .split("ID ")
+        .skip(1)
+        .filter_map(|rest| {
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            digits.parse().ok()
+        })
+        .collect()
 }
 
 fn repo() -> Repo {
@@ -236,15 +288,19 @@ fn a_repository_without_private_entries_reports_zero_and_succeeds() {
 #[test]
 fn a_failed_delete_is_an_error() {
     let mut api = Api::new(mixed());
-    api.fail_delete = Some(2);
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some("deleted 1 of 3; failed at entry ID 2: HTTP 403")
-    );
-    assert_eq!(*api.deleted.borrow(), vec![1]);
+    api.fail_deletes = vec![2];
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![2]));
+    assert_eq!(*api.deleted.borrow(), vec![1, 3]);
+}
+
+#[test]
+fn every_failed_delete_is_reported_together_by_yes() {
+    let mut api = Api::new(mixed());
+    api.fail_deletes = vec![1, 3];
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![1, 3]));
+    assert_eq!(*api.deleted.borrow(), vec![2]);
 }
 
 #[test]
@@ -313,13 +369,8 @@ fn the_deleted_count_is_cumulative_across_passes() {
         "velnor-private-src-Linux-X64-all.roots-aa",
         "refs/heads/main",
     )];
-    api.fail_delete = Some(9);
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some("deleted 1 of 2; failed at entry ID 9: HTTP 403")
-    );
+    api.fail_deletes = vec![9];
+    let error = purge_private(&api, &repo(), true).err();
+    assert_eq!(error.as_ref().map(failed_ids), Some(vec![9]));
     assert_eq!(*api.deleted.borrow(), vec![1]);
 }

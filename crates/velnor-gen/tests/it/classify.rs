@@ -95,10 +95,7 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
             ".velnor/rust-metadata.json",
             AllTrigger::Global(path(".velnor/rust-metadata.json")),
         ),
-        (
-            ".github/workflows/rust-ci.yml",
-            AllTrigger::GeneratedWorkflow,
-        ),
+        (".github/workflows/ci.yml", AllTrigger::GeneratedWorkflow),
     ] {
         rows.push((vec![file], vec![all(trigger.clone()), all(trigger)]));
     }
@@ -135,7 +132,7 @@ fn docs_and_licence_paths_select_nothing_and_look_alikes_select_everything() {
             "NOTICE.txt",
             "licenses/MIT.txt",
             ".github/CODEOWNERS",
-            ".github/workflows/ci.yml",
+            ".github/workflows/hand.yml",
             ".github/dependabot.yml",
             "scripts/build.sh",
             "build.rs",
