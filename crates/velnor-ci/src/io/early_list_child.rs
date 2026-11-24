@@ -21,6 +21,7 @@ const POLL_LAST: Duration = Duration::from_millis(10);
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
 const STDERR_KEPT: u64 = 1 << 20;
 const CHUNK: usize = 1 << 14;
+const PIPE_CAPACITY: usize = 1 << 20;
 
 #[derive(Default)]
 struct Slot {
@@ -140,11 +141,20 @@ impl Supervisor {
             if exited.is_none() {
                 exited = self.exited()?.map(|status| (status, Instant::now()));
             }
-            if let Some((status, at)) = exited {
+            let late = exited.is_some_and(|(_, at)| at.elapsed() >= DRAIN_GRACE);
+            let budget = if late { PIPE_CAPACITY } else { CHUNK };
+            read_ready([&mut *stdout, &mut *stderr], poll, budget)?;
+            if stdout.file.is_some()
+                && u64::try_from(stdout.kept.len()).is_ok_and(|read| read > limit)
+            {
+                self.stop(format!("its listing is longer than {limit} bytes"));
+                stdout.file = None;
+            }
+            if let Some((status, _)) = exited {
                 if stdout.file.is_none() && stderr.file.is_none() {
                     return Ok(status);
                 }
-                if at.elapsed() >= DRAIN_GRACE {
+                if late {
                     self.stop(format!(
                         "{} exited, but a process it started left its process group and still held its output {} ms later",
                         command.get_program().to_string_lossy(),
@@ -152,13 +162,6 @@ impl Supervisor {
                     ));
                     return Ok(status);
                 }
-            }
-            read_ready([&mut *stdout, &mut *stderr], poll)?;
-            if stdout.file.is_some()
-                && u64::try_from(stdout.kept.len()).is_ok_and(|read| read > limit)
-            {
-                self.stop(format!("its listing is longer than {limit} bytes"));
-                stdout.file = None;
             }
             poll = (poll * 2).min(POLL_LAST);
         }
@@ -177,23 +180,29 @@ impl Supervisor {
 
     fn exited(&self) -> io::Result<Option<ExitStatus>> {
         let mut slot = self.lock();
-        let child = slot
+        let status = slot
             .child
             .as_mut()
-            .ok_or_else(|| io::Error::other("no child"))?;
-        let status = child.try_wait()?;
-        if status.is_some() {
-            kill_group(child);
+            .ok_or_else(|| io::Error::other("no child"))?
+            .try_wait()?;
+        if status.is_some()
+            && let Some(child) = slot.child.take()
+        {
+            kill_group(&child);
         }
         Ok(status)
     }
 
     fn release(&self) -> Option<String> {
-        let mut slot = self.lock();
-        if let Some(child) = slot.child.take() {
+        let (child, stopped) = {
+            let mut slot = self.lock();
+            (slot.child.take(), slot.stopped.clone())
+        };
+        if let Some(mut child) = child {
             kill_group(&child);
+            child.wait().ok();
         }
-        slot.stopped.clone()
+        stopped
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Slot> {
@@ -219,26 +228,29 @@ impl Pipe {
         Ok(())
     }
 
-    fn read(&mut self) -> io::Result<()> {
-        let Some(file) = self.file.as_mut() else {
-            return Ok(());
-        };
+    fn read(&mut self, budget: usize) -> io::Result<()> {
         let mut chunk = [0; CHUNK];
-        match file.read(&mut chunk) {
-            Ok(0) => self.file = None,
-            Ok(read) => {
-                let room = self.keep.saturating_sub(self.kept.len()).min(read);
-                self.kept.extend_from_slice(&chunk[..room]);
+        let mut left = budget;
+        while left > 0
+            && let Some(file) = self.file.as_mut()
+        {
+            match file.read(&mut chunk) {
+                Ok(0) => self.file = None,
+                Ok(read) => {
+                    let room = self.keep.saturating_sub(self.kept.len()).min(read);
+                    self.kept.extend_from_slice(&chunk[..room]);
+                    left = left.saturating_sub(read);
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(()),
+                Err(error) => return Err(error),
             }
-            Err(error)
-                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {}
-            Err(error) => return Err(error),
         }
         Ok(())
     }
 }
 
-fn read_ready(pipes: [&mut Pipe; 2], wait: Duration) -> io::Result<()> {
+fn read_ready(pipes: [&mut Pipe; 2], wait: Duration, budget: usize) -> io::Result<()> {
     {
         let mut fds: Vec<PollFd<'_>> = pipes
             .iter()
@@ -249,12 +261,12 @@ fn read_ready(pipes: [&mut Pipe; 2], wait: Duration) -> io::Result<()> {
             &mut fds,
             PollTimeout::try_from(wait).unwrap_or(PollTimeout::MAX),
         ) {
-            Ok(_) | Err(Errno::EINTR) => {}
+            Ok(_) | Err(Errno::EINTR | Errno::EAGAIN) => {}
             Err(errno) => return Err(errno.into()),
         }
     }
     for pipe in pipes {
-        pipe.read()?;
+        pipe.read(budget)?;
     }
     Ok(())
 }
