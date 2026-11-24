@@ -7,6 +7,13 @@ use std::fmt;
 pub enum ImageError {
     Unhosted,
     WorkflowTaken,
+    DockerfileMissing {
+        image: String,
+        path: String,
+    },
+    NotLinuxRunner {
+        runner: String,
+    },
     UnknownRoot {
         image: String,
         root: String,
@@ -126,6 +133,14 @@ impl fmt::Display for ImageError {
             Self::BranchTag { branch } => write!(
                 f,
                 "the default branch `{branch}` cannot be an image tag (letters, digits, `.`, `_` and `-`, at most 128 characters, no leading `.` or `-`); rename the branch or set default_branch"
+            ),
+            Self::DockerfileMissing { image, path } => write!(
+                f,
+                "image {image}: the Dockerfile `{path}` is not a tracked file of this repository"
+            ),
+            Self::NotLinuxRunner { runner } => write!(
+                f,
+                "the runner `{runner}` is not a Linux runner; the image jobs run Docker Buildx and need a Linux runner with Docker"
             ),
             Self::SysrootLockMissing { image } => write!(
                 f,

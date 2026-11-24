@@ -206,6 +206,35 @@ fn a_redirect_is_followed_only_to_https() {
     let protocol_relative =
         Fake::default().with("GET", RUNTIME_URL, Reply::redirect("//evil.test/a.deb"));
     assert!(setup.unpack(&protocol_relative).is_err());
+    for location in ["runtime.deb", "../pool/runtime.deb"] {
+        let relative = Fake::default()
+            .with(
+                "GET",
+                "https://snapshot.test/archive/x/runtime.deb",
+                Reply::bytes(RUNTIME_DEB.as_bytes()),
+            )
+            .with(
+                "GET",
+                "https://snapshot.test/archive/pool/runtime.deb",
+                Reply::bytes(RUNTIME_DEB.as_bytes()),
+            )
+            .with(
+                "GET",
+                "https://snapshot.test/archive/x/start.deb",
+                Reply::redirect(location),
+            )
+            .with("GET", DEV_URL, Reply::bytes(DEV_DEB.as_bytes()));
+        let lock = lock(&[
+            (
+                "libssl3t64",
+                "https://snapshot.test/archive/x/start.deb",
+                &sha256_hex(RUNTIME_DEB.as_bytes()),
+            ),
+            ("libssl-dev", DEV_URL, &sha256_hex(DEV_DEB.as_bytes())),
+        ]);
+        let setup = Setup::new("sysroot-relative", &lock);
+        assert!(setup.unpack(&relative).is_ok(), "{location}");
+    }
     let downgraded = Fake::default().with(
         "GET",
         RUNTIME_URL,

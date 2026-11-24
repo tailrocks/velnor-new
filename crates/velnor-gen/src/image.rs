@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    HelperRelease, ImageConfig, ImageHost, ImageOpenssl, MbxStore, RepoFacts, RepoPath, RepoView,
-    RepositoryIdentity, RustMember, RustRoot, TargetKind,
+    HelperRelease, ImageConfig, ImageHost, ImageOpenssl, MbxStore, MisePlatform, RepoFacts,
+    RepoPath, RepoView, RepositoryIdentity, RustMember, RustRoot, TargetKind, ToolPin,
 };
 use velnor_render::{IMAGE_WORKFLOW_PATH, ImageBuild, ImageMbx, ImageWorkflow, render_image};
 
@@ -34,10 +34,19 @@ pub(crate) fn image_workflow(
         .split_once('/')
         .map(|(owner, _)| owner.to_ascii_lowercase());
     check_all(images, &facts.config.default_branch)?;
+    if MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| !platform.lock_key().starts_with("linux"))
+    {
+        return Err(ImageError::NotLinuxRunner {
+            runner: facts.config.runner.to_string(),
+        }
+        .into());
+    }
     let mut builds = Vec::new();
     for image in images {
         check_registries(image, owner.as_deref())?;
         check_tools(facts, image)?;
+        check_dockerfile(view, image)?;
         check_stage(view, image)?;
         let root = root_of(facts, image)?;
         let packages = packages_of(image, root)?;
@@ -134,15 +143,14 @@ fn check_registries(image: &ImageConfig, owner: Option<&str>) -> Result<(), Imag
 }
 
 fn check_tools(facts: &RepoFacts, image: &ImageConfig) -> Result<(), ImageError> {
+    let platform = MisePlatform::runner(facts.config.runner.as_str())
+        .unwrap_or_else(|| MisePlatform::new("linux", "x64"));
     for tool in ["zig", "cargo-zigbuild"] {
         let named = |key: &String| key.rsplit(['/', ':']).next() == Some(tool);
-        let applies = |pin: &velnor_model::ToolPin| {
-            pin.requested.iter().any(|request| {
-                request
-                    .os
-                    .as_ref()
-                    .is_none_or(|systems| systems.iter().any(|system| system.starts_with("linux")))
-            })
+        let applies = |pin: &ToolPin| {
+            pin.requested
+                .iter()
+                .any(|request| request.applies_on(platform))
         };
         if !facts
             .tools
@@ -157,6 +165,19 @@ fn check_tools(facts: &RepoFacts, image: &ImageConfig) -> Result<(), ImageError>
         }
     }
     Ok(())
+}
+
+fn check_dockerfile(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {
+    let tracked = RepoPath::new(image.dockerfile.as_str())
+        .is_ok_and(|path| view.tracked_paths.contains(&path) || view.files.contains_key(&path));
+    if tracked {
+        Ok(())
+    } else {
+        Err(ImageError::DockerfileMissing {
+            image: image.name.clone(),
+            path: image.dockerfile.clone(),
+        })
+    }
 }
 
 fn check_stage(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {

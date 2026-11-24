@@ -3,6 +3,7 @@
 
 use super::elf::{ElfError, ElfFacts, read};
 
+const GLIBC_LOADER: &str = "/lib64/ld-linux-x86-64.so.2";
 pub const OPENSSL_SONAMES: [&str; 2] = ["libssl.so.3", "libcrypto.so.3"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,8 +58,23 @@ fn problems(facts: &ElfFacts, ceiling: Glibc, openssl: Openssl) -> Vec<String> {
             "it needs GLIBC_{major}.{minor}, which is newer than the allowed glibc {ceiling}"
         ));
     }
+    if facts
+        .interpreter
+        .as_deref()
+        .is_some_and(|interpreter| interpreter != GLIBC_LOADER)
+    {
+        problems.push(format!(
+            "its program interpreter is {}, but the image runs it with {GLIBC_LOADER}",
+            facts.interpreter.as_deref().unwrap_or_default()
+        ));
+    }
     for path in &facts.library_paths {
-        if !path.starts_with("$ORIGIN") {
+        if path.is_empty() {
+            problems.push(
+                "it carries an empty library search path component, which makes the loader search the working directory"
+                    .to_owned(),
+            );
+        } else if !path.starts_with("$ORIGIN") {
             problems.push(format!(
                 "it carries the library search path {path}, which names a place on the build machine"
             ));

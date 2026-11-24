@@ -199,3 +199,48 @@ fn a_dependency_recorded_as_a_build_machine_path_is_refused() {
     );
     assert!(!root.join("dist").exists());
 }
+
+#[test]
+fn an_empty_search_path_component_a_foreign_loader_and_the_relr_marker_are_refused() {
+    let root = fresh_dir("deploy", "stage-loader");
+    let cases = [
+        (
+            "emptypath",
+            Elf::dynamic_x86_64().with_library_path(":$ORIGIN/lib"),
+            "empty library search path component",
+        ),
+        (
+            "loader",
+            Elf::dynamic_x86_64().with_loader("/tmp/nonexistent-loader"),
+            "program interpreter is /tmp/nonexistent-loader",
+        ),
+        (
+            "relr",
+            Elf::dynamic_x86_64().with_versions(&["GLIBC_2.17", "GLIBC_ABI_DT_RELR"]),
+            "it needs GLIBC_2.36",
+        ),
+    ];
+    for (name, elf, expected) in cases {
+        built(&root, name, &elf);
+        let message = refusal(&args(&root, "2.34", OpensslMode::None, &[name]));
+        assert!(message.contains(expected), "{name}: {message}");
+    }
+    built(
+        &root,
+        "relr-ok",
+        &Elf::dynamic_x86_64().with_versions(&["GLIBC_ABI_DT_RELR"]),
+    );
+    assert!(stage(&args(&root, "2.36", OpensslMode::None, &["relr-ok"])).is_ok());
+}
+
+#[test]
+fn staged_binaries_are_executable_whatever_the_umask() {
+    let root = fresh_dir("deploy", "stage-umask");
+    built(&root, "svc", &Elf::dynamic_x86_64());
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
+    let staged = stage(&args(&root, "2.41", OpensslMode::None, &["svc"]));
+    nix::sys::stat::umask(previous);
+    assert!(staged.is_ok());
+    let mode = fs::metadata(root.join("dist/svc")).map(|m| m.permissions().mode() & 0o777);
+    assert_eq!(mode.ok(), Some(0o755));
+}

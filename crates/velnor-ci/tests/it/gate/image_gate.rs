@@ -150,7 +150,7 @@ fn a_check_that_never_finishes_fails_after_the_wall_clock_wait_and_a_zero_wait_l
             .is_some_and(|text| text.contains("not all green after 60 seconds")),
         "{message:?}"
     );
-    assert_eq!(run.pauses, [30, 45]);
+    assert_eq!(run.pauses, [30, 30]);
     let once = wait(&running(), &running(), &request(0, false, &[]), 99);
     assert!(once.outcome.is_err());
     assert_eq!(once.pauses, Vec::<u64>::new());
@@ -276,4 +276,21 @@ fn the_pr_only_checks_reach_the_release_gate() {
             .is_some_and(|text| text.contains("--pr-only-check #1 is blank")),
         "{message:?}"
     );
+}
+
+#[test]
+fn the_last_pause_never_runs_past_the_wait() {
+    let request = Request {
+        sha: GREEN,
+        require_tip: false,
+        wait: Wait {
+            total: Duration::from_secs(1),
+            interval: Duration::from_secs(300),
+        },
+        run_id: None,
+        pr_only_checks: &[],
+    };
+    let run = wait(&running(), &running(), &request, 99);
+    assert!(run.outcome.is_err());
+    assert_eq!(run.pauses, [1]);
 }

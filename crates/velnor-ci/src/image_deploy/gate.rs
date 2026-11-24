@@ -136,7 +136,7 @@ pub fn wait_for_required(
             Err(error) if elapsed >= NOT_YET.min(total) => return Err(error),
             Ok(Attempt::Waiting(_)) | Err(_) => {}
         }
-        (clock.sleep)(pause);
+        (clock.sleep)(pause.min(total.saturating_sub(elapsed).max(Duration::from_secs(1))));
         pause = (pause + pause / 2).min(LONGEST_PAUSE);
     }
 }

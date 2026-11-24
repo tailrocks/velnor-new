@@ -42,6 +42,7 @@ impl fmt::Display for ElfError {
 pub struct ElfFacts {
     pub x86_64: bool,
     pub dynamic: bool,
+    pub interpreter: Option<String>,
     pub needed: Vec<String>,
     pub library_paths: Vec<String>,
     pub glibc: Option<(u32, u32)>,
@@ -127,6 +128,11 @@ fn file_offset(loads: &[&Segment], address: u64) -> Result<u64, ElfError> {
 }
 
 fn glibc_version(name: &str) -> Option<(u32, u32)> {
+    match name {
+        "GLIBC_ABI_DT_RELR" => return Some((2, 36)),
+        "GLIBC_ABI_GNU_TUNABLES" => return Some((2, 26)),
+        _ => {}
+    }
     let rest = name.strip_prefix("GLIBC_")?;
     let mut parts = rest.split('.');
     let major = parts.next()?.parse().ok()?;
@@ -195,7 +201,13 @@ pub fn read(bytes: &[u8]) -> Result<ElfFacts, ElfError> {
         ..ElfFacts::default()
     };
     let segments = segments(&reader)?;
-    facts.dynamic = segments.iter().any(|segment| segment.kind == PT_INTERP);
+    let interpreter = segments
+        .iter()
+        .find(|segment| segment.kind == PT_INTERP)
+        .map(|segment| reader.text(segment.offset, "interpreter"))
+        .transpose()?;
+    facts.dynamic = interpreter.is_some();
+    facts.interpreter = interpreter;
     let Some(dynamic) = segments.iter().find(|segment| segment.kind == PT_DYNAMIC) else {
         return Ok(facts);
     };
@@ -218,12 +230,9 @@ pub fn read(bytes: &[u8]) -> Result<ElfFacts, ElfError> {
         let name = |part| reader.text(strings.saturating_add(*offset), part);
         match *tag {
             DT_NEEDED => facts.needed.push(name("needed library")?),
-            DT_RPATH | DT_RUNPATH => facts.library_paths.extend(
-                name("library path")?
-                    .split(':')
-                    .filter(|path| !path.is_empty())
-                    .map(str::to_owned),
-            ),
+            DT_RPATH | DT_RUNPATH => facts
+                .library_paths
+                .extend(name("library path")?.split(':').map(str::to_owned)),
             _ => {}
         }
     }

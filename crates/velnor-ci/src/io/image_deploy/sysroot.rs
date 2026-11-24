@@ -55,12 +55,29 @@ fn redirect_target(current: &str, location: Option<&str>) -> Option<String> {
     if location.starts_with("https://") {
         return Some(location.to_owned());
     }
-    let origin_end = current
-        .strip_prefix("https://")
-        .and_then(|rest| rest.find('/'))
-        .map(|slash| slash + "https://".len())?;
-    (location.starts_with('/') && !location.starts_with("//"))
-        .then(|| format!("{}{location}", &current[..origin_end]))
+    if location.contains("://") || location.starts_with("//") || location.contains(['\\', ' ']) {
+        return None;
+    }
+    let rest = current.strip_prefix("https://")?;
+    let (host, path) = rest.split_once('/')?;
+    let path = path.split(['?', '#']).next().unwrap_or_default();
+    let mut parts: Vec<&str> = if location.starts_with('/') {
+        Vec::new()
+    } else {
+        let mut directory: Vec<&str> = path.split('/').collect();
+        directory.pop();
+        directory
+    };
+    for part in location.trim_start_matches('/').split('/') {
+        match part {
+            "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other),
+        }
+    }
+    Some(format!("https://{host}/{}", parts.join("/")))
 }
 
 const MARKER: &str = ".velnor-image-sysroot";

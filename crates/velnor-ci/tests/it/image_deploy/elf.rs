@@ -4,6 +4,7 @@
 pub(super) struct Elf {
     pub(super) machine: u16,
     pub(super) interpreter: bool,
+    pub(super) loader: &'static str,
     pub(super) needed: Vec<&'static str>,
     pub(super) versions: Vec<&'static str>,
     pub(super) library_path: Option<&'static str>,
@@ -14,6 +15,7 @@ impl Elf {
         Self {
             machine: 62,
             interpreter: true,
+            loader: "/lib64/ld-linux-x86-64.so.2",
             needed: vec!["libc.so.6"],
             versions: vec!["GLIBC_2.17", "GLIBC_2.34", "GLIBC_PRIVATE"],
             library_path: None,
@@ -32,6 +34,11 @@ impl Elf {
 
     pub(super) fn with_library_path(mut self, path: &'static str) -> Self {
         self.library_path = Some(path);
+        self
+    }
+
+    pub(super) fn with_loader(mut self, loader: &'static str) -> Self {
+        self.loader = loader;
         self
     }
 
@@ -93,7 +100,7 @@ fn program_header(kind: u32, offset: u64, size: u64) -> Vec<u8> {
 
 pub(super) fn build(elf: &Elf) -> Vec<u8> {
     let headers: u16 = if elf.interpreter { 3 } else { 2 };
-    let interpreter = b"/lib64/ld-linux-x86-64.so.2\0";
+    let interpreter = [elf.loader.as_bytes(), b"\0"].concat();
     let mut strings = Strings(vec![0]);
     let needed: Vec<u64> = elf.needed.iter().map(|name| strings.add(name)).collect();
     let path = elf.library_path.map(|text| strings.add(text));
@@ -136,7 +143,7 @@ pub(super) fn build(elf: &Elf) -> Vec<u8> {
         ));
     }
     bytes.extend(program_header(2, dynamic, 16 * entries.len() as u64));
-    bytes.extend_from_slice(interpreter);
+    bytes.extend_from_slice(&interpreter);
     bytes.resize(usize::try_from(strtab).unwrap_or(0), 0);
     bytes.extend_from_slice(&strings.0);
     bytes.resize(usize::try_from(verneed).unwrap_or(0), 0);

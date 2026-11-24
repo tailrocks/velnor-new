@@ -3,7 +3,7 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -109,7 +109,10 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
             .create_new(true)
             .mode(0o755)
             .open(&target)
-            .and_then(|mut file| file.write_all(bytes))
+            .and_then(|mut file| {
+                file.write_all(bytes)?;
+                file.set_permissions(fs::Permissions::from_mode(0o755))
+            })
             .map_err(|error| CiError::new(format!("cannot write {}: {error}", target.display())))?;
         report.push(format!(
             "{bin}: x86-64 dynamic, glibc ceiling {} (allowed {ceiling}), needs {}, {} bytes, sha256 {}",
