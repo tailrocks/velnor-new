@@ -174,3 +174,25 @@ refusal!(
         source.run(&[], &[])
     }
 );
+
+refusal!(
+    a_validation_script_that_edits_a_recorded_input_is_refused,
+    "Build only when the Git worktree is clean.",
+    |source| {
+        source.script("echo changed >> images/job/ubuntu-26.04/Dockerfile");
+        source.run(&[], &[])
+    }
+);
+
+#[test]
+fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
+    let source = Source::new("script-env");
+    source.script("sleep 30 &\nenv > \"$PWD/../script.env\"");
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
+    let seen = source.text("script.env");
+    assert!(seen.contains("PATH="), "{seen}");
+    for hidden in ["GH_TOKEN", "REGISTRY_PASSWORD", "DOCKER_HOST"] {
+        assert!(!seen.contains(hidden), "{hidden} reached build-test.sh");
+    }
+}

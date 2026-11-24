@@ -28,21 +28,22 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
     let env = github_env();
-    let inputs = source::identity(
-        &root,
-        &args.source_commit,
-        env.get("GITHUB_SHA").map(String::as_str),
-    )?;
+    let github_sha = env.get("GITHUB_SHA").map(String::as_str);
+    let inputs = source::identity(&root, &args.source_commit, github_sha)?;
     let (workflow, reference) = workflow(&env)?;
     let lock = parse_lock(&read(&root.join(LOCK))?)?;
     let buildx = docker::buildx(&args.docker, &lock)?;
     let outputs = output::plan(&root, &args.archive, &args.record)?;
-    process::run(
-        Command::new("bash")
-            .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
-            .current_dir(&root),
-        CHECK_TIMEOUT,
-    )?;
+    let mut check = Command::new("bash");
+    check
+        .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
+        .current_dir(&root);
+    process::run(process::clean_environment(&mut check), CHECK_TIMEOUT)?;
+    if source::identity(&root, &args.source_commit, github_sha)? != inputs {
+        return Err(CiError::new(
+            "Build inputs changed while build-test.sh ran.",
+        ));
+    }
     let parent = outputs
         .archive
         .parent()

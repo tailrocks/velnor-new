@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::image_candidate::build::forwards;
+use std::path::Path;
+
+use velnor_ci::image_candidate::build::{buildx_arguments, forwards};
 use velnor_ci::image_candidate::lock::{Lock, banner, parse_lock, plugin};
 
 fn locked() -> Lock {
@@ -67,6 +69,30 @@ fn the_runner_lock_must_pin_the_buildx_version_and_hash() {
     assert!(parse_lock("buildx_sha256 = \"abc\"\n").is_err());
 }
 
+fn output_argument(archive: &str) -> String {
+    let arguments = buildx_arguments(
+        Path::new("/c/Dockerfile"),
+        Path::new(archive),
+        Path::new("/c"),
+    );
+    let at = arguments.iter().position(|argument| argument == "--output");
+    at.and_then(|at| arguments.get(at + 1))
+        .map_or_default(|value| value.to_string_lossy().into_owned())
+}
+
+#[test]
+fn the_archive_path_is_one_csv_field_of_the_output_specification() {
+    let tail = ",compression=gzip,force-compression=true";
+    assert_eq!(
+        output_argument("/out/a.tar"),
+        format!("type=oci,dest=/out/a.tar{tail}")
+    );
+    assert_eq!(
+        output_argument("/out,x/a\"b.tar"),
+        format!("type=oci,\"dest=/out,x/a\"\"b.tar\"{tail}")
+    );
+}
+
 #[test]
 fn the_docker_environment_drops_secrets_and_daemon_selection() {
     for dropped in [
@@ -79,6 +105,8 @@ fn the_docker_environment_drops_secrets_and_daemon_selection() {
         "DOCKER_CONTEXT",
         "DOCKER_HOST",
         "BUILDX_BUILDER",
+        "BUILDX_CONFIG",
+        "BUILDKIT_HOST",
     ] {
         assert!(!forwards(dropped), "{dropped} was forwarded");
     }

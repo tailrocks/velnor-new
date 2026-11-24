@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsString;
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::Path;
 
 use serde_json::{Map, Value, json};
@@ -9,7 +10,13 @@ use serde_json::{Map, Value, json};
 use super::record::{SCHEMA, validate};
 use crate::error::CiError;
 
-const DROPPED: &[&str] = &["DOCKER_CONTEXT", "DOCKER_HOST", "BUILDX_BUILDER"];
+const DROPPED: &[&str] = &[
+    "DOCKER_CONTEXT",
+    "DOCKER_HOST",
+    "BUILDX_BUILDER",
+    "BUILDX_CONFIG",
+    "BUILDKIT_HOST",
+];
 const SECRET_MARKERS: &[&str] = &["TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "KEY"];
 
 #[derive(Debug)]
@@ -44,8 +51,8 @@ pub fn record(parts: &Parts<'_>) -> Result<Value, CiError> {
 
 #[must_use]
 pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Vec<OsString> {
-    let mut output = OsString::from("type=oci,dest=");
-    output.push(archive);
+    let mut output = OsString::from("type=oci,");
+    output.push(csv_field(archive));
     output.push(",compression=gzip,force-compression=true");
     let mut arguments: Vec<OsString> = ["buildx", "build", "--platform", "linux/amd64", "--file"]
         .into_iter()
@@ -57,6 +64,24 @@ pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Ve
     arguments.push(output);
     arguments.push(context.into());
     arguments
+}
+
+fn csv_field(archive: &Path) -> OsString {
+    let mut field = OsString::from("dest=");
+    field.push(archive);
+    let bytes = field.as_bytes();
+    if !bytes.iter().any(|byte| matches!(byte, b',' | b'"')) {
+        return field;
+    }
+    let mut quoted = vec![b'"'];
+    for byte in bytes {
+        if *byte == b'"' {
+            quoted.push(b'"');
+        }
+        quoted.push(*byte);
+    }
+    quoted.push(b'"');
+    OsString::from_vec(quoted)
 }
 
 #[must_use]

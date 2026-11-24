@@ -126,6 +126,16 @@ impl Source {
         self.dir.join(name)
     }
 
+    pub(super) fn script(&self, body: &str) {
+        let checkout = self.path("checkout");
+        write(
+            &checkout.join("images/job/ubuntu-26.04/build-test.sh"),
+            format!("#!/usr/bin/env bash\n{body}\n"),
+        );
+        git(&checkout, &["add", "-A"]);
+        git(&checkout, &["commit", "-q", "-m", "script"]);
+    }
+
     pub(super) fn head(&self) -> String {
         git(&self.path("checkout"), &["rev-parse", "HEAD"])
     }

@@ -11,7 +11,7 @@ use std::time::Duration;
 use super::process;
 use super::{DOCKERFILE, fail};
 use crate::error::CiError;
-use crate::image_candidate::build::{buildx_arguments, forwards};
+use crate::image_candidate::build::buildx_arguments;
 use crate::image_candidate::hashing::Hashing;
 use crate::image_candidate::lock::{self, Lock};
 
@@ -85,9 +85,7 @@ pub(super) fn build(
     let mut command = Command::new(docker);
     command
         .args(buildx_arguments(&dockerfile, archive, context))
-        .current_dir(root)
-        .env_clear()
-        .envs(std::env::vars_os().filter(|(name, _)| name.to_str().is_some_and(forwards)))
-        .env("DOCKER_CONFIG", context.join("docker-config"));
-    process::run(&mut command, BUILD_TIMEOUT).map(drop)
+        .current_dir(root);
+    process::clean_environment(&mut command).env("DOCKER_CONFIG", context.join("docker-config"));
+    process::run(&mut command, BUILD_TIMEOUT)
 }
