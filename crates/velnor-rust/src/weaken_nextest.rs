@@ -18,8 +18,79 @@ fn profiles(parsed: &Table) -> impl Iterator<Item = (&String, &Value)> {
         .flatten()
 }
 
-fn checked(parsed: &Table) -> impl Iterator<Item = (&String, &Value)> {
-    profiles(parsed).filter(|(profile, _)| CHECKED_PROFILES.contains(&profile.as_str()))
+const SCALARS: &[&str] = &[
+    "default-filter",
+    "retries",
+    "slow-timeout",
+    "run-extra-args",
+];
+const DEFAULT_PROFILE: &str = "default";
+
+type Reached<'a> = Vec<(&'a str, &'a Value, Vec<&'static str>)>;
+
+fn section<'a>(parsed: &'a Table, name: &str) -> Option<(&'a str, &'a Value)> {
+    profiles(parsed)
+        .find(|(profile, _)| profile.as_str() == name)
+        .map(|(profile, value)| (profile.as_str(), value))
+}
+
+/// The profile, the profiles it inherits in order, and the default profile last, as nextest
+/// resolves them. A name seen twice ends the chain, so an `inherits` cycle cannot loop.
+fn chain<'a>(parsed: &'a Table, name: &'a str) -> Vec<&'a str> {
+    let mut seen = vec![name];
+    let mut at = name;
+    loop {
+        let next = section(parsed, at)
+            .and_then(|(_, value)| value.get("inherits"))
+            .and_then(Value::as_str)
+            .unwrap_or(DEFAULT_PROFILE);
+        if seen.contains(&next) {
+            return seen;
+        }
+        seen.push(next);
+        at = next;
+    }
+}
+
+fn reach<'a>(parsed: &'a Table, reached: &mut Reached<'a>, name: &str) -> Option<usize> {
+    if let Some(at) = reached.iter().position(|(seen, _, _)| *seen == name) {
+        return Some(at);
+    }
+    let (name, value) = section(parsed, name)?;
+    reached.push((name, value, Vec::new()));
+    Some(reached.len() - 1)
+}
+
+/// The profiles to report, each with the scalar settings that take effect. A checked profile
+/// reports its own settings. A profile that a checked profile inherits reports a setting only
+/// when no profile ahead of it in the chain sets the same key, and reports its overrides and
+/// scripts in full.
+fn reached(parsed: &Table) -> Reached<'_> {
+    let mut reached: Reached<'_> = Vec::new();
+    for (name, value) in profiles(parsed).filter(|(p, _)| CHECKED_PROFILES.contains(&p.as_str())) {
+        let own = SCALARS
+            .iter()
+            .copied()
+            .filter(|key| value.get(*key).is_some());
+        reached.push((name.as_str(), value, own.collect()));
+    }
+    let checked = reached.len();
+    for index in 0..checked {
+        let chain = chain(parsed, reached[index].0);
+        for key in SCALARS {
+            let setter = chain.iter().copied().find(|name| {
+                section(parsed, name).is_some_and(|(_, value)| value.get(*key).is_some())
+            });
+            let at = setter.and_then(|name| reach(parsed, &mut reached, name));
+            if let Some(at) = at.filter(|at| !reached[*at].2.contains(key)) {
+                reached[at].2.push(key);
+            }
+        }
+        for name in chain.into_iter().skip(1) {
+            reach(parsed, &mut reached, name);
+        }
+    }
+    reached
 }
 
 fn entries<'a>(section: &'a Value, key: &str) -> impl Iterator<Item = &'a Value> {
@@ -50,7 +121,8 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
         .and_then(|scripts| scripts.get("wrapper"))
         .and_then(Value::as_table);
     let mut found = Vec::new();
-    for (profile, section) in checked(parsed) {
+    let reached = reached(parsed);
+    for (profile, section, _) in &reached {
         for entry in entries(section, "scripts") {
             for key in ["run-wrapper", "list-wrapper"] {
                 let Some(name) = entry.get(key).and_then(Value::as_str) else {
@@ -80,8 +152,9 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
             }
         }
     }
-    for (profile, section) in checked(parsed) {
-        if let Some(filter) = section.get("default-filter") {
+    for (profile, section, keys) in &reached {
+        let sets = |key: &str| section.get(key).filter(|_| keys.contains(&key));
+        if let Some(filter) = sets("default-filter") {
             found.push(make(
                 format!("profile.{profile}.default-filter = {filter}"),
                 format!(
@@ -89,7 +162,7 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
                 ),
             ));
         }
-        if let Some(retries) = section.get("retries").filter(|r| retries_tests(r)) {
+        if let Some(retries) = sets("retries").filter(|r| retries_tests(r)) {
             found.push(make(
                 format!(
                     "profile.{profile} retries = {retries}{}",
@@ -98,13 +171,13 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
                 "retries every test in the profile, so a flaky failure passes".to_owned(),
             ));
         }
-        if let Some(timeout) = section.get("slow-timeout").filter(|t| passes_on_timeout(t)) {
+        if let Some(timeout) = sets("slow-timeout").filter(|t| passes_on_timeout(t)) {
             found.push(make(
                 format!("profile.{profile} slow-timeout = {timeout}"),
                 "counts a test that times out as passed".to_owned(),
             ));
         }
-        if let Some(args) = section.get("run-extra-args") {
+        if let Some(args) = sets("run-extra-args") {
             found.push(make(
                 format!("profile.{profile} run-extra-args = {args}"),
                 "passes extra arguments to every test binary in the profile".to_owned(),

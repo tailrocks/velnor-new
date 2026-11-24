@@ -142,3 +142,75 @@ fn a_platform_override_default_filter_in_a_checked_profile_is_named() -> TestRes
     );
     Ok(())
 }
+
+#[test]
+fn a_default_filter_set_in_an_inherited_profile_is_named() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.base]\ndefault-filter = \"not test(slow)\"\n\n[profile.mid]\ninherits = \"base\"\n\n[profile.ci]\ninherits = \"mid\"\n\n[profile.unrelated]\ndefault-filter = \"none()\"\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(
+        named[0].starts_with(
+            ".config/nextest.toml: profile.base.default-filter = \"not test(slow)\": limits the default nextest run"
+        ),
+        "{named:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_profile_with_its_own_default_filter_hides_the_inherited_one() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.base]\ndefault-filter = \"not test(slow)\"\n\n[profile.ci]\ninherits = \"base\"\ndefault-filter = \"all()\"\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(
+        named[0].contains("profile.ci.default-filter = \"all()\""),
+        "{named:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inherited_overrides_and_an_inherits_cycle_are_resolved() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.a]\ninherits = \"b\"\n\n[[profile.a.overrides]]\nfilter = \"test(x)\"\nretries = 3\n\n[profile.b]\ninherits = \"a\"\n\n[[profile.b.overrides]]\nfilter = \"test(y)\"\nretries = 4\n\n[profile.ci]\ninherits = \"a\"\n",
+        )],
+        false,
+    )?;
+    let heads = named
+        .iter()
+        .map(|line| line.split(": ").nth(1).unwrap_or_default())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        heads,
+        [
+            "profile.a.overrides filter = \"test(x)\" retries = 3",
+            "profile.b.overrides filter = \"test(y)\" retries = 4",
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_profile_without_inherits_falls_back_to_the_default_profile() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.base]\nretries = 2\n\n[profile.ci]\ninherits = \"base\"\n\n[profile.default]\ndefault-filter = \"not test(slow)\"\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named.len(), 2, "{named:?}");
+    Ok(())
+}
