@@ -7,6 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use nix::errno::Errno;
@@ -131,8 +132,16 @@ pub(crate) fn fresh_dir(prefix: &str, name: &str) -> velnor_test_support::Scratc
     ))
 }
 
+static SWEPT: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
+
 pub(crate) fn fresh_dir_in(root: &Path, counter: &AtomicU64, prefix: &str, name: &str) -> PathBuf {
-    sweep_dead(root, prefix);
+    if SWEPT
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert((root.to_path_buf(), prefix.to_owned()))
+    {
+        sweep_dead(root, prefix);
+    }
     loop {
         let candidate = root.join(format!(
             "{prefix}-{}-{}-{name}",

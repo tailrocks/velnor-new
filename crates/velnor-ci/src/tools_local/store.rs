@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
+use std::fs::{self, File, TryLockError};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use super::clear::{check_home, clear_home};
-use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
+use super::lease::{Identity, identity, open_entry, published};
+use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR, valid_key};
 use crate::mbx_store::{random_u64, writable_by_job};
 use crate::tree_removal::remove_tree;
 
@@ -61,6 +62,12 @@ fn slot(path: &str) -> String {
     path.replace('/', "_")
 }
 
+fn lease(entry: &Path, owner: u32) -> Option<(File, bool)> {
+    let held = open_entry(entry).ok()?;
+    let leased = held.try_lock_shared().is_ok();
+    (published(&held, entry) && complete(entry, owner)).then_some((held, leased))
+}
+
 fn copy_tree(from: &Path, to: &Path) -> bool {
     fs::create_dir_all(to).is_ok()
         && Command::new(COPY)
@@ -79,6 +86,16 @@ pub(super) fn restore(
     read_only: bool,
     owner: u32,
 ) -> Outcome {
+    restore_with(inputs, dir, read_only, owner, &|| {})
+}
+
+fn restore_with(
+    inputs: &Inputs<'_>,
+    dir: Option<&str>,
+    read_only: bool,
+    owner: u32,
+    copied: &dyn Fn(),
+) -> Outcome {
     if let Err(reason) = check_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
@@ -87,9 +104,9 @@ pub(super) fn restore(
         Err(outcome) => return outcome,
     };
     let entry = base.join(TOOLS_DIR).join(inputs.key);
-    if !complete(&entry, owner) {
+    let Some((held, leased)) = lease(&entry, owner) else {
         return Outcome::Miss;
-    }
+    };
     if let Err(reason) = clear_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
@@ -97,8 +114,17 @@ pub(super) fn restore(
         if !copy_tree(&entry.join(slot(path)), &inputs.home.join(path)) {
             return Outcome::Rejected("a copy failed, so the cache action restores instead");
         }
+        copied();
     }
-    Outcome::Restored { from: entry }
+    if !published(&held, &entry) {
+        return Outcome::Rejected(
+            "the entry was replaced or removed during the copy, so the cache action restores instead",
+        );
+    }
+    Outcome::Restored {
+        from: entry,
+        leased,
+    }
 }
 
 struct Lock(PathBuf);
@@ -192,6 +218,10 @@ fn sweep(tools: &Path, current: &str) {
 }
 
 pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
+    save_with(inputs, owner, &|| {})
+}
+
+fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
     let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
@@ -253,7 +283,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    let kept = prune(&tools, inputs.key);
+    let kept = prune(&tools, inputs.key, chosen);
     if replaced {
         Outcome::Healed { to: entry, kept }
     } else {
@@ -261,25 +291,79 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     }
 }
 
-fn prune(tools: &Path, current: &str) -> Vec<String> {
+fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
-    let mut older: Vec<(SystemTime, PathBuf)> = entries
+    let mut older: Vec<(Identity, PathBuf)> = entries
         .flatten()
         .filter(|entry| {
             let name = entry.file_name();
             name != current && !name.to_string_lossy().starts_with('.')
         })
-        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .filter_map(|entry| Some((identity(&entry.metadata().ok()?), entry.path())))
         .collect();
-    older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    older
+    older.sort_by_key(|(listed, _)| std::cmp::Reverse((listed.2, listed.3)));
+    let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
+    chosen();
+    let mut in_use = 0;
+    candidates
         .into_iter()
-        .skip(KEEP_KEYS - 1)
-        .filter(|(_, path)| remove_tree(path).is_err())
+        .filter(
+            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS) {
+                Retired::Settled => false,
+                Retired::InUse => {
+                    in_use += 1;
+                    false
+                }
+                Retired::Stuck => true,
+            },
+        )
         .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
         .collect()
+}
+
+enum Retired {
+    Settled,
+    InUse,
+    Stuck,
+}
+
+fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Retired {
+    let finished = |removal: std::io::Result<()>| match removal {
+        Ok(()) => Retired::Settled,
+        Err(_) => Retired::Stuck,
+    };
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    if !valid_key(&name) {
+        return finished(remove_tree(path));
+    }
+    let _lock = match claim(tools, &name) {
+        Claim::Won(lock) => lock,
+        Claim::Held => return Retired::Settled,
+        Claim::Broken => return Retired::Stuck,
+    };
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return Retired::Settled;
+    };
+    if identity(&metadata) != listed {
+        return Retired::Settled;
+    }
+    let _held = if metadata.is_dir() {
+        let Ok(held) = open_entry(path) else {
+            return Retired::Stuck;
+        };
+        match held.try_lock() {
+            Ok(()) => Some(held),
+            Err(TryLockError::WouldBlock) if spare_in_use => return Retired::InUse,
+            Err(TryLockError::WouldBlock) => None,
+            Err(TryLockError::Error(_)) => return Retired::Stuck,
+        }
+    } else {
+        None
+    };
+    let grave = tools.join(format!("{STAGING_PREFIX}{name}-{:016x}", random_u64()));
+    finished(fs::rename(path, &grave).and_then(|()| remove_tree(&grave)))
 }
 
 fn plain(name: &str) -> String {
@@ -293,3 +377,6 @@ fn plain(name: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

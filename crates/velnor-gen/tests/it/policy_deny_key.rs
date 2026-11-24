@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_model::{DenyCheck, DenyChecks, DenyLane, PolicyTable, PolicyTools, RepoPath, RepoView};
-use velnor_rust::{DENY_OFF_NOTE, detect, policy_runs};
+use velnor_rust::{DENY_OFF_NOTE, DetectError, Reason, detect, policy_runs};
 
 use super::events::DENY_MISE;
 use crate::facts::TestResult;
@@ -177,10 +177,17 @@ fn a_license_file_starts_no_policy_run_when_licenses_are_not_checked() -> TestRe
 
 #[test]
 fn a_policy_gate_with_neither_deny_nor_machete_is_refused() -> TestResult {
-    let error = workflow(&repo(b"[policy]\ngate_on_plan = true\n", false, "0.1.112")?)
-        .err()
-        .ok_or("gate_on_plan with no enabled lane was accepted")?;
-    assert!(error.to_string().contains("gate_on_plan"), "{error}");
+    let refused = detect(&repo(b"[policy]\ngate_on_plan = true\n", false, "0.1.112")?).err();
+    assert!(
+        matches!(
+            refused,
+            Some(DetectError::Invalid {
+                reason: Reason::PolicyGateWithoutLane,
+                ..
+            })
+        ),
+        "{refused:?}"
+    );
     let text = workflow(&repo(b"[policy]\ngate_on_plan = true\n", true, "0.1.112")?)?;
     assert!(text.contains("cargo-deny --"), "{text}");
     Ok(())

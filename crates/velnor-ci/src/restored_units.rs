@@ -202,7 +202,7 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
                 )
             } else {
                 format!(
-                    "{root}: dependency packages not in the restored base (a different package or feature selection than the run that saved it): {packages}"
+                    "{root}: dependency packages whose compiled units were absent from the restored base (for example, the run that saved it built a different package or feature selection): {packages}"
                 )
             }
         })

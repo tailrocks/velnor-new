@@ -76,6 +76,7 @@ pub enum StepKind {
     PublicSources {
         manifests: Vec<RepoPath>,
         selected: Vec<RootSlug>,
+        fails_on_private: bool,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {

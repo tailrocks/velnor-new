@@ -239,8 +239,9 @@ pub(super) fn restore_inputs_scoped(
     fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     let units_target = root.join(target);
+    let physical_target = fs::canonicalize(&units_target).unwrap_or_else(|_| units_target.clone());
     let units = scans
-        .entry(units_target.clone())
+        .entry(physical_target)
         .or_insert_with(|| super::restored_units::scan(&units_target));
     super::restored_units::record(&units_target, &prefix, units.as_ref())?;
     for input in &plan.restore {

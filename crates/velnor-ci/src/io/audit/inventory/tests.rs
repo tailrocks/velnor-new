@@ -5,7 +5,8 @@ use std::fs;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use super::super::options::MAX_ENTRIES_VARIABLE;
-use super::walk::{Probe, scan_with as walk};
+use super::probe::Probe;
+use super::walk::scan_with as walk;
 use super::*;
 
 mod ancestors;
@@ -17,6 +18,8 @@ mod links;
 mod placement;
 mod racing;
 mod released;
+mod root;
+mod settled;
 
 fn scan_with(
     root: &Path,

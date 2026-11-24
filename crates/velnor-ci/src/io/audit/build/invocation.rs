@@ -9,9 +9,12 @@ use crate::error::CiError;
 
 mod alias;
 mod derived;
+mod package_spec;
+mod root;
 mod selection;
 pub(super) use alias::resolve;
 use derived::{build_of, refusal, without_open};
+pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
