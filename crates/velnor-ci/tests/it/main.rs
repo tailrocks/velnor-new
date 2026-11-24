@@ -111,6 +111,7 @@ mod io_required;
 mod io_required_groups;
 mod io_restore;
 mod io_restore_cargo;
+mod io_restore_cargo_dirs;
 mod io_restore_cold_cargo;
 mod io_restore_links;
 mod io_restore_symlinks;
