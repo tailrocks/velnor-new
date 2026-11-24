@@ -208,6 +208,9 @@ check quote_four_margin_after_prose fail '/// prose\n///    >     compile_error!
 check setext_eq_without_heading pass '/// ===\n///     let x = 1;\npub fn n4() {}\n'
 check html_close_with_space pass '/// <script></script >\n///     let x = 1;\npub fn n5() {}\n'
 check html_indented_lazy_pass pass '/// prose\n///     <script></script>\n///     let x = 1;\npub fn n6() {}\n'
+check html_block_close_indent fail '/// <script>\n/// </script>\n///     compile_error!("x");\nfn f() {}\n'
+check lazy_ordered_in_quote fail '/// > quote\n/// continuation\n/// 2.     compile_error!("x");\nfn f() {}\n'
+check setext_root_after_quote pass '/// > Title\n/// ===\n///     compile_error!("x");\nfn f() {}\n'
 check nested_starless_block_pass pass '    /**\n        Prose.\n\n        let x = 1;\n    */\npub fn n7() {}\n'
 
 missing="$work/scanner_missing"

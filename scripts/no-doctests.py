@@ -23,6 +23,7 @@ HTML_CLOSED = re.compile(
     r"|<(script|pre|style|textarea)(?:\s|>|$).*</\1>",
     re.I,
 )
+RAW_HTML_OPEN = re.compile(r"<(script|pre|style|textarea)(?:\s|>|$)", re.I)
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
@@ -104,12 +105,22 @@ def skip_char(src, i):
     return None
 
 
-def opens_paragraph(line, before):
+def container_of(line):
+    return re.match(CONTAINER, line.strip()).group()
+
+
+def raw_html_open(line):
+    text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
+    m = RAW_HTML_OPEN.match(text)
+    return m.group(1).lower() if m and not HTML_CLOSED.match(text) else None
+
+
+def opens_paragraph(line, before, para):
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
     if not text or text.startswith("#") or HRULE.fullmatch(text) or HTML_CLOSED.match(text):
         return False
     if SETEXT_UNDERLINE.fullmatch(text):
-        return not before
+        return not before or container_of(line) != para
     return True
 
 
@@ -125,20 +136,30 @@ def doc_text_tabs(text):
 
 def markdown_hit(lines, indent, quote_start):
     before = False
-    prev = None
+    para = None
+    html = None
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
         lazy = before and not quote_start.match(line)
         item = LIST_INDENT.match(line)
-        root_item = ROOT_ORDERED.match(line) and not CONTAINER_START.match(prev or "")
+        root_item = ROOT_ORDERED.match(line) and not CONTAINER_START.match(para or "")
         if (item and not (lazy and root_item)) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
-        if indent.match(line):
+        if html:
+            if re.search(rf"</{html}>", line, re.I):
+                html = None
+            before, para = False, None
+        elif indent.match(line):
             if not lazy:
                 return k
         else:
-            before = opens_paragraph(line, before)
-        prev = line
+            html = raw_html_open(line)
+            if html or not opens_paragraph(line, before, para):
+                before, para = False, None
+            else:
+                before = True
+                if not lazy:
+                    para = container_of(line)
     return None
 
 
