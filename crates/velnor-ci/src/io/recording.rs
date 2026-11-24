@@ -70,6 +70,8 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         rejected: 0,
         execution,
         target_directory: target_directory(argv)?,
+        dirty: Vec::new(),
+        restored_manifest: None,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {

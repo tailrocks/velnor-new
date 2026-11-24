@@ -17,7 +17,7 @@ Its successful [Rust / velnor-actions-cli job](https://github.com/tailrocks/veln
 started at 2026-10-05T11:02:45Z. The runner log records Ubuntu 26.04.1,
 image ubuntu-26.04, image version 20260927.149.1, runner version 2.337.0,
 and [image release ubuntu26/20260927.149](https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149).
-The retained log is /tmp/velnor-pr75-cli-111731481419.log (SHA-256
+The retained log is <tmp>/velnor-pr75-cli-111731481419.log (SHA-256
 3eae40aa0fd8203775391ecbd8550bc6acd15c6db2ddac68b30d0ae05abc28be). The
 job checked out source head 2d9bca8a37b0440e29a3520aa03e77752079f400; this
 runner observation is separate from the d435ac5 inventory source below. It
@@ -30,14 +30,14 @@ d435ac5b7e686ad9c9c594dde4b024b702435e47 (tree
 32b2bad140a9bc00d3daa7d0e54993c995fabc97). The source inventory blob is
 7807bf94f5f3ea32e93a242b16d1e1d7ad7b5eb5; its SHA-256 is
 ea12f4c9dd41a194d90dc9b92d22bae54e5ac4af4ab5799992fff75275fb72c6. The
-collector /private/tmp/velnor-capture-upstream-d435-v2.py has SHA-256
+collector <tmp>/velnor-capture-upstream-d435-v2.py has SHA-256
 6f5cbd14bee1a6a1a6842c6d7bb19be840e53f7614bb0e72a1d161be45fbeac0. It
 made unauthenticated, sequential HTTPS requests with the repository probe's
 10-second timeout and 512-KiB body cap. It retained status, final URL, selected
 response headers, the manifest requested_at value recorded after body read and
 parse (not a request-start time), persisted body length/hash, truncation status,
 and parsed latest version for each source. The capture directory and raw
-responses remain at /private/tmp/velnor-pr75-captures-d435-20261005-r2/.
+responses remain at <tmp>/velnor-pr75-captures-d435-20261005-r2/.
 
 Capture A ran from 2026-10-05T12:21:25Z through 12:21:38Z. Its manifest
 A/manifest.json has SHA-256
@@ -66,7 +66,7 @@ select the earlier [pkg.cargo] version. The prefix includes the complete field
 used by the parser.
 
 The initial collector attempt is retained separately at
-/private/tmp/velnor-pr75-capture-A.log (SHA-256
+<tmp>/velnor-pr75-capture-A.log (SHA-256
 f9bb5dccca58f7307aa15b956c31050e51cbb45ca4b7c05301709035b5e9bc46). It
 failed when the Rust channel response exceeded the configured cap and is not
 counted as an observation. The earlier revision's cited A/B capture artifacts

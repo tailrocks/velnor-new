@@ -94,7 +94,6 @@ impl Audit<'_> {
         declared: bool,
         limit: usize,
     ) -> Result<Vec<(String, Cause)>, CiError> {
-        // A cross-target cache without a prior receipt cannot prove its inputs and remains stale.
         let saved = inventory::load(output)
             .ok()
             .filter(|saved| self.freshness.targets.is_subset(&saved.targets));

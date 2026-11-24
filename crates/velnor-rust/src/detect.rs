@@ -10,9 +10,7 @@ use velnor_model::{
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
-use crate::detect_checks::{
-    check_build_targets, check_helper_box, check_nextest_harnesses, check_setup_files,
-};
+use crate::detect_checks::{check_build_targets, check_nextest_harnesses, check_setup_files};
 use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
@@ -27,6 +25,7 @@ use crate::unowned::unowned;
 use crate::weaken::{is_nextest_config, weakenings};
 
 pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
+pub(crate) const GENERATOR_PACKAGE: &str = "velnor-gen";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
 #[must_use]
@@ -146,7 +145,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         ));
     }
     check_nextest_harnesses(&config, &rust_roots)?;
-    check_helper_box(&config, &rust_roots)?;
+    crate::detect_checks::check_packages(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     crate::groups::check(view, &config, &rust_roots)?;
     crate::groups::check_shape(&config)?;
@@ -172,7 +171,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         crate::config_lint::pinned_tools(view, &config)?
     };
     check_setup_files(view, &rust_roots)?;
-    check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
+    check_build_targets(view, &config, &rust_roots, toolchain.as_ref(), &tools)?;
     crate::groups::check_helper(&config, helper.as_ref())?;
     refuse_locked_credentials(view, &config, &rust_roots)?;
     crate::public_advice::check(view, &config, &rust_roots)?;

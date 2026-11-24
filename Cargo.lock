@@ -2037,6 +2037,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -4123,7 +4124,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.111"
+version = "0.1.113"
 dependencies = [
  "base64 0.23.1",
  "blake3",
@@ -4151,7 +4152,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.111"
+version = "0.1.113"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -4188,6 +4189,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "velnor-cache-rules",
+ "velnor-test-support",
 ]
 
 [[package]]

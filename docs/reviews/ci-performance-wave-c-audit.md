@@ -11,9 +11,9 @@ Full current workflow families, typed configuration, runtime manifests, relevant
 migration diffs, recent workflow changes, default-branch identity, and hosted
 PR/default-run evidence were assigned separately per repository. Authenticated
 source, diffs, artifacts, job metadata and raw logs live outside this public
-checkout in `/tmp/velnor-ci-performance-wave-c/`. Each repository directory
+checkout in `<tmp>/velnor-ci-performance-wave-c/`. Each repository directory
 contains an evidence index and audit summary; the initial paginated PR metadata
-is shared from `/tmp/velnor-ci-performance-scope-audit/`.
+is shared from `<tmp>/velnor-ci-performance-scope-audit/`.
 
 | Repository | Visibility | Audited default SHA | Migration PR | Qualification |
 |---|---|---|---|---|

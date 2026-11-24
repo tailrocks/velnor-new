@@ -1,26 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-use serde::{Deserialize, Serialize};
 
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
-#[derive(Default, Serialize, Deserialize)]
-pub(super) struct Selection {
-    all: bool,
-    packages: Vec<String>,
-}
-
-impl Selection {
-    pub(super) fn selects(&self, package: &str) -> bool {
-        self.all || self.packages.iter().any(|selected| selected == package)
-    }
-}
+mod selection;
+pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
 
@@ -34,6 +22,7 @@ pub(super) struct Invocation {
     pub(super) preflight: Option<Vec<String>>,
     pub(super) compiler: bool,
     pub(super) cargo: bool,
+    builds: bool,
     globals: Vec<String>,
     chdir: Option<PathBuf>,
 }
@@ -62,39 +51,6 @@ impl Invocation {
             Some(word) => format!("cargo {word}"),
             None => program.to_owned(),
         }
-    }
-
-    pub(super) fn selection(&self, members: &BTreeSet<&str>) -> Option<Selection> {
-        if !self.cargo_program() {
-            return None;
-        }
-        let words: Vec<&str> = self
-            .command
-            .iter()
-            .skip(1)
-            .map(String::as_str)
-            .take_while(|word| *word != "--")
-            .collect();
-        let excluded = words
-            .iter()
-            .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        let all = !excluded
-            && words
-                .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"));
-        let mut packages = Vec::new();
-        for (index, word) in words.iter().enumerate() {
-            if matches!(*word, "-p" | "--package") {
-                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
-            } else if let Some(name) = word
-                .strip_prefix("--package=")
-                .or_else(|| word.strip_prefix("-p"))
-            {
-                packages.push(name.to_owned());
-            }
-        }
-        packages.retain(|name| members.contains(name.as_str()));
-        Some(Selection { all, packages })
     }
 
     fn cargo_program(&self) -> bool {
@@ -153,6 +109,13 @@ impl Invocation {
             preflight.extend(command[end..].iter().cloned());
             preflight
         });
+        let running = matches!(
+            (program, arguments),
+            (
+                "cargo",
+                ["run" | "r" | "bench" | "rustc" | "rustdoc" | "fix", ..]
+            )
+        );
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())
         } else {
@@ -175,19 +138,24 @@ impl Invocation {
             preflight,
             compiler,
             cargo: compilation || nextest || test,
+            builds: compilation || nextest || test || running,
             globals,
             chdir,
         }
     }
 
+    pub(super) fn step(&self, directory: &Path) -> PathBuf {
+        self.chdir
+            .as_ref()
+            .filter(|_| self.builds)
+            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir))
+    }
+
     pub(super) fn location(&self, directory: &Path) -> PathBuf {
-        if !self.cargo {
+        if !self.builds {
             return directory.to_path_buf();
         }
-        let base = self
-            .chdir
-            .as_ref()
-            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir));
+        let base = self.step(directory);
         self.command
             .iter()
             .enumerate()
@@ -215,7 +183,7 @@ impl Invocation {
         inherit: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
-        if !self.cargo {
+        if !self.builds {
             return Ok(());
         }
         if self
@@ -247,9 +215,22 @@ impl Invocation {
             arguments: &self.globals,
             directory,
         };
+        let local_arguments = without_command_scope(&self.globals);
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.root.join("Cargo.toml");
-            let actual = root_workspace(&manifest, Some(&invocation), *inherit, *alone, groups)?;
+            let local = MetadataInvocation {
+                executable,
+                arguments: &local_arguments,
+                directory: &expected.root,
+            };
+            let actual = root_workspace(
+                &manifest,
+                Some(if *inherit { &invocation } else { &local }),
+                directory,
+                *inherit,
+                *alone,
+                groups,
+            )?;
             if actual.root != expected.root
                 || actual.target_directory != expected.target_directory
                 || actual.build_directory != expected.build_directory
@@ -261,6 +242,19 @@ impl Invocation {
         }
         Ok(())
     }
+}
+
+fn without_command_scope(globals: &[String]) -> Vec<String> {
+    let mut kept = Vec::new();
+    let mut words = globals.iter();
+    while let Some(word) = words.next() {
+        if word == "-C" || word == "--config" {
+            words.next();
+        } else if !word.starts_with("-C") && !word.starts_with("--config=") {
+            kept.push(word.clone());
+        }
+    }
+    kept
 }
 
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
@@ -329,3 +323,6 @@ mod location;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
+#[cfg(test)]
+#[path = "invocation/targets.rs"]
+mod targets;

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, HelperCommand, Job, PermissionScope,
-    RepoFacts, RepoPath, RootSlug, Step, StepKind, TokenMint, When,
+    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, Job, PermissionScope, RepoFacts,
+    RepoPath, RootSlug, Step, StepKind, TokenMint, When,
 };
 
 use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 00cab67428
 pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
@@ -34,23 +35,7 @@ pub(crate) fn token_mint(facts: &RepoFacts) -> TokenMint {
 pub(crate) fn after_trusted_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| {
-            !matches!(
-                step.kind,
-                StepKind::Checkout { .. }
-                    | StepKind::InstallHelper(_)
-                    | StepKind::Helper(HelperCommand::Plan)
-                    | StepKind::RepositoryPrivacy
-                    | StepKind::PrivateCheck { .. }
-                    | StepKind::ReleaseAssets { .. }
-                    | StepKind::MbxRemote { .. }
-                    | StepKind::MbxPin
-                    | StepKind::MbxPrivate
-                    | StepKind::MbxStore
-                    | StepKind::MbxSeed
-                    | StepKind::CratesMirror(_)
-            )
-        })
+        .position(|step| !step.kind.is_trusted_setup())
         .unwrap_or(steps.len())
 }
 
@@ -274,10 +259,12 @@ fn runs_repository_code(step: &Step) -> bool {
 }
 
 pub(crate) fn compiles(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if !matches!(
-        command,
-        CargoCommand::FmtCheck
-            | CargoCommand::Machete
-            | CargoCommand::NextestRunArchive { .. }
-    ))
+    match &step.kind {
+        StepKind::Cargo(command) => !matches!(
+            command,
+            CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
+        ),
+        StepKind::GeneratorCheck { from_source } => *from_source,
+        _ => false,
+    }
 }

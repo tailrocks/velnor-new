@@ -342,12 +342,17 @@ MSRV, behavior, and build cost; do not hand-write a regex parser for HCL.
 
 Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
-`alint` job. The job MUST use the configured Alint action, defaulting to the
-full-SHA pin (repository-structure alint, distinct
-from workflow-syntax jactionlint):
+`alint` job. The job MUST install Alint through mise from the pin in
+`mise.toml`, `"github:asamarts/alint" = "v0.23.0"`, whose release assets are
+digest-locked in `mise.lock`. The tag `v0.23.0` resolves to commit
+`465e70c48ec13774c8cb3bb58856b58b71e3a93d`. The job then runs Alint as
+repository-structure checking, distinct from workflow-syntax jactionlint:
 
 ```yaml
-- uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3 # v0.22.1
+- uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+  with:
+    install_args: 'github:asamarts/alint'
+- run: alint --format github --config .alint.yml --fail-on-warning check .
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

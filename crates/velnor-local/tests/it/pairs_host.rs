@@ -54,7 +54,8 @@ async fn a_default_velnor_host_that_others_can_write_is_refused() {
 fn the_cli_never_picks_a_velnor_host_planted_in_its_working_directory() {
     let cwd = temp_dir("pairs-cli-cwd");
     let planted = cwd.join(HOST_BINARY);
-    let installed = temp_dir("pairs-cli-installed").join("bin/velnor-local");
+    let installed_root = temp_dir("pairs-cli-installed");
+    let installed = installed_root.join("bin/velnor-local");
     for dir in [planted.parent(), installed.parent()] {
         std::fs::create_dir_all(dir.unwrap_or_else(|| unreachable!()))
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -68,7 +69,7 @@ fn the_cli_never_picks_a_velnor_host_planted_in_its_working_directory() {
     std::fs::copy(env!("CARGO_BIN_EXE_velnor-local"), &installed)
         .unwrap_or_else(|e| unreachable!("{e}"));
     let output = std::process::Command::new(&installed)
-        .current_dir(&cwd)
+        .current_dir(cwd.path())
         .args(["up", "--repo", ".", "--dir"])
         .arg(cwd.join("state"))
         .output()

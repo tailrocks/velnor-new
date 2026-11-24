@@ -56,7 +56,9 @@ pub enum LintKind {
         task: String,
         tools: Vec<String>,
     },
-    GeneratedCheck,
+    GeneratedCheck {
+        from_source: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

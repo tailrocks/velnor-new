@@ -64,6 +64,14 @@ pub(super) async fn migrate_v45_to_v46(conn: &turso::Connection) -> Result<(), H
     Ok(())
 }
 
+pub(super) fn clock_guard() -> Result<(String, String), HostError> {
+    ddl::objects()
+        .into_iter()
+        .find(|(_, name, _)| name == "physical_attempt_jit_interrupted_claim_insert_guard")
+        .map(|(_, name, sql)| (name, v47::startup_sql(&sql)))
+        .ok_or(HostError::Journal)
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     let version = super::journal_version(conn).await?;
     for (kind, name, expected) in ddl::objects() {
@@ -87,8 +95,12 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
             .get(0)
             .map_err(|_| HostError::Journal)?;
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-            || super::sql_normalization::normalize(&actual)
-                != super::sql_normalization::normalize(&expected)
+            || !super::clock_tick::matches(
+                version,
+                &actual,
+                &expected,
+                super::sql_normalization::normalize,
+            )
         {
             return Err(HostError::Journal);
         }

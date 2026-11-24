@@ -154,13 +154,11 @@ async fn send_after_a_consumed_pair(decisions: &str) -> Vec<bool> {
     };
     let sent = dispatch(&run_args(&dir), &env, (address, "token"), &event).await;
     assert!(sent.is_ok(), "{sent:?}");
-    let started = server
+    server
         .client_started
         .lock()
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .clone();
-    std::fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    started
+        .clone()
 }
 
 #[tokio::test]

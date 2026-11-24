@@ -151,7 +151,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
-        When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
+        When::Finalizer | When::FinalizerAfterProducer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
         When::Failure => parts.push("failure()".to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {

@@ -4,7 +4,7 @@ Audit date: 2026-10-03. Baseline source: `c57c700459bbe1549fe7eedcb7d8689585c389
 
 ## Evidence retained
 
-Durable private evidence is retained under `~/.codex-example-org2/private/ci-performance/`. The frozen `evidence-2026-10-03/runtime/` archive contains 42 files: raw logs, measurements, pinned action sources/bundles, release metadata/binaries and historical diffs. Full main-attempt evidence is in `qualification/r37012391691-a1/`; exact PR-attempt evidence and expanded source/artifact audits are in `generator-source-map/`. `/tmp/velnor-ci-runtime-audit` is a temporary working copy. Raw logs were fetched using `gh api --allow-escape-sequences repos/tailrocks/velnor-new/actions/jobs/<id>/logs` because GitHub CLI rejects escape sequences by default. Private raw bytes remain outside this public checkout.
+Durable private evidence is retained under `~/.codex-example-org2/private/ci-performance/`. The frozen `evidence-2026-10-03/runtime/` archive contains 42 files: raw logs, measurements, pinned action sources/bundles, release metadata/binaries and historical diffs. Full main-attempt evidence is in `qualification/r37012391691-a1/`; exact PR-attempt evidence and expanded source/artifact audits are in `generator-source-map/`. `<tmp>/velnor-ci-runtime-audit` is a temporary working copy. Raw logs were fetched using `gh api --allow-escape-sequences repos/tailrocks/velnor-new/actions/jobs/<id>/logs` because GitHub CLI rejects escape sequences by default. Private raw bytes remain outside this public checkout.
 
 Plan log SHA-256: `ea725c1e2a2790c3df1c0ddbf24bc196b548ed8a7530bfbb541a44e93621003c`. Contract log: `7a972da72a88383bd5e5c5565f06464cdd46b7d079037d842fa6c746fb0c0376`.
 
