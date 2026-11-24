@@ -4133,6 +4133,7 @@ dependencies = [
  "libc",
  "nix",
  "ring",
+ "rustix 1.1.6",
  "rustls-pki-types",
  "serde",
  "serde_json",
