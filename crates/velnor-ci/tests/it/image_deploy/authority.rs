@@ -186,6 +186,20 @@ fn ref_patterns_follow_ruleset_globs() {
             "{pattern}"
         );
     }
+    for (exclude, covers) in [
+        ("refs/tags/other-*", true),
+        ("refs/tags/svc-v[0-9]*", false),
+        ("refs/tags/svc-v{1,2}.*", false),
+        ("refs/tags/svc-v!1*", false),
+        ("", false),
+    ] {
+        let detail = ruleset(|r| r["conditions"]["ref_name"]["exclude"] = json!([exclude]));
+        assert_eq!(
+            run(&api(&detail), "mallory", &[]).is_ok(),
+            covers,
+            "exclude {exclude}"
+        );
+    }
 }
 
 #[test]
