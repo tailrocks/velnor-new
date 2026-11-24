@@ -126,7 +126,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                     .dependencies
                     .iter()
                     .all(|dependency| !compiled.contains(dependency.as_str()))
-                && !pruned_outputs_only(invocation, &event.package);
+                && !pruned_outputs_only(invocation, &event.package, &event.version);
             if (same_lock && !event.workspace && event.restored == Some(true)) || workspace_waste {
                 violations.push(format!(
                     "{}: {} v{} compiled despite usable restored inputs{}",
@@ -164,7 +164,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     violations
 }
 
-fn pruned_outputs_only(invocation: &Invocation, package: &str) -> bool {
+fn pruned_outputs_only(invocation: &Invocation, package: &str, version: &str) -> bool {
     let mut saw = false;
     for artifact in &invocation.artifacts {
         if artifact.fresh {
@@ -174,12 +174,21 @@ fn pruned_outputs_only(invocation: &Invocation, package: &str) -> bool {
         else {
             continue;
         };
-        if identity.name != package {
+        if identity.name != package
+            || identity.version != version
+            || identity
+                .source
+                .is_none_or(|source| !source.starts_with("path+"))
+        {
             continue;
         }
         saw = true;
-        if artifact.filenames.is_empty()
-            || artifact.filenames.iter().any(|file| !pruned_output(file))
+        if retained_build_script(artifact)
+            || artifact.filenames.is_empty()
+            || artifact
+                .filenames
+                .iter()
+                .any(|file| !pruned_output(file, invocation.target_directory.as_deref()))
         {
             return false;
         }
@@ -187,16 +196,46 @@ fn pruned_outputs_only(invocation: &Invocation, package: &str) -> bool {
     saw
 }
 
-fn pruned_output(file: &str) -> bool {
-    let path = std::path::Path::new(file);
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("");
-    crate::cache_prune::is_executable(name)
-        || path
-            .components()
-            .any(|component| component.as_os_str() == "doc")
+fn retained_build_script(artifact: &crate::cargo_artifacts::CargoArtifact) -> bool {
+    artifact
+        .target
+        .kind
+        .iter()
+        .any(|kind| kind == "custom-build")
+        || artifact.filenames.iter().any(|file| {
+            let name = file_name(file);
+            name.starts_with("build_script_") || name.starts_with("build-script-")
+        })
+}
+
+fn pruned_output(file: &str, target_directory: Option<&str>) -> bool {
+    let normalized = file.replace('\\', "/");
+    let name = file_name(&normalized);
+    if name.starts_with("build_script_") || name.starts_with("build-script-") {
+        return false;
+    }
+    crate::cache_prune::is_executable(name) || doc_output(&normalized, target_directory)
+}
+
+fn doc_output(file: &str, target_directory: Option<&str>) -> bool {
+    if let Some(dir) = target_directory {
+        let dir = dir.replace('\\', "/");
+        let prefix = dir.trim_end_matches('/');
+        let Some(rest) = file.strip_prefix(prefix) else {
+            return false;
+        };
+        let rest = rest.trim_start_matches('/');
+        return rest == "doc" || rest.starts_with("doc/");
+    }
+    let parts: Vec<&str> = file.split('/').collect();
+    parts
+        .windows(2)
+        .any(|pair| pair[0] == "target" && pair[1] == "doc")
+        || file.starts_with("doc/")
+}
+
+fn file_name(file: &str) -> &str {
+    file.rsplit(['/', '\\']).next().unwrap_or(file)
 }
 
 fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
