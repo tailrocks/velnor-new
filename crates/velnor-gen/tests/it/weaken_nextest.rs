@@ -214,3 +214,35 @@ fn a_profile_without_inherits_falls_back_to_the_default_profile() -> TestResult 
     assert_eq!(named.len(), 2, "{named:?}");
     Ok(())
 }
+
+#[test]
+fn an_inherited_override_that_a_catch_all_override_of_the_profile_replaces_is_not_named()
+-> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.base]\n\n[[profile.base.overrides]]\nfilter = \"test(x)\"\nretries = 3\n\n[profile.ci]\ninherits = \"base\"\n\n[[profile.ci.overrides]]\nretries = 0\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named, Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn an_inherited_override_that_a_filtered_override_of_the_profile_leaves_alone_is_named()
+-> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.base]\n\n[[profile.base.overrides]]\nfilter = \"test(x)\"\nretries = 3\n\n[profile.ci]\ninherits = \"base\"\n\n[[profile.ci.overrides]]\nfilter = \"test(y)\"\nretries = 0\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(
+        named[0].contains("profile.base.overrides filter = \"test(x)\" retries = 3"),
+        "{named:?}"
+    );
+    Ok(())
+}
