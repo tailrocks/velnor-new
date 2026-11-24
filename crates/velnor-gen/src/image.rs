@@ -67,6 +67,7 @@ pub(crate) fn image_workflow(
         runner: &facts.config.runner,
         private: facts.config.private_sources.as_ref(),
         mbx: mbx_of(facts),
+        skip_draft_pull_requests: facts.config.skip_draft_pull_requests,
     };
     render_image(&workflow).map_err(GenerateError::Rules)
 }

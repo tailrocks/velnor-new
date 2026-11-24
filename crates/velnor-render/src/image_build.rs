@@ -74,7 +74,7 @@ pub(crate) fn build_job(
     let image = build.image;
     let reached = match image.pr_build {
         ImagePrBuild::Off => events.branch_push(),
-        _ => format!("({}) || ({})", events.branch_push(), Events::pull_request()),
+        _ => format!("({}) || ({})", events.branch_push(), events.pull_request()),
     };
     RenderedJob {
         id: job_id(image, "build"),

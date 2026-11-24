@@ -143,7 +143,7 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),
-            gate_step(GATE_WAIT_SECONDS, true, &workflow.pr_only_checks(), false),
+            gate_step(GATE_WAIT_SECONDS, false, &workflow.pr_only_checks(), false),
         ],
         ..RenderedJob::default()
     }

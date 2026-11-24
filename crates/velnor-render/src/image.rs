@@ -49,6 +49,7 @@ pub struct ImageWorkflow<'a> {
     pub runner: &'a RunnerLabel,
     pub private: Option<&'a PrivateSources>,
     pub mbx: ImageMbx,
+    pub skip_draft_pull_requests: bool,
 }
 
 impl ImageWorkflow<'_> {
@@ -67,6 +68,7 @@ impl ImageWorkflow<'_> {
 pub(crate) struct Events<'a> {
     pub(crate) repository: &'a str,
     pub(crate) branch: &'a str,
+    pub(crate) skip_drafts: bool,
 }
 
 impl Events<'_> {
@@ -84,7 +86,16 @@ impl Events<'_> {
         )
     }
 
-    pub(crate) fn pull_request() -> &'static str {
+    pub(crate) fn pull_request(&self) -> String {
+        let draft = if self.skip_drafts {
+            " && github.event.pull_request.draft != true"
+        } else {
+            ""
+        };
+        format!("{}{draft}", Self::pull_request_base())
+    }
+
+    fn pull_request_base() -> &'static str {
         "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]') && (github.event.action != 'edited' || github.event.changes.base != null)"
     }
 }
@@ -105,6 +116,7 @@ pub fn render_image(
     let events = Events {
         repository: workflow.repository,
         branch: workflow.branch,
+        skip_drafts: workflow.skip_draft_pull_requests,
     };
     let mut jobs: Vec<RenderedJob> = Vec::new();
     if !workflow.pr_only_checks().is_empty() {
@@ -113,7 +125,7 @@ pub fn render_image(
     jobs.push(gate_job(workflow, &events));
     for build in &workflow.images {
         jobs.push(build_job(workflow, build, &events));
-        jobs.extend(check_job(workflow, build));
+        jobs.extend(check_job(workflow, build, &events));
         jobs.push(publish_job(workflow, build, &events));
         jobs.push(authority_job(workflow, build, &events));
         jobs.push(promote_job(workflow, build));

@@ -323,3 +323,33 @@ fn the_staged_artifact_outlives_a_weekend_of_environment_approval() -> TestResul
     );
     Ok(())
 }
+
+#[test]
+fn drafts_are_skipped_only_when_the_repository_skips_them() -> TestResult {
+    let plain = rendered("image-plain")?;
+    let condition = |workflow: &serde_json::Value, id: &str| workflow["jobs"][id]["if"].to_string();
+    assert!(!condition(&plain, "image-plain-svc-build").contains("draft"));
+    let skipping = image(&crate::image_workflow::edited("image-plain", |text| {
+        format!("skip_draft_pull_requests = true\n{text}")
+    })?)?;
+    for id in ["image-plain-svc-build", "image-plain-svc-check"] {
+        assert!(
+            condition(&skipping, id).contains("github.event.pull_request.draft != true"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_superseded_commit_still_publishes_its_sha_image_so_that_its_release_tag_can_be_promoted()
+-> TestResult {
+    let workflow = rendered("image-plain")?;
+    let gate = step_named(
+        &workflow["jobs"]["image-gate"],
+        "Wait for every required check",
+    )?;
+    let run = gate["run"].as_str().ok_or("no gate")?;
+    assert!(!run.contains("--require-tip"), "{run}");
+    Ok(())
+}
