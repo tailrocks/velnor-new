@@ -12,7 +12,7 @@ use crate::verdict_plan::{Need, PlanOutput};
 
 #[path = "verdict_counts.rs"]
 mod verdict_counts;
-use verdict_counts::{counts, number};
+use verdict_counts::{counts, number, raw_test_counts};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobResult {
@@ -55,6 +55,12 @@ pub struct PackageCounts {
 
 /// GitHub caps one job output at 1 MB; the gate bounds the whole needs JSON separately.
 pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 1_000_000;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RawTestCounts {
+    pub run: Option<String>,
+    pub listed: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestCounts {
@@ -184,6 +190,7 @@ pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
     tests: &BTreeMap<(JobId, RootSlug), Option<TestCounts>>,
+    raw: &BTreeMap<(JobId, RootSlug), RawTestCounts>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
@@ -207,28 +214,51 @@ pub fn verdict(
         judge(&mut out, job, *scheduled, result);
     }
     for (slug, jobs) in &plan.test_lanes {
-        let counts: Vec<Option<TestCounts>> = jobs
+        let mut counted: Vec<TestCounts> = Vec::new();
+        let mut missing = false;
+        let mut scheduled = false;
+        for job in jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(&(job.clone(), slug.clone())).cloned().flatten())
-            .collect();
-        if counts.is_empty() {
+        {
+            scheduled = true;
+            let counts = tests.get(&(job.clone(), slug.clone())).cloned().flatten();
+            let raw = raw
+                .get(&(job.clone(), slug.clone()))
+                .cloned()
+                .unwrap_or_default();
+            let empty = results.get(job) == Some(&JobResult::Success)
+                && raw.run.as_deref() == Some("0")
+                && raw.listed.as_deref() == Some("0")
+                && counts
+                    .as_ref()
+                    .is_none_or(|report| report.run == 0 && report.listed == 0);
+            if empty {
+                out.warnings
+                    .push(format!("{job} selected no tests of {slug} (empty shard)"));
+            } else if let Some(counts) = counts {
+                counted.push(counts);
+            } else {
+                missing = true;
+            }
+        }
+        if !scheduled {
             out.problems.push(format!(
                 "no scheduled job reports {TESTS_BY_PACKAGE_OUTPUT} for {slug}, whose selected packages have tests"
             ));
-        } else if counts.contains(&None) {
+        } else if missing {
             out.problems.push(format!(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
-            for job in counts.iter().flatten() {
+            for job in &counted {
                 if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
                     out.problems.push(format!(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
                 }
             }
-            for (name, package) in lane_package_totals(counts.iter().flatten()) {
+            for (name, package) in lane_package_totals(counted.iter()) {
                 if package.listed > 0 && package.run == 0 {
                     out.problems.push(format!(
                         "package {name} of {slug} listed {} tests and ran none",
@@ -287,7 +317,20 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
             })
         })
         .collect();
-    let mut out = verdict(&plan, &results, &tests);
+    let raw = spec
+        .jobs
+        .iter()
+        .filter(|job| !job.tests.is_empty())
+        .flat_map(|job| {
+            job.tests.iter().map(|slug| {
+                (
+                    (job.id.clone(), slug.clone()),
+                    raw_test_counts(needs.get(&job.id), slug),
+                )
+            })
+        })
+        .collect();
+    let mut out = verdict(&plan, &results, &tests, &raw);
     for id in needs.keys().filter(|id| !plan.planned.contains_key(*id)) {
         out.problems
             .push(format!("{id} is in needs and the gate does not know it"));

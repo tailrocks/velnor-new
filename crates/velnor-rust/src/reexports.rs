@@ -73,8 +73,8 @@ pub use crate::target_dir::{NESTED_ROOTS_FOLDER, default_folder};
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{
-    JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts, package_token,
-    verdict,
+    JobResult, PackageCounts, RawTestCounts, TestCounts, Verdict, decide, encode_package_counts,
+    package_token, verdict,
 };
 pub use crate::verdict_plan::{Need, PlanOutput};
 pub use crate::weaken::introduced;

@@ -5,7 +5,7 @@ use crate::facts::TestResult;
 use crate::required_gate::{expect, passing, with};
 
 #[test]
-fn a_suite_that_is_compiled_out_fails_and_an_all_ignored_suite_passes() -> TestResult {
+fn a_job_that_selected_no_tests_passes_as_an_empty_shard() -> TestResult {
     let none_listed = |ignored| {
         with(passing(), |run| {
             run.count = Some("0");
@@ -13,11 +13,11 @@ fn a_suite_that_is_compiled_out_fails_and_an_all_ignored_suite_passes() -> TestR
             run.ignored = ignored;
         })
     };
-    let compiled_out = "a test job of root listed no tests and ran none";
-    expect(&none_listed(Some("0")), false, compiled_out)?;
-    expect(&none_listed(Some("3")), true, "Required: pass")?;
-    expect(&none_listed(None), true, "Required: pass")?;
-    expect(&none_listed(Some("")), true, "Required: pass")?;
+    let empty = "warning: rust-test selected no tests of root (empty shard)";
+    expect(&none_listed(Some("0")), true, empty)?;
+    expect(&none_listed(Some("3")), true, empty)?;
+    expect(&none_listed(None), true, empty)?;
+    expect(&none_listed(Some("")), true, empty)?;
     let garbled = with(passing(), |run| run.ignored = Some("-1"));
     expect(&garbled, false, "missing or malformed")
 }

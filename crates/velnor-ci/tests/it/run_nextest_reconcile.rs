@@ -249,7 +249,7 @@ END";
 }
 
 #[test]
-fn a_suite_that_is_compiled_out_fails_the_required_gate() {
+fn a_suite_that_selected_no_tests_passes_the_required_gate_as_an_empty_shard() {
     let script = r"cat >&2 <<'END'
      Summary [   0.001s] 0 tests run: 0 passed, 0 skipped
 END";
@@ -261,9 +261,11 @@ END";
         "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
     );
     let verdict = required_verdict(&written).expect("verdict");
-    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(verdict.passed, "{}", verdict.table());
     assert!(
-        verdict.table().contains("listed no tests and ran none"),
+        verdict
+            .table()
+            .contains("warning: rust-test selected no tests of root (empty shard)"),
         "{}",
         verdict.table()
     );

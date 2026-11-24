@@ -30,6 +30,7 @@ struct Run {
     b: (&'static str, &'static str),
     ignored: &'static str,
     event: &'static str,
+    drop_b_packages: bool,
 }
 
 fn passing() -> Run {
@@ -41,6 +42,7 @@ fn passing() -> Run {
         b: ("2", "2"),
         ignored: "0",
         event: "pull_request",
+        drop_b_packages: false,
     }
 }
 
@@ -52,13 +54,13 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
             .collect()
     };
     let plan = owned(&[("rust_root_mode", run.mode), ("rust_root_tests", "run")]);
-    let counts = |(tests_run, listed): (&str, &str)| {
+    let counts = |(tests_run, listed): (&str, &str), keep_packages: bool| {
         let mut outputs = owned(&[
             ("tests_run", tests_run),
             ("tests_listed", listed),
             ("tests_ignored", run.ignored),
         ]);
-        if canonical(tests_run) && canonical(listed) {
+        if keep_packages && canonical(tests_run) && canonical(listed) {
             outputs.insert(
                 "tests_by_package".to_owned(),
                 format!("pkg={tests_run}/{listed}"),
@@ -70,8 +72,12 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
     for (job, result, outputs) in [
         ("rust-plan", "success", plan),
         ("rust-lint", run.lint, BTreeMap::new()),
-        ("rust-test-a", "success", counts(run.a)),
-        ("rust-test-b", "success", counts(run.b)),
+        ("rust-test-a", "success", counts(run.a, true)),
+        (
+            "rust-test-b",
+            "success",
+            counts(run.b, !run.drop_b_packages),
+        ),
         ("pushed", run.pushed, BTreeMap::new()),
     ] {
         needs.insert(
@@ -156,15 +162,25 @@ fn a_package_split_across_the_lane_passes_when_the_lane_ran_it() -> TestResult {
 }
 
 #[test]
-fn a_split_lane_job_that_listed_and_ran_no_tests_fails_while_another_job_ran_some() -> TestResult {
+fn an_empty_shard_passes_while_another_job_ran_some() -> TestResult {
     let run = Run {
         b: ("0", "0"),
         ..passing()
     };
     expect(
         &run,
-        false,
-        "a test job of root listed no tests and ran none",
+        true,
+        "warning: rust-test-b selected no tests of root (empty shard)",
+    )?;
+    let run = Run {
+        b: ("0", "0"),
+        drop_b_packages: true,
+        ..passing()
+    };
+    expect(
+        &run,
+        true,
+        "warning: rust-test-b selected no tests of root (empty shard)",
     )
 }
 

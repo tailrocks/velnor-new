@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Need, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, TestCounts, parse_package_counts,
+    Need, RawTestCounts, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TestCounts, parse_package_counts,
 };
 
 pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts> {
@@ -35,6 +35,21 @@ pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts>
         ignored,
         packages,
     })
+}
+
+pub(super) fn raw_test_counts(need: Option<&Need>, slug: &RootSlug) -> RawTestCounts {
+    let named = |name: &str| {
+        need.and_then(|need| {
+            need.outputs
+                .get(&format!("{name}_{slug}"))
+                .or_else(|| need.outputs.get(name))
+        })
+        .cloned()
+    };
+    RawTestCounts {
+        run: named(TESTS_RUN_OUTPUT),
+        listed: named(TESTS_LISTED_OUTPUT),
+    }
 }
 
 pub(super) fn number(text: &str) -> Option<u64> {
