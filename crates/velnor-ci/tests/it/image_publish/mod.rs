@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checks;
+mod cli;
 mod client;
+mod fixture;
 mod gate;
+mod gates;
 mod location;
+mod publish;
 mod registry;
 mod transport;

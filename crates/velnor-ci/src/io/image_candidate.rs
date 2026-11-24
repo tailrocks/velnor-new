@@ -126,7 +126,9 @@ pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiE
 }
 
 struct Checked {
+    raw: Vec<u8>,
     record: Value,
+    scan: archive::Scanned,
 }
 
 fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, CiError> {
@@ -151,7 +153,11 @@ fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, 
     if value["source"]["inputs"] != source_inputs(&root)? {
         return fail("Build input bytes changed after candidate creation.");
     }
-    Ok(Checked { record: value })
+    Ok(Checked {
+        raw,
+        record: value,
+        scan,
+    })
 }
 
 fn check_builder(root: &Path, record: &Value) -> Result<(), CiError> {

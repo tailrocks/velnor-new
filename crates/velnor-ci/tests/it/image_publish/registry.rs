@@ -84,6 +84,13 @@ impl Fake {
         self.state().log.clone()
     }
 
+    pub(super) fn holds(&self, other: &Self) {
+        let theirs = other.state();
+        let mut mine = self.state();
+        mine.blobs.extend(theirs.blobs.clone());
+        mine.manifests.extend(theirs.manifests.clone());
+    }
+
     pub(super) fn blobs(&self) -> Vec<String> {
         self.state().blobs.keys().cloned().collect()
     }
