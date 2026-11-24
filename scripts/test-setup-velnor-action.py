@@ -374,14 +374,6 @@ done
 exec "$REAL_TOUCH" "$@"
 """
 
-STUB_STALE_CHANGE_STAT = """#!/bin/sh
-for arg; do last="$arg"; done
-if [ "$last" = "$STUB_STALE" ]; then
-  case "$*" in *%Z*|*%c*) echo $(($(date +%s) - 7200)); exit 0 ;; esac
-fi
-exec "$REAL_STAT" "$@"
-"""
-
 WATCHED_TOOLS = (
     "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
     "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
@@ -1081,17 +1073,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         near_ahead.write_bytes(b"quarantine whose start is half an hour ahead of this clock\n")
         no_start = cached.parent / ".velnor-ci.evicting.x.13.13"
         no_start.write_bytes(b"quarantine with no start time\n")
-        older_in_flight = cached.parent / ".velnor-ci.evict.4242.9"
-        older_in_flight.write_bytes(b"archive an older setup-velnor version just moved aside, before its touch\n")
-        os.utime(older_in_flight, (now - 7200, now - 7200))
-        older_left = cached.parent / ".velnor-ci.evict.4243.10"
-        older_left.write_bytes(b"quarantine an older setup-velnor version left two hours ago\n")
-        stat = self.stub_bin / "stat"
-        stat.write_text(STUB_STALE_CHANGE_STAT)
-        stat.chmod(0o755)
-        result = self.install(
-            sha256(self.archive), extra_env={"REAL_STAT": shutil.which("stat"), "STUB_STALE": str(older_left)}
-        )
+        result = self.install(sha256(self.archive))
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(cached.read_bytes(), self.archive)
         self.assertFalse(abandoned.exists(), "the quarantine of an eviction that started two hours ago was not removed")
@@ -1099,8 +1081,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertFalse(far_ahead.exists(), "a quarantine whose start is two hours ahead was not removed")
         self.assertTrue(near_ahead.exists(), "a quarantine whose start is half an hour ahead was removed")
         self.assertFalse(no_start.exists(), "a quarantine with no start time was not removed")
-        self.assertTrue(older_in_flight.exists(), "an archive an older setup-velnor version had just moved aside was removed")
-        self.assertFalse(older_left.exists(), "a quarantine an older setup-velnor version left two hours ago was not removed")
 
     def test_a_job_that_publishes_removes_the_quarantine_of_an_eviction_that_died_over_an_hour_ago(self):
         cached = self.cached_archive()

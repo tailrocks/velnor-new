@@ -103,21 +103,13 @@ runs:
         mtime_of() {
           stat -c %Y "$1" 2> /dev/null || stat -f %m "$1" 2> /dev/null
         }
-        changed_at() {
-          stat -c %Z "$1" 2> /dev/null || stat -f %c "$1" 2> /dev/null
-        }
         drop_abandoned_evictions() {
-          set -- "$dir"/.velnor-ci.evicting.* "$dir"/.velnor-ci.evict.*
+          set -- "$dir"/.velnor-ci.evicting.*
           now="$(date +%s 2> /dev/null)" || return 0
           for path; do
             [ -e "$path" ] || [ -L "$path" ] || continue
-            case "$path" in
-              */.velnor-ci.evicting.*)
-                started="${path##*/.velnor-ci.evicting.}"
-                started="${started%%.*}"
-                ;;
-              *) started="$(changed_at "$path")" || started= ;;
-            esac
+            started="${path##*/.velnor-ci.evicting.}"
+            started="${started%%.*}"
             case "$started" in
               '' | *[!0-9]*) ;;
               *) if [ "$started" -ge "$((now - 3600))" ] 2> /dev/null && [ "$started" -le "$((now + 3600))" ] 2> /dev/null; then continue; fi ;;
