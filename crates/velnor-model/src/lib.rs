@@ -31,6 +31,7 @@ mod step_setup;
 mod steps;
 mod test_group;
 mod token_permission;
+mod tools_store;
 mod trusted;
 mod verdict;
 
@@ -99,6 +100,7 @@ pub use test_group::{
     TestGroup, TestNeed,
 };
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use tools_store::TOOLS_KEY_LOCK_STALE_AFTER;
 pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 

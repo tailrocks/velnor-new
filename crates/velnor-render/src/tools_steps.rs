@@ -198,6 +198,8 @@ fn clear_step() -> RenderedStep {
 }
 
 pub(crate) const SAVE_TIMEOUT_MINUTES: u16 = 30;
+const _: () =
+    assert!(SAVE_TIMEOUT_MINUTES as u64 * 60 < velnor_model::TOOLS_KEY_LOCK_STALE_AFTER.as_secs());
 
 pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;

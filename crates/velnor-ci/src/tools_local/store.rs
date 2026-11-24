@@ -17,7 +17,7 @@ const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
 const RETIRED_PREFIX: &str = "retired-";
 const LOCK_PREFIX: &str = ".lock-";
-const STALE_AFTER: Duration = Duration::from_hours(1);
+const STALE_AFTER: Duration = velnor_model::TOOLS_KEY_LOCK_STALE_AFTER;
 const COPY: &str = "/bin/cp";
 
 fn base(dir: Option<&str>, owner: u32, read_only: bool) -> Result<PathBuf, Outcome> {

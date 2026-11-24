@@ -155,7 +155,14 @@ fn a_node_hit_on_a_pull_request_neither_looks_up_nor_saves_the_tools() -> TestRe
 #[test]
 fn every_node_store_save_step_ends_before_its_key_lock_can_look_stale() -> TestResult {
     let mut saves = 0;
-    for config in ["mbx_shared_store = true\n", "mbx_shared_store = false\n"] {
+    let stale_minutes = velnor_model::TOOLS_KEY_LOCK_STALE_AFTER.as_secs() / 60;
+    let configs = [
+        "mbx_shared_store = true\n",
+        "mbx_shared_store = false\n",
+        "shape = \"groups\"\nmbx_shared_store = true\n",
+    ];
+    let mut primes = 0;
+    for config in configs {
         for helper in ["0.1.89", "0.1.110"] {
             let text = workflow_for(config, helper)?;
             for (id, step) in steps_of(&text)? {
@@ -164,9 +171,10 @@ fn every_node_store_save_step_ends_before_its_key_lock_can_look_stale() -> TestR
                     .is_some_and(|run| run.contains("tools-local save"))
                 {
                     saves += 1;
+                    primes += usize::from(step["name"] == "Prime the node store with the tools");
                     let minutes = step["timeout-minutes"].as_u64();
                     assert!(
-                        minutes.is_some_and(|m| (1..60).contains(&m)),
+                        minutes.is_some_and(|m| (1..stale_minutes).contains(&m)),
                         "{id} {config:?} {helper}: {step}"
                     );
                 }
@@ -174,6 +182,7 @@ fn every_node_store_save_step_ends_before_its_key_lock_can_look_stale() -> TestR
         }
     }
     assert_ne!(saves, 0);
+    assert_ne!(primes, 0);
     Ok(())
 }
 
