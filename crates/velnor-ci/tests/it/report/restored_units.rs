@@ -27,7 +27,7 @@ fn a_dependency_unit_the_restored_base_never_held_is_a_notice_not_waste() {
     assert!(report.contains("no waste"), "{report}");
     assert!(
         report.contains(
-            ".: dependency packages whose compiled units were absent from the restored base (the run that saved it built a different package or feature selection): serde v1.0.0"
+            ".: dependency packages whose compiled units were absent from the restored base (for example, the run that saved it built a different package or feature selection): serde v1.0.0"
         ),
         "{report}"
     );
