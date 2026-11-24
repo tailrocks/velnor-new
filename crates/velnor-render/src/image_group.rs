@@ -44,6 +44,12 @@ fn features<'a>(build: &'a ImageBuild<'_>) -> Vec<&'a str> {
     features
 }
 
+fn packages<'a>(build: &'a ImageBuild<'_>) -> Vec<&'a str> {
+    let mut packages: Vec<&str> = build.packages.clone();
+    packages.sort_unstable();
+    packages
+}
+
 fn same_compilation(left: &ImageBuild<'_>, right: &ImageBuild<'_>) -> bool {
     let (left_image, right_image) = (left.image, right.image);
     left.root == right.root
@@ -51,6 +57,8 @@ fn same_compilation(left: &ImageBuild<'_>, right: &ImageBuild<'_>) -> bool {
         && left_image.glibc == right_image.glibc
         && left_image.openssl == right_image.openssl
         && left_image.default_features == right_image.default_features
+        && left_image.pr_build == right_image.pr_build
+        && packages(left) == packages(right)
         && features(left) == features(right)
 }
 

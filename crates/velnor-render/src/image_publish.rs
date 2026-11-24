@@ -4,7 +4,7 @@
 use velnor_model::{ImageConfig, ImageCredential, ImageHost, ImageRegistry, ImageVisibility};
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
-use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, staged};
+use crate::image_build::{LIVE_OUTPUT, artifact, checkout, job_id, labels, setup_buildx, staged};
 use crate::image_gate::GATE_JOB;
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
@@ -15,7 +15,7 @@ use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
-const TIP_STEP: &str = "tip";
+pub(crate) const TIP_STEP: &str = "tip";
 
 pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     let mut scopes = vec![("contents", "read")];
@@ -190,9 +190,10 @@ fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
     }
 }
 
-fn tip() -> RenderedStep {
+pub(crate) fn tip(condition: Option<String>) -> RenderedStep {
     RenderedStep {
         id: Some(TIP_STEP.to_owned()),
+        condition,
         env: variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
             ("REPOSITORY", "${{ github.repository }}"),
@@ -274,7 +275,7 @@ pub(crate) fn publish_job(
     steps.push(restore_modes(image));
     steps.push(setup_buildx());
     steps.extend(image.registries.iter().map(login));
-    steps.push(tip());
+    steps.push(tip(None));
     steps.extend(withheld(workflow.branch));
     steps.push(push(image, workflow.branch));
     for registry in &image.registries {
@@ -282,13 +283,13 @@ pub(crate) fn publish_job(
     }
     RenderedJob {
         concurrency: Some(RenderedConcurrency {
-            group: format!("{}-${{{{ github.ref }}}}", job_id(image, "publish")),
+            group: format!("{}-${{{{ github.sha }}}}", job_id(image, "publish")),
             cancel_in_progress: false,
         }),
         id: job_id(image, "publish"),
         needs: vec![compile.to_owned(), GATE_JOB.to_owned()],
         condition: Some(expression(&format!(
-            "needs.{GATE_JOB}.outputs.ready == 'true' && {}",
+            "needs.{GATE_JOB}.outputs.ready == 'true' && needs.{compile}.outputs.{LIVE_OUTPUT} == 'true' && {}",
             events.branch_push()
         ))),
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),

@@ -4,7 +4,7 @@
 use std::fmt::Write;
 
 use crate::image::{Events, ImageWorkflow};
-use crate::image_build::ref_scope;
+use crate::image_build::{only_live, sha_scope, stands_down};
 use crate::install_steps::install_helper;
 use crate::release::{ENVIRONMENT as RELEASE_ENVIRONMENT, HOSTED_RUNNER};
 use crate::release_binaries::command;
@@ -129,7 +129,7 @@ pub(crate) const GATE_JOB: &str = "image-gate";
 pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> RenderedJob {
     RenderedJob {
         concurrency: Some(RenderedConcurrency {
-            group: format!("{GATE_JOB}-{}", ref_scope()),
+            group: format!("{GATE_JOB}-{}", sha_scope()),
             cancel_in_progress: true,
         }),
         id: GATE_JOB.to_owned(),
@@ -148,7 +148,13 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),
-            gate_step(GATE_WAIT_SECONDS, false, &workflow.pr_only_checks(), false),
+            stands_down(),
+            only_live(gate_step(
+                GATE_WAIT_SECONDS,
+                false,
+                &workflow.pr_only_checks(),
+                false,
+            )),
         ],
         ..RenderedJob::default()
     }

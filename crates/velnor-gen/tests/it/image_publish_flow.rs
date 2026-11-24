@@ -165,7 +165,11 @@ fn the_pull_request_image_build_is_its_own_job_with_the_publish_jobs_sparse_chec
         "the compile job holds no docker step"
     );
     let upload = step_named(build, "Upload image-cluster-svc")?;
-    assert!(upload.get("if").is_none());
+    assert!(
+        upload["if"]
+            .as_str()
+            .is_some_and(|text| text.contains("steps.tip.outputs.ready"))
+    );
     let check = &workflow["jobs"]["image-cluster-svc-check"];
     assert_eq!(
         check["needs"],
@@ -201,7 +205,7 @@ fn pr_only_checks_reach_the_gate_and_the_authority_and_widen_their_token_to_chec
             .find(|step| {
                 step["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("image gate"))
+                    .is_some_and(|run| run.contains("image gate") && run.contains("--wait-seconds"))
             })
             .ok_or("no gate step")?;
         assert!(

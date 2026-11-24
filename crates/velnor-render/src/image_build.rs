@@ -11,6 +11,7 @@ use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
 use crate::image_group::Compile;
+use crate::image_publish::{TIP_STEP, tip};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
@@ -21,6 +22,7 @@ use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 use crate::steps::{CHECKOUT, RUN};
 
 const ARTIFACT_RETENTION_DAYS: u64 = 7;
+pub(crate) const LIVE_OUTPUT: &str = "live";
 
 pub(crate) fn job_id(image: &ImageConfig, part: &str) -> String {
     format!("image-{}-{part}", image.name)
@@ -67,8 +69,31 @@ pub(crate) fn checkout() -> RenderedStep {
     }
 }
 
-pub(crate) fn ref_scope() -> &'static str {
-    "${{ github.event_name == 'push' && github.ref || github.run_id }}"
+pub(crate) fn sha_scope() -> &'static str {
+    "${{ github.event_name == 'push' && github.sha || github.run_id }}"
+}
+
+pub(crate) fn stands_down() -> RenderedStep {
+    tip(Some(expression(
+        "github.event_name == 'push' && github.run_attempt == 1",
+    )))
+}
+
+pub(crate) fn only_live(mut step: RenderedStep) -> RenderedStep {
+    let live = format!(
+        "github.event_name != 'push' || github.run_attempt != 1 || steps.{TIP_STEP}.outputs.ready == 'true'"
+    );
+    let inner = step.condition.as_deref().map(|text| {
+        text.strip_prefix("${{ ")
+            .and_then(|rest| rest.strip_suffix(" }}"))
+            .unwrap_or(text)
+            .to_owned()
+    });
+    step.condition = Some(expression(&match inner {
+        Some(inner) => format!("({inner}) && ({live})"),
+        None => live,
+    }));
+    step
 }
 
 pub(crate) fn build_job(
@@ -88,9 +113,15 @@ pub(crate) fn build_job(
     let id = group.id();
     RenderedJob {
         concurrency: Some(RenderedConcurrency {
-            group: format!("{id}-{}", ref_scope()),
+            group: format!("{id}-{}", sha_scope()),
             cancel_in_progress: true,
         }),
+        outputs: vec![(
+            LIVE_OUTPUT.to_owned(),
+            format!(
+                "${{{{ github.run_attempt != 1 || steps.{TIP_STEP}.outputs.ready == 'true' }}}}"
+            ),
+        )],
         id,
         condition: Some(expression(&reached)),
         permissions: permissions(&[("contents", "read")]),
@@ -108,7 +139,7 @@ pub(crate) fn build_job(
 
 fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<RenderedStep> {
     let first = group.members[0];
-    let mut steps = vec![checkout(), install_helper(workflow.helper)];
+    let mut steps = vec![checkout(), install_helper(workflow.helper), stands_down()];
     match workflow.mbx {
         ImageMbx::Off => {}
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
@@ -147,6 +178,8 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
         }
         steps.push(artifact_step);
     }
+    let live = steps.split_off(3);
+    steps.extend(live.into_iter().map(only_live));
     steps
 }
 
