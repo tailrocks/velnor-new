@@ -278,6 +278,15 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+pub(crate) fn hang_up() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    thread::spawn(move || listener.incoming().for_each(drop));
+    format!("http://{address}")
+}
+
 pub(crate) fn serve(responses: BTreeMap<String, String>) -> String {
     serve_with_status(
         responses

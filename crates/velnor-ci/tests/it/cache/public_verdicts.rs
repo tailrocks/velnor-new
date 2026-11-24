@@ -8,8 +8,8 @@ use super::public_declared::{declare, repositories};
 use super::public_git::{
     OTHER_SHA, SHA, TOKEN, decide_with, git, lock, public, refused, reply, serve,
 };
-use super::support::{hang_up, seed};
-use crate::io::Repo as Checkout;
+use super::support::seed;
+use crate::io::{Repo as Checkout, hang_up};
 
 const VERDICTS: &str = "VELNOR_PUBLIC_VERDICTS";
 

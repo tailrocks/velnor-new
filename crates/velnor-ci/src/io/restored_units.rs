@@ -15,7 +15,7 @@ const DEP_INFO_LIMIT: u64 = 4 * 1024 * 1024;
 
 pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     let units = unit_files(target).ok()?;
-    let inside = [Some(target.to_path_buf()), fs::canonicalize(target).ok()];
+    let inside = fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
     let mut found = RestoredUnits::default();
     let mut fingerprints = Vec::new();
     for (unit, path) in units {
@@ -36,7 +36,7 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
             }
             UnitFile::DepInfo {
                 hash: Some(hash), ..
-            } if names_missing_file(&path, inside.iter().flatten()) => {
+            } if names_missing_file(&path, &inside) => {
                 found.missing_input.insert(hash);
             }
             _ => {}
@@ -71,18 +71,35 @@ fn read_small(file: &Path) -> Option<String> {
         .and_then(|_| fs::read_to_string(file).ok())
 }
 
-fn names_missing_file<'a>(dep_info: &Path, inside: impl Iterator<Item = &'a PathBuf>) -> bool {
+fn names_missing_file(dep_info: &Path, inside: &Path) -> bool {
     let Some(text) = read_small(dep_info) else {
         return false;
     };
-    let inside: Vec<&PathBuf> = inside.collect();
     velnor_rust::dep_info_paths(&text).iter().any(|named| {
         let named = Path::new(named);
         named.is_absolute()
-            && !inside.iter().any(|root| named.starts_with(root))
+            && !physical(named).starts_with(inside)
             && !cargo_unpacks(named)
             && fs::metadata(named).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
     })
+}
+
+fn physical(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut ancestor = path;
+    loop {
+        if let Ok(resolved) = fs::canonicalize(ancestor) {
+            return rest
+                .iter()
+                .rev()
+                .fold(resolved, |joined, part| joined.join(part));
+        }
+        let (Some(parent), Some(name)) = (ancestor.parent(), ancestor.file_name()) else {
+            return path.to_path_buf();
+        };
+        rest.push(name);
+        ancestor = parent;
+    }
 }
 
 fn cargo_unpacks(path: &Path) -> bool {
