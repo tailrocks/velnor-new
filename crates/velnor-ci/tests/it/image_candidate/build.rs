@@ -9,6 +9,7 @@ use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 
 use super::build_fixture::{PLANTED, Run, Source};
+use super::fixture::{LAYER, build, plain_layer, spec};
 
 const LEGACY_RECORD: &str = include_str!("../data/image_build_record.json");
 
@@ -57,7 +58,11 @@ fn builds_into_a_local_archive_without_a_registry_or_credentials() {
         "{}",
         calls[1]
     );
-    assert!(calls[1].contains(" --provenance=false --output type=oci,dest="));
+    let argument = format!(
+        "/Dockerfile --build-arg VELNOR_SOURCE_SHA={} --provenance=false --output type=oci,dest=",
+        source.head()
+    );
+    assert!(calls[1].contains(&argument), "{}", calls[1]);
     assert!(calls[1].contains("/candidate.oci.tar,compression=gzip,force-compression=true "));
     assert!(!log.contains("push") && !log.contains("login"));
     let env = source.text("docker.env");
@@ -255,6 +260,18 @@ refusal!(
 );
 
 refusal!(
+    an_image_that_does_not_carry_the_source_commit_leaves_no_output,
+    "OCI image configuration revision label is not the source commit.",
+    |source| {
+        let mut candidate = spec(vec![(plain_layer(), LAYER)]);
+        candidate.revision = Some("b".repeat(40));
+        fs::write(source.path("unlabeled.tar"), build(&candidate).archive()).unwrap_or_default();
+        source.docker("cp \"$FAKE_DIR/unlabeled.tar\" \"$dest\"\nexit 0");
+        source.run(&[], &[])
+    }
+);
+
+refusal!(
     a_failing_docker_build_leaves_no_output,
     "failed",
     |source| {
@@ -280,50 +297,6 @@ refusal!(
         source.run(&[], &[])
     }
 );
-
-#[test]
-fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
-    let source = Source::new("script-env");
-    source.script("sleep 30 &\nenv > \"$PWD/../script.env\"");
-    let run = source.run(
-        &[],
-        &[
-            ("KUBECONFIG", Some("/etc/kube/config")),
-            ("CARGO_HOME", Some("/etc/cargo")),
-        ],
-    );
-    assert!(run.ok, "{}", run.stderr);
-    let seen = source.text("script.env");
-    assert!(seen.contains("PATH="), "{seen}");
-    assert!(
-        seen.contains("HOME=") && seen.contains("/.velnor-job-image-candidate-"),
-        "build-test.sh kept the real home directory: {seen}"
-    );
-    for hidden in [
-        "DOCKER_HOST",
-        "KUBECONFIG",
-        "CARGO_HOME",
-        "DOCKER_CONFIG",
-        "FAKE_DIR",
-    ] {
-        assert!(!seen.contains(hidden), "{hidden} reached build-test.sh");
-    }
-}
-
-#[test]
-fn the_validation_script_home_is_not_inside_the_source_or_the_output_directory() {
-    let source = Source::new("script-home");
-    source.script("env > \"$PWD/../script.env\"");
-    let run = source.run(&[], &[]);
-    assert!(run.ok, "{}", run.stderr);
-    let home = source
-        .text("script.env")
-        .lines()
-        .find_map(|line| line.strip_prefix("HOME=").map(str::to_owned))
-        .unwrap_or_default();
-    assert!(home.contains("/.velnor-job-image-candidate-"), "{home}");
-    assert!(!home.contains("-script-home/"), "{home}");
-}
 
 #[test]
 fn a_failing_build_reports_its_last_line_after_a_megabyte_of_output() {

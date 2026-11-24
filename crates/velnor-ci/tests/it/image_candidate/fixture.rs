@@ -62,8 +62,11 @@ pub(super) struct Image {
     pub(super) entries: Vec<(String, Vec<u8>)>,
 }
 
+pub(super) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 pub(super) struct Spec<'a> {
     pub(super) layers: Vec<(Vec<u8>, &'a str)>,
+    pub(super) revision: Option<String>,
     pub(super) diff_ids: Option<Vec<String>>,
     pub(super) platform: Value,
 }
@@ -71,6 +74,7 @@ pub(super) struct Spec<'a> {
 pub(super) fn spec(layers: Vec<(Vec<u8>, &str)>) -> Spec<'_> {
     Spec {
         layers,
+        revision: Some(REVISION.to_owned()),
         diff_ids: None,
         platform: json!({"architecture": "amd64", "os": "linux"}),
     }
@@ -93,10 +97,12 @@ pub(super) fn build(spec: &Spec<'_>) -> Image {
             })
             .collect()
     });
-    let config = json!({"architecture": "amd64", "os": "linux",
-        "rootfs": {"type": "layers", "diff_ids": diffs}})
-    .to_string()
-    .into_bytes();
+    let mut config = json!({"architecture": "amd64", "os": "linux",
+        "rootfs": {"type": "layers", "diff_ids": diffs}});
+    if let Some(revision) = &spec.revision {
+        config["config"] = json!({"Labels": {"org.opencontainers.image.revision": revision}});
+    }
+    let config = config.to_string().into_bytes();
     let layers: Vec<Value> = spec
         .layers
         .iter()
@@ -174,7 +180,7 @@ impl BlobSource for Memory {
 
 pub(super) fn check(archive: &[u8]) -> Result<Value, String> {
     let scanned = scan(Cursor::new(archive.to_vec())).map_err(|e| e.to_string())?;
-    verify(&scanned, &Memory(archive.to_vec())).map_err(|e| e.to_string())
+    verify(&scanned, &Memory(archive.to_vec()), REVISION).map_err(|e| e.to_string())
 }
 
 pub(super) fn refused(archive: &[u8]) -> String {

@@ -27,12 +27,12 @@ class BindingTests(unittest.TestCase):
             archive = self.archive_with(tmp, b"")
             reference_path = Path(tmp) / "ref.oci.tar"
             reference_path.write_bytes(parity.tar_of(parity.base_entries()))
-            self.assertNotEqual(parity.bind_oci(archive), parity.legacy.verify_oci_archive(reference_path))
+            self.assertNotEqual(parity.bind_oci(archive), parity.legacy.verify_oci_archive(reference_path, parity.SHA))
 
     def test_parseable_archive_binds_its_own_graph(self):
         with tempfile.TemporaryDirectory(prefix="parity-test-") as tmp:
             archive = self.archive_with(tmp, parity.tar_of(parity.base_entries()))
-            self.assertEqual(parity.bind_oci(archive), parity.legacy.verify_oci_archive(archive))
+            self.assertEqual(parity.bind_oci(archive), parity.legacy.verify_oci_archive(archive, parity.SHA))
 
 
 class MessageDiffTests(unittest.TestCase):

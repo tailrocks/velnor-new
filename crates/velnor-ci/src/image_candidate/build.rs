@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
-use super::record::{SCHEMA, validate};
+use super::record::{REVISION_ARGUMENT, SCHEMA, validate};
 use crate::error::CiError;
 
 const DROPPED: &[&str] = &[
@@ -39,7 +39,8 @@ pub fn record(parts: &Parts<'_>) -> Result<Value, CiError> {
         "workflow": &parts.workflow,
         "platform": "linux/amd64",
         "build": {
-            "builder": parts.builder, "platform": "linux/amd64", "arguments": [],
+            "builder": parts.builder, "platform": "linux/amd64",
+            "arguments": [format!("{REVISION_ARGUMENT}={}", parts.commit)],
             "exporter": "oci", "provenance": "disabled",
             "compression": "gzip", "force_compression": true,
         },
@@ -51,7 +52,12 @@ pub fn record(parts: &Parts<'_>) -> Result<Value, CiError> {
 }
 
 #[must_use]
-pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Vec<OsString> {
+pub fn buildx_arguments(
+    dockerfile: &Path,
+    archive: &Path,
+    context: &Path,
+    commit: &str,
+) -> Vec<OsString> {
     let mut output = OsString::from("type=oci,");
     output.push(csv_field(archive));
     output.push(",compression=gzip,force-compression=true");
@@ -60,6 +66,8 @@ pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Ve
         .map(OsString::from)
         .collect();
     arguments.push(dockerfile.into());
+    arguments.push("--build-arg".into());
+    arguments.push(format!("{REVISION_ARGUMENT}={commit}").into());
     arguments.push("--provenance=false".into());
     arguments.push("--output".into());
     arguments.push(output);

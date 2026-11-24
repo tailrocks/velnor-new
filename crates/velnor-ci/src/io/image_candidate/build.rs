@@ -64,6 +64,7 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         staging.path(),
         &isolated,
         &archive,
+        &args.source_commit,
     )?;
     runner.checkpoint()?;
     let scan = scan_archive(&archive)?;
@@ -72,6 +73,7 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         &FileSource {
             path: archive.clone(),
         },
+        &args.source_commit,
     )?;
     let value = record(&Parts {
         commit: &args.source_commit,
