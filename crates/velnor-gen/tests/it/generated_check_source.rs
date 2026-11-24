@@ -288,18 +288,17 @@ fn from_source_requires_a_rust_pin() -> TestResult {
 
 #[test]
 fn from_source_refuses_a_repository_without_exactly_one_velnor_gen() -> TestResult {
-    for roots in [
-        vec![("Cargo.toml", "velnor-ci-app")],
-        vec![
-            ("Cargo.toml", "velnor-gen"),
-            ("tools/gen/Cargo.toml", "velnor-gen"),
-        ],
+    for (roots, found) in [
+        (vec![("Cargo.toml", "velnor-ci-app")], 0),
+        (
+            vec![
+                ("Cargo.toml", "velnor-gen"),
+                ("tools/gen/Cargo.toml", "velnor-gen"),
+            ],
+            2,
+        ),
     ] {
         let repo = packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-        let found = roots
-            .iter()
-            .filter(|(_, name)| *name == "velnor-gen")
-            .count();
         let error = refusal(&repo)?;
         assert_eq!(
             error,
