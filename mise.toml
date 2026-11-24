@@ -139,7 +139,7 @@ set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
-python3 scripts/test-setup-velnor-action.py
+mise run test-setup-velnor-action
 printf "maintenance-phase: mise-binary-digests\n"
 if [ -n "${CI:-}" ]; then
   VELNOR_REQUIRE_MINISIGN=1

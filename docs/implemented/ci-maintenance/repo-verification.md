@@ -31,7 +31,7 @@ skips Nextest only for that workspace; metadata errors fail verification. The
 root workspace runs per-package and workspace-wide Nextest scopes with
 `--no-tests fail` when applicable targets exist. The
 `test-maintenance-helpers` task (a local full run: no generated workflow job runs it, so it is
-not a required check) applies the same metadata rule to its two named
+not a required check; its setup-velnor step is the `test-setup-velnor-action` task, which the generated `setup-velnor-action` lint job also runs when `actions/setup-velnor/**` or its test changes, on GNU userland only) applies the same metadata rule to its two named
 package scopes and first runs the `pin-mirror` repository-policy action against
 the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
 Nextest scope fails when its selected suite is empty. The task generator
