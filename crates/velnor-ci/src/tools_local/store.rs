@@ -12,6 +12,7 @@ use super::lease::{Identity, identity, open_entry, published};
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR, valid_key};
 use crate::mbx_store::{random_u64, writable_by_job};
 use crate::tree_removal::remove_tree;
+use lock::{Claim, Lock, claim};
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
@@ -19,6 +20,14 @@ const RETIRED_PREFIX: &str = "retired-";
 const LOCK_PREFIX: &str = ".lock-";
 const STALE_AFTER: Duration = Duration::from_hours(1);
 const COPY: &str = "/bin/cp";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Chosen,
+    Breaking,
+    Taken,
+    Retiring,
+}
 
 fn base(dir: Option<&str>, owner: u32, read_only: bool) -> Result<PathBuf, Outcome> {
     let Some(dir) = dir.filter(|dir| !dir.is_empty()) else {
@@ -127,41 +136,14 @@ fn restore_with(
     }
 }
 
-struct Lock(PathBuf);
-
-impl Drop for Lock {
-    fn drop(&mut self) {
-        fs::remove_dir(&self.0).ok();
-    }
-}
-
-enum Claim {
-    Won(Lock),
-    Held,
-    Broken,
-}
-
 fn stale(path: &Path) -> bool {
-    fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_AFTER))
+    fs::metadata(path).is_ok_and(|metadata| expired(&metadata))
 }
 
-fn claim(tools: &Path, key: &str) -> Claim {
-    let path = tools.join(format!("{LOCK_PREFIX}{key}"));
-    for _ in 0..2 {
-        match fs::create_dir(&path) {
-            Ok(()) => return Claim::Won(Lock(path)),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if !stale(&path) {
-                    return Claim::Held;
-                }
-                fs::remove_dir_all(&path).ok();
-            }
-            Err(_) => return Claim::Broken,
-        }
-    }
-    Claim::Held
+fn expired(metadata: &fs::Metadata) -> bool {
+    metadata
+        .modified()
+        .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_AFTER))
 }
 
 fn owners(name: &str) -> Vec<&str> {
@@ -179,10 +161,10 @@ fn owners(name: &str) -> Vec<&str> {
     keys
 }
 
-fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
+fn hold_owners(tools: &Path, name: &str, current: &str, pause: &dyn Fn(Step)) -> Option<Vec<Lock>> {
     let mut held = Vec::new();
     for key in owners(name).into_iter().filter(|key| *key != current) {
-        match claim(tools, key) {
+        match claim(tools, key, pause) {
             Claim::Won(lock) => held.push(lock),
             Claim::Held | Claim::Broken => return None,
         }
@@ -190,7 +172,7 @@ fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
     Some(held)
 }
 
-fn sweep(tools: &Path, current: &str) {
+fn sweep(tools: &Path, current: &str, pause: &dyn Fn(Step)) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
@@ -198,30 +180,26 @@ fn sweep(tools: &Path, current: &str) {
     for entry in entries {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        let leftover = name.starts_with(STAGING_PREFIX);
-        if !(leftover || name.starts_with(LOCK_PREFIX))
+        let lock = name.strip_prefix(LOCK_PREFIX);
+        if !(name.starts_with(STAGING_PREFIX) || lock.is_some())
             || entry.file_type().is_ok_and(|kind| kind.is_file())
             || !stale(&entry.path())
         {
             continue;
         }
-        let _held = if leftover {
-            match hold_owners(tools, &name, current) {
-                Some(held) => held,
-                None => continue,
-            }
-        } else {
-            Vec::new()
-        };
-        remove_tree(&entry.path()).ok();
+        if let Some(key) = lock {
+            drop(claim(tools, key, pause));
+        } else if let Some(_held) = hold_owners(tools, &name, current, pause) {
+            remove_tree(&entry.path()).ok();
+        }
     }
 }
 
 pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
-    save_with(inputs, owner, &|| {})
+    save_with(inputs, owner, &|_| {})
 }
 
-fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
+fn save_with(inputs: &Inputs<'_>, owner: u32, pause: &dyn Fn(Step)) -> Outcome {
     let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
@@ -234,12 +212,12 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
     if fs::create_dir_all(&tools).is_err() {
         return Outcome::Failed("cannot create the tools directory");
     }
-    let _lock = match claim(&tools, inputs.key) {
+    let _lock = match claim(&tools, inputs.key, pause) {
         Claim::Won(lock) => lock,
         Claim::Held => return Outcome::Busy,
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
-    sweep(&tools, inputs.key);
+    sweep(&tools, inputs.key, pause);
     if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
@@ -283,7 +261,7 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    let kept = prune(&tools, inputs.key, chosen);
+    let kept = prune(&tools, inputs.key, pause);
     if replaced {
         Outcome::Healed { to: entry, kept }
     } else {
@@ -291,7 +269,7 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, chosen: &dyn Fn()) -> Outcome {
     }
 }
 
-fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
+fn prune(tools: &Path, current: &str, pause: &dyn Fn(Step)) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
@@ -305,12 +283,12 @@ fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
         .collect();
     older.sort_by_key(|(listed, _)| std::cmp::Reverse((listed.2, listed.3)));
     let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
-    chosen();
+    pause(Step::Chosen);
     let mut in_use = 0;
     candidates
         .into_iter()
         .filter(
-            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS) {
+            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS, pause) {
                 Retired::Settled => false,
                 Retired::InUse => {
                     in_use += 1;
@@ -329,7 +307,13 @@ enum Retired {
     Stuck,
 }
 
-fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Retired {
+fn retire(
+    tools: &Path,
+    path: &Path,
+    listed: Identity,
+    spare_in_use: bool,
+    pause: &dyn Fn(Step),
+) -> Retired {
     let finished = |removal: std::io::Result<()>| match removal {
         Ok(()) => Retired::Settled,
         Err(_) => Retired::Stuck,
@@ -338,7 +322,7 @@ fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Re
     if !valid_key(&name) {
         return finished(remove_tree(path));
     }
-    let _lock = match claim(tools, &name) {
+    let _lock = match claim(tools, &name, pause) {
         Claim::Won(lock) => lock,
         Claim::Held => return Retired::Settled,
         Claim::Broken => return Retired::Stuck,
@@ -362,6 +346,7 @@ fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Re
     } else {
         None
     };
+    pause(Step::Retiring);
     let grave = tools.join(format!("{STAGING_PREFIX}{name}-{:016x}", random_u64()));
     finished(fs::rename(path, &grave).and_then(|()| remove_tree(&grave)))
 }
@@ -378,5 +363,6 @@ fn plain(name: &str) -> String {
         .collect()
 }
 
+mod lock;
 #[cfg(test)]
 mod tests;
