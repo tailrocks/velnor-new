@@ -365,3 +365,20 @@ fn the_grace_counts_from_the_run_ending_not_from_the_end_of_the_capture() {
     assert_withheld(&written);
     assert_list_stopped(&run);
 }
+
+#[test]
+fn a_detached_descendant_of_an_accepted_list_does_not_outlive_it() {
+    let json = listed(&[("kept", &["alpha"])]);
+    let mut run = launch(
+        "early-bound-residual",
+        &format!(
+            "sleep 300 > /dev/null 2>&1 &\necho $! > \"$RUNNER_TEMP/list-pid\"\nprintf '%s\\n' '{json}'"
+        ),
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}"),
+        &[(GRACE_VARIABLE, PATIENT)],
+    );
+    let (exited, stderr, written) = finish(&mut run, Duration::from_secs(10));
+    assert!(exited, "{stderr}");
+    assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
+    assert_list_stopped(&run);
+}

@@ -36,10 +36,8 @@ impl Supervisor {
     pub(super) fn stop(&self, reason: impl Into<String>) {
         let mut slot = self.lock();
         slot.stopped.get_or_insert_with(|| reason.into());
-        if let Some(child) = slot.child.as_ref()
-            && let Ok(group) = i32::try_from(child.id())
-        {
-            killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
+        if let Some(child) = slot.child.as_ref() {
+            kill_group(child);
         }
     }
 
@@ -57,7 +55,9 @@ impl Supervisor {
         });
         let stopped = {
             let mut slot = self.lock();
-            slot.child = None;
+            if let Some(child) = slot.child.take() {
+                kill_group(&child);
+            }
             slot.stopped.clone()
         };
         let stdout = stdout.map_err(|_| io::Error::other("its output reader panicked"))??;
@@ -124,6 +124,12 @@ impl Supervisor {
         self.slot
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+fn kill_group(child: &Child) {
+    if let Ok(group) = i32::try_from(child.id()) {
+        killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
     }
 }
 
