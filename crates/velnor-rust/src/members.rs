@@ -7,6 +7,7 @@ use velnor_model::{
     CargoCommand, CustomHarness, FilterRef, PackageName, RepoFacts, RootSlug, RustRoot, TargetKind,
 };
 
+use crate::config_test_lane::ParallelLane;
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -90,12 +91,19 @@ impl Member {
         })
     }
 
-    pub(crate) fn feature_lanes(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
-        let direct = match self.filter(facts) {
+    fn direct_filter(&self, facts: &RepoFacts) -> Vec<String> {
+        match self.filter(facts) {
             FilterRef::AllExcept(binaries) => binaries,
             _ => Vec::new(),
-        };
-        crate::config_test_lane::commands(&facts.config, &self.root, &direct)
+        }
+    }
+
+    pub(crate) fn feature_lanes(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
+        crate::config_test_lane::commands(&facts.config, &self.root, &self.direct_filter(facts))
+    }
+
+    pub(crate) fn parallel_lanes(&self, facts: &RepoFacts) -> Vec<ParallelLane> {
+        crate::config_test_lane::parallel(&facts.config, &self.root, &self.direct_filter(facts))
     }
 
     pub(crate) fn built_without_nextest(&self, facts: &RepoFacts) -> Vec<CargoCommand> {

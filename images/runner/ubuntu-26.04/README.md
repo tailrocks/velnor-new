@@ -30,7 +30,7 @@ Run from the repository root.
 STAGES="$(mktemp -d)"
 lock() { sed -n "s/^$1 = \"\(.*\)\"\$/\1/p" .velnor/runner.lock; }
 docker run --rm --platform linux/arm64 -v "$PWD:/src:ro" -v velnor-arm64-target:/target -v "$STAGES:/out" \
-  -e CARGO_TARGET_DIR=/target -e VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 \
+  -e CARGO_TARGET_DIR=/target -e VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" rust:1.100.0-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8 \
   sh -c 'rustup target add aarch64-unknown-linux-musl \
     && cargo build --locked --release --manifest-path /src/Cargo.toml --target aarch64-unknown-linux-musl \
       -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook \
@@ -87,7 +87,7 @@ target outside the extract root fails closed. With `-P`, relative symlink
 targets may resolve outside `-C`; an archive member that walks through an
 archive symlink or a symlink already on disk still fails closed. Modes,
 executable bits, directory timestamps, empty directories, and pax paths
-longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
+longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `--gzip`, `--file` and `--directory` are long spellings of `-z`, `-f` and `-C`. An empty or repeated archive or directory, and more than one compression option, fail closed. `--no-same-owner` and `--no-recursion` apply to extract only. `--no-recursion` fails closed when a selected member is a directory. `-v` does not
 change archive bytes. `--strip-components` is unsupported and fails closed.
 Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the

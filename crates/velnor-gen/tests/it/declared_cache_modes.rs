@@ -261,3 +261,77 @@ fn a_job_that_saves_must_declare_a_writing_cache_mode() -> TestResult {
     rendered(&one_job("", &restore))?;
     Ok(())
 }
+
+/// A workflow that runs on `on`, with one job of `header` and `steps`.
+fn workflow_on(on: &str, header: &str, steps: &str) -> String {
+    workflow(
+        "",
+        on,
+        &format!("\n[[workflow.job]]\nid = \"check\"\n{header}\n{steps}"),
+    )
+}
+
+const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
+const PULL_REQUEST: &str = "[workflow.on.pull_request]\ntypes = [\"opened\", \"synchronize\"]\n";
+
+fn mbx(with: &str) -> String {
+    with_step("mr-boxington", with)
+}
+
+#[test]
+fn a_job_whose_only_saver_is_mbx_on_the_github_backend_writes() -> TestResult {
+    for with in [
+        "{ backend = \"github\" }",
+        "{ backend = \"github\", github-cache-mode = \"objects\" }",
+        "{ github-cache-mode = \"objects\" }",
+    ] {
+        let config = workflow_on(PUSH, "", &mbx(with));
+        let tree = rendered(&config)?;
+        assert_eq!(
+            job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+            Some("write"),
+            "{with}: the mbx github save needs a writing cache-mode"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_mbx_step_on_a_non_github_backend_does_not_make_a_writer() -> TestResult {
+    for backend in ["local", "remote"] {
+        let config = workflow_on(PUSH, "", &mbx(&format!("{{ backend = \"{backend}\" }}")));
+        let tree = rendered(&config)?;
+        assert_eq!(
+            job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+            Some("read"),
+            "{backend}: the job does not save to the Actions cache service"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_mbx_github_save_in_a_pull_request_job_stays_read() -> TestResult {
+    let config = workflow_on(PULL_REQUEST, "", &mbx("{ backend = \"github\" }"));
+    let tree = rendered(&config)?;
+    assert_eq!(
+        job(&tree, "check")?.get("cache-mode").and_then(Node::text),
+        Some("read")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_saving_mbx_job_that_declares_read_is_refused() -> TestResult {
+    let config = workflow_on(
+        PUSH,
+        "cache_mode = \"read\"\n",
+        &mbx("{ backend = \"github\" }"),
+    );
+    let message = refusal(&config)?;
+    assert!(
+        message.contains("check") && message.contains("cache_mode \"write\""),
+        "{message}"
+    );
+    Ok(())
+}

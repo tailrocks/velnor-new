@@ -9,7 +9,7 @@ const TABLE: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_storage_han
 
 const LEGACY_TRANSITION_TRIGGER: &str = "CREATE TRIGGER IF NOT EXISTS storage_handoff_transition_guard BEFORE UPDATE ON capacity_reservation_storage_handoffs WHEN OLD.state != 'ready_held' OR NEW.state != 'attached' OR OLD.reservation_id != NEW.reservation_id OR OLD.connection_id != NEW.connection_id OR OLD.operation_id != NEW.operation_id OR OLD.generation != NEW.generation OR OLD.helper_name != NEW.helper_name OR OLD.helper_id != NEW.helper_id OR OLD.engine_id != NEW.engine_id OR OLD.docker_root_digest != NEW.docker_root_digest OR OLD.metadata_volume_name != NEW.metadata_volume_name OR OLD.metadata_volume_id != NEW.metadata_volume_id OR OLD.operation_key != NEW.operation_key OR OLD.layout_digest != NEW.layout_digest OR OLD.ready_digest != NEW.ready_digest OR NEW.mount_evidence_digest IS NULL OR NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS runner WHERE runner.reservation_id = NEW.reservation_id AND runner.role = 'runner' AND runner.create_state = 'created' AND runner.start_state = 'started' AND runner.container_id = NEW.runner_container_id) OR NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS dind WHERE dind.reservation_id = NEW.reservation_id AND dind.role = 'dind' AND dind.create_state = 'created' AND dind.start_state = 'started' AND dind.container_id = NEW.dind_container_id) BEGIN SELECT RAISE(ABORT, 'Invalid storage handoff.'); END";
 
-const TRANSITION_TRIGGERS: [(&str, &str); 3] = [
+const TRANSITION_TRIGGERS: &[(&str, &str)] = &[
     (
         "storage_handoff_transition_guard",
         "CREATE TRIGGER IF NOT EXISTS storage_handoff_transition_guard BEFORE UPDATE ON capacity_reservation_storage_handoffs WHEN OLD.state != 'ready_held' OR NEW.state != 'attached' OR OLD.reservation_id != NEW.reservation_id OR OLD.connection_id != NEW.connection_id OR OLD.operation_id != NEW.operation_id OR OLD.generation != NEW.generation OR OLD.helper_name != NEW.helper_name OR OLD.helper_id != NEW.helper_id OR OLD.engine_id != NEW.engine_id OR OLD.docker_root_digest != NEW.docker_root_digest OR OLD.metadata_volume_name != NEW.metadata_volume_name OR OLD.metadata_volume_id != NEW.metadata_volume_id OR OLD.operation_key != NEW.operation_key OR OLD.layout_digest != NEW.layout_digest OR OLD.ready_digest != NEW.ready_digest OR NEW.mount_evidence_digest IS NULL BEGIN SELECT RAISE(ABORT, 'Invalid storage handoff.'); END",
@@ -24,7 +24,7 @@ const TRANSITION_TRIGGERS: [(&str, &str); 3] = [
     ),
 ];
 
-const TRIGGERS: [(&str, &str); 3] = [
+const TRIGGERS: &[(&str, &str)] = &[
     (
         "storage_handoff_insert_guard",
         "CREATE TRIGGER IF NOT EXISTS storage_handoff_insert_guard BEFORE INSERT ON capacity_reservation_storage_handoffs WHEN NOT EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init JOIN capacity_reservations AS reservation ON reservation.id = init.reservation_id JOIN capacity_reservation_provisioning_objects AS object ON object.reservation_id = init.reservation_id AND object.role = 'engine-metadata' AND object.create_state = 'created' WHERE init.reservation_id = NEW.reservation_id AND init.connection_id = NEW.connection_id AND init.operation_id = NEW.operation_id AND init.generation = NEW.generation AND init.create_state = 'created' AND init.start_state = 'started' AND init.result_state = 'confirmed' AND init.remove_state = 'not_requested' AND init.layout_version = 2 AND init.helper_name = NEW.helper_name AND init.helper_id = NEW.helper_id AND init.engine_id = NEW.engine_id AND init.docker_root_digest = NEW.docker_root_digest AND init.metadata_volume = NEW.metadata_volume_name AND init.metadata_volume_id = NEW.metadata_volume_id AND init.operation_key = NEW.operation_key AND init.metadata_layout_digest = NEW.layout_digest AND reservation.connection_id = NEW.connection_id AND reservation.intent_id = NEW.operation_id AND reservation.state = 'reserved' AND object.docker_name = NEW.metadata_volume_name AND object.docker_id = NEW.metadata_volume_id) OR NEW.state != 'ready_held' BEGIN SELECT RAISE(ABORT, 'Invalid storage handoff.'); END",
@@ -46,7 +46,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
         .execute(TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, statement) in TRIGGERS {
+    for &(_, statement) in TRIGGERS {
         connection
             .execute(statement, ())
             .await
@@ -73,7 +73,7 @@ async fn transition_triggers(
         if legacy_exists || extra_count != 0 {
             return Err(HostError::Journal);
         }
-        for (_, statement) in TRANSITION_TRIGGERS {
+        for &(_, statement) in TRANSITION_TRIGGERS {
             connection
                 .execute(statement, ())
                 .await
@@ -97,7 +97,7 @@ async fn transition_triggers(
                 .execute("DROP TRIGGER storage_handoff_transition_guard", ())
                 .await
                 .map_err(|_| HostError::Journal)?;
-            for (_, statement) in TRANSITION_TRIGGERS {
+            for &(_, statement) in TRANSITION_TRIGGERS {
                 connection
                     .execute(statement, ())
                     .await
@@ -109,7 +109,7 @@ async fn transition_triggers(
         if extra_count != TRANSITION_TRIGGERS.len() - 1 {
             return Err(HostError::Journal);
         }
-        for (name, expected) in TRANSITION_TRIGGERS {
+        for &(name, expected) in TRANSITION_TRIGGERS {
             if !trigger_matches(connection, name, expected).await? {
                 return Err(HostError::Journal);
             }

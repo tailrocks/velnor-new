@@ -62,7 +62,6 @@ pub(crate) fn seed_entry(
 #[test]
 fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> TestResult {
     use std::os::unix::fs::{PermissionsExt, symlink};
-    use std::os::unix::process::CommandExt;
     use std::process::Command;
 
     for kind in ["fifo", "symlink-to-fifo"] {
@@ -83,24 +82,9 @@ fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> Test
         if kind != "fifo" {
             symlink(&fifo, &entry)?;
         }
-        let mut child = install.spawn(Some(&cache), |command| {
-            command.process_group(0);
-        })?;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        let status = loop {
-            if let Some(status) = child.try_wait()? {
-                break Some(status);
-            }
-            if std::time::Instant::now() > deadline {
-                let group = child.id().to_string();
-                Command::new(program("kill"))
-                    .args(["-KILL", "--", &format!("-{group}")])
-                    .status()?;
-                child.wait()?;
-                break None;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        };
+        let status = install
+            .spawn(Some(&cache), |_| {})?
+            .wait_within(std::time::Duration::from_secs(20))?;
         let copy = install.installed();
         fs::remove_dir_all(&install.work)?;
         assert!(

@@ -12,9 +12,9 @@
   tests), `tool_catalog_resolve::rust_mirror::tests`,
   `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
-- Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
-  layout, which lets MBX collect unused units one at a time and seed new
-  worktrees from existing ones; bump the catalog when it ships.
+- Follow-up: none for the pin. Rust 1.100.0 brings Cargo's new build-dir
+  layout, which MBX could use to collect unused units one at a time and seed
+  new worktrees from existing ones; that use is not implemented yet.
 
 ## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
@@ -27,7 +27,7 @@ newest stable version of each tool when applying it.
 min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
+rust = { version = "1.100.0", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
@@ -47,7 +47,7 @@ edited alone):
 
 ```toml
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
@@ -162,6 +162,21 @@ versions.
   results into registry and workspace units, so the report alone cannot show
   a registry hit rate. Source:
   [`crates/mbx/src/session/stats.rs`](https://github.com/jdx/mr-boxington/blob/v1.29.1/crates/mbx/src/session/stats.rs).
+- A running MBX session exports `MBX_SOCKET`, a stream socket named
+  `cache-agent.sock` in a `mbx-session-*` directory, and holds an exclusive
+  `flock` on `owner.lock` beside it (also exported as `MBX_SESSION_LEASE`).
+  `velnor-ci` keeps an inherited `MBX_SOCKET` only when a nonblocking connect
+  to it succeeds or reports a full queue (`EAGAIN`, `EINPROGRESS`). macOS
+  answers `ECONNREFUSED` both for a live listener with a full backlog and for
+  a socket file left by a killed session, so on `ECONNREFUSED` it tries a
+  nonblocking shared `flock` on `owner.lock` next to the socket, opened
+  read-only without creating it and without following a symlink, and releases
+  the lock at once if it gets it. The lease counts only when it is a regular
+  file owned by the user running `velnor-ci`. A held lock means a live
+  session; an acquired, missing, unreadable, foreign-owned or non-regular
+  lock means a stale socket, which is removed from the child's environment.
+  Linux reports a full queue as `EAGAIN`; the lease check runs on every Unix
+  target.
 
 ### Optional: name `mise.toml` the authority
 
@@ -207,7 +222,7 @@ debug = false                # no debuginfo for dependencies
 # share every dependency unit.
 ```
 
-Measured on three ChainArgos workspaces (build, then tests, then clippy, from
+Measured on three example-org workspaces (build, then tests, then clippy, from
 an empty target): 26-43% smaller than Cargo's defaults with a `debug = 0`
 test profile, and 49-60% smaller than what the old mise tasks produced. A
 `[profile.test]` that differs from `dev` keeps two copies of every
@@ -235,6 +250,10 @@ Never set `CARGO_TARGET_DIR`, `build.target-dir`, `build.build-dir` or
 is set; with any of them it leaves the directory alone and never collects it.
 The generated workflow is the one exception: it sets `CARGO_TARGET_DIR` on each
 step that builds a root, to that root's cached target directory.
+
+`prepare` refuses a `CARGO_BUILD_BUILD_DIR` that differs from the target
+directory, because the Target cache does not cover a separate build directory.
+The `velnor-ci inputs build` and `velnor-ci inputs audit` commands refuse a `CARGO_BUILD_BUILD_DIR` environment variable that contains a cargo path template such as `{workspace-root}`; set a plain path instead. A template in a Cargo configuration file or a `--config` argument is not checked. They accept a relative `CARGO_BUILD_BUILD_DIR` and read the directory cargo writes: the path is relative to the step directory, or to the `-C` directory of the wrapped cargo command. `prepare` does not run these checks.
 
 ## 5. Developer machines: MBX garbage collection
 
@@ -287,6 +306,5 @@ velnor-new uses the same layout: `mise.toml` with `min_version`,
 targets). Its `.velnor/config.toml`
 keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
 Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
-and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
-`local-cargo.sh` still report the local pin. The hk configuration (`hk.pkl`
+and the inline-table form of a `[tools]` entry. The hk configuration (`hk.pkl`
 and its secret scanners) comes with the hk rollout, not this page.

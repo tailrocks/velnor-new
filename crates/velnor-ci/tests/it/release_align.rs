@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 
 use crate::support::fresh_dir;
@@ -15,7 +15,7 @@ const GEN: &str = "[package]\nname = \"velnor-gen\"\nversion = \"0.1.81\" # move
 const MODEL: &str = "[package]\nname = \"velnor-model\"\nversion.workspace = true\n";
 const FOLLOWER_LOCK: &str = "version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"0.1.81\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n\n[[package]]\nname = \"velnor-gen\"\nversion = \"0.1.81\"\ndependencies = [\n \"serde\",\n]\n\n[[package]]\nname = \"velnor-model\"\nversion = \"0.0.0\"\n";
 
-const FILES: [&str; 8] = [
+const FILES: &[&str] = &[
     "lead/Cargo.toml",
     "lead/crates/velnor-ci/Cargo.toml",
     "lead/Cargo.lock",
@@ -26,7 +26,7 @@ const FILES: [&str; 8] = [
     "follower/crates/velnor-gen/src.txt",
 ];
 
-struct Fixture(PathBuf);
+struct Fixture(velnor_test_support::ScratchDir);
 
 impl Fixture {
     fn new(name: &str) -> Self {
@@ -70,15 +70,9 @@ impl Fixture {
             command.args(["--member", member]);
         }
         command
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"))
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(&self.0);
     }
 }
 

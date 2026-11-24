@@ -49,6 +49,7 @@ pub(crate) fn files() -> ReleaseFiles {
         workflow_names: None,
         push_workflows: None,
         mise_lock: MISE_LOCK.to_owned(),
+        mbx_opt_out: false,
     }
 }
 

@@ -3,9 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{CheckoutScope, FullRun, OnMain, RepoPath, RepoView};
+use velnor_model::{CheckoutScope, FullRun, OnMain, RepoFacts, RepoPath, RepoView};
 use velnor_rust::{
-    bytes_outside_lanes, detect, silent_build_scripts, suggest_groups as suggested_groups,
+    bytes_outside_lanes, detect, silent_build_scripts, sparse_checkout_planned,
+    suggest_groups as suggested_groups,
 };
 
 use crate::{GenerateError, SPARSE_HINT_HELPER};
@@ -26,6 +27,16 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
         .collect())
 }
 
+pub(crate) fn expected_notes(facts: &RepoFacts) -> Vec<String> {
+    velnor_rust::untimed_auto_note(facts)
+        .into_iter()
+        .chain(velnor_rust::unverified_tools_note(facts))
+        .chain(velnor_rust::base_cache_note(facts))
+        .chain(crate::helper_gate::mint_note(facts))
+        .chain(facts.timings_notes.iter().cloned())
+        .collect()
+}
+
 pub const SPARSE_SUGGESTION_BYTES: u64 = 100 * 1024 * 1024;
 
 pub fn sparse_note(
@@ -33,7 +44,7 @@ pub fn sparse_note(
     sizes: &BTreeMap<RepoPath, u64>,
 ) -> Result<Option<String>, GenerateError> {
     let facts = detect(view)?;
-    if facts.config.checkout == CheckoutScope::Sparse {
+    if facts.config.checkout == CheckoutScope::Sparse || !sparse_checkout_planned(&facts) {
         return Ok(None);
     }
     Ok(bytes_outside_lanes(&facts, sizes)

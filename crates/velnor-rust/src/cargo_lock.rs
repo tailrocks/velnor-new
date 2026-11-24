@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::lock::LockError;
 
-const SUPPORTED_FORMATS: [i64; 2] = [3, 4];
+const SUPPORTED_FORMATS: &[i64] = &[3, 4];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

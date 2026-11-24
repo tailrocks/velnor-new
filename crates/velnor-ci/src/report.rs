@@ -3,8 +3,9 @@
 
 use crate::error::CiError;
 use crate::telemetry::{Compilation, Invocation};
+use crate::waste_evidence::MbxEvidence;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 pub const SCHEMA: u32 = 1;
 
@@ -14,15 +15,24 @@ pub struct Cache {
     pub family: String,
     pub root: Option<String>,
     pub restore_step: String,
-    pub save_step: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_step: Option<String>,
     #[serde(default)]
     pub requested_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_key: Option<String>,
     pub matched_key: Option<String>,
     pub hit: Hit,
     pub bytes: Option<u64>,
     pub usable: bool,
     pub usable_same_lock: bool,
     pub save: SaveOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_generated: Option<String>,
+    /// A miss on a key that the cache inventory already listed, on a ref this job may read, when
+    /// the job started. `None` when the inventory was not consulted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_before_job: Option<bool>,
 }
 
 impl Cache {
@@ -67,12 +77,24 @@ pub struct LaneMetrics {
     pub diagnostics: Vec<String>,
     #[serde(default)]
     pub verification_errors: Vec<String>,
+    #[serde(default, skip_serializing_if = "MbxEvidence::is_empty")]
+    pub mbx: MbxEvidence,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolchain_installs: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub privacy_unavailable: bool,
     pub violations: Vec<String>,
 }
 
 #[must_use]
 pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     let mut violations = Vec::new();
+    if metrics.privacy_unavailable {
+        violations.push(format!(
+            "{}: the repository privacy lookup was unavailable, so the base caches of its private dependencies were neither restored nor saved; the Cache check needs a verdict of private, public or internal",
+            metrics.lane
+        ));
+    }
     for invocation in &metrics.invocations {
         let warm = invocation.restored_target_usable != Some(false)
             && metrics.caches.iter().any(|cache| {
@@ -97,18 +119,21 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace)
-                || (warm
-                    && event.workspace
-                    && (event.unchanged
-                        && event
-                            .dependencies
-                            .iter()
-                            .all(|dependency| !compiled.contains(dependency.as_str()))))
-            {
+            let workspace_waste = warm
+                && event.workspace
+                && event.unchanged
+                && event
+                    .dependencies
+                    .iter()
+                    .all(|dependency| !compiled.contains(dependency.as_str()))
+                && !crate::report_prune::outputs_only(invocation, &event.package, &event.version);
+            if (same_lock && !event.workspace && event.restored == Some(true)) || workspace_waste {
                 violations.push(format!(
-                    "{}: {} v{} compiled despite usable restored inputs",
-                    invocation.root, event.package, event.version
+                    "{}: {} v{} compiled despite usable restored inputs{}",
+                    invocation.root,
+                    event.package,
+                    event.version,
+                    crate::restored_units::cargo_reason(event)
                 ));
             }
         }
@@ -133,13 +158,9 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .caches
             .iter()
             .filter(|cache| cache.save == SaveOutcome::Failed)
-            .map(|cache| {
-                format!(
-                    "{} cache save failed: {}",
-                    cache.family, cache.requested_key
-                )
-            }),
+            .map(|cache| format!("{} cache save failed: {}", cache.family, save_key(cache))),
     );
+    violations.extend(crate::waste_evidence::waste(metrics));
     violations
 }
 
@@ -179,90 +200,37 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
     }
-    violations.extend(compilation_repeats(lanes)?);
+    violations.extend(crate::report_compilations::compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
     if violations.is_empty() {
-        Ok(format!("Cache: {} lanes checked, no waste\n", lanes.len()))
+        Ok(format!(
+            "Cache: {} lanes checked, no waste\n{}",
+            lanes.len(),
+            restore_notices(lanes)
+        ))
     } else {
         Err(CiError::new(violations.join("\n")))
     }
 }
 
-fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
-    let mut events = BTreeMap::new();
-    let mut unknown = BTreeMap::new();
-    for invocation in lanes.iter().flat_map(|lane| &lane.invocations) {
-        let mut covered = BTreeSet::new();
-        for artifact in invocation
-            .artifacts
-            .iter()
-            .filter(|artifact| !artifact.fresh)
-        {
-            if let Some(package) =
-                crate::cargo_package::PackageIdentity::parse(&artifact.package_id)
-            {
-                covered.insert((package.name, package.version));
-            }
-            if crate::observed_units::identity(invocation, artifact).is_none() {
-                let key = unknown_context(invocation, artifact)?;
-                let entry = unknown
-                    .entry(key)
-                    .or_insert_with(|| ((&invocation.root, &artifact.target.name), 0_u64));
-                entry.1 += 1;
-            }
-        }
-        for event in &invocation.compilations {
-            if !covered.contains(&(event.package.as_str(), event.version.as_str())) {
-                *events
-                    .entry((
-                        &invocation.root,
-                        &invocation.configuration,
-                        crate::telemetry::target_selection(&invocation.argv),
-                        &invocation.execution,
-                        &event.package,
-                        &event.version,
-                    ))
-                    .or_insert(0_u64) += 1;
-            }
-        }
+#[must_use]
+pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
+    let mut notices: Vec<(&'static str, String)> = Vec::new();
+    for lane in lanes {
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| ("notice", gap)),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
     }
-    if let Some(((root, package), count)) = unknown.values().find(|(_, count)| *count > 2) {
-        return Err(CiError::new(format!(
-            "cannot evaluate cache waste for root {root} crate {package}: compilation identity remains unknown after {count} observations"
-        )));
-    }
-    let mut violations = Vec::new();
-    violations.extend(events.into_iter().filter(|(_, count)| *count > 2).map(
-        |((root, config, _, _, package, version), count)| {
-            format!("{root}: {package} v{version} compiled {count} times for {config}")
-        },
-    ));
-    violations.extend(crate::observed_units::repeats(lanes));
-    Ok(violations)
-}
-
-fn unknown_context(
-    invocation: &Invocation,
-    artifact: &crate::cargo_artifacts::CargoArtifact,
-) -> Result<String, CiError> {
-    let mut features = artifact.features.clone();
-    features.sort();
-    features.dedup();
-    let mut filenames = artifact.filenames.clone();
-    filenames.sort();
-    filenames.dedup();
-    serde_json::to_string(&(
-        &invocation.root,
-        &invocation.configuration,
-        &artifact.package_id,
-        &artifact.target,
-        &artifact.profile,
-        features,
-        filenames,
-        &invocation.execution,
-    ))
-    .map_err(|error| CiError::new(format!("cannot encode compilation observation: {error}")))
+    notices.sort();
+    notices.dedup();
+    notices
+        .iter()
+        .map(|(level, notice)| crate::escape::command_line(level, notice))
+        .collect()
 }
 
 impl LaneMetrics {
@@ -271,7 +239,7 @@ impl LaneMetrics {
         let mut text = vec!["| Cache | Requested key | Matched key | Hit | Archive bytes | Save |\n|---|---|---|---|---|---|\n".to_owned()];
         for cache in &self.caches {
             text.push(format!(
-                "| {} | `{}` | `{}` | {:?} | {} | {:?} |\n",
+                "| {} | `{}` | `{}` | {:?} | {} | {} |\n",
                 cache.family,
                 cache.requested_key,
                 cache.matched_key.as_deref().unwrap_or("none"),
@@ -279,7 +247,10 @@ impl LaneMetrics {
                 cache
                     .bytes
                     .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string()),
-                cache.save
+                match &cache.not_generated {
+                    Some(reason) => format!("not generated ({reason})"),
+                    None => format!("{:?}", cache.save),
+                }
             ));
         }
         let events: Vec<&Compilation> = self
@@ -322,6 +293,14 @@ impl LaneMetrics {
     }
 }
 
+fn save_key(cache: &Cache) -> &str {
+    cache
+        .saved_key
+        .as_deref()
+        .filter(|key| !key.is_empty())
+        .unwrap_or(&cache.requested_key)
+}
+
 fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     if let Some(cache) = lane
         .caches
@@ -330,7 +309,8 @@ fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     {
         return Err(CiError::new(format!(
             "cannot verify cache save for lane {}: {}",
-            lane.lane, cache.requested_key
+            lane.lane,
+            save_key(cache)
         )));
     }
     if !lane.verification_errors.is_empty() {

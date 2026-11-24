@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod activity;
+mod app_token;
 mod archive_witness;
 mod artifact_api;
 mod artifact_unzip;
@@ -10,15 +11,24 @@ mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
+mod cache_credentials;
+mod cache_limits;
 mod cache_paths;
+mod cache_prune;
+pub mod cache_purge;
 mod cache_sources;
+mod cache_target_link;
 mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_alias;
 mod crates_mirror_args;
+mod crates_mirror_depth;
 mod crates_mirror_dispatch;
+mod crates_mirror_mbx;
 mod crates_mirror_mise;
+mod crates_mirror_mode;
 mod delta;
 mod delta_freshness;
 mod delta_paths;
@@ -27,14 +37,22 @@ mod delta_source;
 mod delta_tree;
 mod delta_trim;
 mod early_list;
+mod early_list_child;
+mod early_list_dir;
 mod fetch;
 mod fetch_credentials;
+mod fetch_fixed;
+mod fetch_git;
+mod fetch_home;
+mod fetch_real_cargo;
 mod fetch_reports;
+mod fetch_run;
 mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+mod input_dirs;
 mod input_scopes;
 mod input_snapshot;
 mod input_target;
@@ -42,26 +60,37 @@ mod inputs;
 mod inputs_batch;
 mod inputs_git;
 mod manifests;
+mod mbx_reports;
+pub(crate) use mbx_reports::assign as assign_mbx_report;
 mod merge_group;
 mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
+mod private_repo;
+mod public_repo;
+mod public_sources;
 pub mod pump;
 mod qualification;
 mod recording;
 mod registry;
 mod release;
 mod release_align;
+mod release_assets;
+mod release_assets_files;
 mod report;
 mod report_checkout;
 mod report_inputs;
 mod report_sparse;
+mod report_waste;
 mod required;
 mod resolve_qualification;
 mod restored;
 mod restored_targets;
+mod restored_units;
 mod run;
+mod run_signals;
+mod saved_git_config;
 mod scope_cache;
 mod setup;
 mod small;
@@ -69,6 +98,7 @@ mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
+mod version;
 mod write_request;
 
 use std::fs::{self, File, OpenOptions};
@@ -79,16 +109,21 @@ use std::{path::Path, process::ExitCode};
 pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target};
+pub use self::image_candidate::publish::{
+    Body, Https, OpenBlob, Registry, Request, Response, Run, Transport, publish_with,
+};
 pub use self::input_target::{CaseSensitivity, check_input_target_with};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
+pub use self::version::{parse_cli, version_text};
+use crate::artifact_stage;
 use crate::cli::{
-    AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
-    SourcesCommand, TestGroupsCommand,
+    ArtifactsCommand, AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs,
+    Command, CompareArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -99,7 +134,6 @@ use crate::github::Repo;
 use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use crate::test_groups;
-use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
@@ -110,29 +144,7 @@ const SOURCE_LIMIT: u64 = 1 << 20;
 const SOURCE_TOTAL_LIMIT: u64 = 64 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
-const UNKNOWN_COMMIT: &str = "unknown";
 
-#[must_use]
-pub fn version_text() -> String {
-    format!(
-        "{} ({})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("VELNOR_COMMIT").unwrap_or(UNKNOWN_COMMIT)
-    )
-}
-
-pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<std::ffi::OsString> + Clone,
-{
-    let matches = Cli::command()
-        .version(version_text())
-        .try_get_matches_from(args)?;
-    Cli::from_arg_matches(&matches)
-}
-
-#[must_use]
 pub fn main() -> ExitCode {
     if crates_mirror::is_wrapper() {
         return crates_mirror::run();
@@ -153,6 +165,9 @@ pub fn main() -> ExitCode {
     }
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
+    }
+    if let Command::Artifacts(ArtifactsCommand::Stage(args)) = &cli.command {
+        return artifact_stage::run(args);
     }
     if let Command::TestGroups(TestGroupsCommand::Check(args)) = &cli.command {
         return test_groups::run(args);
@@ -195,6 +210,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             &AuditOptions {
                 write,
                 root,
+                max_directory_entries: audit::max_entries_from_env()?,
                 ..AuditOptions::default()
             },
         ),
@@ -207,6 +223,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
+        Command::Release(ReleaseCommand::VerifyListed(args)) => release::run_verify_listed(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::MergeQueueCheck => Ok(merge_queue::run()),
@@ -222,20 +239,30 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Image(ImageCommand::VerifyCandidate(args)) => {
             image_candidate::verify_candidate(&args)
         }
+        Command::Image(ImageCommand::Build(args)) => image_candidate::build(&args),
+        Command::Image(ImageCommand::Publish(args)) => image_candidate::publish::publish(&args),
         Command::Fetch(args) => fetch::fetch(&args),
+        Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
+        Command::AppToken(args) => app_token::run(&args),
+        Command::RevokeToken => app_token::revoke(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
-        Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
+        Command::MisePin(args) => crate::mise_pin::run(&args.tool),
+        Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, args.key.as_deref()),
+        Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),
         Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
+        Command::Cache(CacheCommand::PrivateRepo) => private_repo::run(),
+        Command::Cache(CacheCommand::PublicSources(args)) => public_sources::run(&args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
+        Command::Cache(CacheCommand::PurgePrivate(args)) => cache_purge::run(&args),
         Command::Restored(args) => small::run_restored(&args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
         Command::Run(_) | Command::Sources(_) => {
@@ -243,6 +270,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
+        Command::Artifacts(_) => Err(CiError::new("artifacts is handled before commands")),
     }
 }
 

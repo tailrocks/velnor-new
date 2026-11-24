@@ -67,6 +67,6 @@ fn draft_skip_on_with_pr_ci_label_is_refused() {
     );
 }
 
-const PIN_OFF_ALWAYS: u64 = 0x8673_3073_47fe_3fa9;
-const PIN_ON_ALWAYS: u64 = 0x04e1_188f_7bd6_9aa3;
-const PIN_OFF_LABEL: u64 = 0xef92_9cd9_8091_56b8;
+const PIN_OFF_ALWAYS: u64 = 0xd26f_dd64_c51d_9549;
+const PIN_ON_ALWAYS: u64 = 0x9516_df05_1e2a_4266;
+const PIN_OFF_LABEL: u64 = 0xba35_551e_b426_d5ff;

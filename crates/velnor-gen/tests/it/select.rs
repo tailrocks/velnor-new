@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob, PolicyTools,
-    RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason,
-    Target, TargetKind, ToolPins, UnownedPackage,
+    AllTrigger, ChangeSet, DenyChecks, DependencyKind, MemberDependency, PackageName, PathGlob,
+    PolicyTools, RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection,
+    SelectionReason, Target, TargetKind, ToolPins, UnownedPackage,
 };
 use velnor_rust::select;
 
@@ -24,6 +24,7 @@ pub(crate) fn name(text: &str) -> PackageName {
 
 pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> RustMember {
     RustMember {
+        version: None,
         name: name(package),
         manifest: path(&format!("{directory}/Cargo.toml")),
         directory: Some(path(directory)),
@@ -84,9 +85,15 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,
+        private_base_caches: false,
         private_suggestion: None,
         unowned,
-        policy: PolicyTools::default(),
+        policy: PolicyTools {
+            deny: false,
+            machete: false,
+            deny_off: false,
+            checks: DenyChecks::of(&[]),
+        },
         deny_configs: BTreeMap::new(),
         weakenings: Vec::new(),
     }
@@ -290,6 +297,7 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
 #[test]
 fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
     let top = RustMember {
+        version: None,
         directory: None,
         manifest: path("Cargo.toml"),
         ..member("top", "top", &[])
@@ -353,6 +361,7 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
 #[test]
 fn a_target_source_outside_every_package_directory_selects_every_root() {
     let sharing = |package: &str, directory: &str| RustMember {
+        version: None,
         targets: vec![Target {
             source: Some(path("shared/common.rs")),
             ..crate::job_shape::target(TargetKind::Lib)

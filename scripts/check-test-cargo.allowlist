@@ -1,0 +1,8 @@
+# Files under crates/*/tests that may still find cargo by name or CARGO.
+
+# Fixture programs compiled and run inside the mirror fixture: they observe the CARGO
+# the mirror hands to a build script or mise entry, which is the behavior under test.
+crates/velnor-ci/tests/it/crates_mirror.rs
+crates/velnor-ci/tests/it/crates_mirror/cargo_directory.rs
+crates/velnor-ci/tests/it/crates_mirror/mise/external.rs
+crates/velnor-ci/tests/it/crates_mirror/toolchain_view.rs

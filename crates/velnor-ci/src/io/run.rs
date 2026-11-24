@@ -6,22 +6,25 @@ use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nix::sys::signal::{Signal, kill, killpg};
 use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
+use velnor_model::BUILT_OUTPUT;
 
 use super::append_outputs;
-use super::early_list::EarlyList;
+use super::early_list::{EarlyList, StopOnDrop};
 use super::pump::{Capture, pump_counted};
+use super::run_signals::{forward, wait_for_exit};
 use crate::cli::RunArgs;
+use crate::escape::stderr_line;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
-use crate::tests_run::{TestCounts, apply_runnable, output_lines, runs_nextest};
+use crate::tests_run::{TestCounts, apply_runnable, built, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -31,7 +34,7 @@ const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
 const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
 const CONTROLLING_TERMINAL: &str = "/dev/tty";
-const STEP_FILE_VARIABLES: [&str; 5] = [
+const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
     "GITHUB_PATH",
@@ -78,7 +81,7 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
     match execute(args) {
         Ok(code) => ExitCode::from(code),
         Err((code, message)) => {
-            eprintln!("velnor-ci: {message}");
+            eprintln!("{}", stderr_line(&message));
             ExitCode::from(code)
         }
     }
@@ -111,6 +114,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let early = runs_nextest(&args.command).then(|| Arc::new(EarlyList::new(&args.command)));
+    let _stop_early = early.as_ref().map(StopOnDrop::new);
     let Pumps { receiver, slots } = start_pumps(
         &mut child,
         &log,
@@ -119,11 +123,15 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         early.as_ref(),
     );
     let handle = signals.handle();
-    forward(signals, pid, own_group);
-    let status = child.wait();
-    handle.close();
+    let exited = Arc::new(AtomicBool::new(false));
+    forward(signals, pid, own_group, early.clone(), Arc::clone(&exited));
+    let (status, ended) = wait_for_exit(&mut child, &exited, early.is_none().then_some(&handle));
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
+    if runs_nextest(&args.command) {
+        append_outputs(&format!("{BUILT_OUTPUT}={}\n", built(code)))
+            .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
+    }
     let (mut lost, console, counts) = collect(&receiver, &slots, &mut invocation);
     if !invocation.capture_complete {
         eprintln!(
@@ -131,7 +139,8 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         );
     }
     let wanted = invocation.capture_complete && counts.is_some();
-    let listing = early.map(|early| early.finish(wanted));
+    let listing = early.map(|early| early.finish(wanted, ended));
+    handle.close();
     if wanted
         && let Some(listing) = listing
         && let Some(counts) = counts
@@ -164,12 +173,15 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         if code == 0 {
             return Err((2, error.to_string()));
         }
-        eprintln!("velnor-ci: {error}");
+        eprintln!("{}", stderr_line(&error.to_string()));
     }
     match lost {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {
-            eprintln!("velnor-ci: cannot write {}: {error}", path.display());
+            eprintln!(
+                "{}",
+                stderr_line(&format!("cannot write {}: {error}", path.display()))
+            );
             Ok(u8::try_from(code).unwrap_or(1))
         }
         None => Ok(u8::try_from(code).unwrap_or(1)),
@@ -219,8 +231,9 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    super::mbx_reports::assign(&mut command, argv);
     if runs_nextest(argv) {
-        for name in STEP_FILE_VARIABLES {
+        for name in STEP_FILE_VARIABLES.iter().copied() {
             command.env_remove(name);
         }
     }
@@ -236,20 +249,6 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         (code, format!("cannot run {}: {e}", argv[0]))
     })?;
     Ok((child, own_group))
-}
-
-fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
-    thread::spawn(move || {
-        for received in signals.forever() {
-            if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
-                if own_group {
-                    killpg(pid, signal).ok();
-                } else {
-                    kill(pid, signal).ok();
-                }
-            }
-        }
-    });
 }
 
 fn collect(
@@ -284,9 +283,13 @@ fn collect(
         console = console.or(captured.console);
         invocation.artifacts.extend(captured.observations.artifacts);
         invocation
+            .build_scripts
+            .extend(captured.observations.build_scripts);
+        invocation
             .progress
             .get_or_insert_with(Vec::new)
             .extend(captured.observations.progress);
+        invocation.dirty.extend(captured.observations.dirty);
         invocation.tests.extend(captured.observations.tests);
         invocation.rejected += captured.observations.rejected;
     }

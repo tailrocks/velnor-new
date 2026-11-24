@@ -48,7 +48,7 @@ fn assert_scope(name: &str, command: &[&str], present: &[&str], absent: &[&str])
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
     let args = list_args(&temp);
     assert_list_args(&args, present, absent);
@@ -115,8 +115,6 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "--archive-file",
             "a.tar.zst",
             "--extract-to",
-            ".",
-            "--extract-overwrite",
             "--workspace-remap",
             "--ignore-default-filter",
             "-E",
@@ -124,7 +122,43 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "--message-format",
             "json",
         ],
-        &["--locked", "--workspace"],
+        &["--locked", "--workspace", "--extract-overwrite"],
+    );
+}
+
+#[test]
+fn run_lists_the_persisted_archive_scope_without_the_extract_tempdir() {
+    assert_scope(
+        "tests-run-list-persisted-archive",
+        &[
+            "cargo-nextest",
+            "nextest",
+            "run",
+            "--archive-file",
+            "a.tar.zst",
+            "--persist-extract-tempdir",
+            "--workspace-remap",
+            ".",
+            "--no-fail-fast",
+            "--ignore-default-filter",
+            "--status-level",
+            "skip",
+            "-E",
+            "all()",
+            "--no-tests=pass",
+        ],
+        &[
+            "list",
+            "--archive-file",
+            "a.tar.zst",
+            "--workspace-remap",
+            "--ignore-default-filter",
+            "-E",
+            "all()",
+            "--message-format",
+            "json",
+        ],
+        &["--persist-extract-tempdir"],
     );
 }
 
@@ -150,7 +184,7 @@ echo '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2";
     );
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
 

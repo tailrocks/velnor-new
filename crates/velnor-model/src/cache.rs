@@ -92,18 +92,41 @@ impl CacheRoot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AnchorSource {
+    ThisJob,
+    Job(JobId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToolsAnchor {
+    Unanchored,
+    Restored(AnchorSource),
+    Recorded,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BaseScope {
+    #[default]
+    Shared,
+    PrivateRepo,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CacheKey {
     Tools {
         host: Host,
+        anchor: ToolsAnchor,
     },
     Sources {
         host: Host,
         lane: CacheRoot,
+        scope: BaseScope,
     },
     Target {
         job: JobId,
         root: CacheRoot,
         host: Host,
+        scope: BaseScope,
     },
     Delta {
         job: JobId,

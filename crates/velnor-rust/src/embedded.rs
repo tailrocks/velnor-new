@@ -10,7 +10,7 @@ use crate::error::DetectError;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
-const MACROS: [&str; 3] = ["include_str", "include_bytes", "include"];
+const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
 
 #[must_use]
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {

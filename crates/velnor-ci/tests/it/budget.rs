@@ -248,12 +248,12 @@ fn the_command_measures_the_successful_first_attempts_and_names_the_slow_job() {
     let empty = serde_json::json!({"total_count": 0, "workflow_runs": []}).to_string();
     for query in ["event=push&branch=main", "event=schedule"] {
         responses.insert(
-            format!("/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&{query}&per_page=100&page=1"),
+            format!("/repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?status=success&{query}&per_page=100&page=1"),
             empty.clone(),
         );
     }
     responses.insert(
-        "/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&event=pull_request&per_page=100&page=1".to_owned(),
+        "/repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?status=success&event=pull_request&per_page=100&page=1".to_owned(),
         listing(),
     );
     responses.insert(
@@ -323,4 +323,26 @@ fn a_window_with_one_run_that_lacks_the_setup_metric_fails_closed() {
         evaluation.missing
     );
     assert_eq!(evaluation.medians[0].setup_seconds, None);
+}
+
+#[test]
+fn a_slow_job_name_with_a_line_break_stays_on_one_line_of_the_report() {
+    let hostile = "build\n::stop-commands::token";
+    let slow = |run_id: u64, seconds: u64| Sample {
+        jobs: vec![(hostile.to_owned(), seconds)],
+        ..sample(run_id, 900, 800, Some(300))
+    };
+    let histories = vec![history(
+        Population::PullRequest,
+        vec![slow(2, 900), slow(1, 100)],
+    )];
+    let limits = budget(0, 0, 0, 0);
+    let report = velnor_ci::budget::report(&limits, &evaluate(&limits, &histories));
+    assert!(
+        report
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{report}"
+    );
+    assert!(report.contains("%0A::stop-commands::token"), "{report}");
 }

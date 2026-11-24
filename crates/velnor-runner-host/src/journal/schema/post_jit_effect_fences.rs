@@ -14,10 +14,10 @@ const RUNNER_START_FENCE_V36: &str = "CREATE TRIGGER post_jit_runner_start_fence
 const JIT_CLAIM_FENCE: &str = "CREATE TRIGGER post_jit_jit_claim_fence BEFORE INSERT ON connection_runner_jits WHEN NEW.state='claimed' AND EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_claims c WHERE c.intent_id=NEW.intent_id AND c.connection_id=NEW.connection_id AND c.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END";
 const RUNNER_START_FENCE: &str = "CREATE TRIGGER post_jit_runner_start_fence BEFORE UPDATE OF state ON connection_runner_jits WHEN NEW.state IN ('start_requested','start_uncertain','ready','started') AND EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_claims c WHERE c.intent_id=NEW.intent_id AND c.connection_id=NEW.connection_id AND c.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END";
 
-const JIT_FENCES_V36: [&str; 2] = [JIT_CLAIM_FENCE_V36, RUNNER_START_FENCE_V36];
-const JIT_FENCES: [&str; 2] = [JIT_CLAIM_FENCE, RUNNER_START_FENCE];
+const JIT_FENCES_V36: &[&str] = &[JIT_CLAIM_FENCE_V36, RUNNER_START_FENCE_V36];
+const JIT_FENCES: &[&str] = &[JIT_CLAIM_FENCE, RUNNER_START_FENCE];
 
-const TRIGGERS: [&str; 6] = [
+const TRIGGERS: &[&str] = &[
     "CREATE TRIGGER post_jit_reservation_jit_fence BEFORE UPDATE OF jit_state ON capacity_reservation_provisioning_state WHEN NEW.jit_state='requested' AND EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_claims c WHERE c.reservation_id=NEW.reservation_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END",
     "CREATE TRIGGER post_jit_job_facts_fence BEFORE UPDATE OF publication_state ON capacity_reservation_provisioning_state WHEN NEW.publication_state='requested' AND EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_claims c WHERE c.reservation_id=NEW.reservation_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END",
     "CREATE TRIGGER post_jit_listener_fence BEFORE UPDATE OF delivery_state ON capacity_reservation_provisioning_state WHEN NEW.delivery_state='requested' AND EXISTS(SELECT 1 FROM physical_attempt_post_jit_retirement_claims c WHERE c.reservation_id=NEW.reservation_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END",
@@ -27,7 +27,7 @@ const TRIGGERS: [&str; 6] = [
 ];
 
 pub(super) async fn restore_jit_attached(conn: &turso::Connection) -> Result<(), HostError> {
-    for sql in JIT_FENCES_V36 {
+    for sql in JIT_FENCES_V36.iter().copied() {
         conn.execute(sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -51,7 +51,7 @@ pub(super) async fn migrate_v54_to_v55(conn: &turso::Connection) -> Result<(), H
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    for sql in JIT_FENCES {
+    for sql in JIT_FENCES.iter().copied() {
         conn.execute(sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -69,7 +69,7 @@ pub(super) async fn downgrade_fences_to_v36(conn: &turso::Connection) -> Result<
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    for sql in JIT_FENCES_V36 {
+    for sql in JIT_FENCES_V36.iter().copied() {
         conn.execute(sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -86,7 +86,7 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     validate_fences(conn, fences).await
 }
 
-async fn validate_fences(conn: &turso::Connection, fences: &[&str; 2]) -> Result<(), HostError> {
+async fn validate_fences(conn: &turso::Connection, fences: &[&str]) -> Result<(), HostError> {
     for expected_sql in fences.iter().chain(TRIGGERS.iter()) {
         let name = trigger_name(expected_sql);
         let mut rows = conn

@@ -40,7 +40,7 @@ macro_rules! outcome_insert_guard {
 pub(super) const OUTCOME_INSERT_GUARD_V33: &str = outcome_insert_guard!("'reserved', 'uncertain'");
 pub(super) const OUTCOME_INSERT_GUARD: &str =
     outcome_insert_guard!("'reserved', 'uncertain', 'recovering'");
-const REVISION_TABLES: [&str; 4] = [LINEAGE, ATTEMPT, CURRENT, OUTCOME];
+const REVISION_TABLES: &[&str] = &[LINEAGE, ATTEMPT, CURRENT, OUTCOME];
 
 async fn bootstrap_with_outcome_guard(
     conn: &turso::Connection,

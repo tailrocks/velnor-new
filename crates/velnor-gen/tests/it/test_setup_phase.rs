@@ -1,0 +1,393 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use serde_json::Value;
+use velnor_model::{DependencyKind, PackageDependency, PackageName, RepoPath};
+
+use crate::facts::TestResult;
+use crate::golden::{load, samples};
+use crate::job_trust_boundary::violations;
+use crate::pipeline::{pin_helper, view, workflow};
+use crate::private_sources::{SECTION, private_repo};
+use crate::test_groups::view_with;
+use crate::yaml_tree::document;
+
+const NAME: &str = "Prepare the fixture";
+const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
+const SHAPES: &[&str] = &["one-job", "lint-test", "groups"];
+
+fn build_phase() -> String {
+    format!("{SETUP}phase = 'build'\n")
+}
+
+fn rendered(config: &str, helper: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    Ok(document(&workflow(&view_with(
+        &["Cargo.toml"],
+        config,
+        helper,
+    )?)?)?)
+}
+
+fn steps(job: &Value) -> &[Value] {
+    job["steps"].as_array().map_or(&[], Vec::as_slice)
+}
+
+fn compiles(step: &Value) -> bool {
+    let run = step["run"].as_str().unwrap_or_default();
+    run.contains("cargo")
+        && !["cargo-fmt", "cargo-machete", "cargo-deny"]
+            .iter()
+            .any(|tool| run.contains(tool))
+}
+
+fn setups(job: &Value) -> Vec<usize> {
+    steps(job)
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step["name"] == NAME)
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn jobs(workflow: &Value) -> Vec<(&String, &Value)> {
+    workflow["jobs"].as_object().into_iter().flatten().collect()
+}
+
+#[test]
+fn a_build_phase_setup_runs_before_the_first_compiling_step_of_every_job_that_compiles()
+-> TestResult {
+    for shape in SHAPES {
+        let workflow = rendered(&format!("shape = '{shape}'\n{}", build_phase()), "0.1.109")?;
+        let mut checked = Vec::new();
+        for (id, job) in jobs(&workflow) {
+            let first = steps(job).iter().position(compiles);
+            let found = setups(job);
+            let Some(first) = first else {
+                assert!(
+                    found.is_empty(),
+                    "{shape} {id}: setup in a job with no cargo"
+                );
+                continue;
+            };
+            assert_eq!(found.len(), 1, "{shape} {id}: {found:?}");
+            assert_eq!(
+                found[0] + 1,
+                first,
+                "{shape} {id}: setup is not just before cargo"
+            );
+            checked.push(id.as_str());
+        }
+        let wanted: &[&str] = match *shape {
+            "one-job" => &["rust"],
+            "lint-test" => &["rust-lint", "rust-test"],
+            _ => &["rust-lint", "rust-test", "rust-test-default"],
+        };
+        assert_eq!(checked, wanted, "{shape}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_build_phase_setup_has_the_gate_of_the_lint_step_it_precedes() -> TestResult {
+    let workflow = rendered(
+        &format!("shape = 'lint-test'\n{}", build_phase()),
+        "0.1.109",
+    )?;
+    let lint = &workflow["jobs"]["rust-lint"];
+    let setup = &steps(lint)[setups(lint)[0]];
+    let clippy = steps(lint)
+        .iter()
+        .find(|step| step["name"] == "Lint")
+        .ok_or("no Lint step")?;
+    let setup_id = setup["id"].as_str().unwrap_or_default();
+    let gated =
+        format!("steps.{setup_id}.outcome != 'failure' && steps.{setup_id}.outcome != 'cancelled'");
+    let expected = setup["if"]
+        .as_str()
+        .ok_or("the setup step has no condition")?
+        .replace(" }}", &format!(" && {gated} }}}}"));
+    assert_eq!(clippy["if"].as_str(), Some(expected.as_str()));
+    Ok(())
+}
+
+#[test]
+fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_tests() -> TestResult
+{
+    for shape in SHAPES {
+        let plain = rendered(&format!("shape = '{shape}'\n{SETUP}"), "0.1.109")?;
+        let test = rendered(
+            &format!("shape = '{shape}'\n{SETUP}phase = 'test'\n"),
+            "0.1.109",
+        )?;
+        assert_eq!(plain, test, "{shape}");
+        for (id, job) in jobs(&plain) {
+            let found = setups(job);
+            let Some(&setup) = found.first() else {
+                continue;
+            };
+            let first_test = steps(job)
+                .iter()
+                .position(|step| {
+                    step["run"]
+                        .as_str()
+                        .is_some_and(|run| run.contains("nextest run"))
+                })
+                .ok_or("no test step")?;
+            assert_eq!(setup + 1, first_test, "{shape} {id}");
+        }
+        if let Some(lint) = plain["jobs"].get("rust-lint") {
+            assert!(setups(lint).is_empty(), "{shape}: lint job");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_a_grouped_root_runs_before_that_roots_first_compiling_step() -> TestResult
+{
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    for shape in ["one-job", "lint-test"] {
+        let config = format!(
+            "shape = '{shape}'\n{GROUP}[[test_setup]]\nroot = 'tools/a'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n"
+        );
+        let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.109")?;
+        let parsed = document(&workflow(&repo)?)?;
+        let mut checked = 0;
+        for (id, job) in jobs(&parsed) {
+            let compiles_a = |step: &Value| {
+                compiles(step)
+                    && step["run"]
+                        .as_str()
+                        .is_some_and(|run| run.contains("tools/a/Cargo.toml"))
+            };
+            match steps(job).iter().position(compiles_a) {
+                None => assert!(
+                    setups(job).is_empty(),
+                    "{shape} {id}: setup without a root a step"
+                ),
+                Some(first) => {
+                    checked += 1;
+                    assert_eq!(setups(job), vec![first - 1], "{shape} {id}");
+                }
+            }
+        }
+        assert!(checked > 0, "{shape}: no job compiled tools/a");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
+    let config = build_phase().replace("root = '.'", "root = 'tools'");
+    let workflow = document(&workflow(&view_with(
+        &["Cargo.toml", "tools/Cargo.toml"],
+        &config,
+        "0.1.109",
+    )?)?)?;
+    for (id, job) in jobs(&workflow) {
+        assert_eq!(
+            !setups(job).is_empty(),
+            id.contains("tools") && steps(job).iter().any(compiles),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> TestResult {
+    for shape in SHAPES.iter().copied().filter(|shape| *shape != "groups") {
+        let config = format!("shape = '{shape}'\n{SECTION}{}", build_phase());
+        let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.109")?)?;
+        let parsed = document(&text)?;
+        let mut checked = 0;
+        for (id, job) in jobs(&parsed) {
+            let Some(&setup) = setups(job).first() else {
+                continue;
+            };
+            checked += 1;
+            let at = |wanted: &dyn Fn(&Value) -> bool| steps(job).iter().position(wanted);
+            let token = at(&|step| step["id"] == "private-token").ok_or("no token step")?;
+            let fetch = at(&|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("\"$VELNOR_EXEC\" fetch "))
+            })
+            .ok_or("no fetch step")?;
+            let first = steps(job).iter().position(compiles).ok_or("no cargo")?;
+            assert!(
+                token < fetch && fetch < setup && setup < first,
+                "{shape} {id}: {token} {fetch} {setup} {first}"
+            );
+            assert!(
+                !steps(job)[setup].to_string().contains("private-token"),
+                "the setup command must not see the token"
+            );
+        }
+        assert_eq!(checked, if shape == "one-job" { 1 } else { 2 }, "{shape}");
+        let bare = format!("shape = '{shape}'\n{SECTION}");
+        let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.109")?)?;
+        assert_eq!(violations(&text)?, violations(&without)?, "{shape}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_phase_key_needs_a_helper_that_reads_it_and_a_known_value() -> TestResult {
+    for config in [build_phase(), format!("{SETUP}phase = 'test'\n")] {
+        let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.107")?)
+            .err()
+            .ok_or("accepted on a helper that does not read the key")?
+            .to_string();
+        assert!(
+            error.contains("phase") && error.contains("0.1.109"),
+            "{error}"
+        );
+    }
+    workflow(&view_with(&["Cargo.toml"], SETUP, "0.1.90")?)?;
+    let error = workflow(&view_with(
+        &["Cargo.toml"],
+        &format!("{SETUP}phase = 'lint'\n"),
+        "0.1.109",
+    )?)
+    .err()
+    .ok_or("an unknown phase was accepted")?
+    .to_string();
+    assert!(
+        error.contains("test_setup.phase") && error.contains("lint"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_the_helper_root_runs_before_the_source_built_helper_compiles()
+-> TestResult {
+    let mut repo = load(&samples().join("helper-source"))?;
+    let config = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n[[test_setup]]\nroot = 'ci-helper'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
+    repo.files
+        .insert(velnor_rust::CONFIG_PATH, config.as_bytes().to_vec());
+    let lock = String::from_utf8(repo.files[&velnor_rust::LOCK_PATH].clone())?;
+    repo.files.insert(
+        velnor_rust::LOCK_PATH,
+        lock.replace("version = \"0.1.81\"", "version = \"0.1.109\"")
+            .into_bytes(),
+    );
+    let parsed = document(&workflow(&repo)?)?;
+    let helper = &parsed["jobs"]["rust-helper"];
+    let build = steps(helper)
+        .iter()
+        .position(compiles)
+        .ok_or("the helper job builds nothing")?;
+    assert_eq!(setups(helper), vec![build - 1]);
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_precedes_a_test_phase_setup_of_the_same_grouped_root() -> TestResult {
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    let config = format!(
+        "shape = 'lint-test'\n{GROUP}[[test_setup]]\nroot = 'tools/a'\nname = 'Build fixture'\nrun = 'bash build.sh'\nphase = 'build'\n[[test_setup]]\nroot = 'tools/a'\nname = 'Test fixture'\nrun = 'bash test.sh'\nphase = 'test'\n"
+    );
+    let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let parsed = document(&workflow(&repo)?)?;
+    let mut checked = 0;
+    for (id, job) in jobs(&parsed) {
+        let position = |wanted: &str| steps(job).iter().position(|step| step["name"] == wanted);
+        let (Some(build), Some(test)) = (position("Build fixture"), position("Test fixture"))
+        else {
+            continue;
+        };
+        checked += 1;
+        assert_eq!(build + 1, test, "{id}");
+        assert!(compiles(&steps(job)[test + 1]), "{id}");
+    }
+    assert!(checked > 0, "no job holds both setups");
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_a_path_dependency_runs_before_the_root_that_compiles_it() -> TestResult {
+    let config = "shape = 'one-job'\n[[test_setup]]\nroot = 'lib'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
+    let mut repo = view(
+        &["app/Cargo.toml", "lib/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let app = RepoPath::new("app/Cargo.toml")?;
+    let dependency = PackageDependency {
+        name: PackageName::new("package-1")?,
+        kind: DependencyKind::Normal,
+        platform: None,
+        optional: false,
+        manifest: Some(RepoPath::new("lib/Cargo.toml")?),
+        features: Vec::new(),
+        rename: None,
+    };
+    repo.rust_metadata
+        .get_mut(&app)
+        .ok_or("no app metadata")?
+        .members[0]
+        .dependencies
+        .push(dependency);
+    let parsed = document(&workflow(&repo)?)?;
+    let mut checked = 0;
+    for (id, job) in jobs(&parsed) {
+        let Some(first) = steps(job)
+            .iter()
+            .position(|step| compiles(step) && step["working-directory"] == "app")
+        else {
+            continue;
+        };
+        checked += 1;
+        let found = setups(job);
+        let setup = found.first().copied().ok_or("no setup")?;
+        assert!(setup < first, "{id}: {found:?}");
+        assert_eq!(steps(job)[setup]["working-directory"], "lib", "{id}");
+    }
+    assert!(checked > 0, "no job compiles app");
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_a_grouped_dependency_runs_once_per_job() -> TestResult {
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    for shape in ["one-job", "lint-test"] {
+        let config = format!(
+            "shape = '{shape}'\n{GROUP}[[test_setup]]\nroot = 'tools/b'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n"
+        );
+        let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.109")?;
+        let dependent = RepoPath::new("tools/a/Cargo.toml")?;
+        repo.rust_metadata
+            .get_mut(&dependent)
+            .ok_or("no a metadata")?
+            .members[0]
+            .dependencies
+            .push(PackageDependency {
+                name: PackageName::new("b")?,
+                kind: DependencyKind::Normal,
+                platform: None,
+                optional: false,
+                manifest: Some(RepoPath::new("tools/b/Cargo.toml")?),
+                features: Vec::new(),
+                rename: None,
+            });
+        let parsed = document(&workflow(&repo)?)?;
+        let mut rendered = 0;
+        for (id, job) in jobs(&parsed) {
+            assert!(setups(job).len() <= 1, "{shape} {id}: {:?}", setups(job));
+            rendered += setups(job).len();
+        }
+        assert_ne!(rendered, 0, "{shape}: no setup was rendered");
+    }
+    Ok(())
+}

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
-    TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, LaneFeatures, RepoPath, StepKind,
+    TEST_STEP, TargetKind, TargetName, WorkflowPlan,
 };
 
 use crate::cargo_features::NO_TESTS_PASS;
@@ -23,6 +23,7 @@ pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
     pub(crate) offline: bool,
+    pub(crate) literal_roots: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -48,7 +49,7 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+pub(crate) fn cargo_lane(job: &Job, plan: &WorkflowPlan) -> CargoLane {
     let artifacts = job
         .steps
         .iter()
@@ -73,6 +74,7 @@ pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
+        literal_roots: crate::source_roots::literal_roots(job, plan),
     }
 }
 
@@ -152,16 +154,21 @@ fn cargo_command(
             file,
             filter,
             threads,
+            partition,
             ci_profile,
+            no_tests,
         } => nextest_run(
             &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}{}",
                 file.as_str().replace('\'', "'\\''"),
-                threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
+                threads.map_or_else(String::new, |count| format!(" --test-threads {count}")),
+                partition.map_or_else(String::new, |(index, count)| format!(
+                    " --partition hash:{index}/{count}"
+                ))
             ),
             filter,
             *ci_profile,
-            NO_TESTS_PASS,
+            no_tests.flag(),
             &path,
         ),
         CargoCommand::NextestArchive { file } => nextest_archive(nextest, file, &path),
@@ -201,7 +208,11 @@ fn cargo_command(
             format!("cargo build{path} --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny { manifest, config } => deny(manifest, config.as_ref()),
+        CargoCommand::Deny {
+            manifest,
+            config,
+            checks,
+        } => crate::lint_steps::deny(manifest, config.as_ref(), checks.as_deref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
@@ -255,7 +266,7 @@ pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
     }
 }
 
-fn offline_env() -> (String, Value) {
+pub(crate) fn offline_env() -> (String, Value) {
     (
         "CARGO_NET_OFFLINE".to_owned(),
         Value::Text("true".to_owned()),
@@ -328,6 +339,16 @@ pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
         .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
+pub(crate) fn lane_flags(features: &LaneFeatures) -> String {
+    let all = if features.all { " --all-features" } else { "" };
+    let no_default = if features.no_default {
+        " --no-default-features"
+    } else {
+        ""
+    };
+    format!("{all}{no_default}{}", feature_flag(&features.names))
+}
+
 pub(crate) fn feature_flag(features: &[String]) -> String {
     if features.is_empty() {
         String::new()
@@ -349,31 +370,6 @@ pub(crate) fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     }
 }
 
-fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<(String, Value)>) {
-    let directory = manifest.parent();
-    let name = directory.as_ref().map_or_else(
-        || "Dependency policy".to_owned(),
-        |directory| format!("Dependency policy ({directory})"),
-    );
-    let manifest_arg = directory.map_or_else(String::new, |_| {
-        format!(
-            " --manifest-path '{}'",
-            manifest.as_str().replace('\'', "'\\''")
-        )
-    });
-    let config_arg = config.map_or_else(String::new, |path| {
-        format!(" --config '{}'", path.as_str().replace('\'', "'\\''"))
-    });
-    (
-        name,
-        format!("cargo-deny{manifest_arg}{config_arg} --locked check"),
-        vec![],
-    )
-}
-
 pub(crate) fn reports_tests(command: &CargoCommand) -> bool {
-    matches!(
-        command,
-        CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. }
-    )
+    command.reports_tests()
 }

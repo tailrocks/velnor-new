@@ -69,7 +69,10 @@ pub fn gather(
     let mut runs = Vec::new();
     for id in &run_ids {
         match collect(github, repo, *id, false) {
-            Ok(run) => runs.push(run),
+            Ok(run) => {
+                notes.extend(unmatched_logs(&run));
+                runs.push(run);
+            }
             Err(error) if error.is_missing() => {
                 notes.push(format!("run {id} has no readable logs and was skipped"));
             }
@@ -104,6 +107,22 @@ pub fn gather(
         }
     }
     Ok(TimingsReport { timings, notes })
+}
+
+fn unmatched_logs(run: &RunMetrics) -> Option<String> {
+    let jobs: Vec<String> = run
+        .jobs
+        .iter()
+        .filter(|job| job.step_logs_unmatched)
+        .map(|job| format!("`{}`", job.name))
+        .collect();
+    (!jobs.is_empty()).then(|| {
+        format!(
+            "run {}: the log of job {} has a different number of step groups than the job has steps, so no step timings were read from it",
+            run.run_id,
+            jobs.join(", ")
+        )
+    })
 }
 
 fn default_branch(github: &dyn GitHub, repo: &Repo) -> Result<String, CiError> {
@@ -165,7 +184,10 @@ fn sample(
     };
     let lint = step_in(&[single.as_str(), lint_job.as_str()], LINT_STEP)?;
     let (build, test) = if let Some(test) = step_in(&[group_job.as_str()], TEST_STEP) {
-        (step_in(&[test_job.as_str()], BUILD_TESTS_STEP)?, test)
+        // Without a separate build step, the test step log names the build time too.
+        let build = step_in(&[test_job.as_str()], BUILD_TESTS_STEP)
+            .or_else(|| step_in(&[test_job.as_str()], TEST_STEP))?;
+        (build, test)
     } else {
         let test = step_in(&[single.as_str(), test_job.as_str()], TEST_STEP)?;
         (test, test)

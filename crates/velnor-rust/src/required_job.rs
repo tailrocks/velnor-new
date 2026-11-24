@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot,
-    RustSelection, Step, StepKind, VerdictJob, VerdictSpec, When,
+    GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, RustSelection,
+    Step, StepKind, VerdictJob, VerdictSpec, When,
 };
 
 use crate::harness::uses_nextest;
@@ -19,9 +19,9 @@ fn tests_lane(job: &Job) -> Vec<RootSlug> {
     job.steps
         .iter()
         .filter_map(|step| match &step.kind {
-            StepKind::Cargo(
-                CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
-            ) => step.reads.as_ref().map(|plan| plan.slug.clone()),
+            StepKind::Cargo(command) if command.reports_tests() => {
+                step.reads.as_ref().map(|plan| plan.slug.clone())
+            }
             _ => None,
         })
         .collect()
@@ -41,6 +41,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
                 )
                 .collect(),
             GateNeed::Policy => vec![JobCondition::Policy],
+            GateNeed::Lint => vec![JobCondition::Lint(gate.slug.clone())],
             _ => Vec::new(),
         })
         .collect();
@@ -62,6 +63,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::NotCancelled
         | When::NotCancelledPostMerge
         | When::Finalizer
+        | When::FinalizerAfterProducer
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
@@ -72,12 +74,15 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::BaseExpired
         | When::SavingRun
         | When::Always
+        | When::Failure
         | When::CacheDebug
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal
         | When::SaveToolsUnlessLocal
+        | When::LookupToolsOnNodeHit
         | When::PrimeToolsFromNetwork
-        | When::SaveToolsOnDefaultBranch => None,
+        | When::SaveToolsOnDefaultBranch
+        | When::SaveVerifiedTools(_) => None,
     };
     gate.into_iter().chain(when).chain(skip).collect()
 }

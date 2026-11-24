@@ -23,7 +23,7 @@ fn every_wait_misses(_call: usize) -> Wait {
 }
 
 async fn host_ends_with(waits: fn(usize) -> Wait) -> TestResult<Option<Result<(), HostError>>> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(None);
     };
     let proxy = Proxy::start(&scenario.fixture.endpoint, Faults::new(waits, 0))?;

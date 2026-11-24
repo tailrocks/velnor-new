@@ -12,7 +12,7 @@ use super::Driver;
 use super::refusal::CANCEL_GRACE;
 use crate::cli::RunnerMode;
 use crate::io::authority::Runners;
-use crate::io::env::{Engine, Environment, STANDIN_IMAGE, words};
+use crate::io::env::{Engine, Environment, STANDIN_IMAGE, client_log_tail, words};
 use crate::io::job_logs;
 use crate::io::probe::request;
 use crate::io::supervisor::await_replacement;
@@ -152,7 +152,10 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
                 continue;
             }
             let id = run.id;
-            let outcome = self.outcome(run, side).await?;
+            let mut outcome = self.outcome(run, side).await?;
+            if outcome.trusted && outcome.started.is_none() {
+                outcome.client_log = Some(client_log_tail(&log).await?);
+            }
             println!("velnor-local {}: {}", self.tag, outcome.line());
             self.outcomes.push(outcome);
             if side == Side::Trusted {
@@ -160,8 +163,10 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             }
         }
         if !succeeded && !created {
+            let tail = client_log_tail(&log).await?;
             return Err(io::Error::other(format!(
-                "Runner.Client failed; see logs/{name}.log"
+                "Runner.Client failed; see logs/{name}.log, last lines:\n{}",
+                tail.join("\n")
             )));
         }
         Ok(())

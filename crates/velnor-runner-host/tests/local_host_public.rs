@@ -113,7 +113,7 @@ async fn decide_jobs(scenario: &Scenario) -> TestResult<(Vec<String>, u64)> {
 
 #[tokio::test]
 async fn local_job_start_check_decides_each_job_against_the_authority() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let plan = scenario.plan(1, 0)?;
@@ -191,13 +191,12 @@ async fn networks_of(scenario: &Scenario, side: &str) -> TestResult<Vec<String>>
     Ok(inspected
         .network_settings
         .and_then(|settings| settings.networks)
-        .map(|networks| networks.into_keys().collect())
-        .unwrap_or_default())
+        .map_or_default(|networks| networks.into_keys().collect()))
 }
 
 #[tokio::test]
 async fn local_pairs_run_one_job_and_are_replaced_after_their_agent_is_deleted() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let plan = scenario.plan(1, 1)?;
@@ -254,7 +253,7 @@ fn secrets_in(inspected: &ContainerInspectResponse) -> String {
 
 #[tokio::test]
 async fn local_pairs_hold_neither_the_authority_address_nor_the_token() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let plan = scenario.plan(1, 1)?;

@@ -15,15 +15,15 @@ use super::super::manifest::{
 use super::super::strict_json;
 
 const MAX_JSON_BYTES: usize = 8 * 1024 * 1024;
-const IMAGE_MEDIA_TYPES: [&str; 2] = [
+const IMAGE_MEDIA_TYPES: &[&str] = &[
     "application/vnd.oci.image.manifest.v1+json",
     "application/vnd.docker.distribution.manifest.v2+json",
 ];
-const CONFIG_MEDIA_TYPES: [&str; 2] = [
+const CONFIG_MEDIA_TYPES: &[&str] = &[
     "application/vnd.oci.image.config.v1+json",
     "application/vnd.docker.container.image.v1+json",
 ];
-const LAYER_MEDIA_TYPES: [&str; 2] = [
+const LAYER_MEDIA_TYPES: &[&str] = &[
     "application/vnd.oci.image.layer.v1.tar+gzip",
     "application/vnd.docker.image.rootfs.diff.tar.gzip",
 ];

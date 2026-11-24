@@ -44,6 +44,10 @@ pub(super) async fn migrate_v55_to_v56(conn: &turso::Connection) -> Result<(), H
     container_absences::migrate(conn).await
 }
 
+pub(super) fn clock_guard() -> Result<(String, String), HostError> {
+    dispatch_deadlines::clock_guard()
+}
+
 const VERSION: i64 = 43;
 
 const CLAIMS: &str = "CREATE TABLE capacity_reservation_unbound_retirement_claims (reservation_id INTEGER NOT NULL PRIMARY KEY REFERENCES capacity_reservations(id), connection_id TEXT NOT NULL REFERENCES connection_scopes(connection_id), operation_id INTEGER NOT NULL UNIQUE REFERENCES connection_intents(id), engine_id TEXT NOT NULL CHECK (length(engine_id) BETWEEN 1 AND 128), docker_root_digest TEXT NOT NULL CHECK (length(docker_root_digest) = 64 AND docker_root_digest NOT GLOB '*[^0-9a-f]*'), claim_generation INTEGER NOT NULL CHECK (claim_generation > 0), lease_until INTEGER NOT NULL CHECK (lease_until > 0))";
@@ -68,13 +72,13 @@ const RETIREMENT_INSERT_GUARD: &str = "CREATE TRIGGER physical_attempt_unbound_r
 
 const BIND_FENCE: &str = "CREATE TRIGGER unbound_retirement_bind_fence BEFORE UPDATE OF resources_bound ON capacity_reservation_provisioning_state WHEN NEW.resources_bound = 1 AND EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_claims AS claim WHERE claim.reservation_id = NEW.reservation_id) BEGIN SELECT RAISE(ABORT, 'A retirement claim prevents this operation.'); END";
 
-const GUARDS_WITH_SHAPE: [&str; 3] = [
+const GUARDS_WITH_SHAPE: &[&str] = &[
     "unbound_retirement_claim_insert_guard",
     "unbound_retirement_progress_insert_guard",
     "physical_attempt_unbound_retirement_insert_guard",
 ];
 
-const IMMUTABLE: [&str; 5] = [
+const IMMUTABLE: &[&str] = &[
     "CREATE TRIGGER unbound_retirement_claim_no_delete BEFORE DELETE ON capacity_reservation_unbound_retirement_claims BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
     "CREATE TRIGGER unbound_retirement_progress_no_update BEFORE UPDATE ON capacity_reservation_unbound_retirement_progress BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
     "CREATE TRIGGER unbound_retirement_progress_no_delete BEFORE DELETE ON capacity_reservation_unbound_retirement_progress BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
@@ -82,7 +86,7 @@ const IMMUTABLE: [&str; 5] = [
     "CREATE TRIGGER physical_attempt_unbound_retirements_no_delete BEFORE DELETE ON physical_attempt_unbound_retirements BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
 ];
 
-const TABLES: [(&str, &str); 3] = [
+const TABLES: &[(&str, &str)] = &[
     ("capacity_reservation_unbound_retirement_claims", CLAIMS),
     ("capacity_reservation_unbound_retirement_progress", PROGRESS),
     ("physical_attempt_unbound_retirements", RETIREMENTS),
@@ -105,8 +109,8 @@ fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
     let shape = shape.replace("{s}", "state");
     let shaped = |sql: &str| sql.replace("{shape}", &shape);
     let mut objects = TABLES
-        .into_iter()
-        .map(|(name, sql)| ("table", name.to_owned(), sql.to_owned()))
+        .iter()
+        .map(|&(name, sql)| ("table", name.to_owned(), sql.to_owned()))
         .collect::<Vec<_>>();
     for sql in [
         shaped(CLAIM_INSERT_GUARD),
@@ -116,11 +120,11 @@ fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
         BIND_FENCE.to_owned(),
     ]
     .into_iter()
-    .chain(IMMUTABLE.into_iter().map(str::to_owned))
+    .chain(IMMUTABLE.iter().copied().map(str::to_owned))
     {
         objects.push(("trigger", trigger_name(&sql).to_owned(), sql));
     }
-    for (table, _) in TABLES {
+    for &(table, _) in TABLES {
         for (suffix, action) in [
             ("insert", "AFTER INSERT"),
             ("update", "AFTER UPDATE"),
@@ -174,7 +178,7 @@ pub(super) async fn migrate_v44_to_v45(conn: &turso::Connection) -> Result<(), H
 
 async fn replace_shape_guards(conn: &turso::Connection, shape: &str) -> Result<(), HostError> {
     let current = objects(shape);
-    for name in GUARDS_WITH_SHAPE {
+    for name in GUARDS_WITH_SHAPE.iter().copied() {
         conn.execute(&format!("DROP TRIGGER {name}"), ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -213,6 +217,7 @@ async fn validate_objects(
     conn: &turso::Connection,
     objects: Vec<(&'static str, String, String)>,
 ) -> Result<(), HostError> {
+    let version = super::journal_version(conn).await?;
     for (kind, name, expected) in objects {
         let mut rows = conn
             .query(
@@ -229,8 +234,12 @@ async fn validate_objects(
             .get(0)
             .map_err(|_| HostError::Journal)?;
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-            || super::sql_normalization::normalize(&actual)
-                != super::sql_normalization::normalize(&expected)
+            || !super::clock_tick::matches(
+                version,
+                &actual,
+                &expected,
+                super::sql_normalization::normalize,
+            )
         {
             return Err(HostError::Journal);
         }

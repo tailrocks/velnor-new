@@ -6,6 +6,7 @@ use crate::error::HostError;
 use super::ddl;
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    let version = super::super::journal_version(conn).await?;
     for (kind, name, expected) in [
         (
             "table",
@@ -33,7 +34,7 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
             ddl::NO_DELETE,
         ),
     ] {
-        validate_object(conn, kind, name, expected).await?;
+        validate_object(conn, version, kind, name, expected).await?;
     }
     for (suffix, action) in [
         ("insert", "after insert"),
@@ -44,13 +45,14 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
         let expected = format!(
             "CREATE TRIGGER {name} {action} ON physical_attempt_jit_conflict_receipts BEGIN UPDATE journal_meta SET revision=revision+1 WHERE singleton=1; END"
         );
-        validate_object(conn, "trigger", &name, &expected).await?;
+        validate_object(conn, version, "trigger", &name, &expected).await?;
     }
     validate_rows(conn).await
 }
 
 async fn validate_object(
     conn: &turso::Connection,
+    version: i64,
     kind: &str,
     name: &str,
     expected: &str,
@@ -70,8 +72,12 @@ async fn validate_object(
         .get(0)
         .map_err(|_| HostError::Journal)?;
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-        || super::super::sql_normalization::normalize(&actual)
-            != super::super::sql_normalization::normalize(expected)
+        || !super::super::clock_tick::matches(
+            version,
+            &actual,
+            expected,
+            super::super::sql_normalization::normalize,
+        )
     {
         return Err(HostError::Journal);
     }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -8,12 +9,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::input_scopes::{git_prefix, scoped_files};
 pub(super) use super::inputs_git::{git, modified_ns, set_modified_ns};
+mod sources;
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, TrackedFile, format_inputs, inputs_file, is_representable, parse_ls_files,
-    plan_restore, snapshot_file, with_worktree_blobs, witness_file,
+    SavedInput, Tracked, format_inputs, input_dirs_file, inputs_file, plan_restore,
+    restored_units_file, snapshot_file, witness_file,
 };
+use crate::restored_units::RestoredUnits;
 use crate::scope::Scope;
+pub(super) use sources::{
+    TrackedPaths, capture_inputs, gitlinks, source_files, top_level_files, tracked_paths,
+};
 
 static NEXT_SNAPSHOT: AtomicU64 = AtomicU64::new(0);
 
@@ -30,7 +36,8 @@ pub(super) fn save_inputs_scoped(
     let identity =
         super::delta_source::identity_of(&top_level_files(&top, &Scope::default(), false)?)
             .unwrap_or_default();
-    let relative = target.join(inputs_file(&git_prefix(root)?));
+    let prefix = git_prefix(root)?;
+    let relative = target.join(inputs_file(&prefix));
     let path = root.join(&relative);
     check_snapshot_parent(&path)?;
     if std::env::var("EXPECTED_SOURCE_IDENTITY")
@@ -66,7 +73,10 @@ pub(super) fn save_inputs_scoped(
         file: link.clone(),
         mtime_ns: 0,
     }));
-    publish_snapshot(&path, &super::input_snapshot::encode(&identity, &saved))?;
+    let text = super::input_snapshot::encode(&identity, &saved);
+    let dirs = root.join(target).join(input_dirs_file(&prefix));
+    super::input_dirs::save(&top, &dirs, &text, &saved)?;
+    publish_snapshot(&path, &text)?;
     Ok(format!(
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
@@ -185,17 +195,19 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    restore_inputs_scoped(root, target, None)
+    restore_inputs_scoped(root, target, None, &mut BTreeMap::new())
 }
 
 pub(super) fn restore_inputs_scoped(
     root: &Path,
     target: &Path,
     scope: Option<&Scope>,
+    scans: &mut BTreeMap<PathBuf, Option<RestoredUnits>>,
 ) -> Result<String, CiError> {
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
     remove_restored(&root.join(target).join(witness_file(&prefix)))?;
+    remove_restored(&root.join(target).join(restored_units_file(&prefix)))?;
     let relative = target.join(inputs_file(&prefix));
     let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
@@ -226,9 +238,17 @@ pub(super) fn restore_inputs_scoped(
     }
     fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
+    let units_target = root.join(target);
+    let physical_target = fs::canonicalize(&units_target).unwrap_or_else(|_| units_target.clone());
+    let units = scans
+        .entry(physical_target)
+        .or_insert_with(|| super::restored_units::scan(&units_target));
+    super::restored_units::record(&units_target, &prefix, units.as_ref())?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
+    let dirs = root.join(target).join(input_dirs_file(&prefix));
+    super::input_dirs::restore(&top, &dirs, &text, &plan.restore)?;
     Ok(format!(
         "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         plan.restore.len(),
@@ -250,144 +270,4 @@ fn remove_restored(path: &Path) -> Result<(), CiError> {
             path.display()
         ))),
     }
-}
-
-pub(super) struct TrackedPaths {
-    pub top: PathBuf,
-    pub paths: Vec<PathBuf>,
-}
-
-pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
-    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
-    let top = PathBuf::from(
-        String::from_utf8(top)
-            .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
-            .trim_end_matches(['\n', '\r']),
-    );
-    let listed = git(&top, &["ls-files", "-z", "--recurse-submodules"], None)?;
-    let mut paths = Vec::new();
-    for path in listed
-        .split(|byte| *byte == 0)
-        .filter(|path| !path.is_empty())
-    {
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStringExt;
-            paths.push(PathBuf::from(std::ffi::OsString::from_vec(path.to_vec())));
-        }
-        #[cfg(not(unix))]
-        {
-            paths.push(PathBuf::from(String::from_utf8(path.to_vec()).map_err(
-                |e| CiError::new(format!("git ls-files printed non-UTF-8: {e}")),
-            )?));
-        }
-    }
-    Ok(TrackedPaths { top, paths })
-}
-
-pub(super) struct CapturedInputs {
-    pub tracked: Tracked,
-    pub source_identity: String,
-    pub sources: Tracked,
-}
-
-pub(super) fn capture_inputs(root: &Path, strict: bool) -> Result<CapturedInputs, CiError> {
-    let top = tracked_paths(root)?.top;
-    let sources = top_level_files(&top, &Scope::default(), strict)?;
-    let source_identity = super::delta_source::identity_of(&sources).unwrap_or_default();
-    let (_, tracked) = scoped_files(root, None)?;
-    Ok(CapturedInputs {
-        tracked,
-        source_identity,
-        sources,
-    })
-}
-
-pub(super) fn source_files(root: &Path) -> Result<Tracked, CiError> {
-    let top = tracked_paths(root)?.top;
-    top_level_files(&top, &Scope::default(), true)
-}
-
-pub(super) fn top_level_files(
-    root: &Path,
-    scope: &Scope,
-    strict: bool,
-) -> Result<Tracked, CiError> {
-    let index = parse_ls_files(
-        &git(
-            root,
-            &["ls-files", "-s", "-z", "--recurse-submodules"],
-            None,
-        )?,
-        scope,
-    );
-    let mut present = Vec::with_capacity(index.files.len());
-    let mut absent = Vec::new();
-    for file in index.files {
-        match fs::symlink_metadata(root.join(&file.path)) {
-            Ok(metadata) if metadata.is_file() => present.push(TrackedFile {
-                mode: worktree_mode(&metadata, &file.mode),
-                ..file
-            }),
-            Err(error) if error.kind() == ErrorKind::NotFound => absent.push(file.path),
-            _ if strict => return Err(CiError::new("tracked source is not a regular file")),
-            _ => absent.push(file.path),
-        }
-    }
-    let mut paths = String::new();
-    for file in &present {
-        let path = root.join(&file.path);
-        let path = path
-            .to_str()
-            .ok_or_else(|| CiError::new(format!("{} is not valid UTF-8", path.display())))?;
-        paths.push_str(path);
-        paths.push('\n');
-    }
-    let hashes = git(
-        root,
-        &["hash-object", "--no-filters", "--stdin-paths"],
-        Some(paths.as_bytes()),
-    )?;
-    let hashes = String::from_utf8(hashes)
-        .map_err(|e| CiError::new(format!("git hash-object printed non-UTF-8: {e}")))?;
-    let mut links = Vec::with_capacity(index.links.len());
-    let mut unverifiable_links = index.unverifiable_links;
-    for link in index.links {
-        let target = match fs::read_link(root.join(&link.path)) {
-            Ok(target) => target,
-            Err(error) if strict && error.kind() != ErrorKind::NotFound => {
-                return Err(CiError::new("tracked source is not a symlink"));
-            }
-            Err(_) => {
-                absent.push(link.path);
-                continue;
-            }
-        };
-        match target.to_str() {
-            Some(text) if is_representable(text) => links.push(TrackedFile {
-                blob: text.to_owned(),
-                ..link
-            }),
-            _ => unverifiable_links += 1,
-        }
-    }
-    Ok(Tracked {
-        files: with_worktree_blobs(present, &hashes)?,
-        links,
-        absent,
-        unsupported: index.unsupported,
-        unverifiable_links,
-        submodules: index.submodules,
-    })
-}
-
-#[cfg(unix)]
-fn worktree_mode(metadata: &fs::Metadata, _index_mode: &str) -> String {
-    use std::os::unix::fs::PermissionsExt;
-    format!("{:o}", 0o100_000 | (metadata.permissions().mode() & 0o7777))
-}
-
-#[cfg(not(unix))]
-fn worktree_mode(_metadata: &fs::Metadata, index_mode: &str) -> String {
-    index_mode.to_owned()
 }

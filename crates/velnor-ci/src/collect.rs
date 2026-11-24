@@ -150,8 +150,10 @@ fn job_metrics(
             .map_err(|e| e.context(&format!("log of job `{}`", job.name)))?;
         (logscan::scan(&text), step_logs(job, &text))
     } else {
-        (logscan::LogScan::default(), BTreeMap::new())
+        (logscan::LogScan::default(), Some(BTreeMap::new()))
     };
+    let step_logs_unmatched = step_logs.is_none();
+    let step_logs = step_logs.unwrap_or_default();
     let (queue_seconds, duration_seconds) = if ran {
         (
             seconds_between(Some(&job.created_at), job.started_at.as_deref()),
@@ -184,6 +186,7 @@ fn job_metrics(
         setup_seconds: if ran { setup_seconds(job) } else { None },
         steps,
         log,
+        step_logs_unmatched,
     })
 }
 
@@ -194,17 +197,18 @@ fn is_user_step(step: &ApiStep) -> bool {
         && !step.name.starts_with("Post ")
 }
 
-fn step_logs(job: &ApiJob, text: &str) -> BTreeMap<usize, logscan::LogScan> {
+/// Pairs the log's top-level step groups with the job's steps that ran, or
+/// `None` when the counts differ and the pairing would be a guess.
+fn step_logs(job: &ApiJob, text: &str) -> Option<BTreeMap<usize, logscan::LogScan>> {
     let indexes: Vec<usize> = (0..job.steps.len())
         .filter(|index| is_user_step(&job.steps[*index]))
         .collect();
     let segments = logscan::split_steps(text);
-    if segments.len() != indexes.len() {
-        return BTreeMap::new();
-    }
-    indexes
-        .into_iter()
-        .zip(segments)
-        .map(|(index, segment)| (index, logscan::scan(segment)))
-        .collect()
+    (segments.len() == indexes.len()).then(|| {
+        indexes
+            .into_iter()
+            .zip(segments)
+            .map(|(index, segment)| (index, logscan::scan(segment)))
+            .collect()
+    })
 }

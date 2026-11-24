@@ -298,7 +298,13 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
     }
 
     async fn pin(&self) -> io::Result<()> {
-        super::local_ci::pin_branch(&self.repo, self.pin.as_ref(), self.args.timeout_scale).await
+        super::local_ci::pin_branch(
+            &self.repo,
+            self.tag,
+            self.pin.as_ref(),
+            self.args.timeout_scale,
+        )
+        .await
     }
 
     async fn switch(&self, branch: &str) -> io::Result<()> {

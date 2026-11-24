@@ -2,24 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, RepoPath, ToolsAnchor};
 use velnor_render::render_key_with_mise;
 use velnor_rust::{CacheEntry, budget_plan};
 
 const DAY: i64 = 86_400;
 const NOW: i64 = 20 * DAY;
 
-fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
+pub(crate) fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
     let key = match family {
         "tgt" => target_key(id, "rust-test", "Cargo.toml"),
         "src" => resolve_cache_key(
             &CacheKey::Sources {
                 host: Host,
                 lane: cache_root("Cargo.toml"),
+                scope: BaseScope::Shared,
             },
             id,
         ),
-        "tools" => resolve_cache_key(&CacheKey::Tools { host: Host }, id),
+        "tools" => resolve_cache_key(
+            &CacheKey::Tools {
+                host: Host,
+                anchor: ToolsAnchor::Unanchored,
+            },
+            id,
+        ),
         "dlt" => resolve_cache_key(
             &CacheKey::Delta {
                 job: JobId::new("rust-test").unwrap_or_else(|e| unreachable!("{e}")),
@@ -43,10 +50,10 @@ fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
 fn delta(id: u64, age: i64) -> CacheEntry {
     entry(id, "dlt", age)
 }
-fn base(id: u64, family: &str) -> CacheEntry {
+pub(crate) fn base(id: u64, family: &str) -> CacheEntry {
     entry(id, family, 10 * DAY)
 }
-fn plan(entries: &[CacheEntry], budget: u64) -> Vec<u64> {
+pub(crate) fn plan(entries: &[CacheEntry], budget: u64) -> Vec<u64> {
     budget_plan(entries, &BTreeSet::from([1]), NOW, budget)
 }
 
@@ -124,6 +131,27 @@ fn ages_are_inclusive_and_only_pr_merge_scopes_are_delta_candidates() {
         );
     }
     assert_eq!(plan(&[delta(1, 0)], 10), Vec::<u64>::new());
+}
+
+fn anchored_tools(id: u64, age: i64) -> CacheEntry {
+    CacheEntry {
+        key: format!(
+            "velnor-tools-Linux-X64-mise2026.11.10-{}-{id:064x}",
+            "a".repeat(64)
+        ),
+        ..entry(id, "other", age)
+    }
+}
+
+#[test]
+fn tools_entries_named_by_their_anchor_are_pruned_as_one_group() {
+    let old = anchored_tools(1, 8 * DAY);
+    let newest = anchored_tools(2, 8 * DAY);
+    assert_eq!(plan(&[old, newest], 0), vec![1]);
+    assert_eq!(
+        plan(&[anchored_tools(1, DAY), anchored_tools(2, DAY)], 0),
+        Vec::<u64>::new()
+    );
 }
 
 #[test]
@@ -212,18 +240,19 @@ fn target_key(id: u64, job: &str, manifest: &str) -> String {
         job: JobId::new(job).unwrap_or_else(|e| unreachable!("{e}")),
         root: cache_root(manifest),
         host: Host,
+        scope: BaseScope::Shared,
     };
     resolve_cache_key(&key, id)
 }
 
-fn cache_root(manifest: &str) -> CacheRoot {
+pub(crate) fn cache_root(manifest: &str) -> CacheRoot {
     CacheRoot::new(
         &RepoPath::new(manifest).unwrap_or_else(|e| unreachable!("{e}")),
         RepoPath::from_static("target"),
     )
 }
 
-fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
+pub(crate) fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
     let rendered = render_key_with_mise(key, &format!("2026.1.{id}")).key;
     let mut resolved = String::new();
     let mut rest = rendered.as_str();

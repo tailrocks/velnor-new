@@ -97,12 +97,14 @@ pub fn retain(
             }).collect()
 }
 
-// A unit without artifact evidence is explained by cargo's own failure report,
-// so it is not a missing-evidence fault. Build success keeps the check strict.
+// A unit without artifact evidence is explained by cargo's own failure report only when cargo
+// named that unit as failed. Every other unit in a failed build stays a strict check.
 fn failed_build(failures: &ArtifactBatch, event: &CargoProgress) -> bool {
-    failures.build_failed
-        || failures
-            .failed_units
-            .iter()
-            .any(|(name, version)| *name == event.package && *version == event.version)
+    failures.failed_units.iter().any(|unit| {
+        unit.package == event.package
+            && unit
+                .version
+                .as_deref()
+                .is_none_or(|version| version == event.version)
+    })
 }

@@ -20,6 +20,7 @@ mod proxy;
 mod reply;
 mod reset;
 pub mod run;
+mod scaled;
 pub mod status;
 pub mod supervisor;
 

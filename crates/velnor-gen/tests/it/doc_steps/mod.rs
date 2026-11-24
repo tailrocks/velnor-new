@@ -14,6 +14,7 @@ fn library(doctest: bool) -> RustMember {
 
 fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustMember {
     RustMember {
+        version: None,
         targets: vec![Target {
             name: TargetName::new(name).unwrap_or_else(|e| unreachable!("{e}")),
             kinds: vec![kind],
@@ -132,7 +133,7 @@ fn a_doctest_is_known_only_from_a_fence_in_a_source_rustdoc_reads() {
     }
 }
 
-const TRACKED: [&str; 22] = [
+const TRACKED: &[&str] = &[
     "app/src/main.rs",
     "app/README.md",
     "vendor/ext/src/lib.rs",
@@ -165,6 +166,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             "tools/Cargo.toml",
             vec![
                 RustMember {
+                    version: None,
                     targets: target_of("tool", TargetKind::Lib, true, "tools/tool/src/lib.txt")
                         .targets,
                     ..member("tool", "tools/tool", &[])
@@ -191,7 +193,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             BTreeSet::from([velnor_model::InputOwner::named(name("app"))]),
         ),
     ]);
-    let tracked: BTreeSet<_> = TRACKED.into_iter().map(path).collect();
+    let tracked: BTreeSet<_> = TRACKED.iter().copied().map(path).collect();
     let sources = |index: usize| -> Vec<String> {
         root_sources(&facts, &facts.rust_roots[index], &tracked)
             .unwrap_or_default()

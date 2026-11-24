@@ -209,23 +209,26 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     let generated = generated_files(&files)?;
     assert_eq!(
         generated.keys().cloned().collect::<Vec<_>>(),
-        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
+        [path(".github/workflows/ci.yml")?, METADATA_PATH]
     );
     let on_disk = generated
         .iter()
         .map(|(path, text)| (path.clone(), text.clone().into_bytes()))
         .collect();
-    assert_eq!(drift(&generated, &on_disk, false), []);
+    assert_eq!(
+        drift(&generated, &on_disk, &std::collections::BTreeSet::new()),
+        []
+    );
     let mut changed = on_disk.clone();
     changed.insert(METADATA_PATH, b"{}".to_vec());
     assert_eq!(
-        drift(&generated, &changed, false),
+        drift(&generated, &changed, &std::collections::BTreeSet::new()),
         [Drift::Changed(METADATA_PATH)]
     );
     let mut missing = on_disk;
     missing.remove(&METADATA_PATH);
     assert_eq!(
-        drift(&generated, &missing, false),
+        drift(&generated, &missing, &std::collections::BTreeSet::new()),
         [Drift::Missing(METADATA_PATH)]
     );
     Ok(())

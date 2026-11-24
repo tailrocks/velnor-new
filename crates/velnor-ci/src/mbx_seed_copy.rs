@@ -3,17 +3,17 @@
 
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-pub const SUBSETS: [&str; 4] = [
-    "cas",
+pub const SUBSETS: &[&str] = &[
     "executable-identities",
     "task-manifests",
     "action-results",
+    "cas",
 ];
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +29,7 @@ struct Job {
     from: PathBuf,
     to: PathBuf,
     size: u64,
+    modified: SystemTime,
 }
 
 #[derive(Default)]
@@ -62,6 +63,10 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
         return;
     };
     for entry in entries {
+        if Instant::now() >= deadline {
+            walk.expired = true;
+            return;
+        }
         let Ok(entry) = entry else {
             walk.failed += 1;
             continue;
@@ -74,30 +79,54 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
         if kind.is_dir() {
             list(&source, &target, walk, deadline);
         } else if kind.is_file() {
-            let size = entry.metadata().map_or(0, |metadata| metadata.len());
+            let (size, modified) = entry.metadata().map_or((0, UNIX_EPOCH), |metadata| {
+                (metadata.len(), metadata.modified().unwrap_or(UNIX_EPOCH))
+            });
             walk.jobs.push(Job {
                 from: source,
                 to: target,
                 size,
+                modified,
             });
         }
     }
 }
 
-#[must_use]
-pub fn copy_subset(seed: &Path, store: &Path, threads: usize, deadline: Instant) -> Copied {
-    let mut total = Copied::default();
+fn plan(seed: &Path, store: &Path, deadline: Instant) -> Walk {
+    let mut all = Walk::default();
     for subset in SUBSETS {
+        if all.expired {
+            break;
+        }
         let mut walk = Walk::default();
         list(&seed.join(subset), &store.join(subset), &mut walk, deadline);
-        let part = run(walk.jobs, threads, deadline);
-        total.files += part.files;
-        total.bytes += part.bytes;
-        total.present += part.present;
-        total.failed += part.failed + walk.failed;
-        total.expired |= part.expired || walk.expired;
+        walk.jobs.sort_by_key(|job| std::cmp::Reverse(job.modified));
+        all.jobs.append(&mut walk.jobs);
+        all.failed += walk.failed;
+        all.expired |= walk.expired;
     }
-    total
+    all
+}
+
+#[must_use]
+pub fn planned(seed: &Path) -> Vec<PathBuf> {
+    let far = Instant::now() + std::time::Duration::from_secs(3600);
+    plan(seed, Path::new("/"), far)
+        .jobs
+        .into_iter()
+        .map(|job| job.from)
+        .collect()
+}
+
+#[must_use]
+pub fn copy_subset(seed: &Path, store: &Path, threads: usize, deadline: Instant) -> Copied {
+    let walk = plan(seed, store, deadline);
+    let part = run(walk.jobs, threads, deadline);
+    Copied {
+        failed: part.failed + walk.failed,
+        expired: part.expired || walk.expired,
+        ..part
+    }
 }
 
 fn run(jobs: Vec<Job>, threads: usize, deadline: Instant) -> Copied {
@@ -176,7 +205,10 @@ fn transfer(job: &Job) -> Option<Copy> {
         .ok()?;
     let done = std::io::copy(&mut source, &mut target)
         .and_then(|_| target.flush())
-        .and_then(|()| target.set_permissions(metadata.permissions()))
+        .and_then(|()| {
+            let mode = metadata.permissions().mode() & 0o777;
+            target.set_permissions(fs::Permissions::from_mode(mode))
+        })
         .and_then(|()| target.set_times(fs::FileTimes::new().set_modified(metadata.modified()?)))
         .and_then(|()| fs::rename(&partial, &job.to));
     match done {

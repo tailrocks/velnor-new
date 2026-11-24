@@ -7,8 +7,11 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
+use velnor_ci::mbx_seed_copy::SUBSETS;
 
 use crate::io::Repo;
+
+mod truncation;
 
 struct Host {
     _repo: Repo,
@@ -54,6 +57,12 @@ fn warm_seed(host: &Host) -> PathBuf {
     ] {
         put(&seed.join(path), text);
     }
+    for subset in SUBSETS {
+        assert!(
+            fs::read_dir(seed.join("actions").join(subset)).is_ok_and(|mut d| d.next().is_some()),
+            "the fixture holds no {subset} files that mbx-seed copies"
+        );
+    }
     read_only(&seed);
     seed
 }
@@ -74,6 +83,7 @@ fn run_within(
     select(&Inputs {
         event_name: event,
         git_ref,
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.as_deref(),
         runner_temp: &temp,
@@ -85,9 +95,7 @@ fn run_within(
 
 fn tree(root: &Path) -> Vec<String> {
     fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
-        let mut entries: Vec<_> = fs::read_dir(dir)
-            .map(|rd| rd.flatten().collect())
-            .unwrap_or_default();
+        let mut entries: Vec<_> = fs::read_dir(dir).map_or_default(|rd| rd.flatten().collect());
         entries.sort_by_key(fs::DirEntry::path);
         for entry in entries {
             let path = entry.path();
@@ -121,7 +129,7 @@ fn a_pull_request_copies_only_the_action_store_subset_into_the_private_store() {
     );
     assert!(!copied.expired);
     assert_eq!(
-        env_lines(&outcome),
+        env_lines(&outcome).expect("env lines"),
         format!("MBX_CACHE_DIR={}\n", store.display())
     );
     assert_eq!(
@@ -183,14 +191,14 @@ fn an_absent_seed_changes_nothing() {
     let host = host("mbx-seed-absent");
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
     let empty = host.root.join("empty");
     fs::create_dir_all(&empty).unwrap_or_else(|e| unreachable!("{e}"));
     read_only(&empty);
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&empty));
     assert_eq!(outcome, Outcome::Empty);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
 }
 
@@ -201,7 +209,7 @@ fn a_trusted_event_is_never_seeded() {
     for event in ["push", "schedule"] {
         let outcome = run(&host, event, "refs/heads/main", Some(&seed));
         assert_eq!(outcome, Outcome::Trusted);
-        assert_eq!(env_lines(&outcome), "");
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
     }
     assert!(!host.root.join("temp/velnor").exists());
 }
@@ -228,12 +236,13 @@ fn a_symlinked_or_unsafe_seed_is_refused() {
     for (dir, reason) in cases {
         let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&dir));
         assert_eq!(outcome, Outcome::Rejected(reason), "{}", dir.display());
-        assert_eq!(env_lines(&outcome), "");
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
         assert!(message(&outcome).starts_with("::warning::VELNOR_MBX_SEED_DIR ignored"));
     }
     let wrong = select(&Inputs {
         event_name: "pull_request",
         git_ref: "refs/pull/1/merge",
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.to_str(),
         runner_temp: &host.root.join("temp"),
@@ -297,7 +306,7 @@ fn a_seed_the_job_can_write_is_refused() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
     assert_eq!(outcome, Outcome::Rejected("writable by this job"));
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
 }
 
@@ -371,4 +380,19 @@ fn seeding_stops_at_the_startup_budget_and_says_so() {
         unreachable!("{within:?}")
     };
     assert_eq!((copied.files, copied.expired), (5, false));
+}
+
+#[test]
+fn a_seeded_file_never_keeps_a_setuid_or_setgid_bit_from_its_source() {
+    let host = host("mbx-seed-setuid");
+    let seed = warm_seed(&host);
+    let source = seed.join("actions/cas/cd/blob2");
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o6755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    let copied = host.root.join("temp/velnor/mbx/actions/cas/cd/blob2");
+    let mode = fs::metadata(&copied)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .mode();
+    assert_eq!(mode & 0o6000, 0, "copied mode {mode:o} keeps setuid/setgid");
 }

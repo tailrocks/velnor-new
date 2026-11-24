@@ -112,11 +112,11 @@ pub(crate) fn release_view(
     view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     view.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new("mise.lock")?,
-        b"[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n\n[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n\n[tools.\"aqua:release-plz/release-plz\".\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_vec(),
+        b"[[tools.mr-boxington]]\nversion = \"1.30.0\"\nspecifiers = [\"v1.30.0\"]\n\n[tools.mr-boxington.\"platforms.linux-x64\"]\nurl = \"https://example.invalid/mbx\"\n\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n\n[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n\n[tools.\"aqua:release-plz/release-plz\".\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new(".github/workflows/lint.yml")?,
@@ -125,6 +125,7 @@ pub(crate) fn release_view(
     if let Some(text) = release_toml {
         view.files
             .insert(RELEASE_CONFIG_PATH, text.as_bytes().to_vec());
+        crate::pipeline::pin_for_keys(&mut view)?;
     }
     for root in roots {
         let manifest = RepoPath::new(if root.dir == "." {
@@ -165,6 +166,44 @@ pub(crate) fn render(
     Ok((text, tree))
 }
 
+/// Raises the pin to `minimum` when the view pins an older release, and keeps a newer one.
+pub(crate) fn pin_at_least(view: &mut RepoView, minimum: &str) -> Result<(), Box<dyn Error>> {
+    let patch = |version: &str| {
+        version
+            .rsplit('.')
+            .next()
+            .and_then(|n| n.parse::<u64>().ok())
+    };
+    let lock = String::from_utf8(view.files.get(&LOCK_PATH).ok_or("no helper lock")?.clone())?;
+    let current = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .ok_or("no version in the helper lock")?
+        .to_owned();
+    if patch(&current) < patch(minimum) {
+        view.files
+            .insert(LOCK_PATH, lock.replace(&current, minimum).into_bytes());
+    }
+    Ok(())
+}
+
+/// Like `render`, with the helper pinned to `version` so two configs compare byte for byte.
+pub(crate) fn render_pinned(
+    roots: &[Root],
+    release_toml: Option<&str>,
+    version: &str,
+) -> Result<(String, Node), Box<dyn Error>> {
+    let mut view = release_view(roots, release_toml)?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", version).into_bytes());
+    let mut files = expected_release(&view)?;
+    let text = files
+        .remove(&RELEASE_WORKFLOW_PATH)
+        .ok_or("release.yml was not rendered")?;
+    let tree = parse(&text)?;
+    Ok((text, tree))
+}
+
 pub(crate) fn app() -> Result<(String, Node), Box<dyn Error>> {
     render(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))
 }
@@ -172,7 +211,7 @@ pub(crate) fn app() -> Result<(String, Node), Box<dyn Error>> {
 pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
     render(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )
 }
 
@@ -199,16 +238,13 @@ pub(crate) fn uses(step: &Node) -> Option<&str> {
 }
 
 pub(crate) fn conjuncts(job: &Node) -> BTreeSet<String> {
-    job.get("if")
-        .and_then(Node::text)
-        .map(|text| {
-            text.trim_start_matches("${{ ")
-                .trim_end_matches(" }}")
-                .split(" && ")
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    job.get("if").and_then(Node::text).map_or_default(|text| {
+        text.trim_start_matches("${{ ")
+            .trim_end_matches(" }}")
+            .split(" && ")
+            .map(str::to_owned)
+            .collect()
+    })
 }
 
 pub(crate) fn app_steps(job: &Node) -> Vec<&Node> {

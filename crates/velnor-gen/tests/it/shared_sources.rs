@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel,
-    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug,
+    RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -64,6 +64,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest")?,
         hosted_runners: velnor_model::HostedRunners::new(vec![RunnerLabel::new("ubuntu-latest")?]),
+        trusted_runners: velnor_model::TrustedRunners::default(),
         jobs: vec![Job {
             id: JobId::new("rust")?,
             name: None,
@@ -75,6 +76,10 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            anchor_key_output: false,
+            build_record: BuildRecord::Unrecorded,
+            chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,
@@ -89,8 +94,12 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                setup_order: SetupOrder::Unordered,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
+                private_repo: false,
+                hosted_only: false,
+                any_gate: Vec::new(),
             }],
         }],
     };
@@ -298,5 +307,32 @@ fn lanes_that_do_not_save_the_sources_run_no_fetch() -> TestResult {
         .find(|(id, _)| id == "rust-inputs-audit")
         .ok_or("no audit")?;
     assert_eq!(fetches(audit), Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn every_decision_to_save_a_build_directory_is_told_whether_the_sources_restore_hit() -> TestResult
+{
+    let mut repo = view(
+        &["Cargo.toml", "xtask/Cargo.toml"],
+        Some(b"shape = \"lint-test\"\n"),
+    )?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.113")?;
+    let lanes = jobs_of(&workflow(&repo)?);
+    let deciders: Vec<(&String, String)> = lanes
+        .iter()
+        .filter_map(|(id, block)| {
+            step(block, "Decide whether to save the build directory")
+                .map(|decide| (id, decide.to_owned()))
+        })
+        .collect();
+    assert_ne!(deciders.len(), 0);
+    for (id, decide) in deciders {
+        assert!(
+            decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+                && decide.contains(".outputs.cache-hit }}'"),
+            "{id}\n{decide}"
+        );
+    }
     Ok(())
 }

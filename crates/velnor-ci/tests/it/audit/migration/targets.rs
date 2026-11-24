@@ -3,6 +3,8 @@
 
 use std::fs;
 
+use velnor_test_support::real_cargo;
+
 use super::super::command;
 use super::{InputDirectory, cargo_project};
 
@@ -46,11 +48,14 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
     assert!(built.status.success(), "{built:?}");
     let receipt = fs::read_dir(repo.root().join(host).join("debug/build"))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| {
-            entry
+        .flat_map(|package| {
+            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
                 .unwrap_or_else(|e| unreachable!("{e}"))
+        })
+        .map(|hash| {
+            hash.unwrap_or_else(|e| unreachable!("{e}"))
                 .path()
-                .join("output.velnor-inputs.json")
+                .join("run/stdout.velnor-inputs.json")
         })
         .find(|path| path.is_file())
         .unwrap_or_else(|| unreachable!("no build output receipt"));
@@ -100,7 +105,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
         .unwrap_or_else(|| unreachable!("{version}"));
-    let plain = command("cargo")
+    let plain = command(real_cargo())
         .current_dir(repo.root().join("rust"))
         .env("CARGO_TARGET_DIR", repo.root())
         .args([

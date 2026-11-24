@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::identity::{buildx_version, is_event, is_repository, is_workflow_ref};
 use super::json::{is_digest, is_hex, is_int_at_least};
 use crate::error::CiError;
 
-pub const SCHEMA: &str = "velnor.job-image-candidate.v1";
-pub const INPUT_PATHS: [&str; 5] = [
+pub const SCHEMA: &str = "velnor.job-image-candidate.v2";
+pub const REVISION_ARGUMENT: &str = "VELNOR_SOURCE_SHA";
+pub const INPUT_PATHS: &[&str] = &[
     ".velnor/runner.lock",
     "images/job/ubuntu-26.04/Dockerfile",
     "images/job/ubuntu-26.04/README.md",
@@ -54,7 +55,7 @@ pub fn validate(value: &Value) -> Result<&Map<String, Value>, CiError> {
     }
     source(&record["source"])?;
     workflow(&record["workflow"])?;
-    build(&record["build"])?;
+    build(&record["build"], text(&record["source"]["commit"]))?;
     let archive = exact(&record["archive"], &["sha256", "size_bytes"], "Archive")?;
     if !hex_text(&archive["sha256"], 64) || !is_int_at_least(&archive["size_bytes"], 1) {
         return fail("Archive identity is incorrect.");
@@ -117,7 +118,7 @@ fn workflow(value: &Value) -> Result<(), CiError> {
     Ok(())
 }
 
-fn build(value: &Value) -> Result<(), CiError> {
+fn build(value: &Value, commit: &str) -> Result<(), CiError> {
     let keys = [
         "builder",
         "platform",
@@ -138,8 +139,8 @@ fn build(value: &Value) -> Result<(), CiError> {
     {
         return fail("Build identity is incorrect.");
     }
-    if build["arguments"] != Value::Array(Vec::new()) {
-        return fail("Build arguments must be empty.");
+    if build["arguments"] != json!([format!("{REVISION_ARGUMENT}={commit}")]) {
+        return fail("Build arguments must be VELNOR_SOURCE_SHA set to the source commit.");
     }
     Ok(())
 }

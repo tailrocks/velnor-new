@@ -75,7 +75,7 @@ async fn discard(scenario: &Scenario, id: &str) {
 
 #[tokio::test]
 async fn local_start_sweeps_the_leftovers_of_its_environment_only() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let environment = scenario.fixture.environment.clone();
@@ -114,7 +114,7 @@ async fn local_start_sweeps_the_leftovers_of_its_environment_only() -> TestResul
 #[tokio::test]
 async fn local_exit_sweeps_what_appeared_after_the_start_and_spares_other_environments()
 -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let docker = scenario.fixture.docker.clone();

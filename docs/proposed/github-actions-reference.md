@@ -108,6 +108,10 @@ Aggregate workflow status alone never establishes caller authority; verify the e
 The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
 
+### GitHub App installation token mint and revocation
+
+`actions/create-github-app-token` at the pinned commit `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0) declares `post: "dist/post.cjs"` with no `post-if` in [`action.yml`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/action.yml), so its post step runs at the end of every job that ran the main step, with the action's inputs (the private key among them) as `INPUT_*` variables. Its [`lib/post.js`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/lib/post.js) sends `DELETE /installation/token` with the token and only warns when that request fails. Its [`lib/get-permissions-from-inputs.js`](https://github.com/actions/create-github-app-token/blob/64ab729a6294000f5aa4a4bc0b73d1f32bc45510/lib/get-permissions-from-inputs.js) turns each `permission-<name>` input into the API permission `<name>` with `-` replaced by `_` (so `permission-pull-requests` asks for `pull_requests`), and inherits every App permission when no such input is set. `velnor-ci app-token` takes the API names directly in `--permission=<name>:<access>`, asks for `contents: read` when no flag is given, and never sends an empty permission set. The generated release jobs revoke the token with the same `DELETE /installation/token` request in their last step, sent by `velnor-ci revoke-token` to `github.api_url`. The step does not use `gh`, because `gh help environment` reads `GH_TOKEN` only for github.com and ghe.com hosts and needs `GH_HOST` and `GH_ENTERPRISE_TOKEN` for a GitHub Enterprise Server.
+
 ### Reusable workflow signer identity
 
 The [GitHub CLI attestation verifier](https://cli.github.com/manual/gh_attestation_verify)
@@ -204,6 +208,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
   - `background: true` on a `run` or `uses` step starts it asynchronously; the job continues to the next step. A composite action may run as a background step but cannot declare background steps or `parallel:` internally.
   - `wait` (one id or a list) and `wait-all` (no arguments) block until the referenced or all active background steps finish; neither accepts `if:` and both always run. Outputs and environment changes of a background step become visible only after a wait that includes it.
   - A failed background step fails the next `wait`/`wait-all` that includes it (unless the step sets `continue-on-error`); the coordinator merges member results into the wait step's result, so later default-`success()` steps are skipped while `always()` steps still run. An implicit `wait-all` runs before post-job cleanup for unjoined members.
+  - Post steps run only after every regular step. In `src/Runner.Worker/StepsRunner.cs` (v2.338.0, tag commit `197ca027b9`, lines 57-74) the loop runs while `JobSteps` is non-empty; only when it is empty does it run the safety-net `WaitForUnwaitedStepsAsync` and then move the `PostJobSteps` stack onto the queue. An action's post step is registered by `ExecutionContext.RegisterPostJobStep` in `src/Runner.Worker/ActionRunner.cs:136`. So a composite or JavaScript action's post handler (for example `jdx/mr-boxington-action`, which runs `mbx cache export`) starts after the last regular step, background steps included.
   - Background steps are linked to the job cancellation token, so job `timeout-minutes` and run cancellation cancel them. `cancel` terminates one member (SIGTERM, then SIGKILL after a 7.5 s grace).
   - At most 10 background steps of one job run concurrently (`DefaultMaxBackgroundSteps = 10`); additional members queue until a slot is free.
   - `parallel:` is sugar for a group of background steps followed by a wait.
@@ -280,7 +285,7 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 
 - Search tries an exact primary key, partial primary-key matches and ordered restore-key prefixes within the current branch before repeating on the default branch. For multiple partial matches, newest means creation time, not last access.
 - Matching order is a documented service contract; the client only sends keys and version. A partial match requires payload reconciliation before use.
-- The pinned client permits at most ten total keys, at most 512 characters per key and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
+- The [pinned toolkit 6.1.0 client](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/cache.ts#L81-L93) permits at most ten total keys (`keys.length > 10`) and, in its `checkKey`, at most 512 JavaScript `key.length` units per key (UTF-16 code units, so a non-BMP character counts as two) and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
 - `cache-hit` proves only an exact primary-key match, never validity, completeness or current-source validation.
 
 #### 5.4 Cache scope and trust
@@ -794,7 +799,7 @@ These behaviors are GitHub service semantics, so the runner source does not defi
 
 ### Generated Rust pull-request delta isolation
 
-[GitHub's cache restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache) scope a `pull_request` cache to `refs/pull/N/merge`; the base branch and other pull requests cannot restore it. Delta keys form their own `dlt` family beside the `tools`, `src` and `tgt` families of the shared key layout: the family tag is the second segment of every key and restore prefix, so a delta key is never equal to, and never a prefix of, a base key. They also encode the PR number explicitly and retain it in every restore prefix. No generated PR or merge-group job receives `actions: write`.
+[GitHub's cache restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache) scope a `pull_request` cache to `refs/pull/N/merge`; the base branch and other pull requests cannot restore it. Delta keys form their own `dlt` family beside the `tools`, `src`, `tgt`, `private-src` and `private-tgt` families of the shared and private key layouts: the family tag follows `velnor-` in every key and restore prefix, so a delta key is never equal to, and never a prefix of, a base key. They also encode the PR number explicitly and retain it in every restore prefix. No generated PR or merge-group job receives `actions: write`.
 
 The [`workflow_run` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run) requires its workflow file on the default branch and can grant write permissions after an unprivileged workflow finishes. The generated cleanup workflow uses that trusted source, installs only the locked released helper, and executes no checkout, project command, cache restore or artifact from the triggering run. Its helper independently validates the completed workflow run and same-repository PR identities before deleting only that PR's older delta caches.
 
@@ -822,3 +827,10 @@ or network access. Admission checks the same-run producer identity, artifact
 digest, source locks, size and expiry. An unavailable metadata response takes
 the generator release qualifier's existing source-fetch fallback. The mandatory
 warm qualification fails if it cannot fetch or admit the source artifact.
+
+## Lowercase hexadecimal `hashFiles` digests
+
+The runner's [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
+prints `result.digest('hex')`, which is lowercase hexadecimal. Cache maintenance
+classifies a tools anchor key only when its lock hash is lowercase, so a runner
+implementation that emitted another casing would leave its anchors unclassified.

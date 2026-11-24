@@ -180,6 +180,6 @@ Sampling tests the implementation. Eligibility still requires the complete key, 
    Estimate 18–30 agent-hours for instrumentation and integration. Evidence takes real traffic. At the design’s volume, 100 merge groups alone take about 44 hours.
    A useful first release ends here. Continuous verification is a separate owner decision informed by observed demand, waste and queue delay.
 
-The design contract and timing assumptions come from the [runner architecture](../../pr-worktree/docs/proposed/velnor-runner-architecture.md),
-[agent-facing UX](../../pr-worktree/docs/proposed/velnor-user-experience.md), [owner decisions](../../pr-worktree/docs/research/velnor-runner-2026-11/owner-decisions.md),
-[explainer](../../pr-worktree/docs/research/velnor-runner-2026-11/explainer.md) and [comparison of speed proposals](../../pr-worktree/docs/research/velnor-runner-2026-11/fastest-comparison.md).
+The design contract and timing assumptions come from the [runner architecture](../../../proposed/velnor-runner-architecture.md),
+[agent-facing UX](../../../proposed/velnor-user-experience.md), [owner decisions](../owner-decisions.md),
+[explainer](../explainer.md) and [comparison of speed proposals](../fastest-comparison.md).

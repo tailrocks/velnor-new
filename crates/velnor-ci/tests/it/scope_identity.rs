@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::scope::Scope;
 use velnor_model::{
-    CompileInputs, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath, RustCiConfig,
-    RustMember, RustRoot, ToolPins,
+    CompileInputs, DenyChecks, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath,
+    RustCiConfig, RustMember, RustRoot, ToolPins,
 };
 
 fn path(text: &str) -> RepoPath {
@@ -19,6 +19,7 @@ fn util(directory: &str) -> RustRoot {
         target_dir: path(&format!("{directory}/target")),
         nextest_ci_profile: false,
         members: vec![RustMember {
+            version: None,
             name: PackageName::new("util").unwrap_or_else(|e| unreachable!("{e}")),
             manifest: path(&format!("{directory}/util/Cargo.toml")),
             directory: Some(path(&format!("{directory}/util"))),
@@ -48,9 +49,15 @@ fn facts() -> RepoFacts {
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,
+        private_base_caches: false,
         private_suggestion: None,
         unowned: BTreeMap::new(),
-        policy: PolicyTools::default(),
+        policy: PolicyTools {
+            deny: false,
+            machete: false,
+            deny_off: false,
+            checks: DenyChecks::of(&[]),
+        },
         deny_configs: BTreeMap::new(),
         weakenings: Vec::new(),
     }

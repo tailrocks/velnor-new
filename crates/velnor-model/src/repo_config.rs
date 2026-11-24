@@ -1,13 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::budget_mode::{ModeBudget, Selection};
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
-use crate::plan::Shape;
+use crate::mbx::MbxMode;
+use crate::policy_table::PolicyTable;
+pub use crate::public_sources::{GitRepository, PublicSources};
+use crate::shape::Shape;
+
+mod default;
+
+pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
+use crate::trusted::TrustedRunners;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
@@ -15,12 +25,18 @@ pub struct RustCiConfig {
     pub fork_runner: RunnerLabel,
     /// Labels declared `hosted = true`; every other runner is self-hosted and fenced.
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub public_sources: Option<PublicSources>,
+    pub release_assets: Vec<crate::ReleaseAsset>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,
     pub timeout_minutes: u16,
+    /// `[root_timeouts]`: the time limit of the jobs of one root, keyed by its folder (`None` is the
+    /// repository root). A root without an entry keeps `timeout_minutes`.
+    pub root_timeouts: BTreeMap<Option<RepoPath>, u16>,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
     pub inputs: Vec<InputRule>,
@@ -39,14 +55,21 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub mbx_remote: MbxRemote,
+    pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub check_configurations: Vec<crate::CheckConfigurations>,
     pub test_lanes: Vec<TestLane>,
     pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
     pub workspace_groups: Vec<WorkspaceGroup>,
+    pub policy: Option<PolicyTable>,
+    /// Hand-written workflows under `.github/workflows/` that `velnor-gen check` must not
+    /// flag. `None` when the key is not written, so the helper gate can tell an absent key
+    /// from an empty list.
+    pub external_workflows: Option<Vec<RepoPath>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,14 +172,70 @@ impl SpeedBudget {
     }
 }
 
+/// The cargo feature selection of a test lane: named features, every feature
+/// (`all`), or the named features without the default ones (`no_default`).
+/// `all` never comes with names, so a parsed lane is one of these three shapes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct LaneFeatures {
+    pub names: Vec<String>,
+    pub all: bool,
+    pub no_default: bool,
+}
+
+impl LaneFeatures {
+    #[must_use]
+    pub fn label(&self) -> String {
+        let mut parts = Vec::new();
+        if self.all {
+            parts.push("all features".to_owned());
+        }
+        if self.no_default {
+            parts.push("no default features".to_owned());
+        }
+        if !self.names.is_empty() {
+            parts.push(format!("features: {}", self.names.join(",")));
+        }
+        parts.join(", ")
+    }
+
+    #[must_use]
+    pub fn normalized(&self) -> Self {
+        let mut names = self.names.clone();
+        names.sort();
+        Self {
+            names,
+            ..self.clone()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestLane {
     pub root: Option<RepoPath>,
-    pub features: Vec<String>,
+    pub features: LaneFeatures,
     pub filter: Option<String>,
     pub lint: bool,
     pub doc: bool,
     pub packages: Vec<PackageName>,
+    pub job: LaneJob,
+    /// The `timeout_minutes` key: the time limit of the lane's own job, or of the root's test job
+    /// that runs an inline lane. `None` keeps the root's limit.
+    pub timeout_minutes: Option<u16>,
+    pub written: LaneKeysWritten,
+}
+
+/// Which optional keys of a `[[test_lane]]` table were written, whatever their values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LaneKeysWritten {
+    pub job: bool,
+    pub feature_flags: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LaneJob {
+    #[default]
+    Inline,
+    Parallel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,6 +243,7 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
+    pub phase: Option<SetupPhase>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,53 +332,17 @@ pub struct InputRule {
     pub packages: Vec<PackageName>,
 }
 
-impl Default for RustCiConfig {
-    fn default() -> Self {
-        Self {
-            runner: RunnerLabel::from_static("ubuntu-latest"),
-            fork_runner: RunnerLabel::from_static("ubuntu-latest"),
-            hosted_runners: HostedRunners::new(vec![RunnerLabel::from_static("ubuntu-latest")]),
-            crates_mirror: None,
-            private_sources: None,
-            mbx_store: MbxStore::Private,
-            docs_run: DocsRun::Always,
-            check_alone_run: DocsRun::Always,
-            timeout_minutes: 30,
-            exclude: Vec::new(),
-            non_inputs: Vec::new(),
-            inputs: Vec::new(),
-            default_ignores: true,
-            shape: None,
-            required_check: "Required".to_owned(),
-            nextest_harnesses: Vec::new(),
-            default_branch: "main".to_owned(),
-            skip_draft_pull_requests: false,
-            pr_ci: PrCi::Always,
-            on_main: OnMain::Affected,
-            full_run: FullRun::Nightly,
-            helper: None,
-            ci_debuginfo: CiDebugInfo::LineTablesOnly,
-            cache_budget_bytes: 8_000_000_000,
-            cache_check_blocks: false,
-            cache_debug: CacheDebug::Off,
-            mbx_remote: MbxRemote::Off,
-            push_after_merge_group: PushAfterMergeGroup::Run,
-            test_setup: Vec::new(),
-            test_lanes: Vec::new(),
-            budget: None,
-            lint: Vec::new(),
-            test_groups: Vec::new(),
-            checkout: CheckoutScope::Full,
-            workspace_groups: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CratesMirror {
     pub runner: RunnerLabel,
     pub registry: String,
     pub cainfo: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenMint {
+    Action,
+    Helper,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

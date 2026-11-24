@@ -9,7 +9,7 @@ use velnor_ci::report::LaneMetrics;
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
 
-const PASS_LINES: [(&str, &str); 13] = [
+const PASS_LINES: &[(&str, &str)] = &[
     ("0.900", "app::bin/db db_zeta"),
     ("0.500", "app::bin/db db_open"),
     ("0.500", "app::bin/db db_close"),

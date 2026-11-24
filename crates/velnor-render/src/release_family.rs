@@ -4,13 +4,15 @@
 use velnor_model::{HelperRelease, PrivateSources};
 use velnor_release::{BinaryPlan, FamilyPlan, ReleasePlan, TAG_JOB_BASE_MINUTES};
 
+use crate::install_steps::install_tools;
 use crate::release::{GATE_IS_READY, after_the_gate_with, newest_check, only_while_newest};
 use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, build_steps, command, download_to, target, upload,
 };
 use crate::release_checks::tag_needs;
-use crate::release_context::{BuildContext, Private};
+use crate::release_context::{BuildContext, Private, private_mbx_store};
 use crate::release_family_publish::{publish, sums, verify};
+use crate::release_optional::is_optional;
 use crate::release_source::{Source, source_of};
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
@@ -41,11 +43,11 @@ pub(crate) fn family_jobs(
         binary
             .platforms
             .iter()
-            .map(|platform| build(binary, *platform, helper, private, &source))
+            .map(|platform| build(binary, *platform, helper, private, &source, plan.mbx))
     }));
     jobs.push(sums(plan, family, &source));
     if family.attest {
-        jobs.push(verify(plan, family, &source));
+        jobs.push(verify(plan, family, helper, &source));
     }
     jobs.push(publish(plan, family, helper, &source));
     jobs
@@ -84,7 +86,11 @@ fn version_files(plan: &ReleasePlan) -> Vec<String> {
 }
 
 fn versions_job(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) -> RenderedJob {
-    let mut steps = vec![checkout(source.verified, 1), install_helper(helper)];
+    let mut steps = vec![checkout(source.verified, 1)];
+    if plan.mbx {
+        steps.push(private_mbx_store(VERSIONS_JOB));
+    }
+    steps.push(install_helper(helper));
     if !source.tag_push {
         steps.push(newest_check());
     }
@@ -98,6 +104,10 @@ fn versions_job(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) -> 
             format!("mkdir {VERSIONS_DIR}"),
         ),
     ]);
+    // cargo metadata runs under the mise wrapper when MBX is declared.
+    if plan.mbx {
+        steps.push(install_tools(None));
+    }
     steps.extend(family_roots(plan).into_iter().zip(version_files(plan)).map(
         |(root, file)| RenderedStep {
             env: vec![(
@@ -142,7 +152,7 @@ fn tag_job(
     }
     steps.extend([
         download_to(VERSIONS_ARTIFACT.to_owned(), VERSIONS_DIR),
-        app_token(&[("contents", "write")]),
+        app_token(helper, &[("contents", "write")]),
     ]);
     let mut env = variables(&[
         ("GITHUB_TOKEN", "${{ steps.app.outputs.token }}"),
@@ -208,6 +218,7 @@ fn build(
     helper: &HelperRelease,
     private: Option<&PrivateSources>,
     source: &Source,
+    mbx: bool,
 ) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     let reference = format!("refs/tags/${{{{ {TAG_OUTPUT} }}}}");
@@ -228,6 +239,7 @@ fn build(
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
+        continue_on_error: is_optional(binary, platform),
         steps: build_steps(
             binary,
             platform,
@@ -236,6 +248,7 @@ fn build(
                 same_commit: check,
                 tag: &tag,
                 private: private.map(|sources| Private { helper, sources }),
+                mbx,
             },
         ),
         ..after_the_family(

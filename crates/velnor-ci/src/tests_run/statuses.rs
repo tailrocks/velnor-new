@@ -101,3 +101,50 @@ fn real_nextest_output_reconciles_with_its_summary() {
         )]))
     );
 }
+
+#[test]
+fn a_nextest_setup_script_line_does_not_poison_package_counts() {
+    let mut tap = SummaryTap::default();
+    tap.feed(
+        b"    Starting 2 tests across 1 binary (1 test skipped)\n\
+          \x20     SETUP [      1/1] prepull-images: bash .config/nextest-prepull-images.sh\n\
+          nextest-prepull-images: pulling postgres:18-alpine\n\
+          \x20SETUP PASS [   9.804s] prepull-images: bash .config/nextest-prepull-images.sh\n\
+          \x20       PASS [   0.012s] (1/2) kept alpha\n\
+          \x20       PASS [   0.012s] (2/2) kept beta\n\
+          \x20    Summary [   0.022s] 2 tests run: 2 passed, 1 skipped\n",
+    );
+    let counts = tap.finish().expect("nextest summary");
+    let listed = BTreeMap::from([("kept".to_owned(), 2)]);
+
+    assert_eq!(
+        apply_runnable(
+            counts,
+            Some(Listing {
+                packages: listed,
+                ignored: 0
+            })
+        )
+        .by_package,
+        Some(BTreeMap::from([(
+            "kept".to_owned(),
+            PackageCounts { run: 2, listed: 2 },
+        )]))
+    );
+}
+
+#[test]
+fn a_missing_listing_withholds_every_count_the_listing_supplies() {
+    let mut tap = SummaryTap::default();
+    tap.feed(
+        b"PASS [   0.012s] (1/2) kept test\n\
+          Summary [   0.022s] 1 test run: 1 passed, 1 skipped\n",
+    );
+    let counts = tap.finish().expect("nextest summary");
+    let counts = apply_runnable(counts, None);
+
+    assert_eq!(
+        (counts.run, counts.listed, counts.ignored, counts.by_package),
+        (1, None, None, None)
+    );
+}

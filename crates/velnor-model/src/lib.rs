@@ -1,38 +1,61 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_paths;
 mod budget_mode;
 mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod check_configurations;
 mod cron;
 mod helper;
 mod hosted;
 mod ids;
 mod lint;
+mod mbx;
+mod mbx_config;
 mod mise;
 mod plan;
+mod plan_gate;
+mod policy_table;
+mod public_sources;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod setup_phase;
+mod shape;
+mod step_setup;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
-pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
+pub use artifact_paths::{
+    Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
+    selects,
+};
+pub use budget_mode::{
+    BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_SELECTION_VARIABLE, BUDGET_STEP_HELPER,
+    BUDGET_STEP_NAME, ModeBudget, Selection, SelectionName,
+};
+pub use cache::{
+    AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,
+};
 pub use cache_layout::{
-    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
-    json_string_bytes,
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX, PRIVATE_SOURCES_TAG,
+    PRIVATE_TARGET_TAG, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER,
+    TOOLS_ANCHOR_LENGTH, json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
-    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
-    SOURCES_SAVED_OUTPUT, cache_lane_outputs,
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
+    PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use cargo_build::BuildRecord;
+pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use hosted::HostedRunners;
@@ -41,33 +64,48 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
+pub use mbx::{MbxMode, MbxStats};
+pub use mbx_config::{
+    MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
+};
 pub use mise::MisePlatform;
 pub use plan::{
-    Access, BUILD_TESTS_STEP, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency, FilterRef,
-    Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
-    Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan, group_output_name,
+    Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_UNITS, CI_AUTO_LABEL, CI_RUN_LABEL,
+    CargoCommand, Concurrency, EMPTY_PACKAGE_MAP, FilterRef, JSON_UNIT_MAX_BYTES, Job, LINT_STEP,
+    MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun,
+    PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
+    TOOLS_ANCHOR_OUTPUT, Triggers, When, WorkflowPlan,
 };
+pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name};
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, MbxRemote, MbxStore, MemberDependency,
-    OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts,
-    RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
-    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
-    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
+    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
+    PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
+    RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestLane,
+    TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
-pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
+pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
-    StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
+    StepNeed, WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
-pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use setup_phase::SetupOrder;
+pub use shape::{Shape, ShapeDecision};
+pub use test_group::{
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
+    TestGroup, TestNeed,
+};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
+    PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };

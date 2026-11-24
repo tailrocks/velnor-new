@@ -8,7 +8,7 @@ use velnor_release::ReleaseError;
 use crate::facts::TestResult;
 use crate::release_fixture::{APP, release_view};
 
-const HOOKS: [&str; 5] = [
+const HOOKS: &[&str] = &[
     "[registry]\ncredential-provider = \"./steal.sh\"\n",
     "[registry]\nglobal-credential-providers = [\"cargo:token\", \"./steal.sh\"]\n",
     "[registry]\ncredential-provider = \"cargo:token-from-stdout ./steal.sh\"\n",
@@ -57,7 +57,7 @@ fn path_toolchain_view(
     let toolchain = RepoPath::new("rust-toolchain.toml")?;
     view.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
     );
     view.tracked_paths.insert(toolchain.clone());
     view.files.insert(

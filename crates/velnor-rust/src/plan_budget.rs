@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, FullRun, GateNeed, Job, JobId, PermissionScope,
-    Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug,
-    SelectionName, Step, StepKind, Triggers, When,
+    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_STEP_HELPER, Concurrency, FullRun,
+    GateNeed, Job, JobId, PermissionScope, Permissions, PlanFrom, PrCi, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, SelectionName, Step, StepKind, Triggers,
+    WORKFLOW_NAME, When, WorkflowPlan,
 };
 
 use crate::lane::PLAN_JOB;
@@ -17,8 +18,6 @@ use crate::units::Unit;
 const BUDGET_RUNS: usize = 10;
 const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 
-/// True when the budget job records the selection of its run in its title,
-/// which only a helper that reads the title can use.
 fn names_selection(facts: &RepoFacts) -> bool {
     facts.config.budget.is_some_and(|budget| budget.enabled())
         && facts
@@ -27,13 +26,19 @@ fn names_selection(facts: &RepoFacts) -> bool {
             .is_some_and(|helper| helper.version().at_least(BUDGET_MODES_HELPER))
 }
 
+fn names_selection_in_step(facts: &RepoFacts) -> bool {
+    names_selection(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(BUDGET_STEP_HELPER))
+}
+
 /// The job whose steps run `velnor-ci plan`.
 pub(crate) fn plan_job_id(single: bool) -> JobId {
     if single { RUST_JOB } else { PLAN_JOB }
 }
 
-/// Makes the job that runs the plan expose `rust_<root>_mode` of every root, so
-/// that the budget job can title itself with what the run selected.
 pub(crate) fn expose_selection(facts: &RepoFacts, jobs: &mut [Job], single: bool, units: &[Unit]) {
     if !names_selection(facts) {
         return;
@@ -78,6 +83,7 @@ pub(crate) fn budget_job(
         return None;
     }
     let selection = selection_name(facts, jobs, &plan_job_id(single));
+    let in_step = names_selection_in_step(facts);
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
@@ -88,7 +94,10 @@ pub(crate) fn budget_job(
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    steps.push(step(StepKind::Budget {
+        last: BUDGET_RUNS,
+        selection: selection.clone().filter(|_| in_step),
+    }));
     // A push the merge queue already tested skips its work and finishes in
     // seconds, so it is no sample of what its selection costs: the job does not
     // run for it.
@@ -103,7 +112,7 @@ pub(crate) fn budget_job(
         name: Some(BUDGET_JOB_NAME.to_owned()),
         needs,
         skip_after_merge_group: skipped_after_queue.then_some(PlanFrom::Job(plan)),
-        selection_name: selection,
+        selection_name: selection.filter(|_| !in_step),
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPushAfterNeeds
         } else {
@@ -133,6 +142,22 @@ pub(crate) fn triggers(facts: &RepoFacts) -> Triggers {
         merge_group: true,
         schedule: schedule(facts),
         workflow_dispatch: true,
+    }
+}
+
+pub(crate) fn workflow(facts: &RepoFacts, jobs: Vec<Job>) -> WorkflowPlan {
+    WorkflowPlan {
+        name: WORKFLOW_NAME.to_owned(),
+        triggers: triggers(facts),
+        concurrency: match facts.config.pr_ci {
+            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
+            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
+        },
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
+        hosted_runners: facts.config.hosted_runners.clone(),
+        trusted_runners: facts.config.trusted_runners.clone(),
+        jobs,
     }
 }
 

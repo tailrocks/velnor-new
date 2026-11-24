@@ -81,6 +81,21 @@ Local equality is never presented as an upstream freshness proof.
 5. Any lock or platform-image change invalidates affected task-result and
    baseline identities (cache contract) — re-baseline deliberately.
 
+## Action pins (rendered workflows)
+
+Every third-party action commit the renderer emits is listed in
+`crates/velnor-render/src/rendered_pins.rs`. The `velnor-gen` test
+`pin_policy` requires each one to equal its `[[actions]]` entry in
+`.velnor/version-policy.toml` (commit, and version where the renderer records
+one). A bump changes the renderer constant and the policy entry in the same
+pull request.
+
+Renovate reads `[[actions]]` through the regex manager and waits 14 days after
+a release (`minimumReleaseAge` in `renovate.json`). A newer release that is not
+yet adopted gets an `eligible_on` date in its policy entry. Run
+`scripts/pins-eligible.sh` to list the pins whose date has arrived. The script
+prints only; nothing runs it automatically.
+
 ## Lock identity (RQ-2.11)
 
 `Cargo.lock` MUST NOT remain stale merely because the build passes. The

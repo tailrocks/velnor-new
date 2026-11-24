@@ -11,11 +11,11 @@ Fn counts are `#[test]`-fn greps from the ledger.
 
 | ID | Owner | Status | Paths / commit | Commands + results | Reviewer | Run / artifact links |
 |----|-------|--------|----------------|--------------------|----------|----------------------|
-| T01 | docs-adopter | complete | no commit (read-only inventory; `/tmp/velnor-ws1-inventory.md` §§2–7, `/tmp/velnor-ci-release.md`, `/tmp/velnor-t01t36.md`, `/tmp/velnor-mergev1-diag.md`) | inventory recorded in ledger | coordinator-accepted (no verify thread) | producer main runs #1/#5/#7 green; consumer main run 36889650178 RED + PR run 36859376510 RED |
+| T01 | docs-adopter | complete | no commit (read-only inventory; `<tmp>/velnor-ws1-inventory.md` §§2–7, `<tmp>/velnor-ci-release.md`, `<tmp>/velnor-t01t36.md`, `<tmp>/velnor-mergev1-diag.md`) | inventory recorded in ledger | coordinator-accepted (no verify thread) | producer main runs #1/#5/#7 green; consumer main run 36889650178 RED + PR run 36859376510 RED |
 | T02 | docs-adopter | complete | no commit (read-only; AGENTS.md + pr-1 triple + 16 proposed files + release interfaces) | failures classified in ledger | coordinator-accepted (no verify thread) | same runs as T01; #8 push run 36916298152 in-progress at check |
-| T03 | docs-adopter | complete | no commit (read-only; consumer `.github` tree + O1–O16 map in `/tmp/velnor-obligations.md`) | baseline coverage proven (4 command sets byte-identical) | coordinator-accepted (no verify thread) | none (static proof) |
+| T03 | docs-adopter | complete | no commit (read-only; consumer `.github` tree + O1–O16 map in `<tmp>/velnor-obligations.md`) | baseline coverage proven (4 command sets byte-identical) | coordinator-accepted (no verify thread) | none (static proof) |
 | T04 | phase-A impl | complete | 52 files +5543/-1, `f549983f997e747ed697da14507886de14c8df53` (parity corpus + opentofu-goldens + capture script) | parity 2/2, goldens check 5/5 | pending independent Phase-A review (ledger-stated) | none |
-| T05 | phase-A impl | complete | no commit (WS2 tables re-grounded at 106bfd7, evidence in `/tmp/velnor-phaseA-impl.md`) | owner-per-fact assigned | coordinator-accepted (no verify thread) | none |
+| T05 | phase-A impl | complete | no commit (WS2 tables re-grounded at 106bfd7, evidence in `<tmp>/velnor-phaseA-impl.md`) | owner-per-fact assigned | coordinator-accepted (no verify thread) | none |
 | T06 | phase-A impl | complete | 7 commits `f45a78c`..`a998b44` (M1 registry, M2 probes −114 net, M3 TOML edge, M4 selection, M5 edge pairs, M6 waist spike, M4 size followup) | each move: affected tests + clippy/fmt + both golden brackets green | coordinator-accepted (no verify thread) | none |
 | T07 | phase-A impl | complete | `6fb0a5d13a51bad17ade2aff6411d7357973f07` ledger record (1 file); behavior proved at `a998b44` | verify-local.sh exit 0, nextest 2020/2020, alint rc 0, deny ok; goldens byte-identical after every move | coordinator-accepted (no verify thread) | none |
 | T08 | phase-B impl | complete | 56 files +1175/-233, `e23d77032b344c50590169af07980eefbfd009bd` (8th member + arch/registry/lint amendments) | nextest 2031/2031; 2036 fns; fmt/clippy/goldens/deny/freshness/alint green | verify-t08 PASS 5/5 + coordinator | none (branch CI absent) |
@@ -336,7 +336,7 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
 
 12. Measurement commits `f57e0b4`/`c2a77b7` DANGLING (doc-only-delta
     proof commands in the perf docs); qual-input long material lives
-    in `/tmp` (`/tmp/velnor-phaseb-research-tmp/q1-parser-prequal.md`,
+    in `/tmp` (`<tmp>/velnor-phaseb-research-tmp/q1-parser-prequal.md`,
     `q2-t08-checklist.md`, `q4-digest.md`, ws1–ws7 reports) — ephemeral
     paths, contents quoted in reports/ledger.
 
@@ -366,9 +366,9 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
 
 ## 8. Provenance (section → evidence)
 
-- §1 rows T01–T03: ledger + `/tmp/velnor-ws1-inventory.md`,
-  `/tmp/velnor-ci-release.md`, `/tmp/velnor-t01t36.md`,
-  `/tmp/velnor-mergev1-diag.md`, `/tmp/velnor-obligations.md`;
+- §1 rows T01–T03: ledger + `<tmp>/velnor-ws1-inventory.md`,
+  `<tmp>/velnor-ci-release.md`, `<tmp>/velnor-t01t36.md`,
+  `<tmp>/velnor-mergev1-diag.md`, `<tmp>/velnor-obligations.md`;
   T04–T07: ledger + commits a12efd7/f549983/M1–M6/a998b44/6fb0a5d;
   T08–T28: ledger + impl-tXX/verify-tXX reports + commits (full SHAs
   via `git rev-parse`); T29: ledger + review/dispo/verify reports;

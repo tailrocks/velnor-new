@@ -20,6 +20,7 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
         metrics: Metrics::Failed(String::new()),
         caches: Vec::new(),
         trusted,
+        client_log: None,
     }
 }
 

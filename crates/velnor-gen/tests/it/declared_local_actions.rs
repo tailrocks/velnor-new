@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::declared_fixture::{TestResult, refusal, rendered_text, workflow};
+use crate::declared_fixture::{DECLARED_FILE, TestResult, refusal, rendered_text, workflow};
 
 const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
 
-const ALLOWED: [&str; 3] = [
+const ALLOWED: &[&str] = &[
     "./qualification/actions/post-fail",
     "./qualification/actions/docker",
     "./qualification/actions/composite",
@@ -30,7 +30,7 @@ fn local(extra: &str) -> String {
 #[test]
 fn an_allowed_local_action_renders_with_the_self_repository_note() -> TestResult {
     for path in ALLOWED {
-        let text = rendered_text(&local(&format!("uses = \"{path}\"")), "ci")?;
+        let text = rendered_text(&local(&format!("uses = \"{path}\"")), DECLARED_FILE)?;
         assert!(
             text.contains(&format!(
                 "uses: '{path}'  # zizmor: ignore[self-repository]\n"
@@ -58,7 +58,7 @@ fn a_local_action_outside_the_allow_list_is_refused_and_the_message_names_the_al
     ] {
         let message = refusal(&local(&format!("uses = \"{path}\"")))?;
         assert!(message.contains(path), "{path}: {message}");
-        for allowed in ALLOWED {
+        for allowed in ALLOWED.iter().copied() {
             assert!(message.contains(allowed), "{path}: {message}");
         }
     }

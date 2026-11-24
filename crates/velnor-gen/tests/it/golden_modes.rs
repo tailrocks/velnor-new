@@ -57,8 +57,8 @@ fn only_the_value_one_turns_the_golden_update_on() {
 #[test]
 fn a_different_render_is_a_failure_and_leaves_expected_alone_unless_updating() -> TestResult {
     let copy = Copy::of("single-crate", "modes")?;
-    let workflow = copy.0.join("expected/.github/workflows/rust-ci.yml");
-    let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
+    let workflow = copy.0.join("expected/.github/workflows/ci.yml");
+    let path = RepoPath::new(".github/workflows/ci.yml")?;
     fs::write(&workflow, "stale\n")?;
 
     let failures = check_sample(&copy.0, update_requested(Some(OsStr::new("0"))))?;

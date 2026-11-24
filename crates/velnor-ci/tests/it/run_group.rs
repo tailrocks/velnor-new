@@ -27,14 +27,11 @@ impl Drop for GroupGuard {
 }
 
 fn grandchild_is_stopped_by(signal: &str) {
-    let temp = std::env::temp_dir().join(format!(
-        "velnor-ci-run-group-{}-{signal}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    let temp = crate::scratch_path("velnor-ci-run-group", signal);
+    std::fs::create_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", SPAWN_GRANDCHILD])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "100")
         .env("VELNOR_CI_RUN_TERMINAL", "0")
         .stdout(Stdio::piped())
@@ -66,7 +63,6 @@ fn grandchild_is_stopped_by(signal: &str) {
     if survived {
         kill(grandchild, Signal::SIGKILL).ok();
     }
-    std::fs::remove_dir_all(&temp).ok();
     assert!(!survived, "the grandchild outlived {signal}");
 }
 
@@ -82,9 +78,11 @@ fn exits_within(child: &mut std::process::Child, limit: Duration) -> bool {
 }
 
 fn child_group_with_terminal(terminal: &str) -> (i32, i32) {
+    let temp =
+        velnor_test_support::ScratchDir::new(crate::scratch_name("velnor-ci-run-group", terminal));
     let mut helper = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", "ps -o pgid= -p $$"])
-        .env("RUNNER_TEMP", std::env::temp_dir())
+        .env("RUNNER_TEMP", temp.path())
         .env("VELNOR_CI_RUN_TERMINAL", terminal)
         .stdout(Stdio::piped())
         .process_group(0)

@@ -120,6 +120,7 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         metrics: Metrics::Failed("no".to_owned()),
         caches: vec!["job lint: key k found no entry".to_owned()],
         trusted: true,
+        client_log: None,
     };
     let text = verdict(
         "leaf",

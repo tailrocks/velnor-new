@@ -4,14 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{RepoView, ToolPins};
+use velnor_model::{RepoPath, RepoView, ToolPins};
 
 use crate::error::Reason;
 use crate::lint_error::LintFault;
 use crate::lint_tools::{Lookup, lookup};
 use crate::toml_file::table;
 
-const TASK_FOLDERS: [&str; 5] = [
+pub(crate) const TASK_FOLDERS: &[&str] = &[
     "mise-tasks/",
     ".mise-tasks/",
     "mise/tasks/",
@@ -53,8 +53,7 @@ fn declared(value: &Value) -> Declared {
         tools: entry
             .get("tools")
             .and_then(Value::as_table)
-            .map(|tools| tools.keys().cloned().collect())
-            .unwrap_or_default(),
+            .map_or_default(|tools| tools.keys().cloned().collect()),
         depends: ["depends", "depends_post"]
             .iter()
             .flat_map(|key| words(entry.get(*key)))
@@ -63,21 +62,22 @@ fn declared(value: &Value) -> Declared {
 }
 
 fn file_names(view: &RepoView) -> BTreeSet<String> {
-    view.tracked_paths
+    view.tracked_paths.iter().flat_map(task_names).collect()
+}
+
+pub(crate) fn task_names(path: &RepoPath) -> Vec<String> {
+    let Some(rest) = TASK_FOLDERS
         .iter()
-        .filter_map(|path| {
-            TASK_FOLDERS
-                .iter()
-                .find_map(|folder| path.as_str().strip_prefix(folder))
-        })
-        .flat_map(|rest| {
-            let name = rest.replace('/', ":");
-            let bare = rest
-                .rsplit_once('.')
-                .filter(|(stem, _)| !stem.is_empty() && !stem.ends_with('/'))
-                .map(|(stem, _)| stem.replace('/', ":"));
-            std::iter::once(name).chain(bare)
-        })
+        .find_map(|folder| path.as_str().strip_prefix(folder))
+    else {
+        return Vec::new();
+    };
+    let bare = rest
+        .rsplit_once('.')
+        .filter(|(stem, _)| !stem.is_empty() && !stem.ends_with('/'))
+        .map(|(stem, _)| stem.replace('/', ":"));
+    std::iter::once(rest.replace('/', ":"))
+        .chain(bare)
         .collect()
 }
 

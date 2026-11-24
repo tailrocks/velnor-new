@@ -33,6 +33,13 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
     Ok(())
 }
 
+pub(super) fn clock_guard() -> (String, String) {
+    (
+        "physical_attempt_jit_conflict_receipt_insert_guard".to_owned(),
+        ddl::INSERT_GUARD.to_owned(),
+    )
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     validation::validate(conn).await
 }

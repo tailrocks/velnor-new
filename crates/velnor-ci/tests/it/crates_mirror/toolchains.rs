@@ -7,7 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::io::Repo;
+use crate::io::{Repo, hang_up};
 
 use super::fixture::{TestResult, mirror_fixture, mirror_fixture_named, rustup_binary};
 
@@ -82,12 +82,12 @@ done
                 std::env::join_paths([PathBuf::from("../proxy-bin"), root.join("commands")])?,
             )
             .env("CARGO_NET_OFFLINE", "false")
-            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("CARGO_HTTP_PROXY", hang_up())
             .env("NO_PROXY", "127.0.0.1")
             .env("CARGO_NET_RETRY", "0")
             .env(
                 "CARGO_REGISTRIES_CRATES_IO_INDEX",
-                "sparse+http://127.0.0.1:1/index/",
+                format!("sparse+{}/index/", hang_up()),
             )
             .output()?;
         assert!(output.status.success(), "{output:?}");

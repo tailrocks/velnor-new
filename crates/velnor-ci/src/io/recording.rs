@@ -63,12 +63,15 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         verified_git_downloads: None,
         restored_target_usable: None,
         artifacts: Vec::new(),
+        build_scripts: Vec::new(),
         progress: Some(Vec::new()),
         capture_complete: false,
         tests: Vec::new(),
         rejected: 0,
         execution,
         target_directory: target_directory(argv)?,
+        dirty: Vec::new(),
+        restored_manifest: None,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {

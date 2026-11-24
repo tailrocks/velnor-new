@@ -223,6 +223,68 @@ fn regular_referent_with_directory_suffix_cannot_prove_source_contents() -> supe
     Ok(())
 }
 
+#[test]
+fn links_outside_every_compilation_input_keep_waste_verifiable() -> super::super::ResultTest {
+    let rebuilt = unrelated_links("report-unrelated-links-rebuilt")?;
+    assert!(
+        super::super::cli(&rebuilt, &["inputs", "save"])
+            .status
+            .success()
+    );
+    rebuilt.write("src/lib.rs", "pub fn changed() {}\n");
+    assert!(
+        super::super::cli(&rebuilt, &["inputs", "restore"])
+            .status
+            .success()
+    );
+    let compiling = event(&rebuilt, "Compiling", "demo", "0.1.0", true);
+    let metrics = progress(&rebuilt, &[compiling])?;
+    assert_eq!(
+        metrics.verification_errors,
+        [] as [String; 0],
+        "{metrics:?}"
+    );
+    assert!(metrics.violations.is_empty(), "{metrics:?}");
+    assert!(velnor_ci::report::check(&[metrics]).is_ok());
+
+    let wasted = unrelated_links("report-unrelated-links-wasted")?;
+    save_restore(&wasted);
+    let metrics = progress(
+        &wasted,
+        &[event(&wasted, "Compiling", "demo", "0.1.0", true)],
+    )?;
+    assert_eq!(
+        metrics.verification_errors,
+        [] as [String; 0],
+        "{metrics:?}"
+    );
+    assert!(
+        metrics.invocations[0].compilations[0].unchanged,
+        "{metrics:?}"
+    );
+    Ok(())
+}
+
+fn unrelated_links(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
+    let repo = fixture(name)?;
+    repo.write_all(&[("AGENTS.md", "notes\n"), ("docs/README.md", "guide\n")]);
+    symlink("AGENTS.md", repo.root().join("CLAUDE.md"))?;
+    symlink("README.md", repo.root().join("docs/guide.md"))?;
+    repo.git(&["add", "."]);
+    Ok(repo)
+}
+
+#[test]
+fn link_at_an_unclassified_path_still_cannot_claim_waste() -> super::super::ResultTest {
+    let repo = fixture("report-unclassified-link")?;
+    repo.write("tool-source", "echo\n");
+    fs::create_dir_all(repo.root().join("scripts"))?;
+    symlink("../tool-source", repo.root().join("scripts/tool"))?;
+    repo.git(&["add", "."]);
+    save_restore(&repo);
+    assert_unknown(&repo)
+}
+
 fn tracked_chain() -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new("report-tracked-source-chain");
     repo.write_all(&[

@@ -18,6 +18,7 @@ mod hardening;
 mod inheritance;
 mod inventory;
 mod lock_version;
+mod mbx;
 mod mise_lock;
 mod nested_root;
 mod profile_defined;

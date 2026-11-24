@@ -21,20 +21,23 @@ const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+pub(crate) const NOT_SELF_HOSTED: &str = "runner.environment != 'self-hosted'";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
 pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
+pub(crate) const TOOLS_LOOKUP_STEP: &str = "toolslookup";
 pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
 pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
+pub(crate) const TOOLS_SAVED_KEY_STEP: &str = "tools_saved_key";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
-const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+pub(crate) const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+pub(crate) const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(lane: &RootSlug) -> String {
     format!("sources_{lane}")
 }
@@ -71,7 +74,7 @@ pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Setup {
     Before,
     Restored,
@@ -148,8 +151,9 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
-        When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
+        When::Finalizer | When::FinalizerAfterProducer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
+        When::Failure => parts.push("failure()".to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
@@ -218,8 +222,10 @@ pub(crate) fn condition(
         }
         When::SaveToolsOnDefaultBranch
         | When::SaveToolsUnlessLocal
+        | When::LookupToolsOnNodeHit
         | When::RestoreToolsUnlessLocal
-        | When::PrimeToolsFromNetwork => tools_parts(when, &mut parts),
+        | When::PrimeToolsFromNetwork
+        | When::SaveVerifiedTools(_) => crate::tools_steps::tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -230,23 +236,6 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
-    }
-}
-
-fn tools_parts(when: When, parts: &mut Vec<String>) {
-    if when == When::PrimeToolsFromNetwork {
-        parts.push(ON_DEFAULT_BRANCH.to_owned());
-        parts.push(SAVING_EVENTS.to_owned());
-        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
-        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"));
-        return;
-    }
-    if when != When::RestoreToolsUnlessLocal {
-        parts.push(ON_DEFAULT_BRANCH.to_owned());
-        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
-    }
-    if when != When::SaveToolsOnDefaultBranch {
-        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
     }
 }
 
@@ -270,7 +259,7 @@ pub(crate) fn check_name(name: Option<&String>, pr: PrRun) -> Option<String> {
     ))
 }
 
-fn pr_parts(pr: PrRun) -> Vec<String> {
+pub(crate) fn pr_parts(pr: PrRun) -> Vec<String> {
     match pr {
         PrRun::Always => Vec::new(),
         PrRun::Ready => vec![NOT_DRAFT.to_owned()],
@@ -323,7 +312,7 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
     }
 }
 
-fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
+pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
@@ -339,6 +328,14 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
     match gate.need {
+        GateNeed::Selected if !gate.also.is_empty() => {
+            let any = gate
+                .roots()
+                .map(|slug| format!("{} != 'none'", read_key(output(slug, GateNeed::Selected))))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            parts.push(format!("({any})"));
+        }
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             match gate.need {
@@ -357,6 +354,7 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 }),
             );
         }
+        GateNeed::Lint => parts.push(runs(GateNeed::Lint)),
         GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
         GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
         GateNeed::Policy => parts.push(format!(

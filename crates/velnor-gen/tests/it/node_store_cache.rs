@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const SHARED: &str = "mbx_shared_store = true\n";
@@ -16,10 +16,7 @@ fn workflow_for(
     helper: &str,
 ) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     let yaml: Value = crate::yaml_tree::document(&workflow(&repo)?)?;
     Ok(yaml["jobs"]
         .as_object()
@@ -211,5 +208,30 @@ fn helper_0_1_99_has_neither_the_cold_output_nor_the_checked_save() -> TestResul
         assert!(id_of(&job, SAVE_RECORDED).is_none(), "{id}");
         assert!(id_of(&job, "toolslocalsave").is_none(), "{id}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_restore_only_tools_job_names_no_save_step_from_helper_0_1_112() -> TestResult {
+    let groups = format!("shape = \"groups\"\n{SHARED}");
+    let mut restore_only = 0;
+    for config in [SHARED, groups.as_str()] {
+        for (id, job) in workflow_for(config, "0.1.112")? {
+            if named(&job, "Restore the tools cache").is_none() {
+                continue;
+            }
+            let plan = report_plan(&job)?;
+            let Some(save) = plan["save_step"].as_str() else {
+                assert!(plan["save_step"].is_null(), "{id}");
+                restore_only += 1;
+                continue;
+            };
+            assert!(
+                id_of(&job, save).is_some(),
+                "{id}: the report names the missing save step {save}"
+            );
+        }
+    }
+    assert!(restore_only > 0);
     Ok(())
 }

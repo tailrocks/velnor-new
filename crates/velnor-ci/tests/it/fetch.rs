@@ -16,7 +16,7 @@ use crate::io::Repo;
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) const TOKEN: &str = "ghs_recorded_installation_token";
-const URLS: [&str; 5] = [
+const URLS: &[&str] = &[
     "https://github.com/acme/private.git",
     "ssh://git@github.com/acme/private.git",
     "ssh://github.com/acme/private.git",
@@ -85,6 +85,7 @@ impl Fixture {
         let root = repo.root().to_path_buf();
         let log = root.join("log");
         fs::create_dir_all(&log)?;
+        fs::create_dir_all(root.join("home/.cargo"))?;
         let trusted = root.join("trusted/bin");
         script(
             &trusted.join("cargo"),
@@ -121,6 +122,21 @@ impl Fixture {
         manifests: &[&str],
         extra: &[(&str, &str)],
     ) -> Output {
+        let arguments: Vec<&str> = manifests
+            .iter()
+            .flat_map(|manifest| ["--manifest-path", manifest])
+            .collect();
+        self.run_arguments(api, token, home, &arguments, extra)
+    }
+
+    pub(crate) fn run_arguments(
+        &self,
+        api: &Api,
+        token: Option<&str>,
+        home: Option<&str>,
+        arguments: &[&str],
+        extra: &[(&str, &str)],
+    ) -> Output {
         let root = self.repo.root();
         let path = format!(
             "{}:{}:/usr/bin:/bin",
@@ -133,6 +149,9 @@ impl Fixture {
             .arg("fetch")
             .arg("--trusted-dir")
             .arg(root.join("trusted"))
+            .arg("--home")
+            .arg(root.join("home"))
+            .arg("--no-fixed-toolchain")
             .env_clear()
             .env("PATH", path)
             .env("VELNOR_API_URL", &api.url)
@@ -141,9 +160,7 @@ impl Fixture {
             .env("GIT_CONFIG_VALUE_0", "hostile-config")
             .env("CARGO_HTTP_PROXY", "http://hostile-proxy.invalid")
             .env("CARGO_NET_OFFLINE", "false");
-        for manifest in manifests {
-            command.args(["--manifest-path", manifest]);
-        }
+        command.args(arguments);
         command.envs(extra.iter().copied());
         if let Some(token) = token {
             command.env("VELNOR_PRIVATE_TOKEN", token);
@@ -154,224 +171,18 @@ impl Fixture {
         command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
+    pub(crate) fn manifest(&self, name: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+        Ok(fs::canonicalize(self.repo.root().join(name))?)
+    }
+
     pub(crate) fn log(&self, name: &str) -> String {
         fs::read_to_string(self.repo.root().join("log").join(name)).unwrap_or_default()
     }
 }
 
-#[test]
-fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch() -> TestResult {
-    let fixture = Fixture::new("fetch-token", 0)?;
-    let api = serve(204)?;
-    let output = fixture.run(&api, Some(TOKEN), None);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(fixture.log("hostile.log"), "");
-    assert_eq!(
-        fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
-    );
-    let cargo_env = fixture.log("cargo.env");
-    let git_env = fixture.log("git.env");
-    assert!(cargo_env.contains(TOKEN) && git_env.contains(TOKEN));
-    for environment in [&cargo_env, &git_env] {
-        assert!(!environment.contains("hostile"), "{environment}");
-        assert!(!environment.contains("CARGO_NET_OFFLINE"), "{environment}");
-        assert!(environment.contains("GIT_CONFIG_NOSYSTEM=1"));
-        assert!(
-            environment
-                .lines()
-                .any(|line| line == "GIT_ALLOW_PROTOCOL=https:http:file"),
-            "{environment}"
-        );
-    }
-    assert!(!cargo_env.contains("PRIVATE_TOKEN"), "{cargo_env}");
-    let requests = api.requests.lock().map_err(|e| e.to_string())?.clone();
-    assert_eq!(
-        requests,
-        [format!(
-            "delete /installation/token http/1.1 | authorization: bearer {}",
-            TOKEN.to_lowercase()
-        )]
-    );
-    Ok(())
-}
-
-#[test]
-fn without_a_token_the_fetch_is_offline_and_a_miss_says_why() -> TestResult {
-    let fixture = Fixture::new("fetch-offline", 101)?;
-    let api = serve(204)?;
-    let output = fixture.run(&api, None, None);
-    assert!(!output.status.success());
-    assert_eq!(
-        fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --offline"
-    );
-    assert!(!fixture.log("cargo.env").contains("GIT_CONFIG_KEY_0=url."));
-    assert!(!fixture.log("cargo.env").contains("GIT_ALLOW_PROTOCOL"));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("fork"), "{stderr}");
-    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
-    Ok(())
-}
-
-#[test]
-fn a_cargo_home_outside_the_tool_directories_runs_nothing_and_still_revokes() -> TestResult {
-    let fixture = Fixture::new("fetch-home", 0)?;
-    let api = serve(204)?;
-    let hostile = fixture.repo.root().join("checkout-cargo-home");
-    let output = fixture.run(&api, Some(TOKEN), Some(&hostile.display().to_string()));
-    assert!(!output.status.success());
-    assert_eq!(fixture.log("cargo.args"), "");
-    assert_eq!(fixture.log("hostile.log"), "");
-    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
-    Ok(())
-}
-
-#[test]
-fn a_token_that_cannot_be_revoked_fails_the_step() -> TestResult {
-    let fixture = Fixture::new("fetch-revoke", 0)?;
-    let api = serve(401)?;
-    let output = fixture.run(&api, Some(TOKEN), None);
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("revoked"));
-    Ok(())
-}
-
-#[test]
-fn a_malformed_api_url_still_runs_the_fetch_and_reports_the_missing_revocation() -> TestResult {
-    let fixture = Fixture::new("fetch-bad-api", 0)?;
-    let api = serve(204)?;
-    let output = fixture.run_with(
-        &api,
-        Some(TOKEN),
-        None,
-        &["Cargo.toml"],
-        &[("VELNOR_API_URL", "ftp://not-the-api.invalid")],
-    );
-    assert!(!output.status.success());
-    assert!(!fixture.log("cargo.args").is_empty(), "the fetch never ran");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("revoked") && stderr.contains("VELNOR_API_URL"),
-        "{stderr}"
-    );
-    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
-    Ok(())
-}
-
-#[test]
-fn every_github_url_form_a_lock_file_records_is_authenticated_and_nothing_else() -> TestResult {
-    let fixture = Fixture::new("fetch-urls", 0)?;
-    let mut urls = URLS.to_vec();
-    urls.insert(1, "http://github.com/acme/private.git");
-    fs::write(fixture.repo.root().join("urls"), urls.join(" "))?;
-    let api = serve(204)?;
-    let output = fixture.run(&api, Some(TOKEN), None);
-    assert!(output.status.success(), "{output:?}");
-    let authenticated = format!("https://x-access-token:{TOKEN}@github.com/acme/private.git");
-    let urls = fixture.log("cargo.urls");
-    assert_eq!(
-        urls.lines().collect::<Vec<_>>(),
-        [
-            authenticated.as_str(),
-            authenticated.as_str(),
-            authenticated.as_str(),
-            authenticated.as_str(),
-            authenticated.as_str(),
-            "https://example.invalid/acme/public.git"
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn the_runner_proxy_reaches_cargo_and_git_but_a_checkout_cargo_setting_does_not() -> TestResult {
-    let fixture = Fixture::new("fetch-proxy", 0)?;
-    let api = serve(204)?;
-    let proxy = [
-        ("HTTPS_PROXY", "http://proxy.runner.invalid:3128"),
-        ("https_proxy", "http://proxy.runner.invalid:3128"),
-        ("ALL_PROXY", "socks5://proxy.runner.invalid:1080"),
-        ("NO_PROXY", "127.0.0.1,.cluster.local"),
-    ];
-    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &proxy);
-    assert!(output.status.success(), "{output:?}");
-    for environment in [fixture.log("cargo.env"), fixture.log("git.env")] {
-        for (name, value) in proxy {
-            assert!(environment.contains(&format!("{name}={value}")), "{name}");
-        }
-        assert!(!environment.contains("hostile"), "{environment}");
-    }
-    Ok(())
-}
-
-#[test]
-fn the_runner_ca_bundle_reaches_cargo_and_git() -> TestResult {
-    let fixture = Fixture::new("fetch-ca-bundle", 0)?;
-    let api = serve(204)?;
-    let bundle = [("SSL_CERT_FILE", "/etc/runner/private-ca.pem")];
-    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &bundle);
-    assert!(output.status.success(), "{output:?}");
-    for environment in [fixture.log("cargo.env"), fixture.log("git.env")] {
-        assert!(
-            environment.contains("SSL_CERT_FILE=/etc/runner/private-ca.pem"),
-            "{environment}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn each_manifest_is_fetched_from_its_own_directory_so_its_cargo_config_applies() -> TestResult {
-    let fixture = Fixture::new("fetch-nested", 0)?;
-    fixture.repo.write_unstaged("tools/Cargo.toml", "");
-    let api = serve(204)?;
-    let output = fixture.run_with(&api, Some(TOKEN), None, &["tools/Cargo.toml"], &[]);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
-    );
-    assert!(fixture.log("cargo.pwd").trim().ends_with("/tools"));
-    Ok(())
-}
+mod environment;
+mod fixed_toolchain;
+mod manifests_env;
+mod token;
 
 const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";
-
-#[test]
-fn the_crates_mirror_the_runner_configured_is_used_and_any_other_config_is_refused() -> TestResult {
-    let fixture = Fixture::new("fetch-mirror", 0)?;
-    let config = fixture.repo.root().join("velnor-cargo/config.toml");
-    fs::create_dir_all(config.parent().ok_or("parent")?)?;
-    fs::write(&config, MIRROR)?;
-    let api = serve(204)?;
-    let path = config.display().to_string();
-    let output = fixture.run_with(
-        &api,
-        Some(TOKEN),
-        None,
-        &["Cargo.toml"],
-        &[("VELNOR_CARGO_CONFIG", &path)],
-    );
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        fixture.log("cargo.args").trim(),
-        format!(
-            "fetch --config {path} --locked --manifest-path Cargo.toml --config net.offline=false"
-        )
-    );
-    assert!(!fixture.log("cargo.env").contains("VELNOR_CARGO_CONFIG"));
-    let refused = Fixture::new("fetch-mirror-refused", 0)?;
-    let other = refused.repo.root().join("config.toml");
-    fs::write(&other, format!("{MIRROR}[credential-alias]\nx = \"y\"\n"))?;
-    let output = refused.run_with(
-        &api,
-        Some(TOKEN),
-        None,
-        &["Cargo.toml"],
-        &[("VELNOR_CARGO_CONFIG", &other.display().to_string())],
-    );
-    assert!(!output.status.success());
-    assert_eq!(refused.log("cargo.args"), "");
-    Ok(())
-}

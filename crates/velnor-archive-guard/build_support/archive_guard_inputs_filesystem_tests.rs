@@ -79,16 +79,17 @@ fn watched_paths_name_only_inputs_that_exist() -> Result<(), Box<dyn Error>> {
         "file Cargo.toml\ntree src\noptional present.toml\noptional absent.toml\n",
     )?;
 
-    let (without, watched) = fingerprint(&root)?;
+    let (without, watched, absent) = fingerprint(&root)?;
     let missing: Vec<_> = watched.iter().filter(|path| !path.exists()).collect();
     assert!(
         missing.is_empty(),
         "cargo reruns the build script on every build when a watched path is missing: {missing:?}"
     );
     assert!(watched.contains(&root.join("present.toml")));
+    assert_eq!(absent, vec![("absent.toml".to_owned(), root.clone())]);
 
     fs::write(root.join("absent.toml"), "")?;
-    let (with, _) = fingerprint(&root)?;
+    let (with, _, _) = fingerprint(&root)?;
     assert_ne!(
         without, with,
         "an optional input appearing must change the fingerprint"

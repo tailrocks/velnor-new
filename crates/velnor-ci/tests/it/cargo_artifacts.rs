@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::json;
-use velnor_ci::cargo_artifacts::{ArtifactTap, CargoArtifact, CargoProgress, ProgressKind};
+use velnor_ci::cargo_artifacts::{
+    ArtifactTap, CargoArtifact, CargoProgress, DirtyUnit, ProgressKind,
+};
 
 pub(crate) fn record(fresh: bool) -> serde_json::Value {
     json!({
@@ -149,5 +151,106 @@ fn oversized_cargo_artifacts_report_rejection_once_across_chunks_and_eof() {
             assert_eq!(batch.artifacts.len(), usize::from(newline));
             assert!(batch.artifacts.iter().all(|artifact| artifact.fresh));
         }
+    }
+}
+
+#[test]
+fn text_report_names_each_failed_package_in_every_target_form() {
+    let input = [
+        "error: could not compile `alpha` (lib) due to 1 previous error",
+        "error: could not compile `beta` (bin \"beta-cli\") due to 2 previous errors; 1 warning emitted",
+        "error: could not compile `gamma` (lib test) due to previous error",
+        "error: could not compile `delta` (test \"suite\") due to previous error",
+        "error: could not compile `epsilon`",
+        "warning: build failed, waiting for other jobs to finish...",
+        "   Compiling zeta v1.0.0",
+    ]
+    .join("\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let names: Vec<_> = tap
+        .finish()
+        .failed_units
+        .into_iter()
+        .map(|unit| (unit.package, unit.version))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("alpha".to_owned(), None),
+            ("beta".to_owned(), None),
+            ("gamma".to_owned(), None),
+            ("delta".to_owned(), None),
+            ("epsilon".to_owned(), None),
+        ]
+    );
+}
+
+#[test]
+fn a_build_script_run_is_recorded_with_its_package_and_output_directory() {
+    let run = json!({
+        "reason": "build-script-executed",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+        "linked_libs": [], "linked_paths": [], "cfgs": [], "env": [],
+        "out_dir": "/work/target/debug/build/serde-0123456789abcdef/out"
+    });
+    let unreadable = json!({"reason": "build-script-executed", "package_id": "x"});
+    let input = format!("{run}\n{unreadable}\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let batch = tap.finish();
+    assert_eq!(
+        batch.build_scripts,
+        [velnor_ci::cargo_artifacts::BuildScriptRun {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0"
+                .to_owned(),
+            out_dir: "/work/target/debug/build/serde-0123456789abcdef/out".to_owned(),
+        }]
+    );
+    assert_eq!(batch.rejected, 0);
+}
+
+#[test]
+fn a_fingerprint_dirty_line_in_cargos_core_namespace_is_read_too() {
+    let input = "2026-11-21T09:23:40.4050213Z    0.024s  INFO prepare_target{force=false package_id=serde_core v1.0.229 target=\"serde_core\"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })\n";
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    assert_eq!(
+        tap.finish().dirty,
+        [DirtyUnit {
+            package: "serde_core".to_owned(),
+            version: "1.0.229".to_owned(),
+            reason: "FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn a_fingerprint_dirty_line_names_the_package_and_cargos_reason() {
+    let missing = "/store/out-dirs/v1/549467dfe87a2a72/x.rs";
+    let input = format!(
+        "   0.010s  INFO prepare_target{{force=false package_id=app v0.1.0 (/work/app) target=\"app\"}}:calculate:calculate: cargo::compiler::fingerprint: stale: missing \"{missing}\"\n\
+         \x1b[2m   0.019s\x1b[0m  INFO prepare_target{{force=false package_id=app v0.1.0 (/work/app) target=\"app\"}}: cargo::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint {{ unit: UnitIndex(1) }})\n\
+         2026-11-21T09:23:40.4050213Z    0.024s  INFO prepare_target{{force=false package_id=serde_core v1.0.229 target=\"serde_core\"}}: cargo::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(MissingFile {{ path: \"{missing}\" }}))\n\
+         unrelated: dirty: not a fingerprint line\n"
+    );
+    let expected = [
+        DirtyUnit {
+            package: "app".to_owned(),
+            version: "0.1.0".to_owned(),
+            reason: "FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })".to_owned(),
+        },
+        DirtyUnit {
+            package: "serde_core".to_owned(),
+            version: "1.0.229".to_owned(),
+            reason: format!("FsStatusOutdated(StaleItem(MissingFile {{ path: \"{missing}\" }}))"),
+        },
+    ];
+    for size in 1..=input.len() {
+        let mut tap = ArtifactTap::default();
+        for chunk in input.as_bytes().chunks(size) {
+            tap.feed(chunk);
+        }
+        assert_eq!(tap.finish().dirty, expected, "chunk size {size}");
     }
 }

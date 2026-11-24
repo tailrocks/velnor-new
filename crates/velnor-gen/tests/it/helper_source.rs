@@ -24,7 +24,7 @@ fn sample(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> 
 
 fn text_of(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     expected_files(view)?
-        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .remove(&RepoPath::new(".github/workflows/ci.yml")?)
         .ok_or_else(|| "no workflow".into())
 }
 
@@ -183,7 +183,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         vec![("ci-helper/Cargo.toml", vec![helper])],
         &[(
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
         )],
     )?;
     view.tracked_paths.insert(path(".velnor/rust-ci.lock")?);

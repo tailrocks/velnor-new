@@ -41,7 +41,7 @@ fn checkout_with(path: &Path, config: &str) -> TestResult {
 }
 
 fn generate(path: &Path) -> Result<Output, Box<dyn Error>> {
-    let cargo = Path::new(env!("CARGO"));
+    let cargo = velnor_test_support::real_cargo();
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([cargo_dir, Path::new("/usr/bin"), Path::new("/bin")])?;
     Ok(Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
@@ -56,7 +56,7 @@ fn schedule(path: &Path) -> Result<String, Box<dyn Error>> {
     let output = generate(path)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    let workflow = fs::read_to_string(path.join(".github/workflows/rust-ci.yml"))?;
+    let workflow = fs::read_to_string(path.join(".github/workflows/ci.yml"))?;
     workflow
         .lines()
         .find_map(|line| line.trim().strip_prefix("- cron: "))
@@ -164,7 +164,7 @@ fn local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity() -> TestR
         "local origin unexpectedly generated a workflow"
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("origin"));
-    assert!(!repo.0.join(".github/workflows/rust-ci.yml").exists());
+    assert!(!repo.0.join(".github/workflows/ci.yml").exists());
     Ok(())
 }
 
@@ -183,7 +183,7 @@ fn local_origin_generates_when_the_schedule_does_not_need_the_identity() -> Test
     let output = generate(&off.0)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    let workflow = fs::read_to_string(off.0.join(".github/workflows/rust-ci.yml"))?;
+    let workflow = fs::read_to_string(off.0.join(".github/workflows/ci.yml"))?;
     assert!(!workflow.contains("- cron: "), "{workflow}");
     assert_eq!(schedule(&cron.0)?, "17 3 * * 2");
     drop(cron);

@@ -11,7 +11,8 @@ use crate::wrapper_options::{
 };
 
 /// A command a `run` value starts, after every wrapper is looked through.
-pub(crate) enum Invoked {
+#[derive(Debug)]
+pub enum Invoked {
     /// The command and its arguments; the first word is the command word.
     Command(Vec<String>),
     /// A command the scan cannot read (`eval`, `sudo`, a shell script with an expansion, a
@@ -20,10 +21,13 @@ pub(crate) enum Invoked {
     Opaque(Vec<String>),
 }
 
+/// How many shell scripts may nest (`sh -c "sh -c '...'"`) before the scan gives up.
 const MAX_DEPTH: usize = 8;
+/// How many wrappers may precede one command before the scan gives up.
+const MAX_CHAIN: usize = 32;
 
 /// Words that run what follows them, or that the scan does not follow into.
-const OPAQUE: [&str; 20] = [
+const OPAQUE: &[&str] = &[
     "eval",
     "source",
     ".",
@@ -44,8 +48,22 @@ const OPAQUE: [&str; 20] = [
     "trap",
     "script",
     "coproc",
+    "unbuffer",
+    "fakeroot",
+    "numactl",
+    "strace",
+    "ltrace",
+    "valgrind",
+    "runuser",
+    "pkexec",
+    "systemd-run",
+    "faketime",
+    "chronic",
+    "cpulimit",
+    "bwrap",
+    "firejail",
 ];
-const RESERVED: [&str; 15] = [
+const RESERVED: &[&str] = &[
     "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac",
     "select", "{", "}",
 ];
@@ -59,7 +77,8 @@ const RESERVED: [&str; 15] = [
 /// `dash`, `zsh`, `ksh` and `ash` with `-c` run their script, which is read the same way when
 /// it holds no `$` or backtick. Everything the scan cannot follow is `Opaque`, so a wrapper
 /// that is not known, an option that is not known and an unreadable script fail closed.
-pub(crate) fn invoked(run: &str) -> Vec<Invoked> {
+#[must_use]
+pub fn invoked(run: &str) -> Vec<Invoked> {
     let mut found = Vec::new();
     scan(run, 0, &mut found);
     found
@@ -94,6 +113,7 @@ fn scan(text: &str, depth: usize, found: &mut Vec<Invoked>) {
 }
 
 fn unwrap(mut words: VecDeque<Word>, depth: usize, found: &mut Vec<Invoked>) {
+    let mut chain = 0;
     loop {
         while words.front().is_some_and(|word| assignment(&word.text)) {
             words.pop_front();
@@ -102,13 +122,13 @@ fn unwrap(mut words: VecDeque<Word>, depth: usize, found: &mut Vec<Invoked>) {
             return;
         };
         let snapshot: Vec<String> = words.iter().map(|word| word.text.clone()).collect();
-        let next = if depth > MAX_DEPTH || first.dynamic {
+        let next = if depth > MAX_DEPTH || chain > MAX_CHAIN || first.dynamic {
             Next::Opaque
         } else {
             step(&mut words)
         };
         match next {
-            Next::Continue => {}
+            Next::Continue => chain += 1,
             Next::Nothing => return,
             Next::Plain => {
                 found.push(Invoked::Command(snapshot));

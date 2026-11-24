@@ -15,15 +15,57 @@ pub struct TestGroup {
     pub runner: Option<RunnerLabel>,
     /// The `hosted` key written next to `runner`, if any.
     pub hosted: Option<bool>,
+    /// The `restore_cache` key, if written. Only `Some(true)` restores.
+    pub restore_cache: Option<bool>,
+    /// The `no_tests` key, if written. Unwritten, a group renders [`NoTests::Fail`].
+    pub no_tests: Option<NoTests>,
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,
+    pub partitions: Option<u16>,
+    pub artifacts: Vec<GroupArtifact>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupArtifact {
+    pub name: String,
+    pub paths: Vec<String>,
+    pub when: ArtifactWhen,
+    pub retention_days: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactWhen {
+    Failure,
+    Always,
+}
+
+pub const ARTIFACT_RETENTION_DEFAULT: u8 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestNeed {
     Docker,
     Cargo,
+}
+
+/// What nextest does when a group's filter selects no test (`--no-tests`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoTests {
+    Fail,
+    Warn,
+    Pass,
+}
+
+impl NoTests {
+    /// The value nextest takes after `--no-tests=`.
+    #[must_use]
+    pub fn flag(self) -> &'static str {
+        match self {
+            Self::Fail => "fail",
+            Self::Warn => "warn",
+            Self::Pass => "pass",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +97,23 @@ pub enum GroupRoot {
 }
 
 impl TestGroup {
+    #[must_use]
+    pub fn partition_count(&self) -> u16 {
+        self.partitions.unwrap_or(1).max(1)
+    }
+
+    #[must_use]
+    pub fn restores_cache(&self) -> bool {
+        self.restore_cache == Some(true)
+    }
+
+    /// The `--no-tests` mode of this group's nextest run. Unwritten, it is `fail`,
+    /// so a group whose filter or binary matches nothing fails instead of passing.
+    #[must_use]
+    pub fn no_tests_mode(&self) -> NoTests {
+        self.no_tests.unwrap_or(NoTests::Fail)
+    }
+
     #[must_use]
     pub fn selects(&self) -> bool {
         !self.paths.is_empty() || !self.events.is_empty()

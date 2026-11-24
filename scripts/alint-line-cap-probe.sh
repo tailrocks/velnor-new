@@ -16,12 +16,15 @@ trap cleanup EXIT
 
 cd "$ROOT" || exit 1
 
+python3 -m unittest scripts/test_private_names_guard.py scripts/test_private_names_spellings.py || exit 1
+python3 scripts/private-names-guard.py || exit 1
+
 for lines in 401 400; do
   rm -f "$PROBE"
   seq 1 "$lines" | sed 's/.*/const L_&: u32 = &;/' > "$PROBE" || exit 1
   rc=0
   alint --format github --config .alint.yml --fail-on-warning check . > "$LOG" 2>&1 || rc=$?
-  cat "$LOG"
+  sed 's/^::/probe output: /' "$LOG"
   if [ "$lines" -eq 401 ]; then
     if [ "$rc" -eq 0 ] || ! grep -q 'alint_line_cap_probe.rs' "$LOG"; then
       echo "::error::alint accepted a 401-line Rust file" >&2
@@ -32,5 +35,8 @@ for lines in 401 400; do
     exit 1
   fi
 done
+
+bash scripts/test-no-doctests-rule.sh || exit 1
+bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 
 rm -f "$PROBE"

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-const CLEANUP_GUARDS: [(&str, &str); 7] = [
+const CLEANUP_GUARDS: &[(&str, &str)] = &[
     (
         "provisioning_storage_cleanup_identity_guard",
         "CREATE TRIGGER IF NOT EXISTS provisioning_storage_cleanup_identity_guard BEFORE UPDATE OF storage_cleanup_proven ON capacity_reservation_provisioning_state WHEN OLD.storage_cleanup_proven = 0 AND NEW.storage_cleanup_proven = 1 AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_topology AS topology JOIN capacity_reservation_provisioning_cleanups AS cleanup ON cleanup.reservation_id = topology.reservation_id WHERE topology.reservation_id = NEW.reservation_id AND cleanup.runner_container_id = NEW.runner_container_id AND cleanup.dind_container_id = NEW.dind_container_id AND cleanup.instance_binding_digest = NEW.instance_binding_digest AND cleanup.role_mask = 2047 AND cleanup.containers_absent = 1 AND cleanup.volumes_absent = 1 AND cleanup.mounts_detached = 1 AND cleanup.cgroups_absent = 1) BEGIN SELECT RAISE(ABORT, 'The cleanup proof does not match the owned objects.'); END",
@@ -42,13 +42,13 @@ pub(super) async fn replace_cleanup_guards(
         )
         .await
         .map_err(|_| HostError::Journal)?;
-    for (name, _) in CLEANUP_GUARDS {
+    for &(name, _) in CLEANUP_GUARDS {
         connection
             .execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    for (_, statement) in CLEANUP_GUARDS {
+    for &(_, statement) in CLEANUP_GUARDS {
         connection
             .execute(statement, ())
             .await

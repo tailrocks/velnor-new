@@ -19,7 +19,7 @@ use crate::release_fixture::release_view;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const RUNS_ON_FENCE: &str = "github.event.pull_request.head.repo.full_name == github.repository";
-const EVENTS: [&str; 3] = ["pull_request", "pull_request_target", "workflow_call"];
+const EVENTS: &[&str] = &["pull_request", "pull_request_target", "workflow_call"];
 
 fn github_hosted(label: &str) -> bool {
     ["ubuntu-", "macos-", "windows-"].iter().any(|family| {
@@ -192,8 +192,8 @@ id = "call-declared"
 uses = "leaf"
 
 [[workflow]]
-file = "ci"
-name = "CI"
+file = "checks"
+name = "Checks"
 runner = "velnor-linux-x64"
 
 [workflow.on.pull_request]
@@ -237,7 +237,7 @@ fn every_job_kind_that_a_pull_request_reaches_is_fenced_on_a_self_hosted_runner(
             KINDS.as_bytes().to_vec(),
         );
         let files = rendered(&view)?;
-        for path in ["rust-ci", "shared", "ci"] {
+        for path in ["ci", "shared", "checks"] {
             assert!(
                 files.contains_key(&format!(".github/workflows/{path}.yml")),
                 "{shape}: {path} not rendered: {:?}",

@@ -19,7 +19,7 @@ use crate::support::fresh_dir;
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 struct Candidate {
-    dir: PathBuf,
+    dir: velnor_test_support::ScratchDir,
 }
 
 impl Candidate {
@@ -122,12 +122,6 @@ impl Candidate {
     }
 }
 
-impl Drop for Candidate {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.dir).ok();
-    }
-}
-
 fn archive() -> Vec<u8> {
     let layer = plain_layer();
     build(&spec(vec![(gzip(&layer), LAYER_GZ), (layer, LAYER)])).archive()
@@ -173,6 +167,17 @@ fn an_archive_whose_bytes_changed_after_the_record_was_written_is_refused() {
     assert_eq!(
         refusal(&candidate, &[]),
         "Candidate archive is not the same as the archive in its record."
+    );
+}
+
+#[test]
+fn an_archive_whose_image_revision_is_not_the_record_commit_is_refused() {
+    let mut other = spec(vec![(plain_layer(), LAYER)]);
+    other.revision = Some("b".repeat(40));
+    let candidate = Candidate::new("revision", &build(&other).archive());
+    assert_eq!(
+        refusal(&candidate, &[]),
+        "OCI image configuration revision label is not the source commit."
     );
 }
 

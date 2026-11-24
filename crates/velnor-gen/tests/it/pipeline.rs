@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 pub(crate) const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 
 pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Box<dyn Error>> {
     let mut view = RepoView::default();
@@ -49,7 +49,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.tracked_paths.insert(mise.clone());
     view.files.insert(
         mise,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
             .to_vec(),
     );
     crate::facts::lock_pinned_tools(&mut view)?;
@@ -58,12 +58,10 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.files
         .insert(lock, String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes());
     if let Some(bytes) = config {
-        if bytes.windows(9).any(|window| window == b"hosted = ") {
-            pin_helper(&mut view, "0.1.99")?;
-        }
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
         view.files.insert(path, bytes.to_vec());
+        pin_for_keys(&mut view)?;
     }
     Ok(view)
 }
@@ -78,12 +76,29 @@ pub(crate) fn pin_helper(view: &mut RepoView, version: &str) -> Result<(), Box<d
     Ok(())
 }
 
-/// The same repository pinned to the first helper release that has the delta commands.
+/// Raises the default pin to the first release that parses every key the config writes, so a
+/// test that writes a newer key does not trip the key gate. A test that checks a refusal pins
+/// after construction.
+pub(crate) fn pin_for_keys(view: &mut RepoView) -> Result<(), Box<dyn Error>> {
+    if let Some((major, minor, patch)) = velnor_gen::required_helper(view) {
+        let lock = view
+            .files
+            .get(&velnor_rust::LOCK_PATH)
+            .ok_or("no helper lock")?;
+        let text =
+            String::from_utf8(lock.clone())?.replace("0.1.81", &format!("{major}.{minor}.{patch}"));
+        view.files.insert(velnor_rust::LOCK_PATH, text.into_bytes());
+    }
+    Ok(())
+}
+
+/// The same repository pinned to the first helper release whose delta cleanup ships
+/// (tools-v0.1.102), so the cleanup workflow renders with the delta layer.
 pub(crate) fn with_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(view.files.remove(&lock).ok_or("no helper lock")?)?;
     view.files
-        .insert(lock, text.replace("0.1.81", "0.1.95").into_bytes());
+        .insert(lock, text.replace("0.1.81", "0.1.102").into_bytes());
     Ok(view)
 }
 
@@ -253,31 +268,27 @@ fn an_invalid_config_is_rejected() -> TestResult {
 }
 
 #[test]
-fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
-    let empty = expected_with_notes(&view(&[], None)?).map(|(files, _)| files);
-    let excluded = expected_with_notes(&view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?)
-        .map(|(files, _)| files);
-    let root_excluded = expected_with_notes(&view(
-        &["Cargo.toml"],
-        Some(b"exclude = [\"Cargo.toml\"]\n"),
-    )?)
-    .map(|(files, _)| files);
+fn a_repository_without_a_cargo_root_with_members_has_no_rust_job() -> TestResult {
     let mut memberless = view(&["Cargo.toml"], None)?;
     for metadata in memberless.rust_metadata.values_mut() {
         metadata.members.clear();
     }
-    assert_eq!(empty, Err(GenerateError::Detect(DetectError::NoRustRoot)));
-    assert_eq!(
-        excluded,
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
-    assert_eq!(
-        root_excluded,
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
-    assert_eq!(
-        expected_with_notes(&memberless).map(|(files, _)| files),
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
+    let cases = [
+        view(&[], None)?,
+        view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?,
+        view(&["Cargo.toml"], Some(b"exclude = [\"Cargo.toml\"]\n"))?,
+        memberless,
+    ];
+    for case in cases {
+        let files = expected_with_notes(&case).map(|(files, _)| files)?;
+        for (path, text) in &files {
+            if path.as_str().starts_with(".github/workflows/") {
+                assert!(
+                    !text.lines().any(|line| line == "  rust:"),
+                    "{path} has a rust job"
+                );
+            }
+        }
+    }
     Ok(())
 }

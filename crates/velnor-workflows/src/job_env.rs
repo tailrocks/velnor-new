@@ -36,7 +36,7 @@ fn env(job: &str, raw: BTreeMap<String, String>) -> Result<Vec<(String, Env)>, W
             ));
         }
         if value.contains("${{") {
-            check_interpolated(&format!("job {job} env {key}"), &value, &ENV_INTERPOLATIONS)?;
+            check_interpolated(&format!("job {job} env {key}"), &value, ENV_INTERPOLATIONS)?;
             items.push((key, Env::Interpolated(value)));
         } else {
             items.push((key, Env::Text(value)));

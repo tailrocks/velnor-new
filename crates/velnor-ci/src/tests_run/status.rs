@@ -33,7 +33,8 @@ pub(super) fn status_line(line: &str) -> Status {
     if !rest.starts_with('[') {
         return Status::Ignore;
     }
-    if matches!(word, "SKIP" | "SLOW") {
+    // SETUP is a nextest setup script starting; it is not a test, so it counts for nothing.
+    if matches!(word, "SKIP" | "SLOW" | "SETUP") {
         return Status::Ignore;
     }
     let counted = matches!(

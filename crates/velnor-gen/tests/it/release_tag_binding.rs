@@ -15,7 +15,7 @@ type Step = (String, Vec<String>);
 fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
@@ -31,20 +31,17 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
         for step in steps(job) {
             let run = step.get("run").and_then(Node::text).unwrap_or_default();
             if run.starts_with("velnor-ci release check-config") {
-                let mut env: Vec<String> = step
-                    .get("env")
-                    .map(|env| {
-                        env.keys()
-                            .into_iter()
-                            .map(|key| {
-                                format!(
-                                    "{key}={}",
-                                    env.get(key).and_then(Node::text).unwrap_or_default()
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                let mut env: Vec<String> = step.get("env").map_or_default(|env| {
+                    env.keys()
+                        .into_iter()
+                        .map(|key| {
+                            format!(
+                                "{key}={}",
+                                env.get(key).and_then(Node::text).unwrap_or_default()
+                            )
+                        })
+                        .collect()
+                });
                 env.sort();
                 env.insert(0, run.to_owned());
                 found.push((id.to_owned(), env));
@@ -93,7 +90,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
     let view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"CI\", \"Lint\"]\n"),
     )?;
     let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)

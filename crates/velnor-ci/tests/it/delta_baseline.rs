@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
 
@@ -21,6 +22,7 @@ fn save_base(repo: &Repo) -> Output {
         .args(["cache", "decide", "--target-dir", "target"])
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_OUTPUT", repo.root().join("decide-output"))
+        .env("HOME", repo.root())
         .env("VELNOR_CACHE_MANIFESTS", "Cargo.toml")
         .current_dir(repo.root())
         .output()
@@ -156,10 +158,29 @@ fn staging_reads_only_files_the_build_touched_and_still_sees_hidden_rewrites() {
     let (output, saved) = run(&repo, "stage", "base");
     let report = stdout(&output);
     assert_eq!(saved, "save=true\n");
-    // The two new outputs, the rewritten file and the inputs record `compiled` saved.
-    let expected = format!("read 4 of {} files\n", FILES + 3);
+    let expected = format!("read 5 of {} files\n", FILES + 4);
     assert!(report.contains(&expected), "{report}");
     let nodes = manifest(&repo)["nodes"].clone();
     assert!(nodes.get("debug/deps/lib9.rlib").is_some(), "{nodes}");
     assert!(nodes.get("debug/deps/lib10.rlib").is_none(), "{nodes}");
+}
+
+/// `prepare` only names the cache key and the source identity, so it must not read the
+/// restored base at all. The base files are made unreadable: any read of one fails the
+/// command. Root ignores mode bits, so the check is meaningful for a non-root user only.
+#[test]
+fn prepare_names_the_delta_without_reading_a_restored_base() {
+    let repo = Repo::new("delta-prepare-no-read");
+    restored_base(&repo);
+    for index in 0..FILES {
+        let path = repo
+            .root()
+            .join(format!("target/debug/deps/lib{index}.rlib"));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let (output, prepared) = run(&repo, "prepare", "base");
+    success(&output);
+    assert!(prepared.starts_with("base8="), "{prepared}");
+    assert!(prepared.contains("source_identity="), "{prepared}");
 }

@@ -3,9 +3,11 @@
 
 use velnor_model::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, HelperCommand,
-    InputsCli, JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind,
-    TrimFamily, cache_lane_outputs,
+    InputsCli, JobId, PlanFrom, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step,
+    StepKind, TrimFamily, cache_lane_outputs,
 };
+
+pub(crate) mod public;
 
 use crate::cache::render_key;
 use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
@@ -25,6 +27,7 @@ pub(crate) fn cache_decide(
     manifests: &[RepoPath],
     cli: InputsCli,
     budget_bytes: u64,
+    verdicts: Option<&PlanFrom>,
 ) -> RenderedStep {
     let mut rendered = RenderedStep {
         id: Some(BASE_STEP.to_owned()),
@@ -55,6 +58,11 @@ pub(crate) fn cache_decide(
         )),
         ..RenderedStep::default()
     };
+    rendered.env.extend(
+        verdicts
+            .into_iter()
+            .flat_map(crate::base_steps::public::decide_env),
+    );
     if cli == InputsCli::PerRoot {
         return rendered;
     }
@@ -191,6 +199,7 @@ pub(crate) fn audited_save(
     job: &velnor_model::Job,
     step: &Step,
     mut bodies: Vec<RenderedStep>,
+    audit_runs: Option<&str>,
 ) -> Vec<RenderedStep> {
     let audited = job
         .needs
@@ -209,6 +218,8 @@ pub(crate) fn audited_save(
     };
     for body in &mut bodies {
         body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
+        body.condition =
+            crate::gate::all_conditions(audit_runs.map(str::to_owned), body.condition.take());
     }
     bodies
 }
@@ -228,8 +239,7 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
 }
 
 const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
-
-fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
+pub(crate) fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
     let budget = MAX_RUN_CHARACTERS
         - crate::helper_integrity::INVOCATION_PREFIX.len()
         - (FETCH_ROOTS.len() - "velnor-ci ".len());
@@ -265,14 +275,16 @@ fn last_fetch_all_id(manifests: &[RepoPath]) -> String {
     fetch_all_id(fetch_chunks(manifests).len() - 1)
 }
 
-fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedStep> {
+fn fetch_all_steps(manifests: &[RepoPath], lane: crate::cargo::CargoLane) -> Vec<RenderedStep> {
     fetch_chunks(manifests)
         .into_iter()
         .enumerate()
         .map(|(chunk, roots)| RenderedStep {
-            env: cache_debug
+            env: lane
+                .cache_debug
                 .then(crate::cargo::cache_debug_env)
                 .into_iter()
+                .chain(lane.offline.then(crate::cargo::offline_env))
                 .collect(),
             id: Some(fetch_all_id(chunk)),
             name: if chunk == 0 {
@@ -287,14 +299,26 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
                 )
             }),
             continue_on_error: true,
-            run: Some(format!("{FETCH_ROOTS} {}", roots.join(" "))),
+            run: Some(format!(
+                "{FETCH_ROOTS} {}",
+                roots_argument(manifests, &roots, lane.literal_roots)
+            )),
             ..RenderedStep::default()
         })
         .collect()
 }
 
-pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
-    fetch_all_steps(manifests, cache_debug)
+fn roots_argument(manifests: &[RepoPath], roots: &[String], literal: bool) -> String {
+    crate::source_roots::roots_env(manifests)
+        .filter(|_| !literal)
+        .map_or_else(|| roots.join(" "), |(name, _)| format!("${name}"))
+}
+
+pub(crate) fn sources_fetch_all(
+    manifests: &[RepoPath],
+    lane: crate::cargo::CargoLane,
+) -> RenderedStep {
+    fetch_all_steps(manifests, lane)
         .into_iter()
         .next()
         .unwrap_or_default()
@@ -302,9 +326,9 @@ pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> Re
 
 pub(crate) fn sources_fetch_all_rest(
     manifests: &[RepoPath],
-    cache_debug: bool,
+    lane: crate::cargo::CargoLane,
 ) -> Vec<RenderedStep> {
-    fetch_all_steps(manifests, cache_debug)
+    fetch_all_steps(manifests, lane)
         .into_iter()
         .skip(1)
         .collect()
@@ -335,6 +359,18 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
             )
         }),
     )
+}
+
+pub(crate) fn cache_purge_private() -> RenderedStep {
+    RenderedStep {
+        name: "Delete the private-base caches unless the repository is private".to_owned(),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci cache purge-private --if-public".to_owned()),
+        ..RenderedStep::default()
+    }
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {

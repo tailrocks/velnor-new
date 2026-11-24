@@ -8,8 +8,10 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::error::CiError;
+use crate::escape::file_value;
 use crate::mbx_seed_copy::{Copied, SUBSETS, copy_subset};
 use crate::mbx_store::{trusted_event, writable_by_job};
+use crate::waste_evidence::SEED_TRUNCATED;
 
 pub const SEED_DIR_ENV: &str = "VELNOR_MBX_SEED_DIR";
 pub const PRIVATE_STORE: &str = "velnor/mbx";
@@ -19,6 +21,7 @@ pub const SEED_BUDGET: Duration = Duration::from_secs(20);
 pub struct Inputs<'a> {
     pub event_name: &'a str,
     pub git_ref: &'a str,
+    pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub seed_dir: Option<&'a str>,
     pub runner_temp: &'a Path,
@@ -45,7 +48,12 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     let Some(dir) = inputs.seed_dir.filter(|dir| !dir.is_empty()) else {
         return Outcome::NotOffered;
     };
-    if trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch) {
+    if trusted_event(
+        inputs.event_name,
+        inputs.git_ref,
+        inputs.ref_protected,
+        inputs.default_branch,
+    ) {
         return Outcome::Trusted;
     }
     let seed = match validated(Path::new(dir), inputs.owner) {
@@ -132,12 +140,16 @@ fn private_store(runner_temp: &Path) -> Result<PathBuf, &'static str> {
     Ok(store)
 }
 
-#[must_use]
-pub fn env_lines(outcome: &Outcome) -> String {
-    match outcome {
-        Outcome::Seeded { store, .. } => format!("MBX_CACHE_DIR={}\n", store.display()),
+pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
+    Ok(match outcome {
+        Outcome::Seeded { store, .. } => {
+            format!(
+                "MBX_CACHE_DIR={}\n",
+                file_value(&store.display().to_string())?
+            )
+        }
         _ => String::new(),
-    }
+    })
 }
 
 #[must_use]
@@ -181,6 +193,23 @@ fn seeded_message(store: &Path, copied: &Copied, elapsed: Duration) -> String {
     )
 }
 
+pub fn record_truncation(runner_temp: &Path, outcome: &Outcome) -> Result<(), CiError> {
+    let marker = runner_temp.join(SEED_TRUNCATED);
+    match outcome {
+        Outcome::Seeded { copied, .. } if copied.expired => fs::write(&marker, b"")
+            .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display()))),
+        Outcome::Seeded { .. } => match fs::remove_file(&marker) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(CiError::new(format!(
+                "cannot remove {}: {error}",
+                marker.display()
+            ))),
+        },
+        Outcome::NotOffered | Outcome::Trusted | Outcome::Empty | Outcome::Rejected(_) => Ok(()),
+    }
+}
+
 pub fn setup() -> Result<String, CiError> {
     let var = |name: &str| std::env::var(name).ok();
     let runner_temp =
@@ -193,6 +222,7 @@ pub fn setup() -> Result<String, CiError> {
     let outcome = select(&Inputs {
         event_name: &var("GITHUB_EVENT_NAME").unwrap_or_default(),
         git_ref: &var("GITHUB_REF").unwrap_or_default(),
+        ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         seed_dir: seed.as_deref(),
         runner_temp: &runner_temp,
@@ -200,7 +230,8 @@ pub fn setup() -> Result<String, CiError> {
         threads: std::thread::available_parallelism().map_or(4, |n| n.get().min(16)),
         budget: SEED_BUDGET,
     });
-    let lines = env_lines(&outcome);
+    record_truncation(&runner_temp, &outcome)?;
+    let lines = env_lines(&outcome)?;
     if !lines.is_empty() {
         let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
         fs::OpenOptions::new()

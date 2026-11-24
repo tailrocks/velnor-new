@@ -1,17 +1,36 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::budget_mode::SelectionName;
 use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
+use crate::plan_gate::{FetchedManifest, PlanFrom};
 use crate::verdict::VerdictSpec;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupUpload {
+    pub position: usize,
+    pub name: String,
+    pub paths: Vec<String>,
+    pub retention_days: u8,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputsCli {
     PerRoot,
     Batched,
+}
+
+/// What `cache decide` finds in `VELNOR_REPOSITORY_PRIVATE`: nothing set (helpers before the
+/// variable), an empty string, or the answer of the repository privacy step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivateVerdict {
+    Unset,
+    Cleared,
+    Checked,
 }
 
 pub const BUDGET_JOB: &str = "rust-budget";
@@ -28,6 +47,8 @@ pub enum StepKind {
     InstallMise,
     Lint(LintCommand),
     CacheRestore(CacheKey),
+    /// A `lookup-only` read of a cache entry: it reports whether the entry exists and never downloads it.
+    CacheLookup(CacheKey),
     CacheSave(CacheKey),
     RestoredTargets {
         expiry: BaseExpiry,
@@ -49,6 +70,14 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
+        verdicts: Option<PlanFrom>,
+        private: PrivateVerdict,
+        sources_restore: Option<RootSlug>,
+    },
+    PublicSources {
+        manifests: Vec<RepoPath>,
+        selected: Vec<RootSlug>,
+        fails_on_private: bool,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -63,12 +92,14 @@ pub enum StepKind {
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
+    CachePurgePrivate,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
         name: String,
         file: RepoPath,
     },
+    UploadGroupArtifact(GroupUpload),
     DownloadArchive {
         name: String,
         into: Option<RepoPath>,
@@ -87,26 +118,50 @@ pub enum StepKind {
     },
     TestGroupsCheck(Vec<GroupFilter>),
     CratesMirror(crate::repo::CratesMirror),
+    RepositoryPrivacy,
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,
     },
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
-        manifests: Vec<RepoPath>,
+        manifests: Vec<FetchedManifest>,
         cached: Vec<crate::ids::RootSlug>,
+        filled: Vec<RepoPath>,
+        filled_private: bool,
+        listed: bool,
     },
-    MbxRemote,
+    ReleaseAssets {
+        assets: Vec<crate::release_asset::ReleaseAsset>,
+        part: crate::release_asset::ReleaseAssetPart,
+    },
+    /// Fetches the `RustSec` advisory DB for each distinct cargo-deny config, so that the
+    /// `--offline` deny check finds it. It runs before any private token exists.
+    AdvisoryFetch {
+        configs: Vec<Option<RepoPath>>,
+    },
+    MbxRemote {
+        from_pin: bool,
+    },
+    MbxPin,
+    MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
-    ToolsLocal(ToolsLocalVerb),
+    ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
         run: String,
+        before_build: bool,
+        offline_after_private_fetch: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        from_source: bool,
+    },
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
@@ -119,8 +174,12 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        saved_keys: bool,
+        not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -128,8 +187,13 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+    Ansible {
+        name: String,
+        run: String,
+    },
     Budget {
         last: usize,
+        selection: Option<SelectionName>,
     },
     MergeGroupPassed {
         required: String,
@@ -138,12 +202,110 @@ pub enum StepKind {
 }
 
 impl StepKind {
+    #[must_use]
+    pub const fn runs_cargo(&self) -> bool {
+        matches!(
+            self,
+            Self::Cargo(_) | Self::GeneratorCheck { from_source: true }
+        )
+    }
+
+    #[must_use]
+    pub const fn feeds_build(&self) -> bool {
+        matches!(
+            self,
+            Self::TestSetup {
+                before_build: true,
+                ..
+            } | Self::ReleaseAssets { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn is_check(&self) -> bool {
+        match self {
+            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
+                true
+            }
+            Self::Cargo(command) => !command.is_target_build(),
+            Self::Checkout { .. }
+            | Self::InstallTools { .. }
+            | Self::InstallMise { .. }
+            | Self::Lint(_)
+            | Self::CacheRestore(_)
+            | Self::CacheSave(_)
+            | Self::RestoredTargets { .. }
+            | Self::SourcesLocks(_)
+            | Self::SourcesFetch { .. }
+            | Self::SourcesFetchAll { .. }
+            | Self::CacheLookup(_)
+            | Self::CacheDecide { .. }
+            | Self::PublicSources { .. }
+            | Self::CacheResult(_)
+            | Self::CacheVerify { .. }
+            | Self::CacheTrim { .. }
+            | Self::DeltaPrepare(_)
+            | Self::DeltaApply(_)
+            | Self::DeltaStage(_, _)
+            | Self::CacheBudget(_)
+            | Self::CachePurgePrivate
+            | Self::RustComponents(_)
+            | Self::RustTargets(_)
+            | Self::UploadArchive { .. }
+            | Self::UploadGroupArtifact { .. }
+            | Self::DownloadArchive { .. }
+            | Self::Helper(_)
+            | Self::Prepare(_)
+            | Self::InputsAuditRoot(_)
+            | Self::InputsSave { .. }
+            | Self::InputsRestore { .. }
+            | Self::TestGroupsCheck(_)
+            | Self::CratesMirror(_)
+            | Self::RepositoryPrivacy
+            | Self::PrivateCheck { .. }
+            | Self::PrivateToken { .. }
+            | Self::PrivateFetch { .. }
+            | Self::MbxRemote { .. }
+            | Self::MbxPin
+            | Self::MbxPrivate
+            | Self::MbxOutDirs
+            | Self::MbxStore { .. }
+            | Self::MbxSeed { .. }
+            | Self::ToolsLocal(..)
+            | Self::GeneratorCheck { .. }
+            | Self::InstallGenerator(_)
+            | Self::InstallHelper(_)
+            | Self::FailWhenANeedFailed { .. }
+            | Self::FailOnDraftRun { .. }
+            | Self::DraftNotice { .. }
+            | Self::ClearRunLabel { .. }
+            | Self::Verdict { .. }
+            | Self::UploadCargoLog { .. }
+            | Self::ReportCaches { .. }
+            | Self::UploadMetrics { .. }
+            | Self::DownloadMetrics { .. }
+            | Self::CheckMetrics { .. }
+            | Self::Budget { .. }
+            | Self::MergeGroupPassed { .. }
+            | Self::MergeQueueCheck { .. }
+            | Self::Ansible { .. } => false,
+        }
+    }
+
     /// Whether the step saves to the Actions cache service, which `cache-mode: read` denies. The
     /// trim steps delete over the REST API with the job token, which the mode does not gate, and
     /// the node-local stores and the scope-cache directory are not the service.
     #[must_use]
     pub fn saves_to_cache_service(&self) -> bool {
-        matches!(self, Self::CacheSave(_))
+        matches!(
+            self,
+            Self::CacheSave(_)
+                | Self::MbxRemote { .. }
+                | Self::ToolsLocal(
+                    ToolsLocalVerb::AnchorSave | ToolsLocalVerb::AnchorSaveAttempt,
+                    _
+                )
+        )
     }
 }
 
@@ -155,12 +317,46 @@ pub struct GroupFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolsLocalVerb {
+    Clear,
     Restore,
     Save,
     SaveChecked,
     Prime,
     RecordRestore,
     RecordSave,
+    RecordSavedKey,
+    AnchorReset,
+    AnchorRestore,
+    AnchorFind,
+    AnchorFindAttempt,
+    AnchorRead,
+    Verify,
+    VerifyNamed,
+    VerifyNamedAnchor,
+    Record,
+    AnchorSave,
+    AnchorSaveAttempt,
+}
+
+impl ToolsLocalVerb {
+    #[must_use]
+    pub fn checks_tools(self) -> bool {
+        matches!(
+            self,
+            Self::Verify | Self::VerifyNamed | Self::VerifyNamedAnchor
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifiedSave {
+    OnDefaultBranch,
+    UnlessLocal,
+    AnchoredOnDefaultBranch,
+    AnchoredUnlessLocal,
+    NodeStore,
+    Prime,
+    Anchor,
 }
 
 /// Which tools steps the cache telemetry reads in place of the cache action's own.
@@ -168,6 +364,7 @@ pub enum ToolsLocalVerb {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub saved_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -226,7 +226,7 @@ fn a_release_workflow_grown_past_the_github_file_size_limit_by_its_after_list_is
         .collect();
     let roots = [APP];
     let config = format!(
-        "roots = [\".\"]\nafter = [\"Rust CI\", {}]\n[[binaries]]\npackage = \"app\"\n",
+        "roots = [\".\"]\nafter = [\"CI\", {}]\n[[binaries]]\npackage = \"app\"\n",
         names
             .iter()
             .map(|name| format!("\"{name}\""))
@@ -249,6 +249,13 @@ fn a_release_workflow_grown_past_the_github_file_size_limit_by_its_after_list_is
             .iter()
             .any(|violation| matches!(violation.rule, velnor_render::Rule::WorkflowTooLarge(_)))
     );
-    assert!(violations[0].to_string().contains("above 500000 bytes"));
+    let message = violations[0].to_string();
+    assert!(message.contains("above 500000 bytes"), "{message}");
+    assert!(
+        message.contains(".github/workflows/release.yml has "),
+        "{message}"
+    );
+    assert!(message.contains(" jobs; the largest are "), "{message}");
+    assert!(message.contains("release-"), "{message}");
     Ok(())
 }

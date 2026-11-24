@@ -8,10 +8,10 @@ use crate::io::Repo;
 
 /// A repository root with its own package, and a nested Cargo root `lab`
 /// beneath it. Neither is in a workspace group.
-fn nested_roots() -> Repo {
+pub(super) fn nested_roots() -> Repo {
     let repo = Repo::new("audit-nested-roots");
     unit(&repo, ".gitignore", "/target/\n/lab/target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     for (directory, name) in [("", "top"), ("lab/", "lab")] {
         unit(
             &repo,
@@ -24,7 +24,7 @@ fn nested_roots() -> Repo {
     unit(
         &repo,
         "driver/cargo.rs",
-        "fn main() {\n    let args: Vec<String> = std::env::args().skip(1).collect();\n    if args.first().is_some_and(|arg| arg == \"metadata\") {\n        std::process::exit(std::process::Command::new(\"cargo\").args(&args).status().unwrap().code().unwrap_or(1));\n    }\n}\n",
+        "fn main() {\n    let args: Vec<String> = std::env::args().skip(1).collect();\n    if args.iter().any(|arg| arg == \"metadata\") {\n        std::process::exit(std::process::Command::new(\"cargo\").args(&args).status().unwrap().code().unwrap_or(1));\n    }\n}\n",
     );
     let compiled = command("rustc")
         .current_dir(repo.root())
@@ -55,6 +55,22 @@ fn an_audit_of_a_nested_root_does_not_refuse_the_target_of_the_root_above() {
     let output = velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("lab/target"))
+        .args(["inputs", "audit", "--root", "lab"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(!text.contains("cannot be told apart"), "{text}");
+}
+
+#[test]
+fn an_audit_of_a_nested_root_building_below_the_target_of_the_root_above_is_not_refused() {
+    let repo = nested_roots();
+    let output = velnor_ci()
+        .current_dir(repo.root())
+        .env(
+            "CARGO_TARGET_DIR",
+            repo.root().join("target/velnor-roots/lab"),
+        )
         .args(["inputs", "audit", "--root", "lab"])
         .output()
         .unwrap_or_else(|error| unreachable!("{error}"));

@@ -11,7 +11,41 @@ pub(crate) struct CachePlan {
     family: String,
     root: Option<String>,
     restore_step: String,
-    save_step: String,
+    #[serde(default)]
+    save_step: Option<String>,
+    #[serde(default)]
+    save_key_step: Option<String>,
+    #[serde(default)]
+    not_generated: Option<String>,
+}
+
+fn no_crate_selected(steps: &Value, lane_modes: Option<&str>) -> bool {
+    if let Some(modes) = lane_modes {
+        let mut modes = modes.split_whitespace().peekable();
+        return modes.peek().is_some() && modes.all(|mode| mode == "none");
+    }
+    let mode = [&steps["replan"], &steps["plan"]]
+        .into_iter()
+        .find_map(|step| {
+            step["outputs"]["rust_root_mode"]
+                .as_str()
+                .filter(|mode| !mode.is_empty())
+        });
+    steps["plan"]["outcome"] == "success" && mode == Some("none")
+}
+
+pub(crate) fn privacy_unavailable(steps: &Value, lane_modes: Option<&str>) -> bool {
+    let step = &steps["private_repo"];
+    if step.is_null() {
+        return false;
+    }
+    if step["outcome"] == "skipped" {
+        return !no_crate_selected(steps, lane_modes);
+    }
+    let outputs = &step["outputs"];
+    step["outcome"] != "success"
+        || outputs["unavailable"] == "true"
+        || !matches!(outputs["private"].as_str(), Some("true" | "false"))
 }
 
 pub(crate) fn observe_caches(
@@ -31,27 +65,39 @@ pub(crate) fn observe_caches(
                 errors.push(format!("{}: {error}", plan.restore_step));
             }
             let (requested_key, matched_key, hit) = evidence.unwrap_or_default();
-            let save = if saving {
-                match steps[&plan.save_step]["outcome"].as_str() {
+            let save = match plan.save_step.as_deref() {
+                Some(step) if saving => match steps[step]["outcome"].as_str() {
                     Some("failure" | "cancelled") => SaveOutcome::Failed,
                     Some("success") => SaveOutcome::Unknown,
                     _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
+                },
+                _ => SaveOutcome::NotAttempted,
             };
+            let saved_key = plan
+                .save_key_step
+                .as_ref()
+                .filter(|_| save != SaveOutcome::NotAttempted)
+                .map(|id| {
+                    steps[id]["outputs"]["key"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned()
+                });
             Cache {
                 family: plan.family,
                 root: plan.root,
                 restore_step: plan.restore_step,
                 save_step: plan.save_step,
                 requested_key,
+                saved_key,
                 matched_key,
                 hit: hit.unwrap_or(Hit::Miss),
                 bytes: None,
                 usable: false,
                 usable_same_lock: false,
                 save,
+                not_generated: plan.not_generated,
+                entry_before_job: None,
             }
         })
         .collect();
@@ -97,4 +143,78 @@ fn restore(step: &Value) -> Result<(String, Option<String>, Option<Hit>), &'stat
         None => Hit::Miss,
     };
     Ok((requested.to_owned(), matched.map(str::to_owned), Some(hit)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CachePlan, observe_caches};
+    use crate::report::{LaneMetrics, SaveOutcome, check};
+    use serde_json::json;
+
+    #[test]
+    fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
+        let plans = vec![CachePlan {
+            family: "sources".to_owned(),
+            root: None,
+            restore_step: "restore".to_owned(),
+            save_step: Some("save".to_owned()),
+            save_key_step: None,
+            not_generated: None,
+        }];
+        let steps = json!({
+            "restore": {"outcome": "skipped", "outputs": {}},
+            "save": {"outcome": "skipped", "outputs": {}},
+        });
+        let (caches, errors) = observe_caches(plans, &steps, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
+        let lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": caches,
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        let metrics: LaneMetrics =
+            serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"));
+        let verdict = check(&[metrics]);
+        assert!(
+            verdict.is_ok(),
+            "{}",
+            verdict.err().map_or_else(String::new, |e| e.to_string())
+        );
+    }
+
+    fn skipped_lane(privacy: serde_json::Value) -> LaneMetrics {
+        let mut lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": [],
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        lane["privacy_unavailable"] = privacy;
+        serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"))
+    }
+
+    #[test]
+    fn an_unavailable_privacy_verdict_fails_the_cache_check() {
+        let verdict = check(&[skipped_lane(json!(true))]);
+        let message = verdict.err().map_or_default(|e| e.to_string());
+        assert!(
+            message.contains("privacy lookup was unavailable"),
+            "{message}"
+        );
+        assert!(check(&[skipped_lane(json!(false))]).is_ok());
+    }
 }

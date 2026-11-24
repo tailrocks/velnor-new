@@ -43,8 +43,8 @@ impl Scenario {
         Self::with(Fixture::new().await?).await
     }
 
-    pub(crate) async fn new_with_guest_hook() -> TestResult<Option<Self>> {
-        if skip_without_guest_hook() {
+    pub(crate) async fn new_with_runtime() -> TestResult<Option<Self>> {
+        if skip_without_linux_runtime() {
             return Ok(None);
         }
         Self::new().await
@@ -54,8 +54,8 @@ impl Scenario {
         Self::with(Fixture::running(program).await?).await
     }
 
-    pub(crate) async fn running_with_guest_hook(program: Program) -> TestResult<Option<Self>> {
-        if skip_without_guest_hook() {
+    pub(crate) async fn running_with_runtime(program: Program) -> TestResult<Option<Self>> {
+        if skip_without_linux_runtime() {
             return Ok(None);
         }
         Self::running(program).await
@@ -153,7 +153,7 @@ impl Scenario {
     }
 }
 
-fn skip_without_guest_hook() -> bool {
+fn skip_without_linux_runtime() -> bool {
     if cfg!(target_os = "macos") && std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY").is_none() {
         eprintln!(
             "SKIP Docker integration test: set VELNOR_TEST_JOB_HOOK_BINARY to a Linux velnor-job-start-hook binary and VELNOR_TEST_JOB_HOOK_ROOTFS to its Linux runtime root"

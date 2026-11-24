@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
 use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
@@ -18,8 +18,8 @@ pub static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static(".mise.toml"),
 ];
 pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
-const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
+const RUST_TOOLS: &[&str] = &["rust", "core:rust"];
+const NEXTEST_SELECTORS: &[&str] = &["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<ToolRequest>>;
 
@@ -28,6 +28,10 @@ fn plain(version: String) -> ToolRequest {
         version,
         ..ToolRequest::default()
     }
+}
+
+pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Option<Vec<ToolRequest>>, Reason> {
+    Ok(versions(bytes)?.remove(tool))
 }
 
 #[must_use]
@@ -142,8 +146,23 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 }
 
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
-
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    check_pinned_tools(facts, true, None)
+}
+
+pub fn check_lint_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    check_pinned_tools(
+        facts,
+        false,
+        crate::lint_jobs::lint_only_tools(facts).as_ref(),
+    )
+}
+
+fn check_pinned_tools(
+    facts: &RepoFacts,
+    mbx: bool,
+    only: Option<&BTreeSet<String>>,
+) -> Result<(), DetectError> {
     if !facts.tools.locked_file {
         return Err(DetectError::MiseLockRequired { path: MISE_LOCK });
     }
@@ -179,7 +198,10 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             },
         ));
     }
-    check_prebuilt(facts)?;
+    check_prebuilt(facts, only)?;
+    if mbx {
+        crate::mbx_pin::check_mbx_pin(facts)?;
+    }
     let tested = facts
         .rust_roots
         .iter()
@@ -190,16 +212,20 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
         });
     }
-    Ok(())
+    if mbx {
+        crate::mbx_layout::check_pin(facts)
+    } else {
+        Ok(())
+    }
 }
 
-fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
+fn check_prebuilt(facts: &RepoFacts, only: Option<&BTreeSet<String>>) -> Result<(), DetectError> {
     let Some(platform) = MisePlatform::runner(facts.config.runner.as_str()) else {
         return Ok(());
     };
     let key = platform.lock_key();
     for (name, pin) in &facts.tools.tools {
-        if is_rustup_tool(name) {
+        if is_rustup_tool(name) || only.is_some_and(|wanted| !wanted.contains(name)) {
             continue;
         }
         let rows = pin.locked_on(platform).map_err(|value| {
@@ -242,7 +268,8 @@ fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
 
 pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
     RUST_TOOLS
-        .into_iter()
+        .iter()
+        .copied()
         .find(|name| pins.tools.contains_key(*name))
 }
 

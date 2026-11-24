@@ -173,11 +173,23 @@ pub struct CratesMirrorArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct MisePinArgs {
+    /// The tool's key in the `[tools]` table, for example mr-boxington
+    pub tool: String,
+}
+
+#[derive(Debug, Args)]
 pub struct ToolsLocalArgs {
     #[arg(value_enum)]
     pub verb: crate::tools_local::Verb,
     #[arg(long)]
-    pub key: String,
+    pub key: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ToolsVerifyArgs {
+    #[arg(value_enum)]
+    pub verb: crate::tools_verify::Verb,
 }
 
 #[derive(Debug, Subcommand)]
@@ -186,6 +198,71 @@ pub enum ImageCommand {
         about = "Check a job image candidate: exit 1 unless the OCI archive is a bounded linux/amd64 image whose blobs, layer DiffIDs and graph match the candidate record, the record's archive hash and size match the archive bytes, the build inputs under --root hash to the recorded values, and the record's source commit, ref and workflow identity equal the current GITHUB_* environment and its Buildx version equals buildx_version in .velnor/runner.lock. Prints PASS on success"
     )]
     VerifyCandidate(VerifyCandidateArgs),
+    #[command(
+        about = "Build the job image candidate: refuse to start, before it runs anything, when its own environment holds a secret-named variable (a name that contains TOKEN, PASSWORD, SECRET, CREDENTIAL, AUTH or KEY in any case, except GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and GIT_AUTHOR_DATE), because build-test.sh can read that environment; check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, copy the Docker client and check the copy against docker_binary_sha256 (docker_arm64_binary_sha256 on arm64) in .velnor/runner.lock, run build-test.sh, check the Docker Buildx plugin against buildx_version and buildx_sha256, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
+    )]
+    Build(BuildArgs),
+    #[command(
+        about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; the checkout is at GITHUB_SHA, which is the tip of main; the candidate record and archive verify against --root; the run has one unexpired candidate artifact; the latest canonical ci.yml push run of the commit succeeded; and `gh attestation verify` passes for the archive and the record with the repository, workflow, ref and commit pinned. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
+    )]
+    Publish(ImagePublishArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ImagePublishArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout; its HEAD must be GITHUB_SHA and its build inputs must hash to the record"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The candidate OCI archive")]
+    pub archive: PathBuf,
+    #[arg(long, help = "The candidate record JSON")]
+    pub record: PathBuf,
+    #[arg(
+        long,
+        help = "Where to write the publication evidence (a new file outside --root)"
+    )]
+    pub result: PathBuf,
+    #[arg(
+        long,
+        default_value = crate::image_publish::gate::DEFAULT_WORKFLOW,
+        help = "The workflow file that may publish, as owner/repo/.github/workflows/<file>; GITHUB_WORKFLOW_REF must be this file at refs/heads/main"
+    )]
+    pub workflow: String,
+    #[arg(
+        long,
+        default_value = crate::image_publish::gate::DEFAULT_EVENT,
+        help = "The event that may publish, workflow_dispatch or push; GITHUB_EVENT_NAME and the attestation trigger must equal it"
+    )]
+    pub event: String,
+}
+
+#[derive(Debug, Args)]
+pub struct BuildArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout to build; it must be a clean Git worktree"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The commit the checkout must be at")]
+    pub source_commit: String,
+    #[arg(long, help = "Where to write the candidate OCI archive (a new file)")]
+    pub archive: PathBuf,
+    #[arg(long, help = "Where to write the candidate record JSON (a new file)")]
+    pub record: PathBuf,
+    #[arg(
+        long,
+        help = "The Docker client file to use, for a host whose docker is not the pinned static binary. Without it, the first docker on PATH. Before build-test.sh runs, the path is resolved to one absolute file, refused when it is under --root, and copied into the staging directory; the copy's SHA-256 is checked against docker_binary_sha256 (docker_arm64_binary_sha256 on arm64) in the .velnor/runner.lock under --root, again before the first Docker command, and only the copy is ever run. Each repository pins its own client in its own runner.lock: the SHA-256 of docker/docker inside the official static Docker archive for each architecture"
+    )]
+    pub docker: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "The docker-buildx plugin file to use. Without it, the first docker-buildx in $DOCKER_CONFIG/cli-plugins (or $HOME/.docker/cli-plugins) and then the system Docker plugin directories. The file is copied, its SHA-256 is checked against buildx_sha256 in .velnor/runner.lock, and only the copy is ever run"
+    )]
+    pub buildx: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

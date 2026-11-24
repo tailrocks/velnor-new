@@ -1,7 +1,101 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# Gitleaks and BetterLeaks config; BetterLeaks reads this when no .betterleaks.toml exists.
-# Uses upstream defaults.
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "matrix_key task-digest ids (m-<16 hex>), not credentials"
+regexes = ['''^m-[0-9a-f]{16}$''']
+
+[[allowlists]]
+description = "cache-sources fixture: only the known fake x-access-token value in this file, so a real credential added later is still reported"
+condition = "AND"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_sources_restored\.rs$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^ghs_secret$''',
+]
+
+[[allowlists]]
+description = "test fixture: fake key in the qualification cache lineage test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests\.rs$''',
+]
+regexes = [
+  '''^qualification\-k1$''',
+]
+
+[[allowlists]]
+description = "dbt contract proposal: the placeholder service credential, in this one document only"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/proposed/dbt-contract\.md$''']
+regexTarget = "secret"
+regexes = ['''^example-org$''']
+
+[[allowlists]]
+description = "test fixture: fake key in the mise env policy test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-actions-mise/tests/impl_mise_env_policy\.rs$''',
+]
+regexes = [
+  '''^VELNOR_P07_DECLARED$''',
+]
+
+[[allowlists]]
+description = "test fixture: fake token in the removal test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-runner/crates/velnor-runner-host/src/launch/gate/removal_tests\.rs$''',
+]
+regexes = [
+  '''^fedcba9876543210fedcba9876543210$''',
+]
+
+[[allowlists]]
+description = "public upstream snakeoil test key"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil\.pem$''',
+]
+regexes = [
+  '''^\-\-\-\-\-BEGIN RSA PRIVATE KEY\-\-\-\-\-\nMIIG4QIBAAKCAYEAnL6u6Q9Q6pg1G5020a83GlH/aFUO0PQ5leIpwWL8kWgpaWuU\nG7oRlOUG2/4cwN5FCvJJGXqU5AtSKq2fZ42J5XR9QMip4Pg0Q6mE8XCvAXAoMnkW\nSchdzgT2GoEntaOeRRTCUGb/DsVoxsVXjV6mFaRMx7nh8ggshMWgTYgTUDK\+CSIB\nCcBWapCFq1BrM60XZmGTqeAuHSHaUUuF9G3bgOflH5L9IpQkaHWbJtGvyKLr53mh\nWO2r8BPR3\+CtNZojAnkwmu4lA94k8C7TLMdcutzU4OzODe9UPERc33lRv8DBgsH3\nF077ZQwv/ikZXWSlACTDWZwenncCEwqdeDd4\+q2AHyqxRN7bUAh57mUN\+kFd3SS/\n4T44sfBrJw6N4JV/mE\+/YfRLWtpIKIsXnBCbrC\+dt96Vqz6g6eVVvqPwhOCSKcYs\nmp/iS6qwVn0Dq2SCrGG1FTmBjeA9ZkcjZhUGQEMyMNhoS\+U2Nx5oIEIq2kREpuu\+\nKsBSTUaOgR07WNUxAgMBAAECggF/FW38e\+CcL3afzCayV/icj/yl7p2yaN77AILr\nMoVWAos7Hi6XETNfM/wb8/fJ9pRs3BJD7DfWI1do5GzYXk/7imNivHiywQ8uFhIX\nGutNAeVTmZL0eSHrsT78ZqNBypOUD93Gszdhp6NVr9dLIQjPrCXKWYQQYAa\+D2j1\ngaQY/93wHU\+I1Mx3BBq\+K63S\+j2v9U9h4NfFdjYqovKwXbqnR/hsWuS9tvyJ/b4W\neDgy0Dt2BS\+b34ye9TPAfds50xo/eEpu\+gPWJtgdMknM5botVRNMBGsTw5wn68GV\nou\+ku8UCaz1q7JXjwJ5RXWNuK5ynxlXZaqhiff5bQgtP1obXCTmrTlloD\+yJUZ5z\nnGVcZhNCaL9CfJs0Q/6j8kgS9jiXZjGFun130GzzUL0Z//dVOJ3ks3JjJl4EU7t3\ni/6KOzafyK\+GvgxHzujbeHHGhE5/F0yc8Q2CzGzJKfXfzd4RVw\+AvHmkzAsQ\+pox\nJvWZ8MS3d5xtY/pFDwsm9e3rR9ECgcEAzoQPWzliwGpc3vAfsqm4HlKf8x5r0WUb\ntQF3wIAd5GS8ZKC2T32coGWY8PPQTJjJxyD2YYSO8TXWgCzadAz/WUO3TLX95cHL\nM\+zf4P/ErUBJY3v7yQwGEgfcDswbD4HZsKo3uKn9I/zjZPHO9LovhGMQdNnOUASR\nLzFSvXACHUyu2O/rFOxCDoZnhSMqrlFRqlv3ShyiUT4M10rdqOscBFe8DUYsrEch\nSRun9\+/dVSHUVAtN/H0/nlI7\+xwSruBlAoHBAMJNm6LTYfVUlJH1lNyoEePWD64P\nhXlXmwuPp7wUaXlApKdHBRDv/TX2iIuzIGhCKNn/PH9a17kdtLSB0oGwfNQizEAJ\nFsMYrz\+K/sVeLYukfqV/TVsBQjC9XFNYPdY7fMv2j4vxGMntvm4Z5Cp/39BlUGxq\niHpHeF1zsIF8cGlhvsOZeOfmqJrWRgmogYAhuRIlKb7trR/YbhR/povaZQ8YfvCI\nI7CJI2V2h3Bba4JuFtQjCcTmeNE77BexlNfG3QKBwF1tj0j0\+EEWnXdaaOy6LYrC\nVIx3mc18kYFc7aFQFLXsAPMBZhkmOcKy0/NGSlks0jRdLDnH76cedTE9mYLhEnB\+\n2yFAQGI\+P0D5i/tNmtvKdqkkQS\+eWey0U5D6M8/bLfHnwBeyB8zNLs7POpKq3K5m\n5t4GX3kB5/DSvpznXH2G4J9SQycPD39kvNaVp0x/i5On0YNc2u4oRUTtIMS3wNAS\nJQhYVAOIln1tnprjkF1gVZ/EEX8F5s8oYuxise0dpQKBwDTpm4OI2vlLMjZZUVOR\ntWV9KsH02h1EPSW11jDCwkJR10Tycy\+8mxDx9RdODXo24hcTia8I1wxDSa2KWQAW\nRrgiTcr2bqtscnT0bhLjZbXMcuywsSkiO5s4RgcwVY6cnoyQtWCfpGeBBcXH6Tml\nnxaKMI\+Fp2rdQar5UUzBzX71LlTn22QTjUC1L1d7\+uAgztxhIHAtG2M7tiaA6KLX\nM4Qb4J2yBT4S6n\+7\+oAfdTSMtEzKyeND/AzGq7F8G5NzRQKBwCM0b3ZY6aZDFDec\njGSwieHWG1PxWCK\+7zbKy5cw7ATXYg/UyiV3YgkzPWi9yzljhKHx3xS6RH8X0ROO\nknfFeFN1WzK4Fgh1ZacQW9gBF7IXyd4\+cCl9PT1Xp\+q4M1e8gdWRZwoUDt7VeKYt\nlSMJkzf0\+oPtbHoOR7ec2mCqopyZmBX8R5XsMRn6jxNyOt7SR/aoXRp2DTecxspn\noom8jFJRCDpBAx0SvVS5lNcAxeQyJ6tSH7\+zrL5iNQjMX9C8WQ==\n\-\-\-\-\-END RSA PRIVATE KEY\-\-\-\-\-$''',
+]
+
+
+[[allowlists]]
+description = "public test-only RSA key fixture TEST-ONLY-not-a-secret-rsa-pkcs1.pem (not a secret)"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1\.pem$''',
+]
+regexes = [
+  '''^\-\-\-\-\-BEGIN RSA PRIVATE KEY\-\-\-\-\-\nMIIEowIBAAKCAQEAwcanHl0rMq5YAwCdCcSTfZ3kftUczCiOEw7KL9BG2rtZUvRb\nBZKtDvaNmBrXVZhF6TMzpGeFQjRslrQ\+HllDXt2CfdVUhDbv/OXh4fnFjIEkogFI\nKoaZrs0vGkTxU8M/y5bgsQ6erjgzIOXYN0p1xwhAcSJzFlXb2\+SHRsbt\+eSmkCYR\nnuK7/UoQ2GeS4zS66VIxv2ZfS8/OBLF\+Py83Lbt1a8mcpjPmgMd/d5PHtDbJr0El\n2OjyXlun0Uhh/4jEhene0Wg1BiSyHJN0SZ6oQR08CtY3cKx/P9KweUDWLuHdUtMd\n9\+IDlkk6k//0Qmvse3XUaCstcw0qkfyVp3yzQwIDAQABAoIBAAnsso4dXkmhoLco\nQEkwY0MRlvlg0Ur3ky2qTUEdQ41b/4HLK1Ph8X3zTMjXxX2hze4MUrHLh4mFHw0Q\nI22K5UA/mIZfXcCXAiJx/huEnzfIb\+euqLnDQq3JEbq6GzrocVg5D9fU4UJ\+qGFT\nKruYoBpwjSeX1X/1J8ySxaCI\+1\+xqnJHZEFSJRtgNNILOsvPp0BsflepFkvEDh6E\nO1SbDQvTOJWOf/5aWZ63G3C2HdilCzKVLiQFJumKmT5hnwCNuWJT9RKqOaS4urfU\nHH2CTyjao\+cNfHxumi9rbtCjqCHym3ZWDadWeKPxV0um63Y4f0SpjjJfuzRSHZkV\nonlCMKECgYEA7ZDWAaMsWvEz6gPlWnCK76/1vF95eO3aent80tUueZXqicBCwGjr\njiG68EVIlrXS3RxGyT\+cl1RCaglt6BBKuaca3rpQafRhrGclqJM2M19puyeWiqyF\n7ypM/4ob6sWym76AEt7Y0aqivNYid6/7baRTo03t\+1FCyXJ7CL4ECPECgYEA0M/y\nmAVaRrH1xMq2SwIiWlt45MZV2PSDrlemmDjnN60uYNWHUlvTEBhW2PIkAh9geT17\nzxtnX/Gna64Zu\+SKPRS7\+qiDOxhqF1hRsI9IY281TI\+dTkL2NTOtVRo293X4vUJj\njGcUJhFEWNgKAMN/d7hVup5TKZ3WnnE3e4QPn3MCgYEAtx2xF8oC4oaRkYw3OaMO\nNPrY275sD36nrUmKSajxDd80zcFYsp8tEn2Fbra44RJ92tl05qMVvL/CAaILCZml\nP71CxPOwEDvDHfTT3kC6wpaFFTHKpFGfW16rwz1dj3Wb2tjYN7N2RQbWMeCM6NzJ\nXRYRMgtbqSBV7plDpNVynsECgYAhMy7rJM65tsnQxDo/qtMzcp/CIBa\+LAJT0fPW\n\+BUrMQnSs6CUY60nPfdw/u7it4JrRG9O\+phxFMb9w\+yrhybDl2xb6jcTSkpz88Lp\nQ57K0H\+08JCeRN9IjjLc\+RIMPmGSFeAmDq2Rb\+ViCtdsT6kQq\+pVhZ7LWyEoh\+\+\+\nX7zsKQKBgEgjiys0GvASacB0LyzmXTKc01f/7d8WDN0IcywZ\+5TQrp9p10xbvTIh\ng7NQZFppxS/OEuNN9VCJpYllgzx/b1IPpr4KMLyPwGqGtf8oT9PjohFiBWaQaO1U\nsoVbNUaau9TU9K3OZl6d/AFFbwJ204xIXSAKvb0iCoW69fZfA9yz\n\-\-\-\-\-END RSA PRIVATE KEY\-\-\-\-\-$''',
+]
+
+[[allowlists]]
+description = "public test-only RSA key fixture TEST-ONLY-not-a-secret-rsa-pkcs8.pem (not a secret)"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8\.pem$''',
+]
+regexes = [
+  '''^\-\-\-\-\-BEGIN PRIVATE KEY\-\-\-\-\-\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDBxqceXSsyrlgD\nAJ0JxJN9neR\+1RzMKI4TDsov0Ebau1lS9FsFkq0O9o2YGtdVmEXpMzOkZ4VCNGyW\ntD4eWUNe3YJ91VSENu/85eHh\+cWMgSSiAUgqhpmuzS8aRPFTwz/LluCxDp6uODMg\n5dg3SnXHCEBxInMWVdvb5IdGxu355KaQJhGe4rv9ShDYZ5LjNLrpUjG/Zl9Lz84E\nsX4/Lzctu3VryZymM\+aAx393k8e0NsmvQSXY6PJeW6fRSGH/iMSF6d7RaDUGJLIc\nk3RJnqhBHTwK1jdwrH8/0rB5QNYu4d1S0x334gOWSTqT//RCa\+x7ddRoKy1zDSqR\n/JWnfLNDAgMBAAECggEACeyyjh1eSaGgtyhASTBjQxGW\+WDRSveTLapNQR1DjVv/\ngcsrU\+HxffNMyNfFfaHN7gxSscuHiYUfDRAjbYrlQD\+Yhl9dwJcCInH\+G4SfN8hv\n566oucNCrckRurobOuhxWDkP19ThQn6oYVMqu5igGnCNJ5fVf/UnzJLFoIj7X7Gq\nckdkQVIlG2A00gs6y8\+nQGx\+V6kWS8QOHoQ7VJsNC9M4lY5//lpZnrcbcLYd2KUL\nMpUuJAUm6YqZPmGfAI25YlP1Eqo5pLi6t9QcfYJPKNqj5w18fG6aL2tu0KOoIfKb\ndlYNp1Z4o/FXS6brdjh/RKmOMl\+7NFIdmRWieUIwoQKBgQDtkNYBoyxa8TPqA\+Va\ncIrvr/W8X3l47dp6e3zS1S55leqJwELAaOuOIbrwRUiWtdLdHEbJP5yXVEJqCW3o\nEEq5pxreulBp9GGsZyWokzYzX2m7J5aKrIXvKkz/ihvqxbKbvoAS3tjRqqK81iJ3\nr/ttpFOjTe37UULJcnsIvgQI8QKBgQDQz/KYBVpGsfXEyrZLAiJaW3jkxlXY9IOu\nV6aYOOc3rS5g1YdSW9MQGFbY8iQCH2B5PXvPG2df8adrrhm75Io9FLv6qIM7GGoX\nWFGwj0hjbzVMj51OQvY1M61VGjb3dfi9QmOMZxQmEURY2AoAw393uFW6nlMpndae\ncTd7hA\+fcwKBgQC3HbEXygLihpGRjDc5ow40\+tjbvmwPfqetSYpJqPEN3zTNwViy\nny0SfYVutrjhEn3a2XTmoxW8v8IBogsJmaU/vULE87AQO8Md9NPeQLrCloUVMcqk\nUZ9bXqvDPV2PdZva2Ng3s3ZFBtYx4Izo3MldFhEyC1upIFXumUOk1XKewQKBgCEz\nLuskzrm2ydDEOj\+q0zNyn8IgFr4sAlPR89b4FSsxCdKzoJRjrSc993D\+7uK3gmtE\nb076mHEUxv3D7KuHJsOXbFvqNxNKSnPzwulDnsrQf7TwkJ5E30iOMtz5Egw\+YZIV\n4CYOrZFv5WIK12xPqRCr6lWFnstbISiH775fvOwpAoGASCOLKzQa8BJpwHQvLOZd\nMpzTV//t3xYM3QhzLBn7lNCun2nXTFu9MiGDs1BkWmnFL84S4031UImliWWDPH9v\nUg\+mvgowvI/Aaoa1/yhP0\+OiEWIFZpBo7VSyhVs1Rpq71NT0rc5mXp38AUVvAnbT\njEhdIAq9vSIKhbr19l8D3LM=\n\-\-\-\-\-END PRIVATE KEY\-\-\-\-\-$''',
+]

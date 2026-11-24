@@ -244,6 +244,7 @@ pub struct Outcome {
     pub metrics: Metrics,
     pub caches: Vec<String>,
     pub trusted: bool,
+    pub client_log: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

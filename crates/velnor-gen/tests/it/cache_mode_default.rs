@@ -52,7 +52,7 @@ fn declared_writers(config: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
 
 /// The default branch gate and the same-repository gate: a save step in a generated job carries
 /// one of them, so a pull request from a fork never reaches it.
-const SAVE_GATES: [&str; 2] = [
+const SAVE_GATES: &[&str] = &[
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
     "github.event.pull_request.head.repo.full_name == github.repository",
 ];
@@ -79,8 +79,7 @@ fn violations(text: &str, writers: &BTreeSet<String>) -> Result<Vec<String>, Box
         let mode = job.get("cache-mode").and_then(crate::yaml_tree::Node::text);
         let savers: Vec<_> = job
             .get("steps")
-            .map(|steps| steps.items().iter().filter(|step| saves(step)).collect())
-            .unwrap_or_default();
+            .map_or_default(|steps| steps.items().iter().filter(|step| saves(step)).collect());
         let can_write = matches!(mode, Some("write" | "write-only"));
         match mode {
             None if job.get("uses").is_none() => found.push(format!("{id}: no cache-mode")),

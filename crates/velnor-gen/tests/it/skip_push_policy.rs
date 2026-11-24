@@ -5,17 +5,22 @@ use serde_json::Value;
 use velnor_model::{RepoPath, RepoView};
 
 use crate::events::DENY_MISE;
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const KNOB: &str = "[ci]\nskip_push_after_merge_group = true\n";
 
 fn repo(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    repo_at(roots, config, "0.1.103")
+}
+
+fn repo_at(
+    roots: &[&str],
+    config: &str,
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.103").into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     for (name, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let name = RepoPath::new(name)?;
         repo.tracked_paths.insert(name.clone());
@@ -57,11 +62,16 @@ fn deny_condition(job: &Value) -> String {
 #[test]
 fn the_policy_checks_skip_after_a_passed_queue_run_in_a_one_root_and_a_many_root_workflow()
 -> TestResult {
-    for (roots, producer) in [
-        (&["Cargo.toml"][..], "rust"),
-        (&["Cargo.toml", "lab/Cargo.toml"][..], "rust-plan"),
+    for (helper, roots, producer) in [
+        ("0.1.103", &["Cargo.toml"][..], "rust"),
+        ("0.1.109", &["Cargo.toml"][..], "rust"),
+        (
+            "0.1.103",
+            &["Cargo.toml", "lab/Cargo.toml"][..],
+            "rust-plan",
+        ),
     ] {
-        let all = jobs(&workflow(&repo(roots, KNOB)?)?)?;
+        let all = jobs(&workflow(&repo_at(roots, KNOB, helper)?)?)?;
         let policy = &all["policy"];
         let skip = format!("needs.{producer}.outputs.skip_push != 'true'");
         let when = deny_condition(policy);

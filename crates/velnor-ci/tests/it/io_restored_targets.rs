@@ -5,8 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
+use crate::io_cold::nested_target;
 
 fn helper(root: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -46,7 +48,7 @@ fn checkout(metadata: bool) -> Repo {
                 &format!("{name}/.cargo/config.toml"),
                 &format!("[build]\ntarget-dir='../configured-{name}'\n"),
             );
-            let output = Command::new("cargo")
+            let output = Command::new(real_cargo())
                 .args(["generate-lockfile", "--offline"])
                 .current_dir(repo.root().join(name))
                 .env_remove("CARGO_TARGET_DIR")
@@ -127,11 +129,12 @@ fn successful_restored_does_not_reuse_consumed_targets() {
     let repo = checkout(false);
     restore(&repo, "a");
     success(repo.root(), &["restored"]);
-    repo.write_unstaged("a/target/stale", "default\n");
+    let default = nested_target("a/Cargo.toml");
+    repo.write_unstaged(&format!("{default}/stale"), "default\n");
     let output = fail_restored(&repo);
     assert!(output.status.success(), "{output:?}");
     assert!(repo.root().join("cache-a/stale").is_file());
-    assert!(!repo.root().join("a/target").exists());
+    assert!(!repo.root().join(&default).exists());
 }
 
 #[test]
@@ -163,7 +166,7 @@ fn restored_cold_fallback_replaces_a_custom_target_link_for_the_next_cargo_build
         "a/src/lib.rs",
         UNIX_EPOCH + Duration::from_secs(1_700_000_000),
     );
-    let output = Command::new("cargo")
+    let output = Command::new(real_cargo())
         .args([
             "build",
             "--offline",

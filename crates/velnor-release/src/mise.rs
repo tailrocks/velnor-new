@@ -15,7 +15,7 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
-const RELEASE_PLZ_KEYS: [&str; 5] = [
+const RELEASE_PLZ_KEYS: &[&str] = &[
     "release-plz",
     "cargo:release-plz",
     "aqua:release-plz/release-plz",
@@ -31,13 +31,12 @@ fn release_plz_tools(table: &Table) -> Vec<(&String, &toml::Value)> {
     table
         .get("tools")
         .and_then(toml::Value::as_table)
-        .map(|tools| {
+        .map_or_default(|tools| {
             tools
                 .iter()
                 .filter(|(key, _)| names_release_plz(key))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn configured_version(value: &toml::Value) -> Option<&str> {
@@ -162,6 +161,14 @@ fn linux_x64_download(entry: &toml::Value, wanted: &str) -> Option<ReleasePlzDow
             sha256: sha256.to_ascii_lowercase(),
         }
     })
+}
+
+pub(crate) fn declares_mbx(mise_tomls: &[String]) -> bool {
+    let tables: Vec<Table> = mise_tomls
+        .iter()
+        .filter_map(|text| text.parse::<Table>().ok())
+        .collect();
+    velnor_model::mbx_declaration(&tables, velnor_model::MbxRule::Strict).declared()
 }
 
 pub(crate) fn check(

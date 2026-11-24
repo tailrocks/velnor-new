@@ -9,6 +9,7 @@ mod collisions;
 mod error;
 mod error_binary;
 mod error_cargo;
+mod error_display;
 mod error_family;
 mod family;
 mod family_assets;
