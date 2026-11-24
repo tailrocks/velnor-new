@@ -58,10 +58,12 @@ runs:
             return 2
           fi
           wait "$reader" || return 1
-          [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
+          measured="$(wc -c < "$2" 2> /dev/null)" || return 1
+          case "$measured" in ''|*[!0-9\ ]*) return 1 ;; esac
+          [ "$measured" -le "$MAX_BYTES" ] || return 3
         }
         clear_entry() {
-          if [ -d "$1" ] || [ -L "$1" ]; then rm -rf -- "$1"; fi
+          if [ -L "$1" ] || { [ -e "$1" ] && [ ! -f "$1" ]; }; then rm -rf -- "$1"; fi
         }
         copy_extracted() {
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
@@ -176,7 +178,7 @@ runs:
           if [ "$source" = cache ]; then
             n=1
             if [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ]; then
-              if [ -n "$(find "$dir/$archive" -size +"${MAX_BYTES}c" 2> /dev/null)" ]; then
+              if [ -n "$(find "$dir/$archive" -maxdepth 0 -type f -size +"${MAX_BYTES}c" 2> /dev/null)" ]; then
                 rm -f "$file"
                 evict_store_entry "without reading it, because it is larger than $MAX_BYTES bytes"
                 continue
@@ -187,6 +189,10 @@ runs:
                 rm -f "$file" 2> /dev/null || true
                 if [ "$rc" -eq 2 ]; then
                   echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be read in time, so it is not used and is kept"
+                elif [ -n "$(find "$dir/$archive" -maxdepth 0 -type f -size +"${MAX_BYTES}c" 2> /dev/null)" ]; then
+                  evict_store_entry "without reading it, because it is larger than $MAX_BYTES bytes"
+                elif [ "$rc" -eq 3 ]; then
+                  echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION changed while it was copied, so it is not used and is kept"
                 elif [ "$(digest "$dir/$archive")" = "$expected" ]; then
                   echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be copied to $RUNNER_TEMP, so it is not used and is kept"
                 else

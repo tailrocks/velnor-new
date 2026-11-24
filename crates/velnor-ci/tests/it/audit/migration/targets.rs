@@ -6,6 +6,7 @@ use std::fs;
 use velnor_test_support::real_cargo;
 
 use super::super::command;
+use super::outputs::run_outputs;
 use super::{InputDirectory, cargo_project};
 
 #[test]
@@ -46,19 +47,10 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
     };
     let built = compile();
     assert!(built.status.success(), "{built:?}");
-    let receipt = fs::read_dir(repo.root().join(host).join("debug/build"))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .flat_map(|package| {
-            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
-                .unwrap_or_else(|e| unreachable!("{e}"))
-        })
-        .map(|hash| {
-            hash.unwrap_or_else(|e| unreachable!("{e}"))
-                .path()
-                .join("run/stdout.velnor-inputs.json")
-        })
-        .find(|path| path.is_file())
-        .unwrap_or_else(|| unreachable!("no build output receipt"));
+    let receipt = run_outputs(&repo.root().join(host).join("debug/build"), "app")
+        .first()
+        .unwrap_or_else(|| unreachable!("no build output receipt"))
+        .receipt();
     fs::remove_file(receipt).unwrap_or_else(|e| unreachable!("{e}"));
     let cached = compile();
     assert!(cached.status.success(), "{cached:?}");

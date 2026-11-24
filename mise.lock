@@ -77,10 +77,6 @@ url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/74540
 version = "0.4.3"
 backend = "aqua:release-plz/release-plz"
 specifiers = ["0.4.3"]
-unsupported_platforms = [
-    "macos-x64",
-    "macos-x64-baseline",
-]
 
 [tools."aqua:release-plz/release-plz"."platforms.linux-arm64"]
 checksum = "sha256:2cde0ccd8355abb8f710f0173d37fcd2eb216d6d91d81cf340ca6c047a9119c9"
@@ -593,65 +589,65 @@ url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
 
 [[tools.hk]]
-version = "2.13.0"
+version = "2.14.0"
 backend = "packslip:github.com/jdx/hk"
-specifiers = ["2.13.0"]
+specifiers = ["2.14.0"]
 unsupported_platforms = [
     "macos-x64",
     "macos-x64-baseline",
 ]
 
 [tools.hk."platforms.linux-arm64"]
-checksum = "sha256:490196a4e638991c671f42941d72ade4d00b14750145f34fc64377b49fc070bb"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-aarch64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:a5503bc4a6cef77697aed92c966f7b444b3fdea4b62b63d9fb0b2b1af7f08c83"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-aarch64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.linux-arm64-musl"]
-checksum = "sha256:cff2d433a82104ace7084a23970ff05b0bf3ca529e00c61da20780104106a3dd"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:d9e0cca380e87a175fa2b18738af3e03cbd4109f9105e1ede60ebb3238d09a16"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-aarch64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.linux-x64"]
-checksum = "sha256:8ff0b29c9925d73df9b14af7fc43ace86de03db73eafa3046750fce5c39e1955"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:230e89eaa3bf78aea23ac1584c8de9dd49141487f6067083003d8bdb38fa6c34"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.linux-x64-baseline"]
-checksum = "sha256:8ff0b29c9925d73df9b14af7fc43ace86de03db73eafa3046750fce5c39e1955"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:230e89eaa3bf78aea23ac1584c8de9dd49141487f6067083003d8bdb38fa6c34"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.linux-x64-musl"]
-checksum = "sha256:3d5ae62e2befe95fa6fc7ffd63a0876c3efe3409634fbd6561b8bb0be787eeae"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:49b9238317fa6f047f66b93cc1a150efaeb9790063ae44aa5de9cc3d59d709c1"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:3d5ae62e2befe95fa6fc7ffd63a0876c3efe3409634fbd6561b8bb0be787eeae"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:49b9238317fa6f047f66b93cc1a150efaeb9790063ae44aa5de9cc3d59d709c1"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.macos-arm64"]
-checksum = "sha256:64efc441dc0858a175909fd6253ddd6c540da80e7d1bd2a2ad0ec9c0cdab3d97"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:82a6ceb4a69bcf9667502f5bdf487a7d1a3aa5078197e981cf0538086d90b778"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-aarch64-apple-darwin.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.windows-x64"]
-checksum = "sha256:2908de6281368b8128f1d4d7a03905d3ab0eb86a82641d6055be88806bf9ffac"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:750e1ccaca97b4c33f9b709e4beea9da5de98c7bb3f175cbbe59c05b5a6e365b"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
 [tools.hk."platforms.windows-x64-baseline"]
-checksum = "sha256:2908de6281368b8128f1d4d7a03905d3ab0eb86a82641d6055be88806bf9ffac"
-url = "https://github.com/jdx/hk/releases/download/v2.13.0/hk-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:750e1ccaca97b4c33f9b709e4beea9da5de98c7bb3f175cbbe59c05b5a6e365b"
+url = "https://github.com/jdx/hk/releases/download/v2.14.0/hk-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
@@ -857,65 +853,61 @@ url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886
 provenance = "minisign"
 
 [[tools.mr-boxington]]
-version = "1.30.0"
+version = "1.31.0"
 backend = "packslip:github.com/jdx/mr-boxington"
-specifiers = ["v1.30.0"]
-unsupported_platforms = [
-    "macos-x64",
-    "macos-x64-baseline",
-]
+specifiers = ["v1.31.0"]
 
 [tools.mr-boxington."platforms.linux-arm64"]
-checksum = "sha256:6317bb6780404e78c3b670d95e128c85871809dfc541882b2efaa34120f45e71"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-aarch64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:2cd9f89abb80186bd3f14794dfbbffd1bc24485ade63c82b8d2e8211f50cae2f"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-aarch64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.linux-arm64-musl"]
-checksum = "sha256:900844b980f9e3daf778d38a19046281cc35e07108a9c821befef6130846df1f"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:dc48c830c8f2e0659a72d487024457b5c8855ac7b5974244515fdae3d29e206c"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-aarch64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.linux-x64"]
-checksum = "sha256:f4992b401fe65744b7c6e7400933d2106da205b499405621d088051a31a8f3f2"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:f692bf576fdcf0d9e98e0f2b2bd6fb6236c452556646b9b782feeb244f388f4d"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.linux-x64-baseline"]
-checksum = "sha256:f4992b401fe65744b7c6e7400933d2106da205b499405621d088051a31a8f3f2"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:f692bf576fdcf0d9e98e0f2b2bd6fb6236c452556646b9b782feeb244f388f4d"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.linux-x64-musl"]
-checksum = "sha256:b523a9324d50fd434e355fc7a5af5f7155d62854dd6a5a74173d52655f168d45"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:b2e2f899c1c2c1a8ab296bb929d54ae5cdf0bed0dbc106e811dc0f0761b87f66"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:b523a9324d50fd434e355fc7a5af5f7155d62854dd6a5a74173d52655f168d45"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:b2e2f899c1c2c1a8ab296bb929d54ae5cdf0bed0dbc106e811dc0f0761b87f66"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.macos-arm64"]
-checksum = "sha256:d5b957216c8b61c2df91c9e7aaf5febd45ec74274a60d3714ebe316edc144543"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:e8fd3f7dcff328470ce161cad92d64352ea50c33ff63deabe318a826a3dc694d"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-aarch64-apple-darwin.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.windows-x64"]
-checksum = "sha256:2d709445957ea5dae95d51379aa9e7e575cfedb12c0d5731de4761a6972626f5"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:428445a4557746dd35f63430a66d5c3c1c28ec93a0335dc1dc23b42b1b6c3fa4"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
 [tools.mr-boxington."platforms.windows-x64-baseline"]
-checksum = "sha256:2d709445957ea5dae95d51379aa9e7e575cfedb12c0d5731de4761a6972626f5"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.30.0/mbx-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:428445a4557746dd35f63430a66d5c3c1c28ec93a0335dc1dc23b42b1b6c3fa4"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.31.0/mbx-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 repository_ids = { repository = "1340721957" }
 
