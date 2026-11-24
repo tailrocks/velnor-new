@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 import hashlib
 import html
+import itertools
 import json
 import multiprocessing
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 from urllib.parse import unquote_to_bytes
@@ -28,7 +30,10 @@ BLANKS = re.compile(rb"[ \t\r\f\v]+")
 NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
 MAX_PERCENT_ROUNDS = 4
-EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock"})
+EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock", b"qualification/fixtures/lfs-marker.txt"})
+MARKUP = re.compile(rb"[*`~]+")
+LFS_POINTER = re.compile(rb"\Aversion https://git-lfs\.github\.com/spec/v1\noid sha256:([0-9a-f]{64})\nsize [0-9]+\n")
+MAX_SEEN = 2_000_000
 
 
 def sha(candidate):
@@ -89,6 +94,8 @@ class Matcher:
         self.seen = set()
 
     def learn(self, chunks):
+        if len(self.seen) > MAX_SEEN:
+            self.seen.clear()
         fresh = set(chunks) - self.seen
         self.seen |= fresh
         split = {chunk: chunk.split(b"/") for chunk in fresh}
@@ -138,18 +145,32 @@ class Matcher:
         return not self.bad.isdisjoint(chunks)
 
     def lines(self, text):
-        return [
+        found = (
             number
-            for number, line in enumerate(text.lower().split(b"\n"), 1)
+            for number, line in numbered(text.lower())
             if not self.bad.isdisjoint(CHUNK.findall(line))
-        ]
+        )
+        return list(itertools.islice(found, MAX_REPORTED))
 
     def flagged_lines(self, text):
         self.learn(CHUNK.findall(text.lower()))
         return self.lines(text)
 
     def view_lines(self, views):
-        return sorted({number for view in views for number in self.lines(view)})
+        return sorted({number for view in views for number in self.lines(view)})[:MAX_REPORTED]
+
+
+def numbered(text):
+    start = 0
+    number = 1
+    while True:
+        end = text.find(b"\n", start)
+        if end < 0:
+            yield number, text[start:]
+            return
+        yield number, text[start:end]
+        start = end + 1
+        number += 1
 
 
 def unpercent(line):
@@ -184,13 +205,17 @@ def spaced(text):
     return BLANKS.sub(b"", text)
 
 
+def unmarked(text):
+    return MARKUP.sub(b"", text)
+
+
 def views(content):
     lowered = content.lower()
     bases = (lowered, lowered.replace(b"\0", b"")) if b"\0" in lowered else (lowered,)
     found = []
     for base in bases:
         for view in (base, decoded(base)):
-            for candidate in (view, spaced(view)):
+            for candidate in (view, spaced(view), unmarked(view)):
                 if candidate not in found:
                     found.append(candidate)
     return tuple(found)
@@ -207,25 +232,49 @@ def tracked_files(root):
     return entries
 
 
-def blobs(root, objects):
-    objects = sorted(objects)
-    output = subprocess.run(
-        ["git", "-C", str(root), "cat-file", "--batch"],
-        input="".join(f"{obj}\n" for obj in objects).encode(),
-        check=True,
-        capture_output=True,
-    ).stdout
-    texts = {}
-    position = 0
-    for obj in objects:
-        newline = output.index(b"\n", position)
-        header = output[position:newline].split(b" ")
-        if len(header) != 3:
-            raise SystemExit(f"git cat-file could not read blob {obj}; the guard cannot scan what it cannot read")
-        size = int(header[2])
-        texts[obj] = output[newline + 1 : newline + 1 + size]
-        position = newline + 2 + size
-    return texts
+def stream_blobs(root, objects):
+    with tempfile.TemporaryFile() as wanted:
+        wanted.write("".join(f"{obj}\n" for obj in objects).encode())
+        wanted.seek(0)
+        process = subprocess.Popen(
+            ["git", "-C", str(root), "cat-file", "--batch"], stdin=wanted, stdout=subprocess.PIPE
+        )
+        with process:
+            for obj in objects:
+                header = process.stdout.readline().rstrip(b"\n").split(b" ")
+                if len(header) != 3:
+                    raise SystemExit(f"git cat-file could not read blob {obj}; the guard cannot scan what it cannot read")
+                content = process.stdout.read(int(header[2]))
+                process.stdout.read(1)
+                yield obj, content
+        if process.returncode:
+            raise SystemExit("git cat-file failed; the guard cannot scan what it cannot read")
+
+
+def lfs_payload(root, content):
+    pointer = LFS_POINTER.match(content)
+    if not pointer:
+        return b""
+    oid = pointer.group(1).decode()
+    store = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--git-path", "lfs/objects"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    stored = Path(root, store, oid[:2], oid[2:4], oid)
+    return stored.read_bytes() if stored.is_file() else None
+
+
+def blob_findings(root, matcher, key, content, names):
+    found_views = views(content)
+    payload = b"" if key[0] else lfs_payload(root, content)
+    if payload is None:
+        return [f"{name}:lfs-payload-unavailable" for name in names]
+    if payload:
+        found_views += views(payload)
+    chunks = set().union(*(CHUNK.findall(view) for view in found_views))
+    matcher.learn(chunks)
+    lines = matcher.view_lines(found_views) if matcher.touches(chunks) else []
+    places = ["target"] if key[0] and lines else lines
+    return [f"{name}:{place}" for name in names for place in places]
 
 
 def scan(root, hashes, only=None):
@@ -242,22 +291,23 @@ def scan(root, hashes, only=None):
         if mode == GITLINK_MODE:
             continue
         by_object.setdefault((mode == SYMLINK_MODE, obj), []).append(path)
-    contents = blobs(root, {obj for _symlink, obj in by_object})
-    texts = {key: views(contents[key[1]]) for key in by_object}
-    seen = {key: set().union(*(CHUNK.findall(view) for view in found)) for key, found in texts.items()}
-    seen.update((path, set().union(*(CHUNK.findall(view) for view in views(path)))) for path in paths)
-    matcher.learn(set().union(*seen.values()))
+    flagged_paths = {}
+    for path in paths:
+        chunks = set().union(*(CHUNK.findall(view) for view in views(path)))
+        matcher.learn(chunks)
+        flagged_paths[path] = matcher.touches(chunks)
     found = []
     labels = {}
     for path, number in paths.items():
-        flagged = matcher.touches(seen[path])
-        labels[path] = f"ls-files line {number}" if flagged else path.decode("utf-8", "backslashreplace")
-        if flagged:
+        labels[path] = f"ls-files line {number}" if flagged_paths[path] else path.decode("utf-8", "backslashreplace")
+        if flagged_paths[path]:
             found.append(labels[path])
-    for key, found_views in texts.items():
-        lines = matcher.view_lines(found_views) if matcher.touches(seen[key]) else []
-        places = ["target"] if key[0] and lines else lines
-        found.extend(f"{labels[path]}:{place}" for path in by_object[key] for place in places)
+    keys = {}
+    for key in by_object:
+        keys.setdefault(key[1], []).append(key)
+    for obj, content in stream_blobs(root, sorted(keys)):
+        for key in keys[obj]:
+            found.extend(blob_findings(root, matcher, key, content, [labels[path] for path in by_object[key]]))
     return sorted(found)
 
 

@@ -22,7 +22,9 @@ priv="/priv""ate/tmp"
 root="/ro""ot"
 home="/ho""me"
 tmp="/t""mp"
+vtmp="/va""r/t""mp"
 win="C:\\Us""ers"
+mnt="/m""nt"
 
 fails=0
 check() {
@@ -60,6 +62,11 @@ check windows_backslash  fail "log at ${win}\\Alice\\project\\out.log"
 check windows_json_escape fail "\"path\": \"D:\\\\Us""ers\\\\Alice\\\\out.log\""
 check windows_forward    fail "see c:/us""ers/alice/work/x.txt"
 check windows_bare       fail "profile ${win}\\Alice"
+check wsl_mounted_profile fail "see ${mnt}/c/Us""ers/Alice/project/out.log"
+check wsl_mounted_profile_bare fail "owner ${mnt}/d/us""ers/alice"
+check wsl_mounted_json_escaped fail "{\"path\": \"\\${mnt}\\/c\\/Us""ers\\/Alice\\/out.log\"}" json
+check wsl_mounted_users_root pass "the ${mnt}/c/Us""ers directory"
+check wsl_mounted_windows pass "installed under ${mnt}/c/Windows/System32"
 check windows_system     pass "installed under C:\\Windows\\System32 and C:\\Program Files\\x"
 check windows_users_root pass "the ${win} directory"
 check agent_scratch     fail "see ${priv}/claude-501/session/out.txt"
@@ -159,6 +166,12 @@ check temp_json_bare_tmp   pass "{\"path\":\"\\${tmp}\\/foo\"}" json
 check temp_json_repo       pass "{\"path\":\"docs\\/implemented\\/a.md\"}" json
 check temp_stderr_in_docs  fail "wrote ${tmp}/a-b/x" stderr
 check temp_body_in_docs    fail "open ${priv}/sdk57-refresh.AbC/out" body
+check temp_var_tmp         fail "retained ${vtmp}/velnor-audit/session.json"
+check temp_var_tmp_log     fail "retained ${vtmp}/velnor-audit/session.json" log
+check temp_var_tmp_bare    fail "see ${vtmp}/new.json"
+check temp_var_tmp_json    fail "{\"path\":\"\\${vtmp}\\/velnor-a\\/out.log\"}" json
+check temp_var_tmp_unicode fail "{\"path\":\"\\u002fva""r\\u002ft""mp\\u002fvelnor-a\\u002fout\"}" json
+check temp_var_tmp_placeholder pass "retained <tmp>/velnor-audit/session.json"
 check temp_stderr_example  pass "use ${tmp}/example/file for the sample" stderr
 
 if [ "$fails" -ne 0 ]; then

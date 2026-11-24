@@ -121,6 +121,76 @@ class ContentTests(unittest.TestCase):
         self.assertEqual(len(guard.load_hashes()), len(lines))
 
 
+class MarkupTests(unittest.TestCase):
+    def test_a_name_split_by_emphasis_markers_is_found(self):
+        tmp, root = repository(
+            {
+                "bold.md": "pre**zzplan**ted tail\n",
+                "mid.md": "zz**plan**ted\n",
+                "code.md": "zz`plan`ted\n",
+                "strike.md": "zz~~plan~~ted\n",
+                "clean.md": "zz**plan**tex\n",
+            }
+        )
+        with tmp:
+            self.assertEqual(
+                guard.scan(root, planted("zzplanted")), ["bold.md:1", "code.md:1", "mid.md:1", "strike.md:1"]
+            )
+
+
+class BoundedReportTests(unittest.TestCase):
+    def test_a_file_repeating_a_name_reports_only_the_reportable_prefix(self):
+        tmp, root = repository({"big.md": "zzplanted\n" * 5000})
+        with tmp:
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(len(found), guard.MAX_REPORTED)
+            self.assertEqual(found[0], "big.md:1")
+
+
+class StreamingTests(unittest.TestCase):
+    def test_scanning_many_blobs_does_not_retain_them_all(self):
+        files = {f"data/{n}.txt": f"lorem ipsum dolor {n}\n" * 10_000 for n in range(40)}
+        tmp, root = repository(files)
+        with tmp:
+            tracemalloc.start()
+            try:
+                found = guard.scan(root, planted("zzplanted"))
+                peak = tracemalloc.get_traced_memory()[1]
+            finally:
+                tracemalloc.stop()
+            self.assertEqual(found, [])
+            self.assertLess(peak, 16_000_000)
+
+
+class LfsTests(unittest.TestCase):
+    OID = "ab" * 32
+
+    def pointer(self):
+        return f"version https://git-lfs.github.com/spec/v1\noid sha256:{self.OID}\nsize 20\n".encode()
+
+    def store(self, root, payload):
+        stored = root / ".git/lfs/objects" / self.OID[:2] / self.OID[2:4] / self.OID
+        stored.parent.mkdir(parents=True)
+        stored.write_bytes(payload)
+
+    def test_the_payload_of_an_lfs_object_is_scanned(self):
+        tmp, root = indexed({b"big.bin": self.pointer()})
+        with tmp:
+            self.store(root, b"one\ntwo zzplanted\n")
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:2"])
+            self.assertEqual(guard.scan(root, planted("zzother")), [])
+
+    def test_a_pointer_whose_payload_is_not_fetched_fails_closed(self):
+        tmp, root = indexed({b"big.bin": self.pointer(), b"plain.txt": b"plain\n"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:lfs-payload-unavailable"])
+
+    def test_the_committed_lfs_fixture_is_exempt(self):
+        tmp, root = indexed({b"qualification/fixtures/lfs-marker.txt": self.pointer()})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), [])
+
+
 class PathTests(unittest.TestCase):
     def test_planted_file_name_fails_and_the_report_hides_the_word(self):
         tmp, root = repository({"docs/readme.md": "plain\n", "docs/zzplanted-notes.md": "plain\n"})
