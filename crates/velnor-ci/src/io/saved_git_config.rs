@@ -43,7 +43,7 @@ const AUTHORIZATION: &str = "authorization";
 const BASIC: &str = "basic";
 
 pub(super) fn is_plain(text: &str) -> bool {
-    if has_token_prefix(&text.to_ascii_lowercase()) {
+    if looks_like_token(&text.to_ascii_lowercase()) {
         return false;
     }
     let mut section = String::new();
