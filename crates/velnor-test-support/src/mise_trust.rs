@@ -20,7 +20,7 @@ fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
     with_dir.push(dir.to_path_buf());
     match std::env::join_paths(with_dir) {
         Ok(joined) => joined,
-        Err(_) if trusted.iter().any(|entry| dir.starts_with(entry)) => {
+        Err(_) if covers(&trusted, dir) => {
             std::env::join_paths(trusted).unwrap_or_else(|error| unreachable!("{error}"))
         }
         Err(error) => unreachable!(
@@ -28,6 +28,14 @@ fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
             dir.display()
         ),
     }
+}
+
+fn covers(trusted: &[PathBuf], dir: &Path) -> bool {
+    dir.components()
+        .all(|part| part != std::path::Component::ParentDir)
+        && trusted
+            .iter()
+            .any(|entry| !entry.as_os_str().is_empty() && dir.starts_with(entry))
 }
 
 #[cfg(test)]
@@ -100,5 +108,21 @@ mod tests {
     fn an_uncovered_dir_that_cannot_join_the_list_fails_naming_the_dir_and_the_fix() {
         let inherited = OsString::from("/work/existing");
         trusted_paths_with(Some(inherited.as_os_str()), Path::new(&invalid_dir()));
+    }
+
+    #[test]
+    #[should_panic(expected = "use a TMPDIR without the separator")]
+    fn an_empty_inherited_entry_does_not_cover_the_dir() {
+        let inherited = OsString::from(if cfg!(windows) { ";" } else { ":" });
+        trusted_paths_with(Some(inherited.as_os_str()), Path::new(&invalid_dir()));
+    }
+
+    #[test]
+    #[should_panic(expected = "use a TMPDIR without the separator")]
+    fn a_dir_that_climbs_out_of_an_inherited_entry_is_not_covered() {
+        let invalid = if cfg!(windows) { '"' } else { ':' };
+        let dir = format!("/tmp/trusted/../out{invalid}side");
+        let inherited = OsString::from("/tmp/trusted");
+        trusted_paths_with(Some(inherited.as_os_str()), Path::new(&dir));
     }
 }
