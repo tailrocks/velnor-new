@@ -174,3 +174,12 @@ fn openssl_in_the_binary_must_match_the_declared_handling() {
     built(&root, "plain", &Elf::dynamic_x86_64());
     assert!(stage(&args(&root, "2.41", OpensslMode::Sysroot, &["plain"])).is_ok());
 }
+
+#[test]
+fn a_binary_named_twice_is_refused_before_anything_is_staged() {
+    let root = fresh_dir("deploy", "stage-twice");
+    built(&root, "svc", &Elf::dynamic_x86_64());
+    let message = refusal(&args(&root, "2.41", OpensslMode::None, &["svc", "svc"]));
+    assert!(message.contains("--bin svc is given twice"), "{message}");
+    assert!(!root.join("dist").exists());
+}

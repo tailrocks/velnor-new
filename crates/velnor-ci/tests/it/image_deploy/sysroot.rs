@@ -239,3 +239,17 @@ fn a_lock_that_could_fetch_something_unlisted_is_refused() {
         assert!(parse_lock(&text).is_err(), "{text}");
     }
 }
+
+#[test]
+fn an_output_directory_that_holds_other_files_is_never_replaced_but_an_earlier_sysroot_is() {
+    let setup = Setup::new("sysroot-out", &good_lock());
+    let args = setup.args();
+    fs::create_dir_all(&args.out).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(args.out.join("precious"), "data").unwrap_or_else(|e| unreachable!("{e}"));
+    let message = setup.unpack(&good_fake()).err().unwrap_or_default();
+    assert!(message.contains("is not an earlier sysroot"), "{message}");
+    assert_eq!(read(&args.out.join("precious")), "data");
+    fs::remove_file(args.out.join("precious")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(setup.unpack(&good_fake()).is_ok());
+    assert!(setup.unpack(&good_fake()).is_ok());
+}

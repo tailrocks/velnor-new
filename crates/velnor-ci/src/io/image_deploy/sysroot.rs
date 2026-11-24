@@ -63,6 +63,24 @@ fn redirect_target(current: &str, location: Option<&str>) -> Option<String> {
         .then(|| format!("{}{location}", &current[..origin_end]))
 }
 
+const MARKER: &str = ".velnor-image-sysroot";
+
+fn prepare_out(out: &Path) -> Result<(), CiError> {
+    if out.exists() {
+        let ours = out.join(MARKER).is_file();
+        let empty = fs::read_dir(out).is_ok_and(|mut entries| entries.next().is_none());
+        if !ours && !empty {
+            return Err(CiError::new(format!(
+                "{} exists and is not an earlier sysroot of this command; choose another --out",
+                out.display()
+            )));
+        }
+        fs::remove_dir_all(out).map_err(|error| failure("replace", out, &error))?;
+    }
+    fs::create_dir_all(out).map_err(|error| failure("create", out, &error))?;
+    fs::write(out.join(MARKER), "").map_err(|error| failure("write", &out.join(MARKER), &error))
+}
+
 fn extract(dpkg_deb: &Path, deb: &Path, root: &Path) -> Result<(), CiError> {
     let status = Command::new(dpkg_deb)
         .env_clear()
@@ -145,10 +163,8 @@ pub fn unpack_with(
     let debs = parse_lock(
         std::str::from_utf8(&lock).map_err(|_| CiError::new("the sysroot lock is not UTF-8"))?,
     )?;
-    if args.out.exists() {
-        fs::remove_dir_all(&args.out).map_err(|error| failure("replace", &args.out, &error))?;
-    }
     let out = args.out.as_path();
+    prepare_out(out)?;
     let root = fetch_all(&debs, transport, &args.dpkg_deb, out)?;
     let lib = root.join(LIB_DIRECTORY);
     merge_headers(&root)?;

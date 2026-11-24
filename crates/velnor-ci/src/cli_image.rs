@@ -69,7 +69,7 @@ pub struct ImageGateArgs {
     pub wait_seconds: u64,
     #[arg(
         long,
-        default_value_t = 15,
+        default_value_t = 30,
         value_parser = clap::value_parser!(u64).range(1..=300),
         help = "Seconds between two looks at the checks"
     )]

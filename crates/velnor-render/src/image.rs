@@ -110,6 +110,13 @@ pub fn render_image(
                 ),
             ]),
         )),
+        Some(entry(
+            "env",
+            Yaml::Map(vec![
+                entry("MISE_AUTO_INSTALL", text("false")),
+                entry("RUSTUP_AUTO_INSTALL", text("0")),
+            ]),
+        )),
         defaults(&rendered.jobs).map(|value| entry("defaults", value)),
         Some(entry(
             "jobs",

@@ -105,7 +105,7 @@ fn segments(reader: &Reader<'_>) -> Result<Vec<Segment>, ElfError> {
     }
     (0..count)
         .map(|index| {
-            let at = table + index * size;
+            let at = table.saturating_add(index * size);
             Ok(Segment {
                 kind: reader.u32(at, "program header")?,
                 offset: reader.u64(at + 8, "program header")?,
@@ -120,7 +120,7 @@ fn file_offset(loads: &[&Segment], address: u64) -> Result<u64, ElfError> {
     loads
         .iter()
         .find(|load| address >= load.address && address - load.address < load.file_size)
-        .map(|load| load.offset + (address - load.address))
+        .map(|load| load.offset.saturating_add(address - load.address))
         .ok_or(ElfError::Malformed(
             "an address outside every loaded segment",
         ))
@@ -142,21 +142,26 @@ fn needs(
 ) -> Result<Option<(u32, u32)>, ElfError> {
     let mut highest = None;
     for _ in 0..count {
-        let aux_count = reader.u16(at + 2, "version need")?;
-        let mut aux = at + u64::from(reader.u32(at + 8, "version need")?);
+        let aux_count = reader.u16(at.saturating_add(2), "version need")?;
+        let mut aux =
+            at.saturating_add(u64::from(reader.u32(at.saturating_add(8), "version need")?));
         for _ in 0..aux_count {
             let name = reader.text(
-                strings + u64::from(reader.u32(aux + 8, "version name")?),
+                strings.saturating_add(u64::from(
+                    reader.u32(aux.saturating_add(8), "version name")?,
+                )),
                 "version name",
             )?;
             highest = highest.max(glibc_version(&name));
-            aux += u64::from(reader.u32(aux + 12, "version name")?);
+            aux = aux.saturating_add(u64::from(
+                reader.u32(aux.saturating_add(12), "version name")?,
+            ));
         }
-        let next = u64::from(reader.u32(at + 12, "version need")?);
+        let next = u64::from(reader.u32(at.saturating_add(12), "version need")?);
         if next == 0 {
             break;
         }
-        at += next;
+        at = at.saturating_add(next);
     }
     Ok(highest)
 }
@@ -164,7 +169,7 @@ fn needs(
 fn dynamic_entries(reader: &Reader<'_>, segment: &Segment) -> Result<Vec<(u64, u64)>, ElfError> {
     let mut entries = Vec::new();
     for index in 0..segment.file_size / 16 {
-        let at = segment.offset + index * 16;
+        let at = segment.offset.saturating_add(index * 16);
         let tag = reader.u64(at, "dynamic section")?;
         if tag == DT_NULL {
             break;
@@ -210,7 +215,7 @@ pub fn read(bytes: &[u8]) -> Result<ElfFacts, ElfError> {
         value(DT_STRTAB).ok_or(ElfError::Malformed("no strtab"))?,
     )?;
     for (tag, offset) in &entries {
-        let name = |part| reader.text(strings + offset, part);
+        let name = |part| reader.text(strings.saturating_add(*offset), part);
         match *tag {
             DT_NEEDED => facts.needed.push(name("needed library")?),
             DT_RPATH | DT_RUNPATH => facts.library_paths.extend(

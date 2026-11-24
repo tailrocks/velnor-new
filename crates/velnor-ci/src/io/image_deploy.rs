@@ -77,7 +77,10 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
     let directory: PathBuf = args.target_dir.join(&args.target).join(&args.profile);
     let mut staged = Vec::new();
     let mut refusals = Vec::new();
-    for bin in &args.bins {
+    for (index, bin) in args.bins.iter().enumerate() {
+        if args.bins[..index].contains(bin) {
+            return Err(CiError::new(format!("--bin {bin} is given twice")));
+        }
         if bin.is_empty() || bin.contains(['/', '\\']) || bin.starts_with('.') {
             return Err(CiError::new(format!("`{bin}` is not a binary name")));
         }
