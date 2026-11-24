@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
+use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{PackageName, RepoPath, RepoView, Target, TargetKind, TargetName};
-use velnor_rust::LOCK_PATH;
+use velnor_rust::{CONFIG_PATH, DetectError, LOCK_PATH, LintFault, Reason};
 
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
+use crate::golden::{load, samples};
 use crate::lint_lane::{LINT, MISE, runs};
 use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{view, workflow};
@@ -59,6 +61,30 @@ pub(crate) fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn st
 
 pub(crate) fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::Error>> {
     workflow(&locked(config, version)?)
+}
+
+fn refusal(repo: &RepoView) -> Result<GenerateError, Box<dyn std::error::Error>> {
+    let mut locked = repo.clone();
+    crate::facts::lock_pinned_tools(&mut locked)?;
+    expected_with_notes(&locked)
+        .err()
+        .ok_or_else(|| "the repository was not refused".into())
+}
+
+fn invalid(reason: Reason) -> GenerateError {
+    GenerateError::Detect(DetectError::Invalid {
+        path: CONFIG_PATH,
+        reason,
+    })
+}
+
+pub(crate) fn nested_sample_job() -> Result<Value, Box<dyn std::error::Error>> {
+    let repo = load(&samples().join("nested-generator-root"))?;
+    let (files, _) = velnor_gen::expected_with_notes(&repo)?;
+    let text = files
+        .get(&RepoPath::new(".github/workflows/ci.yml")?)
+        .ok_or("no workflow")?;
+    job(text)
 }
 
 pub(crate) fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
@@ -143,10 +169,15 @@ fn from_source_false_renders_the_release_install_byte_for_byte() -> TestResult {
 #[test]
 fn a_helper_older_than_from_source_is_refused_with_the_gate_error() -> TestResult {
     for older in ["0.1.110", "0.1.111"] {
-        let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), older)?).err();
-        let text = format!("{error:?}");
-        assert!(text.contains("ConfigKeyHelperTooOld"), "{older}: {text}");
-        assert!(text.contains("lint.from_source"), "{older}: {text}");
+        let error = refusal(&locked(&format!("{LINT}\n{FROM_SOURCE}"), older)?)?;
+        assert!(
+            matches!(
+                &error,
+                GenerateError::ConfigKeyHelperTooOld { key: "lint.from_source", first: (0, 1, 112), pinned, .. }
+                    if pinned.to_string() == older
+            ),
+            "{older}: {error:?}"
+        );
     }
     assert!(workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?).is_ok());
     Ok(())
@@ -170,17 +201,18 @@ fn a_release_without_the_key_still_renders_the_plain_check_unchanged() -> TestRe
 
 #[test]
 fn from_source_is_refused_on_every_other_lint_kind() -> TestResult {
-    for kind in [
-        "kind = 'jactionlint'",
-        "kind = 'alint'\nconfig = '.alint.yml'",
-        "kind = 'mise-task'\ntask = 'check'",
+    for (kind, name) in [
+        ("kind = 'jactionlint'", "jactionlint"),
+        ("kind = 'alint'\nconfig = '.alint.yml'", "alint"),
+        ("kind = 'mise-task'\ntask = 'check'", "mise-task"),
     ] {
         let config = format!("[[lint]]\n{kind}\nfrom_source = true\n");
-        let error = workflow(&locked(&config, FIRST)?).err();
-        let text = format!("{error:?}");
-        assert!(text.contains("LintKeyForeign"), "{kind}: {text}");
-        assert!(text.contains("from_source"), "{kind}: {text}");
-        assert!(!text.contains("HelperTooOld"), "{kind}: {text}");
+        let error = refusal(&locked(&config, FIRST)?)?;
+        let foreign = Reason::LintKeyForeign {
+            kind: name.to_owned(),
+            key: "from_source",
+        };
+        assert_eq!(error, invalid(foreign), "{kind}");
     }
     Ok(())
 }
@@ -246,26 +278,33 @@ fn from_source_requires_a_rust_pin() -> TestResult {
     assert_ne!(without_rust, MISE);
     repo.files
         .insert(RepoPath::new("mise.toml")?, without_rust.into_bytes());
-    let error = workflow(&repo).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("ToolUnpinned"), "{text}");
-    assert!(text.contains("rust"), "{text}");
+    let error = refusal(&repo)?;
+    assert_eq!(
+        error,
+        invalid(Reason::Lint(LintFault::ToolUnpinned("rust".to_owned())))
+    );
     Ok(())
 }
 
 #[test]
 fn from_source_refuses_a_repository_without_exactly_one_velnor_gen() -> TestResult {
-    for roots in [
-        vec![("Cargo.toml", "velnor-ci-app")],
-        vec![
-            ("Cargo.toml", "velnor-gen"),
-            ("tools/gen/Cargo.toml", "velnor-gen"),
-        ],
+    for (roots, found) in [
+        (vec![("Cargo.toml", "velnor-ci-app")], 0),
+        (
+            vec![
+                ("Cargo.toml", "velnor-gen"),
+                ("tools/gen/Cargo.toml", "velnor-gen"),
+            ],
+            2,
+        ),
     ] {
         let repo = packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-        let error = workflow(&repo).err();
-        let text = format!("{error:?}");
-        assert!(text.contains("GeneratorPackage"), "{roots:?}: {text}");
+        let error = refusal(&repo)?;
+        assert_eq!(
+            error,
+            invalid(Reason::GeneratorPackage { found }),
+            "{roots:?}"
+        );
     }
     Ok(())
 }
@@ -282,9 +321,8 @@ fn from_source_refuses_a_velnor_gen_package_without_a_binary() -> TestResult {
         .ok_or("no root")?
         .members[0]
         .targets = vec![lib];
-    let error = workflow(&repo).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("GeneratorPackage"), "{text}");
+    let error = refusal(&repo)?;
+    assert_eq!(error, invalid(Reason::GeneratorPackage { found: 0 }));
     Ok(())
 }
 

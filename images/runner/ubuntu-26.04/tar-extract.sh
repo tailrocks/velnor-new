@@ -151,6 +151,16 @@ read_gnu_names() {
   rm -f -- "$list"
 }
 
+reject_recursive_selection() {
+  local i
+  [ "$no_recursion" -eq 1 ] && [ "$extract_all" -eq 0 ] || return 0
+  for i in "${!mem_name[@]}"; do
+    if [ "${mem_wanted[$i]}" -eq 1 ] && { [ "${mem_type[$i]}" = 5 ] || [[ "${mem_name[$i]}" == */ ]]; }; then
+      die "unsupported option --no-recursion with directory member ${mem_name[$i]}"
+    fi
+  done
+}
+
 load_members() {
   local -A want=()
   local -A seen=()
@@ -195,6 +205,7 @@ load_members() {
       [ -n "${seen[$path]:-}" ] || die "not found in archive: $path"
     done
   fi
+  reject_recursive_selection
   mark_isolated
   reject_symlink_traversal
 }
@@ -384,7 +395,7 @@ extract_shared_external() {
   local meta
   meta="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
   mkdir -p -- "$shared_base"
-  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar -xf - -C "$shared_base" || fail_shared_extract "$meta"
+  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar "${extract_flags[@]}" -xf - -C "$shared_base" || fail_shared_extract "$meta"
 use strict;
 use warnings;
 use bytes;

@@ -83,6 +83,7 @@ fn run_within(
     select(&Inputs {
         event_name: event,
         git_ref,
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.as_deref(),
         runner_temp: &temp,
@@ -241,6 +242,7 @@ fn a_symlinked_or_unsafe_seed_is_refused() {
     let wrong = select(&Inputs {
         event_name: "pull_request",
         git_ref: "refs/pull/1/merge",
+        ref_protected: true,
         default_branch: Some("main"),
         seed_dir: seed.to_str(),
         runner_temp: &host.root.join("temp"),

@@ -171,6 +171,17 @@ fn an_archive_whose_bytes_changed_after_the_record_was_written_is_refused() {
 }
 
 #[test]
+fn an_archive_whose_image_revision_is_not_the_record_commit_is_refused() {
+    let mut other = spec(vec![(plain_layer(), LAYER)]);
+    other.revision = Some("b".repeat(40));
+    let candidate = Candidate::new("revision", &build(&other).archive());
+    assert_eq!(
+        refusal(&candidate, &[]),
+        "OCI image configuration revision label is not the source commit."
+    );
+}
+
+#[test]
 fn a_record_whose_graph_is_not_the_archive_graph_is_refused() {
     let candidate = Candidate::new("graph", &archive());
     candidate.edit(|value| {

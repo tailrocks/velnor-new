@@ -173,3 +173,30 @@ fn no_running_workflows_in_either_pass_lets_the_purge_proceed() {
     assert!(report.contains("deleted 3 entries"), "{report}");
     assert_eq!(api.run_listings.get(), 10);
 }
+
+#[test]
+fn a_failed_run_listing_refuses_the_purge_and_deletes_nothing() {
+    let api = Api::with_run_listing(mixed(), Err("HTTP 502"));
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(error.as_deref(), Some("HTTP 502"));
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}
+
+#[test]
+fn an_unreadable_run_listing_refuses_the_purge_and_deletes_nothing() {
+    let api = Api::with_run_listing(mixed(), Ok("{\"workflow_runs\":[]}"));
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert!(
+        error
+            .as_deref()
+            .is_some_and(|e| e.starts_with("the workflow run listing is not readable")),
+        "{error:?}"
+    );
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}

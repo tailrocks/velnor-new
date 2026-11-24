@@ -39,6 +39,8 @@ docker_source_commit = "b26fb77d3e7b01f9d21b89539c1ab428f5ca431f"
 docker_archive_url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz"
 docker_sha256 = "c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
 docker_sha256_source = "Measured from the official HTTPS archive; the download path has no .sha256 or .sig sidecar"
+docker_binary_sha256 = "3b4f13c1f02bc61131d8d1a13c70c56a18caf1518a692c7c5ad24a3203cc9292"
+docker_binary_sha256_source = "Measured from docker/docker in docker_archive_url after the archive matched docker_sha256"
 docker_source_tag_signature = "PASS: GitHub signed tag."
 
 buildx_version = "0.38.0"
@@ -85,6 +87,8 @@ docker_arm64_archive_url = "https://download.docker.com/linux/static/stable/aarc
 docker_arm64_archive_size_bytes = 77943393
 docker_arm64_sha256 = "3e93cc6d1a686456a3b18eefdde26467a837a7a2b257af22e27cba1dbc1b2018"
 docker_arm64_sha256_source = "Measured from the official HTTPS archive; the download path has no .sha256 or .sig sidecar"
+docker_arm64_binary_sha256 = "77b9c2bb422945584e62cd3d3becb0228fa313d08e72434cb6f3b456ae75213d"
+docker_arm64_binary_sha256_source = "Measured from docker/docker in docker_arm64_archive_url after the archive matched docker_arm64_sha256"
 buildx_arm64_asset_url = "https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-arm64"
 buildx_arm64_sha256 = "38e890e1a162bfdbf32fbe91404991dc4fc28e55b0de901b34374a061bab4d2c"
 buildx_arm64_sha256_source = "GitHub Release API asset digest"
