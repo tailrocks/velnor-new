@@ -13,16 +13,20 @@ use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
 use crate::image_changes::{CHANGES_JOB, selective};
+use crate::image_group::Compile;
+use crate::image_publish::{TIP_STEP, tip};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
 use crate::private_steps::{CHECK_STEP, queued_phase, release_mint};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 use crate::steps::{CACHE_RESTORE, CHECKOUT, RUN};
 
 const ARTIFACT_RETENTION_DAYS: u64 = 7;
+pub(crate) const LIVE_OUTPUT: &str = "live";
+const RECHECK_STEP: &str = "recheck";
 
 pub(crate) fn job_id(image: &ImageConfig, part: &str) -> String {
     format!("image-{}-{part}", image.name)
@@ -97,35 +101,108 @@ fn and_condition(existing: Option<String>, extra: Option<&str>) -> Option<String
     }
 }
 
+pub(crate) fn sha_scope() -> &'static str {
+    "${{ github.event_name == 'push' && github.sha || github.run_id }}"
+}
+
+pub(crate) fn stands_down() -> RenderedStep {
+    tip(
+        TIP_STEP,
+        Some(expression(
+            "github.event_name == 'push' && github.run_attempt == 1",
+        )),
+    )
+}
+
+fn rechecks() -> RenderedStep {
+    only_live(tip(
+        RECHECK_STEP,
+        Some(expression(
+            "github.event_name == 'push' && github.run_attempt == 1",
+        )),
+    ))
+}
+
+pub(crate) fn only_live(step: RenderedStep) -> RenderedStep {
+    live_after(step, &[TIP_STEP])
+}
+
+fn live_after(mut step: RenderedStep, checks: &[&str]) -> RenderedStep {
+    let ready = checks
+        .iter()
+        .map(|id| format!("steps.{id}.outputs.ready == 'true'"))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    let live = format!("github.event_name != 'push' || github.run_attempt != 1 || ({ready})");
+    let inner = step.condition.as_deref().map(|text| {
+        text.strip_prefix("${{ ")
+            .and_then(|rest| rest.strip_suffix(" }}"))
+            .unwrap_or(text)
+            .to_owned()
+    });
+    step.condition = Some(expression(&match inner {
+        Some(inner) => format!("({inner}) && ({live})"),
+        None => live,
+    }));
+    step
+}
+
 pub(crate) fn build_job(
     workflow: &ImageWorkflow<'_>,
-    build: &ImageBuild<'_>,
+    group: &Compile<'_>,
     events: &Events<'_>,
 ) -> RenderedJob {
-    let image = build.image;
     let selective = selective(workflow);
-    let reached = match image.pr_build {
-        ImagePrBuild::Off => events.branch_push(),
-        _ if selective => format!(
-            "({}) || (({}) && needs.{CHANGES_JOB}.outputs.{} == 'true')",
+    let reaching: Vec<&ImageBuild<'_>> = group
+        .members
+        .iter()
+        .copied()
+        .filter(|build| build.image.pr_build != ImagePrBuild::Off)
+        .collect();
+    let reached = if reaching.is_empty() {
+        events.branch_push()
+    } else if selective {
+        let selected: Vec<String> = reaching
+            .iter()
+            .map(|build| format!("needs.{CHANGES_JOB}.outputs.{} == 'true'", build.image.name))
+            .collect();
+        format!(
+            "({}) || (({}) && ({}))",
             events.branch_push(),
             events.checked(),
-            image.name
-        ),
-        _ => format!("({}) || ({})", events.branch_push(), events.checked()),
+            selected.join(" || ")
+        )
+    } else {
+        format!("({}) || ({})", events.branch_push(), events.checked())
     };
+    let id = group.id();
     RenderedJob {
-        id: job_id(image, "build"),
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{id}-{}", sha_scope()),
+            cancel_in_progress: true,
+        }),
+        outputs: vec![(
+            LIVE_OUTPUT.to_owned(),
+            format!(
+                "${{{{ github.run_attempt != 1 || (steps.{TIP_STEP}.outputs.ready == 'true' && steps.{RECHECK_STEP}.outputs.ready == 'true') }}}}"
+            ),
+        )],
+        id,
         condition: Some(expression(&reached)),
-        needs: if selective && image.pr_build != ImagePrBuild::Off {
+        needs: if selective && !reaching.is_empty() {
             vec![CHANGES_JOB.to_owned()]
         } else {
             Vec::new()
         },
         permissions: permissions(&build_scopes(workflow)),
         runs_on: workflow.runner.to_string(),
-        timeout_minutes: image.timeout_minutes,
-        steps: build_steps(workflow, build),
+        timeout_minutes: group
+            .members
+            .iter()
+            .map(|build| build.image.timeout_minutes)
+            .max()
+            .unwrap_or_default(),
+        steps: build_steps(workflow, group),
         ..RenderedJob::default()
     }
 }
@@ -138,9 +215,9 @@ fn build_scopes(workflow: &ImageWorkflow<'_>) -> Vec<(&'static str, &'static str
     scopes
 }
 
-fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<RenderedStep> {
-    let image = build.image;
-    let mut steps = vec![checkout(), install_helper(workflow.helper)];
+fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<RenderedStep> {
+    let first = group.members[0];
+    let mut steps = vec![checkout(), install_helper(workflow.helper), stands_down()];
     match workflow.mbx {
         ImageMbx::Off => {}
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
@@ -159,7 +236,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         steps.extend(
             queued_phase(
                 sources,
-                &join(build.root, "Cargo.toml"),
+                &join(first.root, "Cargo.toml"),
                 release_mint(workflow.helper),
             )
             .into_iter()
@@ -179,7 +256,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         format!("Add the {IMAGE_TARGET} target"),
         format!("rustup target add {IMAGE_TARGET}"),
     )]);
-    if image.openssl == ImageOpenssl::Sysroot {
+    if first.image.openssl == ImageOpenssl::Sysroot {
         steps.push(command(
             "Unpack the pinned OpenSSL sysroot".to_owned(),
             format!(
@@ -187,22 +264,35 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
             ),
         ));
     }
-    steps.push(compile(workflow, build));
-    steps.push(stage(build));
-    let mut artifact_step = upload(artifact(image), staged(image));
-    for (name, value) in &mut artifact_step.with {
-        if name == "retention-days" {
-            *value = Value::Int(ARTIFACT_RETENTION_DAYS);
+    let before_compile = steps.len();
+    steps.push(compile(workflow, group));
+    for build in &group.members {
+        steps.push(stage(build));
+        let mut artifact_step = upload(artifact(build.image), staged(build.image));
+        for (name, value) in &mut artifact_step.with {
+            if name == "retention-days" {
+                *value = Value::Int(ARTIFACT_RETENTION_DAYS);
+            }
         }
+        artifact_step
+            .with
+            .push(("include-hidden-files".to_owned(), Value::Bool(true)));
+        steps.push(artifact_step);
     }
-    artifact_step
-        .with
-        .push(("include-hidden-files".to_owned(), Value::Bool(true)));
-    steps.push(artifact_step);
+    let after = steps.split_off(before_compile);
+    let between = steps.split_off(3);
+    steps.extend(between.into_iter().map(only_live));
+    steps.push(rechecks());
+    steps.extend(
+        after
+            .into_iter()
+            .map(|step| live_after(step, &[TIP_STEP, RECHECK_STEP])),
+    );
     steps
 }
 
-fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep {
+fn compile(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> RenderedStep {
+    let build = group.members[0];
     let image = build.image;
     let offline = workflow.private.is_some();
     let profile = if image.profile == "release" {
@@ -215,10 +305,10 @@ fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep
         if offline { " --offline" } else { "" },
         image.glibc
     );
-    for package in &build.packages {
+    for package in group.packages() {
         let _ = write!(run, " --package {}", shell_word(package));
     }
-    for bin in &image.bins {
+    for bin in group.bins() {
         let _ = write!(run, " --bin {}", shell_word(bin));
     }
     if !image.default_features {
@@ -236,10 +326,16 @@ fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep
         ("SOURCE_DATE_EPOCH".to_owned(), Value::Text("0".to_owned())),
     ];
     env.extend(offline.then(offline_env));
+    let name = group
+        .members
+        .iter()
+        .map(|member| member.image.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     RenderedStep {
         working_directory: (build.root != ".").then(|| build.root.to_owned()),
         env,
-        ..command(format!("Compile {} with zigbuild", image.name), run)
+        ..command(format!("Compile {name} with zigbuild"), run)
     }
 }
 
@@ -257,7 +353,10 @@ fn stage(build: &ImageBuild<'_>) -> RenderedStep {
         let _ = write!(run, " --bin {}", shell_word(bin));
     }
     command(
-        "Stage the binaries and check their glibc ceiling".to_owned(),
+        format!(
+            "Stage the {} binaries and check their glibc ceiling",
+            image.name
+        ),
         run,
     )
 }

@@ -195,7 +195,7 @@ fn only_the_cargo_config_that_cargo_reads_is_checked_in_each_directory() -> Test
 fn second_image(off: bool) -> String {
     let build = if off { "pr_build = \"off\"\n" } else { "" };
     format!(
-        "\n[[image]]\nname = \"other-svc\"\nbins = [\"plain-svc\"]\n{build}\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"acme/other\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
+        "\n[[image]]\nname = \"other-svc\"\nbins = [\"plain-svc\"]\npublish_runner = \"ubuntu-26.04-scale-set-publish\"\n{build}\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"acme/other\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
     )
 }
 

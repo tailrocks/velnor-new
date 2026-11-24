@@ -16,6 +16,7 @@ const CHECK_TIMEOUT_MINUTES: u16 = 30;
 pub(crate) fn check_job(
     workflow: &ImageWorkflow<'_>,
     build: &ImageBuild<'_>,
+    compile: &str,
     events: &Events<'_>,
 ) -> Option<RenderedJob> {
     let image = build.image;
@@ -45,7 +46,7 @@ pub(crate) fn check_job(
     ];
     Some(RenderedJob {
         id: job_id(image, "check"),
-        needs: vec![job_id(image, "build")],
+        needs: vec![compile.to_owned()],
         condition: Some(expression(&events.checked())),
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),

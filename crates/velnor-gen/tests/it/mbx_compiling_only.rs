@@ -36,6 +36,7 @@ fn repo(version: &str, library: bool) -> Result<RepoView, Box<dyn std::error::Er
             doctest: false,
             source: None,
             requires_features: false,
+            required_features: Vec::new(),
         });
     }
     Ok(repo)

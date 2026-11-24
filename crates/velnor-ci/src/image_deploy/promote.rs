@@ -79,7 +79,8 @@ fn plan(registry: &dyn Registry, name: &str, promotion: &Promotion<'_>) -> Resul
     let source = format!("{name}:sha-{}", promotion.commit);
     let wanted = registry.digest(&source)?.ok_or_else(|| {
         CiError::new(format!(
-            "{source} does not exist; the commit was not published, so there is nothing to promote"
+            "{source} does not exist because a superseded commit gets no image, so open the push workflow run of commit {}, choose Re-run all jobs, then re-run this job",
+            promotion.commit
         ))
     })?;
     let target = format!("{name}:{}", promotion.version);

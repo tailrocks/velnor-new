@@ -89,9 +89,9 @@ pub use repo::{
     DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestLane,
-    TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind,
+    TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
     UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};

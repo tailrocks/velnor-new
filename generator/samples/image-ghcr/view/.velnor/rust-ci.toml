@@ -14,6 +14,8 @@ bins = ["cluster-svc"]
 inputs = ["migrations"]
 pr_only_checks = ["DCO"]
 timeout_minutes = 60
+control_runner = "ubuntu-24.04"
+publish_runner = "ubuntu-26.04-scale-set-publish"
 
 [[image.registry]]
 host = "docker.io"

@@ -117,7 +117,8 @@ fn registry_credentials_reach_only_the_publish_and_promote_jobs() -> TestResult 
         let workflow = rendered(name)?;
         for (id, job) in jobs(&workflow)? {
             let text = job.to_string();
-            let privileged = id.ends_with("-publish") || id.ends_with("-promote");
+            let privileged =
+                id.ends_with("-publish") || id.ends_with("-advance") || id.ends_with("-promote");
             assert_eq!(text.contains("DOCKERHUB"), privileged, "{name} {id}");
             assert_eq!(
                 job["environment"] == "images",
@@ -241,8 +242,8 @@ fn the_pushed_image_carries_the_commit_tags_the_source_labels_and_the_declared_a
 }
 
 #[test]
-fn a_second_registry_adds_one_login_and_one_more_commit_tag_while_a_single_one_has_one_login()
--> TestResult {
+fn a_second_registry_adds_one_login_and_one_sha_tag_while_a_single_one_has_one_login() -> TestResult
+{
     let plain = rendered("image-plain")?;
     let both = rendered("image-ghcr")?;
     let logins =
@@ -349,7 +350,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
         ". \"$VELNOR_EXEC\" run -- cargo zigbuild --release --locked --offline --target-dir target --target x86_64-unknown-linux-gnu.2.41 --package cluster-svc --bin cluster-svc"
     );
     assert_eq!(
-        step_named(build, "Stage the binaries")?["run"],
+        step_named(build, "Stage the cluster-svc binaries")?["run"],
         ". \"$VELNOR_EXEC\" image stage --target-dir target --profile release --glibc 2.41 --openssl none --to dist --bin cluster-svc"
     );
     let workspace = rendered("image-workspace")?;
@@ -361,7 +362,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
         ". \"$VELNOR_EXEC\" run -- cargo zigbuild --release --locked --target-dir target --target x86_64-unknown-linux-gnu.2.36 --package legacy-server --package legacy-migrate --bin legacy-server --bin legacy-migration --features tls"
     );
     assert_eq!(
-        step_named(build, "Stage the binaries")?["run"],
+        step_named(build, "Stage the multi-bin-svc binaries")?["run"],
         ". \"$VELNOR_EXEC\" image stage --target-dir backend-rust/target --profile release --glibc 2.36 --openssl sysroot --to dist --bin legacy-server --bin legacy-migration"
     );
     assert!(

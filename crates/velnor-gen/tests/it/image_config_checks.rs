@@ -17,7 +17,7 @@ fn plain_with(
 fn two_images_cannot_share_a_registry_repository_or_a_release_tag_family() -> TestResult {
     let second = |name: &str, repository: &str| {
         format!(
-            "\n[[image]]\nname = \"{name}\"\nbins = [\"plain-svc\"]\n\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"{repository}\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
+            "\n[[image]]\nname = \"{name}\"\nbins = [\"plain-svc\"]\npublish_runner = \"ubuntu-26.04-scale-set-publish\"\n\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"{repository}\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
         )
     };
     let shared = plain_with(|text| format!("{text}{}", second("other-svc", "acme/plain-svc")))?;

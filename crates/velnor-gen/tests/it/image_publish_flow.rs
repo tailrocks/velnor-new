@@ -96,69 +96,32 @@ fn the_pull_request_filter_matches_a_declared_input_file_and_the_dockerfile_spec
 }
 
 #[test]
-fn the_tip_is_checked_after_the_push_and_main_moves_only_while_it_holds() -> TestResult {
-    for (name, id) in [
-        ("image-plain", "image-plain-svc-publish"),
-        ("image-ghcr", "image-cluster-svc-publish"),
+fn a_commit_that_is_no_longer_the_tip_says_so_and_never_moves_the_branch_tag() -> TestResult {
+    for (name, publish, advance) in [
+        (
+            "image-plain",
+            "image-plain-svc-publish",
+            "image-plain-svc-advance",
+        ),
+        (
+            "image-ghcr",
+            "image-cluster-svc-publish",
+            "image-cluster-svc-advance",
+        ),
     ] {
         let workflow = rendered(name)?;
-        let publish = &workflow["jobs"][id];
-        let names: Vec<&str> = steps(publish)
-            .iter()
-            .filter_map(|step| step["name"].as_str())
-            .collect();
-        let position = |prefix: &str| {
-            names
-                .iter()
-                .position(|text| text.starts_with(prefix))
-                .ok_or(format!("no step {prefix}"))
-        };
-        let push = position("Build and push")?;
-        let tip = position("Check that the commit is still the tip")?;
-        let retag = position("Add the default-branch tag")?;
-        assert!(push < tip && tip < retag, "{name}: {names:?}");
-        for step in steps(publish) {
-            if step["name"]
-                .as_str()
-                .is_some_and(|text| text.starts_with("Add the default-branch tag"))
-            {
-                assert!(
-                    step["if"]
-                        .as_str()
-                        .is_some_and(|text| text.contains("steps.tip.outputs.ready == 'true'")),
-                    "{name}"
-                );
-                assert!(
-                    step["run"]
-                        .as_str()
-                        .is_some_and(|run| run.contains("imagetools create --tag")),
-                    "{name}"
-                );
-            }
-        }
-        assert!(
-            step_named(publish, "Say that the default-branch tag was withheld")?["if"]
-                .as_str()
-                .is_some_and(|text| text.contains("steps.tip.outputs.ready != 'true'")),
-            "{name}"
-        );
-        assert!(
-            step_named(publish, "Record the digest")?["env"]["BRANCH_TAG"]
-                .as_str()
-                .is_some_and(|text| text.contains("'withheld'")),
-            "{name}"
-        );
-        assert!(
-            step_named(publish, "still the tip")?["run"]
-                .as_str()
-                .is_some_and(|run| run
-                    .ends_with("image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip"))
-        );
-        let tags = step_named(publish, "Build and push")?["with"]["tags"]
+        let tags = step_named(&workflow["jobs"][publish], "Build and push")?["with"]["tags"]
             .as_str()
             .ok_or("no tags")?
             .to_owned();
         assert!(!tags.contains(":main"), "{name}: {tags}");
+        let advance = &workflow["jobs"][advance];
+        assert!(
+            step_named(advance, "Say that the default-branch tag was withheld")?["if"]
+                .as_str()
+                .is_some_and(|text| text.contains("steps.advance.outputs.moved != 'true'")),
+            "{name}"
+        );
     }
     Ok(())
 }
@@ -166,7 +129,11 @@ fn the_tip_is_checked_after_the_push_and_main_moves_only_while_it_holds() -> Tes
 #[test]
 fn ghcr_is_refused_on_a_github_host_other_than_github_com() -> TestResult {
     let both = rendered("image-ghcr")?;
-    for id in ["image-cluster-svc-publish", "image-cluster-svc-promote"] {
+    for id in [
+        "image-cluster-svc-publish",
+        "image-cluster-svc-advance",
+        "image-cluster-svc-promote",
+    ] {
         let job = &both["jobs"][id];
         let guard = step_named(job, "Refuse ghcr.io outside github.com")?;
         assert!(
@@ -213,7 +180,11 @@ fn the_pull_request_image_build_is_its_own_job_with_the_publish_jobs_sparse_chec
         "the compile job holds no docker step"
     );
     let upload = step_named(build, "Upload image-cluster-svc")?;
-    assert!(upload.get("if").is_none());
+    assert!(
+        upload["if"]
+            .as_str()
+            .is_some_and(|text| text.contains("steps.tip.outputs.ready"))
+    );
     let check = &workflow["jobs"]["image-cluster-svc-check"];
     assert_eq!(
         check["needs"],
@@ -249,7 +220,7 @@ fn pr_only_checks_reach_the_gate_and_the_authority_and_widen_their_token_to_chec
             .find(|step| {
                 step["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("image gate"))
+                    .is_some_and(|run| run.contains("image gate") && run.contains("--wait-seconds"))
             })
             .ok_or("no gate step")?;
         assert!(
@@ -332,7 +303,7 @@ fn pr_only_checks_are_verified_by_hosted_jobs_with_the_app_key_and_waited_for_wi
         |run| run.contains("--verify-exemptions") && run.contains("--wait-seconds=1200")
     ));
     let waiting = &workflow["jobs"]["image-gate"];
-    assert_eq!(waiting["runs-on"], "ubuntu-26.04-scale-set");
+    assert_eq!(waiting["runs-on"], "ubuntu-24.04");
     assert_eq!(waiting["needs"], serde_json::json!(["image-exemptions"]));
     assert!(waiting.get("environment").is_none());
     assert!(!waiting.to_string().contains("RELEASE_APP"));
@@ -343,7 +314,7 @@ fn pr_only_checks_are_verified_by_hosted_jobs_with_the_app_key_and_waited_for_wi
         let job = &plain["jobs"][id];
         assert!(job.get("environment").is_none(), "{id}");
         assert!(!job.to_string().contains("RELEASE_APP"), "{id}");
-        assert_eq!(job["runs-on"], "ubuntu-26.04-scale-set", "{id}");
+        assert_eq!(job["runs-on"], "ubuntu-latest", "{id}");
     }
     Ok(())
 }

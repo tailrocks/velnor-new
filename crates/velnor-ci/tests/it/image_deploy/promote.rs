@@ -114,6 +114,7 @@ fn an_unpublished_commit_and_malformed_requests_promote_nothing() {
     let unpublished = Fake::default().with(&format!("{HUB}:sha-{COMMIT}"), NEW);
     let message = run(&unpublished, "1.2.3").err().unwrap_or_default();
     assert!(message.contains("does not exist"), "{message}");
+    assert!(message.contains("Re-run all jobs"), "{message}");
     assert!(unpublished.tagged.borrow().is_empty());
     let fake = Fake::default().published();
     for version in ["1.2", "1.2.3.4", "v1.2.3", "1.2.x", "latest", "main"] {

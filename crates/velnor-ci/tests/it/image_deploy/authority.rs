@@ -45,7 +45,7 @@ fn ruleset(change: impl FnOnce(&mut Value)) -> Value {
         "target": "tag",
         "enforcement": "active",
         "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-01-02T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00.261+07:00",
         "conditions": {"ref_name": {"include": ["refs/tags/svc-v*"], "exclude": []}},
         "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}]
     });
@@ -140,13 +140,43 @@ fn any_other_actor_needs_an_active_tag_ruleset_that_forbids_creating_moving_and_
     refuse("the ruleset changed after the push", |r| {
         r["updated_at"] = json!("2026-02-01T12:00:01Z");
     });
+    refuse(
+        "the ruleset changed a fraction of a second after the push",
+        |r| {
+            r["updated_at"] = json!("2026-02-01T12:00:00.001Z");
+        },
+    );
+    refuse(
+        "a local time that sorts before the push as text but is later in UTC",
+        |r| {
+            r["updated_at"] = json!("2026-02-01T05:00:01.000-08:00");
+        },
+    );
     refuse("a ruleset with no change time", |r| {
         r["updated_at"] = Value::Null;
         r["created_at"] = Value::Null;
     });
-    refuse("a change time that is not a UTC stamp", |r| {
-        r["updated_at"] = json!("yesterday");
-    });
+    for malformed in [
+        "yesterday",
+        "2026-02-01T12:00:00",
+        "2026-02-01 12:00:00Z",
+        "2026-13-01T12:00:00Z",
+        "2026-02-01T12:00:00.+07:00",
+        "2026-02-01T12:00:00+0700",
+        "2026-02-01T12:00:00+25:00",
+    ] {
+        let message = run(
+            &api(&ruleset(|r| r["updated_at"] = json!(malformed))),
+            "mallory",
+            &["ann"],
+        )
+        .err()
+        .unwrap_or_default();
+        assert!(
+            message.contains("no active tag ruleset"),
+            "{malformed}: {message}"
+        );
+    }
 }
 
 #[test]
@@ -157,6 +187,14 @@ fn a_ruleset_that_predates_the_push_vouches_and_an_unknown_push_time_never_does(
         r["updated_at"] = json!("2026-02-01T12:00:00Z");
     }));
     assert!(run(&same, "mallory", &[]).is_ok());
+    for earlier in [
+        "2026-02-01T19:00:00.000+07:00",
+        "2026-02-01T12:00:00.000Z",
+        "2026-02-01T07:30:00-04:00",
+    ] {
+        let local = api(&ruleset(|r| r["updated_at"] = json!(earlier)));
+        assert!(run(&local, "mallory", &[]).is_ok(), "{earlier}");
+    }
     let unknown = run_with(&covered, "mallory", &[], None)
         .err()
         .unwrap_or_default();

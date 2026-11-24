@@ -68,14 +68,77 @@ fn matches(pattern: &str, reference: &str) -> bool {
     pattern == "~ALL" || glob(pattern.as_bytes(), reference.as_bytes())
 }
 
-fn stamp(text: &str) -> Option<&str> {
-    let shape = b"dddd-dd-ddTdd:dd:ddZ";
-    (text.len() == shape.len()
-        && text.bytes().zip(shape).all(|(byte, kind)| match kind {
-            b'd' => byte.is_ascii_digit(),
-            other => byte == *other,
-        }))
-    .then_some(text)
+fn digits(text: &str, count: usize) -> Option<i64> {
+    (text.len() == count && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| text.parse().ok())
+        .flatten()
+}
+
+fn civil_days(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let of_year = year - era * 400;
+    let shifted = (month + 9) % 12;
+    let of_era = of_year * 365 + of_year / 4 - of_year / 100 + (shifted * 153 + 2) / 5 + day - 1;
+    era * 146_097 + of_era - 719_468
+}
+
+fn stamp(text: &str) -> Option<(i64, u32)> {
+    let (date, rest) = text.split_once('T')?;
+    let mut date_parts = date.split('-');
+    let (year, month, day) = (
+        digits(date_parts.next()?, 4)?,
+        digits(date_parts.next()?, 2)?,
+        digits(date_parts.next()?, 2)?,
+    );
+    if date_parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let (clock, offset) = if let Some(clock) = rest.strip_suffix('Z') {
+        (clock, 0)
+    } else {
+        let cut = rest.len().checked_sub(6)?;
+        let (clock, zone) = rest.split_at_checked(cut)?;
+        let sign = match zone.as_bytes().first()? {
+            b'+' => 1,
+            b'-' => -1,
+            _ => return None,
+        };
+        let (hours, minutes) = zone.get(1..)?.split_once(':')?;
+        let (hours, minutes) = (digits(hours, 2)?, digits(minutes, 2)?);
+        if hours > 23 || minutes > 59 {
+            return None;
+        }
+        (clock, sign * (hours * 3600 + minutes * 60))
+    };
+    let (whole, fraction) = match clock.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (clock, None),
+    };
+    let mut clock_parts = whole.split(':');
+    let (hour, minute, second) = (
+        digits(clock_parts.next()?, 2)?,
+        digits(clock_parts.next()?, 2)?,
+        digits(clock_parts.next()?, 2)?,
+    );
+    if clock_parts.next().is_some() || hour > 23 || minute > 59 || second > 60 {
+        return None;
+    }
+    let nanos = match fraction {
+        None => 0,
+        Some(fraction) => {
+            if fraction.is_empty()
+                || fraction.len() > 9
+                || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+            {
+                return None;
+            }
+            u32::try_from(format!("{fraction:0<9}").parse::<u64>().ok()?).ok()?
+        }
+    };
+    let seconds =
+        civil_days(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second - offset;
+    Some((seconds, nanos))
 }
 
 fn predates(ruleset: &Ruleset, pushed: Option<&str>) -> bool {

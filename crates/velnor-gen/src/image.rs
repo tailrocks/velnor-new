@@ -5,10 +5,12 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     HelperRelease, ImageConfig, ImageHost, ImageOpenssl, MbxStore, MisePlatform, RepoFacts,
-    RepoPath, RepoView, RepositoryIdentity, RustMember, RustRoot, TargetKind, ToolPin,
+    RepoPath, RepoView, RepositoryIdentity, RustRoot, ToolPin,
 };
 use velnor_render::{IMAGE_WORKFLOW_PATH, ImageBuild, ImageMbx, ImageWorkflow, render_image};
 
+use crate::image_bins::{packages_of, root_directory, root_of};
+use crate::image_runner::check_runners;
 use crate::{GenerateError, ImageError};
 
 pub(crate) fn image_workflow(
@@ -34,6 +36,7 @@ pub(crate) fn image_workflow(
         .split_once('/')
         .map(|(owner, _)| owner.to_ascii_lowercase());
     check_all(images, &facts.config.default_branch)?;
+    check_runners(facts, images)?;
     if MisePlatform::runner(facts.config.runner.as_str())
         .is_some_and(|platform| platform.lock_key() != "linux-x64")
     {
@@ -59,6 +62,7 @@ pub(crate) fn image_workflow(
             image,
             root: root_directory(root),
             packages,
+            publish_runner: image.publish_runner.as_ref(),
         });
     }
     let workflow = ImageWorkflow {
@@ -67,6 +71,9 @@ pub(crate) fn image_workflow(
         repository,
         branch: &facts.config.default_branch,
         runner: &facts.config.runner,
+        control_runner: images
+            .first()
+            .and_then(|image| image.control_runner.as_ref()),
         private: facts.config.private_sources.as_ref(),
         sources: velnor_rust::image_sources_restore(facts),
         mirror: facts
@@ -239,87 +246,6 @@ fn check_stage(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {
         }),
         None => Ok(()),
     }
-}
-
-fn root_directory(root: &RustRoot) -> &str {
-    root.manifest
-        .as_str()
-        .rsplit_once('/')
-        .map_or(".", |(directory, _)| directory)
-}
-
-fn root_of<'a>(facts: &'a RepoFacts, image: &ImageConfig) -> Result<&'a RustRoot, ImageError> {
-    match &image.root {
-        Some(root) => facts
-            .rust_roots
-            .iter()
-            .find(|candidate| root_directory(candidate) == root)
-            .ok_or_else(|| ImageError::UnknownRoot {
-                image: image.name.clone(),
-                root: root.clone(),
-            }),
-        None => match facts.rust_roots.as_slice() {
-            [only] => Ok(only),
-            _ => Err(ImageError::AmbiguousRoot {
-                image: image.name.clone(),
-            }),
-        },
-    }
-}
-
-fn packages_of<'a>(image: &ImageConfig, root: &'a RustRoot) -> Result<Vec<&'a str>, ImageError> {
-    let mut owners: Vec<&RustMember> = Vec::new();
-    for bin in &image.bins {
-        let found: Vec<&RustMember> = root
-            .members
-            .iter()
-            .filter(|member| {
-                image
-                    .package
-                    .as_deref()
-                    .is_none_or(|package| member.name.as_str() == package)
-                    && member.targets.iter().any(|target| {
-                        target.kinds.contains(&TargetKind::Bin) && target.name.as_str() == bin
-                    })
-            })
-            .collect();
-        let member = match found.as_slice() {
-            [] if image.package.is_some() => {
-                return Err(ImageError::WrongPackage {
-                    image: image.name.clone(),
-                    bin: bin.clone(),
-                });
-            }
-            [] => {
-                return Err(ImageError::UnknownBin {
-                    image: image.name.clone(),
-                    bin: bin.clone(),
-                });
-            }
-            [only] => *only,
-            _ => {
-                return Err(ImageError::AmbiguousBin {
-                    image: image.name.clone(),
-                    bin: bin.clone(),
-                });
-            }
-        };
-        let needs_features = member.targets.iter().any(|target| {
-            target.name.as_str() == bin
-                && target.kinds.contains(&TargetKind::Bin)
-                && target.requires_features
-        });
-        if needs_features && image.features.is_empty() {
-            return Err(ImageError::BinNeedsFeatures {
-                image: image.name.clone(),
-                bin: bin.clone(),
-            });
-        }
-        if !owners.iter().any(|owner| owner.name == member.name) {
-            owners.push(member);
-        }
-    }
-    Ok(owners.iter().map(|owner| owner.name.as_str()).collect())
 }
 
 fn check_profile(view: &RepoView, image: &ImageConfig, root: &RustRoot) -> Result<(), ImageError> {

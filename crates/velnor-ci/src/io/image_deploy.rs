@@ -11,12 +11,13 @@ use std::time::{Duration, Instant};
 use super::{api_url, append_outputs, http, image_candidate, read_limited, token};
 use crate::cli::ImageCommand;
 use crate::cli_image::{
-    GateOnly, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs,
-    ImagePromoteArgs, ImageStageArgs, OpensslMode,
+    GateOnly, ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs,
+    ImagePreflightArgs, ImagePromoteArgs, ImageStageArgs, OpensslMode,
 };
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
+use crate::image_deploy::advance::{Advancement, advance};
 use crate::image_deploy::authority::{Release, authorize};
 use crate::image_deploy::changes::select;
 use crate::image_deploy::gate::{
@@ -39,6 +40,7 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Stage(args) => stage(&args),
         ImageCommand::Gate(args) => gate(&args),
         ImageCommand::Changes(args) => changes(&args),
+        ImageCommand::Advance(args) => advance_branch(&args),
         ImageCommand::Preflight(args) => hub_preflight(&args),
         ImageCommand::Authorize(args) => authorize_release(&args),
         ImageCommand::Promote(args) => promote_release(&args),
@@ -234,9 +236,34 @@ fn authorize_release(args: &ImageAuthorizeArgs) -> Result<String, CiError> {
             actors: &args.release_actors,
             run_id: std::env::var("GITHUB_RUN_ID")
                 .ok()
-                .and_then(|id| id.parse().ok()),
+                .map(|id| {
+                    id.parse().map_err(|_| {
+                        CiError::new(format!(
+                            "GITHUB_RUN_ID `{id}` is not a number, so the time of the push is unknown and no ruleset can vouch; list the actor in release_actors or run this in a workflow run"
+                        ))
+                    })
+                })
+                .transpose()?,
         },
     )
+}
+
+fn advance_branch(args: &ImageAdvanceArgs) -> Result<String, CiError> {
+    let repo = Repo::parse(&args.repo)?;
+    let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
+    let advanced = advance(
+        &github,
+        &repo,
+        &registry::Docker,
+        &Advancement {
+            images: &args.images,
+            branch: &args.branch,
+            commit: &args.commit,
+            digest: &args.digest,
+        },
+    )?;
+    append_outputs(&format!("moved={}\n", advanced.moved))?;
+    Ok(advanced.report)
 }
 
 fn promote_release(args: &ImagePromoteArgs) -> Result<String, CiError> {

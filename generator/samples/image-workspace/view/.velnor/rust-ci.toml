@@ -12,9 +12,28 @@ context = "."
 glibc = "2.36"
 openssl = "sysroot"
 pr_build = "inputs"
+publish_runner = "ubuntu-26.04-scale-set-publish"
 
 [[image.registry]]
 host = "docker.io"
 repository = "acme/multi-bin-svc"
+username = "secrets.DOCKERHUB_USERNAME"
+token = "secrets.DOCKERHUB_TOKEN"
+
+[[image]]
+name = "ops-job"
+bins = ["legacy-server", "legacy-migration"]
+root = "backend-rust"
+features = ["tls"]
+dockerfile = "docker/Dockerfile.ops"
+stage = "dist-ops"
+glibc = "2.36"
+openssl = "sysroot"
+pr_build = "inputs"
+publish_runner = "ubuntu-26.04-scale-set-publish"
+
+[[image.registry]]
+host = "docker.io"
+repository = "acme/ops-job"
 username = "secrets.DOCKERHUB_USERNAME"
 token = "secrets.DOCKERHUB_TOKEN"

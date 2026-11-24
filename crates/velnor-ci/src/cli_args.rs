@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use crate::cli_image::{
-    ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs, ImagePromoteArgs,
-    ImageStageArgs, ImageSysrootArgs,
+    ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs,
+    ImagePromoteArgs, ImageStageArgs, ImageSysrootArgs,
 };
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
@@ -222,6 +222,10 @@ pub enum ImageCommand {
         about = "Write IMAGE=true or IMAGE=false to $GITHUB_OUTPUT for each image named by --match: on a pull_request event an image is true when a file of the pull request, or the path it was renamed from, matches one of its globs; any other event, and a pull request of more than 3000 files, select every image. Reads GITHUB_TOKEN, which needs pull-requests: read"
     )]
     Changes(ImageChangesArgs),
+    #[command(
+        about = "Point the default-branch tag of every --image at the image of the tip of the default branch, under the lock that the workflow holds: the digest this run pushed when --commit is the tip, otherwise the digest of sha-<tip> read from each registry (nothing moves when the tip has no image there). Then read the tag back in every registry and exit 1, saying that a re-run repairs it, when any registry names another digest. Reads GITHUB_TOKEN, which needs contents: read, and the docker login of the job"
+    )]
+    Advance(ImageAdvanceArgs),
     #[command(
         about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private, and write sha_exists=true or false to $GITHUB_OUTPUT for the tag. Never prints a credential"
     )]

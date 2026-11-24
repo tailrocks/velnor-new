@@ -4,18 +4,19 @@
 use velnor_model::{ImageConfig, ImageCredential, ImageHost, ImageRegistry, ImageVisibility};
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
-use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, staged};
+use crate::image_build::{LIVE_OUTPUT, artifact, checkout, job_id, labels, setup_buildx, staged};
 use crate::image_gate::GATE_JOB;
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
 use crate::release_binaries::{command, download_to};
 use crate::release_steps::{expression, permissions, shell_word, variables};
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 
 const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
-const TIP_STEP: &str = "tip";
+pub(crate) const TIP_STEP: &str = "tip";
+pub(crate) const DIGEST_OUTPUT: &str = "digest";
 
 pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     let mut scopes = vec![("contents", "read")];
@@ -182,9 +183,10 @@ fn push(image: &ImageConfig) -> RenderedStep {
     }
 }
 
-fn tip() -> RenderedStep {
+pub(crate) fn tip(id: &str, condition: Option<String>) -> RenderedStep {
     RenderedStep {
-        id: Some(TIP_STEP.to_owned()),
+        id: Some(id.to_owned()),
+        condition,
         env: variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
             ("REPOSITORY", "${{ github.repository }}"),
@@ -193,27 +195,6 @@ fn tip() -> RenderedStep {
         ..command(
             "Check that the commit is still the tip of the default branch".to_owned(),
             "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip".to_owned(),
-        )
-    }
-}
-
-fn retag(registry: &ImageRegistry, branch: &str) -> RenderedStep {
-    RenderedStep {
-        condition: Some(expression(&format!(
-            "steps.{TIP_STEP}.outputs.ready == 'true'"
-        ))),
-        env: vec![
-            ("IMAGE".to_owned(), Value::Text(registry.reference())),
-            ("BRANCH".to_owned(), Value::Text(branch.to_owned())),
-            (
-                "COMMIT".to_owned(),
-                Value::Expr("${{ github.sha }}".to_owned()),
-            ),
-        ],
-        ..command(
-            format!("Add the default-branch tag in {}", registry.host.name()),
-            "docker buildx imagetools create --tag \"$IMAGE:$BRANCH\" \"$IMAGE:sha-$COMMIT\""
-                .to_owned(),
         )
     }
 }
@@ -244,34 +225,6 @@ pub(crate) fn host_guard(image: &ImageConfig) -> Vec<RenderedStep> {
         },
     ]
 }
-
-fn withheld(branch: &str) -> Vec<RenderedStep> {
-    let condition = expression(&format!("steps.{TIP_STEP}.outputs.ready != 'true'"));
-    let notice = format!(
-        "echo \"::notice title=Image::the {branch} tag was withheld because this commit is no longer the tip\""
-    );
-    let summary = format!(
-        "echo \"The {branch} tag was withheld: this commit is no longer the tip of {branch}, so only sha-$COMMIT was pushed.\" >> \"$GITHUB_STEP_SUMMARY\""
-    );
-    vec![
-        RenderedStep {
-            condition: Some(condition.clone()),
-            ..command(
-                "Say that the default-branch tag was withheld".to_owned(),
-                notice,
-            )
-        },
-        RenderedStep {
-            condition: Some(condition),
-            env: variables(&[("COMMIT", "${{ github.sha }}")]),
-            ..command(
-                "Record that the default-branch tag was withheld".to_owned(),
-                summary,
-            )
-        },
-    ]
-}
-
 fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
     let reference = format!("{}:sha-${{{{ github.sha }}}}", registry.reference());
     let host = registry.host.name();
@@ -282,17 +235,10 @@ fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
                 "DIGEST".to_owned(),
                 Value::Expr(format!("${{{{ steps.{PUSH_STEP}.outputs.digest }}}}")),
             ),
-            (
-                "BRANCH_TAG".to_owned(),
-                Value::Expr(format!(
-                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && 'pushed' || 'withheld' }}}}"
-                )),
-            ),
         ],
         ..command(
             format!("Record the digest pushed to {host}"),
-            "echo \"$IMAGE $DIGEST (default-branch tag $BRANCH_TAG)\" >> \"$GITHUB_STEP_SUMMARY\""
-                .to_owned(),
+            "echo \"$IMAGE $DIGEST\" >> \"$GITHUB_STEP_SUMMARY\"".to_owned(),
         )
     }]
 }
@@ -300,6 +246,7 @@ fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
 pub(crate) fn publish_job(
     workflow: &ImageWorkflow<'_>,
     build: &ImageBuild<'_>,
+    compile: &str,
     events: &Events<'_>,
 ) -> RenderedJob {
     let image = build.image;
@@ -315,27 +262,27 @@ pub(crate) fn publish_job(
     steps.extend(host_guard(image));
     steps.extend(image.registries.iter().map(login));
     steps.push(push(image));
-    steps.push(tip());
-    steps.extend(
-        image
-            .registries
-            .iter()
-            .map(|registry| retag(registry, workflow.branch)),
-    );
-    steps.extend(withheld(workflow.branch));
     for registry in &image.registries {
         steps.extend(report(registry));
     }
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{}-${{{{ github.sha }}}}", job_id(image, "publish")),
+            cancel_in_progress: false,
+        }),
         id: job_id(image, "publish"),
-        needs: vec![job_id(image, "build"), GATE_JOB.to_owned()],
+        outputs: vec![(
+            DIGEST_OUTPUT.to_owned(),
+            format!("${{{{ steps.{PUSH_STEP}.outputs.digest }}}}"),
+        )],
+        needs: vec![compile.to_owned(), GATE_JOB.to_owned()],
         condition: Some(expression(&format!(
-            "needs.{GATE_JOB}.outputs.ready == 'true' && {}",
+            "needs.{GATE_JOB}.outputs.ready == 'true' && needs.{compile}.outputs.{LIVE_OUTPUT} == 'true' && {}",
             events.branch_push()
         ))),
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),
         permissions: registry_scopes(image),
-        runs_on: workflow.runner.to_string(),
+        runs_on: workflow.publish_runner(build),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..RenderedJob::default()

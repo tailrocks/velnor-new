@@ -214,3 +214,21 @@ pub struct ImagePromoteArgs {
     )]
     pub commit: String,
 }
+
+#[derive(Debug, Args)]
+pub struct ImageAdvanceArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(long, help = "The full SHA of the commit that this run pushed")]
+    pub commit: String,
+    #[arg(long, help = "The digest that this run pushed, as sha256:<hex>")]
+    pub digest: String,
+    #[arg(long, help = "The default-branch tag to move")]
+    pub branch: String,
+    #[arg(
+        long = "image",
+        required = true,
+        help = "A registry repository such as ghcr.io/owner/name; repeat for each"
+    )]
+    pub images: Vec<String>,
+}

@@ -8,6 +8,7 @@ name = "plain-svc"
 bins = ["plain-svc"]
 pr_build = "always"
 attestations = false
+publish_runner = "ubuntu-26.04-scale-set-publish"
 
 [[image.registry]]
 host = "docker.io"

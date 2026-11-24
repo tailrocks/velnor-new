@@ -79,7 +79,12 @@ fn a_bot_pull_request_skips_the_image_jobs_that_need_the_private_token_and_the_q
     }
     let build = &workflow["jobs"]["image-cluster-svc-build"];
     let check = step_named(build, "merge queue entry is not from a fork")?;
-    assert_eq!(check["if"], "${{ github.event_name == 'merge_group' }}");
+    assert!(
+        check["if"]
+            .as_str()
+            .is_some_and(|text| text.contains("github.event_name == 'merge_group'")),
+        "{check}"
+    );
     let token = step_named(build, "read-only token for the private repositories")?;
     let condition = token["if"].as_str().ok_or("no token condition")?;
     assert!(
