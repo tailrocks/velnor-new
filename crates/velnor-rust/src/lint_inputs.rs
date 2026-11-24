@@ -10,7 +10,7 @@ use velnor_model::{
 };
 
 use crate::config::CONFIG_PATH;
-use crate::lint_tasks::TASK_FOLDERS;
+use crate::lint_tasks::{TASK_FOLDERS, task_names};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
 #[must_use]
@@ -177,14 +177,13 @@ fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath) -> bool {
     GENERATOR_FOLDERS
         .iter()
         .any(|folder| path.as_str().starts_with(folder))
-        || (facts
-            .config
-            .lint
-            .iter()
-            .any(|lint| matches!(lint.kind, LintKind::MiseTask { .. }))
-            && TASK_FOLDERS
+        || task_names(path).iter().any(|name| {
+            facts
+                .config
+                .lint
                 .iter()
-                .any(|folder| path.as_str().starts_with(folder)))
+                .any(|lint| matches!(&lint.kind, LintKind::MiseTask { task, .. } if task == name))
+        })
 }
 
 fn inert(facts: &RepoFacts, path: &RepoPath) -> bool {

@@ -208,21 +208,23 @@ fn a_pull_request_that_touches_a_generator_input_runs_the_generated_check() -> T
 }
 
 #[test]
-fn a_markdown_file_in_a_mise_task_folder_runs_the_generated_check_only_with_a_mise_task_lint()
--> TestResult {
-    for path in [
-        "mise-tasks/build.md",
-        ".mise-tasks/build.md",
-        "mise/tasks/build.md",
-        ".mise/tasks/build.md",
-        ".config/mise/tasks/build.md",
+fn a_markdown_file_named_like_the_task_of_a_mise_task_lint_runs_the_generated_check() -> TestResult
+{
+    for folder in [
+        "mise-tasks",
+        ".mise-tasks",
+        "mise/tasks",
+        ".mise/tasks",
+        ".config/mise/tasks",
     ] {
+        let task = format!("{folder}/lint-generator-samples.md");
+        let other = format!("{folder}/build.md");
         assert!(
-            selected(&["docs/readme.md", path], EventKind::PullRequest)?,
-            "{path}"
+            selected(&["docs/readme.md", &task], EventKind::PullRequest)?,
+            "{task}"
         );
+        assert!(!selected(&[&other], EventKind::PullRequest)?, "{other}");
     }
-    assert!(!selected(&["docs/tasks/build.md"], EventKind::PullRequest)?);
     let mut bare = view(&["Cargo.toml"], Some(CHECK_GATED.as_bytes()))?;
     crate::facts::lock_pinned_tools(&mut bare)?;
     bare.tracked_paths.insert(LOCK_PATH);
@@ -230,7 +232,7 @@ fn a_markdown_file_in_a_mise_task_folder_runs_the_generated_check_only_with_a_mi
         .insert(LOCK_PATH, archive_lock_at(FIRST)?.into_bytes());
     assert!(!selected_in(
         &bare,
-        &["mise-tasks/build.md"],
+        &["mise-tasks/lint-generator-samples.md"],
         EventKind::PullRequest
     )?);
     Ok(())
