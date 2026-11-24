@@ -54,6 +54,19 @@ class FrozenEvidence(unittest.TestCase):
         self.config.write_text(CONFIG.replace('        - "docs/a.json"\n', '        - "docs/a.json"\n        - "docs/b.json"\n'))
         self.assertEqual(self.problems(), ["exempt but not pinned: docs/b.json"])
 
+    def test_unquoted_and_single_quoted_exemptions_are_read(self):
+        self.config.write_text(CONFIG.replace('        - "docs/a.json"\n', "        - docs/a.json\n        - 'docs/b.json'\n        - docs/c.json # note\n"))
+        self.assertEqual(
+            self.problems(),
+            ["exempt but not pinned: docs/b.json", "exempt but not pinned: docs/c.json"],
+        )
+
+    def test_a_symlink_to_pinned_bytes_is_reported(self):
+        (self.root / "docs/copy.json").write_text("{}")
+        (self.root / "docs/a.json").unlink()
+        (self.root / "docs/a.json").symlink_to("copy.json")
+        self.assertEqual(self.problems(), ["symlink: docs/a.json"])
+
     def test_pin_without_exemption_is_reported(self):
         self.config.write_text(CONFIG.replace('        - "docs/a.json"\n', ""))
         self.assertEqual(self.problems(), ["pinned but not exempt: docs/a.json"])

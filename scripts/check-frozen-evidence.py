@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = Path(__file__).with_name("frozen-evidence.sha256")
 RULES = ("no-absolute-local-paths", "no-local-temp-paths")
-EXEMPT = re.compile(r'^        - "([^"]+)"$')
+EXEMPT = re.compile(r"""^ {8}-\s+(?:"([^"]+)"|'([^']+)'|([^\s#'"][^#]*?))\s*(?:#.*)?$""")
 
 
 def exempt_paths(config):
@@ -19,8 +19,10 @@ def exempt_paths(config):
         if line.startswith("  - id: "):
             rule = line.removeprefix("  - id: ").strip()
         found = EXEMPT.match(line)
-        if found and rule in RULES and found.group(1) != ".alint.yml":
-            paths.add(found.group(1))
+        if found and rule in RULES:
+            path = found.group(1) or found.group(2) or found.group(3)
+            if path != ".alint.yml":
+                paths.add(path)
     return paths
 
 
@@ -39,7 +41,9 @@ def check(root, config, manifest):
     problems += [f"pinned but not exempt: {path}" for path in sorted(pinned.keys() - exempt)]
     for path in sorted(exempt & pinned.keys()):
         target = root / path
-        if not target.is_file():
+        if target.is_symlink():
+            problems.append(f"symlink: {path}")
+        elif not target.is_file():
             problems.append(f"missing: {path}")
         elif digest(target) != pinned[path]:
             problems.append(f"changed: {path}")

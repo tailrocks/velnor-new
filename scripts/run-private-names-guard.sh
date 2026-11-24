@@ -27,3 +27,4 @@ else
 fi
 
 python3 -I "$trusted/private-names-guard.py"
+python3 -I "$guard"

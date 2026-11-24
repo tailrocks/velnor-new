@@ -129,12 +129,13 @@ class MarkupTests(unittest.TestCase):
                 "mid.md": "zz**plan**ted\n",
                 "code.md": "zz`plan`ted\n",
                 "strike.md": "zz~~plan~~ted\n",
+                "mixed.md": "zz **plan** ted\n",
                 "clean.md": "zz**plan**tex\n",
             }
         )
         with tmp:
             self.assertEqual(
-                guard.scan(root, planted("zzplanted")), ["bold.md:1", "code.md:1", "mid.md:1", "strike.md:1"]
+                guard.scan(root, planted("zzplanted")), ["bold.md:1", "code.md:1", "mid.md:1", "mixed.md:1", "strike.md:1"]
             )
 
 
@@ -185,10 +186,15 @@ class LfsTests(unittest.TestCase):
         with tmp:
             self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:lfs-payload-unavailable"])
 
-    def test_the_committed_lfs_fixture_is_exempt(self):
-        tmp, root = indexed({b"qualification/fixtures/lfs-marker.txt": self.pointer()})
+    def test_the_canonical_lfs_fixture_pointer_needs_no_payload(self):
+        tmp, root = indexed({b"qualification/fixtures/lfs-marker.txt": guard.UNFETCHED_LFS_FIXTURE})
         with tmp:
             self.assertEqual(guard.scan(root, planted("zzplanted")), [])
+
+    def test_the_lfs_fixture_path_is_still_scanned_for_names(self):
+        tmp, root = indexed({b"qualification/fixtures/lfs-marker.txt": guard.UNFETCHED_LFS_FIXTURE + b"zzplanted\n"})
+        with tmp:
+            self.assertNotEqual(guard.scan(root, planted("zzplanted")), [])
 
 
 class PathTests(unittest.TestCase):

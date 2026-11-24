@@ -30,10 +30,11 @@ BLANKS = re.compile(rb"[ \t\r\f\v]+")
 NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
 MAX_PERCENT_ROUNDS = 4
-EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock", b"qualification/fixtures/lfs-marker.txt"})
+EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock"})
 MARKUP = re.compile(rb"[*`~]+")
 LFS_POINTER = re.compile(rb"\Aversion https://git-lfs\.github\.com/spec/v1\noid sha256:([0-9a-f]{64})\nsize [0-9]+\n")
 MAX_SEEN = 2_000_000
+UNFETCHED_LFS_FIXTURE = b"version https://git-lfs.github.com/spec/v1\noid sha256:8c271ba1c7127e3409055b635a6a2e2671c004ff9f4a507c2cdfd9e0fb3bf90b\nsize 7\n"
 
 
 def sha(candidate):
@@ -215,7 +216,7 @@ def views(content):
     found = []
     for base in bases:
         for view in (base, decoded(base)):
-            for candidate in (view, spaced(view), unmarked(view)):
+            for candidate in (view, spaced(view), unmarked(view), spaced(unmarked(view))):
                 if candidate not in found:
                     found.append(candidate)
     return tuple(found)
@@ -253,7 +254,7 @@ def stream_blobs(root, objects):
 
 def lfs_payload(root, content):
     pointer = LFS_POINTER.match(content)
-    if not pointer:
+    if not pointer or content == UNFETCHED_LFS_FIXTURE:
         return b""
     oid = pointer.group(1).decode()
     store = subprocess.run(
