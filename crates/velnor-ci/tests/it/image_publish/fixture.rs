@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 
 use super::gate::{env as base_env, policy};
 use super::registry::{ACTOR, TOKEN};
-use crate::image_candidate::fixture::{LAYER, build, check, plain_layer, spec, tar};
+use crate::image_candidate::fixture::{LAYER, build, check_for, plain_layer, spec, tar};
 use crate::image_candidate::record::record;
 use crate::support::fresh_dir;
 
@@ -84,7 +84,9 @@ impl Candidate {
         git(&root, &["commit", "-q", "--allow-empty", "-m", "fixture"]);
         let head = git(&root, &["rev-parse", "HEAD"]);
         let second = tar(&[("second", b"second-layer")]);
-        let archive = build(&spec(vec![(plain_layer(), LAYER), (second, LAYER)])).archive();
+        let mut layers = spec(vec![(plain_layer(), LAYER), (second, LAYER)]);
+        layers.revision = Some(head.clone());
+        let archive = build(&layers).archive();
         let mut value = record();
         let inputs: serde_json::Map<String, Value> = INPUT_PATHS
             .iter()
@@ -94,13 +96,14 @@ impl Candidate {
             })
             .collect();
         value["source"] = json!({"commit": head, "ref": "refs/heads/main", "inputs": inputs});
+        value["build"]["arguments"] = json!([format!("VELNOR_SOURCE_SHA={head}")]);
         value["workflow"] = json!({
             "repository": "tailrocks/velnor-new", "repository_id": 1_390_620_900_u64,
             "event": DEFAULT_EVENT, "workflow_ref": format!("{DEFAULT_WORKFLOW}@refs/heads/main"),
             "authority_commit": head, "run_id": 77, "run_attempt": 2,
         });
         value["archive"] = json!({"sha256": sha256_hex(&archive), "size_bytes": archive.len()});
-        value["oci"] = check(&archive).unwrap_or_else(|e| unreachable!("{e}"));
+        value["oci"] = check_for(&archive, &head).unwrap_or_else(|e| unreachable!("{e}"));
         write(&dir.join("out/candidate.oci.tar"), &archive);
         write(&dir.join("out/candidate.json"), value.to_string());
         let gh = dir.join("bin/gh");

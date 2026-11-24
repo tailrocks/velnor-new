@@ -188,6 +188,7 @@ mod release_tag_patterns;
 mod release_verify_listed;
 mod report;
 mod report_accounting;
+mod report_relative_doc;
 mod report_split_host_units;
 mod report_waste_categories;
 mod report_waste_mbx;

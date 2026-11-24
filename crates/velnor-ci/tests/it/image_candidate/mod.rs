@@ -10,4 +10,5 @@ pub(crate) mod fixture;
 mod layers;
 mod lock;
 pub(crate) mod record;
+mod script;
 mod tar;

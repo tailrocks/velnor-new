@@ -13,14 +13,14 @@ pub(crate) fn record() -> Value {
         .map(|name| ((*name).to_owned(), json!("b".repeat(64))))
         .collect();
     json!({
-        "schema": "velnor.job-image-candidate.v1",
+        "schema": "velnor.job-image-candidate.v2",
         "source": {"commit": "a".repeat(40), "ref": "refs/heads/candidate", "inputs": inputs},
         "workflow": {"repository": "tailrocks/velnor-new", "repository_id": 1, "event": "push",
             "workflow_ref": "tailrocks/velnor-new/.github/workflows/release.yml@refs/heads/main",
             "authority_commit": "c".repeat(40), "run_id": 10, "run_attempt": 2},
         "platform": "linux/amd64",
         "build": {"builder": "github.com/docker/buildx v0.38.0", "platform": "linux/amd64",
-            "arguments": [], "exporter": "oci", "provenance": "disabled",
+            "arguments": [format!("VELNOR_SOURCE_SHA={}", "a".repeat(40))], "exporter": "oci", "provenance": "disabled",
             "compression": "gzip", "force_compression": true},
         "archive": {"sha256": "d".repeat(64), "size_bytes": 5},
         "oci": {"archive_index_digest": "e".repeat(64), "archive_index_size_bytes": 3,
@@ -64,7 +64,11 @@ fn top_and_source_cases() -> Vec<Case> {
     let source = "Source identity is incorrect.";
     let inputs = "The source input list is incomplete or unknown.";
     vec![
-        (vec!["schema"], Some(json!("v2")), schema),
+        (
+            vec!["schema"],
+            Some(json!("velnor.job-image-candidate.v1")),
+            schema,
+        ),
         (vec!["platform"], Some(json!("linux/arm64")), schema),
         (
             vec!["extra"],
@@ -163,6 +167,7 @@ fn workflow_cases() -> Vec<Case> {
 
 fn build_archive_and_oci_cases() -> Vec<Case> {
     let build = "Build identity is incorrect.";
+    let arguments = "Build arguments must be VELNOR_SOURCE_SHA set to the source commit.";
     let digest = format!("sha256:{}", "A".repeat(64));
     vec![
         (
@@ -179,10 +184,24 @@ fn build_archive_and_oci_cases() -> Vec<Case> {
             Some(json!(false)),
             build,
         ),
+        (vec!["build", "arguments"], Some(json!([])), arguments),
         (
             vec!["build", "arguments"],
             Some(json!(["--push"])),
-            "Build arguments must be empty.",
+            arguments,
+        ),
+        (
+            vec!["build", "arguments"],
+            Some(json!([format!("VELNOR_SOURCE_SHA={}", "b".repeat(40))])),
+            arguments,
+        ),
+        (
+            vec!["build", "arguments"],
+            Some(json!([
+                format!("VELNOR_SOURCE_SHA={}", "a".repeat(40)),
+                "--push"
+            ])),
+            arguments,
         ),
         (
             vec!["build", "extra"],

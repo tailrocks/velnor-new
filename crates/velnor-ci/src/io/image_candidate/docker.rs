@@ -110,13 +110,14 @@ pub(super) fn build(
     context: &Path,
     isolated: &Isolated,
     archive: &Path,
+    commit: &str,
 ) -> Result<(), CiError> {
     let dockerfile = context.join("Dockerfile");
     fs::copy(root.join(DOCKERFILE), &dockerfile)
         .map_err(|error| CiError::new(format!("{}: {error}", context.display())))?;
     let mut command = docker_command(docker, isolated);
     command
-        .args(buildx_arguments(&dockerfile, archive, context))
+        .args(buildx_arguments(&dockerfile, archive, context, commit))
         .current_dir(root);
     runner.run(&mut command, BUILD_TIMEOUT)
 }

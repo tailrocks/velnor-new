@@ -62,8 +62,11 @@ pub(crate) struct Image {
     pub(crate) entries: Vec<(String, Vec<u8>)>,
 }
 
+pub(crate) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 pub(crate) struct Spec<'a> {
     pub(crate) layers: Vec<(Vec<u8>, &'a str)>,
+    pub(crate) revision: Option<String>,
     pub(crate) diff_ids: Option<Vec<String>>,
     pub(crate) platform: Value,
 }
@@ -71,6 +74,7 @@ pub(crate) struct Spec<'a> {
 pub(crate) fn spec(layers: Vec<(Vec<u8>, &str)>) -> Spec<'_> {
     Spec {
         layers,
+        revision: Some(REVISION.to_owned()),
         diff_ids: None,
         platform: json!({"architecture": "amd64", "os": "linux"}),
     }
@@ -93,10 +97,12 @@ pub(crate) fn build(spec: &Spec<'_>) -> Image {
             })
             .collect()
     });
-    let config = json!({"architecture": "amd64", "os": "linux",
-        "rootfs": {"type": "layers", "diff_ids": diffs}})
-    .to_string()
-    .into_bytes();
+    let mut config = json!({"architecture": "amd64", "os": "linux",
+        "rootfs": {"type": "layers", "diff_ids": diffs}});
+    if let Some(revision) = &spec.revision {
+        config["config"] = json!({"Labels": {"org.opencontainers.image.revision": revision}});
+    }
+    let config = config.to_string().into_bytes();
     let layers: Vec<Value> = spec
         .layers
         .iter()
@@ -173,8 +179,12 @@ impl BlobSource for Memory {
 }
 
 pub(crate) fn check(archive: &[u8]) -> Result<Value, String> {
+    check_for(archive, REVISION)
+}
+
+pub(crate) fn check_for(archive: &[u8], revision: &str) -> Result<Value, String> {
     let scanned = scan(Cursor::new(archive.to_vec())).map_err(|e| e.to_string())?;
-    verify(&scanned, &Memory(archive.to_vec())).map_err(|e| e.to_string())
+    verify(&scanned, &Memory(archive.to_vec()), revision).map_err(|e| e.to_string())
 }
 
 pub(crate) fn refused(archive: &[u8]) -> String {

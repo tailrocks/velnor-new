@@ -141,6 +141,7 @@ fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, 
         &FileSource {
             path: archive.to_path_buf(),
         },
+        value["source"]["commit"].as_str().unwrap_or_default(),
     )?;
     if value["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
         return fail("Candidate archive is not the same as the archive in its record.");
