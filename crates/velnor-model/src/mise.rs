@@ -44,8 +44,12 @@ impl MisePlatform<'static> {
         if has_token("ubuntu") || has_token("linux") {
             Some(Self::new("linux", if arm { "arm64" } else { "x64" }))
         } else if has_token("macos") {
-            let intel =
-                label.ends_with("-13") || label.ends_with("-intel") || label.ends_with("-large");
+            let intel = label.ends_with("-13")
+                || label.ends_with("-intel")
+                || label.ends_with("-large")
+                || ["x64", "amd64", "x86_64"]
+                    .iter()
+                    .any(|token| has_token(token));
             Some(Self::new("macos", if intel { "x64" } else { "arm64" }))
         } else if has_token("windows") {
             Some(Self::new("windows", if arm { "arm64" } else { "x64" }))

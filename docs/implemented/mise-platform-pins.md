@@ -25,7 +25,7 @@ label on the GitHub-hosted list (`looks_github_hosted` in
 or the configuration is refused. Any other label, such as `ubuntu-26.04-scale-set`,
 is fenced without the key. Declaring a listed label `hosted = true` claims a
 GitHub-hosted glibc runner. A `trusted_runner` pool is always self-hosted and never
-gets the literal. The design and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
+gets the literal. The design and the bump procedure are in [generator/CONFIG.md](../../generator/CONFIG.md#mise-binary-pin).
 
 | `runner.os`-`runner.arch` | Official raw executable | SHA-256 |
 | --- | --- | --- |

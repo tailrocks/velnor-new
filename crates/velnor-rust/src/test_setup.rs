@@ -11,6 +11,16 @@ use crate::members::Member;
 use crate::plan::step;
 use crate::private_fetch::{any_gate, shared_gate};
 
+// helper-gate: first in tools-v0.1.112 via 8843633902
+const LANE_GUARD_ORDER_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+fn lane_guard_ordered(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(LANE_GUARD_ORDER_HELPER))
+}
+
 pub(crate) fn inserted(
     facts: &RepoFacts,
     root: &RustRoot,
@@ -121,7 +131,7 @@ pub(crate) fn place_checks(
     steps: Vec<Step>,
 ) -> Vec<Step> {
     let mut steps = with_checks(facts, members, grouped, checks, steps);
-    gate_job(&mut steps);
+    gate_job(facts, &mut steps);
     steps
 }
 
@@ -245,7 +255,8 @@ fn archives(step: &Step) -> bool {
     )
 }
 
-pub(crate) fn gate_job(steps: &mut [Step]) {
+pub(crate) fn gate_job(facts: &RepoFacts, steps: &mut [Step]) {
+    let guards = lane_guard_ordered(facts);
     let (mut building, mut testing) = (false, false);
     for step in steps {
         match &step.kind {
@@ -253,7 +264,9 @@ pub(crate) fn gate_job(steps: &mut [Step]) {
                 building |= *before_build;
                 testing |= !*before_build;
             }
-            StepKind::Cargo(_) if building || (testing && tests(step)) => {
+            StepKind::Cargo(_)
+                if building || (testing && (tests(step) || (guards && lane_guard(step)))) =>
+            {
                 step.setup_order = SetupOrder::AfterSetup;
             }
             _ => {}
@@ -291,6 +304,10 @@ fn tests(step: &Step) -> bool {
                 | CargoCommand::Doctest
         )
     )
+}
+
+fn lane_guard(step: &Step) -> bool {
+    matches!(step.kind, StepKind::Cargo(CargoCommand::LaneGuard { .. }))
 }
 
 fn builds_or_tests(step: &Step) -> bool {

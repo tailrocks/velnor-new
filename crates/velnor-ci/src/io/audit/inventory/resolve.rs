@@ -75,14 +75,20 @@ fn descend(mut current: OwnedFd, below: &Path, listing: bool) -> io::Result<Owne
 #[derive(Clone, Copy)]
 pub(super) struct Reach<'a> {
     pub(super) bound: usize,
+    #[cfg(test)]
     pub(super) opened: &'a dyn Fn(),
+    #[cfg(not(test))]
+    pub(super) marker: std::marker::PhantomData<&'a ()>,
 }
 
 impl Default for Reach<'_> {
     fn default() -> Self {
         Self {
             bound: DESCRIPTOR_BUDGET.saturating_sub(RESOLVER_FIXED + UNTRACKED_LISTING),
+            #[cfg(test)]
             opened: &|| {},
+            #[cfg(not(test))]
+            marker: std::marker::PhantomData,
         }
     }
 }
@@ -133,9 +139,14 @@ enum Step {
     Root,
     Parent,
     Name(OsString),
+    Directory,
 }
 
 fn steps(target: &Path, pending: &mut Vec<Step>) {
+    let bytes = target.as_os_str().as_encoded_bytes();
+    if bytes.ends_with(b"/") || bytes.ends_with(b"/.") {
+        pending.push(Step::Directory);
+    }
     for component in target.components().rev() {
         match component {
             Component::Normal(name) => pending.push(Step::Name(name.to_owned())),
@@ -158,11 +169,12 @@ pub(super) fn resolve(
     reach: Reach<'_>,
 ) -> io::Result<Followed> {
     let mut current = directory.try_clone_to_owned()?;
+    #[cfg(test)]
     (reach.opened)();
     let mut trail = Trail::new(reach.bound);
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
-    let mut links = 0;
+    let mut links = 1;
     let mut last = None;
     steps(target, &mut pending);
     while let Some(step) = pending.pop() {
@@ -170,6 +182,7 @@ pub(super) fn resolve(
             Step::Root => {
                 trail.clear();
                 current = open_path(Path::new("/"), false)?;
+                #[cfg(test)]
                 (reach.opened)();
                 path = PathBuf::from("/");
                 last = None;
@@ -184,12 +197,18 @@ pub(super) fn resolve(
                         }
                         parent
                     }
-                    None => open_directory(current.as_fd(), Path::new(".."), false)?,
+                    None => {
+                        let parent = open_directory(current.as_fd(), Path::new(".."), false)?;
+                        handle::is_parent_of(&path, parent.as_fd())?;
+                        parent
+                    }
                 };
+                #[cfg(test)]
                 (reach.opened)();
                 path.pop();
                 last = None;
             }
+            Step::Directory => {}
             Step::Name(name) => {
                 let stat = fstatat(&current, name.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     .map_err(failure)?;
@@ -208,6 +227,7 @@ pub(super) fn resolve(
                     steps(&next, &mut pending);
                 } else if format == SFlag::S_IFDIR {
                     let opened = open_directory(current.as_fd(), Path::new(&name), false)?;
+                    #[cfg(test)]
                     (reach.opened)();
                     trail.push(std::mem::replace(&mut current, opened))?;
                     path.push(&name);

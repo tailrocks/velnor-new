@@ -122,6 +122,21 @@ impl Fixture {
         manifests: &[&str],
         extra: &[(&str, &str)],
     ) -> Output {
+        let arguments: Vec<&str> = manifests
+            .iter()
+            .flat_map(|manifest| ["--manifest-path", manifest])
+            .collect();
+        self.run_arguments(api, token, home, &arguments, extra)
+    }
+
+    pub(crate) fn run_arguments(
+        &self,
+        api: &Api,
+        token: Option<&str>,
+        home: Option<&str>,
+        arguments: &[&str],
+        extra: &[(&str, &str)],
+    ) -> Output {
         let root = self.repo.root();
         let path = format!(
             "{}:{}:/usr/bin:/bin",
@@ -145,9 +160,7 @@ impl Fixture {
             .env("GIT_CONFIG_VALUE_0", "hostile-config")
             .env("CARGO_HTTP_PROXY", "http://hostile-proxy.invalid")
             .env("CARGO_NET_OFFLINE", "false");
-        for manifest in manifests {
-            command.args(["--manifest-path", manifest]);
-        }
+        command.args(arguments);
         command.envs(extra.iter().copied());
         if let Some(token) = token {
             command.env("VELNOR_PRIVATE_TOKEN", token);
@@ -169,6 +182,7 @@ impl Fixture {
 
 mod environment;
 mod fixed_toolchain;
+mod manifests_env;
 mod token;
 
 const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";

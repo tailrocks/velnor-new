@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
 use std::process::Command;
 
 use base64::Engine;
@@ -14,7 +13,7 @@ pub(crate) const REPO: &str = "/repos/tailrocks/velnor-lab";
 
 #[derive(Debug)]
 pub(crate) struct TempRepo {
-    pub(crate) dir: PathBuf,
+    pub(crate) dir: velnor_test_support::ScratchDir,
 }
 
 impl TempRepo {
@@ -29,7 +28,7 @@ impl TempRepo {
     pub(crate) fn git(&self, args: &[&str]) -> String {
         let output = Command::new("git")
             .arg("-C")
-            .arg(&self.dir)
+            .arg(self.dir.path())
             .args([
                 "-c",
                 "user.name=Test",
@@ -64,7 +63,8 @@ impl TempRepo {
         let state = temp_dir(&format!("{name}-state"));
         std::fs::write(state.join("pulls.json"), pulls.to_string())
             .unwrap_or_else(|e| unreachable!("{e}"));
-        Stub::new(&self.dir, &state, &temp_dir(&format!("{name}-cache")))
+        let cache = temp_dir(&format!("{name}-cache"));
+        Stub::new(&self.dir, &state, &cache).keeping(vec![state, cache])
     }
 }
 

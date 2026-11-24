@@ -4,10 +4,14 @@
 experimental = ["wrapper-scripts"]
 
 [scripts.wrapper.local-docker-ci]
-command = ["sh", "-c", 'if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
+command = ["sh", "-c", 'unset VELNOR_MBX_REPORTS; if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
 
 [scripts.wrapper.no-programs]
-command = ["/usr/bin/env", "PATH=/nonexistent"]
+command = ["/usr/bin/env", "-u", "VELNOR_MBX_REPORTS", "PATH=/nonexistent"]
+
+[scripts.wrapper.no-mbx-reports]
+command = ["/usr/bin/env", "-u", "VELNOR_MBX_REPORTS"]
+target-runner = "within-wrapper"
 
 [test-groups]
 docker-networks = { max-threads = 4 }
@@ -41,12 +45,28 @@ filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
 platform = 'cfg(target_os = "linux")'
 run-wrapper = 'local-docker-ci'
 
+[[profile.default.scripts]]
+filter = "all()"
+run-wrapper = "no-mbx-reports"
+
+[[profile.ci.scripts]]
+filter = "all()"
+run-wrapper = "no-mbx-reports"
+
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one) or test(=cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one) or test(=cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and test(=download_retry::a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_bytes)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and test(=download_retry::a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_bytes)'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -78,7 +98,7 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_r
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_nested_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_inputs_spec::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::)) and not (test(=io_scope_cache::changed_checkout_inputs_or_identity_refuse_scope_reuse) | test(=io_scope_cache::malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot))"
+filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cargo_dirs::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_nested_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_inputs_spec::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::)) and not (test(=io_scope_cache::changed_checkout_inputs_or_identity_refuse_scope_reuse) | test(=io_scope_cache::malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot))"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -227,7 +247,7 @@ filter = 'package(=velnor-ci) and test(audit::)'
 slow-timeout = { period = "30s", terminate-after = 2 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and (test(/^io_scope_cache::/) | test(/^io_scope_cache_paths::/) | test(/^io_scope_cache_races::/) | test(/^io_plan_docs::/) | test(/^delta::/) | test(/^delta_freshness::/) | test(/^delta_integrity::/) | test(/^delta_metadata::/) | test(/^delta_tree::/) | test(/^delta_availability::/) | test(/^delta_registry_fingerprints::/) | test(/^delta_source::/) | test(/^delta_binding::/) | test(/^delta_cap::/) | test(/^delta_target_paths::/) | test(/^prepare::/) | test(/^prepare_compat::/) | test(/^resolve_qualification::/) | test(/^resolve_run::/) | test(/^io_inputs_batch::/) | test(/^io_inputs_spec::/) | test(/^io_inputs_scope::/) | test(=run::run_exits_with_the_exit_code_of_the_command) | test(/^run_capture::/) | test(/^run_archives::/) | test(/^run_env::/) | test(/^run_evidence::/) | test(/^run_escape::/) | test(/^run_nextest::/) | test(/^run_nextest_reconcile::/) | test(/^run_summary::/) | test(/^io_restore::/) | test(/^io_restore_cargo::/) | test(/^io_restore_cold_cargo::/) | test(/^io_restore_links::/) | test(/^io_restore_symlinks::/) | test(/^io_restored_targets::/) | test(/^io_shared_targets::/) | test(/^io_foreign_targets::/) | test(/^io_nested_targets::/) | test(/^io_cold_targets::/) | test(/^io_snapshot_storage::/) | test(/^io_report::/) | test(/^io_plan::/) | test(/^io_plan_forged::/) | test(/^io_plan_groups::/) | test(/^io_plan_lint::/) | test(/^io_plan_policy::/) | test(/^cache_credential_scrub::/) | test(/^cache_credential_scrub_tokens::/) | test(/^cache_flow::/) | test(/^cache_budget::/) | test(/^plan_diff::/) | test(/^plan_git::/) | test(/^plan_main::/) | test(/^fetch_reports::/) | test(/^fetch_server::/) | test(/^fetch_real_cargo::/) | test(/^mbx_out_dirs::/) | test(/^base_expiry::/) | test(/^check_metadata_gen::/) | test(/^sources_fetch::/) | test(/^plan_api::/) | test(/^fetch_git_home::/) | test(/^cache::/) | test(/^cache_credential_scrub_hardening::/) | test(/^cache_credential_scrub_crates::/) | test(/^prepare_components::/) | test(/^prepare_lock_key::/) | test(/^prepare_inputs::/) | test(/^check_configurations::/) | test(/^cache_safety::/) | test(/^io_cold::/) | test(/^artifact_stage::/) | test(/^artifact_stage_paths::/) | test(/^io_report_slowest::/) | test(/^sparse_checkout_state::/) | test(/^fetch::/) | test(/^io_raw_paths::/) | test(/^run_nextest_output::/))'
+filter = 'package(=velnor-ci) and (test(/^io_scope_cache::/) | test(/^io_scope_cache_paths::/) | test(/^io_scope_cache_races::/) | test(/^io_plan_docs::/) | test(/^delta::/) | test(/^delta_freshness::/) | test(/^delta_integrity::/) | test(/^delta_metadata::/) | test(/^delta_tree::/) | test(/^delta_availability::/) | test(/^delta_registry_fingerprints::/) | test(/^delta_source::/) | test(/^delta_binding::/) | test(/^delta_cap::/) | test(/^delta_target_paths::/) | test(/^prepare::/) | test(/^prepare_compat::/) | test(/^resolve_qualification::/) | test(/^resolve_run::/) | test(/^io_inputs_batch::/) | test(/^io_inputs_spec::/) | test(/^io_inputs_scope::/) | test(=run::run_exits_with_the_exit_code_of_the_command) | test(/^run_capture::/) | test(/^run_archives::/) | test(/^run_env::/) | test(/^run_evidence::/) | test(/^run_escape::/) | test(/^run_nextest::/) | test(/^run_nextest_early_bound::/) | test(/^run_nextest_early_escape::/) | test(/^run_nextest_extract::/) | test(/^run_nextest_reconcile::/) | test(/^run_summary::/) | test(/^io_restore::/) | test(/^io_restore_cargo::/) | test(/^io_restore_cold_cargo::/) | test(/^io_restore_links::/) | test(/^io_restore_symlinks::/) | test(/^io_restored_targets::/) | test(/^io_shared_targets::/) | test(/^io_foreign_targets::/) | test(/^io_nested_targets::/) | test(/^io_cold_targets::/) | test(/^io_snapshot_storage::/) | test(/^io_report::/) | test(/^io_plan::/) | test(/^io_plan_forged::/) | test(/^io_plan_groups::/) | test(/^io_plan_lint::/) | test(/^io_plan_policy::/) | test(/^cache_credential_scrub::/) | test(/^cache_credential_scrub_tokens::/) | test(/^cache_flow::/) | test(/^cache_budget::/) | test(/^plan_diff::/) | test(/^plan_diff_paths::/) | test(/^plan_git::/) | test(/^plan_main::/) | test(/^fetch_reports::/) | test(/^fetch_server::/) | test(/^fetch_real_cargo::/) | test(/^mbx_out_dirs::/) | test(/^base_expiry::/) | test(/^check_metadata_gen::/) | test(/^sources_fetch::/) | test(/^plan_api::/) | test(/^fetch_git_home::/) | test(/^cache::/) | test(/^cache_credential_scrub_hardening::/) | test(/^cache_credential_scrub_crates::/) | test(/^prepare_components::/) | test(/^prepare_lock_key::/) | test(/^prepare_inputs::/) | test(/^check_configurations::/) | test(/^cache_safety::/) | test(/^io_cold::/) | test(/^artifact_stage::/) | test(/^artifact_stage_paths::/) | test(/^io_report_slowest::/) | test(/^sparse_checkout_state::/) | test(/^fetch::/) | test(/^io_raw_paths::/) | test(/^run_nextest_output::/))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -243,11 +263,19 @@ filter = 'package(=velnor-ci) and (test(=configuration_targets::configuration_ta
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job) or test(~step_refs_shapes::) or test(~step_refs_release_shapes::))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job) or test(~step_refs_shapes::) or test(~step_refs_release_shapes::))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = "package(=velnor-ci) and test(=cache_credential_scrub_cargo::a_restored_git_database_without_hooks_fetch_head_or_logs_still_serves_real_cargo)"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = "package(=velnor-ci) and test(=cache_credential_scrub_cargo::a_restored_git_database_without_hooks_fetch_head_or_logs_still_serves_real_cargo)"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -314,7 +342,7 @@ filter = 'package(=velnor-ci) and test(audit::)'
 slow-timeout = { period = "30s", terminate-after = 2 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-ci) and (test(/^io_scope_cache::/) | test(/^io_scope_cache_paths::/) | test(/^io_scope_cache_races::/) | test(/^io_plan_docs::/) | test(/^delta::/) | test(/^delta_freshness::/) | test(/^delta_integrity::/) | test(/^delta_metadata::/) | test(/^delta_tree::/) | test(/^delta_availability::/) | test(/^delta_registry_fingerprints::/) | test(/^delta_source::/) | test(/^delta_binding::/) | test(/^delta_cap::/) | test(/^delta_target_paths::/) | test(/^prepare::/) | test(/^prepare_compat::/) | test(/^resolve_qualification::/) | test(/^resolve_run::/) | test(/^io_inputs_batch::/) | test(/^io_inputs_spec::/) | test(/^io_inputs_scope::/) | test(=run::run_exits_with_the_exit_code_of_the_command) | test(/^run_capture::/) | test(/^run_archives::/) | test(/^run_env::/) | test(/^run_evidence::/) | test(/^run_escape::/) | test(/^run_nextest::/) | test(/^run_nextest_reconcile::/) | test(/^run_summary::/) | test(/^io_restore::/) | test(/^io_restore_cargo::/) | test(/^io_restore_cold_cargo::/) | test(/^io_restore_links::/) | test(/^io_restore_symlinks::/) | test(/^io_restored_targets::/) | test(/^io_shared_targets::/) | test(/^io_foreign_targets::/) | test(/^io_nested_targets::/) | test(/^io_cold_targets::/) | test(/^io_snapshot_storage::/) | test(/^io_report::/) | test(/^io_plan::/) | test(/^io_plan_forged::/) | test(/^io_plan_groups::/) | test(/^io_plan_lint::/) | test(/^io_plan_policy::/) | test(/^cache_credential_scrub::/) | test(/^cache_credential_scrub_tokens::/) | test(/^cache_flow::/) | test(/^cache_budget::/) | test(/^plan_diff::/) | test(/^plan_git::/) | test(/^plan_main::/) | test(/^fetch_reports::/) | test(/^fetch_server::/) | test(/^fetch_real_cargo::/) | test(/^mbx_out_dirs::/) | test(/^base_expiry::/) | test(/^check_metadata_gen::/) | test(/^sources_fetch::/) | test(/^plan_api::/) | test(/^fetch_git_home::/) | test(/^cache::/) | test(/^cache_credential_scrub_hardening::/) | test(/^cache_credential_scrub_crates::/) | test(/^prepare_components::/) | test(/^prepare_lock_key::/) | test(/^prepare_inputs::/) | test(/^check_configurations::/) | test(/^cache_safety::/) | test(/^io_cold::/) | test(/^artifact_stage::/) | test(/^artifact_stage_paths::/) | test(/^io_report_slowest::/) | test(/^sparse_checkout_state::/) | test(/^fetch::/) | test(/^io_raw_paths::/) | test(/^run_nextest_output::/))'
+filter = 'package(=velnor-ci) and (test(/^io_scope_cache::/) | test(/^io_scope_cache_paths::/) | test(/^io_scope_cache_races::/) | test(/^io_plan_docs::/) | test(/^delta::/) | test(/^delta_freshness::/) | test(/^delta_integrity::/) | test(/^delta_metadata::/) | test(/^delta_tree::/) | test(/^delta_availability::/) | test(/^delta_registry_fingerprints::/) | test(/^delta_source::/) | test(/^delta_binding::/) | test(/^delta_cap::/) | test(/^delta_target_paths::/) | test(/^prepare::/) | test(/^prepare_compat::/) | test(/^resolve_qualification::/) | test(/^resolve_run::/) | test(/^io_inputs_batch::/) | test(/^io_inputs_spec::/) | test(/^io_inputs_scope::/) | test(=run::run_exits_with_the_exit_code_of_the_command) | test(/^run_capture::/) | test(/^run_archives::/) | test(/^run_env::/) | test(/^run_evidence::/) | test(/^run_escape::/) | test(/^run_nextest::/) | test(/^run_nextest_early_bound::/) | test(/^run_nextest_early_escape::/) | test(/^run_nextest_extract::/) | test(/^run_nextest_reconcile::/) | test(/^run_summary::/) | test(/^io_restore::/) | test(/^io_restore_cargo::/) | test(/^io_restore_cold_cargo::/) | test(/^io_restore_links::/) | test(/^io_restore_symlinks::/) | test(/^io_restored_targets::/) | test(/^io_shared_targets::/) | test(/^io_foreign_targets::/) | test(/^io_nested_targets::/) | test(/^io_cold_targets::/) | test(/^io_snapshot_storage::/) | test(/^io_report::/) | test(/^io_plan::/) | test(/^io_plan_forged::/) | test(/^io_plan_groups::/) | test(/^io_plan_lint::/) | test(/^io_plan_policy::/) | test(/^cache_credential_scrub::/) | test(/^cache_credential_scrub_tokens::/) | test(/^cache_flow::/) | test(/^cache_budget::/) | test(/^plan_diff::/) | test(/^plan_diff_paths::/) | test(/^plan_git::/) | test(/^plan_main::/) | test(/^fetch_reports::/) | test(/^fetch_server::/) | test(/^fetch_real_cargo::/) | test(/^mbx_out_dirs::/) | test(/^base_expiry::/) | test(/^check_metadata_gen::/) | test(/^sources_fetch::/) | test(/^plan_api::/) | test(/^fetch_git_home::/) | test(/^cache::/) | test(/^cache_credential_scrub_hardening::/) | test(/^cache_credential_scrub_crates::/) | test(/^prepare_components::/) | test(/^prepare_lock_key::/) | test(/^prepare_inputs::/) | test(/^check_configurations::/) | test(/^cache_safety::/) | test(/^io_cold::/) | test(/^artifact_stage::/) | test(/^artifact_stage_paths::/) | test(/^io_report_slowest::/) | test(/^sparse_checkout_state::/) | test(/^fetch::/) | test(/^io_raw_paths::/) | test(/^run_nextest_output::/))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]

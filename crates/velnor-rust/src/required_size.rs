@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CACHE_KEY_MAX_UNITS, GateNeed, JSON_UNIT_MAX_BYTES, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts,
-    RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
-    ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
+    CACHE_KEY_MAX_UNITS, GateNeed, JSON_UNIT_MAX_BYTES, Job, JobId, MERGE_GROUP_SKIP_OUTPUT,
+    RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT,
+    TOOLS_ANCHOR_OUTPUT, ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes,
+    json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -118,6 +119,26 @@ fn package_map_bytes(facts: &RepoFacts, slug: Option<&RootSlug>) -> usize {
             .saturating_add(json_string_bytes(member.name.as_str()))
             .saturating_add(PACKAGE_ENTRY_BYTES)
     })
+}
+
+pub(crate) fn charge_output(jobs: &mut [Job], source: &JobId, name: &str) {
+    let extra = property_bytes(name, 4);
+    for job in jobs {
+        if !job.needs.iter().any(|id| id == source) {
+            continue;
+        }
+        for step in &mut job.steps {
+            match &mut step.kind {
+                StepKind::Verdict {
+                    needs_max_bytes, ..
+                }
+                | StepKind::CheckMetrics {
+                    needs_max_bytes, ..
+                } => *needs_max_bytes = needs_max_bytes.saturating_add(extra),
+                _ => {}
+            }
+        }
+    }
 }
 
 fn property_bytes(key: &str, value_bytes: usize) -> usize {

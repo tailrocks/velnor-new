@@ -7,6 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use nix::errno::Errno;
@@ -122,12 +123,25 @@ pub(crate) fn assert_dead(pid: i32) {
 
 pub(crate) static CREATED: AtomicU64 = AtomicU64::new(0);
 
-pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
-    fresh_dir_in(&std::env::temp_dir(), &CREATED, prefix, name)
+pub(crate) fn fresh_dir(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(fresh_dir_in(
+        &std::env::temp_dir(),
+        &CREATED,
+        prefix,
+        name,
+    ))
 }
 
+static SWEPT: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
+
 pub(crate) fn fresh_dir_in(root: &Path, counter: &AtomicU64, prefix: &str, name: &str) -> PathBuf {
-    sweep_dead(root, prefix);
+    if SWEPT
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert((root.to_path_buf(), prefix.to_owned()))
+    {
+        sweep_dead(root, prefix);
+    }
     loop {
         let candidate = root.join(format!(
             "{prefix}-{}-{}-{name}",
@@ -154,8 +168,11 @@ fn sweep_dead(root: &Path, prefix: &str) {
         else {
             continue;
         };
-        if !is_running(pid) && entry.path().is_dir() {
-            let _ignored = fs::remove_dir_all(entry.path());
+        if !is_running(pid)
+            && entry.path().is_dir()
+            && let Err(error) = velnor_test_support::remove_tree(&entry.path())
+        {
+            eprintln!("cannot sweep {}: {error}", entry.path().display());
         }
     }
 }

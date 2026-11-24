@@ -225,7 +225,7 @@ From this checkout:
 ```sh
 cargo run --locked -p velnor-actions-cli -- --help
 cargo run --locked -p velnor-actions-cli -- plan
-preview="$(mktemp -d /tmp/velnor-preview.XXXXXX)"
+preview="$(mktemp -d "${TMPDIR:-/tmp}/velnor-preview.XXXXXX")"
 cargo run --locked -p velnor-actions-cli -- generate --output-dir "$preview"
 ```
 
