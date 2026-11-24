@@ -64,9 +64,7 @@ pub(super) fn objects() -> Vec<(&'static str, String, String)> {
     let matches = COLUMNS
         .split(',')
         .map(|column| match column {
-            "created_at" => {
-                "NEW.created_at BETWEEN candidate.created_at-1 AND candidate.created_at".to_owned()
-            }
+            "created_at" => "candidate.created_at-NEW.created_at IN (0,1)".to_owned(),
             _ => format!("candidate.{column}=NEW.{column}"),
         })
         .collect::<Vec<_>>()

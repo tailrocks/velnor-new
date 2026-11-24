@@ -53,7 +53,7 @@ WHEN NOT EXISTS (
       AND NEW.requested_name='v'||attempt.physical_nonce
       AND auth.binding_digest=NEW.binding_digest AND auth.source_digest=NEW.source_digest AND auth.acquire_response_digest=NEW.acquire_response_digest AND auth.acquire_state='acquired'
       AND active.generation=NEW.authority_generation AND active.policy_digest=NEW.authority_digest AND policy.binding_digest=NEW.binding_digest
-      AND NEW.response_status=409 AND NEW.created_at BETWEEN unixepoch()-1 AND unixepoch()
+      AND NEW.response_status=409 AND unixepoch()-NEW.created_at IN (0,1)
 )
 BEGIN SELECT RAISE(ABORT,'The JIT conflict receipt does not match the current acquired physical attempt.'); END";
 

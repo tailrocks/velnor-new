@@ -7,16 +7,16 @@ const VERSION: i64 = 61;
 
 const WINDOWS_AND_EXACT_PREDECESSORS: [(&str, &str); 4] = [
     (
-        "NEW.created_at BETWEEN unixepoch()-1 AND unixepoch()",
+        "unixepoch()-NEW.created_at IN (0,1)",
         "NEW.created_at=unixepoch()",
     ),
     (
-        "NEW.commit_observed_at NOT BETWEEN unixepoch() AND unixepoch()+1",
+        "NEW.commit_observed_at-unixepoch() NOT IN (0,1)",
         "NEW.commit_observed_at!=unixepoch()+1",
     ),
     ("NEW.claimed_at<unixepoch()", "NEW.claimed_at<unixepoch()+1"),
     (
-        "NEW.created_at BETWEEN candidate.created_at-1 AND candidate.created_at",
+        "candidate.created_at-NEW.created_at IN (0,1)",
         "candidate.created_at=NEW.created_at",
     ),
 ];

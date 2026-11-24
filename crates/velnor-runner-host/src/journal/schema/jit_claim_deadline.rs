@@ -17,12 +17,12 @@ const OBJECTS: &[(&str, &str, &str)] = &[
     (
         "trigger",
         "jit_dispatch_claim_time_guard",
-        "CREATE TRIGGER jit_dispatch_claim_time_guard BEFORE INSERT ON jit_dispatch_claim_times WHEN NEW.commit_observed_at NOT BETWEEN unixepoch() AND unixepoch()+1 OR NOT EXISTS(SELECT 1 FROM connection_runner_jits jit WHERE jit.intent_id=NEW.intent_id) BEGIN SELECT RAISE(ABORT,'The JIT commit observation must use the current clock.'); END",
+        "CREATE TRIGGER jit_dispatch_claim_time_guard BEFORE INSERT ON jit_dispatch_claim_times WHEN NEW.commit_observed_at-unixepoch() NOT IN (0,1) OR NOT EXISTS(SELECT 1 FROM connection_runner_jits jit WHERE jit.intent_id=NEW.intent_id) BEGIN SELECT RAISE(ABORT,'The JIT commit observation must use the current clock.'); END",
     ),
     (
         "trigger",
         "jit_dispatch_claim_time_no_update",
-        "CREATE TRIGGER jit_dispatch_claim_time_no_update BEFORE UPDATE ON jit_dispatch_claim_times WHEN OLD.commit_observed_at IS NOT NULL OR NEW.commit_observed_at IS NULL OR NEW.commit_observed_at NOT BETWEEN unixepoch() AND unixepoch()+1 OR NEW.intent_id!=OLD.intent_id BEGIN SELECT RAISE(ABORT,'JIT dispatch claim times are immutable.'); END",
+        "CREATE TRIGGER jit_dispatch_claim_time_no_update BEFORE UPDATE ON jit_dispatch_claim_times WHEN OLD.commit_observed_at IS NOT NULL OR NEW.commit_observed_at IS NULL OR NEW.commit_observed_at-unixepoch() NOT IN (0,1) OR NEW.intent_id!=OLD.intent_id BEGIN SELECT RAISE(ABORT,'JIT dispatch claim times are immutable.'); END",
     ),
     (
         "trigger",
