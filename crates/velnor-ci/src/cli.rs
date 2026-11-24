@@ -123,6 +123,10 @@ pub enum Command {
     )]
     AppToken(AppTokenArgs),
     #[command(
+        about = "Revoke the GitHub App installation token in VELNOR_APP_TOKEN with DELETE /installation/token on the API in VELNOR_API_URL, the API that app-token minted it on. An empty or unset VELNOR_APP_TOKEN fails and makes no request"
+    )]
+    RevokeToken,
+    #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,

@@ -181,8 +181,11 @@ pub(crate) fn revoke_app_token(mut job: RenderedJob) -> RenderedJob {
             name: "Revoke the release App token".to_owned(),
             condition: Some(expression("always() && steps.app.outputs.token != ''")),
             continue_on_error: true,
-            env: variables(&[("GH_TOKEN", APP_TOKEN_OUTPUT)]),
-            run: Some("gh api --method DELETE installation/token".to_owned()),
+            env: variables(&[
+                ("VELNOR_APP_TOKEN", APP_TOKEN_OUTPUT),
+                ("VELNOR_API_URL", "${{ github.api_url }}"),
+            ]),
+            run: Some("velnor-ci revoke-token".to_owned()),
             ..RenderedStep::default()
         });
     }

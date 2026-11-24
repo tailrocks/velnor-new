@@ -137,15 +137,13 @@ fn from_helper_0_1_114_the_release_app_key_reaches_only_a_helper_mint_that_every
             "{job}: the key follows release-plz"
         );
         let last = steps.last().ok_or("no steps")?;
-        assert_eq!(last["env"]["GH_TOKEN"], TOKEN, "{job}: {last}");
+        assert_eq!(last["env"]["VELNOR_APP_TOKEN"], TOKEN, "{job}: {last}");
+        assert_eq!(last["env"]["VELNOR_API_URL"], mint["env"]["VELNOR_API_URL"]);
         assert_eq!(
             last["if"], "${{ always() && steps.app.outputs.token != '' }}",
             "{job}: {last}"
         );
-        assert_eq!(
-            last["run"], "gh api --method DELETE installation/token",
-            "{job}: {last}"
-        );
+        assert_eq!(last["run"], "velnor-ci revoke-token", "{job}: {last}");
     }
     for text in workflows("0.1.114")? {
         assert!(

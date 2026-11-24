@@ -14,6 +14,7 @@ use crate::github::GitHubWrite;
 
 const CLIENT_VARIABLE: &str = "VELNOR_APP_CLIENT_ID";
 const KEY_VARIABLE: &str = "VELNOR_APP_PRIVATE_KEY";
+const TOKEN_VARIABLE: &str = "VELNOR_APP_TOKEN";
 const MINT_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn valid_client_id(id: &str) -> bool {
@@ -87,4 +88,15 @@ pub(super) fn run(args: &AppTokenArgs) -> Result<String, CiError> {
         args.repositories.len(),
         args.owner
     ))
+}
+
+pub(super) fn revoke() -> Result<String, CiError> {
+    let token = std::env::var(TOKEN_VARIABLE)
+        .ok()
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| CiError::new(format!("set {TOKEN_VARIABLE} to the token to revoke")))?;
+    super::fetch::api_client(token, MINT_TIMEOUT)
+        .and_then(|github| github.delete(super::fetch::REVOKE_PATH))
+        .map_err(|e| e.context("the token could not be revoked; it expires within the hour"))?;
+    Ok("Revoked the App token\n".to_owned())
 }

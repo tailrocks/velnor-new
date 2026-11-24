@@ -95,6 +95,7 @@ fn serve(installation: (u16, &str), minted: (u16, &str)) -> Result<Api, Box<dyn 
 mod names;
 mod permissions;
 mod retries;
+mod revoke;
 
 const PKCS1: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem");
 const PKCS8: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem");
