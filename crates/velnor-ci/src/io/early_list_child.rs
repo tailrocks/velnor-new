@@ -184,7 +184,8 @@ impl Supervisor {
             .as_mut()
             .ok_or_else(|| io::Error::other("no child"))?;
         let peek = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
-        if waitid(WaitId::Pid(rustix::process::Pid::from_child(child)), peek)?.is_none() {
+        let peeked = waitid(WaitId::Pid(rustix::process::Pid::from_child(child)), peek)?;
+        if !peeked.is_some_and(|status| status.exited() || status.killed() || status.dumped()) {
             return Ok(None);
         }
         kill(child);
