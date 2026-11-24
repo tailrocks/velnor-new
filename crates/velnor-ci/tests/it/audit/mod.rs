@@ -46,7 +46,7 @@ use own_units::{OWN_UNITS, own_units, own_units_in};
 pub(super) use path_dependency_fixture::{path_dependency_units, path_dependency_units_in};
 
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
-    let mut command = Command::new(program);
+    let mut command = crate::run::command_without_nextest_environment(program);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
