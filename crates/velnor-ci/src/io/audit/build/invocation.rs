@@ -1,26 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-use serde::{Deserialize, Serialize};
 
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
-#[derive(Default, Serialize, Deserialize)]
-pub(super) struct Selection {
-    all: bool,
-    packages: Vec<String>,
-}
-
-impl Selection {
-    pub(super) fn selects(&self, package: &str) -> bool {
-        self.all || self.packages.iter().any(|selected| selected == package)
-    }
-}
+mod selection;
+pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
 
@@ -63,39 +51,6 @@ impl Invocation {
             Some(word) => format!("cargo {word}"),
             None => program.to_owned(),
         }
-    }
-
-    pub(super) fn selection(&self, members: &BTreeSet<&str>) -> Option<Selection> {
-        if !self.cargo_program() {
-            return None;
-        }
-        let words: Vec<&str> = self
-            .command
-            .iter()
-            .skip(1)
-            .map(String::as_str)
-            .take_while(|word| *word != "--")
-            .collect();
-        let excluded = words
-            .iter()
-            .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        let all = !excluded
-            && words
-                .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"));
-        let mut packages = Vec::new();
-        for (index, word) in words.iter().enumerate() {
-            if matches!(*word, "-p" | "--package") {
-                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
-            } else if let Some(name) = word
-                .strip_prefix("--package=")
-                .or_else(|| word.strip_prefix("-p"))
-            {
-                packages.push(name.to_owned());
-            }
-        }
-        packages.retain(|name| members.contains(name.as_str()));
-        Some(Selection { all, packages })
     }
 
     fn cargo_program(&self) -> bool {

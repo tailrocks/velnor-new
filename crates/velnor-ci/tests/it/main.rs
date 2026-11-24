@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod ansible_select;
 mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;
@@ -135,6 +136,7 @@ mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
+mod plan_diff_paths;
 mod plan_diff_repo;
 mod plan_git;
 mod plan_main;
