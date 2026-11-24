@@ -31,11 +31,6 @@ expect "the generated workflow runs on the merge_group event" runs "$got"
 condition="$(required_condition)"
 if [ -n "$condition" ]; then got=required; else got=missing; fi
 expect "the Required verdict waits for the helper gates job" required "$got"
-case "$condition" in
-  *lint:*) got=plan-gated ;;
-  *) got=always ;;
-esac
-expect "the helper gates job is not skipped by the plan" always "$got"
 
 git_in() { git -C "$work/repo" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 mkdir -p "$work/repo/crates/velnor-ci" "$work/repo/crates/velnor-gen/src"

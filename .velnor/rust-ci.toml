@@ -92,6 +92,7 @@ name = "Helper gates"
 task = "check-helper-gates"
 tools = ["python"]
 timeout_minutes = 10
+inputs = ["crates/velnor-gen/src", "crates/velnor-render/src", "crates/velnor-rust/src", "crates/velnor-ci/Cargo.toml", "scripts/check-helper-gates.sh", "scripts/ci-helper-gates.sh", "scripts/test-check-helper-gates.sh", "scripts/test-helper-gates-merge-queue.sh", "scripts/fixtures", "mise.toml"]
 
 [[lint]]
 kind = "mise-task"
