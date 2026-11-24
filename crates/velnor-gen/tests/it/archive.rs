@@ -180,6 +180,7 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
 #[test]
 fn a_groups_root_whose_only_tests_are_doctests_keeps_one_test_job_and_builds_no_archive() {
     let lib = RustMember {
+        version: None,
         targets: vec![Target {
             tests: false,
             ..target(TargetKind::Lib)

@@ -47,12 +47,16 @@ fn selected_condition(selected: &[RootSlug]) -> Option<String> {
     })
 }
 
-pub(crate) fn public_sources(manifests: &[RepoPath], selected: &[RootSlug]) -> RenderedStep {
+pub(crate) fn public_sources(
+    manifests: &[RepoPath],
+    selected: &[RootSlug],
+    fails_on_private: bool,
+) -> RenderedStep {
     RenderedStep {
         condition: selected_condition(selected),
         id: Some(PUBLIC_SOURCES_STEP.to_owned()),
         name: "Look up the public git dependencies once for this run".to_owned(),
-        continue_on_error: true,
+        continue_on_error: !fails_on_private,
         env: vec![manifests_env(manifests), token_env()],
         run: Some("velnor-ci cache public-sources".to_owned()),
         ..RenderedStep::default()
@@ -91,6 +95,7 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
             budget_bytes,
             verdicts,
             private: _,
+            sources_restore: _,
         } => crate::base_steps::cache_decide(
             target,
             archive.as_ref(),
@@ -102,7 +107,8 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::PublicSources {
             manifests,
             selected,
-        } => public_sources(manifests, selected),
+            fails_on_private,
+        } => public_sources(manifests, selected, *fails_on_private),
         _ => RenderedStep::default(),
     }
 }

@@ -63,6 +63,19 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
     Ok(())
 }
 
+pub(super) fn clock_guards() -> Result<[(String, String); 2], HostError> {
+    Ok([
+        (
+            "physical_attempt_post_jit_retirement_claim_insert_guard".to_owned(),
+            guards::claim_insert_guard_v37()?,
+        ),
+        (
+            "physical_attempt_post_jit_retirement_progress_insert_guard".to_owned(),
+            guards::PROGRESS_INSERT_GUARD.to_owned(),
+        ),
+    ])
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     validation::validate_objects(conn, guards::CLAIM_INSERT_GUARD).await?;
     validation::validate_revision_triggers(conn).await?;

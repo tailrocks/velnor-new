@@ -46,7 +46,6 @@ const VALUE_LONG_OPTIONS: &[&str] = &["--config", "--color"];
 const VALUE_FREE_LONG_OPTIONS: &[&str] =
     &["--quiet", "--verbose", "--frozen", "--locked", "--offline"];
 
-/// Whether a cargo global option takes the next word, or `None` when it is not one of these.
 fn global_option(word: &str) -> Option<bool> {
     if let Some(shorts) = word
         .strip_prefix('-')
@@ -63,7 +62,6 @@ fn global_option(word: &str) -> Option<bool> {
     .then_some(false)
 }
 
-/// `-qv` and `-vC dir` are bundles: `C` and `Z` take the rest of the bundle, or the next word when none is left.
 fn short_cluster(shorts: &str) -> Option<bool> {
     for (index, letter) in shorts.char_indices() {
         match letter {
@@ -119,9 +117,6 @@ fn lists(words: &[String]) -> bool {
     words.first().is_some_and(|word| word == "list")
 }
 
-/// # Errors
-///
-/// The report is not JSON, has an unknown `version`, or lacks a count.
 pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     let value: Value =
         serde_json::from_slice(report).map_err(|error| format!("not JSON ({error})"))?;
@@ -142,6 +137,12 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
             bypassed = bypassed.saturating_add(*count);
         }
     }
+    let mut compiler = BTreeMap::new();
+    for (outcome, work) in counts.compiler {
+        let work = serde_json::from_value::<MbxCompilerWork>(work)
+            .map_err(|error| format!("compiler work `{outcome}` not understood ({error})"))?;
+        compiler.insert(outcome, work);
+    }
     let not_looked_up = counts
         .unconsulted
         .saturating_add(counts.incremental_compilations);
@@ -160,16 +161,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
         bypassed,
         verifications: Some(counts.verifications).filter(|count| *count > 0),
         bypasses: counts.bypasses,
-        compiler: counts
-            .compiler
-            .into_iter()
-            .filter_map(|(outcome, work)| {
-                Some((
-                    outcome,
-                    serde_json::from_value::<MbxCompilerWork>(work).ok()?,
-                ))
-            })
-            .collect(),
+        compiler,
         probe_only,
     }))
 }

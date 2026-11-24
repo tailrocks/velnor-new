@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod archive;
+pub mod build;
+pub mod canonical;
 pub mod hashing;
 pub mod identity;
 pub mod json;
 pub mod layer;
+pub mod lock;
 pub mod members;
 pub mod oci;
 pub mod paths;

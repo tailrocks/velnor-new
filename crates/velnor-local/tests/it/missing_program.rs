@@ -13,8 +13,8 @@ fn down_without_docker_names_the_missing_program() {
     let empty = temp_dir("missing-docker-path");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-local"))
         .args(["down", "--dir"])
-        .arg(&dir)
-        .env("PATH", &empty)
+        .arg(dir.path())
+        .env("PATH", empty.path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!output.status.success());

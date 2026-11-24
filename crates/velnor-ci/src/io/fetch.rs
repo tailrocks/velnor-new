@@ -76,6 +76,7 @@ fn fetch_with(
     args: &FetchArgs,
     token: Option<&str>,
 ) -> Result<Option<super::fetch_home::Scratch>, CiError> {
+    let manifests = super::inputs_batch::fetch_manifests(args)?;
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
     let fixed = if args.no_fixed_toolchain {
         None
@@ -151,13 +152,7 @@ fn fetch_with(
     for name in ["RUSTC", "CARGO_BUILD_RUSTC"] {
         environment.extend(rustc.iter().map(|rustc| (name.into(), rustc.into())));
     }
-    super::fetch_run::run_fetches(
-        &cargo,
-        &environment,
-        mirror.as_deref(),
-        &args.manifest_path,
-        neutral,
-    )?;
+    super::fetch_run::run_fetches(&cargo, &environment, mirror.as_deref(), &manifests, neutral)?;
     if token.is_some()
         && let Some(scratch) = &scratch
     {

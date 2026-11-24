@@ -88,7 +88,7 @@ name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
 timeout_minutes = 5
-inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/__init__.py", "scripts/hosted_phase_measurement/mbx_summary.py", "scripts/hosted_phase_measurement/tests/test_mbx_summary.py", "images/job/ubuntu-26.04/candidate/candidate.py", "mise.toml", "mise.lock"]
+inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/__init__.py", "scripts/hosted_phase_measurement/mbx_summary.py", "scripts/hosted_phase_measurement/report_counters.py", "scripts/hosted_phase_measurement/report_events.py", "scripts/hosted_phase_measurement/tests/test_mbx_summary.py", "scripts/hosted_phase_measurement/tests/test_report_counters.py", "images/job/ubuntu-26.04/candidate/candidate.py", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"

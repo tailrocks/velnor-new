@@ -4,11 +4,12 @@
 use velnor_model::{HelperCommand, Job, MbxRemote, MbxStats, MbxStore, RepoFacts, Step, StepKind};
 
 use crate::mbx_pin::{MBX_PIN_HELPER, MBX_TOOL, exact_release};
-use crate::plan::step;
+use crate::plan::{MBX_STORE_OUT_DIR_HELPER, step};
 
 // helper-gate: first in tools-v0.1.111 via 534aa8684b
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
-const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.112 via 4ed1cf44b7
+pub(crate) const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.111 via 351e1f2a59
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
 const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
@@ -43,7 +44,9 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     for job in jobs {
         if !compiles(job) {
             if compiling_only {
-                job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                if !prepares_cargo(job) {
+                    job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                }
                 if facts.config.mbx.routed() {
                     insert(job, &[StepKind::MbxPrivate], After::Helper);
                 }
@@ -57,9 +60,14 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             } else {
                 vec![StepKind::MbxRemote { from_pin }]
             };
+            let store_writes = job.steps.iter().any(|step| step.kind == StepKind::MbxStore)
+                && facts
+                    .helper
+                    .as_ref()
+                    .is_some_and(|helper| helper.version().at_least(MBX_STORE_OUT_DIR_HELPER));
             insert(
                 job,
-                &with_out_dirs(remote_steps, out_dirs_in_target),
+                &with_out_dirs(remote_steps, out_dirs_in_target && !store_writes),
                 After::Tools,
             );
         }
@@ -103,16 +111,21 @@ enum After {
 }
 
 fn is_shared_store_step(kind: &StepKind) -> bool {
-    matches!(
-        kind,
-        StepKind::MbxStore | StepKind::MbxSeed | StepKind::MbxOutDirs
-    )
+    matches!(kind, StepKind::MbxStore | StepKind::MbxSeed)
+}
+
+fn prepares_cargo(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Prepare(_)))
 }
 
 fn compiles(job: &Job) -> bool {
-    job.steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()))
+    job.steps.iter().any(|step| match &step.kind {
+        StepKind::Cargo(command) => command.builds(),
+        StepKind::GeneratorCheck { from_source } => *from_source,
+        _ => false,
+    })
 }
 
 fn insert(job: &mut Job, kinds: &[StepKind], place: After) {

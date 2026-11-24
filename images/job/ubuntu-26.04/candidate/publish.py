@@ -163,7 +163,7 @@ def _check_candidate(root: Path, archive: Path, record_path: Path,
         _fail("Candidate inputs must be regular files.")
     record_raw = candidate._read_limited_file(record_path, candidate.MAX_RECORD_BYTES, "Candidate record")
     record = candidate.validate_record(candidate._json_bytes(record_raw, "candidate record"))
-    oci = candidate.verify_oci_archive(archive)
+    oci = candidate.verify_oci_archive(archive, record["source"]["commit"])
     archive_hash, archive_size = _sha_file(archive)
     if record["archive"] != {"sha256": archive_hash, "size_bytes": archive_size}:
         _fail("Candidate archive is not the same as the archive in its signed record.")

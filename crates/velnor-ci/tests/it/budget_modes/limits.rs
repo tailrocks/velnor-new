@@ -122,3 +122,19 @@ fn the_title_of_the_budget_job_names_the_selection_and_nothing_else_does() {
         assert_eq!(Selection::of_job_title(title), None, "{title}");
     }
 }
+
+#[test]
+fn the_name_of_the_budget_step_names_the_selection_and_nothing_else_does() {
+    for selection in Selection::ALL {
+        let name = format!("Check the speed budget ({})", selection.name());
+        assert_eq!(Selection::of_step_name(&name), Some(selection));
+    }
+    for name in [
+        "Check the speed budget",
+        "Check the speed budget (unknown)",
+        "Speed budget (full)",
+        "Check the speed budget (full) ",
+    ] {
+        assert_eq!(Selection::of_step_name(name), None, "{name}");
+    }
+}

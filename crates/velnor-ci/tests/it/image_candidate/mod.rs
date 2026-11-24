@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod build;
+mod build_client;
+mod build_fixture;
+mod build_secrets;
+mod canonical;
 mod cli;
-mod fixture;
+pub(crate) mod fixture;
 mod layers;
-mod record;
+mod lock;
+pub(crate) mod record;
+mod script;
 mod tar;

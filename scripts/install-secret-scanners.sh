@@ -3,7 +3,7 @@ set -euo pipefail
 
 GITLEAKS_VERSION=8.30.1
 BETTERLEAKS_VERSION=1.10.1
-KINGFISHER_VERSION=2.19.1
+KINGFISHER_VERSION=2.20.0
 
 if [ "$#" -ne 1 ]; then
   echo "usage: $0 <install-dir>" >&2
@@ -16,13 +16,13 @@ case "$(uname -s)/$(uname -m)" in
     arch=x64
     gitleaks_sha=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     betterleaks_sha=c174b42d7aa60caf58c0c3e555c0e4bed01fe6b0d99a412bce777b5af4ce913e
-    kingfisher_sha=3449ba41007df91e6774a816dd64cc9385900a304ef3cbb58ab61e0a83448e1c
+    kingfisher_sha=825a5e89cdf6c0d52e85bf029061f76ad6ba7cc6e55406c6eb9f68572ee6b774
     ;;
   Linux/aarch64 | Linux/arm64)
     arch=arm64
     gitleaks_sha=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
     betterleaks_sha=62a63199f9f61a6b5e5a6f58f048493db20fbc8c770014f4d903a4d97886e1bf
-    kingfisher_sha=273744b70304704e46fb980cbe37fc9a94a96f62d65aaf07af1f21ea94b4b09f
+    kingfisher_sha=245c34ee00caf24bffe9fed54a23bcb617fe95a0755ff881ef7d2c869f9d4ad7
     ;;
   *)
     echo "no pinned secret scanner assets for $(uname -s)/$(uname -m)" >&2

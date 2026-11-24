@@ -9,6 +9,17 @@ description = "matrix_key task-digest ids (m-<16 hex>), not credentials"
 regexes = ['''^m-[0-9a-f]{16}$''']
 
 [[allowlists]]
+description = "cache-sources fixture: only the known fake x-access-token value in this file, so a real credential added later is still reported"
+condition = "AND"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_sources_restored\.rs$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^ghs_secret$''',
+]
+
+[[allowlists]]
 description = "dbt contract proposal: the placeholder service credential, in this one document only"
 targetRules = ["generic-password"]
 condition = "AND"
@@ -29,7 +40,7 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "credential-scrub fixtures: only the known fake values in these four files, so a real credential added later is still reported"
+description = "credential-scrub fixtures: only the known fake values in these five files, so a real credential added later is still reported"
 targetRules = ["generic-credential-uri"]
 condition = "AND"
 paths = [
@@ -37,6 +48,7 @@ paths = [
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_crates\.rs$''',
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_hardening\.rs$''',
   '''^crates/velnor-ci/tests/it/cache_credential_scrub_ancestry\.rs$''',
+  '''^crates/velnor-ci/tests/it/sources_fetch\.rs$''',
 ]
 regexTarget = "secret"
 regexes = [
