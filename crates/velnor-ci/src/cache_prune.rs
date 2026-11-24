@@ -63,18 +63,63 @@ pub struct UsedUnits {
     hashes: BTreeSet<String>,
 }
 
-fn keep_artifact(artifact: &CargoArtifact) -> bool {
-    match PackageIdentity::parse(&artifact.package_id) {
-        None => false,
-        Some(package)
-            if package
-                .source
-                .is_some_and(|source| source.starts_with("path+")) =>
-        {
-            library_target(&artifact.target) && manifest_in_checkout(&artifact.manifest_path)
+fn is_path_source(package_id: &str) -> bool {
+    PackageIdentity::parse(package_id)
+        .and_then(|package| package.source)
+        .is_some_and(|source| source.starts_with("path+"))
+}
+
+fn is_custom_build(target: &CargoTarget) -> bool {
+    target.kind.iter().any(|kind| kind == "custom-build")
+}
+
+fn outside_path_names(artifacts: &[CargoArtifact]) -> BTreeSet<String> {
+    artifacts
+        .iter()
+        .filter(|artifact| is_path_source(&artifact.package_id))
+        .filter(|artifact| !manifest_in_checkout(&artifact.manifest_path))
+        .filter_map(|artifact| {
+            PackageIdentity::parse(&artifact.package_id).map(|p| p.name.to_owned())
+        })
+        .collect()
+}
+
+fn closure_touches_outside(
+    root: &str,
+    compilations: &[crate::telemetry::Compilation],
+    outside: &BTreeSet<String>,
+) -> bool {
+    let mut pending = vec![root.to_owned()];
+    let mut seen = BTreeSet::new();
+    while let Some(name) = pending.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
         }
-        Some(_) => true,
+        if outside.contains(&name) {
+            return true;
+        }
+        for compilation in compilations
+            .iter()
+            .filter(|compilation| compilation.package == name)
+        {
+            pending.extend(compilation.dependencies.iter().cloned());
+        }
     }
+    false
+}
+
+fn keep_library(
+    artifact: &CargoArtifact,
+    compilations: &[crate::telemetry::Compilation],
+    outside: &BTreeSet<String>,
+) -> bool {
+    let Some(package) = PackageIdentity::parse(&artifact.package_id) else {
+        return false;
+    };
+    is_path_source(&artifact.package_id)
+        && library_target(&artifact.target)
+        && manifest_in_checkout(&artifact.manifest_path)
+        && !closure_touches_outside(package.name, compilations, outside)
 }
 
 fn keep_build_script(package_id: &str, kept_path_ids: &BTreeSet<&str>) -> bool {
@@ -132,17 +177,21 @@ impl UsedUnits {
         }
         let mut used = Self::default();
         for invocation in invocations {
+            let outside = outside_path_names(&invocation.artifacts);
             let kept_path_ids: BTreeSet<&str> = invocation
                 .artifacts
                 .iter()
-                .filter(|artifact| keep_artifact(artifact))
+                .filter(|artifact| keep_library(artifact, &invocation.compilations, &outside))
                 .map(|artifact| artifact.package_id.as_str())
                 .collect();
-            for artifact in invocation
-                .artifacts
-                .iter()
-                .filter(|artifact| keep_artifact(artifact))
-            {
+            for artifact in invocation.artifacts.iter().filter(|artifact| {
+                !is_path_source(&artifact.package_id)
+                    && PackageIdentity::parse(&artifact.package_id).is_some()
+                    || kept_path_ids.contains(artifact.package_id.as_str())
+                    || (is_path_source(&artifact.package_id)
+                        && is_custom_build(&artifact.target)
+                        && kept_path_ids.contains(artifact.package_id.as_str()))
+            }) {
                 used.insert_all(artifact.filenames.iter().map(String::as_str));
             }
             for script in invocation
