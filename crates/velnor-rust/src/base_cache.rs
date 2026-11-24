@@ -4,16 +4,14 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
+    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, JobId,
     LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
-    RootSlug, RustRoot, Step, StepKind, TrimFamily, When,
+    RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::lane::Lane;
-use crate::plan::{job, step};
+use crate::plan::step;
 use crate::units::Unit;
-
-const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 97);
@@ -44,8 +42,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.112 via e34b20da63
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
-// helper-gate: first in tools-v0.1.112 via 81eb49accb
-const PRIVATE_PURGE_HELPER: (u64, u64, u64) = (0, 1, 112);
+const SOURCES_RESTORED_ENV_HELPER: (u64, u64, u64) = (0, 1, 113);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -67,11 +64,15 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
 }
 
-fn has_private_base_helper(facts: &RepoFacts) -> bool {
+fn has_helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
     facts
         .helper
         .as_ref()
-        .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+        .is_some_and(|helper| helper.version().at_least(gate))
+}
+
+fn has_private_base_helper(facts: &RepoFacts) -> bool {
+    has_helper_at_least(facts, PRIVATE_BASE_HELPER)
 }
 
 pub(crate) fn private_base(facts: &RepoFacts) -> bool {
@@ -285,6 +286,8 @@ pub(crate) fn save_steps(
                     .as_ref()
                     .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
                 private: private_verdict(facts),
+                sources_restore: has_helper_at_least(facts, SOURCES_RESTORED_ENV_HELPER)
+                    .then(|| cache_root.slug().clone()),
             })
         },
         Step {
@@ -311,79 +314,6 @@ pub(crate) fn save_steps(
             gate: lane.steps(),
             ..saved
         })
-        .collect()
-}
-
-pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
-    let release = facts.helper.as_ref().filter(|_| has_saving_helper(facts))?;
-    let trims: Vec<Step> = jobs.iter().flat_map(lane_trims).collect();
-    let needs: Vec<JobId> = jobs
-        .iter()
-        .filter(|job| {
-            job.steps
-                .iter()
-                .any(|step| matches!(step.kind, StepKind::CacheSave(_)))
-        })
-        .map(|job| job.id.clone())
-        .collect();
-    let uploads: Vec<(JobId, TrimFamily)> = jobs.iter().flat_map(lane_uploads).collect();
-    let verifies = uploads.iter().map(|(lane, family)| {
-        step(StepKind::CacheVerify {
-            lane: lane.clone(),
-            family: *family,
-        })
-    });
-    let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
-    let purge = release
-        .version()
-        .at_least(PRIVATE_PURGE_HELPER)
-        .then(|| Step {
-            when: When::Finalizer,
-            ..step(StepKind::CachePurgePrivate)
-        });
-    let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
-        .chain(trims)
-        .chain(verifies)
-        .chain(result)
-        .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
-        .chain(purge)
-        .collect();
-    Some(Job {
-        name: Some("Cache maintenance".to_owned()),
-        needs,
-        when: When::SaveBase,
-        pr: crate::plan::quick(facts),
-        permissions: Permissions(BTreeMap::from([
-            (PermissionScope::Actions, Access::Write),
-            (PermissionScope::PullRequests, Access::Read),
-        ])),
-        steps,
-        ..job(facts, TRIM_JOB)
-    })
-}
-
-fn is_decide(step: &Step) -> bool {
-    matches!(step.kind, StepKind::CacheDecide { .. })
-}
-
-fn lane_trims(lane: &Job) -> Vec<Step> {
-    lane_uploads(lane)
-        .into_iter()
-        .map(|(lane, family)| step(StepKind::CacheTrim { lane, family }))
-        .collect()
-}
-
-fn lane_uploads(lane: &Job) -> Vec<(JobId, TrimFamily)> {
-    let saves_sources = lane
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Sources { .. })));
-    lane.steps
-        .iter()
-        .any(is_decide)
-        .then(|| (lane.id.clone(), TrimFamily::Target))
-        .into_iter()
-        .chain(saves_sources.then(|| (lane.id.clone(), TrimFamily::Sources)))
         .collect()
 }
 

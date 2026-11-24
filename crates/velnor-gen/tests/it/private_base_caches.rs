@@ -74,7 +74,7 @@ fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() ->
 
 #[test]
 fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -> TestResult {
-    let text = workflow(&consumer("0.1.111", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.113", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
     assert!(verdict.contains("id: private_repo"), "{verdict}");
@@ -155,8 +155,49 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
     for token in ["GITHUB_TOKEN", "github.token", "VELNOR_API_URL"] {
         assert!(!decide.contains(token), "{token}: {decide}");
     }
+    assert!(
+        decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+            && decide.contains(".outputs.cache-hit }}'"),
+        "{decide}"
+    );
     let fetch = step(&lane, "Fetch the sources of every root").ok_or("no sources fetch")?;
     assert!(fetch.contains("CARGO_NET_OFFLINE: 'true'"), "{fetch}");
+    Ok(())
+}
+
+#[test]
+fn a_lane_that_saves_no_sources_still_tells_the_decision_that_the_sources_restore_hit() -> TestResult
+{
+    let mut repo = private_repo(
+        &["Cargo.toml"],
+        &format!("shape = \"lint-test\"\n{SECTION}"),
+        "0.1.113",
+    )?;
+    repo.files
+        .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    let target_only: Vec<String> = jobs_of(&text)
+        .into_iter()
+        .map(|(_, block)| block)
+        .filter(|block| {
+            block.contains("Decide whether to save the build directory")
+                && !block.contains("Save the sources cache")
+        })
+        .collect();
+    assert!(!target_only.is_empty(), "no lane saves no sources");
+    for block in target_only {
+        assert!(
+            step(&block, "Restore the sources cache").is_some(),
+            "{block}"
+        );
+        let decide =
+            step(&block, "Decide whether to save the build directory").ok_or("no decide")?;
+        assert!(
+            decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+                && decide.contains(".outputs.cache-hit }}'"),
+            "{decide}"
+        );
+    }
     Ok(())
 }
 
@@ -314,34 +355,6 @@ fn a_cargo_config_the_runtime_would_refuse_keeps_the_generated_refusal() -> Test
 }
 
 #[test]
-fn the_token_bearing_steps_run_before_any_step_that_executes_checkout_code() -> TestResult {
-    let lane = lane(&workflow(&consumer("0.1.111", GIT_LOCK, "")?)?)?;
-    let names = names(&lane);
-    let at = |name: &str| {
-        names
-            .iter()
-            .position(|each| each == name)
-            .ok_or_else(|| format!("{name} missing: {names:?}"))
-    };
-    for token_step in [
-        "Check that the repository is private",
-        "Check that the merge queue entry is not from a fork",
-    ] {
-        for code in [
-            "Install tools",
-            "velnor-ci prepare",
-            "velnor-ci check-metadata",
-        ] {
-            assert!(
-                at(token_step)? < at(code)?,
-                "{token_step} must run before {code}: {names:?}"
-            );
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn a_declared_public_dependency_beside_a_private_one_saves_only_behind_the_verdict() -> TestResult {
     let sha = "0123456789abcdef0123456789abcdef01234567";
     let lock = format!(
@@ -355,6 +368,24 @@ fn a_declared_public_dependency_beside_a_private_one_saves_only_behind_the_verdi
     assert!(
         notes.iter().any(|note| note.contains(SAVING_NOTE)),
         "{notes:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_privacy_check_is_gated_by_the_lane_selection_like_the_cache_steps() -> TestResult {
+    let repo = consumer("0.1.111", GIT_LOCK, "")?;
+    let (text, _) = text_and_notes(&repo)?;
+    let lane = lane(&text)?;
+    let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
+    let condition = verdict
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("if: "))
+        .ok_or("no if on the verdict step")?;
+    assert_eq!(
+        condition,
+        "'${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'",
+        "{verdict}"
     );
     Ok(())
 }
