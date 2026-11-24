@@ -134,25 +134,35 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
 }
 
 #[must_use]
-pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
-    String::from_utf8_lossy(log)
-        .lines()
-        .filter_map(|line| parse_lookup_summary(cache_text(line)?.1))
-        .collect()
+pub fn mbx_sessions(segments: &[&[u8]]) -> Vec<MbxSession> {
+    let mut sessions = Vec::new();
+    for segment in segments {
+        sessions.extend(
+            String::from_utf8_lossy(segment)
+                .lines()
+                .filter_map(|line| parse_lookup_summary(cache_text(line)?.1)),
+        );
+    }
+    sessions
 }
 
 #[must_use]
-pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
-    String::from_utf8_lossy(log)
-        .lines()
-        .filter(|line| {
-            cache_text(line).is_some_and(|(labelled, text)| {
-                (labelled || looks_like_lookup_summary(text))
-                    && parse_lookup_summary(text).is_none()
-            })
-        })
-        .map(|line| line.trim().to_owned())
-        .collect()
+pub fn mbx_unparsed_lines(segments: &[&[u8]]) -> Vec<String> {
+    let mut unparsed = Vec::new();
+    for segment in segments {
+        unparsed.extend(
+            String::from_utf8_lossy(segment)
+                .lines()
+                .filter(|line| {
+                    cache_text(line).is_some_and(|(labelled, text)| {
+                        (labelled || looks_like_lookup_summary(text))
+                            && parse_lookup_summary(text).is_none()
+                    })
+                })
+                .map(|line| line.trim().to_owned()),
+        );
+    }
+    unparsed
 }
 
 fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
