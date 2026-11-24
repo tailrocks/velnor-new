@@ -26,6 +26,7 @@ pub(super) fn refusal(
     program: &str,
     arguments: &[&str],
     running: bool,
+    building: bool,
     words: &[&str],
 ) -> Option<&'static str> {
     let names_target = words.iter().any(|word| {
@@ -41,7 +42,15 @@ pub(super) fn refusal(
             || word.starts_with("--package=")
             || word.starts_with("-p") && word.len() > 2
     });
+    let plans_only = building
+        && words.iter().any(|word| {
+            matches!(*word, "--unit-graph" | "--build-plan" | "--print")
+                || word.starts_with("--print=")
+        });
     match (program, arguments) {
+        _ if plans_only => Some(
+            "inputs build does not accept a plan-only Cargo invocation (`--unit-graph`, `--build-plan` or `--print`): it compiles nothing, so no receipt of a compile is current; run it outside inputs build",
+        ),
         ("cargo", ["fix", ..]) => Some(
             "inputs build does not run cargo fix: it edits sources after compiling them, so no receipt of its compile is current; run it outside inputs build",
         ),

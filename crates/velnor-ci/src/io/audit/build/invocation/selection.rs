@@ -73,6 +73,9 @@ impl Invocation {
                     ],
                 )
         });
+        let all_features = words.contains(&"--all-features");
+        let features = feature_names(&words);
+        let (kinds, harnesses) = wanted(arguments, &words);
         let workspace = !words.iter().any(|word| target_filter(word))
             && words
                 .iter()
@@ -108,7 +111,7 @@ impl Invocation {
         let chosen: Vec<&RustMember> = members
             .iter()
             .filter(|member| {
-                if !provable {
+                if !provable || !compiles(member, &kinds, harnesses, all_features) {
                     false
                 } else if workspace {
                     !excluded
@@ -126,7 +129,7 @@ impl Invocation {
             .map(|member| member.name.as_str().to_owned())
             .collect();
         packages.extend(
-            built(&chosen, members, unowned, dev)
+            built(&chosen, members, unowned, dev, all_features, &features)
                 .into_iter()
                 .map(str::to_owned),
         );
@@ -145,11 +148,103 @@ fn cluster_package(word: &str) -> Option<&str> {
     flags.trim_start_matches(['q', 'v', 'r']).strip_prefix('p')
 }
 
+fn feature_names<'a>(words: &[&'a str]) -> Vec<&'a str> {
+    let mut names = Vec::new();
+    for (index, word) in words.iter().enumerate() {
+        let value = if matches!(*word, "--features" | "-F") {
+            words.get(index + 1).copied()
+        } else if let Some(value) = word.strip_prefix("--features=") {
+            Some(value)
+        } else {
+            word.strip_prefix("-F")
+                .filter(|value| !value.is_empty())
+                .map(|value| value.strip_prefix('=').unwrap_or(value))
+        };
+        names.extend(
+            value
+                .into_iter()
+                .flat_map(|value| value.split([',', ' ']))
+                .filter(|name| !name.is_empty()),
+        );
+    }
+    names
+}
+
+fn enables(features: &[&str], member: &RustMember, dependency: &MemberDependency) -> bool {
+    let name = dependency.name.as_str();
+    features.iter().any(|feature| {
+        if *feature == name || feature.strip_prefix("dep:") == Some(name) {
+            return true;
+        }
+        let Some((left, right)) = feature.split_once('/') else {
+            return false;
+        };
+        left == name
+            || left == member.name.as_str()
+                && (right == name || right.strip_prefix("dep:") == Some(name))
+    })
+}
+
+fn wanted(arguments: &[&str], words: &[&str]) -> (Vec<TargetKind>, bool) {
+    const LIBRARIES: [TargetKind; 2] = [TargetKind::Lib, TargetKind::ProcMacro];
+    let mut kinds = Vec::new();
+    let mut harnesses = false;
+    for word in words {
+        if *word == "--all-targets" {
+            kinds.extend(LIBRARIES);
+            kinds.extend([
+                TargetKind::Bin,
+                TargetKind::Test,
+                TargetKind::Bench,
+                TargetKind::Example,
+            ]);
+            harnesses = true;
+        } else if flag(word, &["--lib"]) {
+            kinds.extend(LIBRARIES);
+        } else if flag(word, &["--bins", "--bin"]) {
+            kinds.push(TargetKind::Bin);
+        } else if flag(word, &["--examples", "--example"]) {
+            kinds.push(TargetKind::Example);
+        } else if flag(word, &["--tests", "--test"]) {
+            kinds.push(TargetKind::Test);
+            harnesses = true;
+        } else if flag(word, &["--benches", "--bench"]) {
+            kinds.push(TargetKind::Bench);
+        }
+    }
+    if kinds.is_empty() {
+        kinds.extend(LIBRARIES);
+        kinds.push(TargetKind::Bin);
+        match arguments {
+            ["test" | "t" | "nextest", ..] => {
+                kinds.extend([TargetKind::Test, TargetKind::Example]);
+            }
+            ["bench", ..] => kinds.push(TargetKind::Bench),
+            _ => {}
+        }
+    }
+    (kinds, harnesses)
+}
+
+fn compiles(
+    member: &RustMember,
+    kinds: &[TargetKind],
+    harnesses: bool,
+    all_features: bool,
+) -> bool {
+    member.targets.iter().any(|target| {
+        (all_features || !target.requires_features)
+            && (target.kinds.iter().any(|kind| kinds.contains(kind)) || harnesses && target.tests)
+    })
+}
+
 fn built<'a>(
     chosen: &[&'a RustMember],
     members: &'a [RustMember],
     unowned: &'a BTreeMap<RepoPath, UnownedPackage>,
     dev: bool,
+    all_features: bool,
+    features: &[&str],
 ) -> BTreeSet<&'a str> {
     let mut pending: Vec<&MemberDependency> = chosen
         .iter()
@@ -168,15 +263,15 @@ fn built<'a>(
                 .dependencies
                 .iter()
                 .filter(move |dependency| tested || dependency.kind != DependencyKind::Dev)
+                .filter(move |dependency| {
+                    !dependency.optional || all_features || enables(features, member, dependency)
+                })
         })
         .collect();
     let mut visited = BTreeSet::new();
     let mut packages = BTreeSet::new();
     while let Some(dependency) = pending.pop() {
-        if dependency.optional
-            || dependency.platform.is_some()
-            || !visited.insert(&dependency.manifest)
-        {
+        if dependency.platform.is_some() || !visited.insert(&dependency.manifest) {
             continue;
         }
         let next = if let Some(package) = unowned.get(&dependency.manifest) {
@@ -191,10 +286,9 @@ fn built<'a>(
         } else {
             continue;
         };
-        pending.extend(
-            next.iter()
-                .filter(|dependency| dependency.kind != DependencyKind::Dev),
-        );
+        pending.extend(next.iter().filter(|dependency| {
+            dependency.kind != DependencyKind::Dev && (all_features || !dependency.optional)
+        }));
     }
     packages
 }

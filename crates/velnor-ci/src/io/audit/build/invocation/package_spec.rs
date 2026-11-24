@@ -8,11 +8,11 @@ use velnor_model::RustMember;
 pub(super) struct Spec<'a> {
     name: Name<'a>,
     version: Option<Partial>,
-    address: Option<&'a str>,
+    address: Option<String>,
 }
 
 enum Name<'a> {
-    Exact(&'a str),
+    Exact(String),
     Glob(&'a str),
 }
 
@@ -24,7 +24,7 @@ struct Partial {
 
 impl Spec<'_> {
     pub(super) fn matches(&self, member: &RustMember, repositories: &[&Path]) -> bool {
-        let named = match self.name {
+        let named = match &self.name {
             Name::Exact(name) => member.name.as_str() == name,
             Name::Glob(pattern) => glob(
                 &pattern.chars().collect::<Vec<_>>(),
@@ -34,6 +34,7 @@ impl Spec<'_> {
         named
             && self
                 .address
+                .as_deref()
                 .is_none_or(|address| located(member, repositories, address))
             && self.version.as_ref().is_none_or(|version| {
                 member
@@ -89,32 +90,54 @@ pub(super) fn parse(spec: &str) -> Option<Spec<'_>> {
         .map_or((location, None), |(address, fragment)| {
             (address, Some(fragment))
         });
+    let address = decode(address);
     match fragment {
         Some(fragment) if !fragment.starts_with(|c: char| c.is_ascii_digit()) => {
             versioned(fragment, Some(address))
         }
         Some(version) => Some(Spec {
-            name: Name::Exact(last_segment(address)),
+            name: Name::Exact(last_segment(&address).to_owned()),
             version: Some(parse_version(version)?),
             address: Some(address),
         }),
         None => Some(Spec {
-            name: Name::Exact(last_segment(address)),
+            name: Name::Exact(last_segment(&address).to_owned()),
             version: None,
             address: Some(address),
         }),
     }
 }
 
-fn versioned<'a>(spec: &'a str, address: Option<&'a str>) -> Option<Spec<'a>> {
+fn decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        let escaped = (bytes[index] == b'%')
+            .then(|| bytes.get(index + 1..index + 3))
+            .flatten()
+            .and_then(|pair| std::str::from_utf8(pair).ok())
+            .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+        if let Some(byte) = escaped {
+            decoded.push(byte);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn versioned(spec: &str, address: Option<String>) -> Option<Spec<'_>> {
     match spec.split_once(['@', ':']) {
         Some((name, version)) => Some(Spec {
-            name: Name::Exact(name),
+            name: Name::Exact(name.to_owned()),
             version: Some(parse_version(version)?),
             address,
         }),
         None => Some(Spec {
-            name: Name::Exact(spec),
+            name: Name::Exact(spec.to_owned()),
             version: None,
             address,
         }),

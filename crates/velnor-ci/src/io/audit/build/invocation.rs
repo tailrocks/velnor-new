@@ -152,6 +152,7 @@ impl Invocation {
             program,
             arguments,
             running,
+            compilation || nextest || test || running,
             &words[..start.filter(|_| running).map_or(words.len(), |start| {
                 (run_program_arguments(command, start) - 1).min(words.len())
             })],
