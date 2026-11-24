@@ -170,6 +170,16 @@ fn pruned_output_classification_keeps_real_library_rebuilds() {
     );
     assert_eq!(waste(&metrics(windows_doc)), [] as [&str; 0]);
 
+    let relative_doc = workspace_app(
+        json!([artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/doc/app/index.html"]
+        )]),
+        Some("/home/runner/_work/repo/repo/target"),
+    );
+    assert_eq!(waste(&metrics(relative_doc)), [] as [&str; 0]);
+
     let build_script = workspace_app(
         json!([artifact_kind(
             "path+file:///checkout/app#1.0.0",

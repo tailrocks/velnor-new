@@ -173,7 +173,9 @@ pages under the target `doc/` directory and extensionless executables other
 than a kept build script — is not waste. A stale `.rlib`, `.rmeta`, or build
 script still is. The `doc/` directory is the one directly inside the
 invocation's target directory, including a Windows path recorded by another
-runner.
+runner. Cargo records that same directory as a relative `target/doc/` path
+when the invocation stores an absolute target directory, and that relative
+path counts as the doc directory.
 
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 

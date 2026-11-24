@@ -60,11 +60,12 @@ fn doc_output(file: &str, target_directory: Option<&str>) -> bool {
     if let Some(dir) = target_directory {
         let dir = dir.replace('\\', "/");
         let prefix = dir.trim_end_matches('/');
-        let Some(rest) = file.strip_prefix(prefix) else {
-            return false;
-        };
-        let rest = rest.trim_start_matches('/');
-        return rest == "doc" || rest.starts_with("doc/");
+        if let Some(rest) = file.strip_prefix(prefix) {
+            let rest = rest.trim_start_matches('/');
+            if rest == "doc" || rest.starts_with("doc/") {
+                return true;
+            }
+        }
     }
     let parts: Vec<&str> = file.split('/').collect();
     parts
