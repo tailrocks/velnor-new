@@ -28,20 +28,20 @@ jactionlint = "2.6.0"
 shellcheck = "0.11.0"
 minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 # Repository policy (.alint.yml): the generated Alint job installs this pin.
-"github:asamarts/alint" = "0.22.1"
+"github:asamarts/alint" = "v0.23.0"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
 node = "26.13.1"
 # Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.
 python = "3.15.2"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
-kingfisher = "v2.19.1"
+kingfisher = "v2.20.0"
 betterleaks = "v1.10.1"
 gitleaks = "8.30.1"
-rumdl = "v0.3.5"
-cargo-deny = "0.22.0"
+rumdl = "v0.3.6"
+cargo-deny = "0.22.1"
 "github:bnjbvr/cargo-machete" = "v0.10.1"
-opentofu = "1.13.9"
+opentofu = "1.13.10"
 # Release PRs and tags: release-plz.toml at the repository root (the tools and
 # runner groups); velnor-gen reads this pin when it plans releases.
 "aqua:release-plz/release-plz" = "0.4.3"
@@ -94,6 +94,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 python3 -m unittest scripts/test_parity_verify_candidate.py
 python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
+python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''
 
 [tasks.validate-hk]
@@ -103,6 +104,10 @@ run = "hk validate --deny-warnings"
 [tasks.test-no-doctests-rule]
 description = "Check the alint no-doctests rule against doctest fixtures: every bypass form must fail, plain prose must pass"
 run = "bash scripts/test-no-doctests-rule.sh"
+
+[tasks.test-no-absolute-local-paths-rule]
+description = "Check the alint no-absolute-local-paths rule against path fixtures: home, root and scratch paths must fail, GitHub runner paths and placeholders must pass"
+run = "bash scripts/test-no-absolute-local-paths-rule.sh"
 
 [tasks.test-mise-binary-digests]
 description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; CI requires minisign, elsewhere a missing minisign skips"

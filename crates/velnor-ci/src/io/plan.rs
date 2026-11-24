@@ -7,13 +7,13 @@ use std::path::Path;
 
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
 use velnor_model::{
-    AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
+    AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RootSlug, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, lint_runs,
-    member_sources, optional_steps, plan_groups, policy_runs, policy_unread, root_sources,
-    select_event, selects_by_diff, tests_expected, unknown_paths, unmatched_inputs,
-    unread_packages,
+    ANSIBLE_SLUG, ansible_runs, cargo_files, defer_post_merge_docs, detect, introduced,
+    is_workflow_file, lint_runs, member_sources, optional_steps, plan_groups, policy_runs,
+    policy_unread, root_sources, select_event, selects_by_diff, tests_expected, unknown_paths,
+    unmatched_inputs, unread_packages,
 };
 
 use super::{
@@ -35,6 +35,29 @@ const LOCK_FILE: &str = "Cargo.lock";
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
+}
+
+fn ansible_output(
+    checkout: &Checkout,
+    facts: &RepoFacts,
+    kind: EventKind,
+    listed: bool,
+    changes: &ChangeSet,
+    unknown: &BTreeSet<RepoPath>,
+    lints: &mut BTreeMap<RootSlug, bool>,
+) -> Result<(), CiError> {
+    if let Some(run) = ansible_runs(
+        &checkout.view,
+        facts,
+        kind,
+        listed.then_some(&changes.paths),
+        unknown,
+    )
+    .map_err(ci)?
+    {
+        lints.insert(ANSIBLE_SLUG, run);
+    }
+    Ok(())
 }
 
 pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
@@ -81,13 +104,17 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             (root.manifest.clone(), tests)
         })
         .collect();
-    let lints = lint_runs(
+    let unknown = unknown_paths(&facts, &changes);
+    let mut lints = lint_runs(
         &facts,
         kind,
         listed.then_some(&changes.paths),
         &checkout.view.tracked_paths,
         &checkout.view.symlinks,
     );
+    ansible_output(
+        &checkout, &facts, kind, listed, &changes, &unknown, &mut lints,
+    )?;
     let skipped: Vec<String> = facts
         .config
         .lint
@@ -112,7 +139,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         explain(
             &selections,
             &steps,
-            &unknown_paths(&facts, &changes),
+            &unknown,
             &unread_packages(&facts, &changes),
         ) + &group_explanation(&groups)
             + &lint_explanation(&skipped)

@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 pub(crate) const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 
 pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Box<dyn Error>> {
     let mut view = RepoView::default();
@@ -268,31 +268,27 @@ fn an_invalid_config_is_rejected() -> TestResult {
 }
 
 #[test]
-fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
-    let empty = expected_with_notes(&view(&[], None)?).map(|(files, _)| files);
-    let excluded = expected_with_notes(&view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?)
-        .map(|(files, _)| files);
-    let root_excluded = expected_with_notes(&view(
-        &["Cargo.toml"],
-        Some(b"exclude = [\"Cargo.toml\"]\n"),
-    )?)
-    .map(|(files, _)| files);
+fn a_repository_without_a_cargo_root_with_members_has_no_rust_job() -> TestResult {
     let mut memberless = view(&["Cargo.toml"], None)?;
     for metadata in memberless.rust_metadata.values_mut() {
         metadata.members.clear();
     }
-    assert_eq!(empty, Err(GenerateError::Detect(DetectError::NoRustRoot)));
-    assert_eq!(
-        excluded,
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
-    assert_eq!(
-        root_excluded,
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
-    assert_eq!(
-        expected_with_notes(&memberless).map(|(files, _)| files),
-        Err(GenerateError::Detect(DetectError::NoRustRoot))
-    );
+    let cases = [
+        view(&[], None)?,
+        view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?,
+        view(&["Cargo.toml"], Some(b"exclude = [\"Cargo.toml\"]\n"))?,
+        memberless,
+    ];
+    for case in cases {
+        let files = expected_with_notes(&case).map(|(files, _)| files)?;
+        for (path, text) in &files {
+            if path.as_str().starts_with(".github/workflows/") {
+                assert!(
+                    !text.lines().any(|line| line == "  rust:"),
+                    "{path} has a rust job"
+                );
+            }
+        }
+    }
     Ok(())
 }

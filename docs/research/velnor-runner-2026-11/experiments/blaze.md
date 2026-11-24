@@ -9,7 +9,7 @@ Comparisons use the same trees and scripts in scripts/; raw logs in logs/ (timin
 - Installer read first (dl/installer.sh); docs install.md, toolchain.md, usage.md read before running.
 - Run as `sh installer.sh --no-toolchain` (and `--channel canary`), then `blaze toolchain`, with HOME, BLAZE_HOME, XDG_{CACHE,CONFIG,DATA,RUNTIME}_HOME, CARGO_HOME, TMPDIR all under blaze-exp/ (scripts/env.sh; canary under blaze-exp/canary/). Installer puts binaries in $CARGO_HOME/bin and writes no rc file; it only prints a PATH hint.
 - This blaze ignored BLAZE_TOOLCHAINS (toolchain landed in $HOME/.blaze/toolchains, i.e. inside scratch).
-- Proof: real ~/.blaze absent after the run; mtimes of ~/.zshrc, .zprofile, .zshenv, .bashrc, fish config identical before/after (logs/rc-mtimes-before.txt vs after; final diff clean). ~/.local/share/mise and the repo were not touched (sources via `git archive`).
+- Proof: real <home>/.blaze absent after the run; mtimes of <home>/.zshrc, .zprofile, .zshenv, .bashrc, fish config identical before/after (logs/rc-mtimes-before.txt vs after; final diff clean). ~/.local/share/mise and the repo were not touched (sources via `git archive`).
 - Cargo baseline: ~/.cargo/bin cargo, RUSTUP_TOOLCHAIN=1.99.1, scratch CARGO_HOME, `cargo fetch --locked` first; `nice -n 10`, `-j 8`. blaze: BLAZE_CORES=8 (background nice 10). Equal CPU limit. cargo-nextest was not used (only in mise's dir); `cargo test` used.
 - All daemons stopped; no blaze/ra-jit process remains.
 

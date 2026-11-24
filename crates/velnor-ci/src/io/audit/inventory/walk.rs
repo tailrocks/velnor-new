@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use super::handle::{self, Climb, Current, Opened, Origin, Stamp};
 use super::held::Held;
+use super::probe::Probe;
 use super::resolve::Reach;
 use super::{Entries, Kind, Scan, excluded_entry};
 
@@ -68,28 +69,6 @@ pub(super) const DESCRIPTOR_BUDGET: usize = 64;
 pub(super) const HELD_HANDLES: usize = 48;
 pub(super) const UNTRACKED_LISTING: usize = 1;
 
-pub(super) struct Probe<'a> {
-    pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
-    pub(super) after_open: &'a dyn Fn(&Path),
-    pub(super) listed: &'a dyn Fn(&OsStr),
-    pub(super) opened: &'a dyn Fn(),
-    pub(super) reopened: &'a dyn Fn(&Path, usize),
-    pub(super) held: usize,
-}
-
-impl Default for Probe<'_> {
-    fn default() -> Self {
-        Self {
-            before_open: &|_| Ok(()),
-            after_open: &|_| {},
-            listed: &|_| {},
-            opened: &|| {},
-            reopened: &|_, _| {},
-            held: HELD_HANDLES,
-        }
-    }
-}
-
 pub(super) struct Pending {
     pub(super) path: PathBuf,
     pub(super) origin: Origin,
@@ -120,7 +99,8 @@ pub(super) fn scan_with(
             continue;
         }
         budget.reserve()?;
-        let opened = (probe.before_open)(&directory)
+        let opened = probe
+            .before_open(&directory)
             .and_then(|()| handle::open(&origin, &directory, &held.climb(&origin)));
         let mut listing = match opened {
             Ok(listing) => listing,
@@ -148,9 +128,9 @@ pub(super) fn scan_with(
         };
         let stamp = handle::stamp(&listing)?;
         identities.insert(directory.clone(), stamp);
-        (probe.after_open)(&directory);
+        probe.after_open(&directory);
         let names = handle::names(&mut listing, |name| {
-            (probe.listed)(name);
+            probe.listed(name);
             budget.reserve()
         })?;
         let listing = Opened::new(listing);

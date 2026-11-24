@@ -67,7 +67,7 @@ pub(crate) fn gate(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) 
         scopes.push(("checks", "read"));
         let mut app_scopes = scopes.clone();
         app_scopes.push(("administration", "write"));
-        steps.push(app_token(&app_scopes));
+        steps.push(app_token(helper, &app_scopes));
         token = APP_TOKEN_OUTPUT;
     }
     for name in &plan.pr_only_checks {

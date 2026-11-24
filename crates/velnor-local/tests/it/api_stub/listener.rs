@@ -19,6 +19,7 @@ use crate::support::{Harness, MAIN, PULL_2, Reply, temp_dir};
 const TOKEN: &str = "Bearer local-test-control";
 
 struct Listening {
+    _dir: velnor_test_support::ScratchDir,
     child: Child,
     job: SocketAddr,
     control: Option<SocketAddr>,
@@ -41,9 +42,9 @@ impl Listening {
             .arg("--listen")
             .arg(job_address.to_string())
             .arg("--repo")
-            .arg(&dir)
+            .arg(dir.path())
             .arg("--dir")
-            .arg(&dir)
+            .arg(dir.path())
             .arg("--cache-dir")
             .arg(harness.dir())
             .stderr(Stdio::piped())
@@ -81,6 +82,7 @@ impl Listening {
             while lines.next_line().await.is_ok_and(|line| line.is_some()) {}
         });
         Self {
+            _dir: dir,
             child,
             job: job_address,
             control: control.then_some(admin_address),

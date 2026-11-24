@@ -23,7 +23,7 @@ use crate::raw::{RawJob, RawStep, RawWorkflow};
 use crate::secret_events::untrusted;
 use crate::triggers::triggers;
 
-const RESERVED_FILES: &[&str] = &["rust-ci", "release"];
+const RESERVED_FILES: &[&str] = &["ci", "release"];
 
 pub(crate) struct Context<'a> {
     pub(crate) file: &'a str,
@@ -70,6 +70,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
     )?;
     let trusted = crate::trusted::pool(&file, &runner, &fork_runner, hosted, &raw)?;
     let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
+    crate::trusted::not_reusable(&file, trusted.as_ref(), &triggers)?;
     let input_names: Vec<&str> = triggers
         .workflow_call
         .iter()

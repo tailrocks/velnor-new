@@ -5,7 +5,7 @@ use velnor_model::{MisePlatform, looks_github_hosted};
 
 use crate::check::runner_label_of;
 use crate::error::{WorkflowsError, refuse};
-use crate::plan::{Action, TrustedPool, Workflow, WorkflowsPlan};
+use crate::plan::{Action, Triggers, TrustedPool, Workflow, WorkflowsPlan};
 use crate::raw::{RawStep, RawWorkflow};
 
 const REF_INPUTS: &[&str] = &["ref", "sha", "repository"];
@@ -59,6 +59,20 @@ fn runs_on(workflow: &Workflow, label: &str) -> bool {
                     matrix.labels.iter().any(|(runner, _)| names(label, runner))
                 })
         })
+}
+
+pub(crate) fn not_reusable(
+    file: &str,
+    pool: Option<&TrustedPool>,
+    triggers: &Triggers,
+) -> Result<(), WorkflowsError> {
+    match pool {
+        Some(pool) if triggers.workflow_call.is_some() => refuse(format!(
+            "the workflow {file} sets trusted_runner {}, but its workflow_call trigger lets a workflow of another repository call it, and the github context of a call belongs to the caller, so a push to the caller's default branch would pass the trusted event check",
+            pool.label
+        )),
+        _ => Ok(()),
+    }
 }
 
 pub(crate) fn reserved_across(workflows: &[Workflow]) -> Result<(), WorkflowsError> {

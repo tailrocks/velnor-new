@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use super::public_declared::{declare, repositories};
 use super::support::{COMPILED, seed};
-use crate::io::Repo as Checkout;
+use crate::io::{Repo as Checkout, hang_up};
 
 pub(super) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(super) const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
@@ -304,15 +304,9 @@ fn a_redirect_to_another_repository_is_not_followed() {
 }
 
 #[test]
-fn an_unreachable_api_is_not_cacheable() {
-    let closed = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
-    let url = format!(
-        "http://{}",
-        closed.local_addr().unwrap_or_else(|e| unreachable!("{e}"))
-    );
-    drop(closed);
+fn an_api_that_hangs_up_is_not_cacheable() {
     let sources = [("dep", git("acme/shared-lib", SHA))];
-    let (output, written) = decide(&sources, &url);
+    let (output, written) = decide(&sources, &hang_up());
     refused(&output, &written);
 }
 

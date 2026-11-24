@@ -447,7 +447,7 @@ A cell is a single-use sandbox the node agent makes ahead of need inside its own
 
 - **Each site is whole:** dispatcher with standby, ledger, store, hooks, mirror. The App's webhook name resolves to both. A PR is pinned to a site by its number, so its pushes stay warm; a site that is down or full hands its requests to the other.
 - **Receipts replicate** between sites in about 2 s [E]; they are small. **Generations replicate** at batch priority. Whether a site syncs 8.7 GiB or replays a 67 s build locally is decided per root by measuring the link: a local build that beats a fetch is allowed, with the number shown.
-- **ChainArgos and jackin stay on ARC** in their namespaces until `velnor-gen` can regenerate their workflows into the closed set. They are tenants of the nodes, not jobs Velnor runs. They get honest requests, a CPU and memory quota from two weeks of measured use, a weight below Velnor's foreground and above batch, and they never share a cpuset with a foreground cell.
+- **example-org and jackin stay on ARC** in their namespaces until `velnor-gen` can regenerate their workflows into the closed set. They are tenants of the nodes, not jobs Velnor runs. They get honest requests, a CPU and memory quota from two weeks of measured use, a weight below Velnor's foreground and above batch, and they never share a cpuset with a foreground cell.
 
 ### 7.5 Host and kernel tuning
 

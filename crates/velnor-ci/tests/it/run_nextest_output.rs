@@ -3,8 +3,6 @@
 
 #![cfg(unix)]
 
-use std::process::Command;
-
 use crate::run::scratch;
 use crate::run_nextest::{NEXTEST_RUN, execute_nextest, fake_nextest, listed, without_built};
 
@@ -45,11 +43,11 @@ fn run_does_not_need_a_step_output_file() {
         temp.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let output = crate::run::velnor_ci_run()
         .arg("run")
         .arg("--")
         .args(NEXTEST_RUN)
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env_remove("GITHUB_OUTPUT")
         .env("PATH", path)
         .output()

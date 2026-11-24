@@ -47,11 +47,11 @@ fn seed(repo: &Checkout) {
         format!(
             "build/serde/{SERDE_RUN_HASH}/fingerprint/run-build-script-build-script-build.json"
         ),
+        format!("build/app/{APP_HASH}/out/libapp-{APP_HASH}.rlib"),
+        format!("build/app/{APP_HASH}/fingerprint/lib-app.json"),
     ];
     let dropped = [
         format!("build/serde/{SERDE_HASH}/out/serde-test"),
-        format!("build/app/{APP_HASH}/out/libapp-{APP_HASH}.rlib"),
-        format!("build/app/{APP_HASH}/fingerprint/lib-app.json"),
         format!("build/old/{OLD_HASH}/out/libold-{OLD_HASH}.rlib"),
         format!("build/old/{OLD_HASH}/fingerprint/lib-old.json"),
         format!("build/old/{OLD_HASH}/run/stdout"),
@@ -93,6 +93,8 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
         ),
         ".cargo-build-lock".to_owned(),
         ".cargo-artifact-lock".to_owned(),
+        format!("build/app/{APP_HASH}/out/libapp-{APP_HASH}.rlib"),
+        format!("build/app/{APP_HASH}/fingerprint/lib-app.json"),
     ] {
         assert!(
             exists(&repo, &format!("{DEBUG}/{kept}")),
@@ -101,7 +103,6 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
     }
     for gone in [
         format!("build/serde/{SERDE_HASH}/out/serde-test"),
-        format!("build/app/{APP_HASH}"),
         format!("build/old/{OLD_HASH}"),
         "app".to_owned(),
         "app.d".to_owned(),
@@ -115,7 +116,6 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
     }
     assert!(!exists(&repo, "target/doc"));
     assert!(stdout.contains("pruned from"), "{stdout}");
-    assert!(stdout.contains("unused or workspace artifacts"), "{stdout}");
     assert!(stdout.contains("fingerprints"), "{stdout}");
 }
 

@@ -5,7 +5,7 @@ deleted with the old engine (#1747) and the tracking issue #1209 was closed as
 obsolete; nothing in the current tree reads `[[images]]`. The text below is kept
 as history only.
 
-**Former status:** Proposed. Source: the ChainArgos split design, section 4.5. The
+**Former status:** Proposed. Source: the example-org split design, section 4.5. The
 schema and the Dockerfile analysis are implemented in
 `velnor-actions-contract` (`config::images`, `config::dockerfile`); the sections
 marked **Planned** are delivered by later increments of the same lane.
@@ -17,18 +17,18 @@ Decision records: hard decision 8 in [`../hard-decisions.md`](../hard-decisions.
 
 ```toml
 [[images]]
-id = "eth-processor-app"
-repository = "ghcr.io/chainargos/eth-processor-app"
-dockerfile = "backend-rust/eth-processor-app/Dockerfile"   # or { linux_amd64 = "...", linux_arm64 = "..." }
+id = "example-repo-14"
+repository = "ghcr.io/example-org/example-repo-14"
+dockerfile = "backend-rust/example-repo-14/Dockerfile"   # or { linux_amd64 = "...", linux_arm64 = "..." }
 context = "."
 platforms = ["linux_amd64", "linux_arm64"]
-version_file = "backend-rust/eth-processor-app/Cargo.toml"
+version_file = "backend-rust/example-repo-14/Cargo.toml"
 
 [images.prebuilt]                    # optional
 kind = "cargo_bin"                   # closed union; gradle_task arrives with the Gradle stack
-package = "eth-processor-app"
-bin = "eth-processor-app"
-stage = "dist/eth-processor-app"
+package = "example-repo-14"
+bin = "example-repo-14"
+stage = "dist/example-repo-14"
 ```
 
 | Key | Rule |

@@ -39,7 +39,7 @@ combined Docker build-context manifest SHA-256 is
 over the exact 25 newline-terminated `sha256sum` entries printed in the raw
 build receipt. The initial capture's `dac58359…` field did not match those
 printed bytes; the original is retained as
-`/tmp/runner25-work-volume-proof-initial-capture.log`, and the corrected final
+`<tmp>/runner25-work-volume-proof-initial-capture.log`, and the corrected final
 receipt records the reproducible digest. Important source SHA-256 values:
 
 After the `6180ccebc` main sync and normal PR25 merge of `4e843d6e`, a rehash
@@ -89,8 +89,8 @@ The immutable local image IDs used for the probe were verified with
 The source-bound Docker engine was `217d445c-e773-41da-b749-d0b32b0881e9`,
 Engine `29.8.2`, Linux x86_64. The base image digest, context manifest, source
 hashes, build output, image inspections, and the raw probe transcript are
-retained in `/tmp/runner25-work-volume-proof-final.log` and
-`/tmp/runner25-work-volume-proof-probe-final2.log` for this run. The final
+retained in `<tmp>/runner25-work-volume-proof-final.log` and
+`<tmp>/runner25-work-volume-proof-probe-final2.log` for this run. The final
 probe also checked that its unique volume name was absent immediately before
 creation, so the Docker copy-up observation comes from a newly created empty
 volume. Earlier exploratory captures with reused volume names or stale image
@@ -157,7 +157,7 @@ docker volume inspect velnor-runner25-work-proof-final2-20261005
 All probe containers used `--rm`; container inspections confirmed none
 remained. The labeled volume was removed and a subsequent inspection confirmed
 it was absent. The transcript uses the exact immutable image IDs above and is
-stored at `/tmp/runner25-work-volume-proof-probe-final2.log`.
+stored at `<tmp>/runner25-work-volume-proof-probe-final2.log`.
 
 ## Earlier merged PR25 + PR48 image receipt (superseded below)
 
@@ -173,8 +173,8 @@ Regenerate and check the manifest with:
 ```sh
 find images/dind images/runner/ubuntu-26.04 -type f ! -name .dockerignore -print0 \
   | LC_ALL=C sort -z \
-  | xargs -0 sha256sum > /tmp/runner25-main-b3-context.sha256
-sha256sum /tmp/runner25-main-b3-context.sha256
+  | xargs -0 sha256sum > "${TMPDIR:-/tmp}/runner25-main-b3-context.sha256"
+sha256sum "${TMPDIR:-/tmp}/runner25-main-b3-context.sha256"
 ```
 
 ```text
@@ -265,9 +265,9 @@ if docker volume inspect "$volume" --format 'name={{.Name}}'; then exit 1; else 
 
 The entrypoint invocation is expected to exit 1 with exactly `docker socket
 missing`; the other probe commands pass. The complete build and probe receipts
-are retained at `/tmp/runner25-b3-image-build.log` and
-`/tmp/runner25-b3-work-volume-probe.log`. The nested source contract test also
-checks the `_work` mount, private `/tmp/velnor-jit.*` location, and absence of
+are retained at `<tmp>/runner25-b3-image-build.log` and
+`<tmp>/runner25-b3-work-volume-probe.log`. The nested source contract test also
+checks the `_work` mount, private `velnor-jit.*` location under `/tmp`, and absence of
 a runner mount at `/tmp`. Its source SHA-256 is
 `6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.
 
@@ -291,7 +291,7 @@ local image and volume behavior only, not a live Scale Set or Actions job.
 The combined build context includes all 23 regular files in the two image
 directories, excluding `.dockerignore`. The newline-terminated sorted
 `sha256sum` manifest is
-`/root/.cache/velnor-pr25-image-context-final.sha256` and hashes to
+`<retained-cache>/velnor-pr25-image-context-final.sha256` and hashes to
 `83544967e64300a68a4969c119e0d8353965e8cf9017d862375315692bd9e7ed`:
 
 ```text
@@ -349,7 +349,7 @@ public socket. In the final runner image, `wait-docker-sock-test.sh`,
 `clear-dockerenv-test.sh`, and the DinD readiness harness passed. The
 Dockerfile's own tar probes also completed during the runner build. Separate
 tar shell suites passed 18/18 and 22/22 with logs under
-`/root/.cache/velnor-pr25-tar-strip-test-logs/`.
+`<retained-cache>/velnor-pr25-tar-strip-test-logs/`.
 
 A fresh-volume probe used the immutable IDs above and volume
 `velnor-pr25-work-imagefix-20261005-01`. The volume was confirmed absent before
@@ -359,14 +359,14 @@ as `1000:1000 755`; its root process wrote a `0:0 644` marker. The default
 runner user `uid=1000(runner)` read that marker and wrote a `1000:1000 644`
 marker. A wrapper invoked the actual runner entrypoint with a dummy JIT body
 and one socket-wait attempt; it exited 1 with `docker socket missing`. An
-exported `mktemp` observer recorded a temporary path under `/tmp/velnor-jit.*`,
+exported `mktemp` observer recorded a temporary path matching `velnor-jit.*` under `/tmp`,
 verified that file was removed, and verified that no JIT file appeared in the
 work volume. Container inspection showed only the `_work` volume mount on
 every probe container, with no `/tmp` mount. All named containers and the
 volume were removed and then confirmed absent.
 
 The raw build logs, installed-file hash check, component-test transcript,
-probe script, and probe output are retained in `/root/.cache` as
+probe script, and probe output are retained in `<retained-cache>` as
 `velnor-pr25-imagefix-dind-build.log`,
 `velnor-pr25-imagefix-runner-build.log`,
 `runner25-imagefix-installed-files.log`,

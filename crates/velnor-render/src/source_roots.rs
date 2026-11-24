@@ -38,6 +38,7 @@ pub(crate) fn roots_env(manifests: &[RepoPath]) -> Option<(String, String)> {
         .then(|| (name_of(&value), value))
 }
 
+// helper-gate: first in tools-v0.1.112 via 106a05c994
 const LITERAL_ROOTS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn literal_roots(job: &Job, plan: &WorkflowPlan) -> bool {

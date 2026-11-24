@@ -8,7 +8,7 @@ use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::RepoPath;
 use velnor_render::MAX_WORKFLOW_BYTES;
 
-const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+const WORKFLOW: &str = ".github/workflows/ci.yml";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\n";
 
 fn long_named_roots(count: usize) -> Vec<String> {

@@ -7,11 +7,7 @@ use crate::plan::step;
 
 pub(crate) fn upload(jobs: &mut [Job]) {
     for job in jobs {
-        if job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-        {
+        if job.steps.iter().any(|step| step.kind.runs_cargo()) {
             let gate = job
                 .steps
                 .iter()

@@ -55,8 +55,7 @@ fn build(repo: &Repo) {
     ));
 }
 
-/// Dependency units of the last `build`, as `(package, fresh)`; workspace units always rebuild.
-fn dependency_units(repo: &Repo) -> Vec<(String, bool)> {
+fn units(repo: &Repo) -> Vec<(String, bool)> {
     let text = fs::read_to_string(repo.root().join("temp/velnor-invocations.jsonl"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut units = Vec::new();
@@ -64,9 +63,7 @@ fn dependency_units(repo: &Repo) -> Vec<(String, bool)> {
         let record: Value = serde_json::from_str(line).unwrap_or_else(|e| unreachable!("{e}"));
         for artifact in record["artifacts"].as_array().into_iter().flatten() {
             let package = artifact["package_id"].as_str().unwrap_or_default();
-            if !package.starts_with("path+") {
-                units.push((package.to_owned(), artifact["fresh"] == true));
-            }
+            units.push((package.to_owned(), artifact["fresh"] == true));
         }
     }
     units
@@ -91,20 +88,37 @@ fn a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build() {
         "{\"files\":{},\"package\":null}\n",
     );
     build(&repo);
-    assert!(dependency_units(&repo).iter().all(|(_, fresh)| !fresh));
+    assert!(units(&repo).iter().all(|(_, fresh)| !fresh));
     let decided = helper(&repo, &["cache", "decide", "--target-dir", "target"]);
     success(&decided);
     let stdout = String::from_utf8_lossy(&decided.stdout);
     assert!(stdout.contains("this run's dependency units"), "{stdout}");
-    assert!(!repo.root().join("target/debug/libleaf.rlib").exists());
     assert!(!repo.root().join("target/debug/incremental").exists());
+    build(&repo);
+    let unchanged = units(&repo);
+    assert!(
+        unchanged
+            .iter()
+            .any(|(package, fresh)| package.contains("#leaf@") && *fresh),
+        "unchanged path library must stay fresh: {unchanged:?}"
+    );
     repo.write_unstaged("src/lib.rs", "pub fn leaf() -> u8 { dep::dep() + 1 }\n");
     build(&repo);
-    let units = dependency_units(&repo);
+    let units = units(&repo);
+    assert!(
+        units
+            .iter()
+            .any(|(package, fresh)| package.contains("#leaf@") && !*fresh),
+        "edited path library must rebuild: {units:?}"
+    );
+    let dependencies: Vec<_> = units
+        .iter()
+        .filter(|(package, _)| !package.contains("#leaf@"))
+        .collect();
     assert_eq!(
-        units.len(),
+        dependencies.len(),
         2,
         "the build script and the library: {units:?}"
     );
-    assert!(units.iter().all(|(_, fresh)| *fresh), "{units:?}");
+    assert!(dependencies.iter().all(|(_, fresh)| *fresh), "{units:?}");
 }

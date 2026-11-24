@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS};
+use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS, MAX_TOTAL_BYTES};
 use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
@@ -26,7 +26,9 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
     let (sessions, unparsed) = sessions(metrics, log, runner_temp);
     metrics.mbx = MbxEvidence {
         declared: crate::mbx_declared::declared_in(Path::new(".")),
-        store_primed: store.zip(first_cargo).is_some_and(|(dir, start)| {
+        store_primed: store.zip(first_cargo).is_some_and(|(dir, first_cargo)| {
+            let start = super::mbx_reports::first_session_start(runner_temp)
+                .map_or(first_cargo, |session| session.min(first_cargo));
             OBJECT_CACHE
                 .iter()
                 .any(|part| has_entry_before(&Path::new(&dir).join(part), start))
@@ -47,7 +49,7 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
 fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<MbxSession>, u64) {
     let (unrecorded, ledger_unknown) = unrecorded_ledger(metrics, runner_temp);
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
-        let (sessions, unparsed) = summaries(metrics, log);
+        let (sessions, unparsed) = summaries(metrics, &[log]);
         return (
             sessions,
             unparsed
@@ -57,20 +59,20 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     };
     if reports.overflowed {
         metrics.verification_errors.push(format!(
-            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions or {MAX_ENTRIES} entries); the MBX session counts are unknown."
+            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions, {MAX_ENTRIES} entries or {} MiB in total); the MBX session counts are unknown.",
+            MAX_TOTAL_BYTES >> 20
         ));
         return (Vec::new(), 1);
     }
-    let mut unassigned = Vec::new();
-    for invocation in &metrics.invocations {
-        if !reports_session(&invocation.argv) {
-            let slice = log
-                .get(invocation.log_start..invocation.log_end.min(log.len()))
-                .unwrap_or_default();
-            unassigned.extend_from_slice(slice);
-        }
-        unassigned.push(b'\n');
-    }
+    let unassigned: Vec<&[u8]> = metrics
+        .invocations
+        .iter()
+        .filter(|invocation| !reports_session(&invocation.argv))
+        .map(|invocation| {
+            log.get(invocation.log_start..invocation.log_end.min(log.len()))
+                .unwrap_or_default()
+        })
+        .collect();
     let missing = reports.missing.len();
     if missing > 0 {
         metrics.verification_errors.push(format!(
@@ -124,8 +126,8 @@ fn unrecorded_sessions(metrics: &mut LaneMetrics, count: u64) -> u64 {
     count
 }
 
-fn summaries(metrics: &mut LaneMetrics, log: &[u8]) -> (Vec<MbxSession>, u64) {
-    let unparsed = mbx_unparsed_lines(log);
+fn summaries(metrics: &mut LaneMetrics, segments: &[&[u8]]) -> (Vec<MbxSession>, u64) {
+    let unparsed = mbx_unparsed_lines(segments);
     if let Some(first) = unparsed.first() {
         metrics.verification_errors.push(format!(
             "MBX lookup summary not understood ({} line(s)); first: {}. Update the mbx summary parser (crates/velnor-ci/src/waste_evidence.rs) for this wording.",
@@ -134,7 +136,7 @@ fn summaries(metrics: &mut LaneMetrics, log: &[u8]) -> (Vec<MbxSession>, u64) {
         ));
     }
     (
-        mbx_sessions(log),
+        mbx_sessions(segments),
         u64::try_from(unparsed.len()).unwrap_or(u64::MAX),
     )
 }
