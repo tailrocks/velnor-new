@@ -39,6 +39,18 @@ fn a_default_branch_that_looks_like_a_release_version_is_refused() -> TestResult
         ))
     ));
     let view = edited("image-plain", |text| {
+        text.replace(
+            "default_branch = \"main\"",
+            "default_branch = \"sha-0123abc\"",
+        )
+    })?;
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(
+            ImageError::BranchReleaseVersion { .. }
+        ))
+    ));
+    let view = edited("image-plain", |text| {
         text.replace("default_branch = \"main\"", "default_branch = \"v1.2\"")
     })?;
     assert!(expected_files(&view).is_ok());
@@ -148,5 +160,29 @@ fn rustflags_that_set_a_cpu_are_refused_wherever_cargo_would_read_them() -> Test
         b"[build]\nrustflags = [\"--cfg\", \"tokio_unstable\"]\n[target.aarch64-apple-darwin]\nrustflags = [\"-C\", \"target-cpu=native\"]\n".to_vec(),
     );
     assert!(expected_files(&harmless).is_ok());
+    Ok(())
+}
+
+#[test]
+fn only_the_cargo_config_that_cargo_reads_is_checked_in_each_directory() -> TestResult {
+    let bad = b"[build]\nrustflags = [\"-C\", \"target-cpu=native\"]\n".to_vec();
+    let fine = b"[build]\nrustflags = [\"--cfg\", \"tokio_unstable\"]\n".to_vec();
+    let mut shadowed = sample("image-plain")?;
+    shadowed
+        .files
+        .insert(RepoPath::new(".cargo/config")?, fine.clone());
+    shadowed
+        .files
+        .insert(RepoPath::new(".cargo/config.toml")?, bad.clone());
+    assert!(expected_files(&shadowed).is_ok());
+    let mut effective = sample("image-plain")?;
+    effective.files.insert(RepoPath::new(".cargo/config")?, bad);
+    effective
+        .files
+        .insert(RepoPath::new(".cargo/config.toml")?, fine);
+    assert!(matches!(
+        expected_files(&effective),
+        Err(GenerateError::Image(ImageError::CpuBaseline { .. }))
+    ));
     Ok(())
 }

@@ -91,10 +91,11 @@ fn check_all(images: &[ImageConfig], branch: &str) -> Result<(), ImageError> {
         });
     }
     let version: Vec<&str> = branch.split('.').collect();
-    if version.len() == 3
-        && version
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    if branch.starts_with("sha-")
+        || version.len() == 3
+            && version
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
     {
         return Err(ImageError::BranchReleaseVersion {
             branch: branch.to_owned(),

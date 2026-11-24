@@ -147,7 +147,7 @@ impl fmt::Display for ImageError {
             ),
             Self::BranchReleaseVersion { branch } => write!(
                 f,
-                "the default branch `{branch}` looks like a release version, so its image tag would collide with the tag that a release promotes; rename the branch or set default_branch"
+                "the default branch `{branch}` looks like a release version or starts with `sha-`, so its image tag would collide with a tag that a release or a commit owns; rename the branch or set default_branch"
             ),
             Self::CpuBaseline { image, path } => write!(
                 f,
