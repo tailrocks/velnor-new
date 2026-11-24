@@ -53,7 +53,6 @@ fn put(home: &Path) {
 
 fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
     let store = node.root.join("store").display().to_string();
-    let home = node.root.join(home);
     run(&Inputs {
         verb,
         key,
@@ -67,7 +66,7 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
-        home: &home,
+        home: &node.root.join(home),
         replace: false,
     })
 }
