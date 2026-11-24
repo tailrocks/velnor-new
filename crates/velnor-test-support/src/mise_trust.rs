@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn a_temp_dir_containing_the_list_separator_is_skipped_without_panicking() {
-        let separator = if cfg!(windows) { ';' } else { ':' };
+        let separator = if cfg!(windows) { '"' } else { ':' };
         let dir = format!("/tmp/velnor{separator}project");
         let inherited = OsString::from("/work/existing");
         let value = trusted_paths_with(Some(inherited.as_os_str()), Path::new(&dir));
