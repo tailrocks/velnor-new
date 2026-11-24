@@ -19,7 +19,9 @@ import zlib
 from typing import Any
 
 
-SCHEMA = "velnor.job-image-candidate.v1"
+SCHEMA = "velnor.job-image-candidate.v2"
+REVISION_LABEL = "org.opencontainers.image.revision"
+REVISION_ARGUMENT = "VELNOR_SOURCE_SHA"
 PLATFORM = {"architecture": "amd64", "os": "linux"}
 MAX_ARCHIVE_BYTES = 4 * 1024**3
 MAX_ARCHIVE_CONTENT_BYTES = 4 * 1024**3
@@ -181,7 +183,7 @@ def _load_archive(path: Path) -> tuple[dict[str, bytes], dict[str, int]]:
     return json_files, blob_files
 
 
-def verify_oci_archive(path: Path) -> dict[str, Any]:
+def verify_oci_archive(path: Path, revision: str) -> dict[str, Any]:
     json_files, blobs = _load_archive(path)
     layout = _json_bytes(json_files["oci-layout"], "OCI layout")
     _exact_keys(layout, {"imageLayoutVersion"}, "OCI layout")
@@ -258,6 +260,10 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     config_data = _json_bytes(config_raw, "OCI image configuration")
     if not isinstance(config_data, dict) or config_data.get("os") != "linux" or config_data.get("architecture") != "amd64":
         raise CandidateError("OCI image configuration platform is not linux/amd64.")
+    container = config_data.get("config")
+    labels = container.get("Labels") if isinstance(container, dict) else None
+    if not isinstance(labels, dict) or labels.get(REVISION_LABEL) != revision:
+        raise CandidateError("OCI image configuration revision label is not the source commit.")
     rootfs = config_data.get("rootfs")
     diff_ids = rootfs.get("diff_ids") if isinstance(rootfs, dict) else None
     if (
@@ -607,12 +613,13 @@ def build(args: argparse.Namespace) -> None:
                 docker_env.pop(name)
         command = [
             args.docker, "buildx", "build", "--platform", "linux/amd64", "--file",
-            str(context / "Dockerfile"), "--provenance=false", "--output",
+            str(context / "Dockerfile"), "--build-arg", f"{REVISION_ARGUMENT}={args.source_commit}",
+            "--provenance=false", "--output",
             f"type=oci,dest={staged_archive},compression=gzip,force-compression=true",
         ]
         command.append(str(context))
         subprocess.run(command, check=True, cwd=root, env=docker_env, timeout=1800)
-        oci = verify_oci_archive(staged_archive)
+        oci = verify_oci_archive(staged_archive, args.source_commit)
         archive_hash, archive_size = _hash_file(staged_archive)
         record = {
             "schema": SCHEMA,
@@ -620,7 +627,8 @@ def build(args: argparse.Namespace) -> None:
             "workflow": workflow,
             "platform": "linux/amd64",
             "build": {
-                "builder": builder, "platform": "linux/amd64", "arguments": [],
+                "builder": builder, "platform": "linux/amd64",
+                "arguments": [f"{REVISION_ARGUMENT}={args.source_commit}"],
                 "exporter": "oci", "provenance": "disabled",
                 "compression": "gzip", "force_compression": True,
             },
@@ -721,8 +729,8 @@ def validate_record(value: Any) -> dict[str, Any]:
         or build["force_compression"] is not True
     ):
         raise CandidateError("Build identity is incorrect.")
-    if build["arguments"] != []:
-        raise CandidateError("Build arguments must be empty.")
+    if build["arguments"] != [f"{REVISION_ARGUMENT}={source['commit']}"]:
+        raise CandidateError("Build arguments must be VELNOR_SOURCE_SHA set to the source commit.")
     archive = _exact_keys(record["archive"], ARCHIVE_KEYS, "Archive")
     if not isinstance(archive["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", archive["sha256"]) or type(archive["size_bytes"]) is not int or archive["size_bytes"] < 1:
         raise CandidateError("Archive identity is incorrect.")
@@ -751,7 +759,7 @@ def validate(args: argparse.Namespace) -> None:
     record = validate_record(
         _json_bytes(_read_limited_file(record_path, MAX_RECORD_BYTES, "Candidate record"), "candidate record")
     )
-    actual_oci = verify_oci_archive(archive)
+    actual_oci = verify_oci_archive(archive, record["source"]["commit"])
     archive_hash, archive_size = _hash_file(archive)
     if record["archive"] != {"sha256": archive_hash, "size_bytes": archive_size}:
         raise CandidateError("Candidate archive is not the same as the archive in its record.")
