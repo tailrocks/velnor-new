@@ -7,7 +7,10 @@ use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
+mod package_spec;
+mod root;
 mod selection;
+pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
