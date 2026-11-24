@@ -27,6 +27,7 @@ const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansib
 const RUN_LIMIT: usize = 2000;
 
 pub const ANSIBLE_SLUG: RootSlug = RootSlug::from_static("ansible");
+// helper-gate: first in tools-v0.1.113 via 3a4114ea3d
 pub(crate) const ANSIBLE_SELECT_HELPER: (u64, u64, u64) = (0, 1, 113);
 
 fn yaml_name(name: &str) -> bool {
