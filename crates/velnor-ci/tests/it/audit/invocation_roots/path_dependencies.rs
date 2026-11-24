@@ -145,3 +145,85 @@ fn a_build_without_test_targets_does_not_select_a_dev_only_path_dependency() {
         assert_selected(&stderr, &format!("{selection:?}"));
     }
 }
+
+fn with_optional_path_dependency() -> Repo {
+    let repo = root_package_with_path_dependencies();
+    unit(
+        &repo,
+        "other/Cargo.toml",
+        "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[dependencies]\nmid = { path = \"../vendor/mid\", optional = true }\n",
+    );
+    unit(&repo, "other/src/main.rs", "fn main() {}\n");
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn a_build_selects_the_optional_path_dependencies_its_features_enable() {
+    for selection in [
+        &["-p", "other", "--features", "mid"][..],
+        &["-p", "other", "--features=mid"],
+        &["-p", "other", "-F", "mid"],
+        &["-p", "other", "-Fmid"],
+        &["-p", "other", "--features", "dep:mid"],
+        &["-p", "other", "--features", "mid/serde"],
+        &["-p", "other", "--features", "a,mid"],
+        &["-p", "other", "--all-features"],
+    ] {
+        for package in ["mid", "leaf"] {
+            let stderr = stderr_of_build_with_untrusted_output_in(
+                &with_optional_path_dependency(),
+                package,
+                selection,
+            );
+            assert_selected(&stderr, &format!("{selection:?} {package}"));
+        }
+    }
+}
+
+#[test]
+fn a_build_does_not_select_an_optional_path_dependency_its_features_leave_off() {
+    for selection in [
+        &["-p", "other"][..],
+        &["-p", "other", "--features", "unrelated"],
+        &["-p", "other", "--features", "mid?/serde"],
+    ] {
+        let stderr = stderr_of_build_with_untrusted_output_in(
+            &with_optional_path_dependency(),
+            "mid",
+            selection,
+        );
+        assert_refused(&stderr, &format!("{selection:?}"));
+    }
+}
+
+#[test]
+fn a_run_selects_the_optional_path_dependencies_its_features_enable() {
+    let repo = with_optional_path_dependency();
+    unit(
+        &repo,
+        "target/debug/build/mid-f000000000000005/output",
+        "cargo:rerun-if-changed=src/lib.rs\n",
+    );
+    let output = command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "run",
+            "-p",
+            "other",
+            "--bin",
+            "other",
+            "--features",
+            "mid",
+            "--no-such-flag",
+        ])
+        .env_remove("GITHUB_RUN_ID")
+        .env_remove("GITHUB_RUN_ATTEMPT")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_selected(&String::from_utf8_lossy(&output.stderr), "cargo run");
+}

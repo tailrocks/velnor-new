@@ -281,8 +281,7 @@ fn ungrouped_root_beside_the_group(build_directory: bool) {
     );
 }
 
-#[test]
-fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group() {
+fn two_groups() -> Repo {
     let repo = grouped_tools();
     unit(
         &repo,
@@ -302,6 +301,12 @@ fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group()
         );
         unit(&repo, &format!("libs/{package}/src/lib.rs"), "");
     }
+    repo
+}
+
+#[test]
+fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group() {
+    let repo = two_groups();
     unit(
         &repo,
         "tools/a/.cargo/config.toml",
@@ -315,4 +320,20 @@ fn a_target_config_under_the_step_does_not_apply_to_the_roots_of_another_group()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let stderr = String::from_utf8_lossy(&built.stderr);
     assert!(built.status.success(), "{stderr}");
+}
+
+#[test]
+fn a_relative_target_variable_of_the_step_does_not_apply_to_the_roots_of_another_group() {
+    for variable in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        let repo = two_groups();
+        repo.git(&["add", "--all"]);
+        let built = velnor_ci()
+            .current_dir(repo.root().join("tools/a"))
+            .env(variable, "shared")
+            .args(["inputs", "build", "--", "true"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let stderr = String::from_utf8_lossy(&built.stderr);
+        assert!(built.status.success(), "{variable}: {stderr}");
+    }
 }

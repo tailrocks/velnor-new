@@ -131,3 +131,20 @@ fn a_relative_config_file_of_the_command_is_not_applied_from_an_unrelated_roots_
     let stderr = String::from_utf8_lossy(&built.stderr);
     assert!(built.status.success(), "{stderr}");
 }
+
+#[test]
+fn a_target_variable_of_the_step_does_not_apply_to_a_root_the_step_is_not_in() {
+    let repo = two_standalone_roots();
+    let shared = repo.root().join("shared");
+    for variable in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        let built = velnor_ci()
+            .current_dir(repo.root().join("web"))
+            .env(variable, &shared)
+            .args(["inputs", "build", "--", "true"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let stderr = String::from_utf8_lossy(&built.stderr);
+        assert!(built.status.success(), "{variable}: {stderr}");
+        assert!(!stderr.contains("cannot be told apart"), "{variable}: {stderr}");
+    }
+}

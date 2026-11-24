@@ -102,17 +102,42 @@ fn a_plain_target_named_through_a_parent_component_that_the_command_creates_stil
 
 #[test]
 fn a_relative_plain_target_is_audited_from_the_step_directory_as_cargo_writes_it() {
-    let repo = workspace_below_the_root();
-    unit(&repo, "rust/target/debug/libapp.rlib", "");
-    let refused = velnor_ci()
-        .current_dir(repo.root().join("rust/app"))
-        .env("CARGO_TARGET_DIR", "../target")
-        .args(["inputs", "build", "--", "true"])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
-    let stderr = String::from_utf8_lossy(&refused.stderr);
-    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+    for variable in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        let repo = workspace_below_the_root();
+        unit(&repo, "rust/target/debug/libapp.rlib", "");
+        let refused = velnor_ci()
+            .current_dir(repo.root().join("rust/app"))
+            .env(variable, "../target")
+            .args(["inputs", "build", "--", "true"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(refused.status.code(), Some(1), "{variable}: {refused:?}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.contains("unknown cargo layout?"),
+            "{variable}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_relative_plain_target_variable_is_audited_from_the_step_directory_by_inputs_audit() {
+    for variable in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        let repo = workspace_below_the_root();
+        unit(&repo, "rust/target/debug/libapp.rlib", "");
+        let refused = velnor_ci()
+            .current_dir(repo.root().join("rust/app"))
+            .env(variable, "../target")
+            .args(["inputs", "audit"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(refused.status.code(), Some(1), "{variable}: {refused:?}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.contains("unknown cargo layout?"),
+            "{variable}: {stderr}"
+        );
+    }
 }
 
 #[test]

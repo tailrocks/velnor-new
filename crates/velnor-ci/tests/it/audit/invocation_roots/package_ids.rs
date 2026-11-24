@@ -70,16 +70,20 @@ const FORMS: [(&str, &str, bool); 53] = [
 ];
 
 fn workspace_with_beta() -> Repo {
+    workspace_with_beta_in("pkg-beta")
+}
+
+fn workspace_with_beta_in(beta: &str) -> Repo {
     let repo = Repo::new("audit-invocation-package-ids");
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
     unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     unit(
         &repo,
         "Cargo.toml",
-        "[workspace]\nmembers = [\"x\", \"pkg-beta\"]\nresolver = \"3\"\n",
+        &format!("[workspace]\nmembers = [\"x\", \"{beta}\"]\nresolver = \"3\"\n"),
     );
     unit(&repo, "Cargo.lock", "version = 4\n");
-    for (directory, package) in [("x", "x"), ("pkg-beta", "beta")] {
+    for (directory, package) in [("x", "x"), (beta, "beta")] {
         unit(
             &repo,
             &format!("{directory}/Cargo.toml"),
@@ -162,5 +166,43 @@ fn every_package_id_form_excludes_its_member_under_exclude_flag() {
     assert!(
         wrong.is_empty(),
         "--exclude does not exclude as expected: {wrong:#?}"
+    );
+}
+
+const ENCODED_FORMS: [(&str, bool); 6] = [
+    ("path+file://@ROOT@/pkg%20beta#beta@0.1.0", true),
+    ("path+file://@ROOT@/pkg%20beta#beta", true),
+    ("file://@ROOT@/pkg%20beta#beta", true),
+    ("path+file://@ROOT@/pkg%2Dbeta#beta", false),
+    ("path+file://@ROOT@/pkg%20other#beta", false),
+    ("path+file://@ROOT@/pkg%2#beta", false),
+];
+
+fn encoded_spec_in(repo: &Repo, form: &str) -> String {
+    let root = std::fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let encoded = root.display().to_string().replace(' ', "%20");
+    form.replace(ROOT, &encoded)
+}
+
+#[test]
+fn a_package_id_with_an_encoded_path_selects_the_member_in_that_directory() {
+    let mut wrong = Vec::new();
+    for (form, selects) in ENCODED_FORMS {
+        let repo = workspace_with_beta_in("pkg beta");
+        untrusted_output_of(&repo, "beta");
+        let spec = encoded_spec_in(&repo, form);
+        let stderr = workspace_output(&repo, &["cargo", "build", "-p", &spec, "--no-such-flag"]);
+        let right = if selects {
+            !stderr.contains(REFUSAL) && stderr.contains("build command failed")
+        } else {
+            refused(&stderr, "beta")
+        };
+        if !right {
+            wrong.push(spec);
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "-p does not select as expected: {wrong:#?}"
     );
 }

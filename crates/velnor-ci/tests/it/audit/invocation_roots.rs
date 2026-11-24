@@ -9,6 +9,7 @@ mod descendant;
 mod glob;
 mod package_ids;
 mod path_dependencies;
+mod targets;
 
 const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
