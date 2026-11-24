@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod audit;
 mod lanes;
 mod timeouts;
 
 use velnor_model::{
-    CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
-    StepKind, When,
+    CargoCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step, StepKind, When,
 };
 
-use crate::audit_job::{AuditLocation, audit_gate, audit_when, audits_per_root};
+use crate::audit_job::{AuditLocation, audits_per_root};
 use crate::base_cache::{save_steps, saving_run};
 use crate::lane::Lane;
 use crate::members::{Member, check_alone, lint};
@@ -191,28 +191,6 @@ impl RootJobs<'_> {
         }
     }
 
-    fn audit(&self) -> Option<Step> {
-        if self.audit == AuditLocation::Separate {
-            return None;
-        }
-        let when = audit_when(self.facts)?;
-        let kind = if audits_per_root(self.facts) {
-            StepKind::InputsAuditRoot(
-                self.unit
-                    .roots
-                    .first()
-                    .and_then(|root| root.manifest.parent()),
-            )
-        } else {
-            StepKind::Helper(HelperCommand::InputsAudit)
-        };
-        Some(Step {
-            when,
-            gate: audit_gate(self.facts, self.lane),
-            ..step(kind)
-        })
-    }
-
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
         if self.unit.grouped {
             crate::test_setup::before_tests(self.facts, &member.root, &member.lane, steps)
@@ -355,6 +333,7 @@ impl RootJobs<'_> {
             let mut steps = self.setup(&test_id);
             let saves = self.saves(&test_id, None, true);
             let saving = self.nextest() && !saves.is_empty();
+            let audit_last = saving && self.audit_after_saves();
             if saving {
                 if !self.records_build() {
                     for member in self.members.iter().filter(|member| member.nextest) {
@@ -375,6 +354,9 @@ impl RootJobs<'_> {
                     );
                     steps.extend(self.member_steps(member, tests));
                 }
+                if !audit_last {
+                    steps.extend(self.audit());
+                }
                 steps.extend(saves.iter().cloned());
             } else {
                 for member in &self.members {
@@ -382,7 +364,9 @@ impl RootJobs<'_> {
                     steps.extend(self.member_steps(member, tests));
                 }
             }
-            steps.extend(self.audit());
+            if audit_last || !saving {
+                steps.extend(self.audit());
+            }
             if !saving {
                 steps.extend(saves);
             }
