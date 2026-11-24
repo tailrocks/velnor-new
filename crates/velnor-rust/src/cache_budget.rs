@@ -295,7 +295,7 @@ fn tier(
             Some(0)
         }
         (CacheFamily::Delta, _) => {
-            let pr = delta_pull_request(entry)?;
+            let pr = scoped_pull_request(entry)?;
             Some(if !open_prs.contains(&pr) {
                 0
             } else if idle(3) {
@@ -360,10 +360,13 @@ pub fn budget_plan(
 }
 
 #[must_use]
-pub fn delta_pull_request(entry: &CacheEntry) -> Option<u64> {
-    (cache_family(&entry.key) == CacheFamily::Delta)
-        .then(|| pull_request(&entry.reference))
-        .flatten()
+pub fn scoped_pull_request(entry: &CacheEntry) -> Option<u64> {
+    matches!(
+        cache_family(&entry.key),
+        CacheFamily::Delta | CacheFamily::Objects
+    )
+    .then(|| pull_request(&entry.reference))
+    .flatten()
 }
 
 pub(crate) fn configured_budget(value: Option<u64>) -> Result<u64, crate::error::Reason> {
