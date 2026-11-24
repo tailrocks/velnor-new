@@ -60,7 +60,7 @@ fn dep_info_carries_the_hash_of_its_unit_directory() {
         assert_eq!(
             parsed(&format!("{unit}/out/{stem}.d")),
             Some(UnitFile::DepInfo {
-                configuration: Some("debug".to_owned()),
+                configuration: "debug".to_owned(),
                 hash: Some(hash.to_owned()),
                 stem: stem.to_owned(),
             }),

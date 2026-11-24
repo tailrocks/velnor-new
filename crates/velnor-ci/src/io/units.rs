@@ -56,7 +56,7 @@ pub(super) enum UnitFile {
         name: String,
     },
     DepInfo {
-        configuration: Option<String>,
+        configuration: String,
         hash: Option<String>,
         stem: String,
     },
@@ -254,7 +254,7 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
             let configuration =
                 configuration(1).filter(|configuration| !configuration.is_empty())?;
             (hash.is_some() || folder == "deps").then(|| UnitFile::DepInfo {
-                configuration: Some(configuration),
+                configuration,
                 hash,
                 stem: stem.to_owned(),
             })
@@ -295,7 +295,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
                 });
             }
             Some(UnitFile::DepInfo {
-                configuration: Some(configuration),
+                configuration,
                 hash: Some(hash),
                 stem: stem.to_owned(),
             })
