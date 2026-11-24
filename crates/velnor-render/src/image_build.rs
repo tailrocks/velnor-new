@@ -19,6 +19,8 @@ use crate::release_steps::{expression, join, permissions, shell_word};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::{CHECKOUT, RUN};
 
+const ARTIFACT_RETENTION_DAYS: u64 = 7;
+
 pub(crate) fn job_id(image: &ImageConfig, part: &str) -> String {
     format!("image-{}-{part}", image.name)
 }
@@ -117,7 +119,13 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
     }
     steps.push(compile(workflow, build));
     steps.push(stage(build));
-    steps.push(upload(artifact(image), staged(image)));
+    let mut artifact_step = upload(artifact(image), staged(image));
+    for (name, value) in &mut artifact_step.with {
+        if name == "retention-days" {
+            *value = Value::Int(ARTIFACT_RETENTION_DAYS);
+        }
+    }
+    steps.push(artifact_step);
     steps
 }
 

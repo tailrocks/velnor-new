@@ -64,6 +64,8 @@ fn each_refused_value_names_its_key() -> TestResult {
         ("dockerfile = \"/etc/Dockerfile\"", "image.dockerfile"),
         ("context = \"a//b\"", "image.context"),
         ("stage = \".\"", "image.stage"),
+        ("stage = \"-dist\"", "image.stage"),
+        ("dockerfile = \"-f\"", "image.dockerfile"),
         ("stage = \"dist/.git\"", "image.stage"),
         ("inputs = [\"../x\"]", "image.inputs"),
         ("context = \"app\"\ninputs = [\"other\"]", "image.inputs"),

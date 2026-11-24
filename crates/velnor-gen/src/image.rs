@@ -35,7 +35,7 @@ pub(crate) fn image_workflow(
         .map(|(owner, _)| owner.to_ascii_lowercase());
     check_all(images, &facts.config.default_branch)?;
     if MisePlatform::runner(facts.config.runner.as_str())
-        .is_some_and(|platform| !platform.lock_key().starts_with("linux"))
+        .is_some_and(|platform| platform.lock_key() != "linux-x64")
     {
         return Err(ImageError::NotLinuxRunner {
             runner: facts.config.runner.to_string(),

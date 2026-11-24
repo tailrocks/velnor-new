@@ -131,6 +131,16 @@ fn the_dockerfile_must_be_tracked_and_the_runner_must_be_linux() -> TestResult {
         expected_files(&view),
         Err(GenerateError::Image(ImageError::NotLinuxRunner { .. }))
     ));
+    let arm = plain_with(|text| {
+        text.replace(
+            "runner = \"ubuntu-26.04-scale-set\"\nhosted = false\nfork_runner = \"ubuntu-latest\"",
+            "runner = \"ubuntu-24.04-arm\"\nhosted = true",
+        )
+    })?;
+    assert!(matches!(
+        expected_files(&arm),
+        Err(GenerateError::Image(ImageError::NotLinuxRunner { .. }))
+    ));
     Ok(())
 }
 

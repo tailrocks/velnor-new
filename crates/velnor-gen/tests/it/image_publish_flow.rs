@@ -224,6 +224,26 @@ fn pr_only_checks_get_an_administration_capable_app_token_that_is_revoked_and_no
             step_named(job, "Revoke the release App token").is_ok(),
             "{id}"
         );
+        let names: Vec<&str> = steps(job)
+            .iter()
+            .filter_map(|step| step["name"].as_str())
+            .collect();
+        let launcher = names
+            .iter()
+            .position(|text| text.starts_with("Install the released helper launcher"))
+            .ok_or("no launcher step")?;
+        let minted = names
+            .iter()
+            .position(|text| text.starts_with("Create the release App token"))
+            .ok_or("no app step")?;
+        assert!(
+            launcher < minted,
+            "{id}: the token exists only after the helper is pinned"
+        );
+        for step in steps(job) {
+            let run = step["run"].as_str().unwrap_or("");
+            assert!(!run.starts_with("velnor-ci "), "{id}: {run}");
+        }
     }
     let plain = rendered("image-plain")?;
     for id in ["image-gate", "image-plain-svc-authority"] {
@@ -245,6 +265,17 @@ fn a_release_version_is_bounded_so_that_it_is_a_valid_image_tag() -> TestResult 
     assert!(
         check.contains("[0-9]{1,40}[.][0-9]{1,40}[.][0-9]{1,40}$"),
         "{check}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_staged_artifact_outlives_a_weekend_of_environment_approval() -> TestResult {
+    let workflow = rendered("image-plain")?;
+    let build = &workflow["jobs"]["image-plain-svc-build"];
+    assert_eq!(
+        step_named(build, "Upload image-plain-svc")?["with"]["retention-days"],
+        7
     );
     Ok(())
 }

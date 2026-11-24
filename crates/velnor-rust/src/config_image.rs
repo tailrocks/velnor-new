@@ -257,7 +257,7 @@ fn path(text: &str, dot: bool, key: &'static str) -> Result<String, Reason> {
         && text
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'/' | b'-'))
-        && !text.starts_with('/')
+        && !text.starts_with(['/', '-'])
         && !text.ends_with('/')
         && text
             .split('/')

@@ -110,10 +110,11 @@ pub fn render_image(
     let jobs: Vec<RenderedJob> = jobs
         .into_iter()
         .map(|job| {
-            let pr_only = workflow.pr_only_checks();
-            if !pr_only.is_empty() && is_admin_job(&job) {
-                return revoke_app_token(admin_token(workflow, job));
-            }
+            let job = if !workflow.pr_only_checks().is_empty() && is_admin_job(&job) {
+                revoke_app_token(admin_token(workflow, job))
+            } else {
+                job
+            };
             RenderedJob {
                 steps: secure_with(workflow.helper, job.steps),
                 ..job

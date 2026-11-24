@@ -140,7 +140,7 @@ impl fmt::Display for ImageError {
             ),
             Self::NotLinuxRunner { runner } => write!(
                 f,
-                "the runner `{runner}` is not a Linux runner; the image jobs run Docker Buildx and need a Linux runner with Docker"
+                "the runner `{runner}` is not a Linux x64 runner; the image jobs build linux/amd64 images with Docker Buildx and install no emulation, so they need an x64 Linux runner with Docker"
             ),
             Self::SysrootLockMissing { image } => write!(
                 f,
