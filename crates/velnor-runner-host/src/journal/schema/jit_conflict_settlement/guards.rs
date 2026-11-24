@@ -123,7 +123,7 @@ WHEN NOT EXISTS (
       AND auth.acquire_state='acquired' AND auth.acquire_response_digest=NEW.acquire_response_digest AND auth.started_event_digest IS NULL AND auth.completed_event_digest IS NULL
       AND active.generation=NEW.authority_generation AND active.policy_digest=NEW.authority_digest AND policy.binding_digest=NEW.binding_digest
       AND receipt.binding_digest=NEW.binding_digest AND receipt.source_digest=NEW.source_digest AND receipt.acquire_response_digest=NEW.acquire_response_digest AND receipt.authority_generation=NEW.authority_generation AND receipt.authority_digest=NEW.authority_digest AND receipt.engine_id=NEW.engine_id AND receipt.docker_root_digest=NEW.docker_root_digest AND receipt.requested_name=NEW.requested_name AND receipt.response_status=409
-      AND NEW.lease_until>unixepoch() AND NEW.created_at=unixepoch()
+      AND NEW.lease_until>unixepoch() AND unixepoch()-NEW.created_at IN (0,1)
       AND NEW.claim_generation=COALESCE((SELECT MAX(prior.claim_generation)+1 FROM physical_attempt_jit_conflict_recovery_claims prior WHERE prior.reservation_id=NEW.reservation_id),1)
       AND NOT EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_recovery_claims prior WHERE prior.reservation_id=NEW.reservation_id AND prior.lease_until>unixepoch())
       AND NOT EXISTS(SELECT 1 FROM connection_completion_inbox inbox WHERE inbox.connection_id=NEW.connection_id AND inbox.scale_set_id=NEW.scale_set_id)
@@ -219,7 +219,7 @@ WHEN NOT EXISTS (
                OR EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_recovery_progress target JOIN physical_attempt_jit_conflict_recovery_progress deletion ON deletion.reservation_id=target.reservation_id AND deletion.claim_generation=target.claim_generation AND deletion.phase_index=3 AND deletion.phase='delete_started' WHERE target.reservation_id=claim.reservation_id AND target.claim_generation<claim.claim_generation AND target.phase_index=2 AND target.phase='remote_target' AND target.runner_id=remote.runner_id AND target.runner_name=claim.requested_name AND target.runner_scale_set_id=claim.scale_set_id AND deletion.runner_id=remote.runner_id AND deletion.runner_name=claim.requested_name AND deletion.runner_scale_set_id=claim.scale_set_id AND NOT EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_recovery_progress prior WHERE prior.reservation_id=claim.reservation_id AND prior.claim_generation<claim.claim_generation AND prior.phase_index=2 AND prior.phase='remote_initial_absent')))))
       AND auth.acquire_state='acquired' AND auth.binding_digest=claim.binding_digest AND auth.source_digest=claim.source_digest AND auth.acquire_response_digest=claim.acquire_response_digest AND auth.started_event_digest IS NULL AND auth.completed_event_digest IS NULL
       AND active.generation=claim.authority_generation AND active.policy_digest=claim.authority_digest AND policy.binding_digest=claim.binding_digest
-      AND claim.lease_until>unixepoch() AND NEW.created_at=unixepoch()
+      AND claim.lease_until>unixepoch() AND unixepoch()-NEW.created_at IN (0,1)
       AND NOT EXISTS(SELECT 1 FROM connection_completion_inbox inbox WHERE inbox.connection_id=claim.connection_id AND inbox.scale_set_id=claim.scale_set_id)
       AND NOT EXISTS(SELECT 1 FROM connection_request_authorizations auth WHERE auth.connection_id=claim.connection_id AND auth.scale_set_id=claim.scale_set_id AND ((auth.started_event_digest IS NOT NULL AND auth.started_runner_name=claim.requested_name) OR (auth.completed_event_digest IS NOT NULL AND auth.completed_runner_name=claim.requested_name)))
 )

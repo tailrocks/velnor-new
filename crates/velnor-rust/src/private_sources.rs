@@ -6,7 +6,7 @@ use velnor_model::{GitRepository, RepoPath, RepoView, RepositoryIdentity, RustCi
 use crate::error::{DetectError, Reason};
 use crate::public_git::pinned_github;
 
-use crate::roots::{CARGO_LOCK, is_cargo_config};
+use crate::roots::{CARGO_LOCK, effective_configs};
 use crate::toml_file::table;
 use crate::weaken_scope::reaches_a_check;
 
@@ -50,10 +50,8 @@ pub(crate) fn private_cause(
                 .map(|bytes| locked_source(&lock, bytes, declared))
         })
         .flatten();
-    let configs = view
-        .files
-        .iter()
-        .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
+    let configs = effective_configs(&view.files)
+        .filter(|(path, _)| reaches_a_check(path, roots))
         .filter_map(|(path, bytes)| configured_source(path, bytes));
     locks.chain(configs).next()
 }
@@ -182,10 +180,8 @@ pub(crate) fn only_private_git(view: &RepoView, roots: &[RustRoot]) -> bool {
             .is_some_and(|text| cacheable_private_lock(text).unwrap_or(false))
     });
     locks
-        && !view
-            .files
-            .iter()
-            .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
+        && !effective_configs(&view.files)
+            .filter(|(path, _)| reaches_a_check(path, roots))
             .any(|(_, bytes)| {
                 !std::str::from_utf8(bytes)
                     .is_ok_and(|text| cacheable_config(text).unwrap_or(false))

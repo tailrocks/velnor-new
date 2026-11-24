@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use super::{OUTPUT_VARIABLE, append_to};
 use crate::error::CiError;
+use crate::private_repo::Rejection;
 
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -18,9 +19,10 @@ fn variable(name: &str) -> Result<String, CiError> {
         .ok_or_else(|| CiError::new(format!("{name} is not set")))
 }
 
-pub(super) fn require() -> Result<(), CiError> {
-    let repository = variable(REPOSITORY_VARIABLE)?;
-    let github = super::fetch::api_client(variable(TOKEN_VARIABLE)?, LOOKUP_TIMEOUT)?;
+pub(super) fn require() -> Result<(), Rejection> {
+    let repository = variable(REPOSITORY_VARIABLE).map_err(Rejection::Unavailable)?;
+    let token = variable(TOKEN_VARIABLE).map_err(Rejection::Unavailable)?;
+    let github = super::fetch::api_client(token, LOOKUP_TIMEOUT).map_err(Rejection::Unavailable)?;
     crate::private_repo::require_private(&repository, &github)
 }
 
@@ -34,8 +36,8 @@ pub(super) fn confirmed() -> Result<(), CiError> {
 }
 
 pub(super) fn run() -> Result<String, CiError> {
-    let private = match require() {
-        Ok(()) => true,
+    let (private, unavailable) = match require() {
+        Ok(()) => (true, false),
         Err(error) => {
             eprintln!(
                 "{}",
@@ -43,10 +45,14 @@ pub(super) fn run() -> Result<String, CiError> {
                     "the base caches of private dependencies are not used: {error}"
                 ))
             );
-            false
+            (false, matches!(error, Rejection::Unavailable(_)))
         }
     };
-    let line = format!("private={private}\n");
+    let line = if unavailable {
+        "private=false\nunavailable=true\n".to_owned()
+    } else {
+        format!("private={private}\n")
+    };
     append_to(OUTPUT_VARIABLE, &line)?;
     Ok(line)
 }

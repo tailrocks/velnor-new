@@ -44,6 +44,10 @@ pub(super) async fn migrate_v55_to_v56(conn: &turso::Connection) -> Result<(), H
     container_absences::migrate(conn).await
 }
 
+pub(super) fn clock_guard() -> Result<(String, String), HostError> {
+    dispatch_deadlines::clock_guard()
+}
+
 const VERSION: i64 = 43;
 
 const CLAIMS: &str = "CREATE TABLE capacity_reservation_unbound_retirement_claims (reservation_id INTEGER NOT NULL PRIMARY KEY REFERENCES capacity_reservations(id), connection_id TEXT NOT NULL REFERENCES connection_scopes(connection_id), operation_id INTEGER NOT NULL UNIQUE REFERENCES connection_intents(id), engine_id TEXT NOT NULL CHECK (length(engine_id) BETWEEN 1 AND 128), docker_root_digest TEXT NOT NULL CHECK (length(docker_root_digest) = 64 AND docker_root_digest NOT GLOB '*[^0-9a-f]*'), claim_generation INTEGER NOT NULL CHECK (claim_generation > 0), lease_until INTEGER NOT NULL CHECK (lease_until > 0))";
@@ -213,6 +217,7 @@ async fn validate_objects(
     conn: &turso::Connection,
     objects: Vec<(&'static str, String, String)>,
 ) -> Result<(), HostError> {
+    let version = super::journal_version(conn).await?;
     for (kind, name, expected) in objects {
         let mut rows = conn
             .query(
@@ -229,8 +234,12 @@ async fn validate_objects(
             .get(0)
             .map_err(|_| HostError::Journal)?;
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-            || super::sql_normalization::normalize(&actual)
-                != super::sql_normalization::normalize(&expected)
+            || !super::clock_tick::matches(
+                version,
+                &actual,
+                &expected,
+                super::sql_normalization::normalize,
+            )
         {
             return Err(HostError::Journal);
         }

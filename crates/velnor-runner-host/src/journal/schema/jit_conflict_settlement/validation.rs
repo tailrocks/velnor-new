@@ -7,13 +7,15 @@ use crate::journal::connection::reservation::jit_conflict::identity::{
     remote_absence_digest_values, remote_target_digest_values, valid_sha256,
 };
 
+use super::super::{clock_tick, sql_normalization::normalize_v40_guard_aliases};
 use super::schema_objects;
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    let version = super::super::journal_version(conn).await?;
     for (kind, name, expected) in schema_objects() {
         let expected =
             super::super::jit_interrupted_claims::versioned_recovery_sql(conn, expected).await?;
-        validate_object(conn, kind, name, &expected).await?;
+        validate_object(conn, version, kind, name, &expected).await?;
     }
     validate_revision_triggers(conn).await?;
     validate_rows(conn).await?;
@@ -286,6 +288,7 @@ fn valid_phase_order(phases: &[(i64, String)]) -> bool {
 
 async fn validate_object(
     conn: &turso::Connection,
+    version: i64,
     kind: &str,
     name: &str,
     expected: &str,
@@ -305,8 +308,7 @@ async fn validate_object(
         .get(0)
         .map_err(|_| HostError::Journal)?;
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-        || super::super::sql_normalization::normalize_v40_guard_aliases(&actual)
-            != super::super::sql_normalization::normalize_v40_guard_aliases(expected)
+        || !clock_tick::matches(version, &actual, expected, normalize_v40_guard_aliases)
     {
         return Err(HostError::Journal);
     }

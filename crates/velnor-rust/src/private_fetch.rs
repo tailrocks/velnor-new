@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, HelperCommand, Job, PermissionScope,
-    RepoFacts, RepoPath, RootSlug, Step, StepKind, TokenMint, When,
+    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, Job, PermissionScope, RepoFacts,
+    RepoPath, RootSlug, Step, StepKind, TokenMint, When,
 };
 
 use crate::plan::step;
@@ -35,23 +35,7 @@ pub(crate) fn token_mint(facts: &RepoFacts) -> TokenMint {
 pub(crate) fn after_trusted_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| {
-            !matches!(
-                step.kind,
-                StepKind::Checkout { .. }
-                    | StepKind::InstallHelper(_)
-                    | StepKind::Helper(HelperCommand::Plan)
-                    | StepKind::RepositoryPrivacy
-                    | StepKind::PrivateCheck { .. }
-                    | StepKind::ReleaseAssets { .. }
-                    | StepKind::MbxRemote { .. }
-                    | StepKind::MbxPin
-                    | StepKind::MbxPrivate
-                    | StepKind::MbxStore
-                    | StepKind::MbxSeed
-                    | StepKind::CratesMirror(_)
-            )
-        })
+        .position(|step| !step.kind.is_trusted_setup())
         .unwrap_or(steps.len())
 }
 
