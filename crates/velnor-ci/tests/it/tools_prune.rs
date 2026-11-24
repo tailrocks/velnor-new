@@ -73,6 +73,7 @@ fn a_job_holding_an_entry_locked_cannot_turn_a_trusted_restore_into_a_miss() {
         key: "k1",
         event_name: "push",
         git_ref: "refs/heads/main",
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&shared),
         seed_dir: Some(&shared),

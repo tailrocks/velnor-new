@@ -11,7 +11,7 @@ mod restored_units;
 pub(crate) fn lane() -> Value {
     json!({"schema":1,"lane":"rust","caches":[{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","matched_key":"target-lock-old","hit":"fallback","bytes":null,"usable":true,"usable_same_lock":true,"save":"not_attempted"}],"invocations":[{"argv":["cargo","check"],"root":".","configuration":"default","started_at":10,"seconds":1.0,"log_start":0,"log_end":0,"compilations":[{"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]}],"downloads":[],"capture_complete":true,"verified_git_downloads":[]}],"downloaded":0,"first_cargo_seconds":null,"slowest_tests":[],"tests_run":null,"diagnostics":[],"violations":[]})
 }
-fn metrics(value: Value) -> LaneMetrics {
+pub(crate) fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
 }
 
@@ -65,6 +65,138 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
         }
         assert_eq!(!waste(&metrics(value)).is_empty(), expected, "{case}");
     }
+}
+
+pub(crate) fn artifact(package_id: &str, fresh: bool, filenames: &[&str]) -> Value {
+    artifact_kind(package_id, fresh, &["lib"], filenames)
+}
+
+fn artifact_kind(package_id: &str, fresh: bool, kind: &[&str], filenames: &[&str]) -> Value {
+    json!({
+        "package_id": package_id,
+        "manifest_path": "/checkout/app/Cargo.toml",
+        "target": {"name": "app", "kind": kind, "crate_types": ["lib"], "src_path": "/checkout/app/src/lib.rs"},
+        "profile": {"opt_level": "0", "debuginfo": 0, "debug_assertions": true, "overflow_checks": true, "test": false},
+        "features": [],
+        "filenames": filenames,
+        "fresh": fresh
+    })
+}
+
+pub(crate) fn workspace_app(artifacts: Value, target_directory: Option<&str>) -> Value {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["package"] = json!("app");
+    value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
+    value["invocations"][0]["compilations"][0]["unchanged"] = json!(true);
+    value["invocations"][0]["artifacts"] = artifacts;
+    if let Some(directory) = target_directory {
+        value["invocations"][0]["target_directory"] = json!(directory);
+    }
+    value
+}
+
+#[test]
+fn pruned_doc_and_executable_outputs_are_not_workspace_waste() {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["package"] = json!("app");
+    value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
+    value["invocations"][0]["compilations"][0]["unchanged"] = json!(true);
+    value["invocations"][0]["artifacts"] = json!([
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/doc/app/index.html"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/app"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/build/app/aaaaaaaaaaaaaaaa/out/app-aaaaaaaaaaaaaaaa"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            true,
+            &["target/debug/deps/libapp-bbbbbbbbbbbbbbbb.rlib"]
+        ),
+    ]);
+    assert_eq!(waste(&metrics(value)), [] as [&str; 0]);
+
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["package"] = json!("app");
+    value["invocations"][0]["compilations"][0]["workspace"] = json!(true);
+    value["invocations"][0]["compilations"][0]["unchanged"] = json!(true);
+    value["invocations"][0]["artifacts"] = json!([
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/doc/app/index.html"]
+        ),
+        artifact(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["target/debug/deps/libapp-aaaaaaaaaaaaaaaa.rlib"]
+        ),
+    ]);
+    assert_eq!(
+        waste(&metrics(value)),
+        [".: app v1.0.0 compiled despite usable restored inputs"]
+    );
+}
+
+#[test]
+fn pruned_output_classification_keeps_real_library_rebuilds() {
+    let waste_line = [".: app v1.0.0 compiled despite usable restored inputs"];
+    let under_doc_checkout = workspace_app(
+        json!([artifact(
+            "path+file:///srv/doc/project/app#1.0.0",
+            false,
+            &["/srv/doc/project/target/debug/deps/libapp-aaaaaaaaaaaaaaaa.rlib"]
+        )]),
+        Some("/srv/doc/project/target"),
+    );
+    assert_eq!(waste(&metrics(under_doc_checkout)), waste_line);
+
+    let windows_doc = workspace_app(
+        json!([artifact(
+            "path+file:///D:/a/repo/app#1.0.0",
+            false,
+            &["D:\\a\\repo\\target\\doc\\app\\index.html"]
+        )]),
+        Some("D:\\a\\repo\\target"),
+    );
+    assert_eq!(waste(&metrics(windows_doc)), [] as [&str; 0]);
+
+    let build_script = workspace_app(
+        json!([artifact_kind(
+            "path+file:///checkout/app#1.0.0",
+            false,
+            &["custom-build"],
+            &["target/debug/build/app-aaaaaaaaaaaaaaaa/build_script_build-aaaaaaaaaaaaaaaa"]
+        )]),
+        None,
+    );
+    assert_eq!(waste(&metrics(build_script)), waste_line);
+
+    let same_name = workspace_app(
+        json!([
+            artifact(
+                "path+file:///checkout/app#1.0.0",
+                false,
+                &["target/debug/app"]
+            ),
+            artifact(
+                "registry+https://github.com/rust-lang/crates.io-index#app@1.0.0",
+                false,
+                &["target/debug/deps/libapp-aaaaaaaaaaaaaaaa.rlib"]
+            )
+        ]),
+        None,
+    );
+    assert_eq!(waste(&metrics(same_name)), [] as [&str; 0]);
 }
 
 #[test]

@@ -21,6 +21,7 @@ pub const SEED_BUDGET: Duration = Duration::from_secs(20);
 pub struct Inputs<'a> {
     pub event_name: &'a str,
     pub git_ref: &'a str,
+    pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub seed_dir: Option<&'a str>,
     pub runner_temp: &'a Path,
@@ -47,7 +48,12 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     let Some(dir) = inputs.seed_dir.filter(|dir| !dir.is_empty()) else {
         return Outcome::NotOffered;
     };
-    if trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch) {
+    if trusted_event(
+        inputs.event_name,
+        inputs.git_ref,
+        inputs.ref_protected,
+        inputs.default_branch,
+    ) {
         return Outcome::Trusted;
     }
     let seed = match validated(Path::new(dir), inputs.owner) {
@@ -216,6 +222,7 @@ pub fn setup() -> Result<String, CiError> {
     let outcome = select(&Inputs {
         event_name: &var("GITHUB_EVENT_NAME").unwrap_or_default(),
         git_ref: &var("GITHUB_REF").unwrap_or_default(),
+        ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         seed_dir: seed.as_deref(),
         runner_temp: &runner_temp,

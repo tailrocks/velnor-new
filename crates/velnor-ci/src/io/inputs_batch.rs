@@ -76,14 +76,26 @@ pub(super) fn restored_targets(args: &crate::cli::RestoredArgs) -> Result<Vec<Pa
     }
 }
 
-fn read_paths<T: serde::de::DeserializeOwned>(variable: &str) -> Result<T, CiError> {
+pub(super) fn fetch_manifests(args: &crate::cli::FetchArgs) -> Result<Vec<PathBuf>, CiError> {
+    let Some(variable) = &args.manifests_env else {
+        return Ok(args.manifest_path.clone());
+    };
+    let listed: Vec<(String, bool)> = read_paths(variable)?;
+    listed
+        .into_iter()
+        .filter(|(_, fetch)| *fetch)
+        .map(|(path, _)| decode_path(&path))
+        .collect()
+}
+
+pub(super) fn read_paths<T: serde::de::DeserializeOwned>(variable: &str) -> Result<T, CiError> {
     let text = std::env::var(variable)
         .map_err(|error| CiError::new(format!("cannot read {variable}: {error}")))?;
     serde_json::from_str(&text)
         .map_err(|error| CiError::new(format!("cannot parse {variable}: {error}")))
 }
 
-fn decode_path(encoded: &str) -> Result<PathBuf, CiError> {
+pub(super) fn decode_path(encoded: &str) -> Result<PathBuf, CiError> {
     let (pairs, extra) = encoded.as_bytes().as_chunks::<2>();
     if !extra.is_empty() {
         return Err(CiError::new(

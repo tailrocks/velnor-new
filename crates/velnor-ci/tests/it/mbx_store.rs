@@ -30,6 +30,7 @@ fn run(host: &Host, event: &str, git_ref: &str, shared: Option<&Path>) -> Outcom
     select(&Inputs {
         event_name: event,
         git_ref,
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: shared.as_deref(),
         runner_temp: &temp,
@@ -60,15 +61,25 @@ fn trust_follows_the_event_and_the_default_branch() {
     ];
     for (event, git_ref, expected) in cases {
         assert_eq!(
-            trusted_event(event, git_ref, Some("main")),
+            trusted_event(event, git_ref, true, Some("main")),
             expected,
             "{event} {git_ref}"
         );
     }
-    assert!(!trusted_event("push", "refs/heads/main", None));
-    assert!(!trusted_event("push", "refs/heads/main", Some("")));
-    assert!(!trusted_event("push", "refs/heads/MAIN", Some("main")));
-    assert!(!trusted_event("push", "refs/heads/main", Some("MAIN")));
+    assert!(!trusted_event("push", "refs/heads/main", true, None));
+    assert!(!trusted_event("push", "refs/heads/main", true, Some("")));
+    assert!(!trusted_event(
+        "push",
+        "refs/heads/MAIN",
+        true,
+        Some("main")
+    ));
+    assert!(!trusted_event(
+        "push",
+        "refs/heads/main",
+        true,
+        Some("MAIN")
+    ));
 }
 
 #[test]
@@ -277,5 +288,38 @@ fn the_command_appends_the_out_dir_setting_to_github_env_whatever_the_event() {
             KEEP_OUT_DIR,
             "{name}"
         );
+    }
+}
+
+#[test]
+fn the_command_gives_a_default_branch_push_the_shared_store_only_when_its_ref_is_protected() {
+    for (name, protected, shared) in [
+        ("mbx-store-protected", Some("true"), true),
+        ("mbx-store-unprotected", Some("false"), false),
+        ("mbx-store-protection-unknown", None, false),
+    ] {
+        let host = host(name);
+        let env_file = host.root.join("github-env");
+        let event_file = host.root.join("event.json");
+        fs::write(&event_file, r#"{"repository":{"default_branch":"main"}}"#)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        command
+            .arg("mbx-store")
+            .env_clear()
+            .env("RUNNER_TEMP", host.root.join("temp"))
+            .env("GITHUB_ENV", &env_file)
+            .env("GITHUB_EVENT_PATH", &event_file)
+            .env("GITHUB_EVENT_NAME", "push")
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("VELNOR_MBX_SHARED_DIR", host.root.join("shared"));
+        if let Some(value) = protected {
+            command.env("GITHUB_REF_PROTECTED", value);
+        }
+        let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{name}: {output:?}");
+        let lines = fs::read_to_string(&env_file).unwrap_or_default();
+        assert_eq!(lines.contains("MBX_CACHE_DIR="), shared, "{name}: {lines}");
+        assert!(lines.ends_with(KEEP_OUT_DIR), "{name}: {lines}");
     }
 }

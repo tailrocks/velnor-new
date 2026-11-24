@@ -265,3 +265,91 @@ case_unicode() {
   bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" || return 1
   grep -qx 'uni-ok' "$root/dest/café.txt" || return 1
 }
+
+case_gnu_long_options() {
+  local root="$work/long-options" listing
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/out" "$root/out-eq"
+  printf bin >"$root/src/velnor-ci"
+  tar.gnu -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  listing="$(env -u TAR_OPTIONS bash "$shim" --list --gzip --file "$root/a.tgz")" || return 1
+  [ "$listing" = velnor-ci ] || return 1
+  env -u TAR_OPTIONS bash "$shim" --extract --gzip --no-same-owner --no-recursion \
+    --file "$root/a.tgz" --directory "$root/out" velnor-ci || return 1
+  [ "$(cat "$root/out/velnor-ci")" = bin ] || return 1
+  bash "$shim" --extract --gzip --file="$root/a.tgz" --directory="$root/out-eq" velnor-ci || return 1
+  [ "$(cat "$root/out-eq/velnor-ci")" = bin ] || return 1
+}
+
+case_no_same_owner_extract() {
+  local root="$work/owner" me
+  me="$(id -u)"
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/kept" "$root/mine"
+  printf bin >"$root/src/velnor-ci"
+  tar.gnu --owner=1234 --group=1234 -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  bash "$shim" --no-same-owner -xzf "$root/a.tgz" -C "$root/mine" || return 1
+  [ "$(stat -c %u "$root/mine/velnor-ci")" = "$me" ] || return 1
+  [ "$me" -eq 0 ] || return 0
+  bash "$shim" -xzf "$root/a.tgz" -C "$root/kept" || return 1
+  [ "$(stat -c %u "$root/kept/velnor-ci")" = 1234 ] || return 1
+}
+
+case_no_recursion_extract() {
+  local root="$work/no-recursion" err status flags archive mode member
+  rm -rf -- "$root"
+  mkdir -p "$root/src/velnor-ci" "$root/all"
+  printf child >"$root/src/velnor-ci/child"
+  tar.gnu -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  bash "$shim" -xzf "$root/a.tgz" --no-recursion -C "$root/all" || return 1
+  [ "$(cat "$root/all/velnor-ci/child")" = child ] || return 1
+  write_ustar "$root/slash.tar" f d/ "" f d/f X || return 1
+  for flags in "" "-P"; do
+    for archive in a.tgz slash.tar; do
+      mode=-xz
+      member=velnor-ci/
+      [ "$archive" = a.tgz ] || { mode=-x; member=d/; }
+      status=0
+      err="$root/err"
+      mkdir -p "$root/out"
+      run_shim "$err" $mode $flags --no-recursion -f "$root/$archive" -C "$root/out" "$member" || status=$?
+      [ "$status" -ne 0 ] || return 1
+      grep -F -q -- '--no-recursion' "$err" || return 1
+      [ -z "$(find "$root/out" -mindepth 1 -print -quit)" ] || return 1
+    done
+  done
+}
+
+case_refused_option_sets() {
+  local root="$work/refused" err status spec expected
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/cwd" "$root/out"
+  printf x >"$root/src/velnor-ci"
+  tar.gnu -czf "$root/a.tgz" -C "$root/src" velnor-ci || return 1
+  local a="$root/a.tgz" o="$root/out" s="$root/src"
+  while IFS='|' read -r expected spec; do
+    status=0
+    err="$root/err"
+    ( cd "$root/cwd" && eval "run_shim \"\$err\" $spec" ) || status=$?
+    [ "$status" -ne 0 ] || { printf 'accepted: %s\n' "$spec" >&2; return 1; }
+    grep -F -q -- "$expected" "$err" || { printf 'wrong error for: %s\n' "$spec" >&2; return 1; }
+    [ -z "$(find "$root/cwd" "$o" -mindepth 1 -print -quit)" ] || return 1
+  done <<EOF
+--no-recursion|--list --no-recursion --gzip --file "\$a"
+--no-recursion|--no-recursion -cf "\$o/out.tar" -C "\$s" velnor-ci
+empty value for --directory|-xzf "\$a" --directory= velnor-ci
+empty value for --directory|-xzf "\$a" --directory "" velnor-ci
+empty value for --file|-xz --file= --directory "\$o"
+empty value for --file|-xz --file "" --directory "\$o"
+repeated --directory|-xzf "\$a" --directory "\$o" --directory "\$o"
+repeated --directory|-xzf "\$a" --directory "\$o" -C "\$o"
+repeated --file|-xz --file "\$a" --file "\$a" --directory "\$o"
+repeated --file|-xz --file="\$a" -f "\$a" --directory "\$o"
+conflicting compression|--gzip --zstd -cf "\$o/out.tar" -C "\$s" velnor-ci
+EOF
+}
+
+run_case gnu-long-options case_gnu_long_options
+run_case no-same-owner-extract case_no_same_owner_extract
+run_case no-recursion-extract case_no_recursion_extract
+run_case refused-option-sets case_refused_option_sets
