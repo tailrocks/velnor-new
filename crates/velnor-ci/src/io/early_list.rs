@@ -9,7 +9,7 @@ use std::process::Command;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::early_list_child::Supervisor;
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
@@ -78,7 +78,7 @@ impl EarlyList {
         self.supervisor.stop(reason);
     }
 
-    pub(super) fn finish(&self, wanted: bool) -> Option<Listing> {
+    pub(super) fn finish(&self, wanted: bool, ended: Instant) -> Option<Listing> {
         let state = std::mem::replace(
             &mut *self
                 .state
@@ -103,7 +103,7 @@ impl EarlyList {
             }
             State::Taken => return None,
         };
-        match receiver.recv_timeout(self.grace) {
+        match receiver.recv_timeout(self.grace.saturating_sub(ended.elapsed())) {
             Ok(listing) => listing,
             Err(RecvTimeoutError::Timeout) => {
                 let reason = format!(

@@ -16,6 +16,7 @@ use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 const RECORD_LIST_PID: &str = "echo $$ > \"$RUNNER_TEMP/list-pid\"\n";
+const RECORD_RUN_PID: &str = "echo $$ > \"$RUNNER_TEMP/run-pid\"\n";
 const RUN_START: &str = "echo '    Starting 1 tests across 1 binary' >&2\n";
 const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2\n";
 const WAIT_FOR_LIST_PID: &str = "i=0\nwhile [ ! -s \"$RUNNER_TEMP/list-pid\" ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done\n";
@@ -45,7 +46,11 @@ fn pid_of(child: &Child) -> Pid {
 }
 
 fn list_pid(temp: &Path) -> Option<Pid> {
-    fs::read_to_string(temp.join("list-pid"))
+    list_pid_at(&temp.join("list-pid"))
+}
+
+fn list_pid_at(file: &Path) -> Option<Pid> {
+    fs::read_to_string(file)
         .ok()
         .and_then(|text| text.trim().parse().ok())
         .map(Pid::from_raw)
@@ -249,11 +254,16 @@ fn a_signal_after_the_run_ended_still_stops_the_list() {
     let mut run = launch(
         "early-bound-signal-late",
         &format!("{RECORD_LIST_PID}exec sleep 300"),
-        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}"),
+        &format!("{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}{RECORD_RUN_PID}"),
         &[(GRACE_VARIABLE, PATIENT)],
     );
-    wait_for(&run.temp.join("list-pid"));
-    std::thread::sleep(Duration::from_secs(1));
+    wait_for(&run.temp.join("run-pid"));
+    let run_pid = list_pid_at(&run.temp.join("run-pid")).unwrap_or_else(|| unreachable!("no run"));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !gone(run_pid) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::thread::sleep(Duration::from_millis(300));
     kill(pid_of(&run.child), Signal::SIGTERM).ok();
     let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
     assert!(exited, "velnor-ci outlived the signal: {stderr}");
@@ -278,7 +288,7 @@ fn a_descendant_that_outlives_the_list_is_stopped_with_it() {
 fn a_signal_before_the_list_starts_is_reported() {
     let mut run = launch(
         "early-bound-signal-early",
-        "exit 0",
+        "echo ran > \"$RUNNER_TEMP/list-ran\"\nexit 0",
         "echo started > \"$RUNNER_TEMP/run-started\"\nexec sleep 300",
         &[(GRACE_VARIABLE, PATIENT)],
     );
@@ -289,6 +299,10 @@ fn a_signal_before_the_list_starts_is_reported() {
     assert!(
         stderr.contains("velnor-ci: the early nextest list failed: velnor-ci received a signal"),
         "{stderr}"
+    );
+    assert!(
+        !run.temp.join("list-ran").exists(),
+        "the list ran after the signal"
     );
 }
 
@@ -323,5 +337,31 @@ fn a_failure_before_the_list_is_collected_still_stops_it() {
     let (exited, stderr, _) = finish(&mut run, Duration::from_secs(10));
     assert!(exited, "{stderr}");
     assert!(stderr.contains("cannot write the step output"), "{stderr}");
+    assert_list_stopped(&run);
+}
+
+#[test]
+fn the_grace_counts_from_the_run_ending_not_from_the_end_of_the_capture() {
+    let mut run = launch(
+        "early-bound-anchor",
+        &format!("{RECORD_LIST_PID}exec sleep 300"),
+        &format!(
+            "{RUN_START}{WAIT_FOR_LIST_PID}{RUN_END}sleep 2.5 &\n: > \"$RUNNER_TEMP/run-ended\"\n"
+        ),
+        &[
+            (GRACE_VARIABLE, "3000"),
+            ("VELNOR_CI_RUN_PUMP_GRACE_MS", "10000"),
+        ],
+    );
+    wait_for(&run.temp.join("run-ended"));
+    let ended = Instant::now();
+    let (exited, stderr, written) = finish(&mut run, Duration::from_secs(15));
+    assert!(exited, "{stderr}");
+    assert!(
+        ended.elapsed() < Duration::from_millis(4500),
+        "the list was given its grace after the capture ended: {:?}",
+        ended.elapsed()
+    );
+    assert_withheld(&written);
     assert_list_stopped(&run);
 }

@@ -127,6 +127,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     forward(signals, pid, own_group, early.clone(), Arc::clone(&exited));
     let status = child.wait();
     exited.store(true, Ordering::SeqCst);
+    let ended = Instant::now();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
     if runs_nextest(&args.command) {
@@ -140,7 +141,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         );
     }
     let wanted = invocation.capture_complete && counts.is_some();
-    let listing = early.map(|early| early.finish(wanted));
+    let listing = early.map(|early| early.finish(wanted, ended));
     handle.close();
     if wanted
         && let Some(listing) = listing
