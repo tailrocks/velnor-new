@@ -93,6 +93,9 @@ runs:
         mtime_of() {
           stat -c %Y "$1" 2> /dev/null || stat -f %m "$1" 2> /dev/null
         }
+        changed_at() {
+          stat -c %Z "$1" 2> /dev/null || stat -f %c "$1" 2> /dev/null
+        }
         drop_abandoned_evictions() {
           set -- "$dir"/.velnor-ci.evicting.* "$dir"/.velnor-ci.evict.*
           now="$(date +%s 2> /dev/null)" || return 0
@@ -103,7 +106,7 @@ runs:
                 started="${path##*/.velnor-ci.evicting.}"
                 started="${started%%.*}"
                 ;;
-              *) started="$(mtime_of "$path")" || started= ;;
+              *) started="$(changed_at "$path")" || started= ;;
             esac
             case "$started" in
               '' | *[!0-9]*) ;;
