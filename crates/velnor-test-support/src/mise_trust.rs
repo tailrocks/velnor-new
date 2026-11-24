@@ -14,11 +14,13 @@ pub fn trust_mise_dir<'a>(command: &'a mut Command, dir: &Path) -> &'a mut Comma
 }
 
 fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
-    let mut trusted: Vec<PathBuf> =
+    let trusted: Vec<PathBuf> =
         inherited.map_or_else(Vec::new, |value| std::env::split_paths(value).collect());
-    trusted.push(dir.to_path_buf());
-    std::env::join_paths(trusted)
-        .unwrap_or_else(|error| unreachable!("MISE_TRUSTED_CONFIG_PATHS: {error}"))
+    let mut with_dir = trusted.clone();
+    with_dir.push(dir.to_path_buf());
+    std::env::join_paths(with_dir)
+        .or_else(|_| std::env::join_paths(&trusted))
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -72,5 +74,18 @@ mod tests {
     fn without_an_inherited_value_only_the_temp_dir_is_trusted() {
         let value = trusted_paths_with(None::<&OsStr>, Path::new("/tmp/velnor-project"));
         assert_eq!(value, OsString::from("/tmp/velnor-project"));
+    }
+
+    #[test]
+    fn a_temp_dir_containing_the_list_separator_is_skipped_without_panicking() {
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        let dir = format!("/tmp/velnor{separator}project");
+        let inherited = OsString::from("/work/existing");
+        let value = trusted_paths_with(Some(inherited.as_os_str()), Path::new(&dir));
+        assert_eq!(value, inherited);
+        assert_eq!(
+            trusted_paths_with(None::<&OsStr>, Path::new(&dir)),
+            OsString::new()
+        );
     }
 }
