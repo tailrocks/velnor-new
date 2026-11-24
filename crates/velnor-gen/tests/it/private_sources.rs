@@ -48,17 +48,17 @@ fn assert_phase(
     job: &serde_json::Value,
     steps: &[serde_json::Value],
     token: usize,
-    fetch: usize,
+    fetches: std::ops::RangeInclusive<usize>,
 ) -> TestResult {
     let compiling = cargo_commands(steps);
-    assert_eq!(token + 1, fetch);
+    assert_eq!(token + 1, *fetches.start());
     let check = token.checked_sub(1).ok_or("no step before the token")?;
-    assert!(compiling.iter().all(|index| *index > fetch), "{job}");
+    assert!(compiling.iter().all(|index| index > fetches.end()), "{job}");
     for (index, step) in steps.iter().enumerate() {
         let rendered = step.to_string();
         assert_eq!(
             rendered.contains("private-token"),
-            index == fetch || index == token || index == check,
+            fetches.contains(&index) || index == token || index == check,
             "{rendered}"
         );
         assert_eq!(
@@ -77,7 +77,7 @@ fn assert_phase(
         );
         assert_eq!(step["env"]["CARGO_NET_OFFLINE"], "true", "{step}");
     }
-    let fetch_step = &steps[fetch];
+    let fetch_step = &steps[*fetches.start()];
     assert_eq!(
         fetch_step["env"]["VELNOR_PRIVATE_TOKEN"],
         "${{ steps.private-token.outputs.token }}"
@@ -130,17 +130,20 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
         for job in jobs(&text)? {
             let steps = job["steps"].as_array().ok_or("steps missing")?;
             let token = steps.iter().position(|s| s["id"] == "private-token");
-            let fetch = steps.iter().position(|s| {
+            let fetching = |s: &serde_json::Value| {
                 s["run"]
                     .as_str()
                     .is_some_and(|run| run.contains("\"$VELNOR_EXEC\" fetch "))
-            });
+            };
+            let fetch = steps.iter().position(fetching);
             assert_eq!(token.is_some(), fetch.is_some(), "{job}");
-            let (Some(token), Some(fetch)) = (token, fetch) else {
+            let (Some(token), Some(fetch), Some(last)) =
+                (token, fetch, steps.iter().rposition(fetching))
+            else {
                 continue;
             };
             fetches += 1;
-            assert_phase(&job, steps, token, fetch)?;
+            assert_phase(&job, steps, token, fetch..=last)?;
         }
         assert!(fetches > 0, "{text}");
         assert!(

@@ -66,6 +66,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 _ => None,
             })
             .collect();
+        let filled = filled(&job.steps, &manifests);
         let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
@@ -95,7 +96,11 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 cached: cached.clone(),
                 mint: token_mint(facts),
             },
-            StepKind::PrivateFetch { manifests, cached },
+            StepKind::PrivateFetch {
+                manifests,
+                cached,
+                filled,
+            },
         ]);
         if early {
             let at = after_trusted_setup(&job.steps[..first]);
@@ -123,6 +128,26 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .0
             .insert(PermissionScope::PullRequests, Access::Read);
     }
+}
+
+fn filled(steps: &[Step], built: &[RepoPath]) -> Vec<RepoPath> {
+    let Some(every) = steps.iter().find_map(|step| match &step.kind {
+        StepKind::SourcesFetchAll { manifests, .. } => Some(manifests),
+        _ => None,
+    }) else {
+        return Vec::new();
+    };
+    if every.iter().all(|manifest| built.contains(manifest)) {
+        return Vec::new();
+    }
+    let mut filled = built.to_vec();
+    filled.extend(
+        every
+            .iter()
+            .filter(|manifest| !built.contains(manifest))
+            .cloned(),
+    );
+    filled
 }
 
 fn hoist_sources_restores(steps: &mut Vec<Step>, from: usize, to: usize) -> Vec<Step> {

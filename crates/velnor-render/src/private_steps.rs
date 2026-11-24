@@ -5,7 +5,7 @@ use velnor_model::{
     HelperRelease, PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind, TokenMint,
 };
 
-use crate::gate::sources_step;
+use crate::gate::{ON_DEFAULT_BRANCH, SAVING_EVENTS, sources_step};
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::RUN;
@@ -31,7 +31,12 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::RepositoryPrivacy => privacy(),
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, mint, .. } => token(sources, *mint),
-        StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
+        StepKind::PrivateFetch {
+            manifests, filled, ..
+        } => RenderedStep {
+            condition: (!filled.is_empty()).then(|| format!("${{{{ !({}) }}}}", saving_run())),
+            ..fetch(manifests)
+        },
         StepKind::ReleaseAssets { assets, part } => {
             crate::private_steps::release_asset_steps::render(assets, part)
         }
@@ -245,6 +250,21 @@ pub(crate) fn advisory_fetch(configs: &[Option<RepoPath>]) -> RenderedStep {
         run: Some(run),
         ..RenderedStep::default()
     }
+}
+
+fn saving_run() -> String {
+    format!("{ON_DEFAULT_BRANCH} && {SAVING_EVENTS}")
+}
+
+pub(crate) fn filled_fetch(filled: &[RepoPath]) -> Vec<RenderedStep> {
+    if filled.is_empty() {
+        return Vec::new();
+    }
+    vec![RenderedStep {
+        name: "Fetch the dependencies of every root, then drop the token".to_owned(),
+        condition: Some(format!("${{{{ {} }}}}", saving_run())),
+        ..fetch(filled)
+    }]
 }
 
 fn fetch(manifests: &[RepoPath]) -> RenderedStep {

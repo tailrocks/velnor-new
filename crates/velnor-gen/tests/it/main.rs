@@ -214,6 +214,7 @@ mod private_base_plan_mode;
 mod private_base_prefix;
 mod private_base_shadowed_config;
 mod private_base_token_order;
+mod private_fill_roots;
 mod private_helper_note;
 mod private_sources;
 mod private_sources_advisory;
