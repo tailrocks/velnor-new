@@ -84,6 +84,16 @@ fn check_all(images: &[ImageConfig], branch: &str) -> Result<(), ImageError> {
             branch: branch.to_owned(),
         });
     }
+    let version: Vec<&str> = branch.split('.').collect();
+    if version.len() == 3
+        && version
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err(ImageError::BranchReleaseVersion {
+            branch: branch.to_owned(),
+        });
+    }
     for (index, image) in images.iter().enumerate() {
         for other in &images[index + 1..] {
             for (first, second) in [(image, other), (other, image)] {
@@ -171,14 +181,27 @@ fn check_tools(facts: &RepoFacts, image: &ImageConfig) -> Result<(), ImageError>
 fn check_dockerfile(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {
     let tracked = RepoPath::new(image.dockerfile.as_str())
         .is_ok_and(|path| view.tracked_paths.contains(&path) || view.files.contains_key(&path));
-    if tracked {
-        Ok(())
-    } else {
-        Err(ImageError::DockerfileMissing {
+    if !tracked {
+        return Err(ImageError::DockerfileMissing {
             image: image.name.clone(),
             path: image.dockerfile.clone(),
-        })
+        });
     }
+    let ignore = if image.context == "." {
+        ".dockerignore".to_owned()
+    } else {
+        format!("{}/.dockerignore", image.context)
+    };
+    let specific = format!("{}.dockerignore", image.dockerfile);
+    for path in [image.dockerfile.clone(), ignore, specific] {
+        if RepoPath::new(path.as_str()).is_ok_and(|checked| view.symlinks.contains(&checked)) {
+            return Err(ImageError::DockerfileSymlink {
+                image: image.name.clone(),
+                path,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn check_stage(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {

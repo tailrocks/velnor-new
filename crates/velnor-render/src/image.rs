@@ -154,10 +154,19 @@ pub fn render_image(
         Some(entry(
             "concurrency",
             Yaml::Map(vec![
-                entry("group", Yaml::Expr("image-${{ github.ref }}".to_owned())),
+                entry(
+                    "group",
+                    Yaml::Expr(
+                        "image-${{ github.ref }}${{ github.event.action == 'edited' && github.event.changes.base == null && format('-edit-{0}', github.run_id) || '' }}"
+                            .to_owned(),
+                    ),
+                ),
                 entry(
                     "cancel-in-progress",
-                    Yaml::Expr("${{ github.event_name == 'pull_request' }}".to_owned()),
+                    Yaml::Expr(
+                        "${{ github.event_name == 'pull_request' && !(github.event.action == 'edited' && github.event.changes.base == null) }}"
+                            .to_owned(),
+                    ),
                 ),
             ]),
         )),

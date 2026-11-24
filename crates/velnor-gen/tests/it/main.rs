@@ -121,6 +121,7 @@ mod helper_workflow_size;
 mod hosted_key;
 mod image_config;
 mod image_config_checks;
+mod image_hardening;
 mod image_publish_flow;
 mod image_workflow;
 mod key_gates;

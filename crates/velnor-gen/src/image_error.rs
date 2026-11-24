@@ -64,6 +64,13 @@ pub enum ImageError {
     BranchTag {
         branch: String,
     },
+    BranchReleaseVersion {
+        branch: String,
+    },
+    DockerfileSymlink {
+        image: String,
+        path: String,
+    },
     SysrootLockMissing {
         image: String,
     },
@@ -133,6 +140,14 @@ impl fmt::Display for ImageError {
             Self::BranchTag { branch } => write!(
                 f,
                 "the default branch `{branch}` cannot be an image tag (letters, digits, `.`, `_` and `-`, at most 128 characters, no leading `.` or `-`); rename the branch or set default_branch"
+            ),
+            Self::BranchReleaseVersion { branch } => write!(
+                f,
+                "the default branch `{branch}` looks like a release version, so its image tag would collide with the tag that a release promotes; rename the branch or set default_branch"
+            ),
+            Self::DockerfileSymlink { image, path } => write!(
+                f,
+                "image {image}: `{path}` is a symbolic link; the publish job checks out only regular files, so commit the file itself"
             ),
             Self::DockerfileMissing { image, path } => write!(
                 f,
