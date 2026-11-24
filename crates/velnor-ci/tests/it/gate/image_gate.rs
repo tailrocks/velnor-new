@@ -98,7 +98,15 @@ fn request(total: u64, tip: bool, pr_only: &[String]) -> Request<'_> {
 }
 
 fn drive(github: &dyn GitHub, request: &Request<'_>, on_pause: &dyn Fn(usize)) -> Run {
-    let elapsed = Cell::new(Duration::ZERO);
+    drive_on(github, request, on_pause, &Cell::new(Duration::ZERO))
+}
+
+fn drive_on(
+    github: &dyn GitHub,
+    request: &Request<'_>,
+    on_pause: &dyn Fn(usize),
+    elapsed: &Cell<Duration>,
+) -> Run {
     let pauses = RefCell::new(Vec::new());
     let now = || elapsed.get();
     let sleep = |duration: Duration| {
@@ -293,4 +301,40 @@ fn the_last_pause_never_runs_past_the_wait() {
     let run = wait(&running(), &running(), &request, 99);
     assert!(run.outcome.is_err());
     assert_eq!(run.pauses, [1]);
+}
+
+struct Slow<'a> {
+    live: &'a Live,
+    clock: &'a Cell<Duration>,
+}
+
+impl GitHub for Slow<'_> {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        self.clock
+            .set(self.clock.get() + Duration::from_millis(400));
+        self.live.get(path)
+    }
+}
+
+#[test]
+fn time_spent_in_the_api_requests_counts_against_the_wait() {
+    let live = Live(RefCell::new(running().0));
+    let clock = Cell::new(Duration::ZERO);
+    let github = Slow {
+        live: &live,
+        clock: &clock,
+    };
+    let request = Request {
+        sha: GREEN,
+        require_tip: false,
+        wait: Wait {
+            total: Duration::from_secs(1),
+            interval: Duration::from_secs(30),
+        },
+        run_id: None,
+        pr_only_checks: &[],
+    };
+    let run = drive_on(&github, &request, &|_| {}, &clock);
+    assert!(run.outcome.is_err());
+    assert_eq!(run.pauses, Vec::<u64>::new());
 }

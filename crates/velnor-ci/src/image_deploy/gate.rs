@@ -122,8 +122,9 @@ pub fn wait_for_required(
     let total = request.wait.total;
     let mut pause = request.wait.interval;
     loop {
+        let result = attempt(github, repo, request);
         let elapsed = (clock.now)().saturating_sub(started);
-        match attempt(github, repo, request) {
+        match result {
             Ok(Attempt::Ready(outcome) | Attempt::Superseded(outcome)) => return Ok(outcome),
             Ok(Attempt::Waiting(report)) if elapsed >= total => {
                 return Err(CiError::new(format!(
@@ -136,7 +137,7 @@ pub fn wait_for_required(
             Err(error) if elapsed >= NOT_YET.min(total) => return Err(error),
             Ok(Attempt::Waiting(_)) | Err(_) => {}
         }
-        (clock.sleep)(pause.min(total.saturating_sub(elapsed).max(Duration::from_secs(1))));
+        (clock.sleep)(pause.min(total.saturating_sub(elapsed)));
         pause = (pause + pause / 2).min(LONGEST_PAUSE);
     }
 }

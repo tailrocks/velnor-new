@@ -204,3 +204,47 @@ fn pr_only_checks_reach_the_gate_and_the_authority_and_widen_their_token_to_chec
     );
     Ok(())
 }
+
+#[test]
+fn pr_only_checks_get_an_administration_capable_app_token_that_is_revoked_and_nothing_else_does()
+-> TestResult {
+    let workflow = rendered("image-ghcr")?;
+    for id in ["image-gate", "image-cluster-svc-authority"] {
+        let job = &workflow["jobs"][id];
+        assert_eq!(job["environment"], "release", "{id}");
+        let app = step_named(job, "Create the release App token")?;
+        let run = app["run"].as_str().ok_or("no app step")?;
+        assert!(run.contains("--permission=administration:write"), "{id}");
+        let gate = step_named(job, "Wait for every required check")?;
+        assert_eq!(
+            gate["env"]["GITHUB_TOKEN"], "${{ steps.app.outputs.token }}",
+            "{id}"
+        );
+        assert!(
+            step_named(job, "Revoke the release App token").is_ok(),
+            "{id}"
+        );
+    }
+    let plain = rendered("image-plain")?;
+    for id in ["image-gate", "image-plain-svc-authority"] {
+        let job = &plain["jobs"][id];
+        assert!(job.get("environment").is_none(), "{id}");
+        assert!(!job.to_string().contains("RELEASE_APP"), "{id}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_release_version_is_bounded_so_that_it_is_a_valid_image_tag() -> TestResult {
+    let workflow = rendered("image-plain")?;
+    let authority = &workflow["jobs"]["image-plain-svc-authority"];
+    let check = step_named(authority, "strict version")?["run"]
+        .as_str()
+        .ok_or("no check")?
+        .to_owned();
+    assert!(
+        check.contains("[0-9]{1,40}[.][0-9]{1,40}[.][0-9]{1,40}$"),
+        "{check}"
+    );
+    Ok(())
+}

@@ -9,8 +9,11 @@ use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, staged};
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
+use crate::release::ENVIRONMENT as RELEASE_ENVIRONMENT;
 use crate::release_binaries::{command, download_to};
-use crate::release_steps::{expression, permissions, shell_word, variables};
+use crate::release_steps::{
+    APP_TOKEN_OUTPUT, app_token, expression, permissions, shell_word, variables,
+};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
 const GATE_WAIT_SECONDS: u32 = 2400;
@@ -19,7 +22,7 @@ const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
 const TIP_STEP: &str = "tip";
-const GATE_STEP: &str = "gate";
+pub(crate) const GATE_STEP: &str = "gate";
 
 pub(crate) fn gate_scopes(pr_only: &[String]) -> Vec<(String, String)> {
     let mut scopes = vec![
@@ -67,6 +70,31 @@ pub(crate) fn gate_step(wait: u32, tip: bool, pr_only: &[String]) -> RenderedSte
         )),
         ..RenderedStep::default()
     }
+}
+
+pub(crate) fn admin_token(workflow: &ImageWorkflow<'_>, mut job: RenderedJob) -> RenderedJob {
+    let scopes = [
+        ("actions", "read"),
+        ("checks", "read"),
+        ("contents", "read"),
+        ("statuses", "read"),
+        ("administration", "write"),
+    ];
+    job.steps.insert(1, app_token(workflow.helper, &scopes));
+    for step in &mut job.steps {
+        if step.id.as_deref() == Some(GATE_STEP) {
+            step.env.retain(|(name, _)| name != "GITHUB_TOKEN");
+            step.env.insert(
+                0,
+                (
+                    "GITHUB_TOKEN".to_owned(),
+                    Value::Expr(APP_TOKEN_OUTPUT.to_owned()),
+                ),
+            );
+        }
+    }
+    job.environment = Some(RELEASE_ENVIRONMENT.to_owned());
+    job
 }
 
 pub(crate) const GATE_JOB: &str = "image-gate";

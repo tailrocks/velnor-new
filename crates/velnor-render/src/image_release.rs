@@ -18,7 +18,10 @@ pub(crate) fn authority_job(
     events: &Events<'_>,
 ) -> RenderedJob {
     let image = build.image;
-    let strict = format!("^{}-v[0-9]+[.][0-9]+[.][0-9]+$", image.name);
+    let strict = format!(
+        "^{}-v[0-9]{{1,40}}[.][0-9]{{1,40}}[.][0-9]{{1,40}}$",
+        image.name
+    );
     let strip = format!("version=${{REF_NAME#{}-v}}", image.name);
     let ref_name = || variables(&[("REF_NAME", "${{ github.ref_name }}")]);
     RenderedJob {

@@ -10,8 +10,9 @@ use velnor_model::{
 use crate::helper_integrity::{defaults, secure_with};
 use crate::image_build::build_job;
 use crate::image_check::check_job;
-use crate::image_publish::{gate_job, publish_job};
+use crate::image_publish::{GATE_JOB, admin_token, gate_job, publish_job};
 use crate::image_release::{authority_job, promote_job};
+use crate::release_steps::revoke_app_token;
 use crate::rules::{RenderedJob, RuleViolation, check_rules};
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
@@ -87,6 +88,10 @@ impl Events<'_> {
     }
 }
 
+fn is_admin_job(job: &RenderedJob) -> bool {
+    job.id == GATE_JOB || job.id.ends_with("-authority")
+}
+
 pub fn render_image(
     workflow: &ImageWorkflow<'_>,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
@@ -104,9 +109,15 @@ pub fn render_image(
     }
     let jobs: Vec<RenderedJob> = jobs
         .into_iter()
-        .map(|job| RenderedJob {
-            steps: secure_with(workflow.helper, job.steps),
-            ..job
+        .map(|job| {
+            let pr_only = workflow.pr_only_checks();
+            if !pr_only.is_empty() && is_admin_job(&job) {
+                return revoke_app_token(admin_token(workflow, job));
+            }
+            RenderedJob {
+                steps: secure_with(workflow.helper, job.steps),
+                ..job
+            }
         })
         .collect();
     let rendered = RenderedWorkflow { jobs };
