@@ -234,7 +234,7 @@ pub struct ImagePublishArgs {
     #[arg(
         long,
         default_value = crate::image_publish::gate::DEFAULT_EVENT,
-        help = "The event that may publish; GITHUB_EVENT_NAME and the attestation trigger must equal it. pull_request events are refused"
+        help = "The event that may publish, workflow_dispatch or push; GITHUB_EVENT_NAME and the attestation trigger must equal it"
     )]
     pub event: String,
 }

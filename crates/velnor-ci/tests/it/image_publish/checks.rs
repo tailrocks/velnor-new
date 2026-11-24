@@ -3,7 +3,8 @@
 
 use serde_json::{Value, json};
 use velnor_ci::image_publish::checks::{
-    CiRun, artifact, attestation, attestation_args, ci_listing, ci_run, main_tip, repository,
+    CiRun, artifact, attestation, attestation_args, ci_listing, ci_path, ci_run, main_tip,
+    repository,
 };
 use velnor_ci::image_publish::evidence::{Published, encode};
 use velnor_ci::image_publish::gate::identity;
@@ -74,6 +75,11 @@ fn the_latest_canonical_ci_push_run_must_have_succeeded() {
 
 #[test]
 fn only_a_canonical_ci_run_for_this_source_counts() {
+    let listing = ci_path(SOURCE);
+    assert!(
+        listing.contains("&branch=main&event=push&per_page=100"),
+        "the 100-run page holds only canonical candidates: {listing}"
+    );
     let mut pull = run(9, 90, "completed", "success");
     pull["event"] = json!("pull_request");
     let mut fork = run(9, 91, "completed", "success");

@@ -37,13 +37,13 @@ fn the_command_stops_at_a_failed_attestation_found_through_the_gh_on_path() {
 fn the_publishing_workflow_and_event_are_flags_and_a_pull_request_event_cannot_be_chosen() {
     let candidate = Candidate::new("cli-flags");
     let mut vars = candidate.env();
-    vars.insert("GITHUB_EVENT_NAME".to_owned(), "workflow_run".to_owned());
+    vars.insert("GITHUB_EVENT_NAME".to_owned(), "push".to_owned());
     let release = "tailrocks/velnor-new/.github/workflows/release.yml";
     vars.insert(
         "GITHUB_WORKFLOW_REF".to_owned(),
         format!("{release}@refs/heads/main"),
     );
-    let flags = ["--workflow", release, "--event", "workflow_run"];
+    let flags = ["--workflow", release, "--event", "push"];
     let (ok, _, stderr) = candidate.binary(&vars, &flags);
     assert!(!ok);
     assert!(
@@ -59,7 +59,7 @@ fn the_publishing_workflow_and_event_are_flags_and_a_pull_request_event_cannot_b
     let (ok, _, stderr) = candidate.binary(&candidate.env(), &refused);
     assert!(!ok);
     assert!(
-        stderr.contains("Publishing event is incorrect or comes from a pull request."),
+        stderr.contains("Publishing event must be workflow_dispatch or push."),
         "{stderr}"
     );
 }

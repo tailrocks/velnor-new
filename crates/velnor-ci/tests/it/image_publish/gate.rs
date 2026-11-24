@@ -86,6 +86,8 @@ fn a_policy_cannot_be_loosened_to_a_pull_request_or_a_foreign_workflow() {
     for (workflow, event) in [
         (DEFAULT_WORKFLOW, "pull_request"),
         (DEFAULT_WORKFLOW, "pull_request_target"),
+        (DEFAULT_WORKFLOW, "schedule"),
+        (DEFAULT_WORKFLOW, "workflow_run"),
         (DEFAULT_WORKFLOW, "Push"),
         ("other/repo/.github/workflows/x.yml", "push"),
         (
@@ -98,11 +100,8 @@ fn a_policy_cannot_be_loosened_to_a_pull_request_or_a_foreign_workflow() {
     ] {
         assert!(Policy::new(workflow, event).is_err(), "{workflow} {event}");
     }
-    let caller = Policy::new(
-        "tailrocks/velnor-new/.github/workflows/release.yml",
-        "workflow_run",
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
+    let caller = Policy::new("tailrocks/velnor-new/.github/workflows/release.yml", "push")
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         caller.workflow_ref(),
         "tailrocks/velnor-new/.github/workflows/release.yml@refs/heads/main"

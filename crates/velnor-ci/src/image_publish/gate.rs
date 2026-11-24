@@ -8,7 +8,6 @@ use std::path::Path;
 use serde_json::{Map, Value, json};
 
 use crate::error::CiError;
-use crate::image_candidate::identity::is_event;
 use crate::image_candidate::json::is_hex;
 
 pub const REPOSITORY: &str = "tailrocks/velnor-new";
@@ -29,7 +28,7 @@ pub const REQUIRED: &[&str] = &[
     "VELNOR_CANDIDATE_ARTIFACT_ID",
 ];
 const WORKFLOW_DIRECTORY: &str = "tailrocks/velnor-new/.github/workflows/";
-const PULL_REQUEST_EVENTS: &[&str] = &["pull_request", "pull_request_target"];
+const EVENTS: &[&str] = &["workflow_dispatch", "push"];
 
 fn fail<T>(message: impl Into<String>) -> Result<T, CiError> {
     Err(CiError::new(message))
@@ -58,8 +57,8 @@ impl Policy {
                 "Publishing workflow must be a file under {WORKFLOW_DIRECTORY}."
             ));
         }
-        if !is_event(event) || PULL_REQUEST_EVENTS.contains(&event) {
-            return fail("Publishing event is incorrect or comes from a pull request.");
+        if !EVENTS.contains(&event) {
+            return fail("Publishing event must be workflow_dispatch or push.");
         }
         Ok(Self {
             workflow: workflow.to_owned(),

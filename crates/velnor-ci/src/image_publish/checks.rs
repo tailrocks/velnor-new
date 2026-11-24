@@ -34,7 +34,9 @@ pub fn artifacts_path(identity: &Identity) -> String {
 
 #[must_use]
 pub fn ci_path(source: &str) -> String {
-    format!("repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&per_page=100")
+    format!(
+        "repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&branch=main&event=push&per_page=100"
+    )
 }
 
 pub fn repository(value: &Value) -> Result<(), CiError> {

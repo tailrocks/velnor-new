@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::Read;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use ureq::http::Request as HttpRequest;
@@ -93,42 +94,40 @@ pub trait Transport: Sync {
     fn send(&self, request: Request<'_>) -> Result<Response, CiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Https {
-    agent: ureq::Agent,
+    agent: OnceLock<ureq::Agent>,
 }
 
-impl Default for Https {
-    fn default() -> Self {
-        Self::new()
-    }
+fn build_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .max_redirects_will_error(false)
+        .timeout_connect(Some(CONNECT_TIMEOUT))
+        .timeout_send_body(Some(SEND_TIMEOUT))
+        .timeout_recv_response(Some(RESPONSE_TIMEOUT))
+        .timeout_recv_body(Some(RECEIVE_TIMEOUT))
+        .user_agent("velnor-ci")
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(crate::trusted_roots::configured_roots())
+                .build(),
+        )
+        .build()
+        .into()
 }
 
 impl Https {
     #[must_use]
     pub fn new() -> Self {
-        let agent = ureq::Agent::config_builder()
-            .http_status_as_error(false)
-            .max_redirects(0)
-            .max_redirects_will_error(false)
-            .timeout_connect(Some(CONNECT_TIMEOUT))
-            .timeout_send_body(Some(SEND_TIMEOUT))
-            .timeout_recv_response(Some(RESPONSE_TIMEOUT))
-            .timeout_recv_body(Some(RECEIVE_TIMEOUT))
-            .user_agent("velnor-ci")
-            .tls_config(
-                ureq::tls::TlsConfig::builder()
-                    .root_certs(crate::trusted_roots::configured_roots())
-                    .build(),
-            )
-            .build()
-            .into();
-        Self { agent }
+        Self::default()
     }
 
     fn run(&self, parts: Parts, body: SendBody<'_>) -> Result<Response, CiError> {
         let response = self
             .agent
+            .get_or_init(build_agent)
             .run(HttpRequest::from_parts(parts, body))
             .map_err(|error| {
                 CiError::new(format!("Registry request failed or timed out: {error}"))
