@@ -55,8 +55,9 @@ pub(super) fn trailing_steps(kind: &StepKind, lane: CargoLane) -> Vec<RenderedSt
         StepKind::PrivateFetch {
             filled,
             filled_private,
+            listed,
             ..
-        } => crate::private_steps::filled_fetch(filled, *filled_private),
+        } => crate::private_steps::filled_fetch(filled, *filled_private, *listed),
         _ => Vec::new(),
     }
 }

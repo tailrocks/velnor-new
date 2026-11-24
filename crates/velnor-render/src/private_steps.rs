@@ -7,16 +7,16 @@ use velnor_model::{
 
 use crate::gate::{ON_DEFAULT_BRANCH, SAVING_EVENTS, sources_step};
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
-use crate::rules::{APP_TOKEN_ACTION, MAX_RUN_CHARACTERS, RenderedStep, Value};
+use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
-const FETCH_MANIFESTS: &str = "VELNOR_FETCH_MANIFESTS";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
 // helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const RELEASE_HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
+mod fetch_step;
 pub(crate) mod release_asset_steps;
 
 /// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
@@ -36,11 +36,12 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
             manifests,
             filled,
             filled_private,
+            listed,
             ..
         } => RenderedStep {
             condition: (!filled.is_empty())
                 .then(|| format!("${{{{ !({}) }}}}", saving_run(*filled_private))),
-            ..fetch(manifests)
+            ..fetch_step::selected(manifests, *listed)
         },
         StepKind::ReleaseAssets { assets, part } => {
             crate::private_steps::release_asset_steps::render(assets, part)
@@ -148,7 +149,7 @@ pub(crate) fn release_phase(
             condition: None,
             ..token(sources, mint)
         },
-        fetch_paths([manifest]),
+        fetch_step::one(manifest),
     ]
 }
 
@@ -266,64 +267,13 @@ fn saving_run(private: bool) -> String {
     }
 }
 
-pub(crate) fn filled_fetch(filled: &[RepoPath], private: bool) -> Vec<RenderedStep> {
+pub(crate) fn filled_fetch(filled: &[RepoPath], private: bool, listed: bool) -> Vec<RenderedStep> {
     if filled.is_empty() {
         return Vec::new();
     }
     vec![RenderedStep {
         name: "Fetch the dependencies of every root, then drop the token".to_owned(),
         condition: Some(format!("${{{{ {} }}}}", saving_run(private))),
-        ..fetch(filled)
+        ..fetch_step::every(filled, listed)
     }]
-}
-
-fn fetch(manifests: &[RepoPath]) -> RenderedStep {
-    fetch_paths(manifests.iter().map(RepoPath::as_str))
-}
-
-fn fetch_paths<'a>(manifests: impl IntoIterator<Item = &'a str>) -> RenderedStep {
-    let mut plain = true;
-    let arguments: Vec<String> = manifests
-        .into_iter()
-        .map(|manifest| {
-            let word = shell_word(manifest);
-            plain &= word == manifest;
-            format!("--manifest-path {word}")
-        })
-        .collect();
-    let arguments = arguments.join(" ");
-    let run = format!("velnor-ci fetch {arguments}");
-    let too_long = crate::helper_integrity::INVOCATION_PREFIX.len() + run.len()
-        - "velnor-ci ".len()
-        > MAX_RUN_CHARACTERS;
-    let (run, listed) = if too_long && plain {
-        (
-            format!("velnor-ci fetch ${FETCH_MANIFESTS}"),
-            Some((FETCH_MANIFESTS.to_owned(), Value::Text(arguments))),
-        )
-    } else {
-        (run, None)
-    };
-    RenderedStep {
-        name: "Fetch the dependencies, then drop the token".to_owned(),
-        env: listed
-            .into_iter()
-            .chain([
-                (
-                    "VELNOR_PRIVATE_TOKEN".to_owned(),
-                    Value::Expr(format!("${{{{ steps.{TOKEN_STEP}.outputs.token }}}}")),
-                ),
-                (
-                    "VELNOR_API_URL".to_owned(),
-                    Value::Expr("${{ github.api_url }}".to_owned()),
-                ),
-                (
-                    "VELNOR_SERVER_URL".to_owned(),
-                    Value::Expr("${{ github.server_url }}".to_owned()),
-                ),
-            ])
-            .collect(),
-        run: Some(run),
-        ..RenderedStep::default()
-    }
 }
