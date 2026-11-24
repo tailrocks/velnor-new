@@ -58,10 +58,10 @@ runs:
             return 2
           fi
           wait "$reader" || return 1
-          [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
+          [ "$(wc -c < "$2")" -le "$MAX_BYTES" ] || return 3
         }
         clear_entry() {
-          if [ -d "$1" ] || [ -L "$1" ]; then rm -rf -- "$1"; fi
+          if [ -e "$1" ] || [ -L "$1" ]; then rm -rf -- "$1"; fi
         }
         copy_extracted() {
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
@@ -158,6 +158,8 @@ runs:
                 rm -f "$file" 2> /dev/null || true
                 if [ "$rc" -eq 2 ]; then
                   echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be read in time, so it is not used and is kept"
+                elif [ "$rc" -eq 3 ]; then
+                  evict_store_entry "without reading it, because it is larger than $MAX_BYTES bytes"
                 elif [ "$(digest "$dir/$archive")" = "$expected" ]; then
                   echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be copied to $RUNNER_TEMP, so it is not used and is kept"
                 else

@@ -176,6 +176,15 @@ fi
 exec "$REAL_HEAD" "$@"
 """
 
+STUB_OVERSIZE_FIRST_WC = """#!/bin/sh
+if [ ! -e "$STUB_WC_MARK" ]; then
+  : > "$STUB_WC_MARK"
+  echo 268435457
+  exit 0
+fi
+exec "$REAL_WC" "$@"
+"""
+
 STUB_NO_INODE_MKTEMP = """#!/bin/sh
 for arg; do
   case "$arg" in *.velnor-ci.evict.*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
@@ -416,6 +425,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "STUB_TAR_LOG": str(self.tar_log),
             "REAL_TAR": shutil.which("tar"),
             "REAL_HEAD": shutil.which("head"),
+            "REAL_WC": shutil.which("wc"),
         }
         result = subprocess.run(
             ["bash", "-c", install_script()],
@@ -973,6 +983,45 @@ class SetupVelnorInstallTests(unittest.TestCase):
             cached.exists() or cached.is_symlink(),
             "a directory at the store entry path survived a job that could not download",
         )
+
+    def test_a_fifo_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        os.mkfifo(cached)
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a fifo at the store entry path survived a job that could not download",
+        )
+
+    def test_a_store_entry_found_oversized_while_copying_is_evicted_without_being_hashed(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        wc = self.stub_bin / "wc"
+        wc.write_text(STUB_OVERSIZE_FIRST_WC)
+        wc.chmod(0o755)
+        digest = self.stub_bin / "sha256sum"
+        digest.write_text(STUB_DIGEST)
+        digest.chmod(0o755)
+        digest_log = self.root / "digest-calls.log"
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_WC_MARK": str(self.root / "wc-mark"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "STUB_DIGEST_LOG": str(digest_log),
+                "REAL_SHA256SUM": shutil.which("sha256sum") or "",
+                "REAL_SHASUM": shutil.which("shasum") or "",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+        digested = digest_log.read_text().splitlines() if digest_log.exists() else []
+        self.assertEqual([call for call in digested if str(cached) in call], [])
 
     def test_a_dangling_symlink_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
