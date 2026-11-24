@@ -62,6 +62,10 @@ fn builds_into_a_local_archive_without_a_registry_or_credentials() {
         assert!(!env.contains(hidden), "{hidden} reached docker build");
     }
     assert!(env.contains("/docker-config\n"), "{env}");
+    assert!(
+        env.contains("HOME=") && env.contains("/.velnor-job-image-candidate-"),
+        "docker build kept the real home directory: {env}"
+    );
 }
 
 fn refused(label: &str, act: impl Fn(&Source) -> Run, message: &str) {
@@ -213,6 +217,10 @@ fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
     assert!(run.ok, "{}", run.stderr);
     let seen = source.text("script.env");
     assert!(seen.contains("PATH="), "{seen}");
+    assert!(
+        seen.contains("HOME=") && seen.contains("/.velnor-job-image-candidate-"),
+        "build-test.sh kept the real home directory: {seen}"
+    );
     for hidden in ["GH_TOKEN", "REGISTRY_PASSWORD", "DOCKER_HOST"] {
         assert!(!seen.contains(hidden), "{hidden} reached build-test.sh");
     }

@@ -34,27 +34,29 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
     let lock = parse_lock(&read(&root.join(LOCK))?)?;
     let buildx = docker::buildx(&args.docker, &lock)?;
     let outputs = output::plan(&root, &args.archive, &args.record)?;
-    let mut check = Command::new("bash");
-    check
-        .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
-        .current_dir(&root);
-    process::run(process::clean_environment(&mut check), CHECK_TIMEOUT)?;
-    if source::identity(&root, &args.source_commit, github_sha)? != inputs {
-        return Err(CiError::new(
-            "Build inputs changed while build-test.sh ran.",
-        ));
-    }
     let parent = outputs
         .archive
         .parent()
         .ok_or_else(|| CiError::new("Candidate output directory must exist."))?;
     let staging = Staging::create(parent)?;
+    let mut check = Command::new("bash");
+    check
+        .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
+        .current_dir(&root);
+    process::clean_environment(&mut check).env("HOME", staging.home());
+    process::run(&mut check, CHECK_TIMEOUT)?;
+    if source::identity(&root, &args.source_commit, github_sha)? != inputs {
+        return Err(CiError::new(
+            "Build inputs changed while build-test.sh ran.",
+        ));
+    }
     let archive = staging.path().join("candidate.oci.tar");
     let manifest = staging.path().join("candidate.json");
     docker::build(
         &args.docker,
         &root,
         staging.path(),
+        &staging.home(),
         &archive,
         &buildx,
         &lock,

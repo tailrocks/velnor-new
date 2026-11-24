@@ -107,7 +107,13 @@ impl Staging {
                 std::process::id()
             ));
             match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self(path)),
+                Ok(()) => {
+                    let staging = Self(path);
+                    fs::create_dir(staging.home()).map_err(|error| {
+                        CiError::new(format!("{}: {error}", path_text(&staging.0)))
+                    })?;
+                    return Ok(staging);
+                }
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
                 Err(error) => return fail(format!("{}: {error}", path.display())),
             }
@@ -121,6 +127,14 @@ impl Staging {
     pub(super) fn path(&self) -> &Path {
         &self.0
     }
+
+    pub(super) fn home(&self) -> PathBuf {
+        self.0.join("home")
+    }
+}
+
+fn path_text(path: &Path) -> String {
+    path.display().to_string()
 }
 
 impl Drop for Staging {

@@ -64,6 +64,7 @@ pub(super) fn build(
     docker: &str,
     root: &Path,
     context: &Path,
+    home: &Path,
     archive: &Path,
     plugin: &Buildx,
     lock: &Lock,
@@ -83,6 +84,8 @@ pub(super) fn build(
     command
         .args(buildx_arguments(&dockerfile, archive, context))
         .current_dir(root);
-    process::clean_environment(&mut command).env("DOCKER_CONFIG", context.join("docker-config"));
+    process::clean_environment(&mut command)
+        .env("DOCKER_CONFIG", context.join("docker-config"))
+        .env("HOME", home);
     process::run(&mut command, BUILD_TIMEOUT)
 }
