@@ -10,6 +10,8 @@ fn locked() -> Lock {
     Lock {
         buildx_version: "0.38.0".to_owned(),
         buildx_sha256: Some("a".repeat(64)),
+        docker_binary_sha256: None,
+        docker_arm64_binary_sha256: None,
     }
 }
 
@@ -44,7 +46,9 @@ fn the_runner_lock_must_pin_the_buildx_version_and_may_pin_its_hash() {
         parsed.unwrap_or_else(|e| unreachable!("{e}")),
         Lock {
             buildx_version: "0.38.0".to_owned(),
-            buildx_sha256: Some("abc".to_owned())
+            buildx_sha256: Some("abc".to_owned()),
+            docker_binary_sha256: None,
+            docker_arm64_binary_sha256: None,
         }
     );
     let versioned = parse_lock("buildx_version = \"0.38.0\"\n");
@@ -55,6 +59,32 @@ fn the_runner_lock_must_pin_the_buildx_version_and_may_pin_its_hash() {
         None
     );
     assert!(parse_lock("buildx_sha256 = \"abc\"\n").is_err());
+}
+
+#[test]
+fn the_docker_client_hash_is_the_one_locked_for_the_host_architecture() {
+    let lock = parse_lock(concat!(
+        "buildx_version = \"0.38.0\"\n",
+        "docker_binary_sha256 = \"amd\"\n",
+        "docker_arm64_binary_sha256 = \"arm\"\n",
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let pinned = |arch| {
+        lock.docker_client_sha256(arch)
+            .map_or_else(|e| e.to_string(), str::to_owned)
+    };
+    assert_eq!(pinned("x86_64"), "amd");
+    assert_eq!(pinned("aarch64"), "arm");
+    assert_eq!(
+        pinned("riscv64"),
+        "runner.lock pins no Docker client for riscv64"
+    );
+    assert_eq!(
+        locked()
+            .docker_client_sha256("x86_64")
+            .map_err(|e| e.to_string()),
+        Err("runner.lock: docker_binary_sha256 is missing".to_owned())
+    );
 }
 
 fn output_argument(archive: &str) -> String {

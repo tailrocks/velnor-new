@@ -199,7 +199,7 @@ pub enum ImageCommand {
     )]
     VerifyCandidate(VerifyCandidateArgs),
     #[command(
-        about = "Build the job image candidate: refuse to start, before it runs anything, when its own environment holds a secret-named variable (a name that contains TOKEN, PASSWORD, SECRET, CREDENTIAL, AUTH or KEY in any case, except GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and GIT_AUTHOR_DATE), because build-test.sh can read that environment; check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, check the Docker Buildx plugin against buildx_version and buildx_sha256 in .velnor/runner.lock, run build-test.sh, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
+        about = "Build the job image candidate: refuse to start, before it runs anything, when its own environment holds a secret-named variable (a name that contains TOKEN, PASSWORD, SECRET, CREDENTIAL, AUTH or KEY in any case, except GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL and GIT_AUTHOR_DATE), because build-test.sh can read that environment; check that the worktree under --root is clean at --source-commit and equals GITHUB_SHA, copy the Docker client and check the copy against docker_binary_sha256 (docker_arm64_binary_sha256 on arm64) in .velnor/runner.lock, run build-test.sh, check the Docker Buildx plugin against buildx_version and buildx_sha256, build the Dockerfile for linux/amd64 into an OCI archive with the isolated plugin and no credentials, verify the archive, and write the archive and its candidate record (the format verify-candidate checks) as new files outside --root. It never pushes. Prints PASS on success"
     )]
     Build(BuildArgs),
     #[command(
@@ -253,8 +253,11 @@ pub struct BuildArgs {
     pub archive: PathBuf,
     #[arg(long, help = "Where to write the candidate record JSON (a new file)")]
     pub record: PathBuf,
-    #[arg(long, default_value = "docker", help = "The Docker client to run")]
-    pub docker: String,
+    #[arg(
+        long,
+        help = "The Docker client file to use, for a host whose docker is not the pinned static binary. Without it, the first docker on PATH. Before build-test.sh runs, the path is resolved to one absolute file, refused when it is under --root, and copied into the staging directory; the copy's SHA-256 is checked against docker_binary_sha256 (docker_arm64_binary_sha256 on arm64) in the .velnor/runner.lock under --root, again before the first Docker command, and only the copy is ever run. Each repository pins its own client in its own runner.lock: the SHA-256 of docker/docker inside the official static Docker archive for each architecture"
+    )]
+    pub docker: Option<PathBuf>,
     #[arg(
         long,
         help = "The docker-buildx plugin file to use. Without it, the first docker-buildx in $DOCKER_CONFIG/cli-plugins (or $HOME/.docker/cli-plugins) and then the system Docker plugin directories. The file is copied, its SHA-256 is checked against buildx_sha256 in .velnor/runner.lock, and only the copy is ever run"

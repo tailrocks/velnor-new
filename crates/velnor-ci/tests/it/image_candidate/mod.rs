@@ -3,6 +3,7 @@
 
 mod archive;
 mod build;
+mod build_client;
 mod build_fixture;
 mod build_secrets;
 mod canonical;

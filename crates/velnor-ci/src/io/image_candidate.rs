@@ -19,6 +19,7 @@ use crate::image_candidate::oci::{self, BlobSource};
 use crate::image_candidate::record::{INPUT_PATHS, validate};
 
 mod build;
+mod client;
 mod docker;
 mod output;
 mod process;
