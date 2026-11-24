@@ -7,7 +7,7 @@ use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
-use crate::plan_gate::PlanFrom;
+use crate::plan_gate::{FetchedManifest, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,10 +128,11 @@ pub enum StepKind {
         mint: crate::repo::TokenMint,
     },
     PrivateFetch {
-        manifests: Vec<RepoPath>,
+        manifests: Vec<FetchedManifest>,
         cached: Vec<crate::ids::RootSlug>,
         filled: Vec<RepoPath>,
         filled_private: bool,
+        listed: bool,
     },
     ReleaseAssets {
         assets: Vec<crate::release_asset::ReleaseAsset>,
