@@ -27,6 +27,7 @@ pub fn parse_utc(text: &str) -> Option<i64> {
     let month = number(date.next()?)?;
     let day = number(date.next()?)?;
     if date.next().is_some()
+        || year > 9999
         || !(1..=12).contains(&month)
         || !(1..=days_in_month(year, month)).contains(&day)
     {

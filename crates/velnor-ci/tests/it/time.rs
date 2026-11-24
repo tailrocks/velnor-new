@@ -58,3 +58,16 @@ fn a_real_leap_day_is_accepted() {
         parse_utc("2026-02-28T00:00:00Z")
     );
 }
+
+#[test]
+fn a_year_beyond_four_digits_is_a_parse_error_and_never_overflows() {
+    for text in [
+        "999999999999999999-01-01T00:00:00Z",
+        "9223372036854775807-12-31T23:59:59Z",
+        "99999-01-01T00:00:00Z",
+        "10000-01-01T00:00:00Z",
+    ] {
+        assert_eq!(parse_utc(text), None, "{text}");
+    }
+    assert!(parse_utc("9999-12-31T23:59:59Z").is_some());
+}

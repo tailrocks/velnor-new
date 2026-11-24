@@ -98,7 +98,12 @@ fn a_missing_or_unparsable_created_at_is_refused() {
 #[test]
 fn an_absent_or_unparsable_restored_before_is_refused() {
     let api = api(vec![entry(12, KEY, MAIN, VERSION_A)]);
-    for stamp in ["", "yesterday", "2026-11-18"] {
+    for stamp in [
+        "",
+        "yesterday",
+        "2026-11-18",
+        "999999999999999999-01-01T00:00:00Z",
+    ] {
         let text = refused(&api, stamp);
         assert!(text.contains("--restored-before"), "{stamp}: {text}");
     }
