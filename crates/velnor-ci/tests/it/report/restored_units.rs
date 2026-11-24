@@ -27,7 +27,7 @@ fn a_dependency_unit_the_restored_base_never_held_is_a_notice_not_waste() {
     assert!(report.contains("no waste"), "{report}");
     assert!(
         report.contains(
-            ".: dependency packages not in the restored base (a different package or feature selection than the run that saved it): serde v1.0.0"
+            ".: dependency packages whose compiled units were absent from the restored base (for example, the run that saved it built a different package or feature selection): serde v1.0.0"
         ),
         "{report}"
     );
@@ -169,7 +169,10 @@ fn a_dependency_unit_whose_dep_info_names_a_missing_file_is_a_base_gap_with_that
     );
     assert!(report.contains("MBX_SHARE_OUT_DIR=0"), "{report}");
     assert!(report.contains("serde v1.0.0"), "{report}");
-    assert!(!report.contains("not in the restored base"), "{report}");
+    assert!(
+        !report.contains("absent from the restored base"),
+        "{report}"
+    );
 }
 
 #[test]

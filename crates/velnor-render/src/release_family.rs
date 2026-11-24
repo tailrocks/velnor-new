@@ -152,7 +152,7 @@ fn tag_job(
     }
     steps.extend([
         download_to(VERSIONS_ARTIFACT.to_owned(), VERSIONS_DIR),
-        app_token(&[("contents", "write")]),
+        app_token(helper, &[("contents", "write")]),
     ]);
     let mut env = variables(&[
         ("GITHUB_TOKEN", "${{ steps.app.outputs.token }}"),

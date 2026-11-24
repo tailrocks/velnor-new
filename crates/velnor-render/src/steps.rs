@@ -10,8 +10,8 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
-    sources_fetch_all_rest, sources_locks, trimmed_lane,
+    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all, sources_locks,
+    trimmed_lane,
 };
 use crate::budget_steps::budget_step;
 use crate::cache::cache_step;
@@ -27,6 +27,7 @@ use crate::install_steps::{
     generator_check_step, install_generator_step, install_mise, install_tools,
 };
 use crate::permission_pairs;
+use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
@@ -51,7 +52,9 @@ mod chained_save;
 mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
-use steps_helpers::{after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable};
+use steps_helpers::{
+    after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps, variable,
+};
 use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
@@ -147,6 +150,11 @@ fn job_steps(
                     saved_after: gate.required(),
                     chained: job.chained_saves,
                     job_name: job.name.as_deref(),
+                    privacy_gate: job
+                        .steps
+                        .iter()
+                        .find(|step| step.kind == StepKind::RepositoryPrivacy)
+                        .and_then(|step| step.gate.as_ref().or(job.gate.as_ref())),
                     after_setup: after_setup(step, setups),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
@@ -182,6 +190,7 @@ struct Around<'a> {
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
+    privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
 }
 
@@ -200,9 +209,7 @@ fn rendered_steps(
         body.id = around.id.map(str::to_owned);
     }
     rendered.push(body);
-    if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(manifests, lane));
-    }
+    rendered.extend(trailing_steps(&step.kind, lane));
     for body in &mut rendered {
         if let (
             StepKind::Cargo(_) | StepKind::TestSetup { .. } | StepKind::GeneratorCheck { .. },
@@ -228,6 +235,14 @@ fn rendered_steps(
             body.env.push((
                 "VELNOR_REPORT_JOB_NAME".to_owned(),
                 Value::Text(name.to_owned()),
+            ));
+        }
+        if matches!(step.kind, StepKind::ReportCaches { .. })
+            && let Some(gate) = around.privacy_gate
+        {
+            body.env.push((
+                "VELNOR_REPORT_PLAN_MODE".to_owned(),
+                Value::Expr(plan_modes(gate, setup)),
             ));
         }
         let extra = extra_conditions(step, setup, &around.after_setup);
@@ -313,6 +328,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
+        StepKind::CachePurgePrivate => crate::base_steps::cache_purge_private(),
         StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
         StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
         StepKind::DeltaStage(root, packages) => crate::delta_steps::delta_stage(root, packages),
@@ -378,6 +394,6 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
-        StepKind::Budget { last } => budget_step(*last),
+        StepKind::Budget { last, selection } => budget_step(*last, selection.as_ref()),
     }
 }

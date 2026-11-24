@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mbx_reports::report_json;
+use super::mbx_reports_sessions::plant_session;
 use super::{Repo, ResultTest, fixture, read};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
 use std::process::Command;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const MBX_LINE: &str = "mbx[cache]: object cache: 0 hits, 0 misses, 12 not looked up; 0 B downloaded, 0 B uploaded, 0 B stored locally";
 
@@ -236,5 +238,42 @@ fn report_records_that_the_checkout_declares_mbx() -> ResultTest {
         "{:?}",
         metrics.violations
     );
+    Ok(())
+}
+
+fn store_entry_written(repo: &Repo, seconds_ago: u64) -> ResultTest {
+    let object = repo.root().join("store/actions/cas/object");
+    fs::create_dir_all(object.parent().ok_or("parent")?)?;
+    fs::write(&object, "entry")?;
+    fs::File::options()
+        .write(true)
+        .open(&object)?
+        .set_modified(SystemTime::now() - Duration::from_secs(seconds_ago))?;
+    Ok(())
+}
+
+#[test]
+fn a_store_entry_written_by_a_session_before_the_first_invocation_is_not_pre_job_state()
+-> ResultTest {
+    for (name, entry_age, primed) in [
+        ("report-store-written-by-check", 30, false),
+        ("report-store-written-before-job", 120, true),
+    ] {
+        let repo = fixture(name)?;
+        repo.git(&["add", "."]);
+        run_cargo(&repo)?;
+        let check_started = SystemTime::now() - Duration::from_secs(60);
+        plant_session(
+            &repo,
+            &format!(
+                "{:020}-1-0",
+                check_started.duration_since(UNIX_EPOCH)?.as_nanos()
+            ),
+            Some(&report_json(5, 0, 1, 0)),
+        )?;
+        store_entry_written(&repo, entry_age)?;
+        let metrics = with_store(&repo, true)?;
+        assert_eq!(metrics.mbx.store_primed, primed, "{name}: {metrics:?}");
+    }
     Ok(())
 }

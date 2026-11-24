@@ -10,8 +10,8 @@ use crate::facts::TestResult;
 use crate::lint_gate::{needs_of, spec, verdict};
 use crate::lint_lane::{LINT, repo, runs};
 use crate::lock::{COMMIT_FILE, SUMS};
-use crate::lock_archive::archive_lock_at;
-use crate::pipeline::workflow;
+use crate::lock_archive::{ARCHIVE_SUMS, BINARY_SUMS, archive_lock_at};
+use crate::pipeline::{view, workflow};
 
 pub(crate) const CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
 pub(crate) const CHECK_HELPER: &str = "0.1.110";
@@ -202,5 +202,76 @@ fn the_check_job_installs_mbx_because_cargo_metadata_runs_through_it() -> TestRe
     let text = rendered(&format!("{LINT}\n{CHECK}"))?;
     let job = job(&text)?;
     assert!(job.to_string().contains("mr-boxington"), "{job}");
+    Ok(())
+}
+
+fn on_macos(config: &str, lock: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let config = format!("runner = 'macos-15'\nhosted = false\n\n{config}");
+    let mut view = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+    view.tracked_paths.insert(LOCK_PATH);
+    view.files.insert(LOCK_PATH, lock.as_bytes().to_vec());
+    Ok(view)
+}
+
+#[test]
+fn a_macos_runner_needs_a_macos_velnor_gen_digest_before_the_check_can_install_it() -> TestResult {
+    expected_files(&on_macos(CHECK, &archive_lock_at(CHECK_HELPER)?)?)?;
+    let linux_only_generator: String = ARCHIVE_SUMS
+        .lines()
+        .filter(|line| !line.contains("velnor-gen-aarch64-apple-darwin"))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    let lock = velnor_rust::pin_lock(
+        CHECK_HELPER,
+        COMMIT_FILE,
+        &linux_only_generator,
+        Some(BINARY_SUMS),
+    )?;
+    let result = expected_files(&on_macos(CHECK, &lock)?);
+    assert!(
+        matches!(result, Err(GenerateError::GeneratorLockLacksMacos { .. })),
+        "{result:?}"
+    );
+    let message = result.err().ok_or("accepted")?.to_string();
+    assert!(
+        message.contains("macos-arm64") && message.contains("pin-helper"),
+        "{message}"
+    );
+    expected_files(&on_macos("", &lock)?)?;
+    Ok(())
+}
+
+#[test]
+fn a_macos_x64_runner_is_refused_because_no_x64_velnor_gen_archive_is_pinned() -> TestResult {
+    for runner in [
+        "self-macos-intel",
+        "self-macos-13",
+        "self-macos-13-large",
+        "self-macos-x64",
+        "self-macos-amd64",
+    ] {
+        let config = format!("runner = '{runner}'\nhosted = false\n\n{CHECK}");
+        let mut view = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        view.tracked_paths.insert(LOCK_PATH);
+        view.files
+            .insert(LOCK_PATH, archive_lock_at(CHECK_HELPER)?.into_bytes());
+        let result = expected_files(&view);
+        assert!(
+            matches!(result, Err(GenerateError::GeneratorMacosX64 { .. })),
+            "{runner}: {result:?}"
+        );
+    }
+    for runner in ["macos-13", "macos-13-large"] {
+        let config = format!("runner = '{runner}'\nhosted = false\n\n{CHECK}");
+        let mut view = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        view.tracked_paths.insert(LOCK_PATH);
+        view.files
+            .insert(LOCK_PATH, archive_lock_at(CHECK_HELPER)?.into_bytes());
+        let result = expected_files(&view);
+        assert!(
+            matches!(result, Err(GenerateError::Detect(_))),
+            "{runner}: {result:?}"
+        );
+    }
     Ok(())
 }

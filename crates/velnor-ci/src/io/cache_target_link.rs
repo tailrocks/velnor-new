@@ -138,12 +138,12 @@ mod tests {
     #[test]
     fn linux_default_cache_dir_prefers_xdg_over_home() {
         assert_eq!(
-            default_cache_dir_for(false, Some(dir("/home/u")), Some(dir("/xdg"))),
+            default_cache_dir_for(false, Some(dir("/srv/u")), Some(dir("/xdg"))),
             Some(dir("/xdg/mbx"))
         );
         assert_eq!(
-            default_cache_dir_for(false, Some(dir("/home/u")), None),
-            Some(dir("/home/u/.cache/mbx"))
+            default_cache_dir_for(false, Some(dir("/srv/u")), None),
+            Some(dir("/srv/u/.cache/mbx"))
         );
         assert_eq!(default_cache_dir_for(false, None, None), None);
     }
@@ -151,8 +151,8 @@ mod tests {
     #[test]
     fn macos_default_cache_dir_ignores_xdg() {
         assert_eq!(
-            default_cache_dir_for(true, Some(dir("/Users/u")), Some(dir("/xdg"))),
-            Some(dir("/Users/u/Library/Caches/mbx"))
+            default_cache_dir_for(true, Some(dir("/srv/u")), Some(dir("/xdg"))),
+            Some(dir("/srv/u/Library/Caches/mbx"))
         );
         assert_eq!(default_cache_dir_for(true, None, Some(dir("/xdg"))), None);
     }

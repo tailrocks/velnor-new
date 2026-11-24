@@ -81,13 +81,13 @@ fn sources_cargo_unpacks_again_do_not_make_a_unit_a_base_gap()
         &repo,
         REGISTRY_SOURCE,
         &format!(
-            "{root}/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
+            "{root}/srv/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
         ),
     );
     dep_info_unit(
         &repo,
         GIT_CHECKOUT,
-        &format!("{root}/home/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
+        &format!("{root}/srv/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
     );
     restore(&repo);
     let record = restored_record(&repo)?;
@@ -251,5 +251,46 @@ fn a_build_script_sibling_of_the_same_package_does_not_hide_a_missing_input_gap(
             .all(|line| !line.contains("wrapper")),
         "{metrics:?}"
     );
+    Ok(())
+}
+
+const ALIASED: &str = "00000000bad0000b";
+
+#[test]
+fn a_dep_info_path_under_a_symlinked_spelling_of_the_target_is_inside_it_in_either_root_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    for roots in [["target", "alias"], ["alias", "target"]] {
+        let repo = fixture(&format!("report-restored-units-alias-{}", roots[0]))?;
+        let root = fs::canonicalize(repo.root())?;
+        let named = format!("{}/alias/debug/build/serde/out/x.rs", root.display());
+        dep_info_unit(&repo, ALIASED, &named);
+        repo.git(&["add", "."]);
+        assert!(
+            super::super::super::cli(&repo, &["inputs", "save"])
+                .status
+                .success()
+        );
+        std::os::unix::fs::symlink("target", repo.root().join("alias"))?;
+        let output = super::super::super::cli(
+            &repo,
+            &[
+                "inputs",
+                "restore-all",
+                "--root-target",
+                ".",
+                roots[0],
+                "--root-target",
+                ".",
+                roots[1],
+            ],
+        );
+        assert!(output.status.success(), "{roots:?}: {output:?}");
+        let record = restored_record(&repo)?;
+        assert!(
+            record.lines().any(|line| line == ALIASED),
+            "{roots:?}: {record}"
+        );
+        assert!(!record.contains("missing-input"), "{roots:?}: {record}");
+    }
     Ok(())
 }

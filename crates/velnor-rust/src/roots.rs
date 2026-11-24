@@ -325,6 +325,7 @@ fn member(
 ) -> Result<RustMember, DetectError> {
     Ok(RustMember {
         name: package.name.clone(),
+        version: package.version.clone(),
         manifest: package.manifest.clone(),
         directory: package.manifest.parent(),
         dependencies: package

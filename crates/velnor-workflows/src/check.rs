@@ -70,6 +70,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
     )?;
     let trusted = crate::trusted::pool(&file, &runner, &fork_runner, hosted, &raw)?;
     let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
+    crate::trusted::not_reusable(&file, trusted.as_ref(), &triggers)?;
     let input_names: Vec<&str> = triggers
         .workflow_call
         .iter()

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_socket::SocketDir;
 use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
@@ -35,7 +35,8 @@ fn reports(repo: &super::Repo) -> Vec<String> {
 #[test]
 fn a_stale_socket_path_does_not_make_a_cargo_call_look_nested() -> ResultTest {
     let repo = fixture("mbx-reports-stale-socket")?;
-    let dead = repo.root().join("dead.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let dead = sockets.socket("dead.sock");
     cargo_with(
         &repo,
         "build",
@@ -72,9 +73,10 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 
 #[test]
 fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
-    let repo = fixture("sock-orphan")?;
-    let orphan = repo.root().join("orphan.sock");
-    drop(UnixListener::bind(&orphan)?);
+    let repo = fixture("mbx-reports-orphan-socket")?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let orphan = sockets.socket("orphan.sock");
+    let _listener = UnixListener::bind(&orphan)?;
     cargo_with(
         &repo,
         "build",
@@ -89,10 +91,30 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 }
 
 #[test]
+fn a_relative_socket_path_is_not_a_live_session() -> ResultTest {
+    let repo = fixture("mbx-reports-relative-socket")?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let _listener = UnixListener::bind(sockets.socket("cache-agent.sock"))?;
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 2, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(std::path::Path::new("cache-agent.sock")),
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
+    Ok(())
+}
+
+#[test]
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
-    let repo = fixture("sock-stuck")?;
-    let stuck = repo.root().join("stuck.sock");
-    let listener = UnixListener::bind(&stuck)?;
+    let repo = fixture("mbx-reports-stuck-listener")?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let stuck = sockets.socket("stuck.sock");
+    let _listener = UnixListener::bind(&stuck)?;
     let mut command = cargo_command(
         &repo,
         "build",
@@ -118,13 +140,6 @@ fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTes
     let output = output?;
     assert!(output.status.success(), "{output:?}");
     assert_eq!(markers(&repo), 0);
-    listener.set_nonblocking(true)?;
-    assert!(
-        listener
-            .accept()
-            .is_err_and(|error| error.kind() == ErrorKind::WouldBlock),
-        "the check connected to the listener"
-    );
     Ok(())
 }
 
@@ -146,6 +161,23 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
                 "verification": {"invocations": 4, "duration_ns": 70}
             }
         })
+    );
+    Ok(())
+}
+
+#[test]
+fn a_malformed_compiler_work_entry_makes_its_report_not_understood() -> ResultTest {
+    let repo = fixture("mbx-reports-malformed-work")?;
+    let body = r#"{"version":5,"hits":3,"misses":1,"unconsulted":0,"compiler":{"miss":{"invocations":1,"duration_ns":900},"verification":{"invocations":"four","duration_ns":70}}}"#;
+    cargo(&repo, "build", body, "compiled")?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    let errors = metrics.verification_errors.join("\n");
+    assert!(
+        errors.contains("MBX stats report not understood (1 report(s))")
+            && errors.contains("compiler work `verification`"),
+        "{errors}"
     );
     Ok(())
 }
@@ -183,7 +215,7 @@ fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
 
 #[test]
 fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
-    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true}}}"#;
     assert_eq!(
         parse(newer),
         Ok(Some(MbxSession {

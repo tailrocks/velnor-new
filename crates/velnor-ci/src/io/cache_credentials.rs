@@ -5,16 +5,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::escape::inert;
+use crate::io::saved_git_config::{holds_token, names_credential};
 
 mod prune;
 
 use prune::Identity;
 
 const SAVED_ROOT: &str = ".cargo";
-const SAVED: &[(&str, bool)] = &[
-    ("registry/index", false),
-    ("registry/cache", false),
-    ("git/db", true),
+const SAVED: &[(&str, Context)] = &[
+    ("registry/index", Context::Index),
+    ("registry/cache", Context::Outside),
+    ("git/db", Context::Repository),
 ];
 const GIT_DIRECTORY: &str = ".git";
 const CREDENTIAL_FILES: &[&str] = &[
@@ -26,9 +27,10 @@ const CREDENTIAL_FILES: &[&str] = &[
 ];
 const GIT_CREDENTIAL_FILES: &[&str] = &["credentials"];
 const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "config.bak"];
-const HOOKS: &str = "hooks";
-const LOGS: &str = "logs";
-const FETCH_HEAD: &str = "fetch_head";
+const LEFT_OUT_TREES: &[&str] = &["hooks", "logs", "remotes", "branches"];
+const LEFT_OUT_FILES: &[&str] = &["fetch_head", "http-alternates"];
+const REGISTRY_CONFIG: &str = "config.json";
+const INDEX_CACHE: &str = ".cache";
 const REFS: &str = "refs";
 const HEAD: &str = "head";
 const CONFIG: &str = "config";
@@ -42,6 +44,7 @@ const MAX_ENTRIES: usize = 2_000_000;
 #[derive(Clone, Copy, PartialEq)]
 enum Context {
     Outside,
+    Index,
     Repository,
     Declared,
     Refs,
@@ -60,7 +63,7 @@ impl Context {
             Self::Declared
         } else if parent_is_git_directory && exact_refs {
             Self::Refs
-        } else if parent_is_git_directory && (name == HOOKS || name == LOGS) {
+        } else if parent_is_git_directory && LEFT_OUT_TREES.contains(&name) {
             Self::Prunable
         } else {
             self
@@ -68,7 +71,7 @@ impl Context {
     }
 
     fn git(self) -> bool {
-        self != Self::Outside
+        !matches!(self, Self::Outside | Self::Index)
     }
 
     fn names_refs(self) -> bool {
@@ -76,30 +79,29 @@ impl Context {
     }
 }
 
-pub(super) fn saved_root() -> Option<PathBuf> {
+fn saved_root() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
         .map(|home| PathBuf::from(home).join(SAVED_ROOT))
 }
 
-pub(super) fn find(root: &Path) -> Option<String> {
+pub(super) fn leak() -> Option<String> {
+    saved_root().map_or_else(|| Some("HOME is not set".to_owned()), |home| find(&home))
+}
+
+fn find(root: &Path) -> Option<String> {
     find_within(root, MAX_ENTRIES)
 }
 
 fn find_within(root: &Path, entries: usize) -> Option<String> {
     let mut budget = entries;
-    for (saved, git) in SAVED {
+    for (saved, context) in SAVED {
         let directory = match plain_path(root, saved) {
             Ok(Some(directory)) => directory,
             Ok(None) => continue,
             Err(reason) => return Some(reason),
         };
-        let context = if *git {
-            Context::Repository
-        } else {
-            Context::Outside
-        };
-        if let Some(found) = walk(&directory, 0, &mut budget, context, None) {
+        if let Some(found) = walk(&directory, 0, &mut budget, *context, None) {
             return Some(found);
         }
     }
@@ -219,12 +221,13 @@ fn walk(
             ));
         }
         let git = context.git() && !context.names_refs();
-        if CREDENTIAL_FILES.contains(&name.as_str())
+        if (CREDENTIAL_FILES.contains(&name.as_str())
+            && !(context == Context::Index && is_index_entry(&path, depth)))
             || (git && GIT_CREDENTIAL_FILES.contains(&name.as_str()))
         {
             return Some(format!("{} is a credential file", shown(&path)));
         }
-        if git && kind.is_file() && name == FETCH_HEAD {
+        if git && kind.is_file() && LEFT_OUT_FILES.contains(&name.as_str()) {
             if let Some(found) = leave_out(&path, fs::remove_file(&path)) {
                 return Some(found);
             }
@@ -250,6 +253,8 @@ fn walk(
                 "{} holds a credential or a transport setting",
                 shown(&path)
             ));
+        } else if !context.names_refs() && name == REGISTRY_CONFIG && json_holds_credential(&path) {
+            return Some(format!("{} holds a credential", shown(&path)));
         }
     }
     subdirectories
@@ -317,18 +322,64 @@ fn is_ref_value(path: &Path) -> bool {
     read_small(path).is_some_and(|text| {
         let value = text.trim_end();
         !value.contains(['\n', '\r'])
-            && ((value.starts_with("ref:")
-                && !crate::io::saved_git_config::names_credential(value))
+            && ((value.starts_with("ref:") && !names_credential(value))
                 || (matches!(value.len(), 40 | 64)
                     && value.bytes().all(|each| each.is_ascii_hexdigit())))
     })
 }
 
 fn holds_credential(path: &Path) -> bool {
+    read_small(path)
+        .is_none_or(|text| !crate::io::saved_git_config::is_plain(&text) || names_credential(&text))
+}
+
+fn json_holds_credential(path: &Path) -> bool {
     read_small(path).is_none_or(|text| {
-        !crate::io::saved_git_config::is_plain(&text)
-            || crate::io::saved_git_config::names_credential(&text)
+        holds_token(&text)
+            || serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .filter(serde_json::Value::is_object)
+                .is_none_or(|value| names_credential_in(&value))
     })
+}
+
+fn names_secret(text: &str) -> bool {
+    names_credential(text) || holds_token(text)
+}
+
+fn names_credential_in(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => names_secret(text),
+        serde_json::Value::Array(items) => items.iter().any(names_credential_in),
+        serde_json::Value::Object(fields) => fields
+            .iter()
+            .any(|(key, value)| names_secret(key) || names_credential_in(value)),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+            false
+        }
+    }
+}
+
+fn is_index_entry(path: &Path, depth: usize) -> bool {
+    let Some(name) = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| {
+            name.bytes().all(|each| {
+                each.is_ascii_lowercase() || each.is_ascii_digit() || matches!(each, b'-' | b'_')
+            })
+        })
+    else {
+        return false;
+    };
+    let mut entry = PathBuf::from(INDEX_CACHE);
+    match name.len() {
+        1 | 2 => entry.push(name.len().to_string()),
+        3 => entry.extend(["3", &name[..1]]),
+        _ => entry.extend([&name[..2], &name[2..4]]),
+    }
+    entry.push(name);
+    depth == entry.components().count() && path.ends_with(&entry)
 }
 
 fn read_small(path: &Path) -> Option<String> {

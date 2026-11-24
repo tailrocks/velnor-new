@@ -4,6 +4,7 @@
 mod ansible;
 mod audit_job;
 mod base_cache;
+mod base_cache_trim;
 mod build_profile;
 mod build_script;
 mod build_target;

@@ -24,6 +24,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "fetch-assets",
     "private-token-allowed",
     "app-token",
+    "revoke-token",
     "mbx-store",
     "mbx-seed",
     "tools-local",

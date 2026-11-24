@@ -51,10 +51,7 @@ impl Removed {
     }
 }
 
-/// Removes from `target` what a later build rebuilds anyway or never reads: documentation,
-/// scratch directories, executables and the workspace's own artifacts. With `used`, also
-/// every dependency unit the run did not use. Dependency libraries, build script outputs and
-/// their fingerprints stay, so a build that restores the result finds its dependencies fresh.
+/// Removes documentation, scratch directories, executables, and units this run did not use.
 pub(super) fn prune(target: &Path, used: Option<&UsedUnits>) -> Result<Removed, CiError> {
     let mut removed = Removed::default();
     for entry in entries(target)? {

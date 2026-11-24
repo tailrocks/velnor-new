@@ -331,7 +331,7 @@ reports, fixture results over `minimal-cargo`, `nested`, `mbx-nextest`,
 
 ## 6. Source register addenda (beyond spec R01–R21/E01–E10/U01)
 
-- W1–W7 workstream reports (`/tmp/velnor-ws{1,2,2b,3,4,5,6,7}-*.md`,
+- W1–W7 workstream reports (`<tmp>/velnor-ws{1,2,2b,3,4,5,6,7}-*.md`,
   re-verified at live head; WS2/WS2b snapshots predated BR-26).
 - Q1 OpenTofu v1.13.1 release + SHA256SUMS
   (`https://github.com/opentofu/opentofu/releases/tag/v1.13.1`).

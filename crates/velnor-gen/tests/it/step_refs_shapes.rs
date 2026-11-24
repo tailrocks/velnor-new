@@ -107,6 +107,7 @@ struct RustCi {
     config: Option<String>,
     files: Vec<(&'static str, String)>,
     cleanup: bool,
+    roots: &'static [&'static str],
 }
 
 fn rust_ci(label: &'static str, keys: Keys, config: Option<String>) -> RustCi {
@@ -116,10 +117,16 @@ fn rust_ci(label: &'static str, keys: Keys, config: Option<String>) -> RustCi {
         config,
         files: Vec::new(),
         cleanup: false,
+        roots: ROOTS,
     }
 }
 
 impl RustCi {
+    fn single(mut self) -> Self {
+        self.roots = &["Cargo.toml"];
+        self
+    }
+
     fn with(mut self, path: &'static str, text: impl Into<String>) -> Self {
         self.files.push((path, text.into()));
         self
@@ -136,7 +143,7 @@ impl Shape for RustCi {
     }
 
     fn render(&self, pin: u64) -> Result<Option<Rendered>, Box<dyn Error>> {
-        let mut repo = view(ROOTS, self.config.as_deref().map(str::as_bytes))?;
+        let mut repo = view(self.roots, self.config.as_deref().map(str::as_bytes))?;
         for (name, text) in &self.files {
             let path = RepoPath::new(*name)?;
             repo.tracked_paths.insert(path.clone());
@@ -172,6 +179,12 @@ impl Shape for RustCi {
 fn public_lock() -> String {
     format!(
         "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"dep0\"\nversion = \"1.0.0\"\nsource = \"git+{SOURCE}?rev=v1#{SHA}\"\n"
+    )
+}
+
+fn mixed_lock() -> String {
+    format!(
+        "{GIT_LOCK}\n[[package]]\nname = \"dep1\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/public-lib?rev=v1#{SHA}\"\n"
     )
 }
 
@@ -241,6 +254,13 @@ fn rust_ci_shapes() -> Vec<RustCi> {
         shape("public sources", &["public_sources"], PUBLIC_SOURCES)
             .with("Cargo.lock", public_lock())
             .with("tools/Cargo.lock", public_lock()),
+        shape(
+            "public and private sources",
+            &["private_sources", "public_sources"],
+            &format!("{SECTION}[public_sources]\ngit = ['https://github.com/acme/public-lib']\n"),
+        )
+        .with("Cargo.lock", mixed_lock())
+        .single(),
         shape(
             "dependency policy",
             &["policy.deny"],

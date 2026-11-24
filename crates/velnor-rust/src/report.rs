@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::audit_job::AUDIT_JOB;
+use crate::lane::{PLAN_JOB, present_plan_job, used_outputs};
 use crate::plan::{HELPER_JOB, job, step};
 use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
@@ -13,7 +13,9 @@ use velnor_model::{
 
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.112 via d937e8dfc6
 const CACHE_AFTER_PRODUCER_HELPER: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.112 via 9ae30da2fc
 const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
@@ -55,8 +57,13 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         if !job.steps.iter().any(|step| step.kind.runs_cargo()) && !saves {
             continue;
         }
-        let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
-        attach_metrics(job, nextest_artifacts, saved_keys, reason, optional_saves);
+        attach_metrics(
+            job,
+            nextest_artifacts,
+            saved_keys,
+            not_generated,
+            optional_saves,
+        );
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -187,7 +194,7 @@ pub(crate) fn finish(
         crate::merge_group_skip::ask(facts, jobs, single);
     }
     crate::merge_queue_check::ask(facts, jobs, single);
-    let trim = crate::base_cache::trim_job(facts, jobs);
+    let trim = crate::base_cache_trim::trim_job(facts, jobs);
     let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {
         jobs.push(cache.clone());
@@ -201,4 +208,27 @@ pub(crate) fn finish(
     if !facts.config.cache_check_blocks {
         jobs.push(cache);
     }
+}
+
+pub fn finish_present(facts: &RepoFacts, jobs: &mut Vec<Job>) {
+    if jobs.is_empty()
+        || facts.helper.is_none()
+        || jobs
+            .iter()
+            .any(|job| job.id == crate::required_job::VERDICT_JOB)
+    {
+        return;
+    }
+    if !jobs.iter().any(|job| job.id == PLAN_JOB) {
+        let outputs = used_outputs(jobs);
+        jobs.insert(0, present_plan_job(facts, outputs));
+    }
+    crate::merge_queue_check::ask(facts, jobs, false);
+    jobs.push(crate::required_job::verdict_job(
+        facts,
+        jobs,
+        false,
+        crate::plan_budget::draft_guard(facts),
+    ));
+    jobs.extend(label_reset(facts));
 }

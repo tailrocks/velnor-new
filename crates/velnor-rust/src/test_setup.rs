@@ -11,6 +11,7 @@ use crate::members::Member;
 use crate::plan::step;
 use crate::private_fetch::{any_gate, shared_gate};
 
+// helper-gate: first in tools-v0.1.112 via 8843633902
 const LANE_GUARD_ORDER_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 fn lane_guard_ordered(facts: &RepoFacts) -> bool {

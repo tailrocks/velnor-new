@@ -28,6 +28,7 @@ pub enum CacheFamily {
     Tools,
     ToolsAnchor,
     Delta,
+    Objects,
     Unknown,
 }
 
@@ -69,19 +70,75 @@ fn scoped<'a>(key: &'a str, rest: &str, group: &'a str, private: bool) -> &'a st
     }
 }
 
+fn job_id(text: &str) -> bool {
+    let mut bytes = text.bytes();
+    bytes
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+fn anchor_run(run: &str) -> bool {
+    run.is_empty()
+        || run
+            .strip_prefix('-')
+            .and_then(|run| run.split_once('-'))
+            .is_some_and(|(id, rest)| {
+                numeric(id)
+                    && (job_id(rest)
+                        || rest
+                            .split_once('-')
+                            .is_some_and(|(attempt, job)| numeric(attempt) && job_id(job)))
+            })
+}
+
 fn anchor_platform(rest: &str) -> Option<&str> {
     let (platform, rest) = rest.split_once("-mise")?;
     let (version, rest) = rest.split_once('-')?;
     let (lock, run) = rest.split_at_checked(64)?;
-    let run_ok = run.is_empty()
-        || run
-            .strip_prefix('-')
-            .and_then(|run| run.split_once('-'))
-            .is_some_and(|(id, job)| numeric(id) && !job.is_empty());
-    (host(platform) && !version.is_empty() && hex(lock, 64) && run_ok).then_some(platform)
+    (host(platform)
+        && !version.is_empty()
+        && hex(lock, 64)
+        && !lock.bytes().any(|b| b.is_ascii_uppercase())
+        && anchor_run(run))
+    .then_some(platform)
+}
+
+const OBJECTS_MARK: &str = "-mbx-v1-";
+
+fn toolchain_owner(group: &str) -> Option<&str> {
+    group.strip_suffix("-norust").or_else(|| {
+        let (owner, tool) = group.rsplit_once("-rust-")?;
+        hex(tool, 12).then_some(owner)
+    })
+}
+
+fn objects_group(key: &str) -> Option<&str> {
+    let (host, rest) = key.split_once(OBJECTS_MARK)?;
+    let (platform, arch) = host.split_once('-')?;
+    let rest = match rest.rsplit_once("-run-") {
+        Some((head, run))
+            if run
+                .split_once('-')
+                .is_some_and(|(id, attempt)| numeric(id) && numeric(attempt)) =>
+        {
+            head
+        }
+        _ => rest,
+    };
+    let (body, commit) = rest.rsplit_once('-')?;
+    let job = toolchain_owner(body)?.strip_suffix("-dir")?;
+    (matches!(platform, "linux" | "darwin" | "win32")
+        && matches!(arch, "x64" | "arm64")
+        && hex(commit, 40)
+        && job_id(job))
+    .then(|| &key[..host.len() + OBJECTS_MARK.len() + body.len()])
 }
 
 fn classify(key: &str) -> Option<(CacheFamily, &str)> {
+    if let Some(group) = objects_group(key) {
+        return Some((CacheFamily::Objects, group));
+    }
     if let Some(rest) = key.strip_prefix("velnor-tools-anchor-") {
         return anchor_platform(rest).map(|platform| (CacheFamily::ToolsAnchor, platform));
     }
@@ -158,8 +215,11 @@ fn pull_request(reference: &str) -> Option<u64> {
         .filter(|number| *number > 0)
 }
 
-fn target_owner(group: &str) -> Option<&str> {
-    group.rsplit_once('-').map(|(owner, _)| owner)
+fn owner(family: CacheFamily, group: &str) -> Option<&str> {
+    match family {
+        CacheFamily::Objects => toolchain_owner(group),
+        _ => group.rsplit_once('-').map(|(owner, _)| owner),
+    }
 }
 
 #[must_use]
@@ -196,11 +256,11 @@ fn ranked<'a>(entries: &'a [CacheEntry]) -> Groups<'a> {
     groups
 }
 
-fn newest_targets<'a>(groups: &Groups<'a>) -> Newest<'a> {
+fn newest_generations<'a>(groups: &Groups<'a>) -> Newest<'a> {
     let mut newest: Newest<'a> = BTreeMap::new();
     for ((family, group, reference), members) in groups {
-        if *family == CacheFamily::Target
-            && let (Some(owner), Some(first)) = (target_owner(group), members.first())
+        if matches!(family, CacheFamily::Target | CacheFamily::Objects)
+            && let (Some(owner), Some(first)) = (owner(*family, group), members.first())
         {
             let stamp = (first.created_at, first.id);
             let slot = newest.entry((owner, reference)).or_insert((stamp, group));
@@ -222,15 +282,20 @@ fn tier(
     let idle = |days: i64| entry.last_accessed_at <= now.saturating_sub(days * DAY);
     match classify(&entry.key)? {
         (CacheFamily::Sources, _) if retired_sources(&entry.key) => Some(0),
-        (CacheFamily::Target, group)
-            if target_owner(group)
+        (family @ (CacheFamily::Target | CacheFamily::Objects), group)
+            if owner(family, group)
                 .and_then(|owner| newest.get(&(owner, entry.reference.as_str())))
                 .is_some_and(|(_, current)| *current != group) =>
         {
             Some(0)
         }
+        (CacheFamily::Objects, _)
+            if pull_request(&entry.reference).is_some_and(|pr| !open_prs.contains(&pr)) =>
+        {
+            Some(0)
+        }
         (CacheFamily::Delta, _) => {
-            let pr = delta_pull_request(entry)?;
+            let pr = scoped_pull_request(entry)?;
             Some(if !open_prs.contains(&pr) {
                 0
             } else if idle(3) {
@@ -240,7 +305,9 @@ fn tier(
             })
         }
         (CacheFamily::Sources | CacheFamily::ToolsAnchor, _) if !idle(1) => None,
-        (CacheFamily::Target | CacheFamily::Sources, _) if rank >= 2 => Some(2),
+        (CacheFamily::Target | CacheFamily::Sources | CacheFamily::Objects, _) if rank >= 2 => {
+            Some(2)
+        }
         (CacheFamily::ToolsAnchor, _) if rank >= ANCHOR_GENERATIONS => Some(0),
         (CacheFamily::Tools, _) if rank > 0 && idle(7) => Some(3),
         _ => None,
@@ -255,7 +322,7 @@ pub fn budget_plan(
     budget_bytes: u64,
 ) -> Vec<CacheId> {
     let groups = ranked(entries);
-    let newest = newest_targets(&groups);
+    let newest = newest_generations(&groups);
     let ranks: BTreeMap<CacheId, usize> = groups
         .values()
         .flat_map(|members| members.iter().enumerate())
@@ -293,10 +360,13 @@ pub fn budget_plan(
 }
 
 #[must_use]
-pub fn delta_pull_request(entry: &CacheEntry) -> Option<u64> {
-    (cache_family(&entry.key) == CacheFamily::Delta)
-        .then(|| pull_request(&entry.reference))
-        .flatten()
+pub fn scoped_pull_request(entry: &CacheEntry) -> Option<u64> {
+    matches!(
+        cache_family(&entry.key),
+        CacheFamily::Delta | CacheFamily::Objects
+    )
+    .then(|| pull_request(&entry.reference))
+    .flatten()
 }
 
 pub(crate) fn configured_budget(value: Option<u64>) -> Result<u64, crate::error::Reason> {

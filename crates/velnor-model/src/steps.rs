@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::budget_mode::SelectionName;
 use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
-use crate::plan_gate::PlanFrom;
+use crate::plan_gate::{FetchedManifest, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,10 +72,12 @@ pub enum StepKind {
         budget_bytes: u64,
         verdicts: Option<PlanFrom>,
         private: PrivateVerdict,
+        sources_restore: Option<RootSlug>,
     },
     PublicSources {
         manifests: Vec<RepoPath>,
         selected: Vec<RootSlug>,
+        fails_on_private: bool,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -89,6 +92,7 @@ pub enum StepKind {
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
+    CachePurgePrivate,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -124,8 +128,11 @@ pub enum StepKind {
         mint: crate::repo::TokenMint,
     },
     PrivateFetch {
-        manifests: Vec<RepoPath>,
+        manifests: Vec<FetchedManifest>,
         cached: Vec<crate::ids::RootSlug>,
+        filled: Vec<RepoPath>,
+        filled_private: bool,
+        listed: bool,
     },
     ReleaseAssets {
         assets: Vec<crate::release_asset::ReleaseAsset>,
@@ -186,6 +193,7 @@ pub enum StepKind {
     },
     Budget {
         last: usize,
+        selection: Option<SelectionName>,
     },
     MergeGroupPassed {
         required: String,
@@ -240,6 +248,7 @@ impl StepKind {
             | Self::DeltaApply(_)
             | Self::DeltaStage(_, _)
             | Self::CacheBudget(_)
+            | Self::CachePurgePrivate
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }

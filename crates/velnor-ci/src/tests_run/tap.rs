@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
-use super::{LINE_LIMIT, TestCounts, skipped, status};
+use super::{LINE_LIMIT, TestCounts, status};
 
 #[derive(Debug)]
 enum Seen {
@@ -86,7 +86,7 @@ impl SummaryTap {
             self.closed = true;
             self.counts = Some(TestCounts {
                 run: summary.tests_run,
-                listed: skipped(trimmed).and_then(|skipped| skipped.checked_add(summary.tests_run)),
+                listed: None,
                 ignored: None,
                 by_package: None,
                 runs,

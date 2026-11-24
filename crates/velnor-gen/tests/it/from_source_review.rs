@@ -13,6 +13,7 @@ use crate::generated_check_source::{
 };
 use crate::lint_lane::{LINT, MISE};
 use crate::lock::{COMMIT_FILE, SUMS};
+use crate::lock_archive::{GENERATOR_BINARY_SUMS, generator_sums};
 use crate::pipeline::workflow;
 
 const GATED: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\ngate_on_plan = true\n";
@@ -192,6 +193,27 @@ fn from_source_still_needs_the_generator_digests_that_verify_release_compares() 
 }
 
 #[test]
+fn from_source_on_a_macos_runner_needs_no_macos_generator_archive_digest() -> TestResult {
+    let config = format!("runner = 'macos-15'\nhosted = false\n\n{LINT}\n{FROM_SOURCE}");
+    let mut repo = locked(&config, FIRST)?;
+    let linux_only_generator: String = generator_sums()
+        .lines()
+        .filter(|line| !line.contains("velnor-gen-aarch64-apple-darwin"))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    let raw = velnor_rust::pin_lock(
+        FIRST,
+        COMMIT_FILE,
+        &linux_only_generator,
+        Some(GENERATOR_BINARY_SUMS),
+    )?;
+    repo.files.insert(LOCK_PATH, raw.into_bytes());
+    let text = format!("{:?}", workflow(&repo).err());
+    assert!(!text.contains("GeneratorLockLacksMacos"), "{text}");
+    Ok(())
+}
+
+#[test]
 fn from_source_wires_the_shared_mbx_store_before_the_tools_install() -> TestResult {
     let config = format!("mbx_shared_store = true\n{LINT}\n{FROM_SOURCE}");
     let job = job(&rendered(&config, FIRST)?)?;
@@ -234,13 +256,7 @@ fn from_source_keeps_the_date_of_a_host_qualified_nightly() -> TestResult {
 
 #[test]
 fn a_nested_generator_builds_into_its_detected_target_directory() -> TestResult {
-    let roots = [
-        ("Cargo.toml", "velnor-ci-app"),
-        ("tools/gen/Cargo.toml", "velnor-gen"),
-    ];
-    let repo =
-        crate::generated_check_source::packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-    let job = job(&workflow(&repo)?)?;
+    let job = crate::generated_check_source::nested_sample_job()?;
     let target = check_step(&job)["env"]["CARGO_TARGET_DIR"]
         .as_str()
         .unwrap_or_default()

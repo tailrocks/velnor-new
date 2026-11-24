@@ -94,3 +94,20 @@ fn a_list_that_matches_the_lock_and_foreign_owners_are_silent() -> TestResult {
     assert_eq!(mismatches(&view)?, Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn a_private_sources_table_silences_the_public_sources_suggestion_for_any_owner() -> TestResult {
+    let view = locked(
+        &[(
+            "serde",
+            "git+https://github.com/serde-rs/serde#0123456789abcdef0123456789abcdef01234567",
+        )],
+        &["shared-lib"],
+    )?;
+    let notes = expected_with_notes(&view)?.1;
+    assert!(
+        notes.iter().all(|note| !note.contains("[public_sources]")),
+        "{notes:?}"
+    );
+    Ok(())
+}
