@@ -33,7 +33,7 @@ pub enum ImageMbx {
 pub struct ImageBuild<'a> {
     pub image: &'a ImageConfig,
     pub root: &'a str,
-    pub package: Option<&'a str>,
+    pub packages: Vec<&'a str>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +79,9 @@ pub fn render_image(
         repository: workflow.repository,
         branch: workflow.branch,
     };
-    let mut jobs: Vec<RenderedJob> = Vec::new();
+    let mut jobs: Vec<RenderedJob> = vec![gate_job(workflow, &events)];
     for build in &workflow.images {
         jobs.push(build_job(workflow, build, &events));
-        jobs.push(gate_job(workflow, build, &events));
         jobs.push(publish_job(workflow, build, &events));
         jobs.push(authority_job(workflow, build, &events));
         jobs.push(promote_job(workflow, build));
@@ -201,10 +200,13 @@ fn pr_paths(builds: &[&ImageBuild<'_>]) -> Vec<String> {
     for build in builds {
         let image = build.image;
         paths.push(image.dockerfile.clone());
+        paths.push(format!("{}.dockerignore", image.dockerfile));
         if image.context != "." {
             paths.push(format!("{}/.dockerignore", image.context));
         }
-        paths.extend(image.inputs.iter().map(|input| format!("{input}/**")));
+        for input in &image.inputs {
+            paths.extend([input.clone(), format!("{input}/**")]);
+        }
         if image.openssl == velnor_model::ImageOpenssl::Sysroot {
             paths.push(IMAGE_SYSROOT_LOCK.to_owned());
         }

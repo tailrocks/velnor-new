@@ -7,16 +7,63 @@ use std::fmt;
 pub enum ImageError {
     Unhosted,
     WorkflowTaken,
-    UnknownRoot { image: String, root: String },
-    AmbiguousRoot { image: String },
-    UnknownBin { image: String, bin: String },
-    AmbiguousBin { image: String, bin: String },
-    BinNeedsFeatures { image: String, bin: String },
-    WrongPackage { image: String, bin: String },
-    OpensslRequired { image: String },
-    StageTracked { image: String, path: String },
-    ToolMissing { image: String, tool: &'static str },
-    GhcrNamespace { image: String, repository: String },
+    UnknownRoot {
+        image: String,
+        root: String,
+    },
+    AmbiguousRoot {
+        image: String,
+    },
+    UnknownBin {
+        image: String,
+        bin: String,
+    },
+    AmbiguousBin {
+        image: String,
+        bin: String,
+    },
+    BinNeedsFeatures {
+        image: String,
+        bin: String,
+    },
+    WrongPackage {
+        image: String,
+        bin: String,
+    },
+    OpensslRequired {
+        image: String,
+    },
+    StageTracked {
+        image: String,
+        path: String,
+    },
+    ToolMissing {
+        image: String,
+        tool: &'static str,
+    },
+    GhcrNamespace {
+        image: String,
+        repository: String,
+    },
+    RegistryShared {
+        first: String,
+        second: String,
+        reference: String,
+    },
+    TagFamilies {
+        first: String,
+        second: String,
+    },
+    BranchTag {
+        branch: String,
+    },
+    SysrootLockMissing {
+        image: String,
+    },
+    ProfileUndefined {
+        image: String,
+        profile: String,
+    },
 }
 
 impl fmt::Display for ImageError {
@@ -63,6 +110,30 @@ impl fmt::Display for ImageError {
             Self::ToolMissing { image, tool } => write!(
                 f,
                 "image {image}: mise.toml and mise.lock must pin `{tool}` for the zigbuild compile"
+            ),
+            Self::RegistryShared {
+                first,
+                second,
+                reference,
+            } => write!(
+                f,
+                "images {first} and {second} both push to {reference}; two images cannot share a registry repository, because their publish jobs would overwrite each other's tags"
+            ),
+            Self::TagFamilies { first, second } => write!(
+                f,
+                "image names {first} and {second} overlap: a tag {second}-v1.2.3 also starts with {first}-v; rename one so neither name plus -v is a prefix of the other"
+            ),
+            Self::BranchTag { branch } => write!(
+                f,
+                "the default branch `{branch}` cannot be an image tag (letters, digits, `.`, `_` and `-`, at most 128 characters, no leading `.` or `-`); rename the branch or set default_branch"
+            ),
+            Self::SysrootLockMissing { image } => write!(
+                f,
+                "image {image}: openssl = \"sysroot\" needs the tracked file .velnor/image-sysroot.lock"
+            ),
+            Self::ProfileUndefined { image, profile } => write!(
+                f,
+                "image {image}: the Cargo root defines no [profile.{profile}]"
             ),
             Self::GhcrNamespace { image, repository } => write!(
                 f,

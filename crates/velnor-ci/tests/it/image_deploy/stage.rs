@@ -183,3 +183,19 @@ fn a_binary_named_twice_is_refused_before_anything_is_staged() {
     assert!(message.contains("--bin svc is given twice"), "{message}");
     assert!(!root.join("dist").exists());
 }
+
+#[test]
+fn a_dependency_recorded_as_a_build_machine_path_is_refused() {
+    let root = fresh_dir("deploy", "stage-absolute");
+    built(
+        &root,
+        "svc",
+        &Elf::dynamic_x86_64().needing("/tmp/build/libfoo.so"),
+    );
+    let message = refusal(&args(&root, "2.41", OpensslMode::None, &["svc"]));
+    assert!(
+        message.contains("it needs /tmp/build/libfoo.so, a path on the build machine"),
+        "{message}"
+    );
+    assert!(!root.join("dist").exists());
+}

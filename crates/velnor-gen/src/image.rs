@@ -33,18 +33,21 @@ pub(crate) fn image_workflow(
     let owner = repository
         .split_once('/')
         .map(|(owner, _)| owner.to_ascii_lowercase());
+    check_all(images, &facts.config.default_branch)?;
     let mut builds = Vec::new();
     for image in images {
         check_registries(image, owner.as_deref())?;
         check_tools(facts, image)?;
         check_stage(view, image)?;
         let root = root_of(facts, image)?;
-        let package = package_of(image, root)?;
+        let packages = packages_of(image, root)?;
         check_openssl(view, image, root)?;
+        check_sysroot(view, image)?;
+        check_profile(view, image, root)?;
         builds.push(ImageBuild {
             image,
             root: root_directory(root),
-            package,
+            packages,
         });
     }
     let workflow = ImageWorkflow {
@@ -57,6 +60,47 @@ pub(crate) fn image_workflow(
         mbx: mbx_of(facts),
     };
     render_image(&workflow).map_err(GenerateError::Rules)
+}
+
+fn check_all(images: &[ImageConfig], branch: &str) -> Result<(), ImageError> {
+    let tag = !branch.is_empty()
+        && branch.len() <= 128
+        && !branch.starts_with(['.', '-'])
+        && branch
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+    if !tag {
+        return Err(ImageError::BranchTag {
+            branch: branch.to_owned(),
+        });
+    }
+    for (index, image) in images.iter().enumerate() {
+        for other in &images[index + 1..] {
+            for (first, second) in [(image, other), (other, image)] {
+                if second.name.starts_with(&format!("{}-v", first.name)) {
+                    return Err(ImageError::TagFamilies {
+                        first: first.name.clone(),
+                        second: second.name.clone(),
+                    });
+                }
+            }
+            for registry in &image.registries {
+                let reference = registry.reference();
+                if other
+                    .registries
+                    .iter()
+                    .any(|candidate| candidate.reference() == reference)
+                {
+                    return Err(ImageError::RegistryShared {
+                        first: image.name.clone(),
+                        second: other.name.clone(),
+                        reference,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn mbx_of(facts: &RepoFacts) -> ImageMbx {
@@ -92,7 +136,20 @@ fn check_registries(image: &ImageConfig, owner: Option<&str>) -> Result<(), Imag
 fn check_tools(facts: &RepoFacts, image: &ImageConfig) -> Result<(), ImageError> {
     for tool in ["zig", "cargo-zigbuild"] {
         let named = |key: &String| key.rsplit(['/', ':']).next() == Some(tool);
-        if !facts.tools.tools.keys().any(named) {
+        let applies = |pin: &velnor_model::ToolPin| {
+            pin.requested.iter().any(|request| {
+                request
+                    .os
+                    .as_ref()
+                    .is_none_or(|systems| systems.iter().any(|system| system.starts_with("linux")))
+            })
+        };
+        if !facts
+            .tools
+            .tools
+            .iter()
+            .any(|(key, pin)| named(key) && applies(pin))
+        {
             return Err(ImageError::ToolMissing {
                 image: image.name.clone(),
                 tool,
@@ -149,7 +206,7 @@ fn root_of<'a>(facts: &'a RepoFacts, image: &ImageConfig) -> Result<&'a RustRoot
     }
 }
 
-fn package_of<'a>(image: &ImageConfig, root: &'a RustRoot) -> Result<Option<&'a str>, ImageError> {
+fn packages_of<'a>(image: &ImageConfig, root: &'a RustRoot) -> Result<Vec<&'a str>, ImageError> {
     let mut owners: Vec<&RustMember> = Vec::new();
     for bin in &image.bins {
         let found: Vec<&RustMember> = root
@@ -201,10 +258,37 @@ fn package_of<'a>(image: &ImageConfig, root: &'a RustRoot) -> Result<Option<&'a 
             owners.push(member);
         }
     }
-    Ok(match owners.as_slice() {
-        [only] => Some(only.name.as_str()),
-        _ => None,
-    })
+    Ok(owners.iter().map(|owner| owner.name.as_str()).collect())
+}
+
+fn check_profile(view: &RepoView, image: &ImageConfig, root: &RustRoot) -> Result<(), ImageError> {
+    if matches!(image.profile.as_str(), "release" | "dev") {
+        return Ok(());
+    }
+    let header = format!("[profile.{}]", image.profile);
+    let defined = view.files.get(&root.manifest).is_some_and(|bytes| {
+        std::str::from_utf8(bytes).is_ok_and(|text| text.lines().any(|line| line.trim() == header))
+    });
+    if defined {
+        Ok(())
+    } else {
+        Err(ImageError::ProfileUndefined {
+            image: image.name.clone(),
+            profile: image.profile.clone(),
+        })
+    }
+}
+
+fn check_sysroot(view: &RepoView, image: &ImageConfig) -> Result<(), ImageError> {
+    let lock = RepoPath::new(".velnor/image-sysroot.lock").ok();
+    let present = lock
+        .is_some_and(|path| view.files.contains_key(&path) || view.tracked_paths.contains(&path));
+    if image.openssl == ImageOpenssl::Sysroot && !present {
+        return Err(ImageError::SysrootLockMissing {
+            image: image.name.clone(),
+        });
+    }
+    Ok(())
 }
 
 fn check_openssl(view: &RepoView, image: &ImageConfig, root: &RustRoot) -> Result<(), ImageError> {

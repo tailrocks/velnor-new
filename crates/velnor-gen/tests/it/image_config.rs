@@ -259,3 +259,100 @@ fn an_image_needs_a_pin_that_reads_the_key_and_an_external_entry_cannot_name_its
     ));
     Ok(())
 }
+
+fn plain_with(
+    change: impl FnOnce(String) -> String,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    edited("image-plain", change)
+}
+
+#[test]
+fn two_images_cannot_share_a_registry_repository_or_a_release_tag_family() -> TestResult {
+    let second = |name: &str, repository: &str| {
+        format!(
+            "\n[[image]]\nname = \"{name}\"\nbins = [\"plain-svc\"]\n\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"{repository}\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
+        )
+    };
+    let shared = plain_with(|text| format!("{text}{}", second("other-svc", "acme/plain-svc")))?;
+    assert!(matches!(
+        expected_files(&shared),
+        Err(GenerateError::Image(ImageError::RegistryShared { .. }))
+    ));
+    let overlapping = plain_with(|text| format!("{text}{}", second("plain-svc-v2", "acme/other")))?;
+    assert!(matches!(
+        expected_files(&overlapping),
+        Err(GenerateError::Image(ImageError::TagFamilies { .. }))
+    ));
+    let distinct = plain_with(|text| format!("{text}{}", second("other-svc", "acme/other")))?;
+    assert!(expected_files(&distinct).is_ok());
+    Ok(())
+}
+
+#[test]
+fn a_default_branch_that_is_not_an_image_tag_is_refused() -> TestResult {
+    let view = plain_with(|text| {
+        text.replace(
+            "default_branch = \"main\"",
+            "default_branch = \"release/stable\"",
+        )
+    })?;
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::BranchTag { .. }))
+    ));
+    Ok(())
+}
+
+#[test]
+fn the_sysroot_lock_and_a_custom_profile_must_exist() -> TestResult {
+    let mut view = sample("image-workspace")?;
+    let lock = RepoPath::new(".velnor/image-sysroot.lock")?;
+    view.files.remove(&lock);
+    view.tracked_paths.remove(&lock);
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::SysrootLockMissing { .. }))
+    ));
+    let view = plain_with(|text| {
+        text.replace(
+            "pr_build = \"always\"",
+            "pr_build = \"always\"\nprofile = \"fast\"",
+        )
+    })?;
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::ProfileUndefined { .. }))
+    ));
+    let mut view = view;
+    let manifest = RepoPath::new("Cargo.toml")?;
+    let text = String::from_utf8(view.files.remove(&manifest).ok_or("no manifest")?)?;
+    view.files.insert(
+        manifest,
+        format!("{text}\n[profile.fast]\ninherits = \"release\"\n").into_bytes(),
+    );
+    assert!(expected_files(&view).is_ok());
+    Ok(())
+}
+
+#[test]
+fn a_tool_pinned_only_for_another_operating_system_does_not_count() -> TestResult {
+    let mut view = sample("image-plain")?;
+    let path = RepoPath::new("mise.toml")?;
+    let text = String::from_utf8(view.files.remove(&path).ok_or("no mise.toml")?)?;
+    view.files.insert(
+        path,
+        text.replace(
+            "zig = \"0.17.1\"",
+            "zig = { version = \"0.17.1\", os = [\"macos\"] }",
+        )
+        .into_bytes(),
+    );
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::ToolMissing {
+            tool: "zig",
+            ..
+        }))
+    ));
+    Ok(())
+}

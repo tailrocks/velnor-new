@@ -8,7 +8,7 @@ use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, stage
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
 use crate::release_binaries::{command, download_to};
-use crate::release_steps::{expression, permissions, variables};
+use crate::release_steps::{expression, permissions, shell_word, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
 const GATE_WAIT_SECONDS: u32 = 2400;
@@ -57,14 +57,11 @@ fn gate_step(wait: u32, tip: bool) -> RenderedStep {
     }
 }
 
-pub(crate) fn gate_job(
-    workflow: &ImageWorkflow<'_>,
-    build: &ImageBuild<'_>,
-    events: &Events<'_>,
-) -> RenderedJob {
-    let image = build.image;
+pub(crate) const GATE_JOB: &str = "image-gate";
+
+pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> RenderedJob {
     RenderedJob {
-        id: job_id(image, "gate"),
+        id: GATE_JOB.to_owned(),
         condition: Some(expression(&events.branch_push())),
         permissions: gate_scopes(),
         outputs: vec![(
@@ -83,6 +80,7 @@ pub(crate) fn gate_job(
 
 fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
     let mut paths = vec![format!("/{}", image.dockerfile)];
+    paths.push(format!("/{}.dockerignore", image.dockerfile));
     paths.push(if image.context == "." {
         "/.dockerignore".to_owned()
     } else {
@@ -103,6 +101,15 @@ fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
         ],
     );
     step
+}
+
+fn executables(image: &ImageConfig) -> String {
+    image
+        .bins
+        .iter()
+        .map(|bin| shell_word(&format!("{}/{bin}", staged(image))))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn private_hub(image: &ImageConfig) -> Option<&ImageRegistry> {
@@ -232,7 +239,7 @@ pub(crate) fn publish_job(
 ) -> RenderedJob {
     let image = build.image;
     let hub = private_hub(image);
-    let fresh = hub.map(|_| {
+    let fresh = hub.filter(|_| image.registries.len() == 1).map(|_| {
         expression(&format!(
             "steps.{PREFLIGHT_STEP}.outputs.sha_exists != 'true'"
         ))
@@ -247,6 +254,10 @@ pub(crate) fn publish_job(
         download_to(artifact(image), &staged(image)),
     ];
     steps.extend(hub.map(preflight));
+    steps.push(command(
+        "Restore the executable bits of the staged binaries".to_owned(),
+        format!("chmod 0755 {}", executables(image)),
+    ));
     steps.push(on_fresh(setup_buildx()));
     steps.extend(
         image
@@ -260,10 +271,9 @@ pub(crate) fn publish_job(
     }
     RenderedJob {
         id: job_id(image, "publish"),
-        needs: vec![job_id(image, "build"), job_id(image, "gate")],
+        needs: vec![job_id(image, "build"), GATE_JOB.to_owned()],
         condition: Some(expression(&format!(
-            "needs.{}.outputs.ready == 'true' && {}",
-            job_id(image, "gate"),
+            "needs.{GATE_JOB}.outputs.ready == 'true' && {}",
             events.branch_push()
         ))),
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),

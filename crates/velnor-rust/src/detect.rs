@@ -37,6 +37,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
+        RepoPath::from_static(".velnor/image-sysroot.lock"),
         MISE_LOCK,
         TOOLCHAIN_PLAIN,
         TOOLCHAIN_TOML,

@@ -63,6 +63,12 @@ pub fn wait_for_required(
         }
         match release_gate(github, repo, sha, &[], run_id) {
             Ok(verdict) if verdict.ready => {
+                if require_tip && let Some(report) = superseded(github, repo, sha)? {
+                    return Ok(Outcome {
+                        ready: false,
+                        report,
+                    });
+                }
                 return Ok(Outcome {
                     ready: true,
                     report: verdict.report,

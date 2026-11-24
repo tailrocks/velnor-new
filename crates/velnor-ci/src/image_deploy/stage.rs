@@ -64,6 +64,11 @@ fn problems(facts: &ElfFacts, ceiling: Glibc, openssl: Openssl) -> Vec<String> {
             ));
         }
     }
+    for library in facts.needed.iter().filter(|library| library.contains('/')) {
+        problems.push(format!(
+            "it needs {library}, a path on the build machine, so the loader looks for that exact path in the image"
+        ));
+    }
     for library in facts.needed.iter().filter(|library| is_openssl(library)) {
         match openssl {
             Openssl::Sysroot if OPENSSL_SONAMES.contains(&library.as_str()) => {}

@@ -134,7 +134,7 @@ fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep
         if offline { " --offline" } else { "" },
         image.glibc
     );
-    if let Some(package) = build.package {
+    for package in &build.packages {
         let _ = write!(run, " --package {}", shell_word(package));
     }
     for bin in &image.bins {

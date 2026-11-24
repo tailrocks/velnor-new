@@ -149,3 +149,46 @@ fn a_commit_that_stopped_being_the_tip_is_superseded_and_never_waits() {
     let without = wait(&behind, &behind, 2400, false, 99);
     assert!(without.outcome.is_ok_and(|outcome| outcome.ready));
 }
+
+struct Moving<'a> {
+    live: &'a Live,
+    later: &'a BTreeMap<String, Value>,
+    reads: &'a Cell<u32>,
+}
+impl GitHub for Moving<'_> {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        if path == branch_path(&repo(), "main") {
+            self.reads.set(self.reads.get() + 1);
+            if self.reads.get() >= 2 {
+                return Ok(self.later[path].to_string());
+            }
+        }
+        self.live.get(path)
+    }
+}
+
+#[test]
+fn a_commit_superseded_while_the_gate_was_reading_is_not_published() {
+    let green = at_tip(Recorded::new(), GREEN);
+    let behind = at_tip(Recorded::new(), AHEAD);
+    let live = Live(RefCell::new(green.0.clone()));
+    let reads = Cell::new(0);
+    let github = Moving {
+        live: &live,
+        later: &behind.0,
+        reads: &reads,
+    };
+    let outcome = wait_for_required(
+        &github,
+        &repo(),
+        GREEN,
+        true,
+        Wait {
+            total: Duration::from_secs(60),
+            interval: Duration::from_secs(30),
+        },
+        &|_| {},
+        None,
+    );
+    assert!(outcome.is_ok_and(|outcome| !outcome.ready));
+}
