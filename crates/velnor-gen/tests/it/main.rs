@@ -222,6 +222,7 @@ mod public_sources;
 mod public_verdicts;
 mod purge_private_step;
 mod qualification;
+mod release_app_key;
 mod release_assets;
 mod release_assets_setup_action;
 mod release_branch_prefix;

@@ -119,7 +119,7 @@ pub enum Command {
     )]
     PrivateTokenAllowed,
     #[command(
-        about = "Create a GitHub App installation token that can only read the contents of the --repository repositories of --owner, and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. Runs no post step: the step that uses the token revokes it"
+        about = "Create a GitHub App installation token for the --repository repositories of --owner with only the --permission permissions (contents:read when none is named), and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. A permission that is not <name>:read or <name>:write, or a name given twice, makes no request. Runs no post step: a later step of the job revokes the token"
     )]
     AppToken(AppTokenArgs),
     #[command(

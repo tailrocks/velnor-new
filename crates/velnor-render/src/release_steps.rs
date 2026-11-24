@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::RELEASE_PLZ_FILE;
+use velnor_model::{HelperRelease, RELEASE_PLZ_FILE};
 use velnor_release::{ReleasePlan, RootPlan};
 
-use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::rules::{APP_TOKEN_ACTION, RenderedJob, RenderedStep, Value};
 use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
 pub(crate) const RECORD_RECOVERY_HELPER: (u64, u64, u64) = (0, 1, 93);
 pub(crate) const RECORD_GROUPS_HELPER: (u64, u64, u64) = (0, 1, 97);
+const RELEASE_APP_HELPER_MINT: (u64, u64, u64) = (0, 1, 114);
+const APP_STEP: &str = "app";
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 pub(crate) const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 pub(crate) const APP_TOKEN_VERSION: &str = "v3.3.0";
@@ -120,7 +122,35 @@ const NO_PROGRAM_VARIABLES: &[(&str, &str)] = &[
     ("RUSTC", "rustc"),
 ];
 
-pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
+pub(crate) fn app_token(helper: &HelperRelease, scopes: &[(&str, &str)]) -> RenderedStep {
+    let step = RenderedStep {
+        id: Some(APP_STEP.to_owned()),
+        name: "Create the release App token".to_owned(),
+        ..RenderedStep::default()
+    };
+    if helper.version().at_least(RELEASE_APP_HELPER_MINT) {
+        let permissions: Vec<String> = scopes
+            .iter()
+            .map(|(scope, access)| format!("--permission={}:{access}", scope.replace('-', "_")))
+            .collect();
+        return RenderedStep {
+            env: variables(&[
+                ("VELNOR_APP_CLIENT_ID", "${{ secrets.RELEASE_APP_ID }}"),
+                (
+                    "VELNOR_APP_PRIVATE_KEY",
+                    "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+                ),
+                ("VELNOR_API_URL", "${{ github.api_url }}"),
+                ("OWNER", "${{ github.repository_owner }}"),
+                ("REPOSITORY", "${{ github.event.repository.name }}"),
+            ]),
+            run: Some(format!(
+                "velnor-ci app-token --owner=\"$OWNER\" --repository=\"$REPOSITORY\" {}",
+                permissions.join(" ")
+            )),
+            ..step
+        };
+    }
     let mut with = variables(&[
         ("client-id", "${{ secrets.RELEASE_APP_ID }}"),
         ("private-key", "${{ secrets.RELEASE_APP_PRIVATE_KEY }}"),
@@ -134,13 +164,29 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
         )
     }));
     RenderedStep {
-        id: Some("app".to_owned()),
-        name: "Create the release App token".to_owned(),
         uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
         uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
         with,
-        ..RenderedStep::default()
+        ..step
     }
+}
+
+pub(crate) fn revoke_app_token(mut job: RenderedJob) -> RenderedJob {
+    if job
+        .steps
+        .iter()
+        .any(|step| step.id.as_deref() == Some(APP_STEP) && step.uses.is_none())
+    {
+        job.steps.push(RenderedStep {
+            name: "Revoke the release App token".to_owned(),
+            condition: Some(expression("always() && steps.app.outputs.token != ''")),
+            continue_on_error: true,
+            env: variables(&[("GH_TOKEN", APP_TOKEN_OUTPUT)]),
+            run: Some("gh api --method DELETE installation/token".to_owned()),
+            ..RenderedStep::default()
+        });
+    }
+    job
 }
 
 pub(crate) fn refuse_commands(roots: &[RootPlan], tag_job: bool) -> RenderedStep {

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use velnor_ci::app_token::mint;
+use velnor_ci::app_token::{Permission, mint};
 use velnor_ci::error::CiError;
 use velnor_ci::github::GitHub;
 use velnor_ci::release_family::GitHubPost;
@@ -66,8 +66,10 @@ fn rejected() -> Answer {
 
 fn run(app: &Scripted) -> (Result<String, CiError>, Vec<Duration>) {
     let pauses = RefCell::new(Vec::new());
-    let minted = mint(app, "acme", &["shared-lib".to_owned()], &|d| {
-        pauses.borrow_mut().push(d);
+    let minted = "contents:read".parse().and_then(|read: Permission| {
+        mint(app, "acme", &["shared-lib".to_owned()], &[read], &|d| {
+            pauses.borrow_mut().push(d);
+        })
     });
     (minted.map(|token| token.to_string()), pauses.into_inner())
 }

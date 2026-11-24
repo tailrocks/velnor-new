@@ -93,6 +93,7 @@ fn serve(installation: (u16, &str), minted: (u16, &str)) -> Result<Api, Box<dyn 
 }
 
 mod names;
+mod permissions;
 mod retries;
 
 const PKCS1: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem");
@@ -140,18 +141,22 @@ fn mint(key: &str, api: &Api, output: &Path, repositories: &[&str]) -> Output {
 }
 
 fn mint_as(client_id: &str, key: &str, api: &Api, output: &Path, repositories: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command
+    let arguments: Vec<String> = repositories
+        .iter()
+        .map(|repository| format!("--repository={repository}"))
+        .collect();
+    app_token(client_id, key, api, output, &arguments)
+}
+
+fn app_token(client_id: &str, key: &str, api: &Api, output: &Path, arguments: &[String]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_clear()
         .args(["app-token", "--owner=acme"])
+        .args(arguments)
         .env("VELNOR_APP_CLIENT_ID", client_id)
         .env("VELNOR_APP_PRIVATE_KEY", key)
         .env("VELNOR_API_URL", &api.url)
-        .env("GITHUB_OUTPUT", output);
-    for repository in repositories {
-        command.arg(format!("--repository={repository}"));
-    }
-    command
+        .env("GITHUB_OUTPUT", output)
         .output()
         .unwrap_or_else(|e| unreachable!("velnor-ci: {e}"))
 }
