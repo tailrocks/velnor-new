@@ -79,6 +79,18 @@ pub struct ImageGateArgs {
         help = "Write ready=false and exit 0 when the commit stops being the tip of the default branch"
     )]
     pub require_tip: bool,
+    #[arg(
+        long,
+        conflicts_with = "require_tip",
+        help = "Only check that the commit is still the tip of the default branch: write ready=true or ready=false and exit 0, without reading any check"
+    )]
+    pub tip_only: bool,
+    #[arg(
+        allow_hyphen_values = true,
+        long = "pr-only-check",
+        help = "A required check that runs only on pull requests; repeat for each"
+    )]
+    pub pr_only_checks: Vec<String>,
 }
 
 #[derive(Debug, Args)]

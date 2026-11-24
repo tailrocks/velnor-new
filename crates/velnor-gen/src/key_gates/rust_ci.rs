@@ -108,6 +108,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate_untagged(RustCi, "image.openssl", IMAGE_HELPER),
     gate_untagged(RustCi, "image.package", IMAGE_HELPER),
     gate_untagged(RustCi, "image.pr_build", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.pr_only_checks", IMAGE_HELPER),
     gate_untagged(RustCi, "image.profile", IMAGE_HELPER),
     gate_untagged(RustCi, "image.registry", IMAGE_HELPER),
     gate_untagged(RustCi, "image.registry.host", IMAGE_HELPER),

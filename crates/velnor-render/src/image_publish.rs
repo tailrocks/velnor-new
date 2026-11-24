@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{ImageConfig, ImageHost, ImageRegistry, ImageVisibility};
+use std::fmt::Write;
+
+use velnor_model::{ImageConfig, ImageCredential, ImageHost, ImageRegistry, ImageVisibility};
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, staged};
@@ -14,21 +16,24 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 const GATE_WAIT_SECONDS: u32 = 2400;
 const GATE_TIMEOUT_MINUTES: u16 = 50;
 const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
-const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
-const VERSION_STEP: &str = "version";
+const TIP_STEP: &str = "tip";
 const GATE_STEP: &str = "gate";
 
-fn gate_scopes() -> Vec<(String, String)> {
-    permissions(&[
+pub(crate) fn gate_scopes(pr_only: &[String]) -> Vec<(String, String)> {
+    let mut scopes = vec![
         ("actions", "read"),
         ("contents", "read"),
         ("statuses", "read"),
-    ])
+    ];
+    if !pr_only.is_empty() {
+        scopes.insert(1, ("checks", "read"));
+    }
+    permissions(&scopes)
 }
 
-fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
+pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     let mut scopes = vec![("contents", "read")];
     if image
         .registries
@@ -40,8 +45,15 @@ fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     permissions(&scopes)
 }
 
-fn gate_step(wait: u32, tip: bool) -> RenderedStep {
-    let tip = if tip { " --require-tip" } else { "" };
+pub(crate) fn gate_step(wait: u32, tip: bool, pr_only: &[String]) -> RenderedStep {
+    let mut flags = if tip {
+        " --require-tip".to_owned()
+    } else {
+        String::new()
+    };
+    for name in pr_only {
+        let _ = write!(flags, " --pr-only-check={}", shell_word(name));
+    }
     RenderedStep {
         id: Some(GATE_STEP.to_owned()),
         name: "Wait for every required check of the commit".to_owned(),
@@ -51,7 +63,7 @@ fn gate_step(wait: u32, tip: bool) -> RenderedStep {
             ("COMMIT", "${{ github.sha }}"),
         ]),
         run: Some(format!(
-            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --wait-seconds={wait}{tip}"
+            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --wait-seconds={wait}{flags}"
         )),
         ..RenderedStep::default()
     }
@@ -63,7 +75,7 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
     RenderedJob {
         id: GATE_JOB.to_owned(),
         condition: Some(expression(&events.branch_push())),
-        permissions: gate_scopes(),
+        permissions: gate_scopes(&workflow.pr_only_checks()),
         outputs: vec![(
             "ready".to_owned(),
             format!("${{{{ steps.{GATE_STEP}.outputs.ready }}}}"),
@@ -72,13 +84,13 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),
-            gate_step(GATE_WAIT_SECONDS, true),
+            gate_step(GATE_WAIT_SECONDS, true, &workflow.pr_only_checks()),
         ],
         ..RenderedJob::default()
     }
 }
 
-fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
+pub(crate) fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
     let mut paths = vec![format!("/{}", image.dockerfile)];
     paths.push(format!("/{}.dockerignore", image.dockerfile));
     paths.push(if image.context == "." {
@@ -103,6 +115,13 @@ fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
     step
 }
 
+pub(crate) fn restore_modes(image: &ImageConfig) -> RenderedStep {
+    command(
+        "Restore the executable bits of the staged binaries".to_owned(),
+        format!("chmod 0755 {}", executables(image)),
+    )
+}
+
 fn executables(image: &ImageConfig) -> String {
     image
         .bins
@@ -112,16 +131,33 @@ fn executables(image: &ImageConfig) -> String {
         .join(" ")
 }
 
-fn private_hub(image: &ImageConfig) -> Option<&ImageRegistry> {
-    image.registries.iter().find(|registry| {
-        registry.host == ImageHost::DockerHub && registry.visibility == ImageVisibility::Private
+struct Hub<'a> {
+    registry: &'a ImageRegistry,
+    username: &'a ImageCredential,
+    token: &'a ImageCredential,
+}
+
+fn private_hub(image: &ImageConfig) -> Option<Hub<'_>> {
+    image.registries.iter().find_map(|registry| {
+        let private = registry.host == ImageHost::DockerHub
+            && registry.visibility == ImageVisibility::Private;
+        match (&registry.username, &registry.token) {
+            (Some(username), Some(token)) if private => Some(Hub {
+                registry,
+                username,
+                token,
+            }),
+            _ => None,
+        }
     })
 }
 
-fn preflight(registry: &ImageRegistry) -> RenderedStep {
-    let (Some(username), Some(token)) = (&registry.username, &registry.token) else {
-        return RenderedStep::default();
-    };
+fn preflight(hub: &Hub<'_>) -> RenderedStep {
+    let Hub {
+        registry,
+        username,
+        token,
+    } = hub;
     RenderedStep {
         id: Some(PREFLIGHT_STEP.to_owned()),
         name: "Refuse to push to a Docker Hub repository that is missing or public".to_owned(),
@@ -147,7 +183,7 @@ fn preflight(registry: &ImageRegistry) -> RenderedStep {
     }
 }
 
-fn login(registry: &ImageRegistry) -> RenderedStep {
+pub(crate) fn login(registry: &ImageRegistry) -> RenderedStep {
     let name = format!("Log in to {}", registry.host.name());
     let step = DOCKER_LOGIN.step(name);
     let with = match (&registry.username, &registry.token) {
@@ -178,7 +214,9 @@ fn tags(image: &ImageConfig, branch: &str) -> Value {
             let reference = registry.reference();
             [
                 format!("{reference}:sha-${{{{ github.sha }}}}"),
-                format!("{reference}:{branch}"),
+                format!(
+                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && '{reference}:{branch}' || '' }}}}"
+                ),
             ]
         })
         .collect();
@@ -213,6 +251,21 @@ fn push(image: &ImageConfig, branch: &str) -> RenderedStep {
     }
 }
 
+fn tip() -> RenderedStep {
+    RenderedStep {
+        id: Some(TIP_STEP.to_owned()),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", "${{ github.sha }}"),
+        ]),
+        ..command(
+            "Check that the commit is still the tip of the default branch".to_owned(),
+            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --tip-only".to_owned(),
+        )
+    }
+}
+
 fn report(registry: &ImageRegistry, fresh: Option<&str>) -> Vec<RenderedStep> {
     let reference = format!("{}:sha-${{{{ github.sha }}}}", registry.reference());
     let host = registry.host.name();
@@ -239,11 +292,14 @@ pub(crate) fn publish_job(
 ) -> RenderedJob {
     let image = build.image;
     let hub = private_hub(image);
-    let fresh = hub.filter(|_| image.registries.len() == 1).map(|_| {
-        expression(&format!(
-            "steps.{PREFLIGHT_STEP}.outputs.sha_exists != 'true'"
-        ))
-    });
+    let fresh = hub
+        .as_ref()
+        .filter(|_| image.registries.len() == 1)
+        .map(|_| {
+            expression(&format!(
+                "steps.{PREFLIGHT_STEP}.outputs.sha_exists != 'true'"
+            ))
+        });
     let on_fresh = |mut step: RenderedStep| {
         step.condition.clone_from(&fresh);
         step
@@ -253,11 +309,8 @@ pub(crate) fn publish_job(
         install_helper(workflow.helper),
         download_to(artifact(image), &staged(image)),
     ];
-    steps.extend(hub.map(preflight));
-    steps.push(command(
-        "Restore the executable bits of the staged binaries".to_owned(),
-        format!("chmod 0755 {}", executables(image)),
-    ));
+    steps.extend(hub.as_ref().map(preflight));
+    steps.push(restore_modes(image));
     steps.push(on_fresh(setup_buildx()));
     steps.extend(
         image
@@ -265,6 +318,7 @@ pub(crate) fn publish_job(
             .iter()
             .map(|registry| on_fresh(login(registry))),
     );
+    steps.push(on_fresh(tip()));
     steps.push(on_fresh(push(image, workflow.branch)));
     for registry in &image.registries {
         steps.extend(report(registry, fresh.as_deref()));
@@ -280,87 +334,6 @@ pub(crate) fn publish_job(
         permissions: registry_scopes(image),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
-        steps,
-        ..RenderedJob::default()
-    }
-}
-
-pub(crate) fn authority_job(
-    workflow: &ImageWorkflow<'_>,
-    build: &ImageBuild<'_>,
-    events: &Events<'_>,
-) -> RenderedJob {
-    let image = build.image;
-    let strict = format!("^{}-v[0-9]+[.][0-9]+[.][0-9]+$", image.name);
-    let strip = format!("version=${{REF_NAME#{}-v}}", image.name);
-    let ref_name = || variables(&[("REF_NAME", "${{ github.ref_name }}")]);
-    RenderedJob {
-        id: job_id(image, "authority"),
-        condition: Some(expression(&events.tag_push(image))),
-        permissions: gate_scopes(),
-        outputs: vec![(
-            "version".to_owned(),
-            format!("${{{{ steps.{VERSION_STEP}.outputs.version }}}}"),
-        )],
-        runs_on: workflow.runner.to_string(),
-        timeout_minutes: PROMOTE_TIMEOUT_MINUTES,
-        steps: vec![
-            install_helper(workflow.helper),
-            RenderedStep {
-                env: ref_name(),
-                ..command(
-                    "Check that the tag names a strict version".to_owned(),
-                    format!("[[ \"$REF_NAME\" =~ {strict} ]]"),
-                )
-            },
-            gate_step(0, false),
-            RenderedStep {
-                id: Some(VERSION_STEP.to_owned()),
-                env: ref_name(),
-                ..command(
-                    "Read the version from the tag".to_owned(),
-                    format!("echo \"{strip}\" >> \"$GITHUB_OUTPUT\""),
-                )
-            },
-        ],
-        ..RenderedJob::default()
-    }
-}
-
-pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
-    let image = build.image;
-    let mut steps = vec![setup_buildx()];
-    steps.extend(image.registries.iter().map(login));
-    for registry in &image.registries {
-        steps.push(RenderedStep {
-            env: vec![
-                ("IMAGE".to_owned(), Value::Text(registry.reference())),
-                (
-                    "VERSION".to_owned(),
-                    Value::Expr(format!(
-                        "${{{{ needs.{}.outputs.version }}}}",
-                        job_id(image, "authority")
-                    )),
-                ),
-                (
-                    "COMMIT".to_owned(),
-                    Value::Expr("${{ github.sha }}".to_owned()),
-                ),
-            ],
-            ..command(
-                format!("Promote the pushed digest in {}", registry.host.name()),
-                "docker buildx imagetools create --tag \"$IMAGE:$VERSION\" \"$IMAGE:sha-$COMMIT\""
-                    .to_owned(),
-            )
-        });
-    }
-    RenderedJob {
-        id: job_id(image, "promote"),
-        needs: vec![job_id(image, "authority")],
-        environment: Some(IMAGE_ENVIRONMENT.to_owned()),
-        permissions: registry_scopes(image),
-        runs_on: workflow.runner.to_string(),
-        timeout_minutes: PROMOTE_TIMEOUT_MINUTES,
         steps,
         ..RenderedJob::default()
     }

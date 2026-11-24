@@ -12,6 +12,7 @@ use crate::error::Reason;
 
 const MAX_IMAGES: usize = 4;
 const MAX_BINS: usize = 8;
+const MAX_PR_ONLY: usize = 8;
 const MAX_REPOSITORY_BYTES: usize = 255;
 const DEFAULT_TIMEOUT: u16 = 45;
 
@@ -35,6 +36,8 @@ pub(crate) struct RawImage {
     openssl: Option<String>,
     pr_build: Option<String>,
     attestations: Option<bool>,
+    #[serde(default)]
+    pr_only_checks: Vec<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     registry: Vec<RawRegistry>,
@@ -105,6 +108,7 @@ fn image(raw: RawImage) -> Result<ImageConfig, Reason> {
         openssl: openssl(raw.openssl.as_deref())?,
         pr_build: pr_build(raw.pr_build.as_deref())?,
         attestations: raw.attestations.unwrap_or(true),
+        pr_only_checks: pr_only_checks(&raw.pr_only_checks)?,
         timeout_minutes: timeout(raw.timeout_minutes)?,
         registries: registries(raw.registry)?,
         name: raw.name,
@@ -112,6 +116,24 @@ fn image(raw: RawImage) -> Result<ImageConfig, Reason> {
         stage,
         inputs,
     })
+}
+
+fn pr_only_checks(raw: &[String]) -> Result<Vec<String>, Reason> {
+    if raw.len() > MAX_PR_ONLY {
+        return Err(invalid("image.pr_only_checks", "more than 8 entries"));
+    }
+    let mut checks: Vec<String> = Vec::new();
+    for check in raw {
+        let plain = !check.trim().is_empty()
+            && check.len() <= 100
+            && check.trim() == check
+            && !check.chars().any(char::is_control);
+        if !plain || checks.contains(check) {
+            return Err(invalid("image.pr_only_checks", check));
+        }
+        checks.push(check.clone());
+    }
+    Ok(checks)
 }
 
 fn name(text: &str) -> bool {

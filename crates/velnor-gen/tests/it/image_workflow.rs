@@ -208,7 +208,9 @@ fn the_pushed_image_carries_the_commit_tags_the_source_labels_and_the_declared_a
         let tags = with["tags"].as_str().ok_or("no tags")?;
         for line in tags.lines() {
             assert!(
-                line.ends_with(":sha-${{ github.sha }}") || line.ends_with(":main"),
+                line.ends_with(":sha-${{ github.sha }}")
+                    || (line.starts_with("${{ steps.tip.outputs.ready == 'true' && '")
+                        && line.ends_with(":main' || '' }}")),
                 "{line}"
             );
         }

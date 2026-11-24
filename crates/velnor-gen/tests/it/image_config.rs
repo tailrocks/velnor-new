@@ -77,6 +77,12 @@ fn each_refused_value_names_its_key() -> TestResult {
         ("features = [\"a,b\"]", "image.features"),
         ("package = \"a b\"", "image.package"),
         ("timeout_minutes = 0", "image.timeout_minutes"),
+        ("pr_only_checks = [\"\"]", "image.pr_only_checks"),
+        ("pr_only_checks = [\" DCO\"]", "image.pr_only_checks"),
+        (
+            "pr_only_checks = [\"DCO\", \"DCO\"]",
+            "image.pr_only_checks",
+        ),
     ];
     for (line, key) in cases {
         let overridden: Vec<&str> = line

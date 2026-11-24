@@ -160,6 +160,8 @@ pub struct ApiPage<T> {
 #[derive(Debug, Deserialize)]
 pub struct ApiWorkflowRun {
     pub id: u64,
+    #[serde(default)]
+    pub workflow_id: Option<u64>,
     pub event: String,
     pub status: String,
     pub head_branch: Option<String>,

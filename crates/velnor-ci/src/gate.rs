@@ -71,7 +71,7 @@ pub fn release_gate(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
     )?;
-    let push = push_evidence(github, repo, sha, id, &default_branch)?;
+    let push = push_evidence(github, repo, sha, id, &default_branch, current_run_id)?;
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
@@ -141,9 +141,17 @@ fn push_evidence(
     sha: &str,
     repository_id: u64,
     branch: &str,
+    current_run_id: Option<u64>,
 ) -> Result<PushEvidence, CiError> {
     let mut runs: Vec<ApiWorkflowRun> =
         all_pages(github, "workflow runs", |page| runs_path(repo, sha, page))?;
+    let own_workflow = current_run_id
+        .and_then(|id| runs.iter().find(|run| run.id == id))
+        .and_then(|run| run.workflow_id);
+    runs.retain(|run| {
+        Some(run.id) != current_run_id
+            && own_workflow.is_none_or(|workflow| run.workflow_id != Some(workflow))
+    });
     runs.retain(|run| {
         run.event == "push"
             && run.head_sha == sha

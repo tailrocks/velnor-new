@@ -5,7 +5,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::{api_url, append_outputs, http, image_candidate, read_limited, token};
 use crate::cli::ImageCommand;
@@ -13,7 +13,7 @@ use crate::cli_image::{ImageGateArgs, ImagePreflightArgs, ImageStageArgs, Openss
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
-use crate::image_deploy::gate::{Wait, wait_for_required};
+use crate::image_deploy::gate::{Clock, Request, Wait, tip_only, wait_for_required};
 use crate::image_deploy::hub::{HUB_URL, preflight};
 use crate::image_deploy::stage::{Glibc, Openssl, check};
 
@@ -127,23 +127,34 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
 fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
     let repo = Repo::parse(&args.repo)?;
     let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
-    let run_id = std::env::var("GITHUB_RUN_ID")
-        .ok()
-        .map(|id| id.parse::<u64>())
-        .transpose()
-        .map_err(|error| CiError::new(format!("invalid GITHUB_RUN_ID: {error}")))?;
-    let outcome = wait_for_required(
-        &github,
-        &repo,
-        &args.sha,
-        args.require_tip,
-        Wait {
-            total: Duration::from_secs(args.wait_seconds),
-            interval: Duration::from_secs(args.interval_seconds),
-        },
-        &std::thread::sleep,
-        run_id,
-    )?;
+    let outcome = if args.tip_only {
+        tip_only(&github, &repo, &args.sha)?
+    } else {
+        let run_id = std::env::var("GITHUB_RUN_ID")
+            .ok()
+            .map(|id| id.parse::<u64>())
+            .transpose()
+            .map_err(|error| CiError::new(format!("invalid GITHUB_RUN_ID: {error}")))?;
+        let started = Instant::now();
+        wait_for_required(
+            &github,
+            &repo,
+            &Request {
+                sha: &args.sha,
+                require_tip: args.require_tip,
+                wait: Wait {
+                    total: Duration::from_secs(args.wait_seconds),
+                    interval: Duration::from_secs(args.interval_seconds),
+                },
+                run_id,
+                pr_only_checks: &args.pr_only_checks,
+            },
+            &Clock {
+                now: &|| started.elapsed(),
+                sleep: &std::thread::sleep,
+            },
+        )?
+    };
     append_outputs(&format!("ready={}\n", outcome.ready))?;
     Ok(outcome.report)
 }

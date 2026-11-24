@@ -12,6 +12,7 @@ repositories = ["acme/shared-proto"]
 name = "cluster-svc"
 bins = ["cluster-svc"]
 inputs = ["migrations"]
+pr_only_checks = ["DCO"]
 timeout_minutes = 60
 
 [[image.registry]]

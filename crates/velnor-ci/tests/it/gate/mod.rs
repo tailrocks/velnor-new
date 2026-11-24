@@ -11,6 +11,7 @@ mod external_checks;
 mod hostile_check;
 mod image_gate;
 mod inputs;
+mod own_run;
 mod pr_only;
 mod pr_rules;
 mod skipped;

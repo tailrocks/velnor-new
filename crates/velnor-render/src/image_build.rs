@@ -12,7 +12,7 @@ use crate::image::{
 };
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
-use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_SETUP_BUILDX};
+use crate::pinned_actions::DOCKER_SETUP_BUILDX;
 use crate::private_steps::{release_mint, release_phase};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
@@ -117,7 +117,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
     }
     steps.push(compile(workflow, build));
     steps.push(stage(build));
-    steps.extend(finish(image));
+    steps.push(upload(artifact(image), staged(image)));
     steps
 }
 
@@ -179,34 +179,4 @@ fn stage(build: &ImageBuild<'_>) -> RenderedStep {
         "Stage the binaries and check their glibc ceiling".to_owned(),
         run,
     )
-}
-
-fn finish(image: &ImageConfig) -> Vec<RenderedStep> {
-    let pull_request = expression("github.event_name == 'pull_request'");
-    let push = expression("github.event_name == 'push'");
-    let mut steps = vec![RenderedStep {
-        condition: Some(pull_request.clone()),
-        ..setup_buildx()
-    }];
-    steps.push(RenderedStep {
-        condition: Some(pull_request),
-        with: vec![
-            ("context".to_owned(), Value::Text(image.context.clone())),
-            ("file".to_owned(), Value::Text(image.dockerfile.clone())),
-            (
-                "platforms".to_owned(),
-                Value::Text("linux/amd64".to_owned()),
-            ),
-            ("push".to_owned(), Value::Bool(false)),
-            ("provenance".to_owned(), Value::Bool(false)),
-            ("sbom".to_owned(), Value::Bool(false)),
-            ("labels".to_owned(), labels()),
-        ],
-        ..DOCKER_BUILD_PUSH.step(format!("Build the {} image without pushing", image.name))
-    });
-    steps.push(RenderedStep {
-        condition: Some(push),
-        ..upload(artifact(image), staged(image))
-    });
-    steps
 }

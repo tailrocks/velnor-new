@@ -94,6 +94,7 @@ pub struct ImageConfig {
     pub openssl: ImageOpenssl,
     pub pr_build: ImagePrBuild,
     pub attestations: bool,
+    pub pr_only_checks: Vec<String>,
     pub timeout_minutes: u16,
     pub registries: Vec<ImageRegistry>,
 }

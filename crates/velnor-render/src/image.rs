@@ -9,7 +9,9 @@ use velnor_model::{
 
 use crate::helper_integrity::{defaults, secure_with};
 use crate::image_build::build_job;
-use crate::image_publish::{authority_job, gate_job, promote_job, publish_job};
+use crate::image_check::check_job;
+use crate::image_publish::{gate_job, publish_job};
+use crate::image_release::{authority_job, promote_job};
 use crate::rules::{RenderedJob, RuleViolation, check_rules};
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
@@ -47,6 +49,19 @@ pub struct ImageWorkflow<'a> {
     pub mbx: ImageMbx,
 }
 
+impl ImageWorkflow<'_> {
+    pub(crate) fn pr_only_checks(&self) -> Vec<String> {
+        let mut checks: Vec<String> = self
+            .images
+            .iter()
+            .flat_map(|build| build.image.pr_only_checks.iter().cloned())
+            .collect();
+        checks.sort();
+        checks.dedup();
+        checks
+    }
+}
+
 pub(crate) struct Events<'a> {
     pub(crate) repository: &'a str,
     pub(crate) branch: &'a str,
@@ -82,6 +97,7 @@ pub fn render_image(
     let mut jobs: Vec<RenderedJob> = vec![gate_job(workflow, &events)];
     for build in &workflow.images {
         jobs.push(build_job(workflow, build, &events));
+        jobs.extend(check_job(workflow, build));
         jobs.push(publish_job(workflow, build, &events));
         jobs.push(authority_job(workflow, build, &events));
         jobs.push(promote_job(workflow, build));

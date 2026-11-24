@@ -10,6 +10,7 @@ use crate::gate::release_gate;
 use crate::github::{ApiRepo, GitHub, Repo, branch_path, parse, repo_path};
 
 const NOT_YET: Duration = Duration::from_secs(90);
+const LONGEST_PAUSE: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
@@ -21,6 +22,26 @@ pub struct Outcome {
 pub struct Wait {
     pub total: Duration,
     pub interval: Duration,
+}
+
+impl std::fmt::Debug for Clock<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Clock").finish_non_exhaustive()
+    }
+}
+
+pub struct Clock<'a> {
+    pub now: &'a dyn Fn() -> Duration,
+    pub sleep: &'a dyn Fn(Duration),
+}
+
+#[derive(Debug)]
+pub struct Request<'a> {
+    pub sha: &'a str,
+    pub require_tip: bool,
+    pub wait: Wait,
+    pub run_id: Option<u64>,
+    pub pr_only_checks: &'a [String],
 }
 
 #[derive(Deserialize)]
@@ -44,47 +65,78 @@ fn superseded(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Option<Stri
     }))
 }
 
+pub fn tip_only(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Outcome, CiError> {
+    Ok(match superseded(github, repo, sha)? {
+        Some(report) => Outcome {
+            ready: false,
+            report,
+        },
+        None => Outcome {
+            ready: true,
+            report: format!("commit {sha} is the tip of the default branch\n"),
+        },
+    })
+}
+
+enum Attempt {
+    Ready(Outcome),
+    Superseded(Outcome),
+    Waiting(String),
+}
+
+fn attempt(github: &dyn GitHub, repo: &Repo, request: &Request<'_>) -> Result<Attempt, CiError> {
+    let sha = request.sha;
+    if request.require_tip
+        && let Some(report) = superseded(github, repo, sha)?
+    {
+        return Ok(Attempt::Superseded(Outcome {
+            ready: false,
+            report,
+        }));
+    }
+    let verdict = release_gate(github, repo, sha, request.pr_only_checks, request.run_id)?;
+    if !verdict.ready {
+        return Ok(Attempt::Waiting(verdict.report));
+    }
+    if request.require_tip
+        && let Some(report) = superseded(github, repo, sha)?
+    {
+        return Ok(Attempt::Superseded(Outcome {
+            ready: false,
+            report,
+        }));
+    }
+    Ok(Attempt::Ready(Outcome {
+        ready: true,
+        report: verdict.report,
+    }))
+}
+
 pub fn wait_for_required(
     github: &dyn GitHub,
     repo: &Repo,
-    sha: &str,
-    require_tip: bool,
-    wait: Wait,
-    sleep: &dyn Fn(Duration),
-    run_id: Option<u64>,
+    request: &Request<'_>,
+    clock: &Clock<'_>,
 ) -> Result<Outcome, CiError> {
-    let mut elapsed = Duration::ZERO;
+    let started = (clock.now)();
+    let total = request.wait.total;
+    let mut pause = request.wait.interval;
     loop {
-        if require_tip && let Some(report) = superseded(github, repo, sha)? {
-            return Ok(Outcome {
-                ready: false,
-                report,
-            });
-        }
-        match release_gate(github, repo, sha, &[], run_id) {
-            Ok(verdict) if verdict.ready => {
-                if require_tip && let Some(report) = superseded(github, repo, sha)? {
-                    return Ok(Outcome {
-                        ready: false,
-                        report,
-                    });
-                }
-                return Ok(Outcome {
-                    ready: true,
-                    report: verdict.report,
-                });
-            }
-            Ok(verdict) if elapsed >= wait.total => {
+        let elapsed = (clock.now)().saturating_sub(started);
+        match attempt(github, repo, request) {
+            Ok(Attempt::Ready(outcome) | Attempt::Superseded(outcome)) => return Ok(outcome),
+            Ok(Attempt::Waiting(report)) if elapsed >= total => {
                 return Err(CiError::new(format!(
-                    "the required checks of {sha} were not all green after {} seconds\n{}",
-                    wait.total.as_secs(),
-                    verdict.report
+                    "the required checks of {} were not all green after {} seconds\n{report}",
+                    request.sha,
+                    total.as_secs(),
                 )));
             }
-            Err(error) if elapsed >= NOT_YET.min(wait.total) => return Err(error),
-            Ok(_) | Err(_) => {}
+            Err(error) if error.is_transient() && elapsed < total => {}
+            Err(error) if elapsed >= NOT_YET.min(total) => return Err(error),
+            Ok(Attempt::Waiting(_)) | Err(_) => {}
         }
-        sleep(wait.interval);
-        elapsed += wait.interval;
+        (clock.sleep)(pause);
+        pause = (pause + pause / 2).min(LONGEST_PAUSE);
     }
 }
