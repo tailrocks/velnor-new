@@ -148,8 +148,10 @@ jobs:
         run: bash scripts/test-helper-gates-merge-queue.sh
       - name: Check the added gates against the base
         env:
-          BASE: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.base_ref) }}
-        run: bash scripts/check-helper-gates.sh "$BASE"
+          BASE_REF: ${{ github.event.merge_group.base_ref || github.base_ref }}
+        run: |
+          git fetch --force --tags --quiet origin
+          bash scripts/check-helper-gates.sh "origin/${BASE_REF#refs/heads/}"
   secret-scan:
     name: Secret scanners
     runs-on: [velnor, ubuntu-26.04-scale-set]
