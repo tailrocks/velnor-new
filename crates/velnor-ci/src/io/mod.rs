@@ -240,6 +240,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
         Command::AppToken(args) => app_token::run(&args),
+        Command::RevokeToken => app_token::revoke(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
