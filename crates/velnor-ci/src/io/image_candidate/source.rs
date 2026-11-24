@@ -9,13 +9,14 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::process::Runner;
-use super::{DOCKERFILE, fail, regular, source_inputs};
+use super::{DOCKERFILE, MAX_INPUT_BYTES, fail, regular, source_inputs};
 use crate::error::CiError;
 use crate::image_candidate::json::is_hex;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_LINE_BYTES: u64 = 1 << 20;
 
-fn git(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
+fn git(runner: &Runner, root: &Path, args: &[&str], limit: u64) -> Result<String, CiError> {
     let mut command = Command::new("git");
     command.arg("-C").arg(root).args(args);
     for (name, _) in std::env::vars_os() {
@@ -23,11 +24,11 @@ fn git(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
             command.env_remove(name);
         }
     }
-    runner.text(&mut command, GIT_TIMEOUT)
+    runner.text_up_to(&mut command, GIT_TIMEOUT, limit)
 }
 
 fn git_line(runner: &Runner, root: &Path, args: &[&str]) -> Result<String, CiError> {
-    git(runner, root, args).map(|output| output.trim().to_owned())
+    git(runner, root, args, MAX_LINE_BYTES).map(|output| output.trim().to_owned())
 }
 
 pub(super) fn identity(
@@ -47,9 +48,12 @@ pub(super) fn identity(
     if github_sha != Some(head.as_str()) {
         return fail("GitHub source commit is not the same as the Git commit in the worktree.");
     }
-    let committed = git(runner, root, &["show", &format!("{head}:{DOCKERFILE}")])?;
+    let blob = ["show", &format!("{head}:{DOCKERFILE}")];
+    let committed = git(runner, root, &blob, MAX_INPUT_BYTES)?;
     let path = root.join(DOCKERFILE);
-    regular(&path, DOCKERFILE)?;
+    if regular(&path, DOCKERFILE)? > MAX_INPUT_BYTES {
+        return fail(format!("{DOCKERFILE} exceeds its size limit."));
+    }
     let current = fs::read_to_string(&path)
         .map_err(|error| CiError::new(format!("{}: {error}", path.display())))?;
     if committed != current {

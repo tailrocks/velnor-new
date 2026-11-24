@@ -3,7 +3,7 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,7 +13,7 @@ use crate::error::CiError;
 const ATTEMPTS: u32 = 100;
 const STAGING_PREFIX: &str = ".velnor-job-image-candidate-";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(super) struct Outputs {
     pub(super) archive: PathBuf,
     pub(super) record: PathBuf,
@@ -106,7 +106,7 @@ impl Staging {
                 "{STAGING_PREFIX}{}-{nanos}-{attempt}",
                 std::process::id()
             ));
-            match fs::create_dir(&path) {
+            match fs::DirBuilder::new().mode(0o700).create(&path) {
                 Ok(()) => {
                     let staging = Self(path);
                     fs::create_dir(staging.home()).map_err(|error| {

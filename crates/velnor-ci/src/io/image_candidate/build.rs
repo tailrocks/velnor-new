@@ -32,7 +32,7 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         .archive
         .parent()
         .ok_or_else(|| CiError::new("Candidate output directory must exist."))?;
-    let scratch = Staging::create(parent)?;
+    let scratch = Staging::create(&std::env::temp_dir())?;
     let mut check = Command::new("bash");
     check
         .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
@@ -43,6 +43,11 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
     if source::identity(&runner, &root, &args.source_commit, github_sha)? != inputs {
         return Err(CiError::new(
             "Build inputs changed while build-test.sh ran.",
+        ));
+    }
+    if output::plan(&root, &args.archive, &args.record)? != outputs {
+        return Err(CiError::new(
+            "Candidate output paths changed while build-test.sh ran.",
         ));
     }
     let staging = Staging::create(parent)?;

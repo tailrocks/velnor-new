@@ -47,15 +47,29 @@ impl Runner {
     }
 
     pub(super) fn run(&self, command: &mut Command, timeout: Duration) -> Result<(), CiError> {
-        self.execute(command, timeout).map(drop)
+        self.execute(command, timeout, None).map(drop)
     }
 
     pub(super) fn text(&self, command: &mut Command, timeout: Duration) -> Result<String, CiError> {
-        let bytes = self.execute(command, timeout)?;
+        self.text_up_to(command, timeout, CAPTURE_LIMIT)
+    }
+
+    pub(super) fn text_up_to(
+        &self,
+        command: &mut Command,
+        timeout: Duration,
+        limit: u64,
+    ) -> Result<String, CiError> {
+        let bytes = self.execute(command, timeout, Some(limit))?;
         String::from_utf8(bytes).map_err(|_| CiError::new("command output is not UTF-8."))
     }
 
-    fn execute(&self, command: &mut Command, timeout: Duration) -> Result<Vec<u8>, CiError> {
+    fn execute(
+        &self,
+        command: &mut Command,
+        timeout: Duration,
+        capture: Option<u64>,
+    ) -> Result<Vec<u8>, CiError> {
         let label = command.get_program().to_string_lossy().into_owned();
         let (done, waiting) = mpsc::channel::<()>();
         let supervisor = &self.supervisor;
@@ -69,7 +83,10 @@ impl Runner {
                     ));
                 }
             });
-            let finished = self.supervisor.run(command, CAPTURE_LIMIT);
+            let finished = match capture {
+                Some(limit) => self.supervisor.run(command, limit),
+                None => self.supervisor.run_streaming(command),
+            };
             drop(done);
             finished
         });

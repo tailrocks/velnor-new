@@ -295,6 +295,64 @@ fn the_validation_script_gets_no_credentials_and_leaves_no_process_behind() {
 }
 
 #[test]
+fn the_validation_script_home_is_not_inside_the_source_or_the_output_directory() {
+    let source = Source::new("script-home");
+    source.script("env > \"$PWD/../script.env\"");
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
+    let home = source
+        .text("script.env")
+        .lines()
+        .find_map(|line| line.strip_prefix("HOME=").map(str::to_owned))
+        .unwrap_or_default();
+    assert!(home.contains("/.velnor-job-image-candidate-"), "{home}");
+    assert!(!home.contains("-script-home/"), "{home}");
+}
+
+#[test]
+fn a_failing_build_reports_its_last_line_after_a_megabyte_of_output() {
+    let source = Source::new("long-failure");
+    source.docker(concat!(
+        "i=0\n",
+        "while [ $i -lt 20000 ]; do\n",
+        "  echo \"progress progress progress progress progress progress progress progress\" >&2\n",
+        "  i=$((i+1))\n",
+        "done\n",
+        "echo \"the-real-error-line\" >&2\n",
+        "exit 3"
+    ));
+    let run = source.run(&[], &[]);
+    assert!(!run.ok);
+    assert!(run.stderr.contains("the-real-error-line"), "lost the error");
+    assert!(run.stderr.contains("failed"), "{}", run.stderr);
+}
+
+#[test]
+fn the_progress_of_a_successful_build_is_streamed() {
+    let source = Source::new("streamed-progress");
+    source.docker("echo \"build-progress-line\" >&2\necho \"build-stdout-line\"\ncp \"$FAKE_DIR/archive.tar\" \"$dest\"\nexit 0");
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
+    assert!(run.stderr.contains("build-progress-line"), "{}", run.stderr);
+    assert!(run.stderr.contains("build-stdout-line"), "{}", run.stderr);
+    assert!(!run.stdout.contains("build-stdout-line"), "{}", run.stdout);
+}
+
+#[test]
+fn a_dockerfile_between_one_and_sixteen_mebibytes_is_built() {
+    let source = Source::new("large-dockerfile");
+    let dockerfile = source.path("checkout/images/job/ubuntu-26.04/Dockerfile");
+    fs::write(
+        &dockerfile,
+        format!("FROM scratch\n{}", "# padding\n".repeat(250_000)),
+    )
+    .unwrap_or_default();
+    source.commit_all("large");
+    let run = source.run(&[], &[]);
+    assert!(run.ok, "{}", run.stderr);
+}
+
+#[test]
 fn state_planted_by_the_validation_script_never_reaches_the_build() {
     let source = Source::new("planted-state");
     source.script(concat!(
