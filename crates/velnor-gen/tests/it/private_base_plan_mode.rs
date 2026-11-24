@@ -13,7 +13,7 @@ fn every_lane_with_the_privacy_step_tells_the_report_its_own_plan_mode() -> Test
     let mut repo = private_repo(
         &["Cargo.toml", "xtask/Cargo.toml"],
         &format!("shape = \"lint-test\"\n{SECTION}"),
-        "0.1.112",
+        "0.1.113",
     )?;
     for lock in ["Cargo.lock", "xtask/Cargo.lock"] {
         repo.files.insert(path(lock)?, GIT_LOCK.as_bytes().to_vec());

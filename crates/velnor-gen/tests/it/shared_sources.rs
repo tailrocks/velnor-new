@@ -317,7 +317,7 @@ fn every_decision_to_save_a_build_directory_is_told_whether_the_sources_restore_
         &["Cargo.toml", "xtask/Cargo.toml"],
         Some(b"shape = \"lint-test\"\n"),
     )?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.112")?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.113")?;
     let lanes = jobs_of(&workflow(&repo)?);
     let deciders: Vec<(&String, String)> = lanes
         .iter()
