@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use velnor_ci::tools_local::Outcome;
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, message, run};
 
 use crate::tools_heal::{leftovers, save_as};
 use crate::tools_verify::{Job, job};
@@ -57,4 +57,36 @@ fn an_old_entry_whose_name_no_key_can_have_is_still_pruned() {
     saved_quietly(&store, &job, "k1");
     saved_quietly(&store, &job, "k2");
     assert_eq!(leftovers(&store), ["k1", "k2"]);
+}
+
+#[test]
+fn a_job_holding_an_entry_locked_cannot_turn_a_trusted_restore_into_a_miss() {
+    let (job, store) = node("tools-prune-locked");
+    saved_quietly(&store, &job, "k1");
+    let locked = File::open(store.join("tools/k1")).unwrap_or_else(|e| unreachable!("{e}"));
+    locked.lock().unwrap_or_else(|e| unreachable!("{e}"));
+    let fresh = job.root.join("fresh");
+    fs::create_dir_all(&fresh).unwrap_or_else(|e| unreachable!("{e}"));
+    let shared = store.display().to_string();
+    let restored = run(&Inputs {
+        verb: Verb::Restore,
+        key: "k1",
+        event_name: "push",
+        git_ref: "refs/heads/main",
+        default_branch: Some("main"),
+        shared_dir: Some(&shared),
+        seed_dir: Some(&shared),
+        home: &fresh,
+        replace: false,
+    });
+    assert!(restored.hit(), "{restored:?}");
+    assert!(
+        message(&restored, "node-a").starts_with("::warning::"),
+        "{restored:?}"
+    );
+    let rustc = fresh.join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc");
+    assert_eq!(
+        fs::read_to_string(rustc).unwrap_or_default(),
+        "rustc binary"
+    );
 }

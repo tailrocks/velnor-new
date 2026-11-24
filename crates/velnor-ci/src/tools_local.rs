@@ -46,7 +46,7 @@ pub enum Outcome {
     NotOffered,
     BadKey,
     Miss,
-    Restored { from: PathBuf },
+    Restored { from: PathBuf, leased: bool },
     Rejected(&'static str),
     Saved { to: PathBuf, kept: Vec<String> },
     Healed { to: PathBuf, kept: Vec<String> },
@@ -162,12 +162,19 @@ fn describe(outcome: &Outcome) -> String {
             "::warning::the tools key is not a plain name; the node store is skipped".to_owned()
         }
         Outcome::Miss => "velnor: the node-local tools store has no entry for this key".to_owned(),
-        Outcome::Restored { from } => {
+        Outcome::Restored { from, leased: true } => {
             format!(
                 "velnor: tools restored from the node store {}",
                 from.display()
             )
         }
+        Outcome::Restored {
+            from,
+            leased: false,
+        } => format!(
+            "::warning::tools restored from the node store {} without a shared lock, because another process holds the entry locked",
+            from.display()
+        ),
         Outcome::Rejected(reason) => {
             format!("::warning::node-local tools store ignored ({reason})")
         }

@@ -62,20 +62,10 @@ fn slot(path: &str) -> String {
     path.replace('/', "_")
 }
 
-fn lease(entry: &Path, owner: u32) -> Result<File, Outcome> {
-    let held = open_entry(entry).map_err(|_| Outcome::Miss)?;
-    match held.try_lock_shared() {
-        Ok(()) => {}
-        Err(TryLockError::WouldBlock) => return Err(Outcome::Miss),
-        Err(TryLockError::Error(_)) => {
-            return Err(Outcome::Rejected("the entry cannot be locked"));
-        }
-    }
-    if published(&held, entry) && complete(entry, owner) {
-        Ok(held)
-    } else {
-        Err(Outcome::Miss)
-    }
+fn lease(entry: &Path, owner: u32) -> Option<(File, bool)> {
+    let held = open_entry(entry).ok()?;
+    let leased = held.try_lock_shared().is_ok();
+    (published(&held, entry) && complete(entry, owner)).then_some((held, leased))
 }
 
 fn copy_tree(from: &Path, to: &Path) -> bool {
@@ -114,9 +104,8 @@ fn restore_with(
         Err(outcome) => return outcome,
     };
     let entry = base.join(TOOLS_DIR).join(inputs.key);
-    let held = match lease(&entry, owner) {
-        Ok(held) => held,
-        Err(outcome) => return outcome,
+    let Some((held, leased)) = lease(&entry, owner) else {
+        return Outcome::Miss;
     };
     if let Err(reason) = clear_home(inputs.home) {
         return Outcome::Rejected(reason);
@@ -129,10 +118,13 @@ fn restore_with(
     }
     if !published(&held, &entry) {
         return Outcome::Rejected(
-            "the entry was replaced during the copy, so the cache action restores instead",
+            "the entry was replaced or removed during the copy, so the cache action restores instead",
         );
     }
-    Outcome::Restored { from: entry }
+    Outcome::Restored {
+        from: entry,
+        leased,
+    }
 }
 
 struct Lock(PathBuf);
