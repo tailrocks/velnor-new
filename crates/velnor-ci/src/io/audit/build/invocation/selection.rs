@@ -30,6 +30,7 @@ impl Invocation {
         &self,
         root: &str,
         members: &[RustMember],
+        dependencies: &[&str],
     ) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
@@ -72,7 +73,7 @@ impl Invocation {
         }
         let selected: Vec<Spec<'_>> = selected.into_iter().filter_map(parse).collect();
         let excluded: Vec<Spec<'_>> = excluded.into_iter().filter_map(parse).collect();
-        let packages = members
+        let mut packages: Vec<String> = members
             .iter()
             .filter(|member| {
                 if !provable {
@@ -85,6 +86,9 @@ impl Invocation {
             })
             .map(|member| member.name.as_str().to_owned())
             .collect();
+        if provable && workspace {
+            packages.extend(dependencies.iter().map(|name| (*name).to_owned()));
+        }
         Some(Selection {
             root: root.to_owned(),
             packages,

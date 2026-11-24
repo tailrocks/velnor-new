@@ -137,7 +137,17 @@ impl Builder<'_> {
     fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
         let root = self.invoked();
         let members = root.map_or(&[][..], |root| root.members.as_slice());
-        invocation.selection(root.map_or("", |root| root.manifest.as_str()), members)
+        let dependencies: Vec<&str> = root.map_or_else(Vec::new, |root| {
+            crate::needs::reached(root, &self.facts.unowned)
+                .values()
+                .map(|package| package.name.as_str())
+                .collect()
+        });
+        invocation.selection(
+            root.map_or("", |root| root.manifest.as_str()),
+            members,
+            &dependencies,
+        )
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
