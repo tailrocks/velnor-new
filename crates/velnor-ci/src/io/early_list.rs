@@ -5,14 +5,22 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::Mutex;
-use std::thread::{self, JoinHandle};
+use std::process::Command;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
+use super::early_list_child::Supervisor;
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
 use crate::tests_run::{Listing, list_argv, runnable_matches};
 
 const EXPANSION_HEADROOM: u64 = 8;
+const GRACE: Duration = Duration::from_secs(60);
+const GRACE_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_GRACE_MS";
+const STOP_GRACE: Duration = Duration::from_secs(5);
+const STDOUT_LIMIT: u64 = 128 << 20;
+const STDOUT_LIMIT_VARIABLE: &str = "VELNOR_CI_EARLY_LIST_STDOUT_LIMIT";
 
 type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
 
@@ -35,12 +43,14 @@ const STEP_FILE_VARIABLES: &[&str] = &[
 
 enum State {
     Idle,
-    Running(JoinHandle<Option<Listing>>),
+    Running(Receiver<Option<Listing>>),
     Taken,
 }
 
 pub(super) struct EarlyList {
     argv: Vec<String>,
+    grace: Duration,
+    supervisor: Arc<Supervisor>,
     state: Mutex<State>,
 }
 
@@ -48,6 +58,8 @@ impl EarlyList {
     pub(super) fn new(run: &[String]) -> Self {
         Self {
             argv: run.to_vec(),
+            grace: env_number(GRACE_VARIABLE).map_or(GRACE, Duration::from_millis),
+            supervisor: Arc::new(Supervisor::default()),
             state: Mutex::new(State::Idle),
         }
     }
@@ -58,9 +70,12 @@ impl EarlyList {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if matches!(*state, State::Idle) {
-            let argv = self.argv.clone();
-            *state = State::Running(thread::spawn(move || list_matches(&argv)));
+            *state = State::Running(self.spawn());
         }
+    }
+
+    pub(super) fn stop(&self, reason: &str) {
+        self.supervisor.stop(reason);
     }
 
     pub(super) fn finish(&self, wanted: bool) -> Option<Listing> {
@@ -71,24 +86,59 @@ impl EarlyList {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
             State::Taken,
         );
-        match state {
-            State::Running(handle) => handle.join().unwrap_or_else(|_| {
-                eprintln!(
-                    "velnor-ci: the early nextest list failed: its thread panicked; the step reports no tests_listed, tests_by_package or tests_ignored"
+        let receiver = match state {
+            State::Running(receiver) => receiver,
+            State::Idle if wanted => self.spawn(),
+            State::Idle | State::Taken => return None,
+        };
+        match receiver.recv_timeout(self.grace) {
+            Ok(listing) => listing,
+            Err(RecvTimeoutError::Timeout) => {
+                let reason = format!(
+                    "it did not finish within {} ms of the run ending",
+                    self.grace.as_millis()
                 );
+                self.supervisor.stop(reason.clone());
+                receiver.recv_timeout(STOP_GRACE).unwrap_or_else(|_| {
+                    report(&reason);
+                    None
+                })
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                report("its thread panicked");
                 None
-            }),
-            State::Idle if wanted => list_matches(&self.argv),
-            State::Idle | State::Taken => None,
+            }
         }
+    }
+
+    fn spawn(&self) -> Receiver<Option<Listing>> {
+        let (sender, receiver) = mpsc::channel();
+        let argv = self.argv.clone();
+        let supervisor = Arc::clone(&self.supervisor);
+        thread::spawn(move || sender.send(list_matches(&argv, supervisor)).ok());
+        receiver
     }
 }
 
-fn list_matches(argv: &[String]) -> Option<Listing> {
+fn env_number(name: &str) -> Option<u64> {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse().ok())
+}
+
+fn report(reason: &str) {
+    eprintln!(
+        "velnor-ci: the early nextest list failed: {reason}; the step reports no tests_listed, tests_by_package or tests_ignored"
+    );
+}
+
+fn list_matches(argv: &[String], supervisor: Arc<Supervisor>) -> Option<Listing> {
     match try_list(
         argv,
         &Environment {
             runner_temp: std::env::var_os("RUNNER_TEMP"),
+            stdout_limit: env_number(STDOUT_LIMIT_VARIABLE).unwrap_or(STDOUT_LIMIT),
+            supervisor,
         },
         &can_execute_from,
         &free_bytes,
@@ -96,10 +146,7 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         Ok(listing) => Some(listing),
         Err(failure) => {
             drop(std::io::stderr().write_all(&failure.stderr));
-            eprintln!(
-                "velnor-ci: the early nextest list failed: {}; the step reports no tests_listed, tests_by_package or tests_ignored",
-                failure.reason
-            );
+            report(&failure.reason);
             None
         }
     }
@@ -122,6 +169,8 @@ impl Failure {
 
 struct Environment {
     runner_temp: Option<OsString>,
+    stdout_limit: u64,
+    supervisor: Arc<Supervisor>,
 }
 
 fn try_list(
@@ -152,18 +201,22 @@ fn try_list(
         None
     };
     let mut command = Command::new(&argv[0]);
-    command
-        .args(&argv[1..])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(&argv[1..]);
     for name in STEP_FILE_VARIABLES.iter().copied() {
         command.env_remove(name);
     }
     super::mbx_reports::assign(&mut command, &argv);
-    let output = command
-        .output()
+    let output = environment
+        .supervisor
+        .run(&mut command, environment.stdout_limit)
         .map_err(|error| Failure::new(format!("cannot start it: {error}")))?;
     drop(directory);
+    if let Some(reason) = output.stopped {
+        return Err(Failure {
+            reason,
+            stderr: output.stderr,
+        });
+    }
     if !output.status.success() {
         return Err(Failure {
             reason: output.status.code().map_or_else(

@@ -121,7 +121,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
         early.as_ref(),
     );
     let handle = signals.handle();
-    forward(signals, pid, own_group);
+    forward(signals, pid, own_group, early.clone());
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
@@ -248,9 +248,12 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
     Ok((child, own_group))
 }
 
-fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
+fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool, early: Option<Arc<EarlyList>>) {
     thread::spawn(move || {
         for received in signals.forever() {
+            if let Some(early) = &early {
+                early.stop("velnor-ci received a signal");
+            }
             if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
                 if own_group {
                     killpg(pid, signal).ok();
