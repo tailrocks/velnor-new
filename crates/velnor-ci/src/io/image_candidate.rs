@@ -124,31 +124,53 @@ pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiE
     verify_with(args, &github_env())
 }
 
+struct Checked {
+    record: Value,
+}
+
+fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, CiError> {
+    let raw = read_record(record)?;
+    let value = parse(&raw, "candidate record")?;
+    validate(&value)?;
+    let scan = scan_archive(archive)?;
+    let actual = oci::verify(
+        &scan,
+        &FileSource {
+            path: archive.to_path_buf(),
+        },
+    )?;
+    if value["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
+        return fail("Candidate archive is not the same as the archive in its record.");
+    }
+    if value["oci"] != actual {
+        return fail("OCI graph is not the same as the graph in its candidate record.");
+    }
+    let root = fs::canonicalize(root)
+        .map_err(|error| CiError::new(format!("{}: {error}", root.display())))?;
+    if value["source"]["inputs"] != source_inputs(&root)? {
+        return fail("Build input bytes changed after candidate creation.");
+    }
+    Ok(Checked { record: value })
+}
+
+fn check_builder(root: &Path, record: &Value) -> Result<(), CiError> {
+    let lock = read_lock(root)?;
+    let builder = record["build"]["builder"].as_str().unwrap_or_default();
+    if buildx_version(builder) != Some(lock.buildx_version.as_str()) {
+        return fail(
+            "Candidate Buildx identity is not the same as the value in .velnor/runner.lock.",
+        );
+    }
+    Ok(())
+}
+
 fn verify_with(
     args: &VerifyCandidateArgs,
     env: &HashMap<String, String>,
 ) -> Result<String, CiError> {
-    let raw = read_record(&args.record)?;
-    let value = parse(&raw, "candidate record")?;
-    let record = validate(&value)?;
-    let scan = scan_archive(&args.archive)?;
-    let actual = oci::verify(
-        &scan,
-        &FileSource {
-            path: args.archive.clone(),
-        },
-    )?;
-    if record["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
-        return fail("Candidate archive is not the same as the archive in its record.");
-    }
-    if record["oci"] != actual {
-        return fail("OCI graph is not the same as the graph in its candidate record.");
-    }
+    let Checked { record, .. } = check_archive(&args.record, &args.archive, &args.root)?;
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
-    if record["source"]["inputs"] != source_inputs(&root)? {
-        return fail("Build input bytes changed after candidate creation.");
-    }
     let (identity, reference) = workflow(env)?;
     let commit = env.get("GITHUB_SHA");
     if commit.map(String::as_str) != record["source"]["commit"].as_str()
@@ -163,12 +185,6 @@ fn verify_with(
             "Candidate workflow identity is not the same as the current GitHub workflow identity.",
         );
     }
-    let lock = read_lock(&root)?;
-    let builder = record["build"]["builder"].as_str().unwrap_or_default();
-    if buildx_version(builder) != Some(lock.buildx_version.as_str()) {
-        return fail(
-            "Candidate Buildx identity is not the same as the value in .velnor/runner.lock.",
-        );
-    }
+    check_builder(&root, &record)?;
     Ok(PASS.to_owned())
 }
