@@ -64,6 +64,7 @@ pub mod release_published;
 pub mod release_recover;
 pub mod report;
 mod report_caches;
+mod report_compilations;
 pub mod reports;
 pub mod required;
 pub mod resolve_qualification;

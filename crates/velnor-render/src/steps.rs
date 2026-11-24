@@ -27,6 +27,7 @@ use crate::install_steps::{
     generator_check_step, install_generator_step, install_mise, install_tools,
 };
 use crate::permission_pairs;
+use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
@@ -147,6 +148,11 @@ fn job_steps(
                     saved_after: gate.required(),
                     chained: job.chained_saves,
                     job_name: job.name.as_deref(),
+                    privacy_gate: job
+                        .steps
+                        .iter()
+                        .find(|step| step.kind == StepKind::RepositoryPrivacy)
+                        .and_then(|step| step.gate.as_ref().or(job.gate.as_ref())),
                     after_setup: after_setup(step, setups),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
@@ -182,6 +188,7 @@ struct Around<'a> {
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
+    privacy_gate: Option<&'a velnor_model::Gate>,
     after_setup: Vec<String>,
 }
 
@@ -228,6 +235,14 @@ fn rendered_steps(
             body.env.push((
                 "VELNOR_REPORT_JOB_NAME".to_owned(),
                 Value::Text(name.to_owned()),
+            ));
+        }
+        if matches!(step.kind, StepKind::ReportCaches { .. })
+            && let Some(gate) = around.privacy_gate
+        {
+            body.env.push((
+                "VELNOR_REPORT_PLAN_MODE".to_owned(),
+                Value::Expr(plan_modes(gate, setup)),
             ));
         }
         let extra = extra_conditions(step, setup, &around.after_setup);

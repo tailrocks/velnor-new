@@ -32,6 +32,7 @@ mod mbx_out_dirs;
 mod mise_digest;
 mod permission_yaml;
 mod pinned_actions;
+mod plan_modes;
 mod private_steps;
 mod release;
 mod release_assets;
