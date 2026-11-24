@@ -66,6 +66,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 _ => None,
             })
             .collect();
+        let (filled, filled_private) = filled(&job.steps, &manifests);
         let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
@@ -95,7 +96,12 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
                 cached: cached.clone(),
                 mint: token_mint(facts),
             },
-            StepKind::PrivateFetch { manifests, cached },
+            StepKind::PrivateFetch {
+                manifests,
+                cached,
+                filled,
+                filled_private,
+            },
         ]);
         if early {
             let at = after_trusted_setup(&job.steps[..first]);
@@ -123,6 +129,26 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .0
             .insert(PermissionScope::PullRequests, Access::Read);
     }
+}
+
+fn filled(steps: &[Step], built: &[RepoPath]) -> (Vec<RepoPath>, bool) {
+    let Some((every, private)) = steps.iter().find_map(|step| match &step.kind {
+        StepKind::SourcesFetchAll { manifests, .. } => Some((manifests, step.private_repo)),
+        _ => None,
+    }) else {
+        return (Vec::new(), false);
+    };
+    if every.iter().all(|manifest| built.contains(manifest)) {
+        return (Vec::new(), false);
+    }
+    let mut filled = built.to_vec();
+    filled.extend(
+        every
+            .iter()
+            .filter(|manifest| !built.contains(manifest))
+            .cloned(),
+    );
+    (filled, private)
 }
 
 fn hoist_sources_restores(steps: &mut Vec<Step>, from: usize, to: usize) -> Vec<Step> {
@@ -246,6 +272,9 @@ pub(crate) fn any_gate(first: Option<&Gate>, second: Option<&Gate>) -> Option<Ga
 
 fn manifest(step: &Step) -> RepoPath {
     if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
+        return manifest.clone();
+    }
+    if let Some(manifest) = &step.manifest {
         return manifest.clone();
     }
     step.directory.as_ref().map_or_else(

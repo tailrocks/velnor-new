@@ -10,8 +10,8 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
-    sources_fetch_all_rest, sources_locks, trimmed_lane,
+    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all, sources_locks,
+    trimmed_lane,
 };
 use crate::budget_steps::budget_step;
 use crate::cache::cache_step;
@@ -52,7 +52,9 @@ mod chained_save;
 mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
-use steps_helpers::{after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable};
+use steps_helpers::{
+    after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps, variable,
+};
 use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
@@ -207,9 +209,7 @@ fn rendered_steps(
         body.id = around.id.map(str::to_owned);
     }
     rendered.push(body);
-    if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(manifests, lane));
-    }
+    rendered.extend(trailing_steps(&step.kind, lane));
     for body in &mut rendered {
         if let (
             StepKind::Cargo(_) | StepKind::TestSetup { .. } | StepKind::GeneratorCheck { .. },

@@ -130,6 +130,8 @@ pub enum StepKind {
     PrivateFetch {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
+        filled: Vec<RepoPath>,
+        filled_private: bool,
     },
     ReleaseAssets {
         assets: Vec<crate::release_asset::ReleaseAsset>,
