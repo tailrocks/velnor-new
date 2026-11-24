@@ -74,6 +74,26 @@ fn an_older_helper_never_reads_the_inputs_output() -> TestResult {
 }
 
 #[test]
+fn a_merge_group_audits_inputs_only_when_a_lock_or_a_manifest_changed_from_helper_0_1_113()
+-> TestResult {
+    for config in ["", EVERYTHING] {
+        assert!(
+            audit_runs("0.1.113", config, "merge_group", false, "run")?,
+            "{config}"
+        );
+        assert!(
+            !audit_runs("0.1.113", config, "merge_group", false, "skip")?,
+            "{config}"
+        );
+        assert!(
+            !audit_runs("0.1.112", config, "merge_group", false, "run")?,
+            "{config}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_push_keeps_its_audit_rule_at_every_helper() -> TestResult {
     for helper in ["0.1.112", "0.1.113"] {
         for inputs in ["run", "skip"] {

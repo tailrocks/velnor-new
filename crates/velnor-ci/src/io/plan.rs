@@ -95,7 +95,8 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     } else {
         policy_runs(facts.policy, &changes.paths, everything, selected)
     };
-    let inputs = (kind == EventKind::PullRequest && changes.paths.is_empty())
+    let inputs = (matches!(kind, EventKind::PullRequest | EventKind::MergeGroup)
+        && changes.paths.is_empty())
         || inputs_changed(&changes.paths);
     let expected: BTreeMap<RepoPath, bool> = facts
         .rust_roots

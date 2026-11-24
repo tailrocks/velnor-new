@@ -29,13 +29,20 @@ pub(crate) fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -
 }
 
 fn lines_of(repo: &Repo, changed: &[&str], needles: &[&str]) -> String {
+    lines_on(repo, None, changed, needles)
+}
+
+fn lines_on(repo: &Repo, event: Option<&str>, changed: &[&str], needles: &[&str]) -> String {
     let outputs = repo.root().join("lines");
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
-    command
-        .args(["plan", "--changed"])
-        .args(changed)
-        .env("GITHUB_OUTPUT", &outputs);
+    command.arg("plan").env("GITHUB_OUTPUT", &outputs);
+    if !changed.is_empty() {
+        command.arg("--changed").args(changed);
+    }
+    if let Some(event) = event {
+        command.env("GITHUB_EVENT_NAME", event);
+    }
     let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
     fs::read_to_string(&outputs)
@@ -145,6 +152,26 @@ fn plan_asks_for_the_inputs_audit_only_when_a_lock_or_a_manifest_changed() {
             "{changed}"
         );
     }
+}
+
+#[test]
+fn plan_asks_for_the_inputs_audit_of_a_merge_group_only_when_a_lock_or_a_manifest_changed() {
+    let repo = plan_repo("inputs-audit-merge-group");
+    for (changed, expected) in [
+        ("Cargo.lock", "rust_inputs=run "),
+        ("b/Cargo.toml", "rust_inputs=run "),
+        ("b/src/lib.rs", "rust_inputs=skip "),
+    ] {
+        assert_eq!(
+            lines_on(&repo, Some("merge_group"), &[changed], &["rust_inputs="]),
+            expected,
+            "{changed}"
+        );
+    }
+    assert_eq!(
+        lines_on(&repo, Some("merge_group"), &[], &["rust_inputs="]),
+        "rust_inputs=run "
+    );
 }
 
 const DOCTESTS_OFF: &str =

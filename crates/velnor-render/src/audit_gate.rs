@@ -3,11 +3,13 @@
 
 use velnor_model::{Gate, GateNeed, When};
 
-use crate::gate::{IS_PULL_REQUEST, Setup, output, plan_read, plan_source};
+use crate::gate::{Setup, output, plan_read, plan_source};
 
 const SCHEDULED_OR_DISPATCHED: &str =
     "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'";
 const EXPIRED: &str = "steps.restored.outputs.expired == 'true'";
+const PULL_REQUEST_OR_MERGE_GROUP: &str =
+    "(github.event_name == 'pull_request' || github.event_name == 'merge_group')";
 const PUSH: &str = "github.event_name == 'push'";
 
 pub(crate) fn events(when: When, gate: Option<&Gate>, setup: Setup) -> String {
@@ -33,5 +35,7 @@ fn inputs_changed(gate: Option<&Gate>, setup: Setup) -> Option<String> {
     } else {
         read
     };
-    Some(format!("({IS_PULL_REQUEST} && {read} == 'run')"))
+    Some(format!(
+        "({PULL_REQUEST_OR_MERGE_GROUP} && {read} == 'run')"
+    ))
 }

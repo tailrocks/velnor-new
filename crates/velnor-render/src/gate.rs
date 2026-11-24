@@ -16,7 +16,7 @@ const NOT_CANCELLED: &str = "!cancelled()";
 const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
-pub(crate) const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
+const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
 const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
