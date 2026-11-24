@@ -12,8 +12,8 @@ pub(super) use super::inputs_git::{git, modified_ns, set_modified_ns};
 mod sources;
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, format_inputs, inputs_file, plan_restore, restored_units_file,
-    snapshot_file, witness_file,
+    SavedInput, Tracked, format_inputs, inputs_file, plan_directory_times, plan_restore,
+    restored_units_file, snapshot_file, witness_file,
 };
 use crate::restored_units::RestoredUnits;
 use crate::scope::Scope;
@@ -32,7 +32,7 @@ pub(super) fn save_inputs_scoped(
     target: &Path,
     scope: Option<&Scope>,
 ) -> Result<String, CiError> {
-    let (top, tracked) = scoped_files(root, scope)?;
+    let (TrackedPaths { top, .. }, tracked) = scoped_files(root, scope)?;
     let identity =
         super::delta_source::identity_of(&top_level_files(&top, &Scope::default(), false)?)
             .unwrap_or_default();
@@ -219,7 +219,7 @@ pub(super) fn restore_inputs_scoped(
     let saved = super::input_snapshot::decode(&text)
         .map_err(|e| CiError::new(format!("{}: {e}", path.display())))?
         .inputs;
-    let (top, tracked) = scoped_files(root, scope)?;
+    let (TrackedPaths { top, paths }, tracked) = scoped_files(root, scope)?;
     fs::write(
         root.join(target).join(witness_file(&prefix)),
         input_witness(&tracked),
@@ -241,6 +241,9 @@ pub(super) fn restore_inputs_scoped(
     super::restored_units::record(&units_target, &prefix, units.as_ref())?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
+    }
+    for (directory, mtime_ns) in plan_directory_times(&saved, &plan, &tracked, &paths) {
+        set_modified_ns(&top.join(directory), mtime_ns)?;
     }
     Ok(format!(
         "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",

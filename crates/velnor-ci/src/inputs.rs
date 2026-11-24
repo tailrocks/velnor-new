@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 use crate::scope::Scope;
@@ -284,4 +285,42 @@ pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
         }
     }
     plan
+}
+
+#[must_use]
+pub fn plan_directory_times<'a>(
+    saved: &'a [SavedInput],
+    plan: &RestorePlan,
+    tracked: &Tracked,
+    index: &'a [PathBuf],
+) -> BTreeMap<&'a Path, u64> {
+    let unchanged: BTreeMap<&Path, u64> = plan
+        .restore
+        .iter()
+        .map(|input| (Path::new(&input.file.path), input.mtime_ns))
+        .chain(tracked.links.iter().map(|link| (Path::new(&link.path), 0)))
+        .collect();
+    let mut newest = BTreeMap::new();
+    let mut stale = BTreeSet::new();
+    let saved = saved.iter().map(|input| Path::new(&input.file.path));
+    for path in index.iter().map(PathBuf::as_path).chain(saved) {
+        let time = unchanged.get(path).copied();
+        for directory in path
+            .ancestors()
+            .skip(1)
+            .filter(|directory| !directory.as_os_str().is_empty())
+        {
+            match time {
+                Some(time) => {
+                    let entry = newest.entry(directory).or_insert(0);
+                    *entry = time.max(*entry);
+                }
+                None => {
+                    stale.insert(directory);
+                }
+            }
+        }
+    }
+    newest.retain(|directory, time| *time > 0 && !stale.contains(directory));
+    newest
 }
