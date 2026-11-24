@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use super::public_declared::{declare, repositories};
-use super::support::{COMPILED, hang_up, seed};
-use crate::io::Repo as Checkout;
+use super::support::{COMPILED, seed};
+use crate::io::{Repo as Checkout, hang_up};
 
 pub(super) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(super) const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
