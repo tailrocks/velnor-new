@@ -140,10 +140,6 @@ impl Workspace {
 }
 
 impl Workspace {
-    pub(in crate::io) fn units(&self) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-        unit_files_apart(&self.target_directory, &self.build_directory)
-    }
-
     pub(in crate::io) fn build_units(
         &self,
         workspaces: &[Workspace],

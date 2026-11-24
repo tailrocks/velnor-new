@@ -12,7 +12,7 @@ use super::{placed, unit, velnor_ci};
 const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
-fn grouped_tools() -> Repo {
+pub(super) fn grouped_tools() -> Repo {
     grouped_tools_in(Repo::new("audit-groups"))
 }
 
