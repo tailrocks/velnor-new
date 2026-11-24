@@ -14,6 +14,7 @@ pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
+// helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const RELEASE_HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 pub(crate) mod release_asset_steps;
 

@@ -9,6 +9,7 @@ use velnor_model::{
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::error::{DetectError, Reason};
 
+// helper-gate: first in tools-v0.1.112 via a60bd44dc6
 pub(crate) const CHECKS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn current(helper: Option<&HelperRelease>) -> bool {

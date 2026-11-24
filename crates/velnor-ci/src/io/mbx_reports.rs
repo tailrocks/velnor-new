@@ -156,6 +156,29 @@ fn note_unrecorded(temp: &Path) {
     }
 }
 
+pub(super) fn first_session_start(runner_temp: &Path) -> Option<u64> {
+    if !enabled() {
+        return None;
+    }
+    fs::read_dir(runner_temp.join(DIRECTORY))
+        .ok()?
+        .take(MAX_ENTRIES + 1)
+        .flatten()
+        .filter_map(|entry| session_start(&entry.path()))
+        .min()
+}
+
+fn session_start(marker: &Path) -> Option<u64> {
+    if marker.extension()? != EXPECTED {
+        return None;
+    }
+    let (nanos, rest) = marker.file_stem()?.to_str()?.split_at_checked(20)?;
+    if !rest.starts_with('-') || !nanos.bytes().all(|digit| digit.is_ascii_digit()) {
+        return None;
+    }
+    u64::try_from(nanos.parse::<u128>().ok()? / 1_000_000_000).ok()
+}
+
 pub(super) fn unrecorded(runner_temp: &Path) -> Result<u64, String> {
     if !enabled() {
         return Ok(0);
