@@ -114,6 +114,7 @@ fn selecting(binary: &MiseBinary) -> Value {
     ))
 }
 
+// helper-gate: first in tools-v0.1.112 via 106a05c994
 const CASE_INSENSITIVE_LABEL_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn pin_to_runner_platform(

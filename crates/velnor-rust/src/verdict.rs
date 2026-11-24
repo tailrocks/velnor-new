@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    EMPTY_PACKAGE_MAP, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 use crate::verdict_plan::{Need, PlanOutput};
@@ -66,6 +66,9 @@ pub struct TestCounts {
 
 #[must_use]
 pub fn encode_package_counts(packages: &BTreeMap<String, PackageCounts>) -> Option<String> {
+    if packages.is_empty() {
+        return Some(EMPTY_PACKAGE_MAP.to_owned());
+    }
     let mut parts = Vec::with_capacity(packages.len());
     for (name, counts) in packages {
         if !package_token(name) || counts.run > counts.listed {
@@ -82,7 +85,7 @@ fn parse_package_counts(text: &str) -> Option<BTreeMap<String, PackageCounts>> {
         return None;
     }
     let mut packages = BTreeMap::new();
-    if text.is_empty() {
+    if text.is_empty() || text == EMPTY_PACKAGE_MAP {
         return Some(packages);
     }
     for token in text.split(' ') {
@@ -221,8 +224,16 @@ pub fn verdict(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
+            let lane_empty = counts
+                .iter()
+                .flatten()
+                .all(|job| job.listed == 0 && job.run == 0 && job.ignored.unwrap_or(0) == 0);
             for job in counts.iter().flatten() {
-                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                if job.listed == 0
+                    && job.run == 0
+                    && job.ignored.unwrap_or(0) == 0
+                    && (!job.packages.is_empty() || lane_empty)
+                {
                     out.problems.push(format!(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
