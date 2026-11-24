@@ -284,7 +284,7 @@ fn pr_only_checks_are_verified_by_hosted_jobs_with_the_app_key_and_waited_for_wi
         |run| run.contains("--verify-exemptions") && run.contains("--wait-seconds=1200")
     ));
     let waiting = &workflow["jobs"]["image-gate"];
-    assert_eq!(waiting["runs-on"], "ubuntu-26.04-scale-set");
+    assert_eq!(waiting["runs-on"], "ubuntu-24.04");
     assert_eq!(waiting["needs"], serde_json::json!(["image-exemptions"]));
     assert!(waiting.get("environment").is_none());
     assert!(!waiting.to_string().contains("RELEASE_APP"));
@@ -295,7 +295,7 @@ fn pr_only_checks_are_verified_by_hosted_jobs_with_the_app_key_and_waited_for_wi
         let job = &plain["jobs"][id];
         assert!(job.get("environment").is_none(), "{id}");
         assert!(!job.to_string().contains("RELEASE_APP"), "{id}");
-        assert_eq!(job["runs-on"], "ubuntu-26.04-scale-set", "{id}");
+        assert_eq!(job["runs-on"], "ubuntu-latest", "{id}");
     }
     Ok(())
 }

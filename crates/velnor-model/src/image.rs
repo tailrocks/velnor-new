@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ids::RunnerLabel;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageOpenssl {
     None,
@@ -96,6 +98,8 @@ pub struct ImageConfig {
     pub attestations: bool,
     pub pr_only_checks: Vec<String>,
     pub timeout_minutes: u16,
+    pub control_runner: Option<RunnerLabel>,
+    pub publish_runner: Option<RunnerLabel>,
     pub registries: Vec<ImageRegistry>,
 }
 

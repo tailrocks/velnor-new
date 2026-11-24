@@ -11,8 +11,10 @@ use crate::helper_integrity::{defaults, secure_with};
 use crate::image_build::build_job;
 use crate::image_check::check_job;
 use crate::image_gate::{EXEMPTIONS_JOB, admin_token, exemptions_job, gate_job};
+use crate::image_group::compile_groups;
 use crate::image_publish::publish_job;
 use crate::image_release::{authority_job, promote_job};
+use crate::release::HOSTED_RUNNER;
 use crate::release_steps::revoke_app_token;
 use crate::rules::{RenderedJob, RuleViolation, check_rules};
 use crate::workflow::{ShellcheckMarks, yaml_job};
@@ -38,6 +40,7 @@ pub struct ImageBuild<'a> {
     pub image: &'a ImageConfig,
     pub root: &'a str,
     pub packages: Vec<&'a str>,
+    pub publish_runner: Option<&'a RunnerLabel>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +50,7 @@ pub struct ImageWorkflow<'a> {
     pub repository: &'a str,
     pub branch: &'a str,
     pub runner: &'a RunnerLabel,
+    pub control_runner: Option<&'a RunnerLabel>,
     pub private: Option<&'a PrivateSources>,
     pub mirror: Option<&'a CratesMirror>,
     pub mbx: ImageMbx,
@@ -54,6 +58,15 @@ pub struct ImageWorkflow<'a> {
 }
 
 impl ImageWorkflow<'_> {
+    pub(crate) fn control_runner(&self) -> String {
+        self.control_runner
+            .map_or_else(|| HOSTED_RUNNER.to_owned(), ToString::to_string)
+    }
+
+    pub(crate) fn publish_runner(&self, build: &ImageBuild<'_>) -> String {
+        build.publish_runner.unwrap_or(self.runner).to_string()
+    }
+
     pub(crate) fn pr_only_checks(&self) -> Vec<String> {
         let mut checks: Vec<String> = self
             .images
@@ -124,12 +137,14 @@ pub fn render_image(
         jobs.push(exemptions_job(workflow, &events));
     }
     jobs.push(gate_job(workflow, &events));
-    for build in &workflow.images {
-        jobs.push(build_job(workflow, build, &events));
-        jobs.extend(check_job(workflow, build, &events));
-        jobs.push(publish_job(workflow, build, &events));
-        jobs.push(authority_job(workflow, build, &events));
-        jobs.push(promote_job(workflow, build));
+    for group in compile_groups(&workflow.images) {
+        jobs.push(build_job(workflow, &group, &events));
+        for build in &group.members {
+            jobs.extend(check_job(workflow, build, &group.id(), &events));
+            jobs.push(publish_job(workflow, build, &group.id(), &events));
+            jobs.push(authority_job(workflow, build, &events));
+            jobs.push(promote_job(workflow, build));
+        }
     }
     let jobs: Vec<RenderedJob> = jobs
         .into_iter()
@@ -158,7 +173,7 @@ pub fn render_image(
                 entry(
                     "group",
                     Yaml::Expr(
-                        "image-${{ github.ref }}${{ github.event.action == 'edited' && github.event.changes.base == null && format('-edit-{0}', github.run_id) || '' }}"
+                        "image-${{ github.event_name == 'push' && format('push-{0}', github.run_id) || github.ref }}${{ github.event.action == 'edited' && github.event.changes.base == null && format('-edit-{0}', github.run_id) || '' }}"
                             .to_owned(),
                     ),
                 ),

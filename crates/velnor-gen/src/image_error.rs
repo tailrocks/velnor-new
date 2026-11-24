@@ -32,6 +32,19 @@ pub enum ImageError {
     BinNeedsFeatures {
         image: String,
         bin: String,
+        feature: String,
+    },
+    BinFeaturesUnrecorded {
+        image: String,
+        bin: String,
+    },
+    PublishPoolShared {
+        image: String,
+        runner: String,
+    },
+    ControlRunnerDiffers {
+        first: String,
+        second: String,
     },
     WrongPackage {
         image: String,
@@ -87,6 +100,10 @@ pub enum ImageError {
 impl fmt::Display for ImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BinNeedsFeatures { .. }
+            | Self::BinFeaturesUnrecorded { .. }
+            | Self::PublishPoolShared { .. }
+            | Self::ControlRunnerDiffers { .. } => self.feature_or_runner(f),
             Self::Unhosted => f.write_str(
                 "[[image]] needs a repository on GitHub: the generated workflow names the repository it may publish from, and this checkout has no origin remote that names one",
             ),
@@ -108,10 +125,6 @@ impl fmt::Display for ImageError {
             Self::AmbiguousBin { image, bin } => write!(
                 f,
                 "image {image}: several packages have a binary target named `{bin}`; name the package with `package`"
-            ),
-            Self::BinNeedsFeatures { image, bin } => write!(
-                f,
-                "image {image}: binary `{bin}` has required-features; list the features it needs in `features`"
             ),
             Self::WrongPackage { image, bin } => write!(
                 f,
@@ -177,6 +190,34 @@ impl fmt::Display for ImageError {
                 f,
                 "image {image}: ghcr.io repository `{repository}` must sit under the lowercase owner of this repository"
             ),
+        }
+    }
+}
+
+impl ImageError {
+    fn feature_or_runner(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BinNeedsFeatures {
+                image,
+                bin,
+                feature,
+            } => write!(
+                f,
+                "image {image}: binary `{bin}` requires the feature `{feature}`, which the image does not enable; name it (or a feature that enables it) in `features`, or keep default_features on when a default feature enables it"
+            ),
+            Self::BinFeaturesUnrecorded { image, bin } => write!(
+                f,
+                "image {image}: binary `{bin}` has required-features that .velnor/rust-metadata.json does not name; run velnor-gen generate with velnor-ci 0.1.116 or later pinned"
+            ),
+            Self::PublishPoolShared { image, runner } => write!(
+                f,
+                "image {image}: `{runner}` is a self-hosted runner shared with the pull request build, so code of a pull request could persist on it and reach the registry credentials of the publish job; set publish_runner to a separate or ephemeral pool (the same label only for a pool whose runners are ephemeral)"
+            ),
+            Self::ControlRunnerDiffers { first, second } => write!(
+                f,
+                "images {first} and {second} set different control_runner values, but one gate job serves all images; set the same control_runner on both"
+            ),
+            _ => Ok(()),
         }
     }
 }

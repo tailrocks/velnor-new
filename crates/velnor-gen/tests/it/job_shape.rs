@@ -67,6 +67,7 @@ pub(crate) fn target(kind: TargetKind) -> Target {
         doctest: kind == TargetKind::Lib,
         source: None,
         requires_features: false,
+        required_features: Vec::new(),
     }
 }
 
@@ -138,6 +139,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         RustMember {
             targets: vec![Target {
                 requires_features: true,
+                required_features: Vec::new(),
                 ..target(TargetKind::Bin)
             }],
             ..member("gated", "crates/gated", &[])

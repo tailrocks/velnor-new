@@ -8,7 +8,7 @@ use crate::image_publish::{login, registry_scopes};
 use crate::install_steps::install_helper;
 use crate::release_binaries::command;
 use crate::release_steps::{expression, variables};
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 
 const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
 const AUTHORITY_WAIT_SECONDS: u32 = 1200;
@@ -36,7 +36,7 @@ pub(crate) fn authority_job(
             "version".to_owned(),
             format!("${{{{ steps.{VERSION_STEP}.outputs.version }}}}"),
         )],
-        runs_on: workflow.runner.to_string(),
+        runs_on: workflow.control_runner(),
         timeout_minutes: if pr_only.is_empty() {
             PROMOTE_TIMEOUT_MINUTES
         } else {
@@ -102,11 +102,15 @@ pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) 
         });
     }
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{}-${{{{ github.ref }}}}", job_id(image, "promote")),
+            cancel_in_progress: false,
+        }),
         id: job_id(image, "promote"),
         needs: vec![job_id(image, "authority")],
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),
         permissions: registry_scopes(image),
-        runs_on: workflow.runner.to_string(),
+        runs_on: workflow.publish_runner(build),
         timeout_minutes: PROMOTE_TIMEOUT_MINUTES,
         steps,
         ..RenderedJob::default()

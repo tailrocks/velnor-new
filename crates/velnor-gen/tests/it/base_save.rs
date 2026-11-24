@@ -67,6 +67,7 @@ fn with_library(config: &str, tested: bool) -> Result<RepoView, Box<dyn std::err
                 doctest: false,
                 source: None,
                 requires_features: false,
+                required_features: Vec::new(),
             });
         }
     }
@@ -88,6 +89,7 @@ fn with_doctests_and_harness(config: &str) -> Result<RepoView, Box<dyn std::erro
                 doctest: true,
                 source: None,
                 requires_features: false,
+                required_features: Vec::new(),
             });
             member.targets.push(Target {
                 name: TargetName::new("custom")?,
@@ -96,6 +98,7 @@ fn with_doctests_and_harness(config: &str) -> Result<RepoView, Box<dyn std::erro
                 doctest: false,
                 source: None,
                 requires_features: false,
+                required_features: Vec::new(),
             });
         }
     }

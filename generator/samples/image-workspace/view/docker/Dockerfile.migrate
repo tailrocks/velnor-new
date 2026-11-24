@@ -1,0 +1,2 @@
+FROM debian:trixie-slim
+COPY dist-migrate/legacy-migration /usr/local/bin/

@@ -10,13 +10,14 @@ use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirro
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
+use crate::image_group::Compile;
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
 use crate::private_steps::{release_mint, release_phase};
 use crate::release_binaries::{command, upload};
 use crate::release_steps::{expression, join, permissions, shell_word};
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 use crate::steps::{CHECKOUT, RUN};
 
 const ARTIFACT_RETENTION_DAYS: u64 = 7;
@@ -66,29 +67,47 @@ pub(crate) fn checkout() -> RenderedStep {
     }
 }
 
+pub(crate) fn ref_scope() -> &'static str {
+    "${{ github.event_name == 'push' && github.ref || github.run_id }}"
+}
+
 pub(crate) fn build_job(
     workflow: &ImageWorkflow<'_>,
-    build: &ImageBuild<'_>,
+    group: &Compile<'_>,
     events: &Events<'_>,
 ) -> RenderedJob {
-    let image = build.image;
-    let reached = match image.pr_build {
-        ImagePrBuild::Off => events.branch_push(),
-        _ => format!("({}) || ({})", events.branch_push(), events.pull_request()),
+    let reached = if group
+        .members
+        .iter()
+        .all(|build| build.image.pr_build == ImagePrBuild::Off)
+    {
+        events.branch_push()
+    } else {
+        format!("({}) || ({})", events.branch_push(), events.pull_request())
     };
+    let id = group.id();
     RenderedJob {
-        id: job_id(image, "build"),
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{id}-{}", ref_scope()),
+            cancel_in_progress: true,
+        }),
+        id,
         condition: Some(expression(&reached)),
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),
-        timeout_minutes: image.timeout_minutes,
-        steps: build_steps(workflow, build),
+        timeout_minutes: group
+            .members
+            .iter()
+            .map(|build| build.image.timeout_minutes)
+            .max()
+            .unwrap_or_default(),
+        steps: build_steps(workflow, group),
         ..RenderedJob::default()
     }
 }
 
-fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<RenderedStep> {
-    let image = build.image;
+fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<RenderedStep> {
+    let first = group.members[0];
     let mut steps = vec![checkout(), install_helper(workflow.helper)];
     match workflow.mbx {
         ImageMbx::Off => {}
@@ -99,7 +118,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
     if let Some(sources) = workflow.private {
         steps.extend(release_phase(
             sources,
-            &join(build.root, "Cargo.toml"),
+            &join(first.root, "Cargo.toml"),
             release_mint(workflow.helper),
         ));
     }
@@ -109,7 +128,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
         format!("Add the {IMAGE_TARGET} target"),
         format!("rustup target add {IMAGE_TARGET}"),
     )]);
-    if image.openssl == ImageOpenssl::Sysroot {
+    if first.image.openssl == ImageOpenssl::Sysroot {
         steps.push(command(
             "Unpack the pinned OpenSSL sysroot".to_owned(),
             format!(
@@ -117,19 +136,22 @@ fn build_steps(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Vec<Rend
             ),
         ));
     }
-    steps.push(compile(workflow, build));
-    steps.push(stage(build));
-    let mut artifact_step = upload(artifact(image), staged(image));
-    for (name, value) in &mut artifact_step.with {
-        if name == "retention-days" {
-            *value = Value::Int(ARTIFACT_RETENTION_DAYS);
+    steps.push(compile(workflow, group));
+    for build in &group.members {
+        steps.push(stage(build));
+        let mut artifact_step = upload(artifact(build.image), staged(build.image));
+        for (name, value) in &mut artifact_step.with {
+            if name == "retention-days" {
+                *value = Value::Int(ARTIFACT_RETENTION_DAYS);
+            }
         }
+        steps.push(artifact_step);
     }
-    steps.push(artifact_step);
     steps
 }
 
-fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep {
+fn compile(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> RenderedStep {
+    let build = group.members[0];
     let image = build.image;
     let offline = workflow.private.is_some();
     let profile = if image.profile == "release" {
@@ -142,10 +164,10 @@ fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep
         if offline { " --offline" } else { "" },
         image.glibc
     );
-    for package in &build.packages {
+    for package in group.packages() {
         let _ = write!(run, " --package {}", shell_word(package));
     }
-    for bin in &image.bins {
+    for bin in group.bins() {
         let _ = write!(run, " --bin {}", shell_word(bin));
     }
     if !image.default_features {
@@ -163,10 +185,16 @@ fn compile(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedStep
         ("SOURCE_DATE_EPOCH".to_owned(), Value::Text("0".to_owned())),
     ];
     env.extend(offline.then(offline_env));
+    let name = group
+        .members
+        .iter()
+        .map(|member| member.image.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     RenderedStep {
         working_directory: (build.root != ".").then(|| build.root.to_owned()),
         env,
-        ..command(format!("Compile {} with zigbuild", image.name), run)
+        ..command(format!("Compile {name} with zigbuild"), run)
     }
 }
 
@@ -184,7 +212,10 @@ fn stage(build: &ImageBuild<'_>) -> RenderedStep {
         let _ = write!(run, " --bin {}", shell_word(bin));
     }
     command(
-        "Stage the binaries and check their glibc ceiling".to_owned(),
+        format!(
+            "Stage the {} binaries and check their glibc ceiling",
+            image.name
+        ),
         run,
     )
 }

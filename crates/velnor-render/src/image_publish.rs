@@ -10,7 +10,7 @@ use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
 use crate::release_binaries::{command, download_to};
 use crate::release_steps::{expression, permissions, shell_word, variables};
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 
 const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
@@ -260,6 +260,7 @@ fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
 pub(crate) fn publish_job(
     workflow: &ImageWorkflow<'_>,
     build: &ImageBuild<'_>,
+    compile: &str,
     events: &Events<'_>,
 ) -> RenderedJob {
     let image = build.image;
@@ -280,15 +281,19 @@ pub(crate) fn publish_job(
         steps.extend(report(registry));
     }
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{}-${{{{ github.ref }}}}", job_id(image, "publish")),
+            cancel_in_progress: false,
+        }),
         id: job_id(image, "publish"),
-        needs: vec![job_id(image, "build"), GATE_JOB.to_owned()],
+        needs: vec![compile.to_owned(), GATE_JOB.to_owned()],
         condition: Some(expression(&format!(
             "needs.{GATE_JOB}.outputs.ready == 'true' && {}",
             events.branch_push()
         ))),
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),
         permissions: registry_scopes(image),
-        runs_on: workflow.runner.to_string(),
+        runs_on: workflow.publish_runner(build),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..RenderedJob::default()

@@ -4,13 +4,14 @@
 use std::fmt::Write;
 
 use crate::image::{Events, ImageWorkflow};
+use crate::image_build::ref_scope;
 use crate::install_steps::install_helper;
 use crate::release::{ENVIRONMENT as RELEASE_ENVIRONMENT, HOSTED_RUNNER};
 use crate::release_binaries::command;
 use crate::release_steps::{
     APP_TOKEN_OUTPUT, app_token, expression, permissions, shell_word, variables,
 };
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 
 const GATE_WAIT_SECONDS: u32 = 2400;
 const GATE_TIMEOUT_MINUTES: u16 = 50;
@@ -127,6 +128,10 @@ pub(crate) const GATE_JOB: &str = "image-gate";
 
 pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> RenderedJob {
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: format!("{GATE_JOB}-{}", ref_scope()),
+            cancel_in_progress: true,
+        }),
         id: GATE_JOB.to_owned(),
         condition: Some(expression(&events.branch_push())),
         needs: if workflow.pr_only_checks().is_empty() {
@@ -139,7 +144,7 @@ pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> Ren
             "ready".to_owned(),
             format!("${{{{ steps.{GATE_STEP}.outputs.ready }}}}"),
         )],
-        runs_on: workflow.runner.to_string(),
+        runs_on: workflow.control_runner(),
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(workflow.helper),

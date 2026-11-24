@@ -347,7 +347,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
         ". \"$VELNOR_EXEC\" run -- cargo zigbuild --release --locked --offline --target-dir target --target x86_64-unknown-linux-gnu.2.41 --package cluster-svc --bin cluster-svc"
     );
     assert_eq!(
-        step_named(build, "Stage the binaries")?["run"],
+        step_named(build, "Stage the cluster-svc binaries")?["run"],
         ". \"$VELNOR_EXEC\" image stage --target-dir target --profile release --glibc 2.41 --openssl none --to dist --bin cluster-svc"
     );
     let workspace = rendered("image-workspace")?;
@@ -359,7 +359,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
         ". \"$VELNOR_EXEC\" run -- cargo zigbuild --release --locked --target-dir target --target x86_64-unknown-linux-gnu.2.36 --package legacy-server --package legacy-migrate --bin legacy-server --bin legacy-migration --features tls"
     );
     assert_eq!(
-        step_named(build, "Stage the binaries")?["run"],
+        step_named(build, "Stage the multi-bin-svc binaries")?["run"],
         ". \"$VELNOR_EXEC\" image stage --target-dir backend-rust/target --profile release --glibc 2.36 --openssl sysroot --to dist --bin legacy-server --bin legacy-migration"
     );
     assert!(

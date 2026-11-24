@@ -79,6 +79,8 @@ fn each_refused_value_names_its_key() -> TestResult {
         ("features = [\"a,b\"]", "image.features"),
         ("package = \"a b\"", "image.package"),
         ("timeout_minutes = 0", "image.timeout_minutes"),
+        ("control_runner = \"a b\"", "image.control_runner"),
+        ("publish_runner = \"a${{ x }}\"", "image.publish_runner"),
         ("pr_only_checks = [\"\"]", "image.pr_only_checks"),
         ("pr_only_checks = [\" DCO\"]", "image.pr_only_checks"),
         (
