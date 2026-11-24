@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File, TryLockError};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use super::clear::{check_home, clear_home};
-use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
+use super::lease::{Identity, identity, open_entry, published};
+use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR, valid_key};
 use crate::mbx_store::{random_u64, writable_by_job};
 use crate::tree_removal::remove_tree;
 
@@ -59,31 +60,6 @@ fn complete(entry: &Path, owner: u32) -> bool {
 
 fn slot(path: &str) -> String {
     path.replace('/', "_")
-}
-
-type Identity = (u64, u64, i64, i64);
-
-fn identity(metadata: &fs::Metadata) -> Identity {
-    (
-        metadata.dev(),
-        metadata.ino(),
-        metadata.mtime(),
-        metadata.mtime_nsec(),
-    )
-}
-
-fn open_entry(entry: &Path) -> std::io::Result<File> {
-    fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
-        .open(entry)
-}
-
-fn published(held: &File, entry: &Path) -> bool {
-    match (held.metadata(), fs::symlink_metadata(entry)) {
-        (Ok(held), Ok(named)) => identity(&held) == identity(&named),
-        _ => false,
-    }
 }
 
 fn lease(entry: &Path, owner: u32) -> Result<File, Outcome> {
@@ -338,40 +314,64 @@ fn prune(tools: &Path, current: &str, chosen: &dyn Fn()) -> Vec<String> {
     older.sort_by_key(|(listed, _)| std::cmp::Reverse((listed.2, listed.3)));
     let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
     chosen();
+    let mut in_use = 0;
     candidates
         .into_iter()
-        .filter(|(listed, path)| stuck(tools, path, *listed))
+        .filter(
+            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS) {
+                Retired::Settled => false,
+                Retired::InUse => {
+                    in_use += 1;
+                    false
+                }
+                Retired::Stuck => true,
+            },
+        )
         .map(|(_, path)| plain(&path.file_name().unwrap_or_default().to_string_lossy()))
         .collect()
 }
 
-fn stuck(tools: &Path, path: &Path, listed: Identity) -> bool {
+enum Retired {
+    Settled,
+    InUse,
+    Stuck,
+}
+
+fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Retired {
+    let finished = |removal: std::io::Result<()>| match removal {
+        Ok(()) => Retired::Settled,
+        Err(_) => Retired::Stuck,
+    };
     let name = path.file_name().unwrap_or_default().to_string_lossy();
+    if !valid_key(&name) {
+        return finished(remove_tree(path));
+    }
     let _lock = match claim(tools, &name) {
         Claim::Won(lock) => lock,
-        Claim::Held => return false,
-        Claim::Broken => return true,
+        Claim::Held => return Retired::Settled,
+        Claim::Broken => return Retired::Stuck,
     };
     let Ok(metadata) = fs::symlink_metadata(path) else {
-        return false;
+        return Retired::Settled;
     };
     if identity(&metadata) != listed {
-        return false;
+        return Retired::Settled;
     }
     let _held = if metadata.is_dir() {
         let Ok(held) = open_entry(path) else {
-            return true;
+            return Retired::Stuck;
         };
         match held.try_lock() {
             Ok(()) => Some(held),
-            Err(TryLockError::WouldBlock) => return false,
-            Err(TryLockError::Error(_)) => return true,
+            Err(TryLockError::WouldBlock) if spare_in_use => return Retired::InUse,
+            Err(TryLockError::WouldBlock) => None,
+            Err(TryLockError::Error(_)) => return Retired::Stuck,
         }
     } else {
         None
     };
     let grave = tools.join(format!("{STAGING_PREFIX}{name}-{:016x}", random_u64()));
-    fs::rename(path, &grave).is_err() || remove_tree(&grave).is_err()
+    finished(fs::rename(path, &grave).and_then(|()| remove_tree(&grave)))
 }
 
 fn plain(name: &str) -> String {

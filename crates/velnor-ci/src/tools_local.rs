@@ -11,6 +11,7 @@ use crate::mbx_seed::SEED_DIR_ENV;
 use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
 
 mod clear;
+mod lease;
 mod store;
 use clear::clear_home;
 use store::{restore, save};

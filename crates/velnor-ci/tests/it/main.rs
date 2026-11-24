@@ -236,6 +236,7 @@ mod tools_heal;
 mod tools_heal_leftovers;
 mod tools_home_clear;
 mod tools_local;
+mod tools_prune;
 mod tools_verify;
 mod tools_verify_anchor;
 mod tools_verify_bounds;
