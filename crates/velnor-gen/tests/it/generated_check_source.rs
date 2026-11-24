@@ -7,6 +7,7 @@ use velnor_rust::LOCK_PATH;
 
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
+use crate::golden::{load, samples};
 use crate::lint_lane::{LINT, MISE, runs};
 use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{view, workflow};
@@ -59,6 +60,15 @@ pub(crate) fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn st
 
 pub(crate) fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::Error>> {
     workflow(&locked(config, version)?)
+}
+
+pub(crate) fn nested_sample_job() -> Result<Value, Box<dyn std::error::Error>> {
+    let repo = load(&samples().join("nested-generator-root"))?;
+    let (files, _) = velnor_gen::expected_with_notes(&repo)?;
+    let text = files
+        .get(&RepoPath::new(".github/workflows/ci.yml")?)
+        .ok_or("no workflow")?;
+    job(text)
 }
 
 pub(crate) fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
