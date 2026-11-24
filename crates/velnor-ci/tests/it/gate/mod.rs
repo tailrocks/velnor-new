@@ -10,6 +10,7 @@ mod current_run;
 mod external_checks;
 mod hostile_check;
 mod image_gate;
+mod image_gate_modes;
 mod inputs;
 mod own_run;
 mod pr_only;

@@ -14,7 +14,7 @@ use super::support::Recorded;
 use super::{AHEAD, GREEN};
 use crate::support::repo;
 
-struct Live(RefCell<BTreeMap<String, Value>>);
+pub(super) struct Live(pub(super) RefCell<BTreeMap<String, Value>>);
 
 impl GitHub for Live {
     fn get(&self, path: &str) -> Result<String, CiError> {
@@ -44,10 +44,10 @@ impl GitHub for Moving<'_> {
     }
 }
 
-struct Flaky<'a> {
-    live: &'a Live,
-    failures: &'a Cell<u32>,
-    error: CiError,
+pub(super) struct Flaky<'a> {
+    pub(super) live: &'a Live,
+    pub(super) failures: &'a Cell<u32>,
+    pub(super) error: CiError,
 }
 
 impl GitHub for Flaky<'_> {
@@ -60,13 +60,13 @@ impl GitHub for Flaky<'_> {
     }
 }
 
-fn at_tip(recorded: Recorded, sha: &str) -> Recorded {
+pub(super) fn at_tip(recorded: Recorded, sha: &str) -> Recorded {
     recorded.edit(&branch_path(&repo(), "main"), |branch| {
         branch["commit"] = json!({"sha": sha});
     })
 }
 
-fn running() -> Recorded {
+pub(super) fn running() -> Recorded {
     at_tip(Recorded::new(), GREEN)
         .green_run(|run| run["status"] = json!("in_progress"))
         .green_job("Required", |job| {
@@ -79,12 +79,12 @@ fn failing() -> Recorded {
     at_tip(Recorded::new(), GREEN).green_job("Required", |job| job["conclusion"] = json!("failure"))
 }
 
-struct Run {
-    outcome: Result<Outcome, CiError>,
-    pauses: Vec<u64>,
+pub(super) struct Run {
+    pub(super) outcome: Result<Outcome, CiError>,
+    pub(super) pauses: Vec<u64>,
 }
 
-fn request(total: u64, tip: bool, pr_only: &[String]) -> Request<'_> {
+pub(super) fn request(total: u64, tip: bool, pr_only: &[String]) -> Request<'_> {
     Request {
         sha: GREEN,
         require_tip: tip,
@@ -94,6 +94,7 @@ fn request(total: u64, tip: bool, pr_only: &[String]) -> Request<'_> {
         },
         run_id: None,
         pr_only_checks: pr_only,
+        verify_exemptions: false,
     }
 }
 
@@ -101,7 +102,7 @@ fn drive(github: &dyn GitHub, request: &Request<'_>, on_pause: &dyn Fn(usize)) -
     drive_on(github, request, on_pause, &Cell::new(Duration::ZERO))
 }
 
-fn drive_on(
+pub(super) fn drive_on(
     github: &dyn GitHub,
     request: &Request<'_>,
     on_pause: &dyn Fn(usize),
@@ -260,16 +261,31 @@ fn a_commit_superseded_while_the_gate_was_reading_is_not_published() {
     assert!(run.outcome.is_ok_and(|outcome| !outcome.ready));
 }
 
+pub(super) fn tip(github: &dyn GitHub) -> Result<Outcome, CiError> {
+    let elapsed = Cell::new(Duration::ZERO);
+    let now = || elapsed.get();
+    let sleep = |duration: Duration| elapsed.set(elapsed.get() + duration);
+    tip_only(
+        github,
+        &repo(),
+        GREEN,
+        &Clock {
+            now: &now,
+            sleep: &sleep,
+        },
+    )
+}
+
 #[test]
 fn the_tip_check_alone_reads_no_check_and_answers_for_the_publish_job() {
     let at = Live(RefCell::new(at_tip(Recorded::new(), GREEN).0));
-    assert!(tip_only(&at, &repo(), GREEN).is_ok_and(|outcome| outcome.ready));
+    assert!(tip(&at).is_ok_and(|outcome| outcome.ready));
     let behind = Live(RefCell::new(at_tip(Recorded::new(), AHEAD).0));
-    let outcome = tip_only(&behind, &repo(), GREEN);
+    let outcome = tip(&behind);
     assert!(outcome.is_ok_and(|outcome| !outcome.ready && outcome.report.contains("no longer")));
     let mut bare = at_tip(Recorded::new(), GREEN).0;
     bare.retain(|path, _| !path.contains("/actions/") && !path.contains("/rules/"));
-    assert!(tip_only(&Live(RefCell::new(bare)), &repo(), GREEN).is_ok());
+    assert!(tip(&Live(RefCell::new(bare))).is_ok());
 }
 
 #[test]
@@ -297,6 +313,7 @@ fn the_last_pause_never_runs_past_the_wait() {
         },
         run_id: None,
         pr_only_checks: &[],
+        verify_exemptions: false,
     };
     let run = wait(&running(), &running(), &request, 99);
     assert!(run.outcome.is_err());
@@ -333,6 +350,7 @@ fn time_spent_in_the_api_requests_counts_against_the_wait() {
         },
         run_id: None,
         pr_only_checks: &[],
+        verify_exemptions: false,
     };
     let run = drive_on(&github, &request, &|_| {}, &clock);
     assert!(run.outcome.is_err());

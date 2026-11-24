@@ -1,40 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
-
 use velnor_model::{ImageConfig, ImageCredential, ImageHost, ImageRegistry, ImageVisibility};
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, checkout, job_id, labels, setup_buildx, staged};
+use crate::image_gate::GATE_JOB;
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
-use crate::release::ENVIRONMENT as RELEASE_ENVIRONMENT;
 use crate::release_binaries::{command, download_to};
-use crate::release_steps::{
-    APP_TOKEN_OUTPUT, app_token, expression, permissions, shell_word, variables,
-};
+use crate::release_steps::{expression, permissions, shell_word, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
-const GATE_WAIT_SECONDS: u32 = 2400;
-const GATE_TIMEOUT_MINUTES: u16 = 50;
 const PUBLISH_TIMEOUT_MINUTES: u16 = 30;
 const PREFLIGHT_STEP: &str = "preflight";
 const PUSH_STEP: &str = "push";
 const TIP_STEP: &str = "tip";
-pub(crate) const GATE_STEP: &str = "gate";
-
-pub(crate) fn gate_scopes(pr_only: &[String]) -> Vec<(String, String)> {
-    let mut scopes = vec![
-        ("actions", "read"),
-        ("contents", "read"),
-        ("statuses", "read"),
-    ];
-    if !pr_only.is_empty() {
-        scopes.insert(1, ("checks", "read"));
-    }
-    permissions(&scopes)
-}
 
 pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
     let mut scopes = vec![("contents", "read")];
@@ -46,76 +27,6 @@ pub(crate) fn registry_scopes(image: &ImageConfig) -> Vec<(String, String)> {
         scopes.push(("packages", "write"));
     }
     permissions(&scopes)
-}
-
-pub(crate) fn gate_step(wait: u32, tip: bool, pr_only: &[String]) -> RenderedStep {
-    let mut flags = if tip {
-        " --require-tip".to_owned()
-    } else {
-        String::new()
-    };
-    for name in pr_only {
-        let _ = write!(flags, " --pr-only-check={}", shell_word(name));
-    }
-    RenderedStep {
-        id: Some(GATE_STEP.to_owned()),
-        name: "Wait for every required check of the commit".to_owned(),
-        env: variables(&[
-            ("GITHUB_TOKEN", "${{ github.token }}"),
-            ("REPOSITORY", "${{ github.repository }}"),
-            ("COMMIT", "${{ github.sha }}"),
-        ]),
-        run: Some(format!(
-            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --wait-seconds={wait}{flags}"
-        )),
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn admin_token(workflow: &ImageWorkflow<'_>, mut job: RenderedJob) -> RenderedJob {
-    let scopes = [
-        ("actions", "read"),
-        ("checks", "read"),
-        ("contents", "read"),
-        ("statuses", "read"),
-        ("administration", "write"),
-    ];
-    job.steps.insert(1, app_token(workflow.helper, &scopes));
-    for step in &mut job.steps {
-        if step.id.as_deref() == Some(GATE_STEP) {
-            step.env.retain(|(name, _)| name != "GITHUB_TOKEN");
-            step.env.insert(
-                0,
-                (
-                    "GITHUB_TOKEN".to_owned(),
-                    Value::Expr(APP_TOKEN_OUTPUT.to_owned()),
-                ),
-            );
-        }
-    }
-    job.environment = Some(RELEASE_ENVIRONMENT.to_owned());
-    job
-}
-
-pub(crate) const GATE_JOB: &str = "image-gate";
-
-pub(crate) fn gate_job(workflow: &ImageWorkflow<'_>, events: &Events<'_>) -> RenderedJob {
-    RenderedJob {
-        id: GATE_JOB.to_owned(),
-        condition: Some(expression(&events.branch_push())),
-        permissions: gate_scopes(&workflow.pr_only_checks()),
-        outputs: vec![(
-            "ready".to_owned(),
-            format!("${{{{ steps.{GATE_STEP}.outputs.ready }}}}"),
-        )],
-        runs_on: workflow.runner.to_string(),
-        timeout_minutes: GATE_TIMEOUT_MINUTES,
-        steps: vec![
-            install_helper(workflow.helper),
-            gate_step(GATE_WAIT_SECONDS, true, &workflow.pr_only_checks()),
-        ],
-        ..RenderedJob::default()
-    }
 }
 
 pub(crate) fn sparse_checkout(image: &ImageConfig) -> RenderedStep {
@@ -289,9 +200,43 @@ fn tip() -> RenderedStep {
         ]),
         ..command(
             "Check that the commit is still the tip of the default branch".to_owned(),
-            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --tip-only".to_owned(),
+            "velnor-ci image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip".to_owned(),
         )
     }
+}
+
+fn withheld(branch: &str, fresh: Option<&str>) -> Vec<RenderedStep> {
+    let superseded = format!("steps.{TIP_STEP}.outputs.ready != 'true'");
+    let condition = match fresh {
+        Some(text) => format!(
+            "${{{{ {} && {superseded} }}}}",
+            text.trim_start_matches("${{ ").trim_end_matches(" }}")
+        ),
+        None => expression(&superseded),
+    };
+    let notice = format!(
+        "echo \"::notice title=Image::the {branch} tag was withheld because this commit is no longer the tip\""
+    );
+    let summary = format!(
+        "echo \"The {branch} tag was withheld: this commit is no longer the tip of {branch}, so only sha-$COMMIT was pushed.\" >> \"$GITHUB_STEP_SUMMARY\""
+    );
+    vec![
+        RenderedStep {
+            condition: Some(condition.clone()),
+            ..command(
+                "Say that the default-branch tag was withheld".to_owned(),
+                notice,
+            )
+        },
+        RenderedStep {
+            condition: Some(condition),
+            env: variables(&[("COMMIT", "${{ github.sha }}")]),
+            ..command(
+                "Record that the default-branch tag was withheld".to_owned(),
+                summary,
+            )
+        },
+    ]
 }
 
 fn report(registry: &ImageRegistry, fresh: Option<&str>) -> Vec<RenderedStep> {
@@ -305,10 +250,17 @@ fn report(registry: &ImageRegistry, fresh: Option<&str>) -> Vec<RenderedStep> {
                 "DIGEST".to_owned(),
                 Value::Expr(format!("${{{{ steps.{PUSH_STEP}.outputs.digest }}}}")),
             ),
+            (
+                "BRANCH_TAG".to_owned(),
+                Value::Expr(format!(
+                    "${{{{ steps.{TIP_STEP}.outputs.ready == 'true' && 'pushed' || 'withheld' }}}}"
+                )),
+            ),
         ],
         ..command(
             format!("Record the digest pushed to {host}"),
-            "echo \"$IMAGE $DIGEST\" >> \"$GITHUB_STEP_SUMMARY\"".to_owned(),
+            "echo \"$IMAGE $DIGEST (default-branch tag $BRANCH_TAG)\" >> \"$GITHUB_STEP_SUMMARY\""
+                .to_owned(),
         )
     }]
 }
@@ -347,6 +299,7 @@ pub(crate) fn publish_job(
             .map(|registry| on_fresh(login(registry))),
     );
     steps.push(on_fresh(tip()));
+    steps.extend(withheld(workflow.branch, fresh.as_deref()));
     steps.push(on_fresh(push(image, workflow.branch)));
     for registry in &image.registries {
         steps.extend(report(registry, fresh.as_deref()));

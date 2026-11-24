@@ -113,16 +113,29 @@ fn the_tip_is_checked_right_before_the_push_and_main_moves_only_while_it_holds()
             .iter()
             .position(|text| text.starts_with("Build and push"))
             .ok_or("no push step")?;
-        assert_eq!(
-            tip + 1,
-            push,
-            "{name}: nothing may sit between the check and the push"
+        assert!(
+            names[tip + 1..push]
+                .iter()
+                .all(|text| text.contains("default-branch tag was withheld")),
+            "{name}: only the withheld notices may sit between the check and the push"
+        );
+        assert!(
+            step_named(publish, "Say that the default-branch tag was withheld")?["if"]
+                .as_str()
+                .is_some_and(|text| text.contains("steps.tip.outputs.ready != 'true'")),
+            "{name}"
+        );
+        assert!(
+            step_named(publish, "Record the digest")?["env"]["BRANCH_TAG"]
+                .as_str()
+                .is_some_and(|text| text.contains("'withheld'")),
+            "{name}"
         );
         assert!(
             step_named(publish, "still the tip")?["run"]
                 .as_str()
                 .is_some_and(|run| run
-                    .ends_with("image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --tip-only"))
+                    .ends_with("image gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\" --only=tip"))
         );
         let tags = step_named(publish, "Build and push")?["with"]["tags"]
             .as_str()
@@ -206,20 +219,16 @@ fn pr_only_checks_reach_the_gate_and_the_authority_and_widen_their_token_to_chec
 }
 
 #[test]
-fn pr_only_checks_get_an_administration_capable_app_token_that_is_revoked_and_nothing_else_does()
+fn pr_only_checks_are_verified_by_hosted_jobs_with_the_app_key_and_waited_for_with_a_read_only_token()
 -> TestResult {
     let workflow = rendered("image-ghcr")?;
-    for id in ["image-gate", "image-cluster-svc-authority"] {
+    for id in ["image-exemptions", "image-cluster-svc-authority"] {
         let job = &workflow["jobs"][id];
+        assert_eq!(job["runs-on"], "ubuntu-latest", "{id}");
         assert_eq!(job["environment"], "release", "{id}");
         let app = step_named(job, "Create the release App token")?;
         let run = app["run"].as_str().ok_or("no app step")?;
         assert!(run.contains("--permission=administration:write"), "{id}");
-        let gate = step_named(job, "Wait for every required check")?;
-        assert_eq!(
-            gate["env"]["GITHUB_TOKEN"], "${{ steps.app.outputs.token }}",
-            "{id}"
-        );
         assert!(
             step_named(job, "Revoke the release App token").is_ok(),
             "{id}"
@@ -228,14 +237,9 @@ fn pr_only_checks_get_an_administration_capable_app_token_that_is_revoked_and_no
             .iter()
             .filter_map(|step| step["name"].as_str())
             .collect();
-        let launcher = names
-            .iter()
-            .position(|text| text.starts_with("Install the released helper launcher"))
-            .ok_or("no launcher step")?;
-        let minted = names
-            .iter()
-            .position(|text| text.starts_with("Create the release App token"))
-            .ok_or("no app step")?;
+        let position = |prefix: &str| names.iter().position(|text| text.starts_with(prefix));
+        let launcher = position("Install the released helper launcher").ok_or("no launcher")?;
+        let minted = position("Create the release App token").ok_or("no app step")?;
         assert!(
             launcher < minted,
             "{id}: the token exists only after the helper is pinned"
@@ -245,11 +249,51 @@ fn pr_only_checks_get_an_administration_capable_app_token_that_is_revoked_and_no
             assert!(!run.starts_with("velnor-ci "), "{id}: {run}");
         }
     }
+    let exemptions = &workflow["jobs"]["image-exemptions"];
+    let verify = step_named(exemptions, "Verify that the PR-only checks")?;
+    assert_eq!(
+        verify["env"]["GITHUB_TOKEN"],
+        "${{ steps.app.outputs.token }}"
+    );
+    assert!(
+        verify["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("--only=exemptions"))
+    );
+    let authority = &workflow["jobs"]["image-cluster-svc-authority"];
+    let names: Vec<&str> = steps(authority)
+        .iter()
+        .filter_map(|step| step["name"].as_str())
+        .collect();
+    let strict = names
+        .iter()
+        .position(|text| text.contains("strict version"))
+        .ok_or("no strict step")?;
+    let minted = names
+        .iter()
+        .position(|text| text.contains("App token") && text.starts_with("Create"))
+        .ok_or("no app step")?;
+    assert!(
+        strict < minted,
+        "the tag is validated before the key is used"
+    );
+    let gate = step_named(authority, "Wait for every required check")?;
+    assert!(gate["run"].as_str().is_some_and(
+        |run| run.contains("--verify-exemptions") && run.contains("--wait-seconds=1200")
+    ));
+    let waiting = &workflow["jobs"]["image-gate"];
+    assert_eq!(waiting["runs-on"], "ubuntu-26.04-scale-set");
+    assert_eq!(waiting["needs"], serde_json::json!(["image-exemptions"]));
+    assert!(waiting.get("environment").is_none());
+    assert!(!waiting.to_string().contains("RELEASE_APP"));
+    assert!(!waiting.to_string().contains("--verify-exemptions"));
     let plain = rendered("image-plain")?;
+    assert!(plain["jobs"].get("image-exemptions").is_none());
     for id in ["image-gate", "image-plain-svc-authority"] {
         let job = &plain["jobs"][id];
         assert!(job.get("environment").is_none(), "{id}");
         assert!(!job.to_string().contains("RELEASE_APP"), "{id}");
+        assert_eq!(job["runs-on"], "ubuntu-26.04-scale-set", "{id}");
     }
     Ok(())
 }

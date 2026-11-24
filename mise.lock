@@ -77,6 +77,10 @@ url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/74540
 version = "0.4.3"
 backend = "aqua:release-plz/release-plz"
 specifiers = ["0.4.3"]
+unsupported_platforms = [
+    "macos-x64",
+    "macos-x64-baseline",
+]
 
 [tools."aqua:release-plz/release-plz"."platforms.linux-arm64"]
 checksum = "sha256:2cde0ccd8355abb8f710f0173d37fcd2eb216d6d91d81cf340ca6c047a9119c9"
@@ -592,6 +596,10 @@ url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333
 version = "2.13.0"
 backend = "packslip:github.com/jdx/hk"
 specifiers = ["2.13.0"]
+unsupported_platforms = [
+    "macos-x64",
+    "macos-x64-baseline",
+]
 
 [tools.hk."platforms.linux-arm64"]
 checksum = "sha256:490196a4e638991c671f42941d72ade4d00b14750145f34fc64377b49fc070bb"
@@ -852,6 +860,10 @@ provenance = "minisign"
 version = "1.30.0"
 backend = "packslip:github.com/jdx/mr-boxington"
 specifiers = ["v1.30.0"]
+unsupported_platforms = [
+    "macos-x64",
+    "macos-x64-baseline",
+]
 
 [tools.mr-boxington."platforms.linux-arm64"]
 checksum = "sha256:6317bb6780404e78c3b670d95e128c85871809dfc541882b2efaa34120f45e71"

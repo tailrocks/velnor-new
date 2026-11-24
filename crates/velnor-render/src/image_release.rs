@@ -3,13 +3,16 @@
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{job_id, setup_buildx};
-use crate::image_publish::{gate_scopes, gate_step, login, registry_scopes};
+use crate::image_gate::{gate_scopes, gate_step};
+use crate::image_publish::{login, registry_scopes};
 use crate::install_steps::install_helper;
 use crate::release_binaries::command;
 use crate::release_steps::{expression, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
 const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
+const AUTHORITY_WAIT_SECONDS: u32 = 1200;
+const AUTHORITY_WAIT_MINUTES: u16 = 30;
 const VERSION_STEP: &str = "version";
 
 pub(crate) fn authority_job(
@@ -18,6 +21,7 @@ pub(crate) fn authority_job(
     events: &Events<'_>,
 ) -> RenderedJob {
     let image = build.image;
+    let pr_only = workflow.pr_only_checks();
     let strict = format!(
         "^{}-v[0-9]{{1,40}}[.][0-9]{{1,40}}[.][0-9]{{1,40}}$",
         image.name
@@ -27,13 +31,17 @@ pub(crate) fn authority_job(
     RenderedJob {
         id: job_id(image, "authority"),
         condition: Some(expression(&events.tag_push(image))),
-        permissions: gate_scopes(&workflow.pr_only_checks()),
+        permissions: gate_scopes(&pr_only),
         outputs: vec![(
             "version".to_owned(),
             format!("${{{{ steps.{VERSION_STEP}.outputs.version }}}}"),
         )],
         runs_on: workflow.runner.to_string(),
-        timeout_minutes: PROMOTE_TIMEOUT_MINUTES,
+        timeout_minutes: if pr_only.is_empty() {
+            PROMOTE_TIMEOUT_MINUTES
+        } else {
+            AUTHORITY_WAIT_MINUTES
+        },
         steps: vec![
             install_helper(workflow.helper),
             RenderedStep {
@@ -43,7 +51,16 @@ pub(crate) fn authority_job(
                     format!("[[ \"$REF_NAME\" =~ {strict} ]]"),
                 )
             },
-            gate_step(0, false, &workflow.pr_only_checks()),
+            gate_step(
+                if pr_only.is_empty() {
+                    0
+                } else {
+                    AUTHORITY_WAIT_SECONDS
+                },
+                false,
+                &pr_only,
+                !pr_only.is_empty(),
+            ),
             RenderedStep {
                 id: Some(VERSION_STEP.to_owned()),
                 env: ref_name(),

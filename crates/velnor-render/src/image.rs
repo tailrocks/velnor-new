@@ -10,7 +10,8 @@ use velnor_model::{
 use crate::helper_integrity::{defaults, secure_with};
 use crate::image_build::build_job;
 use crate::image_check::check_job;
-use crate::image_publish::{GATE_JOB, admin_token, gate_job, publish_job};
+use crate::image_gate::{EXEMPTIONS_JOB, admin_token, exemptions_job, gate_job};
+use crate::image_publish::publish_job;
 use crate::image_release::{authority_job, promote_job};
 use crate::release_steps::revoke_app_token;
 use crate::rules::{RenderedJob, RuleViolation, check_rules};
@@ -88,8 +89,14 @@ impl Events<'_> {
     }
 }
 
-fn is_admin_job(job: &RenderedJob) -> bool {
-    job.id == GATE_JOB || job.id.ends_with("-authority")
+fn admin_position(job: &RenderedJob) -> Option<usize> {
+    if job.id == EXEMPTIONS_JOB {
+        Some(1)
+    } else if job.id.ends_with("-authority") {
+        Some(2)
+    } else {
+        None
+    }
 }
 
 pub fn render_image(
@@ -99,7 +106,11 @@ pub fn render_image(
         repository: workflow.repository,
         branch: workflow.branch,
     };
-    let mut jobs: Vec<RenderedJob> = vec![gate_job(workflow, &events)];
+    let mut jobs: Vec<RenderedJob> = Vec::new();
+    if !workflow.pr_only_checks().is_empty() {
+        jobs.push(exemptions_job(workflow, &events));
+    }
+    jobs.push(gate_job(workflow, &events));
     for build in &workflow.images {
         jobs.push(build_job(workflow, build, &events));
         jobs.extend(check_job(workflow, build));
@@ -110,10 +121,11 @@ pub fn render_image(
     let jobs: Vec<RenderedJob> = jobs
         .into_iter()
         .map(|job| {
-            let job = if !workflow.pr_only_checks().is_empty() && is_admin_job(&job) {
-                revoke_app_token(admin_token(workflow, job))
-            } else {
-                job
+            let job = match admin_position(&job) {
+                Some(position) if !workflow.pr_only_checks().is_empty() => {
+                    revoke_app_token(admin_token(workflow, job, position))
+                }
+                _ => job,
             };
             RenderedJob {
                 steps: secure_with(workflow.helper, job.steps),

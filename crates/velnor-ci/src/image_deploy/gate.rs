@@ -6,11 +6,13 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::gate::release_gate;
+use crate::gate::{GateMode, release_gate_with, verify_exemptions};
 use crate::github::{ApiRepo, GitHub, Repo, branch_path, parse, repo_path};
 
 const NOT_YET: Duration = Duration::from_secs(90);
 const LONGEST_PAUSE: Duration = Duration::from_secs(120);
+const TRANSIENT_BUDGET: Duration = Duration::from_secs(60);
+const TIP_PAUSE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
@@ -42,6 +44,7 @@ pub struct Request<'a> {
     pub wait: Wait,
     pub run_id: Option<u64>,
     pub pr_only_checks: &'a [String],
+    pub verify_exemptions: bool,
 }
 
 #[derive(Deserialize)]
@@ -65,17 +68,62 @@ fn superseded(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Option<Stri
     }))
 }
 
-pub fn tip_only(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Outcome, CiError> {
-    Ok(match superseded(github, repo, sha)? {
-        Some(report) => Outcome {
-            ready: false,
-            report,
-        },
-        None => Outcome {
-            ready: true,
-            report: format!("commit {sha} is the tip of the default branch\n"),
-        },
-    })
+pub fn tip_only(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    clock: &Clock<'_>,
+) -> Result<Outcome, CiError> {
+    let started = (clock.now)();
+    loop {
+        match superseded(github, repo, sha) {
+            Ok(Some(report)) => {
+                return Ok(Outcome {
+                    ready: false,
+                    report,
+                });
+            }
+            Ok(None) => {
+                return Ok(Outcome {
+                    ready: true,
+                    report: format!("commit {sha} is the tip of the default branch\n"),
+                });
+            }
+            Err(error)
+                if error.is_transient()
+                    && (clock.now)().saturating_sub(started) < TRANSIENT_BUDGET =>
+            {
+                (clock.sleep)(TIP_PAUSE);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+pub fn exemptions_only(
+    github: &dyn GitHub,
+    repo: &Repo,
+    pr_only_checks: &[String],
+    clock: &Clock<'_>,
+) -> Result<Outcome, CiError> {
+    let started = (clock.now)();
+    loop {
+        match verify_exemptions(github, repo, pr_only_checks) {
+            Ok(report) => {
+                return Ok(Outcome {
+                    ready: true,
+                    report,
+                });
+            }
+            Err(error)
+                if error.is_transient()
+                    && (clock.now)().saturating_sub(started) < TRANSIENT_BUDGET =>
+            {
+                (clock.sleep)(TIP_PAUSE);
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 enum Attempt {
@@ -94,7 +142,17 @@ fn attempt(github: &dyn GitHub, repo: &Repo, request: &Request<'_>) -> Result<At
             report,
         }));
     }
-    let verdict = release_gate(github, repo, sha, request.pr_only_checks, request.run_id)?;
+    let verdict = release_gate_with(
+        github,
+        repo,
+        sha,
+        request.pr_only_checks,
+        request.run_id,
+        GateMode {
+            verify_exemptions: request.verify_exemptions,
+            wait_for_unfinished: true,
+        },
+    )?;
     if !verdict.ready {
         return Ok(Attempt::Waiting(verdict.report));
     }
@@ -124,6 +182,12 @@ pub fn wait_for_required(
     loop {
         let result = attempt(github, repo, request);
         let elapsed = (clock.now)().saturating_sub(started);
+        let transient = matches!(&result, Err(error) if error.is_transient());
+        let limit = if transient {
+            total.max(TRANSIENT_BUDGET)
+        } else {
+            total
+        };
         match result {
             Ok(Attempt::Ready(outcome) | Attempt::Superseded(outcome)) => return Ok(outcome),
             Ok(Attempt::Waiting(report)) if elapsed >= total => {
@@ -133,11 +197,11 @@ pub fn wait_for_required(
                     total.as_secs(),
                 )));
             }
-            Err(error) if error.is_transient() && elapsed < total => {}
-            Err(error) if elapsed >= NOT_YET.min(total) => return Err(error),
+            Err(error) if transient && elapsed >= limit => return Err(error),
+            Err(error) if !transient && elapsed >= NOT_YET.min(total) => return Err(error),
             Ok(Attempt::Waiting(_)) | Err(_) => {}
         }
-        (clock.sleep)(pause.min(total.saturating_sub(elapsed)));
+        (clock.sleep)(pause.min(limit.saturating_sub(elapsed)));
         pause = (pause + pause / 2).min(LONGEST_PAUSE);
     }
 }

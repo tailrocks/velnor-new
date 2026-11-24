@@ -9,11 +9,13 @@ use std::time::{Duration, Instant};
 
 use super::{api_url, append_outputs, http, image_candidate, read_limited, token};
 use crate::cli::ImageCommand;
-use crate::cli_image::{ImageGateArgs, ImagePreflightArgs, ImageStageArgs, OpensslMode};
+use crate::cli_image::{GateOnly, ImageGateArgs, ImagePreflightArgs, ImageStageArgs, OpensslMode};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
-use crate::image_deploy::gate::{Clock, Request, Wait, tip_only, wait_for_required};
+use crate::image_deploy::gate::{
+    Clock, Request, Wait, exemptions_only, tip_only, wait_for_required,
+};
 use crate::image_deploy::hub::{HUB_URL, preflight};
 use crate::image_deploy::stage::{Glibc, Openssl, check};
 
@@ -130,15 +132,21 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
 fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
     let repo = Repo::parse(&args.repo)?;
     let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
-    let outcome = if args.tip_only {
-        tip_only(&github, &repo, &args.sha)?
+    let started = Instant::now();
+    let clock = Clock {
+        now: &|| started.elapsed(),
+        sleep: &std::thread::sleep,
+    };
+    let outcome = if args.only == Some(GateOnly::Exemptions) {
+        exemptions_only(&github, &repo, &args.pr_only_checks, &clock)?
+    } else if args.only == Some(GateOnly::Tip) {
+        tip_only(&github, &repo, &args.sha, &clock)?
     } else {
         let run_id = std::env::var("GITHUB_RUN_ID")
             .ok()
             .map(|id| id.parse::<u64>())
             .transpose()
             .map_err(|error| CiError::new(format!("invalid GITHUB_RUN_ID: {error}")))?;
-        let started = Instant::now();
         wait_for_required(
             &github,
             &repo,
@@ -151,11 +159,9 @@ fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
                 },
                 run_id,
                 pr_only_checks: &args.pr_only_checks,
+                verify_exemptions: args.verify_exemptions,
             },
-            &Clock {
-                now: &|| started.elapsed(),
-                sleep: &std::thread::sleep,
-            },
+            &clock,
         )?
     };
     append_outputs(&format!("ready={}\n", outcome.ready))?;

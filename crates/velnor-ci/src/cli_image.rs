@@ -55,6 +55,12 @@ pub struct ImageStageArgs {
     pub bins: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum GateOnly {
+    Tip,
+    Exemptions,
+}
+
 #[derive(Debug, Args)]
 pub struct ImageGateArgs {
     #[arg(long, help = "Repository as owner/name")]
@@ -81,10 +87,16 @@ pub struct ImageGateArgs {
     pub require_tip: bool,
     #[arg(
         long,
-        conflicts_with = "require_tip",
-        help = "Only check that the commit is still the tip of the default branch: write ready=true or ready=false and exit 0, without reading any check"
+        value_enum,
+        conflicts_with_all = ["require_tip", "verify_exemptions"],
+        help = "Do one thing without waiting: `tip` checks that the commit is still the tip of the default branch and writes ready=true or ready=false; `exemptions` verifies that the PR-only exemptions sit under a non-bypassable ruleset (needs a token that can read bypass_actors, Administration: write, and at least one --pr-only-check) and exits 1 or writes ready=true"
     )]
-    pub tip_only: bool,
+    pub only: Option<GateOnly>,
+    #[arg(
+        long,
+        help = "Also verify the PR-only exemptions inside the wait, which needs the same token; without it the exemptions are trusted because an earlier job verified them"
+    )]
+    pub verify_exemptions: bool,
     #[arg(
         allow_hyphen_values = true,
         long = "pr-only-check",

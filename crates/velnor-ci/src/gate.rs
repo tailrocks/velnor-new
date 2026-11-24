@@ -48,12 +48,56 @@ fn refuse_blank_pr_only(pr_only_checks: &[String]) -> Result<(), CiError> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GateMode {
+    pub verify_exemptions: bool,
+    pub wait_for_unfinished: bool,
+}
+
+impl GateMode {
+    pub const RELEASE: Self = Self {
+        verify_exemptions: true,
+        wait_for_unfinished: false,
+    };
+}
+
 pub fn release_gate(
     github: &dyn GitHub,
     repo: &Repo,
     sha: &str,
     pr_only_checks: &[String],
     current_run_id: Option<u64>,
+) -> Result<Verdict, CiError> {
+    release_gate_with(
+        github,
+        repo,
+        sha,
+        pr_only_checks,
+        current_run_id,
+        GateMode::RELEASE,
+    )
+}
+
+pub fn verify_exemptions(
+    github: &dyn GitHub,
+    repo: &Repo,
+    pr_only_checks: &[String],
+) -> Result<String, CiError> {
+    refuse_blank_pr_only(pr_only_checks)?;
+    let ApiRepo { default_branch, .. } = parse(&github.get(&repo_path(repo))?, "repository")?;
+    required_checks(github, repo, &default_branch, pr_only_checks, true)?;
+    Ok(format!(
+        "the PR-only checks of {default_branch} sit under a non-bypassable ruleset\n"
+    ))
+}
+
+pub fn release_gate_with(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    pr_only_checks: &[String],
+    current_run_id: Option<u64>,
+    mode: GateMode,
 ) -> Result<Verdict, CiError> {
     refuse_blank_pr_only(pr_only_checks)?;
     if sha.len() != 40
@@ -66,7 +110,13 @@ pub fn release_gate(
         )));
     }
     let ApiRepo { id, default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
-    let required = required_checks(github, repo, &default_branch, pr_only_checks)?;
+    let required = required_checks(
+        github,
+        repo,
+        &default_branch,
+        pr_only_checks,
+        mode.verify_exemptions,
+    )?;
     let compare: ApiCompare = parse(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
@@ -75,8 +125,15 @@ pub fn release_gate(
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
-    let check_names =
-        exemptions::check_names(github, repo, sha, &required.exempt_sources, current_run_id)?;
+    let found = exemptions::check_names(
+        github,
+        repo,
+        sha,
+        &required.exempt_sources,
+        current_run_id,
+        mode.wait_for_unfinished,
+    )?;
+    let check_names = found.names;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -127,6 +184,10 @@ pub fn release_gate(
     }
     if !failures.is_empty() {
         return Err(CiError::new(failures.join("\n")));
+    }
+    if let Some(message) = &found.unfinished {
+        ready = false;
+        report.push(message.clone());
     }
     report.push(format!("ready={ready}"));
     Ok(Verdict {
