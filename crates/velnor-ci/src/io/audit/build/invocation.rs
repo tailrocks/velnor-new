@@ -8,8 +8,10 @@ use super::super::groups::root_workspace;
 use crate::error::CiError;
 
 mod alias;
+mod derived;
 mod selection;
 pub(super) use alias::resolve;
+use derived::{build_of, refusal, without_open};
 pub(super) use selection::Selection;
 
 const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
@@ -262,86 +264,6 @@ impl Invocation {
         }
         Ok(())
     }
-}
-
-fn without_open(command: &[String]) -> Vec<String> {
-    let end = command
-        .iter()
-        .position(|word| word == "--")
-        .unwrap_or(command.len());
-    command[..end]
-        .iter()
-        .filter(|word| *word != "--open")
-        .cloned()
-        .collect()
-}
-
-fn refusal(
-    program: &str,
-    arguments: &[&str],
-    running: bool,
-    words: &[&str],
-) -> Option<&'static str> {
-    let names_target = words.iter().any(|word| {
-        ["--bin", "--example"].iter().any(|flag| {
-            word == flag
-                || word
-                    .strip_prefix(flag)
-                    .is_some_and(|rest| rest.starts_with('='))
-        })
-    });
-    match (program, arguments) {
-        ("cargo", ["fix", ..]) => Some(
-            "inputs build does not run cargo fix: it edits sources after compiling them, so no receipt of its compile is current; run it outside inputs build",
-        ),
-        _ if running && !names_target => Some(
-            "inputs build cannot tell which target cargo run builds; name it with --bin or --example",
-        ),
-        _ => None,
-    }
-}
-
-const RUN_VALUED: [&str; 18] = [
-    "-p",
-    "--package",
-    "--bin",
-    "--example",
-    "-F",
-    "--features",
-    "--profile",
-    "--target",
-    "--manifest-path",
-    "--message-format",
-    "-j",
-    "--jobs",
-    "--config",
-    "-Z",
-    "--color",
-    "--target-dir",
-    "--lockfile-path",
-    "--artifact-dir",
-];
-
-fn run_program_arguments(command: &[String], subcommand: usize) -> usize {
-    let mut index = subcommand + 2;
-    while let Some(word) = command.get(index) {
-        if word == "--" || !word.starts_with('-') {
-            return index;
-        }
-        index += if RUN_VALUED.contains(&word.as_str()) {
-            2
-        } else {
-            1
-        };
-    }
-    command.len()
-}
-
-fn build_of(command: &[String], subcommand: usize) -> Vec<String> {
-    let end = run_program_arguments(command, subcommand);
-    let mut build = command[..end.min(command.len())].to_vec();
-    "build".clone_into(&mut build[subcommand + 1]);
-    build
 }
 
 fn without_command_scope(globals: &[String]) -> Vec<String> {
