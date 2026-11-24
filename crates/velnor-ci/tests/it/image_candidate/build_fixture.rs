@@ -38,6 +38,8 @@ fn git(checkout: &Path, args: &[&str]) -> String {
             "commit.gpgsign=false",
         ])
         .args(args)
+        .env("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z")
+        .env("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z")
         .current_dir(checkout)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -127,15 +129,18 @@ impl Source {
         git(&checkout, &["commit", "-q", "-m", "fixture"]);
         executable(&dir.join("bin/docker"), DOCKER.as_bytes());
         executable(&dir.join("genuine-plugin"), GENUINE);
-        write(
-            &dir.join("archive.tar"),
-            build(&spec(vec![(plain_layer(), LAYER)])).archive(),
-        );
         fs::create_dir(dir.join("out")).unwrap_or_else(|e| unreachable!("{e}"));
         let source = Self { dir };
+        source.image_for_head();
         source.plugin(GENUINE);
         source.docker(COPY);
         source
+    }
+
+    fn image_for_head(&self) {
+        let mut candidate = spec(vec![(plain_layer(), LAYER)]);
+        candidate.revision = Some(self.head());
+        write(&self.path("archive.tar"), build(&candidate).archive());
     }
 
     pub(super) fn docker(&self, behavior: &str) {
@@ -166,6 +171,7 @@ impl Source {
         let checkout = self.path("checkout");
         git(&checkout, &["add", "-A"]);
         git(&checkout, &["commit", "-q", "-m", message]);
+        self.image_for_head();
     }
 
     pub(super) fn head(&self) -> String {
@@ -259,9 +265,7 @@ impl Source {
             ("GITHUB_WORKFLOW_SHA", "c".repeat(40)),
             ("GITHUB_RUN_ID", "10".to_owned()),
             ("GITHUB_RUN_ATTEMPT", "2".to_owned()),
-            ("GH_TOKEN", "secret-token".to_owned()),
             ("DOCKER_HOST", "tcp://elsewhere:2375".to_owned()),
-            ("REGISTRY_PASSWORD", "secret-password".to_owned()),
         ];
         for (name, value) in env {
             vars.retain(|(known, _)| known != name);

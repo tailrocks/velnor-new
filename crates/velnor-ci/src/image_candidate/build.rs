@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
-use super::record::{SCHEMA, validate};
+use super::record::{REVISION_ARGUMENT, SCHEMA, validate};
 use crate::error::CiError;
 
 const DROPPED: &[&str] = &[
@@ -18,6 +18,7 @@ const DROPPED: &[&str] = &[
     "BUILDKIT_HOST",
 ];
 const SECRET_MARKERS: &[&str] = &["TOKEN", "PASSWORD", "SECRET", "CREDENTIAL", "AUTH", "KEY"];
+const NOT_SECRETS: &[&str] = &["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_AUTHOR_DATE"];
 
 #[derive(Debug)]
 pub struct Parts<'a> {
@@ -38,7 +39,8 @@ pub fn record(parts: &Parts<'_>) -> Result<Value, CiError> {
         "workflow": &parts.workflow,
         "platform": "linux/amd64",
         "build": {
-            "builder": parts.builder, "platform": "linux/amd64", "arguments": [],
+            "builder": parts.builder, "platform": "linux/amd64",
+            "arguments": [format!("{REVISION_ARGUMENT}={}", parts.commit)],
             "exporter": "oci", "provenance": "disabled",
             "compression": "gzip", "force_compression": true,
         },
@@ -50,7 +52,12 @@ pub fn record(parts: &Parts<'_>) -> Result<Value, CiError> {
 }
 
 #[must_use]
-pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Vec<OsString> {
+pub fn buildx_arguments(
+    dockerfile: &Path,
+    archive: &Path,
+    context: &Path,
+    commit: &str,
+) -> Vec<OsString> {
     let mut output = OsString::from("type=oci,");
     output.push(csv_field(archive));
     output.push(",compression=gzip,force-compression=true");
@@ -59,6 +66,8 @@ pub fn buildx_arguments(dockerfile: &Path, archive: &Path, context: &Path) -> Ve
         .map(OsString::from)
         .collect();
     arguments.push(dockerfile.into());
+    arguments.push("--build-arg".into());
+    arguments.push(format!("{REVISION_ARGUMENT}={commit}").into());
     arguments.push("--provenance=false".into());
     arguments.push("--output".into());
     arguments.push(output);
@@ -87,8 +96,34 @@ fn csv_field(archive: &Path) -> OsString {
     OsString::from_vec(quoted)
 }
 
+fn secret_named(name: &str) -> bool {
+    let upper = name.to_uppercase();
+    !NOT_SECRETS.contains(&name) && SECRET_MARKERS.iter().any(|marker| upper.contains(marker))
+}
+
+pub fn refuse_secrets(names: impl IntoIterator<Item = OsString>) -> Result<(), CiError> {
+    let mut secrets: Vec<String> = names
+        .into_iter()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| secret_named(name))
+        .collect();
+    if secrets.is_empty() {
+        return Ok(());
+    }
+    secrets.sort();
+    secrets.dedup();
+    Err(CiError::new(format!(
+        "image build refuses to start with secret-named variables in its environment: {}. \
+         build-test.sh can read this environment through /proc/$PPID/environ, so remove them \
+         from the step's env. A name is secret-named when it contains any of {} in any case, \
+         except {}.",
+        secrets.join(", "),
+        SECRET_MARKERS.join(", "),
+        NOT_SECRETS.join(", "),
+    )))
+}
+
 #[must_use]
 pub fn forwards(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    !DROPPED.contains(&name) && !SECRET_MARKERS.iter().any(|marker| upper.contains(marker))
+    !DROPPED.contains(&name) && !secret_named(name)
 }

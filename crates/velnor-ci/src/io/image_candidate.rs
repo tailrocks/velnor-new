@@ -137,6 +137,7 @@ fn verify_with(
         &FileSource {
             path: args.archive.clone(),
         },
+        record["source"]["commit"].as_str().unwrap_or_default(),
     )?;
     if record["archive"] != json!({"sha256": scan.archive_sha, "size_bytes": scan.archive_size}) {
         return fail("Candidate archive is not the same as the archive in its record.");

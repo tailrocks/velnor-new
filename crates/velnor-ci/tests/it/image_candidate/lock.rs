@@ -62,6 +62,7 @@ fn output_argument(archive: &str) -> String {
         Path::new("/c/Dockerfile"),
         Path::new(archive),
         Path::new("/c"),
+        &"a".repeat(40),
     );
     let at = arguments.iter().position(|argument| argument == "--output");
     at.and_then(|at| arguments.get(at + 1))
