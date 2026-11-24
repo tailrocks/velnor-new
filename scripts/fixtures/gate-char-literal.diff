@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-gen/src/gates.rs b/crates/velnor-gen/src/gates.rs
+--- a/crates/velnor-gen/src/gates.rs
++++ b/crates/velnor-gen/src/gates.rs
+@@ -1,1 +1,1 @@
++gate_with_delimiters('"', (0, 1, 110), '"');

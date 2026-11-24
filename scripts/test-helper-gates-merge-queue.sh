@@ -2,12 +2,16 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-workflow="${1:-$repo/.github/workflows/repository-checks.yml}"
+workflow="${1:-$repo/.github/workflows/ci.yml}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/helper-gates-queue.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
-job_if() {
-  awk '/^  helper-gates:/ {on = 1; next} on && /^  [a-z-]+:/ {exit} on && /^    if: / {sub(/^    if: /, ""); print; exit}' "$workflow"
+triggers_on_merge_group() {
+  awk '/^"?on"?:/ {on = 1; next} on && /^[^ ]/ {exit} on && /^  merge_group:/ {found = 1} END {exit !found}' "$workflow"
+}
+
+required_condition() {
+  grep -o -- '--job lint-helper-gates=[^ '"'"']*' "$workflow" | head -n1
 }
 
 fails=0
@@ -21,8 +25,17 @@ expect() {
   fi
 }
 
-if [ -n "$(job_if | grep -F "github.event_name == 'merge_group'")" ]; then got=runs; else got=skipped; fi
-expect "helper-gates is selected for the merge_group event" runs "$got"
+if triggers_on_merge_group; then got=runs; else got=skipped; fi
+expect "the generated workflow runs on the merge_group event" runs "$got"
+
+condition="$(required_condition)"
+if [ -n "$condition" ]; then got=required; else got=missing; fi
+expect "the Required verdict waits for the helper gates job" required "$got"
+case "$condition" in
+  *lint:*) got=plan-gated ;;
+  *) got=always ;;
+esac
+expect "the helper gates job is not skipped by the plan" always "$got"
 
 git_in() { git -C "$work/repo" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 mkdir -p "$work/repo/crates/velnor-ci" "$work/repo/crates/velnor-gen/src"

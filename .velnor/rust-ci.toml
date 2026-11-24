@@ -87,6 +87,14 @@ inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_cand
 
 [[lint]]
 kind = "mise-task"
+id = "helper-gates"
+name = "Helper gates"
+task = "check-helper-gates"
+tools = ["python"]
+timeout_minutes = 10
+
+[[lint]]
+kind = "mise-task"
 id = "mise-binary-digests"
 name = "mise binary digest signature tests"
 task = "test-mise-binary-digests"

@@ -46,7 +46,7 @@ if [ -z "$diff_file" ]; then
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
-      printf 'diff --git a/%s b/%s\n@@ -0,0 +1 @@\n' "$f" "$f"
+      printf 'diff --git a/%s b/%s\n--- a/%s\n+++ b/%s\n@@ -0,0 +1 @@\n' "$f" "$f" "$f" "$f"
       sed 's/^/+/' "$f"
     done >"$tree_file"
   fi
@@ -140,8 +140,15 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
-  /^@@/ { prevnew = ""; prevadded = 0; next }
+  function destination(path) {
+    sub(/\t.*$/, "", path)
+    if (path ~ /^"b\/.*"$/) path = substr(path, 2, length(path) - 2)
+    sub(/^b\//, "", path)
+    return path
+  }
+  /^diff --git / { header = 1; file = destination($4); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
+  header && /^\+\+\+ / { file = destination(substr($0, 5)); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); next }
+  /^@@/ { header = 0; prevnew = ""; prevadded = 0; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {

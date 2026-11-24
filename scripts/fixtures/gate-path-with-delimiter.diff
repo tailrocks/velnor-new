@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-gen/src/new b/dir/gates.rs b/crates/velnor-gen/src/new b/dir/gates.rs
+--- /dev/null
++++ b/crates/velnor-gen/src/new b/dir/gates.rs
+@@ -0,0 +1 @@
++pub const MINIMUM_HELPER: (u32, u32, u32) = (0, 1, 110);
