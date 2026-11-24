@@ -54,6 +54,39 @@ fn a_full_run_after_only_affected_history_passes_within_its_own_limit() {
 }
 
 #[test]
+fn a_run_records_its_selection_in_the_name_of_the_budget_step() {
+    let mut fake = FakeGitHub::default();
+    run_listing(&mut fake, &[1, 2, 3]);
+    for id in [1, 2] {
+        finished_with(
+            &mut fake,
+            id,
+            60,
+            stepped("affected", budget_job(None, 58, Some(60))),
+        );
+    }
+    finished_with(
+        &mut fake,
+        3,
+        800,
+        stepped("full", budget_job(None, 798, Some(800))),
+    );
+    let running = executing_with(
+        &mut fake,
+        FULL_RUN,
+        700,
+        stepped("full", budget_job(None, 698, None)),
+    );
+    assert_eq!(running.sample.selection, Some(Selection::Full));
+    let (ids, _) = judged(&fake, &running, &two_modes());
+    assert_eq!(
+        ids,
+        [FULL_RUN, 3],
+        "only the full run is a sample of a full run"
+    );
+}
+
+#[test]
 fn runs_that_do_not_record_their_selection_are_one_group_of_their_own() {
     let mut fake = FakeGitHub::default();
     run_listing(&mut fake, &[1, 2, 3]);

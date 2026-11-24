@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, Concurrency, FullRun, GateNeed, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts,
-    RootSlug, SelectionName, Step, StepKind, Triggers, WORKFLOW_NAME, When, WorkflowPlan,
+    Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_STEP_HELPER, Concurrency, FullRun,
+    GateNeed, Job, JobId, PermissionScope, Permissions, PlanFrom, PrCi, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, SelectionName, Step, StepKind, Triggers,
+    WORKFLOW_NAME, When, WorkflowPlan,
 };
 
 use crate::lane::PLAN_JOB;
@@ -25,6 +26,14 @@ fn names_selection(facts: &RepoFacts) -> bool {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(BUDGET_MODES_HELPER))
+}
+
+fn names_selection_in_step(facts: &RepoFacts) -> bool {
+    names_selection(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(BUDGET_STEP_HELPER))
 }
 
 /// The job whose steps run `velnor-ci plan`.
@@ -78,6 +87,7 @@ pub(crate) fn budget_job(
         return None;
     }
     let selection = selection_name(facts, jobs, &plan_job_id(single));
+    let in_step = names_selection_in_step(facts);
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
@@ -88,7 +98,10 @@ pub(crate) fn budget_job(
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    steps.push(step(StepKind::Budget {
+        last: BUDGET_RUNS,
+        selection: selection.clone().filter(|_| in_step),
+    }));
     // A push the merge queue already tested skips its work and finishes in
     // seconds, so it is no sample of what its selection costs: the job does not
     // run for it.
@@ -103,7 +116,7 @@ pub(crate) fn budget_job(
         name: Some(BUDGET_JOB_NAME.to_owned()),
         needs,
         skip_after_merge_group: skipped_after_queue.then_some(PlanFrom::Job(plan)),
-        selection_name: selection,
+        selection_name: selection.filter(|_| !in_step),
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPushAfterNeeds
         } else {

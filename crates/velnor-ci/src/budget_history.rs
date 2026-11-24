@@ -168,12 +168,18 @@ fn by_selection(
     Ok(groups)
 }
 
-/// The selection a run records in the title of its budget job, when it has one
-/// that ran.
+/// The selection a run records in the name of the step that checks its budget,
+/// or in the title of its budget job, when that job ran.
 fn selection_of(jobs: &[ApiJob]) -> Option<Selection> {
     jobs.iter()
         .filter(|job| job.conclusion.as_deref() != Some("skipped"))
-        .find_map(|job| Selection::of_job_title(&job.name))
+        .find_map(|job| {
+            job.steps
+                .iter()
+                .filter(|step| step.conclusion.as_deref() != Some("skipped"))
+                .find_map(|step| Selection::of_step_name(&step.name))
+                .or_else(|| Selection::of_job_title(&job.name))
+        })
 }
 
 fn job_seconds(job: &ApiJob, run_id: u64) -> Result<u64, CiError> {

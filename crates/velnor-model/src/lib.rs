@@ -38,7 +38,10 @@ pub use artifact_paths::{
     Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
     selects,
 };
-pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
+pub use budget_mode::{
+    BUDGET_JOB_NAME, BUDGET_MODES_HELPER, BUDGET_STEP_HELPER, BUDGET_STEP_NAME, ModeBudget,
+    Selection, SelectionName,
+};
 pub use cache::{
     AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,
 };
