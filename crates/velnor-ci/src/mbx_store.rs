@@ -17,6 +17,7 @@ pub const KEEP_OUT_DIR: &str = "MBX_SHARE_OUT_DIR=0\n";
 pub struct Inputs<'a> {
     pub event_name: &'a str,
     pub git_ref: &'a str,
+    pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub shared_dir: Option<&'a str>,
     pub runner_temp: &'a Path,
@@ -31,9 +32,14 @@ pub enum Outcome {
 }
 
 #[must_use]
-pub fn trusted_event(event_name: &str, git_ref: &str, default_branch: Option<&str>) -> bool {
+pub fn trusted_event(
+    event_name: &str,
+    git_ref: &str,
+    ref_protected: bool,
+    default_branch: Option<&str>,
+) -> bool {
     match event_name {
-        "push" | "schedule" | "workflow_dispatch" => default_branch
+        "push" | "schedule" | "workflow_dispatch" if ref_protected => default_branch
             .filter(|branch| !branch.is_empty())
             .is_some_and(|branch| git_ref.strip_prefix("refs/heads/") == Some(branch)),
         _ => false,
@@ -45,7 +51,12 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     let Some(dir) = inputs.shared_dir.filter(|dir| !dir.is_empty()) else {
         return Outcome::NotOffered;
     };
-    if !trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch) {
+    if !trusted_event(
+        inputs.event_name,
+        inputs.git_ref,
+        inputs.ref_protected,
+        inputs.default_branch,
+    ) {
         return Outcome::Untrusted;
     }
     match validated(Path::new(dir)) {
@@ -209,6 +220,7 @@ pub fn setup() -> Result<String, CiError> {
     let outcome = select(&Inputs {
         event_name: &var("GITHUB_EVENT_NAME").unwrap_or_default(),
         git_ref: &var("GITHUB_REF").unwrap_or_default(),
+        ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         shared_dir: shared.as_deref(),
         runner_temp: &runner_temp,
