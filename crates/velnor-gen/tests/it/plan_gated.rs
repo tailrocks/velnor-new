@@ -62,7 +62,15 @@ fn plans(job: &Value) -> bool {
 }
 
 fn selected(paths: &[&str], event: EventKind) -> Result<bool, Box<dyn std::error::Error>> {
-    let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
+    selected_in(&check_repo(CHECK_GATED, FIRST)?, paths, event)
+}
+
+fn selected_in(
+    repo: &RepoView,
+    paths: &[&str],
+    event: EventKind,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let facts = detect(repo)?;
     let changed: BTreeSet<RepoPath> = paths
         .iter()
         .map(|path| RepoPath::new(*path))
@@ -196,6 +204,29 @@ fn a_pull_request_that_touches_a_generator_input_runs_the_generated_check() -> T
             "{path}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_markdown_file_the_generator_reads_runs_the_generated_check() -> TestResult {
+    let mut repo = check_repo(CHECK_GATED, FIRST)?;
+    let source = RepoPath::new("src/lib.rs")?;
+    repo.tracked_paths.insert(source.clone());
+    repo.files.insert(
+        source,
+        b"pub const GUIDE: &str = include_str!(\"../docs/guide.md\");".to_vec(),
+    );
+    for path in ["docs/guide.md", "mise-tasks/build.md"] {
+        assert!(
+            selected_in(&repo, &[path], EventKind::PullRequest)?,
+            "{path}"
+        );
+    }
+    assert!(!selected_in(
+        &repo,
+        &["docs/other.md"],
+        EventKind::PullRequest
+    )?);
     Ok(())
 }
 
