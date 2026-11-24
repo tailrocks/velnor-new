@@ -33,7 +33,13 @@
       "license_file": null,
       "links": null,
       "manifest_path": "/repo/backend-rust/crates/server/Cargo.toml",
-      "metadata": null,
+      "metadata": {
+        "cargo-machete": {
+          "ignored": [
+            "openssl-sys"
+          ]
+        }
+      },
       "name": "legacy-server",
       "publish": null,
       "readme": null,

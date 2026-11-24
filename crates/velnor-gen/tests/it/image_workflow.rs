@@ -150,7 +150,7 @@ pub(crate) fn name_of(sample: &str) -> &'static str {
     match sample {
         "image-plain" => "plain-svc",
         "image-ghcr" => "cluster-svc",
-        _ => "legacy-grpc-server",
+        _ => "multi-bin-svc",
     }
 }
 
@@ -327,7 +327,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
         ". \"$VELNOR_EXEC\" image stage --target-dir target --profile release --glibc 2.41 --openssl none --to dist --bin cluster-svc"
     );
     let workspace = rendered("image-workspace")?;
-    let build = &workspace["jobs"]["image-legacy-grpc-server-build"];
+    let build = &workspace["jobs"]["image-multi-bin-svc-build"];
     let compile = step_named(build, "Compile")?;
     assert_eq!(compile["working-directory"], "backend-rust");
     assert_eq!(

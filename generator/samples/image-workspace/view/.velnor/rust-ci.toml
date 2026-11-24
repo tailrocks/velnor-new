@@ -3,7 +3,7 @@ hosted = false
 fork_runner = "ubuntu-latest"
 
 [[image]]
-name = "legacy-grpc-server"
+name = "multi-bin-svc"
 bins = ["legacy-server", "legacy-migration"]
 root = "backend-rust"
 features = ["tls"]
@@ -15,6 +15,6 @@ pr_build = "inputs"
 
 [[image.registry]]
 host = "docker.io"
-repository = "acme/legacy-grpc-server"
+repository = "acme/multi-bin-svc"
 username = "secrets.DOCKERHUB_USERNAME"
 token = "secrets.DOCKERHUB_TOKEN"

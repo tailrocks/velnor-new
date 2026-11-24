@@ -227,21 +227,21 @@ A project that ships a Docker image of its Rust binaries describes it with one `
 
 ```toml
 [[image]]
-name = "platform-gateway"          # job ids image-<name>-*, artifact image-<name>, release tag <name>-v<X.Y.Z>
-bins = ["platform-gateway"]        # 1 to 8 binary targets of one Cargo root
+name = "example-service"          # job ids image-<name>-*, artifact image-<name>, release tag <name>-v<X.Y.Z>
+bins = ["example-service"]        # 1 to 8 binary targets of one Cargo root
 glibc = "2.41"                     # the newest glibc the image may need (default 2.41, Debian trixie)
 openssl = "sysroot"                # none (default), sysroot or vendored
 inputs = ["crates/cluster-migration/migrations"]
 
 [[image.registry]]
 host = "docker.io"
-repository = "chainargos/platform-gateway"
+repository = "example-org/example-service"
 username = "secrets.DOCKERHUB_USERNAME"
 token = "secrets.DOCKERHUB_TOKEN"
 
 [[image.registry]]                 # optional second registry
 host = "ghcr.io"
-repository = "chainargos/platform-gateway"
+repository = "example-org/example-service"
 ```
 
 | Key | Default | Rule |
