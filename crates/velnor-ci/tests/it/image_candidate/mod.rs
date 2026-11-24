@@ -10,4 +10,5 @@ mod fixture;
 mod layers;
 mod lock;
 mod record;
+mod script;
 mod tar;
