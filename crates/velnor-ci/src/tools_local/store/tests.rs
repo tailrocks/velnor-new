@@ -53,6 +53,7 @@ impl Node {
             key,
             event_name: "push",
             git_ref: "refs/heads/main",
+            ref_protected: true,
             default_branch: Some("main"),
             shared_dir: Some(&self.store),
             seed_dir: Some(&self.store),

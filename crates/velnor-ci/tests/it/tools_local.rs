@@ -63,6 +63,7 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         } else {
             "refs/pull/1/merge"
         },
+        ref_protected: true,
         default_branch: Some("main"),
         shared_dir: Some(&store),
         seed_dir: Some(&store),
@@ -114,6 +115,7 @@ fn a_push_to_a_non_default_branch_never_saves() {
             key: KEY,
             event_name: event,
             git_ref: "refs/heads/feature",
+            ref_protected: true,
             default_branch: Some("main"),
             shared_dir: Some(&store),
             seed_dir: Some(&store),
