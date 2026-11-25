@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::OnceCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use velnor_model::{RepoPath, RustMember, Target, TargetKind, UnownedPackage};
+use velnor_model::{RepoPath, RustMember, UnownedPackage};
 
-use super::package_spec::{Spec, named, parse};
-use super::platform::{Platform, Which};
+use super::package_spec::{Spec, parse};
+use super::platform::{Configured, Platform, Which, command_target};
 use super::resolve::{Request, Resolver, tests_of};
+use super::wanted::{compiles, flag, runs_doctests, wanted};
 use super::{Invocation, subcommand};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -59,17 +60,19 @@ impl Invocation {
             &words[..]
         };
         let dev = with_dev_targets(arguments, &words);
+        let doctests = runs_doctests(arguments, &words);
         let all_features = words.contains(&"--all-features");
         let defaults = !words.contains(&"--no-default-features");
         let features = feature_names(&words);
-        let target = target_flag(&words);
         let host = OnceCell::new();
         let aimed = OnceCell::new();
         let platform = |build: bool| {
             if build {
                 host.get_or_init(|| probe(Which::Host)).as_ref()
             } else {
-                aimed.get_or_init(|| probe(Which::Target(target))).as_ref()
+                aimed
+                    .get_or_init(|| probe(aim(target_flag(&words), &command_target(&words))))
+                    .as_ref()
             }
         };
         let explicit = dev
@@ -105,7 +108,7 @@ impl Invocation {
         };
         let mut own = Resolver::new(members, unowned, &platform);
         for member in &candidates {
-            own.mark(member, dev && (explicit || tests_of(member)));
+            own.mark(member, dev && (explicit || tests_of(member, doctests)));
         }
         for member in &candidates {
             own.start(member, &request);
@@ -123,7 +126,7 @@ impl Invocation {
             .collect();
         let mut built = Resolver::new(members, unowned, &platform);
         for member in &chosen {
-            built.mark(member, dev && (explicit || tests_of(member)));
+            built.mark(member, dev && (explicit || tests_of(member, doctests)));
         }
         for member in &chosen {
             built.start(member, &request);
@@ -137,6 +140,15 @@ impl Invocation {
             root: root.to_owned(),
             packages,
         })
+    }
+}
+
+fn aim<'a>(flagged: Option<&'a str>, configured: &'a Configured) -> Which<'a> {
+    match (flagged, configured) {
+        (Some(target), _) => Which::Target(Some(target)),
+        (None, Configured::Triple(triple)) => Which::Target(Some(triple)),
+        (None, Configured::Unknown) => Which::Unresolved,
+        (None, Configured::Absent) => Which::Target(None),
     }
 }
 
@@ -238,157 +250,4 @@ fn feature_names<'a>(words: &[&'a str]) -> Vec<&'a str> {
         );
     }
     names
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Gate {
-    Open,
-    Bench,
-    Doc,
-}
-
-impl Gate {
-    fn allows(self, target: &Target) -> bool {
-        match self {
-            Self::Open => true,
-            Self::Bench => target.bench,
-            Self::Doc => target.doc,
-        }
-    }
-}
-
-struct Wanted<'a> {
-    kinds: Vec<(TargetKind, Option<&'a str>, Gate)>,
-    harnesses: bool,
-}
-
-fn target_name<'a>(words: &[&'a str], index: usize, name: &str) -> Option<&'a str> {
-    let word = words[index];
-    word.strip_prefix(name)
-        .and_then(|rest| rest.strip_prefix('='))
-        .or_else(|| {
-            (word == name)
-                .then(|| words.get(index + 1).copied())
-                .flatten()
-                .filter(|value| !value.starts_with('-'))
-        })
-}
-
-fn wanted<'a>(arguments: &[&str], words: &[&'a str]) -> Wanted<'a> {
-    const LIBRARIES: [TargetKind; 2] = [TargetKind::Lib, TargetKind::ProcMacro];
-    const BENCHED: [TargetKind; 4] = [
-        TargetKind::Lib,
-        TargetKind::ProcMacro,
-        TargetKind::Bin,
-        TargetKind::Bench,
-    ];
-    let mut kinds: Vec<(TargetKind, Option<&str>, Gate)> = Vec::new();
-    let mut harnesses = false;
-    for (index, word) in words.iter().enumerate() {
-        if *word == "--all-targets" {
-            kinds.extend(
-                [
-                    TargetKind::Lib,
-                    TargetKind::ProcMacro,
-                    TargetKind::Bin,
-                    TargetKind::Test,
-                    TargetKind::Bench,
-                    TargetKind::Example,
-                ]
-                .map(|kind| (kind, None, Gate::Open)),
-            );
-            harnesses = true;
-        } else if flag(word, &["--lib"]) {
-            kinds.extend(LIBRARIES.map(|kind| (kind, None, Gate::Open)));
-        } else if *word == "--bins" {
-            kinds.push((TargetKind::Bin, None, Gate::Open));
-        } else if flag(word, &["--bin"]) {
-            kinds.push((
-                TargetKind::Bin,
-                target_name(words, index, "--bin"),
-                Gate::Open,
-            ));
-        } else if *word == "--examples" {
-            kinds.push((TargetKind::Example, None, Gate::Open));
-        } else if flag(word, &["--example"]) {
-            kinds.push((
-                TargetKind::Example,
-                target_name(words, index, "--example"),
-                Gate::Open,
-            ));
-        } else if *word == "--tests" {
-            harnesses = true;
-        } else if flag(word, &["--test"]) {
-            kinds.push((
-                TargetKind::Test,
-                target_name(words, index, "--test"),
-                Gate::Open,
-            ));
-        } else if *word == "--benches" {
-            kinds.extend(BENCHED.map(|kind| (kind, None, Gate::Bench)));
-        } else if flag(word, &["--bench"]) {
-            kinds.push((
-                TargetKind::Bench,
-                target_name(words, index, "--bench"),
-                Gate::Open,
-            ));
-        }
-    }
-    if kinds.is_empty() {
-        let gate = match arguments {
-            ["bench", ..] => Gate::Bench,
-            ["doc" | "d", ..] => Gate::Doc,
-            _ => Gate::Open,
-        };
-        kinds.extend(
-            [TargetKind::Lib, TargetKind::ProcMacro, TargetKind::Bin]
-                .map(|kind| (kind, None, gate)),
-        );
-        match arguments {
-            ["test" | "t" | "nextest", ..] => {
-                kinds.extend(
-                    [TargetKind::Test, TargetKind::Example].map(|kind| (kind, None, Gate::Open)),
-                );
-            }
-            ["bench", ..] => kinds.push((TargetKind::Bench, None, Gate::Bench)),
-            _ => {}
-        }
-    }
-    Wanted { kinds, harnesses }
-}
-
-fn compiles(
-    member: &RustMember,
-    wanted: &Wanted<'_>,
-    all_features: bool,
-    enabled: &BTreeSet<String>,
-) -> bool {
-    member.targets.iter().any(|target| {
-        (all_features
-            || (names_known(target)
-                && target
-                    .required_features
-                    .iter()
-                    .all(|feature| enabled.contains(&feature.name))))
-            && (wanted.harnesses && target.tests
-                || wanted.kinds.iter().any(|(kind, name, gate)| {
-                    target.kinds.contains(kind)
-                        && gate.allows(target)
-                        && (name.is_some() || *kind != TargetKind::Test || target.tests)
-                        && name.is_none_or(|name| named(name, target.name.as_str()))
-                }))
-    })
-}
-
-fn names_known(target: &Target) -> bool {
-    !target.requires_features || !target.required_features.is_empty()
-}
-
-fn flag(word: &str, names: &[&str]) -> bool {
-    names.iter().any(|name| {
-        word == *name
-            || word
-                .strip_prefix(name)
-                .is_some_and(|rest| rest.starts_with('='))
-    })
 }

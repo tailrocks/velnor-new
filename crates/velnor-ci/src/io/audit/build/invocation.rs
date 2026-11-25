@@ -14,6 +14,7 @@ mod platform;
 mod resolve;
 mod root;
 mod selection;
+mod wanted;
 pub(super) use alias::resolve;
 use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
 pub(super) use platform::Platform;

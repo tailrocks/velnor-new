@@ -7,7 +7,7 @@ use super::{WORKSPACE_TARGET, placed, unit, workspace_output};
 
 const REFUSAL: &str = "outside this command's explicit selection";
 
-fn repo_of(files: &[(&str, &str)]) -> Repo {
+pub(super) fn repo_of(files: &[(&str, &str)]) -> Repo {
     let repo = Repo::new("audit-selection-features");
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
     unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
@@ -19,7 +19,7 @@ fn repo_of(files: &[(&str, &str)]) -> Repo {
     repo
 }
 
-fn library(repo: &Repo, directory: &str, name: &str, extra: &str) {
+pub(super) fn library(repo: &Repo, directory: &str, name: &str, extra: &str) {
     unit(
         repo,
         &format!("{directory}/Cargo.toml"),
@@ -29,7 +29,7 @@ fn library(repo: &Repo, directory: &str, name: &str, extra: &str) {
     unit(repo, &format!("{directory}/build.rs"), "fn main() {}\n");
 }
 
-fn app(repo: &Repo, manifest: &str) {
+pub(super) fn app(repo: &Repo, manifest: &str) {
     if repo.root().join("vendor").exists() {
         unit(repo, ".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     }
@@ -41,7 +41,7 @@ fn app(repo: &Repo, manifest: &str) {
     repo.git(&["add", "--all"]);
 }
 
-fn selects(repo: &Repo, package: &str, cargo: &[&str]) -> bool {
+pub(super) fn selects(repo: &Repo, package: &str, cargo: &[&str]) -> bool {
     placed(repo, &format!("{WORKSPACE_TARGET}/debug"));
     unit(
         repo,
@@ -321,7 +321,7 @@ fn untested_library_with_a_dev_dependency() -> Repo {
     library(&repo, "vendor/devtool", "devtool", "");
     app(
         &repo,
-        "\n[lib]\ntest = false\n\n[dev-dependencies]\ndevtool = { path = \"vendor/devtool\" }\n",
+        "\n[lib]\ntest = false\ndoctest = false\n\n[dev-dependencies]\ndevtool = { path = \"vendor/devtool\" }\n",
     );
     repo
 }
