@@ -12,6 +12,7 @@ use crate::plan::step;
 pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
+// helper-gate: first in tools-v0.1.116 via 18440c1489
 const LISTED_MANIFESTS_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {

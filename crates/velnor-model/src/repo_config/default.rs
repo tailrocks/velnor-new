@@ -54,6 +54,7 @@ impl Default for RustCiConfig {
             policy: None,
             external_workflows: None,
             release_assets: Vec::new(),
+            images: Vec::new(),
         }
     }
 }

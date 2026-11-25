@@ -29,6 +29,7 @@ pub(crate) fn bin(name: &str) -> Result<Target, Box<dyn std::error::Error>> {
         doctest: false,
         source: None,
         requires_features: false,
+        required_features: Vec::new(),
     })
 }
 

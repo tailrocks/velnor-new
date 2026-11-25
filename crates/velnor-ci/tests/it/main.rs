@@ -84,6 +84,7 @@ mod group_runs;
 mod helper_commands;
 mod http_errors;
 mod image_candidate;
+mod image_deploy;
 mod image_publish;
 mod inputs;
 mod io;
