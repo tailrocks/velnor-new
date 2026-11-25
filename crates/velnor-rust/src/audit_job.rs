@@ -12,7 +12,7 @@ use crate::units::Unit;
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
 const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 102);
-const PULL_REQUEST_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 116);
+const PULL_REQUEST_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 117);
 
 // helper-gate: first in tools-v0.1.116 via 3797db0eb5
 const AUDIT_BEFORE_SAVES_HELPER: (u64, u64, u64) = (0, 1, 116);

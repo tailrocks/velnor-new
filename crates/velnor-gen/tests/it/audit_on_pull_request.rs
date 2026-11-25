@@ -37,14 +37,14 @@ fn audit_runs(
 }
 
 #[test]
-fn a_pull_request_audits_inputs_with_a_warm_cache_from_helper_0_1_116() -> TestResult {
+fn a_pull_request_audits_inputs_with_a_warm_cache_from_helper_0_1_117() -> TestResult {
     for config in ["", EVERYTHING] {
         assert!(
-            audit_runs("0.1.116", config, "pull_request", false)?,
+            audit_runs("0.1.117", config, "pull_request", false)?,
             "{config}"
         );
         assert!(
-            audit_runs("0.1.116", config, "pull_request", true)?,
+            audit_runs("0.1.117", config, "pull_request", true)?,
             "{config}"
         );
     }
@@ -52,10 +52,10 @@ fn a_pull_request_audits_inputs_with_a_warm_cache_from_helper_0_1_116() -> TestR
 }
 
 #[test]
-fn a_merge_group_audits_inputs_with_a_warm_cache_from_helper_0_1_116() -> TestResult {
+fn a_merge_group_audits_inputs_with_a_warm_cache_from_helper_0_1_117() -> TestResult {
     for config in ["", EVERYTHING, LABEL] {
         assert!(
-            audit_runs("0.1.116", config, "merge_group", false)?,
+            audit_runs("0.1.117", config, "merge_group", false)?,
             "{config}"
         );
     }
@@ -119,8 +119,8 @@ fn audit_condition(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn the_audits_of_a_plan_job_lane_run_on_a_pull_request_from_helper_0_1_116() -> TestResult {
-    let audits = audit_condition(&grouped("0.1.116")?);
+fn the_audits_of_a_plan_job_lane_run_on_a_pull_request_from_helper_0_1_117() -> TestResult {
+    let audits = audit_condition(&grouped("0.1.117")?);
     assert_eq!(audits.len(), 2);
     for condition in &audits {
         assert!(
