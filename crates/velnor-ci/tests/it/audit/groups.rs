@@ -337,9 +337,6 @@ fn a_relative_target_variable_of_the_step_does_not_apply_to_the_roots_of_another
         assert!(built.status.success(), "{variable}: {stderr}");
     }
 }
-<<<<<<< HEAD
-||||||| 9394ee7399
-=======
 
 #[test]
 fn a_cargo_build_from_one_group_leaves_the_roots_of_another_group_at_their_own_targets() {
@@ -359,4 +356,3 @@ fn a_cargo_build_from_one_group_leaves_the_roots_of_another_group_at_their_own_t
         );
     }
 }
->>>>>>> origin/main
