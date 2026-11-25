@@ -139,6 +139,24 @@ class MarkupTests(unittest.TestCase):
             )
 
 
+class LinkMarkupTests(unittest.TestCase):
+    def test_a_name_split_by_link_and_tag_markup_is_found(self):
+        tmp, root = repository(
+            {
+                "inline.md": "zz[plan](https://example.test)ted\n",
+                "image.md": "zz![plan](a.png)ted\n",
+                "reference.md": "zz[plan][ref]ted\n[ref]: https://example.test\n",
+                "html.md": "zz<b>plan</b>ted\n",
+                "span.md": '<span class="x">zz</span>planted\n',
+                "clean.md": "zz[plan](https://example.test)tex\n",
+            }
+        )
+        with tmp:
+            self.assertEqual(
+                guard.scan(root, planted("zzplanted")), ["html.md:1", "image.md:1", "inline.md:1", "reference.md:1", "span.md:1"]
+            )
+
+
 class BoundedReportTests(unittest.TestCase):
     def test_a_file_repeating_a_name_reports_only_the_reportable_prefix(self):
         tmp, root = repository({"big.md": "zzplanted\n" * 5000})
@@ -180,6 +198,51 @@ class LfsTests(unittest.TestCase):
             self.store(root, b"one\ntwo zzplanted\n")
             self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:2"])
             self.assertEqual(guard.scan(root, planted("zzother")), [])
+
+    def test_pointers_with_extension_lines_or_crlf_endings_are_scanned(self):
+        extension = f"version https://git-lfs.github.com/spec/v1\next-0-sha256 {self.OID}\noid sha256:{self.OID}\nsize 20\n".encode()
+        crlf = self.pointer().replace(b"\n", b"\r\n")
+        for pointer in (extension, crlf):
+            tmp, root = indexed({b"big.bin": pointer})
+            with tmp:
+                self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:lfs-payload-unavailable"])
+                self.store(root, b"one\ntwo zzplanted\n")
+                self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:2"])
+
+    def test_a_pointer_without_an_oid_fails_closed(self):
+        tmp, root = indexed({b"big.bin": b"version https://git-lfs.github.com/spec/v1\nsize 20\n"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["big.bin:lfs-payload-unavailable"])
+
+    def test_the_payload_is_found_from_a_linked_worktree(self):
+        tmp, root = indexed({b"big.bin": self.pointer()})
+        with tmp:
+            self.store(root, b"one\ntwo zzplanted\n")
+            env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+            subprocess.run(
+                ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@invalid", "commit", "-q", "-m", "base"],
+                check=True,
+                env=env,
+            )
+            linked = root.parent / (root.name + "-linked")
+            subprocess.run(["git", "-C", str(root), "worktree", "add", "-q", str(linked)], check=True, env=env)
+            try:
+                self.assertEqual(guard.scan(linked, planted("zzplanted")), ["big.bin:2"])
+            finally:
+                subprocess.run(["git", "-C", str(root), "worktree", "remove", "--force", str(linked)], check=True, env=env)
+
+    def test_a_large_payload_is_scanned_in_bounded_memory_with_correct_line_numbers(self):
+        tmp, root = indexed({b"big.bin": self.pointer()})
+        with tmp:
+            self.store(root, b"lorem ipsum dolor\n" * 400_000 + b"see zzplanted\n" + b"tail\n" * 10)
+            tracemalloc.start()
+            try:
+                found = guard.scan(root, planted("zzplanted"))
+                peak = tracemalloc.get_traced_memory()[1]
+            finally:
+                tracemalloc.stop()
+            self.assertEqual(found, ["big.bin:400001"])
+            self.assertLess(peak, 24_000_000)
 
     def test_a_pointer_whose_payload_is_not_fetched_fails_closed(self):
         tmp, root = indexed({b"big.bin": self.pointer(), b"plain.txt": b"plain\n"})

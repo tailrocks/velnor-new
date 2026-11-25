@@ -31,8 +31,12 @@ NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
 MAX_PERCENT_ROUNDS = 4
 EXEMPT_PATHS = frozenset({b"docs/hard-decisions.md", b".velnor/runner.lock"})
-MARKUP = re.compile(rb"[*`~]+")
-LFS_POINTER = re.compile(rb"\Aversion https://git-lfs\.github\.com/spec/v1\noid sha256:([0-9a-f]{64})\nsize [0-9]+\n")
+MARKUP = re.compile(rb"\]\([^)\n]*\)|\]\[[^\]\n]*\]|</?[a-z][^>\n]*>|[*`~\[\]]+")
+LFS_PREFIX = b"version https://git-lfs.github.com/spec/"
+LFS_OID = re.compile(rb"^oid sha256:([0-9a-f]{64})\r?$", re.MULTILINE)
+LFS_MAX_POINTER = 1024
+LFS_BLOCK = 1 << 18
+LFS_OVERLAP = 1024
 MAX_SEEN = 2_000_000
 UNFETCHED_LFS_FIXTURE = b"version https://git-lfs.github.com/spec/v1\noid sha256:8c271ba1c7127e3409055b635a6a2e2671c004ff9f4a507c2cdfd9e0fb3bf90b\nsize 7\n"
 
@@ -252,29 +256,71 @@ def stream_blobs(root, objects):
             raise SystemExit("git cat-file failed; the guard cannot scan what it cannot read")
 
 
-def lfs_payload(root, content):
-    pointer = LFS_POINTER.match(content)
-    if not pointer or content == UNFETCHED_LFS_FIXTURE:
-        return b""
+def is_lfs_pointer(content):
+    return content.startswith(LFS_PREFIX) and len(content) <= LFS_MAX_POINTER and content != UNFETCHED_LFS_FIXTURE
+
+
+def lfs_object(root, content):
+    pointer = LFS_OID.search(content)
+    if not pointer:
+        return None
     oid = pointer.group(1).decode()
-    store = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "--git-path", "lfs/objects"], check=True, capture_output=True, text=True
+    common = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
-    stored = Path(root, store, oid[:2], oid[2:4], oid)
-    return stored.read_bytes() if stored.is_file() else None
+    stored = Path(common, "lfs", "objects", oid[:2], oid[2:4], oid)
+    return stored if stored.is_file() else None
+
+
+def blocks(stored):
+    with stored.open("rb") as stream:
+        tail = b""
+        while True:
+            data = stream.read(LFS_BLOCK)
+            if not data:
+                break
+            data = tail + data
+            cut = data.rfind(b"\n") + 1
+            if cut:
+                tail = data[cut:]
+                yield data[:cut]
+            elif len(data) >= 2 * LFS_BLOCK:
+                tail = data[-LFS_OVERLAP:]
+                yield data
+            else:
+                tail = data
+        if tail:
+            yield tail
+
+
+def payload_lines(matcher, stored):
+    lines = set()
+    offset = 0
+    for block in blocks(stored):
+        found_views = views(block)
+        chunks = set().union(*(CHUNK.findall(view) for view in found_views))
+        matcher.learn(chunks)
+        if matcher.touches(chunks):
+            lines.update(offset + number for number in matcher.view_lines(found_views))
+        offset += block.count(b"\n")
+    return lines
 
 
 def blob_findings(root, matcher, key, content, names):
     found_views = views(content)
-    payload = b"" if key[0] else lfs_payload(root, content)
-    if payload is None:
-        return [f"{name}:lfs-payload-unavailable" for name in names]
-    if payload:
-        found_views += views(payload)
     chunks = set().union(*(CHUNK.findall(view) for view in found_views))
     matcher.learn(chunks)
-    lines = matcher.view_lines(found_views) if matcher.touches(chunks) else []
-    places = ["target"] if key[0] and lines else lines
+    lines = set(matcher.view_lines(found_views)) if matcher.touches(chunks) else set()
+    if not key[0] and is_lfs_pointer(content):
+        stored = lfs_object(root, content)
+        if stored is None:
+            return [f"{name}:lfs-payload-unavailable" for name in names]
+        lines |= payload_lines(matcher, stored)
+    ordered = sorted(lines)[:MAX_REPORTED]
+    places = ["target"] if key[0] and ordered else ordered
     return [f"{name}:{place}" for name in names for place in places]
 
 
