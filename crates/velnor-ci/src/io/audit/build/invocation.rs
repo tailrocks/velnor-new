@@ -3,6 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
+use velnor_gen::io::{Cargo, Checkout, read_checkout_under};
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
@@ -177,6 +179,18 @@ impl Invocation {
         } else {
             "cargo".to_owned()
         }
+    }
+
+    pub(super) fn checkout(&self, directory: &Path) -> Result<Checkout, CiError> {
+        let executable = self.executable(directory);
+        read_checkout_under(
+            directory,
+            Some(&Cargo {
+                executable: &executable,
+                toolchain: self.toolchain(),
+            }),
+        )
+        .map_err(|e| CiError::new(e.to_string()))
     }
 
     pub(super) fn toolchain(&self) -> Option<&str> {
