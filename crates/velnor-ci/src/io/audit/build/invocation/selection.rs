@@ -380,8 +380,6 @@ fn compiles(
     })
 }
 
-/// A target the recorded file marks as gated without naming the features (an
-/// older pin) cannot be proven enabled.
 fn names_known(target: &Target) -> bool {
     !target.requires_features || !target.required_features.is_empty()
 }
