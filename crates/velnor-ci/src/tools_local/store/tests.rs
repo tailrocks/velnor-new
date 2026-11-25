@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread::{Scope, ScopedJoinHandle};
 use std::time::{Duration, SystemTime};
 
-use super::{Step, restore_with, save_with};
-use crate::tools_local::{Inputs, Outcome, Verb};
+use super::{Step, hook};
+use crate::tools_local::{Inputs, Outcome, Verb, run};
 
 const RUSTC: &str = ".rustup/toolchains/stable/rustc";
 const COSIGN: &str = ".local/share/mise/installs/cosign/bin/cosign";
@@ -19,7 +19,6 @@ const COSIGN: &str = ".local/share/mise/installs/cosign/bin/cosign";
 struct Node {
     root: PathBuf,
     store: String,
-    owner: u32,
 }
 
 impl Drop for Node {
@@ -41,9 +40,8 @@ fn node(name: &str) -> Node {
         fs::create_dir_all(path.parent().expect("a parent")).expect("create the tool");
         fs::write(path, text).expect("write the tool");
     }
-    let owner = fs::metadata(&root).expect("node metadata").uid();
     let store = root.join("store").display().to_string();
-    Node { root, store, owner }
+    Node { root, store }
 }
 
 impl Node {
@@ -62,19 +60,16 @@ impl Node {
         }
     }
 
-    fn save(&self, key: &str, replace: bool, pause: &dyn Fn(Step)) -> Outcome {
+    fn save(&self, key: &str, replace: bool, reached: impl Fn(Step) + 'static) -> Outcome {
+        let _installed = hook::install(reached);
         let home = self.root.join("home");
-        save_with(
-            &self.inputs(Verb::Save, key, &home, replace),
-            self.owner,
-            pause,
-        )
+        run(&self.inputs(Verb::Save, key, &home, replace))
     }
 
-    fn restore(&self, key: &str, copied: &dyn Fn()) -> Outcome {
+    fn restore(&self, key: &str, reached: impl Fn(Step) + 'static) -> Outcome {
+        let _installed = hook::install(reached);
         let home = self.root.join("fresh");
-        let inputs = self.inputs(Verb::Restore, key, &home, false);
-        restore_with(&inputs, Some(&self.store), false, self.owner, copied)
+        run(&self.inputs(Verb::Restore, key, &home, false))
     }
 
     fn entry(&self, key: &str) -> PathBuf {
@@ -82,7 +77,7 @@ impl Node {
     }
 
     fn saved_aged(&self, key: &str, hours: u64) {
-        let saved = self.save(key, false, &|_| {});
+        let saved = self.save(key, false, |_| {});
         assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
         aged(&self.entry(key), hours);
     }
@@ -116,7 +111,7 @@ fn quiet(saved: &Outcome) -> bool {
     matches!(saved, Outcome::Saved { kept, .. } if kept.is_empty())
 }
 
-fn at(step: Step, pause: &dyn Fn()) -> impl Fn(Step) + '_ {
+fn at(step: Step, pause: Rc<dyn Fn()>) -> impl Fn(Step) + 'static {
     move |reached| {
         if reached == step {
             pause();
@@ -138,25 +133,25 @@ impl<T> Paused<'_, T> {
 
 fn started<'scope, T: Send + std::fmt::Debug + 'scope>(
     scope: &'scope Scope<'scope, '_>,
-    operation: impl FnOnce(&dyn Fn()) -> T + Send + 'scope,
+    operation: impl FnOnce(Rc<dyn Fn()>) -> T + Send + 'scope,
 ) -> (bool, Paused<'scope, T>) {
     let (reached, at_pause) = mpsc::channel();
     let (resume, resumed) = mpsc::channel::<()>();
     let worker = scope.spawn(move || {
-        let first = AtomicBool::new(true);
-        operation(&|| {
-            if first.swap(false, Ordering::SeqCst) {
+        let first = Cell::new(true);
+        operation(Rc::new(move || {
+            if first.replace(false) {
                 reached.send(()).ok();
                 resumed.recv().ok();
             }
-        })
+        }))
     });
     (at_pause.recv().is_ok(), Paused { resume, worker })
 }
 
 fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
     scope: &'scope Scope<'scope, '_>,
-    operation: impl FnOnce(&dyn Fn()) -> T + Send + 'scope,
+    operation: impl FnOnce(Rc<dyn Fn()>) -> T + Send + 'scope,
 ) -> Paused<'scope, T> {
     let (reached, operation) = started(scope, operation);
     assert!(reached, "ended before its pause: {:?}", operation.finish());
@@ -164,7 +159,7 @@ fn paused<'scope, T: Send + std::fmt::Debug + 'scope>(
 }
 
 fn interleave<T: Send + std::fmt::Debug>(
-    operation: impl FnOnce(&dyn Fn()) -> T + Send,
+    operation: impl FnOnce(Rc<dyn Fn()>) -> T + Send,
     meanwhile: impl FnOnce(),
 ) -> T {
     std::thread::scope(|scope| {
@@ -180,11 +175,11 @@ fn heal_k1_seeing_the_stale_lock_while_a_save_prunes_k1(
 ) -> (Outcome, Outcome) {
     std::thread::scope(|scope| {
         let heal = paused(scope, |pause| {
-            node.save("k1", true, &at(Step::Breaking, pause))
+            node.save("k1", true, at(Step::Breaking, pause))
         });
         meanwhile();
         let prune = paused(scope, |pause| {
-            node.save("k3", false, &at(Step::Retiring, pause))
+            node.save("k3", false, at(Step::Retiring, pause))
         });
         (heal.finish(), prune.finish())
     })
@@ -196,9 +191,9 @@ fn a_save_does_not_prune_an_entry_a_restore_is_copying_and_a_later_save_does() {
     node.saved_aged("k1", 3);
     node.saved_aged("k2", 2);
     let restored = interleave(
-        |pause| node.restore("k1", pause),
+        |pause| node.restore("k1", at(Step::Copied, pause)),
         || {
-            let saved = node.save("k3", false, &|_| {});
+            let saved = node.save("k3", false, |_| {});
             let quiet = matches!(&saved, Outcome::Saved { kept, .. } if kept.is_empty());
             assert!(quiet, "{saved:?}");
         },
@@ -207,7 +202,7 @@ fn a_save_does_not_prune_an_entry_a_restore_is_copying_and_a_later_save_does() {
     let rustc = fs::read_to_string(node.root.join("fresh").join(RUSTC));
     assert_eq!(rustc.ok().as_deref(), Some("rustc"));
     assert_eq!(node.listed(), ["k1", "k2", "k3"]);
-    let saved = node.save("k4", false, &|_| {});
+    let saved = node.save("k4", false, |_| {});
     assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
     assert_eq!(node.listed(), ["k3", "k4"]);
 }
@@ -218,15 +213,15 @@ fn a_prune_does_not_remove_the_fresh_entry_a_replacing_save_published_after_the_
     node.saved_aged("k1", 3);
     node.saved_aged("k2", 2);
     let saved = interleave(
-        |pause| node.save("k3", false, &at(Step::Chosen, pause)),
+        |pause| node.save("k3", false, at(Step::Chosen, pause)),
         || {
-            let healed = node.save("k1", true, &|_| {});
+            let healed = node.save("k1", true, |_| {});
             assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
         },
     );
     assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
     assert_eq!(node.listed(), ["k1", "k3"]);
-    let restored = node.restore("k1", &|| {});
+    let restored = node.restore("k1", |_| {});
     assert!(restored.hit(), "{restored:?}");
 }
 
@@ -241,9 +236,9 @@ fn a_restore_whose_entry_is_replaced_during_the_copy_is_not_a_hit() {
     )
     .expect("poison the entry");
     let restored = interleave(
-        |pause| node.restore("k1", pause),
+        |pause| node.restore("k1", at(Step::Copied, pause)),
         || {
-            let healed = node.save("k1", true, &|_| {});
+            let healed = node.save("k1", true, |_| {});
             assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
         },
     );
@@ -290,14 +285,14 @@ fn a_save_that_saw_a_stale_lock_does_not_remove_the_lock_another_job_took_since(
     node.with_a_killed_jobs_lock();
     let (first, healed, second) = std::thread::scope(|scope| {
         let sweep = paused(scope, |pause| {
-            node.save("k3", false, &at(Step::Breaking, pause))
+            node.save("k3", false, at(Step::Breaking, pause))
         });
         let prune = paused(scope, |pause| {
-            node.save("k4", false, &at(Step::Retiring, pause))
+            node.save("k4", false, at(Step::Retiring, pause))
         });
         let first = sweep.finish();
         aged(&node.entry("k4"), 1);
-        let healed = node.save("k1", true, &|_| {});
+        let healed = node.save("k1", true, |_| {});
         (first, healed, prune.finish())
     });
     let listed = node.listed();
@@ -315,15 +310,15 @@ fn a_lock_whose_taker_was_killed_is_taken_over_once_it_is_stale_again() {
     let node = node("killed-taker");
     node.with_a_killed_jobs_lock();
     let killed = catch_unwind(AssertUnwindSafe(|| {
-        node.save("k1", true, &|step| {
+        node.save("k1", true, |step| {
             assert_ne!(step, Step::Taken, "killed while taking the lock over");
         })
     }));
     assert!(killed.is_err(), "{killed:?}");
     aged(&node.entry(".lock-k1"), 2);
-    let healed = node.save("k1", true, &|_| {});
+    let healed = node.save("k1", true, |_| {});
     assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
-    let restored = node.restore("k1", &|| {});
+    let restored = node.restore("k1", |_| {});
     assert!(restored.hit(), "{restored:?}");
     assert_eq!(node.listed(), ["k1", "k2"]);
 }
@@ -333,18 +328,16 @@ fn a_job_that_took_over_a_stale_lock_keeps_the_key_until_it_moved_the_lock() {
     let node = node("taken-lock");
     node.with_a_killed_jobs_lock();
     let (healed, saved) = std::thread::scope(|scope| {
-        let heal = paused(scope, |pause| {
-            node.save("k1", true, &at(Step::Taken, pause))
-        });
+        let heal = paused(scope, |pause| node.save("k1", true, at(Step::Taken, pause)));
         let (_, prune) = started(scope, |pause| {
-            node.save("k3", false, &at(Step::Retiring, pause))
+            node.save("k3", false, at(Step::Retiring, pause))
         });
         (heal.finish(), prune.finish())
     });
     let listed = node.listed();
     assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
     assert!(quiet(&saved), "{saved:?}");
-    let restored = node.restore("k1", &|| {});
+    let restored = node.restore("k1", |_| {});
     assert!(restored.hit(), "{restored:?}, the store lists {listed:?}");
     assert_eq!(listed, ["k1", "k3"]);
 }

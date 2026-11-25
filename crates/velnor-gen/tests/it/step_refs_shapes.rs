@@ -182,7 +182,7 @@ fn public_lock() -> String {
     )
 }
 
-fn mixed_lock() -> String {
+pub(crate) fn mixed_lock() -> String {
     format!(
         "{GIT_LOCK}\n[[package]]\nname = \"dep1\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/public-lib?rev=v1#{SHA}\"\n"
     )
