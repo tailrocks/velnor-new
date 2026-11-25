@@ -114,6 +114,7 @@ fn ansible_runs_for_every_changed_path_when_a_play_exists() -> TestResult {
         manifest.clone(),
         RustMetadata {
             members: vec![RustPackage {
+                features: std::collections::BTreeMap::new(),
                 name: PackageName::new("app")?,
                 version: Some("0.1.0".to_owned()),
                 manifest,
@@ -124,7 +125,9 @@ fn ansible_runs_for_every_changed_path_when_a_play_exists() -> TestResult {
                     tests: false,
                     doctest: false,
                     source: None,
-                    requires_features: false,
+                    required_features: Vec::new(),
+                    doc: true,
+                    bench: true,
                 }],
             }],
         },

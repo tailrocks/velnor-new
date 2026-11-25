@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::benches::Benches;
 use crate::reads::{Located, locate};
 use velnor_model::{
     DependencyKind, PackageDependency, PackageName, RepoPath, RustMetadata, RustPackage, Target,
@@ -48,6 +50,8 @@ struct Package {
     manifest_path: PathBuf,
     dependencies: Vec<Dependency>,
     targets: Vec<RawTarget>,
+    #[serde(default)]
+    features: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +65,8 @@ struct Dependency {
     #[serde(default)]
     features: Vec<String>,
     rename: Option<String>,
+    #[serde(default = "enabled")]
+    uses_default_features: bool,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +77,8 @@ struct RawTarget {
     test: bool,
     #[serde(default = "enabled")]
     doctest: bool,
+    #[serde(default = "enabled")]
+    doc: bool,
     src_path: Option<PathBuf>,
     #[serde(rename = "required-features", default)]
     required_features: Vec<String>,
@@ -86,6 +94,7 @@ pub fn reduce_metadata(
         .packages
         .into_iter()
         .map(|package| {
+            let benches = Benches::read(&package.manifest_path);
             Ok(RustPackage {
                 name: PackageName::new(package.name).map_err(invalid)?,
                 version: Some(package.version),
@@ -98,8 +107,9 @@ pub fn reduce_metadata(
                 targets: package
                     .targets
                     .into_iter()
-                    .map(|target| target_of(repository, target))
+                    .map(|target| target_of(repository, &benches, target))
                     .collect::<Result<_, _>>()?,
+                features: package.features,
             })
         })
         .collect::<Result<_, MetadataError>>()?;
@@ -126,12 +136,17 @@ fn dependency_of(
             .map(|path| repo_path(repository, &path.join("Cargo.toml")))
             .transpose()?,
         features: dependency.features,
+        default_features: dependency.uses_default_features,
         rename: dependency.rename,
     })
 }
 
-fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataError> {
-    let kinds = target
+fn target_of(
+    repository: &Path,
+    benches: &Benches,
+    target: RawTarget,
+) -> Result<Target, MetadataError> {
+    let kinds: Vec<TargetKind> = target
         .kind
         .iter()
         .map(|kind| match kind.as_str() {
@@ -145,12 +160,15 @@ fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataErr
             other => Err(invalid(format!("unknown target kind {other}"))),
         })
         .collect::<Result<_, _>>()?;
+    let bench = benches.allows(&kinds, &target.name);
     Ok(Target {
         name: TargetName::new(target.name).map_err(invalid)?,
         kinds,
         tests: target.test,
         doctest: target.doctest,
-        requires_features: !target.required_features.is_empty(),
+        doc: target.doc,
+        bench,
+        required_features: target.required_features,
         source: target
             .src_path
             .and_then(|path| match locate(repository, &path, "") {

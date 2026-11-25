@@ -66,12 +66,15 @@ pub(crate) fn target(kind: TargetKind) -> Target {
         tests: true,
         doctest: kind == TargetKind::Lib,
         source: None,
-        requires_features: false,
+        required_features: Vec::new(),
+        doc: true,
+        bench: true,
     }
 }
 
 pub(crate) fn with_targets(package: &str, kinds: &[TargetKind]) -> RustMember {
     RustMember {
+        features: std::collections::BTreeMap::new(),
         targets: kinds.iter().map(|kind| target(*kind)).collect(),
         ..member(package, &format!("crates/{package}"), &[])
     }
@@ -136,8 +139,9 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         with_targets("macro", &[TargetKind::ProcMacro]),
         with_targets("tests-only", &[TargetKind::Test]),
         RustMember {
+            features: std::collections::BTreeMap::new(),
             targets: vec![Target {
-                requires_features: true,
+                required_features: vec!["f".to_owned()],
                 ..target(TargetKind::Bin)
             }],
             ..member("gated", "crates/gated", &[])
@@ -176,6 +180,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
     assert!(!commands.contains(&CargoCommand::Doctest), "{commands:?}");
 
     let untested = RustMember {
+        features: std::collections::BTreeMap::new(),
         targets: vec![Target {
             tests: false,
             ..target(TargetKind::Bin)

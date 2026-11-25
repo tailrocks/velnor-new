@@ -22,6 +22,7 @@ fn dependency(
     manifest: Option<&str>,
 ) -> Result<PackageDependency, Box<dyn Error>> {
     Ok(PackageDependency {
+        default_features: true,
         name: PackageName::new(name)?,
         kind,
         platform: None,
@@ -38,13 +39,25 @@ fn target(
     tests: bool,
     source: Option<&str>,
 ) -> Result<Target, Box<dyn Error>> {
+    let bench = kinds.iter().any(|kind| {
+        matches!(
+            kind,
+            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin | TargetKind::Bench
+        )
+    });
     Ok(Target {
         name: TargetName::new(name)?,
         kinds,
         tests,
         doctest: true,
         source: source.map(path).transpose()?,
-        requires_features: name == "derive",
+        required_features: if name == "derive" {
+            vec!["macros".to_owned()]
+        } else {
+            Vec::new()
+        },
+        doc: true,
+        bench,
     })
 }
 
@@ -73,6 +86,7 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
     }"#;
     let expected = RustMetadata {
         members: vec![RustPackage {
+            features: std::collections::BTreeMap::new(),
             name: PackageName::new("app")?,
             version: Some("0.0.0".to_owned()),
             manifest: path("app/Cargo.toml")?,
@@ -163,6 +177,63 @@ fn io_reads_the_tracked_config_and_runs_metadata_on_manifests_outside_exclude_sh
             path("b/Cargo.toml")?,
             path("a/c/Cargo.toml")?,
         ]
+    );
+    Ok(())
+}
+
+#[test]
+fn cargo_metadata_carries_the_flags_and_feature_table_selection_needs() -> TestResult {
+    let scratch = velnor_test_support::ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-gen-target-flags-{}", std::process::id())),
+    );
+    let manifest = scratch.path().join("Cargo.toml");
+    std::fs::write(
+        &manifest,
+        "[package]\nname = \"app\"\nversion = \"0.0.0\"\n[lib]\nbench = false\n[[bin]]\nname = \"tool\"\npath = \"src/tool.rs\"\nbench = false\n",
+    )?;
+    let root = scratch.path().to_string_lossy();
+    let json = format!(
+        r#"{{
+      "workspace_root": "{root}",
+      "packages": [{{
+        "name": "app",
+        "version": "0.0.0",
+        "manifest_path": "{root}/Cargo.toml",
+        "features": {{"default": ["dep:helper"], "extra": []}},
+        "dependencies": [
+          {{"name": "helper", "kind": null, "optional": true, "uses_default_features": false, "target": "cfg(unix)", "path": "{root}/helper"}}
+        ],
+        "targets": [
+          {{"name": "app", "kind": ["lib"], "test": true}},
+          {{"name": "tool", "kind": ["bin"], "test": true, "doc": false, "required-features": ["extra"]}},
+          {{"name": "speed", "kind": ["bench"], "test": false}}
+        ]
+      }}]
+    }}"#
+    );
+    let (_, reduced) = reduce_metadata(scratch.path(), json.as_bytes())?;
+    let package = &reduced.members[0];
+    let flags: Vec<(&str, bool, bool, Vec<String>)> = package
+        .targets
+        .iter()
+        .map(|t| (t.name.as_str(), t.doc, t.bench, t.required_features.clone()))
+        .collect();
+    assert_eq!(
+        flags,
+        [
+            ("app", true, false, vec![]),
+            ("tool", false, false, vec!["extra".to_owned()]),
+            ("speed", true, true, vec![]),
+        ]
+    );
+    assert_eq!(
+        package.features.get("default"),
+        Some(&vec!["dep:helper".to_owned()])
+    );
+    assert!(!package.dependencies[0].default_features);
+    assert_eq!(
+        package.dependencies[0].platform.as_deref(),
+        Some("cfg(unix)")
     );
     Ok(())
 }

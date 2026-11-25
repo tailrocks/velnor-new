@@ -70,6 +70,7 @@ fn package(
             return UnownedPackage {
                 name,
                 dependencies: Vec::new(),
+                features: BTreeMap::new(),
                 unread: Some(unread),
             };
         }
@@ -82,6 +83,7 @@ fn package(
             .and_then(|declared| PackageName::new(declared).ok())
             .unwrap_or(name),
         dependencies: Vec::new(),
+        features: feature_table(&own),
         unread: None,
     };
     for section in sections(&own) {
@@ -103,6 +105,7 @@ fn package(
                 entry,
             ) {
                 Ok(edges) => {
+                    let (features, default_features) = requested(view, manifest, &own, key, entry);
                     package
                         .dependencies
                         .extend(edges.into_iter().map(|(manifest, name)| MemberDependency {
@@ -110,6 +113,8 @@ fn package(
                             kind,
                             platform: platform.clone(),
                             optional: optional(entry),
+                            features: features.clone(),
+                            default_features,
                             manifest,
                         }));
                 }
@@ -155,6 +160,50 @@ fn sections(own: &Table) -> Vec<Section<'_>> {
                 .collect(),
         })
         .collect()
+}
+
+fn feature_table(own: &Table) -> BTreeMap<String, Vec<String>> {
+    own.get("features")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten()
+        .map(|(name, members)| (name.clone(), strings(members)))
+        .collect()
+}
+
+fn strings(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn requested(
+    view: &RepoView,
+    manifest: &RepoPath,
+    own: &Table,
+    key: &str,
+    entry: &Value,
+) -> (Vec<String>, bool) {
+    let mut features = entry.get("features").map_or_else(Vec::new, strings);
+    let mut defaults = entry.get("default-features").and_then(Value::as_bool);
+    if entry.get("workspace").is_some()
+        && let Some((_, workspace)) = workspace(view, manifest, own)
+        && let Some(shared) = workspace
+            .get("workspace")
+            .and_then(|workspace| workspace.get("dependencies"))
+            .and_then(|dependencies| dependencies.get(key))
+    {
+        features.extend(shared.get("features").map_or_else(Vec::new, strings));
+        defaults = shared
+            .get("default-features")
+            .and_then(Value::as_bool)
+            .or(defaults);
+    }
+    (features, defaults.unwrap_or(true))
 }
 
 fn optional(entry: &Value) -> bool {

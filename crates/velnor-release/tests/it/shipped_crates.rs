@@ -35,6 +35,7 @@ fn package(
                 optional: false,
                 manifest: None,
                 features: Vec::new(),
+                default_features: true,
                 rename: None,
             })
         })
@@ -45,6 +46,7 @@ fn package(
         manifest: RepoPath::new(manifest)?,
         dependencies,
         targets: Vec::new(),
+        features: std::collections::BTreeMap::new(),
     })
 }
 
@@ -153,6 +155,7 @@ fn recorded_metadata(
                     optional: false,
                     manifest: None,
                     features: Vec::new(),
+                    default_features: true,
                     rename: None,
                 });
             }
@@ -162,6 +165,7 @@ fn recorded_metadata(
                 manifest: RepoPath::new(member["manifest"].as_str().ok_or("no manifest")?)?,
                 dependencies,
                 targets: Vec::new(),
+                features: std::collections::BTreeMap::new(),
             });
         }
         metadata.insert(RepoPath::new(workspace)?, RustMetadata { members });

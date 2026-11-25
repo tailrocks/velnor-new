@@ -24,6 +24,7 @@ pub(crate) fn name(text: &str) -> PackageName {
 
 pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> RustMember {
     RustMember {
+        features: std::collections::BTreeMap::new(),
         version: None,
         name: name(package),
         manifest: path(&format!("{directory}/Cargo.toml")),
@@ -31,6 +32,8 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
         dependencies: dependencies
             .iter()
             .map(|(package, directory)| MemberDependency {
+                features: Vec::new(),
+                default_features: true,
                 name: name(package),
                 kind: DependencyKind::Normal,
                 platform: None,
@@ -62,6 +65,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         .filter(|dependency| !members.iter().any(|m| m.manifest == dependency.manifest))
         .map(|dependency| {
             let package = UnownedPackage {
+                features: std::collections::BTreeMap::new(),
                 name: dependency.name.clone(),
                 dependencies: Vec::new(),
                 unread: None,
@@ -297,6 +301,7 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
 #[test]
 fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
     let top = RustMember {
+        features: std::collections::BTreeMap::new(),
         version: None,
         directory: None,
         manifest: path("Cargo.toml"),
@@ -361,6 +366,7 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
 #[test]
 fn a_target_source_outside_every_package_directory_selects_every_root() {
     let sharing = |package: &str, directory: &str| RustMember {
+        features: std::collections::BTreeMap::new(),
         version: None,
         targets: vec![Target {
             source: Some(path("shared/common.rs")),

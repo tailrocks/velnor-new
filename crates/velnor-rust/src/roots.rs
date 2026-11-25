@@ -341,11 +341,14 @@ fn member(
                     kind: dependency.kind,
                     platform: dependency.platform.clone(),
                     optional: dependency.optional,
+                    features: dependency.features.clone(),
+                    default_features: dependency.default_features,
                     manifest,
                 })
             })
             .collect(),
         targets: package.targets.clone(),
+        features: package.features.clone(),
         custom_harnesses: custom_harnesses(view, package)?,
     })
 }

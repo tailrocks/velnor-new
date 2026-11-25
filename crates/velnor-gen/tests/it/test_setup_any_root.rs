@@ -46,6 +46,7 @@ fn a_coalesced_build_phase_setup_runs_when_any_root_that_needs_it_is_selected() 
                 .members[0]
                 .dependencies
                 .push(PackageDependency {
+                    default_features: true,
                     name: PackageName::new("package-1")?,
                     kind: DependencyKind::Normal,
                     platform: None,

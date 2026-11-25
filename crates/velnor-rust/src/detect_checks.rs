@@ -18,7 +18,7 @@ fn is_generator(member: &RustMember) -> bool {
         && member.targets.iter().any(|target| {
             target.name.as_str() == GENERATOR_PACKAGE
                 && target.kinds.contains(&TargetKind::Bin)
-                && !target.requires_features
+                && !target.requires_features()
         })
 }
 

@@ -338,6 +338,7 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
     let dependency =
         |name: &str, manifest: Option<&str>| -> Result<_, Box<dyn std::error::Error>> {
             Ok(PackageDependency {
+                default_features: true,
                 name: PackageName::new(name)?,
                 kind: DependencyKind::Normal,
                 manifest: manifest.map(path).transpose()?,
@@ -354,6 +355,7 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
         dependency("shared", Some("shared/Cargo.toml"))?,
         dependency("macros", None)?,
         PackageDependency {
+            default_features: true,
             name: PackageName::new("proptest")?,
             kind: DependencyKind::Dev,
             manifest: None,

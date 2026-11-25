@@ -322,6 +322,7 @@ fn a_build_phase_setup_of_a_path_dependency_runs_before_the_root_that_compiles_i
     pin_helper(&mut repo, "0.1.109")?;
     let app = RepoPath::new("app/Cargo.toml")?;
     let dependency = PackageDependency {
+        default_features: true,
         name: PackageName::new("package-1")?,
         kind: DependencyKind::Normal,
         platform: None,
@@ -373,6 +374,7 @@ fn a_build_phase_setup_of_a_grouped_dependency_runs_once_per_job() -> TestResult
             .members[0]
             .dependencies
             .push(PackageDependency {
+                default_features: true,
                 name: PackageName::new("b")?,
                 kind: DependencyKind::Normal,
                 platform: None,

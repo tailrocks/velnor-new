@@ -331,6 +331,7 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
 #[test]
 fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_that_package() {
     let root_package = RustMember {
+        features: std::collections::BTreeMap::new(),
         version: None,
         name: name("tool"),
         manifest: path("Cargo.toml"),
@@ -342,7 +343,9 @@ fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_tha
             tests: false,
             doctest: false,
             source: Some(path("docs/tool.rs")),
-            requires_features: false,
+            required_features: Vec::new(),
+            doc: true,
+            bench: true,
         }],
         custom_harnesses: Vec::new(),
     };
@@ -372,7 +375,9 @@ fn a_source_two_roots_name_as_a_target_selects_the_package_of_every_root() {
             tests: false,
             doctest: false,
             source: Some(path("a/shared/tool.rs")),
-            requires_features: false,
+            required_features: Vec::new(),
+            doc: true,
+            bench: true,
         }];
         member
     };
