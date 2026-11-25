@@ -91,7 +91,20 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
     }"#;
     let expected = RustMetadata {
         members: vec![RustPackage {
-            features: std::collections::BTreeMap::new(),
+            features: [
+                ("default", vec!["full"]),
+                ("full", vec!["macros"]),
+                ("macros", vec![]),
+                ("unrelated", vec!["serde/derive"]),
+            ]
+            .into_iter()
+            .map(|(name, members)| {
+                (
+                    name.to_owned(),
+                    members.into_iter().map(str::to_owned).collect(),
+                )
+            })
+            .collect(),
             name: PackageName::new("app")?,
             version: Some("0.0.0".to_owned()),
             manifest: path("app/Cargo.toml")?,

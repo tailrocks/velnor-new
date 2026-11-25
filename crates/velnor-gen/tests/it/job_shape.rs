@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use velnor_gen::io::recording_of;
 use velnor_gen::{GenerateError, expected_with_notes, plan_generate};
 use velnor_model::{
-    CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RequiredFeature, RustMember, Shape, StepKind, Target,
-    TargetKind, TargetName, Timings, When,
+    CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RequiredFeature, RustMember, Shape,
+    StepKind, Target, TargetKind, TargetName, Timings, When,
 };
 use velnor_rust::{
     CONFIG_PATH, DetectError, METADATA_PATH, TIMINGS_PATH, decide_shape, plan, render_timings,
