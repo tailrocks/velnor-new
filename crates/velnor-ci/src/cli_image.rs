@@ -49,6 +49,11 @@ pub struct ImageStageArgs {
     pub to: PathBuf,
     #[arg(
         long,
+        help = "Stage into a new directory with an unpredictable name below this directory (0700), instead of --to, and write its path as dir=<path> to $GITHUB_OUTPUT; the files are read-only"
+    )]
+    pub private_under: Option<PathBuf>,
+    #[arg(
+        long,
         help = "The checkout: every directory of --to below it must be a real directory, not a symbolic link; the working directory by default"
     )]
     pub within: Option<PathBuf>,

@@ -83,6 +83,16 @@ fn civil_days(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + of_era - 719_468
 }
 
+fn days_in(year: i64, month: i64) -> i64 {
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
 fn stamp(text: &str) -> Option<(i64, u32)> {
     let (date, rest) = text.split_once('T')?;
     let mut date_parts = date.split('-');
@@ -91,7 +101,10 @@ fn stamp(text: &str) -> Option<(i64, u32)> {
         digits(date_parts.next()?, 2)?,
         digits(date_parts.next()?, 2)?,
     );
-    if date_parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    if date_parts.next().is_some()
+        || !(1..=12).contains(&month)
+        || !(1..=days_in(year, month)).contains(&day)
+    {
         return None;
     }
     let (clock, offset) = if let Some(clock) = rest.strip_suffix('Z') {
@@ -147,7 +160,7 @@ fn predates(ruleset: &Ruleset, pushed: Option<&str>) -> bool {
         .as_deref()
         .or(ruleset.created_at.as_deref())
         .and_then(stamp);
-    matches!((changed, pushed.and_then(stamp)), (Some(changed), Some(pushed)) if changed <= pushed)
+    matches!((changed, pushed.and_then(stamp)), (Some(changed), Some(pushed)) if changed < pushed)
 }
 
 fn pushed_at(github: &dyn GitHub, repo: &Repo, run_id: u64) -> Result<String, CiError> {

@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -37,7 +37,7 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::VerifyCandidate(args) => image_candidate::verify_candidate(&args),
         ImageCommand::Build(args) => image_candidate::build(&args),
         ImageCommand::Publish(args) => image_candidate::publish::publish(&args),
-        ImageCommand::Stage(args) => stage(&args),
+        ImageCommand::Stage(args) => stage_command(&args),
         ImageCommand::Gate(args) => gate(&args),
         ImageCommand::Changes(args) => changes(&args),
         ImageCommand::Advance(args) => advance_branch(&args),
@@ -110,7 +110,42 @@ fn staged_directory(to: &Path, within: &Path) -> Result<(), CiError> {
     no_link_on(to, within)
 }
 
+#[derive(Debug)]
+pub struct Staged {
+    pub report: String,
+    pub directory: PathBuf,
+}
+
+fn stage_command(args: &ImageStageArgs) -> Result<String, CiError> {
+    let staged = stage_to(args)?;
+    if args.private_under.is_some() {
+        append_outputs(&format!("dir={}\n", staged.directory.display()))?;
+    }
+    Ok(staged.report)
+}
+
 pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
+    stage_to(args).map(|staged| staged.report)
+}
+
+fn private_directory(under: &Path) -> Result<PathBuf, CiError> {
+    let mut random = [0_u8; 16];
+    fs::File::open("/dev/urandom")
+        .and_then(|mut source| std::io::Read::read_exact(&mut source, &mut random))
+        .map_err(|error| CiError::new(format!("cannot read random bytes: {error}")))?;
+    let mut name = String::new();
+    for byte in random {
+        let _ = write!(name, "{byte:02x}");
+    }
+    let directory = under.join(format!("image-stage-{name}"));
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&directory)
+        .map_err(|error| CiError::new(format!("cannot create {}: {error}", directory.display())))?;
+    Ok(directory)
+}
+
+pub fn stage_to(args: &ImageStageArgs) -> Result<Staged, CiError> {
     let ceiling = Glibc::parse(&args.glibc).ok_or_else(|| {
         CiError::new(format!("`{}` is not a glibc version like 2.41", args.glibc))
     })?;
@@ -150,23 +185,33 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
         None => std::env::current_dir()
             .map_err(|error| CiError::new(format!("cannot read the working directory: {error}")))?,
     };
-    let to = if args.to.is_absolute() {
+    let to = if let Some(under) = &args.private_under {
+        no_link_on(under, under)?;
+        private_directory(under)?
+    } else if args.to.is_absolute() {
         args.to.clone()
     } else {
         within.join(&args.to)
     };
-    staged_directory(&to, &within)?;
+    if args.private_under.is_none() {
+        staged_directory(&to, &within)?;
+    }
+    let mode = if args.private_under.is_some() {
+        0o555
+    } else {
+        0o755
+    };
     let mut report = Vec::new();
     for (bin, bytes, checked) in &staged {
         let target = to.join(bin);
         OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(0o755)
+            .mode(mode)
             .open(&target)
             .and_then(|mut file| {
                 file.write_all(bytes)?;
-                file.set_permissions(fs::Permissions::from_mode(0o755))
+                file.set_permissions(fs::Permissions::from_mode(mode))
             })
             .map_err(|error| CiError::new(format!("cannot write {}: {error}", target.display())))?;
         report.push(format!(
@@ -186,7 +231,10 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
             .map(|(bin, _, _)| (*bin).as_str())
             .collect::<Vec<_>>(),
     )?;
-    Ok(report.join("\n") + "\n")
+    Ok(Staged {
+        report: report.join("\n") + "\n",
+        directory: to,
+    })
 }
 
 fn only_staged_files(to: &Path, names: &[&str]) -> Result<(), CiError> {
@@ -287,7 +335,6 @@ fn hub_preflight(args: &ImagePreflightArgs) -> Result<String, CiError> {
         &args.repository,
         &args.tag,
     )?;
-    append_outputs(&format!("sha_exists={}\n", outcome.sha_exists))?;
     Ok(outcome.report)
 }
 

@@ -278,7 +278,10 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
             condition: picked.clone(),
             ..stage(build)
         });
-        let mut artifact_step = upload(artifact(build.image), staged(build.image));
+        let mut artifact_step = upload(
+            artifact(build.image),
+            format!("${{{{ steps.{}.outputs.dir }}}}", stage_step(build.image)),
+        );
         artifact_step.condition = picked;
         for (name, value) in &mut artifact_step.with {
             if name == "retention-days" {
@@ -353,21 +356,27 @@ fn compile(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> RenderedStep {
 fn stage(build: &ImageBuild<'_>) -> RenderedStep {
     let image = build.image;
     let mut run = format!(
-        "velnor-ci image stage --target-dir {} --profile {} --glibc {} --openssl {} --to {}",
+        "velnor-ci image stage --target-dir {} --profile {} --glibc {} --openssl {} --private-under \"$RUNNER_TEMP\"",
         shell_word(&join(build.root, "target")),
         shell_word(image.profile_directory()),
         image.glibc,
         image.openssl.name(),
-        shell_word(&staged(image))
     );
     for bin in &image.bins {
         let _ = write!(run, " --bin {}", shell_word(bin));
     }
-    command(
-        format!(
-            "Stage the {} binaries and check their glibc ceiling",
-            image.name
-        ),
-        run,
-    )
+    RenderedStep {
+        id: Some(stage_step(image)),
+        ..command(
+            format!(
+                "Stage the {} binaries and check their glibc ceiling",
+                image.name
+            ),
+            run,
+        )
+    }
+}
+
+fn stage_step(image: &ImageConfig) -> String {
+    format!("stage-{}", image.name)
 }

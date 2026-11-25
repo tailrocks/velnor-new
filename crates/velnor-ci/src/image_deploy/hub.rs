@@ -159,7 +159,7 @@ pub fn preflight(
         report: format!(
             "{repository} is private; tag {tag} {}\n",
             if sha_exists {
-                "already exists, so nothing is pushed again"
+                "already exists and this push replaces it"
             } else {
                 "is new"
             }

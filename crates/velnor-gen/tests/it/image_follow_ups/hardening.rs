@@ -76,6 +76,29 @@ fn a_symlinked_dockerfile_or_ignore_file_is_refused() -> TestResult {
             "{path}"
         );
     }
+    let mut submodule = sample("image-plain")?;
+    submodule.tracked_paths.insert(RepoPath::new("Dockerfile")?);
+    submodule.gitlinks.insert(RepoPath::new("Dockerfile")?);
+    assert!(matches!(
+        expected_files(&submodule),
+        Err(GenerateError::Image(ImageError::DockerfileSymlink { .. }))
+    ));
+    let mut inside = sample("image-plain")?;
+    inside.gitlinks.insert(RepoPath::new("vendor")?);
+    inside
+        .tracked_paths
+        .insert(RepoPath::new("vendor/Dockerfile")?);
+    let nested = edited("image-plain", |text| {
+        text.replace(
+            "name = \"plain-svc\"\n",
+            "name = \"plain-svc\"\ndockerfile = \"vendor/Dockerfile\"\n",
+        )
+    })?;
+    inside.files = nested.files;
+    assert!(matches!(
+        expected_files(&inside),
+        Err(GenerateError::Image(ImageError::DockerfileSymlink { .. }))
+    ));
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::Path;
 
 use velnor_ci::cli::{ImageStageArgs, OpensslMode};
-use velnor_ci::io::image_deploy::stage;
+use velnor_ci::io::image_deploy::{stage, stage_to};
 
 use super::elf::{Elf, build};
 use crate::support::fresh_dir;
@@ -22,6 +22,7 @@ fn args(root: &Path, glibc: &str, openssl: OpensslMode, bins: &[&str]) -> ImageS
         openssl,
         to: root.join("dist"),
         within: Some(root.to_path_buf()),
+        private_under: None,
         bins: bins.iter().map(|bin| (*bin).to_owned()).collect(),
     }
 }
@@ -284,5 +285,37 @@ fn a_stage_directory_or_a_parent_that_is_a_symbolic_link_is_refused_before_anyth
     assert!(
         fs::read_dir(&real).is_ok_and(|mut entries| entries.next().is_none()),
         "nothing was written through the parent link"
+    );
+}
+
+#[test]
+fn a_private_stage_directory_has_an_unpredictable_name_is_not_writable_and_is_new_each_time() {
+    let root = fresh_dir("deploy", "stage-private");
+    built(&root, "svc", &Elf::dynamic_x86_64());
+    let under = root.join("temp");
+    fs::create_dir_all(&under).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut private = args(&root, "2.41", OpensslMode::None, &["svc"]);
+    private.private_under = Some(under.clone());
+    let first = stage_to(&private).unwrap_or_else(|e| unreachable!("{e}"));
+    let second = stage_to(&private).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_ne!(first.directory, second.directory);
+    for staged in [&first, &second] {
+        assert!(staged.directory.starts_with(&under));
+        let name = staged
+            .directory
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+        assert!(name.starts_with("image-stage-") && name.len() == "image-stage-".len() + 32);
+        let mode =
+            |path: &Path| fs::metadata(path).map_or(0, |meta| meta.permissions().mode() & 0o777);
+        assert_eq!(mode(&staged.directory), 0o700);
+        assert_eq!(mode(&staged.directory.join("svc")), 0o555);
+    }
+    assert!(!root.join("dist").exists(), "--to is not used");
+    symlink(&under, root.join("link")).unwrap_or_else(|e| unreachable!("{e}"));
+    private.private_under = Some(root.join("link"));
+    assert!(
+        stage_to(&private).is_err(),
+        "the parent of a private directory cannot be a link"
     );
 }

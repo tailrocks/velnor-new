@@ -59,16 +59,15 @@ fn images_with_one_compilation_identity_compile_once_and_stage_one_directory_eac
         .filter(|run| run.contains("image stage"))
         .collect();
     assert_eq!(stages.len(), 2);
-    assert!(
-        stages
-            .iter()
-            .any(|run| run.ends_with("--to dist --bin legacy-server --bin legacy-migration"))
-    );
-    assert!(
-        stages
-            .iter()
-            .any(|run| run.ends_with("--to dist-ops --bin legacy-server --bin legacy-migration"))
-    );
+    assert!(stages.iter().all(|run| {
+        run.ends_with("--private-under \"$RUNNER_TEMP\" --bin legacy-server --bin legacy-migration")
+    }));
+    let ids: Vec<&str> = steps(build)
+        .iter()
+        .filter_map(|step| step["id"].as_str())
+        .filter(|id| id.starts_with("stage-"))
+        .collect();
+    assert_eq!(ids, ["stage-multi-bin-svc", "stage-ops-job"]);
     let artifacts: Vec<&str> = uses_of(build, "actions/upload-artifact")
         .iter()
         .filter_map(|step| step["with"]["name"].as_str())

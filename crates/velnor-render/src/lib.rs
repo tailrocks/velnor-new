@@ -26,6 +26,7 @@ mod helper_integrity;
 mod helper_steps;
 mod image;
 mod image_advance;
+mod image_boundary;
 mod image_build;
 mod image_changes;
 mod image_check;
@@ -84,6 +85,7 @@ pub use crate::image::{
     IMAGE_BUILDKIT, IMAGE_ENVIRONMENT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, IMAGE_WORKFLOW_PATH,
     ImageBuild, ImageMbx, ImageWorkflow, render_image,
 };
+pub use crate::image_boundary::check_image_boundary;
 pub use crate::mise_digest::{MISE_BINARIES, MiseBinary, UnknownMiseVersion, mise_sha256_input};
 pub(crate) use crate::permission_yaml::permission_pairs;
 pub use crate::pinned_actions::{

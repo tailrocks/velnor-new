@@ -351,7 +351,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
     );
     assert_eq!(
         step_named(build, "Stage the cluster-svc binaries")?["run"],
-        ". \"$VELNOR_EXEC\" image stage --target-dir target --profile release --glibc 2.41 --openssl none --to dist --bin cluster-svc"
+        ". \"$VELNOR_EXEC\" image stage --target-dir target --profile release --glibc 2.41 --openssl none --private-under \"$RUNNER_TEMP\" --bin cluster-svc"
     );
     let workspace = rendered("image-workspace")?;
     let build = &workspace["jobs"]["image-multi-bin-svc-build"];
@@ -363,7 +363,7 @@ fn the_compile_step_names_the_glibc_target_the_selection_and_the_staged_director
     );
     assert_eq!(
         step_named(build, "Stage the multi-bin-svc binaries")?["run"],
-        ". \"$VELNOR_EXEC\" image stage --target-dir backend-rust/target --profile release --glibc 2.36 --openssl sysroot --to dist --bin legacy-server --bin legacy-migration"
+        ". \"$VELNOR_EXEC\" image stage --target-dir backend-rust/target --profile release --glibc 2.36 --openssl sysroot --private-under \"$RUNNER_TEMP\" --bin legacy-server --bin legacy-migration"
     );
     assert!(
         step_named(build, "OpenSSL sysroot")?["run"]

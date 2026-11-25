@@ -214,8 +214,23 @@ fn check_dockerfile(view: &RepoView, image: &ImageConfig) -> Result<(), ImageErr
         format!("{}/.dockerignore", image.context)
     };
     let specific = format!("{}.dockerignore", image.dockerfile);
+    let under_gitlink = |path: &str| {
+        view.gitlinks
+            .iter()
+            .any(|link| path == link.as_str() || path.starts_with(&format!("{}/", link.as_str())))
+    };
+    for path in [image.dockerfile.as_str(), image.context.as_str()] {
+        if under_gitlink(path) {
+            return Err(ImageError::DockerfileSymlink {
+                image: image.name.clone(),
+                path: path.to_owned(),
+            });
+        }
+    }
     for path in [image.dockerfile.clone(), ignore, specific] {
-        if RepoPath::new(path.as_str()).is_ok_and(|checked| view.symlinks.contains(&checked)) {
+        if RepoPath::new(path.as_str()).is_ok_and(|checked| {
+            view.symlinks.contains(&checked) || view.gitlinks.contains(&checked)
+        }) {
             return Err(ImageError::DockerfileSymlink {
                 image: image.name.clone(),
                 path,

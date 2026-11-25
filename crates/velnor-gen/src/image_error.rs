@@ -176,7 +176,7 @@ impl fmt::Display for ImageError {
             ),
             Self::DockerfileSymlink { image, path } => write!(
                 f,
-                "image {image}: `{path}` is a symbolic link; the publish job checks out only regular files, so commit the file itself"
+                "image {image}: `{path}` is a symbolic link or a git submodule; the publish job checks out only regular files and no submodules, so commit the file itself"
             ),
             Self::DockerfileMissing { image, path } => write!(
                 f,

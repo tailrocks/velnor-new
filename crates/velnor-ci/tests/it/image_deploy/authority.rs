@@ -164,6 +164,10 @@ fn any_other_actor_needs_an_active_tag_ruleset_that_forbids_creating_moving_and_
         "2026-02-01T12:00:00.+07:00",
         "2026-02-01T12:00:00+0700",
         "2026-02-01T12:00:00+25:00",
+        "2025-04-31T12:00:00Z",
+        "2025-02-29T12:00:00Z",
+        "1900-02-29T12:00:00Z",
+        "2026-02-30T00:00:00Z",
     ] {
         let message = run(
             &api(&ruleset(|r| r["updated_at"] = json!(malformed))),
@@ -186,14 +190,29 @@ fn a_ruleset_that_predates_the_push_vouches_and_an_unknown_push_time_never_does(
     let same = api(&ruleset(|r| {
         r["updated_at"] = json!("2026-02-01T12:00:00Z");
     }));
-    assert!(run(&same, "mallory", &[]).is_ok());
+    let message = run(&same, "mallory", &[]).err().unwrap_or_default();
+    assert!(
+        message.contains("no active tag ruleset"),
+        "a change in the same second is not older: {message}"
+    );
     for earlier in [
-        "2026-02-01T19:00:00.000+07:00",
-        "2026-02-01T12:00:00.000Z",
+        "2026-02-01T18:59:59.999+07:00",
+        "2026-02-01T11:59:59.999Z",
         "2026-02-01T07:30:00-04:00",
     ] {
         let local = api(&ruleset(|r| r["updated_at"] = json!(earlier)));
         assert!(run(&local, "mallory", &[]).is_ok(), "{earlier}");
+    }
+    let leap = api(&ruleset(|r| {
+        r["updated_at"] = json!("2024-02-29T12:00:00Z")
+    }));
+    assert!(
+        run(&leap, "mallory", &[]).is_ok(),
+        "a real leap day is a valid, earlier instant"
+    );
+    for same_instant in ["2026-02-01T19:00:00.000+07:00", "2026-02-01T12:00:00.000Z"] {
+        let local = api(&ruleset(|r| r["updated_at"] = json!(same_instant)));
+        assert!(run(&local, "mallory", &[]).is_err(), "{same_instant}");
     }
     let unknown = run_with(&covered, "mallory", &[], None)
         .err()

@@ -10,6 +10,7 @@ use velnor_model::{
 
 use crate::helper_integrity::{defaults, secure_with};
 use crate::image_advance::advance_job;
+use crate::image_boundary::check_image_boundary;
 use crate::image_build::build_job;
 use crate::image_changes::changes_job;
 use crate::image_check::check_job;
@@ -183,6 +184,10 @@ pub fn render_image(
             }
         })
         .collect();
+    let boundary = check_image_boundary(&jobs);
+    if !boundary.is_empty() {
+        return Err(boundary);
+    }
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
     let document = [

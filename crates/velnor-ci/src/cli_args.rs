@@ -227,7 +227,7 @@ pub enum ImageCommand {
     )]
     Advance(ImageAdvanceArgs),
     #[command(
-        about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private, and write sha_exists=true or false to $GITHUB_OUTPUT for the tag. Never prints a credential"
+        about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private. Never prints a credential"
     )]
     Preflight(ImagePreflightArgs),
     #[command(
