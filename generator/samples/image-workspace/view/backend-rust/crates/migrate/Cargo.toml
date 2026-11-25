@@ -1,0 +1,10 @@
+[package]
+name = "legacy-migrate"
+version = "1.4.0"
+edition = "2024"
+
+[[bin]]
+name = "legacy-migration"
+path = "src/main.rs"
+
+[dependencies]

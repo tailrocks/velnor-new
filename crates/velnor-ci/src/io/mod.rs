@@ -53,6 +53,7 @@ mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+pub mod image_deploy;
 mod input_dirs;
 mod input_scopes;
 mod input_snapshot;
@@ -123,8 +124,8 @@ pub use self::version::{parse_cli, version_text};
 use crate::artifact_stage;
 use crate::cli::{
     ArtifactsCommand, AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs,
-    Command, CompareArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
-    ReleaseGateArgs, SourcesCommand, TestGroupsCommand,
+    Command, CompareArgs, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
+    SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -237,11 +238,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
-        Command::Image(ImageCommand::VerifyCandidate(args)) => {
-            image_candidate::verify_candidate(&args)
-        }
-        Command::Image(ImageCommand::Build(args)) => image_candidate::build(&args),
-        Command::Image(ImageCommand::Publish(args)) => image_candidate::publish::publish(&args),
+        Command::Image(command) => image_deploy::run(command),
         Command::Fetch(args) => fetch::fetch(&args),
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),

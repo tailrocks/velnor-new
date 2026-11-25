@@ -8,6 +8,8 @@ mod drifts;
 mod error;
 mod external;
 mod helper_gate;
+mod image;
+mod image_error;
 pub mod io;
 mod key_gates;
 mod plan_render;
@@ -22,6 +24,7 @@ pub use drifts::{Drift, drift};
 pub use error::{ExternalWorkflowError, GenerateError};
 pub use external::external_skips;
 pub use helper_gate::require_compatible;
+pub use image_error::ImageError;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use tag::check_tag;
 pub use velnor_workflows::HELPER_COMMANDS;
@@ -105,6 +108,7 @@ pub fn expected_with_notes(
         }
         let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
         files.extend(release);
+        files.extend(image::image_workflow(view, &facts, helper, &files)?);
         (reusable_notes, release_notes)
     } else {
         (Vec::new(), Vec::new())

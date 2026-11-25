@@ -50,15 +50,41 @@ pub fn recording_of(
         writeln!(out, "velnor-gen: {note}").ok();
     }
     let symlinks = view.symlinks.iter().cloned().collect();
+    let mut manifests = cargo_files(&view.tracked_paths);
+    manifests.extend(image_inputs(&view)?);
+    manifests.sort();
+    manifests.dedup();
     Ok(Recording {
         symlinks,
         view: recorded_files(view.files, &view.tracked_paths),
-        manifests: cargo_files(&view.tracked_paths),
+        manifests,
         metadata: metadata
             .into_iter()
             .map(|(workspace, json)| Ok((workspace, relocate_metadata(checkout, &json)?)))
             .collect::<Result<_, Error>>()?,
     })
+}
+
+fn image_inputs(view: &RepoView) -> Result<Vec<RepoPath>, Error> {
+    let facts = velnor_rust::detect(view).map_err(Error::Detect)?;
+    let inputs: Vec<&str> = facts
+        .config
+        .images
+        .iter()
+        .flat_map(|image| image.inputs.iter().map(String::as_str))
+        .collect();
+    Ok(view
+        .tracked_paths
+        .iter()
+        .filter(|path| {
+            inputs.iter().any(|input| {
+                path.as_str()
+                    .strip_prefix(input)
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+            })
+        })
+        .cloned()
+        .collect())
 }
 
 #[must_use]

@@ -22,6 +22,7 @@ fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustM
             doctest,
             source: Some(path(source)),
             requires_features: false,
+            required_features: Vec::new(),
         }],
         ..member(name, "a", &[])
     }
