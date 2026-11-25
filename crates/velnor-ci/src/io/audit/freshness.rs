@@ -175,6 +175,9 @@ fn failed(path: &Path, error: &io::Error) -> CiError {
 }
 
 #[cfg(test)]
+mod race;
+
+#[cfg(test)]
 mod tests {
     use std::fs;
     use std::time::UNIX_EPOCH;

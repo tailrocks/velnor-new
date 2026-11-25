@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use nix::sys::stat::{Mode, mkdirat};
 
-use super::{LOCK_PREFIX, STAGING_PREFIX, Step, expired};
+use super::{LOCK_PREFIX, STAGING_PREFIX, Step, expired, step};
 use crate::mbx_store::random_u64;
 use crate::tools_local::lease::{open_entry, published};
 use crate::tree_removal::remove_tree;
@@ -26,7 +26,7 @@ pub(super) enum Claim {
     Broken,
 }
 
-pub(super) fn claim(tools: &Path, key: &str, pause: &dyn Fn(Step)) -> Claim {
+pub(super) fn claim(tools: &Path, key: &str) -> Claim {
     let path = tools.join(format!("{LOCK_PREFIX}{key}"));
     for _ in 0..2 {
         match fs::create_dir(&path) {
@@ -34,14 +34,14 @@ pub(super) fn claim(tools: &Path, key: &str, pause: &dyn Fn(Step)) -> Claim {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(_) => return Claim::Broken,
         }
-        if !take_over(tools, &path, key, pause) {
+        if !take_over(tools, &path, key) {
             return Claim::Held;
         }
     }
     Claim::Held
 }
 
-fn take_over(tools: &Path, path: &Path, key: &str, pause: &dyn Fn(Step)) -> bool {
+fn take_over(tools: &Path, path: &Path, key: &str) -> bool {
     let Ok(held) = open_entry(path) else {
         return false;
     };
@@ -51,12 +51,12 @@ fn take_over(tools: &Path, path: &Path, key: &str, pause: &dyn Fn(Step)) -> bool
     if !expired(&seen) {
         return false;
     }
-    pause(Step::Breaking);
+    step(Step::Breaking);
     let marker = format!(".taken-{}.{:09}", seen.mtime(), seen.mtime_nsec());
     if mkdirat(&held, marker.as_str(), Mode::S_IRWXU).is_err() || !published(&held, path) {
         return false;
     }
-    pause(Step::Taken);
+    step(Step::Taken);
     let grave = tools.join(format!("{STAGING_PREFIX}{key}-{:016x}", random_u64()));
     if fs::rename(path, &grave).is_err() {
         return false;

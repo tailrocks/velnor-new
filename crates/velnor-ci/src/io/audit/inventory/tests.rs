@@ -19,7 +19,6 @@ mod placement;
 mod racing;
 mod released;
 mod root;
-mod settled;
 
 fn scan_with(
     root: &Path,
@@ -118,35 +117,6 @@ fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
         matches!(&entries, Err(error) if error.kind() == io::ErrorKind::PermissionDenied),
         "{entries:?}"
     );
-}
-
-#[test]
-fn an_entry_removed_during_the_walk_is_not_an_error() {
-    let root = std::env::temp_dir().join(format!("velnor-scan-vanish-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    for index in 0..8 {
-        fs::write(root.join(format!("entry-{index}")), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    let mut budget = Budget::new(usize::MAX);
-    let entries = scan_with(
-        &root,
-        &BTreeSet::new(),
-        &mut budget,
-        &Probe {
-            listed: &|name| {
-                let _ = fs::remove_file(root.join(name));
-            },
-            ..Probe::default()
-        },
-    );
-    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a vanished entry: {e}"));
-    let children = entries
-        .values()
-        .next()
-        .unwrap_or_else(|| unreachable!("root is always recorded"));
-    assert!(children.is_empty(), "{children:?}");
 }
 
 #[test]
