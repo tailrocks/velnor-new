@@ -48,12 +48,60 @@ fn refuse_blank_pr_only(pr_only_checks: &[String]) -> Result<(), CiError> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GateMode<'a> {
+    pub verify_exemptions: bool,
+    pub wait_for_unfinished: bool,
+    pub ignore_jobs: &'a [String],
+    pub require_published: Option<&'a str>,
+}
+
+impl GateMode<'_> {
+    pub const RELEASE: Self = Self {
+        verify_exemptions: true,
+        wait_for_unfinished: false,
+        ignore_jobs: &[],
+        require_published: None,
+    };
+}
+
 pub fn release_gate(
     github: &dyn GitHub,
     repo: &Repo,
     sha: &str,
     pr_only_checks: &[String],
     current_run_id: Option<u64>,
+) -> Result<Verdict, CiError> {
+    release_gate_with(
+        github,
+        repo,
+        sha,
+        pr_only_checks,
+        current_run_id,
+        GateMode::RELEASE,
+    )
+}
+
+pub fn verify_exemptions(
+    github: &dyn GitHub,
+    repo: &Repo,
+    pr_only_checks: &[String],
+) -> Result<String, CiError> {
+    refuse_blank_pr_only(pr_only_checks)?;
+    let ApiRepo { default_branch, .. } = parse(&github.get(&repo_path(repo))?, "repository")?;
+    required_checks(github, repo, &default_branch, pr_only_checks, true)?;
+    Ok(format!(
+        "the PR-only checks of {default_branch} sit under a non-bypassable ruleset\n"
+    ))
+}
+
+pub fn release_gate_with(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    pr_only_checks: &[String],
+    current_run_id: Option<u64>,
+    mode: GateMode<'_>,
 ) -> Result<Verdict, CiError> {
     refuse_blank_pr_only(pr_only_checks)?;
     if sha.len() != 40
@@ -66,17 +114,37 @@ pub fn release_gate(
         )));
     }
     let ApiRepo { id, default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
-    let required = required_checks(github, repo, &default_branch, pr_only_checks)?;
+    let required = required_checks(
+        github,
+        repo,
+        &default_branch,
+        pr_only_checks,
+        mode.verify_exemptions,
+    )?;
     let compare: ApiCompare = parse(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
     )?;
-    let push = push_evidence(github, repo, sha, id, &default_branch)?;
+    let push = push_evidence(
+        github,
+        repo,
+        sha,
+        id,
+        &default_branch,
+        (current_run_id, mode.ignore_jobs),
+    )?;
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
-    let check_names =
-        exemptions::check_names(github, repo, sha, &required.exempt_sources, current_run_id)?;
+    let found = exemptions::check_names(
+        github,
+        repo,
+        sha,
+        &required.exempt_sources,
+        current_run_id,
+        mode.wait_for_unfinished,
+    )?;
+    let check_names = found.names;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -90,30 +158,16 @@ pub fn release_gate(
     let mut ready = true;
     for name in &required.names {
         if pr_only_checks.contains(name) {
-            if push.names.contains(name)
-                || check_names.contains(&name.to_lowercase())
-                || statuses
-                    .iter()
-                    .any(|status| status.context.to_lowercase() == name.to_lowercase())
-            {
-                return Err(CiError::new(format!(
-                    "PR-only check {name} has a push job or commit status or check run on commit {sha}"
-                )));
-            }
+            ensure_pr_only(name, sha, &push, &check_names, &statuses)?;
             report.push(format!(
                 "check {} is explicitly PR-only",
                 escape(name, false)
             ));
             continue;
         }
-        let named: Vec<&str> = statuses
-            .iter()
-            .filter(|status| status.context.to_lowercase() == name.to_lowercase())
-            .map(|status| status.state.as_str())
-            .collect();
         match with_status(
             judge(name, &push.jobs, push.running, &default_branch),
-            &named,
+            &named_states(&statuses, name),
         ) {
             Check::Passed => report.push(format!("check {} passed", escape(name, false))),
             Check::Waiting(state) => {
@@ -125,8 +179,21 @@ pub fn release_gate(
             )),
         }
     }
+    if let Some(job) = mode.require_published {
+        match published(job, sha, &push, &default_branch) {
+            Ok((done, line)) => {
+                ready &= done;
+                report.push(line);
+            }
+            Err(failure) => failures.push(failure),
+        }
+    }
     if !failures.is_empty() {
         return Err(CiError::new(failures.join("\n")));
+    }
+    if let Some(message) = &found.unfinished {
+        ready = false;
+        report.push(message.clone());
     }
     report.push(format!("ready={ready}"));
     Ok(Verdict {
@@ -135,15 +202,66 @@ pub fn release_gate(
     })
 }
 
+fn named_states<'a>(statuses: &'a [ApiCommitStatus], name: &str) -> Vec<&'a str> {
+    statuses
+        .iter()
+        .filter(|status| status.context.to_lowercase() == name.to_lowercase())
+        .map(|status| status.state.as_str())
+        .collect()
+}
+
+fn ensure_pr_only(
+    name: &str,
+    sha: &str,
+    push: &PushEvidence,
+    check_names: &BTreeSet<String>,
+    statuses: &[ApiCommitStatus],
+) -> Result<(), CiError> {
+    if push.names.contains(name)
+        || check_names.contains(&name.to_lowercase())
+        || !named_states(statuses, name).is_empty()
+    {
+        return Err(CiError::new(format!(
+            "PR-only check {name} has a push job or commit status or check run on commit {sha}"
+        )));
+    }
+    Ok(())
+}
+
+fn published(
+    job: &str,
+    sha: &str,
+    push: &PushEvidence,
+    branch: &str,
+) -> Result<(bool, String), String> {
+    match judge(job, &push.jobs, push.running, branch) {
+        Check::Passed => Ok((true, format!("the push run published through {job}"))),
+        Check::Waiting(state) => Ok((false, format!("the publish job {job} {state}"))),
+        Check::Failed(reason) => Err(format!(
+            "the image of commit {sha} was not published: {job}: {reason}; re-run the push workflow of that commit"
+        )),
+    }
+}
+
 fn push_evidence(
     github: &dyn GitHub,
     repo: &Repo,
     sha: &str,
     repository_id: u64,
     branch: &str,
+    (current_run_id, ignore_jobs): (Option<u64>, &[String]),
 ) -> Result<PushEvidence, CiError> {
     let mut runs: Vec<ApiWorkflowRun> =
         all_pages(github, "workflow runs", |page| runs_path(repo, sha, page))?;
+    let own_workflow = current_run_id
+        .and_then(|id| runs.iter().find(|run| run.id == id))
+        .and_then(|run| run.workflow_id);
+    let keep_own = !ignore_jobs.is_empty();
+    runs.retain(|run| {
+        keep_own
+            || (Some(run.id) != current_run_id
+                && own_workflow.is_none_or(|workflow| run.workflow_id != Some(workflow)))
+    });
     runs.retain(|run| {
         run.event == "push"
             && run.head_sha == sha
@@ -158,12 +276,20 @@ fn push_evidence(
         running: false,
     };
     for run in &runs {
-        let jobs =
+        let mut jobs =
             all_pages::<ApiRunJob>(github, "jobs", |page| run_jobs_path(repo, run.id, page))?;
+        let own = keep_own && own_workflow.is_some() && run.workflow_id == own_workflow;
+        if own {
+            jobs.retain(|job| !ignore_jobs.contains(&job.name));
+        }
         push.names.extend(jobs.iter().map(|job| job.name.clone()));
         if run.head_branch.as_deref() == Some(branch) {
+            push.running |= if own {
+                jobs.iter().any(|job| job.status != "completed")
+            } else {
+                run.status != "completed"
+            };
             push.jobs.extend(jobs);
-            push.running |= run.status != "completed";
         }
     }
     Ok(push)

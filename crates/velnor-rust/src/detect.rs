@@ -37,6 +37,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
+        RepoPath::from_static(".velnor/image-sysroot.lock"),
         MISE_LOCK,
         TOOLCHAIN_PLAIN,
         TOOLCHAIN_TOML,
@@ -79,7 +80,14 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
             .filter(|path| crate::ansible::is_layout_file(path))
             .cloned(),
     )
+    .chain(tracked.iter().filter(|path| is_dockerfile(path)).cloned())
     .collect()
+}
+
+fn is_dockerfile(path: &RepoPath) -> bool {
+    path.as_str().rsplit('/').next().is_some_and(|name| {
+        name == "Dockerfile" || name.starts_with("Dockerfile.") || name.ends_with(".Dockerfile")
+    })
 }
 
 fn is_nested_toolchain(path: &RepoPath) -> bool {

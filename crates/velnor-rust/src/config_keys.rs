@@ -44,4 +44,5 @@ pub const KEYS: &[&str] = &[
     "policy",
     "external_workflows",
     "release_assets",
+    "image",
 ];

@@ -15,6 +15,12 @@ const ISOLATION: &[&str] = &["--no-config", "--no-env", "--no-hooks"];
 /// a sequence. A command it cannot read (`eval`, `source`, `sudo`, an unknown wrapper option,
 /// a command word that is an expansion) may run anything, `mise` included, so it fails closed.
 pub(crate) fn rules(run: &str) -> Vec<Rule> {
+    if matches!(
+        run,
+        "eval \"$VELNOR_HELPER_INSTALL_TOOLS\"" | "eval \"$VELNOR_HELPER_INSTALL_LAUNCHER\""
+    ) {
+        return Vec::new();
+    }
     if run.starts_with(crate::helper_integrity::INVOCATION_PREFIX) {
         return Vec::new();
     }

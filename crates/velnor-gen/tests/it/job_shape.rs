@@ -67,6 +67,7 @@ pub(crate) fn target(kind: TargetKind) -> Target {
         doctest: kind == TargetKind::Lib,
         source: None,
         requires_features: false,
+        required_features: Vec::new(),
     }
 }
 

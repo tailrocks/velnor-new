@@ -1,0 +1,17 @@
+[package]
+name = "legacy-server"
+version = "1.4.0"
+edition = "2024"
+
+[features]
+tls = []
+
+[[bin]]
+name = "legacy-server"
+path = "src/main.rs"
+
+[dependencies]
+openssl-sys = "0.9"
+
+[package.metadata.cargo-machete]
+ignored = ["openssl-sys"]
