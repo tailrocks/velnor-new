@@ -19,7 +19,7 @@ use crate::github::Repo;
 use crate::image_candidate::hashing::sha256_hex;
 use crate::image_deploy::advance::{Advancement, advance};
 use crate::image_deploy::authority::{Release, authorize};
-use crate::image_deploy::changes::select;
+use crate::image_deploy::changes::{parse_matches, select};
 use crate::image_deploy::gate::{
     Clock, Request, Wait, exemptions_only, tip_only, wait_for_required,
 };
@@ -60,7 +60,32 @@ fn read_binary(path: &Path) -> Result<Vec<u8>, String> {
     read_limited(file, MAX_BINARY_BYTES).map_err(|error| error.to_string())
 }
 
-fn staged_directory(to: &Path) -> Result<(), CiError> {
+fn no_link_on(to: &Path, within: &Path) -> Result<(), CiError> {
+    let below = to.strip_prefix(within).unwrap_or_else(|_| Path::new(""));
+    let mut so_far = within.to_path_buf();
+    let inspect = |path: &Path| match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(CiError::new(format!(
+            "{} is a symbolic link, and the stage directory and its parents must be real directories",
+            path.display()
+        ))),
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(CiError::new(format!(
+            "cannot inspect {}: {error}",
+            path.display()
+        ))),
+    };
+    for part in below.components() {
+        so_far.push(part);
+        if !inspect(&so_far)? {
+            return Ok(());
+        }
+    }
+    inspect(to).map(|_| ())
+}
+
+fn staged_directory(to: &Path, within: &Path) -> Result<(), CiError> {
+    no_link_on(to, within)?;
     match fs::read_dir(to) {
         Ok(entries) => {
             if entries.count() > 0 {
@@ -69,15 +94,20 @@ fn staged_directory(to: &Path) -> Result<(), CiError> {
                     to.display()
                 )));
             }
-            Ok(())
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir_all(to)
-            .map_err(|error| CiError::new(format!("cannot create {}: {error}", to.display()))),
-        Err(error) => Err(CiError::new(format!(
-            "cannot read {}: {error}",
-            to.display()
-        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(to).map_err(|error| {
+                CiError::new(format!("cannot create {}: {error}", to.display()))
+            })?;
+        }
+        Err(error) => {
+            return Err(CiError::new(format!(
+                "cannot read {}: {error}",
+                to.display()
+            )));
+        }
     }
+    no_link_on(to, within)
 }
 
 pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
@@ -115,10 +145,20 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
     if !refusals.is_empty() {
         return Err(CiError::new(refusals.join("\n")));
     }
-    staged_directory(&args.to)?;
+    let within = match &args.within {
+        Some(within) => within.clone(),
+        None => std::env::current_dir()
+            .map_err(|error| CiError::new(format!("cannot read the working directory: {error}")))?,
+    };
+    let to = if args.to.is_absolute() {
+        args.to.clone()
+    } else {
+        within.join(&args.to)
+    };
+    staged_directory(&to, &within)?;
     let mut report = Vec::new();
     for (bin, bytes, checked) in &staged {
-        let target = args.to.join(bin);
+        let target = to.join(bin);
         OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -139,7 +179,38 @@ pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
             sha256_hex(bytes)
         ));
     }
+    only_staged_files(
+        &to,
+        &staged
+            .iter()
+            .map(|(bin, _, _)| (*bin).as_str())
+            .collect::<Vec<_>>(),
+    )?;
     Ok(report.join("\n") + "\n")
+}
+
+fn only_staged_files(to: &Path, names: &[&str]) -> Result<(), CiError> {
+    let entries = fs::read_dir(to)
+        .map_err(|error| CiError::new(format!("cannot read {}: {error}", to.display())))?;
+    for entry in entries {
+        let entry = entry
+            .map_err(|error| CiError::new(format!("cannot read {}: {error}", to.display())))?;
+        let meta = fs::symlink_metadata(entry.path()).map_err(|error| {
+            CiError::new(format!(
+                "cannot inspect {}: {error}",
+                entry.path().display()
+            ))
+        })?;
+        let name = entry.file_name();
+        if !meta.is_file() || !names.iter().any(|known| name == *known) {
+            return Err(CiError::new(format!(
+                "{} holds {} besides the staged binaries; nothing may be added to the stage directory",
+                to.display(),
+                name.to_string_lossy()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
@@ -186,11 +257,7 @@ fn gate(args: &ImageGateArgs) -> Result<String, CiError> {
 fn changes(args: &ImageChangesArgs) -> Result<String, CiError> {
     let repo = Repo::parse(&args.repo)?;
     let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
-    let pairs: Vec<(String, String)> = args
-        .matches
-        .iter()
-        .map(|entry| (entry.image.clone(), entry.glob.clone()))
-        .collect();
+    let pairs = parse_matches(&args.matches)?;
     let number = match args.pull_request.as_deref() {
         None | Some("") => None,
         Some(text) => Some(

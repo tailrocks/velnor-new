@@ -48,7 +48,10 @@ pub(crate) fn changes_job(
             image_paths(build)
         };
         for glob in globs {
-            let _ = writeln!(matches, "{}={glob}", image.name);
+            if !matches.is_empty() {
+                matches.push('\n');
+            }
+            let _ = write!(matches, "{}={glob}", image.name);
         }
         outputs.push((
             image.name.clone(),

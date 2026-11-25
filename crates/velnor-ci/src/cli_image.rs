@@ -48,6 +48,11 @@ pub struct ImageStageArgs {
     )]
     pub to: PathBuf,
     #[arg(
+        long,
+        help = "The checkout: every directory of --to below it must be a real directory, not a symbolic link; the working directory by default"
+    )]
+    pub within: Option<PathBuf>,
+    #[arg(
         long = "bin",
         required = true,
         help = "A binary to stage; repeat for each"
@@ -142,22 +147,6 @@ pub struct ImageSysrootArgs {
     pub dpkg_deb: PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImageGlob {
-    pub image: String,
-    pub glob: String,
-}
-
-fn image_glob(text: &str) -> Result<ImageGlob, String> {
-    match text.split_once('=') {
-        Some((image, glob)) if !image.is_empty() && !glob.is_empty() => Ok(ImageGlob {
-            image: image.to_owned(),
-            glob: glob.to_owned(),
-        }),
-        _ => Err("expected IMAGE=GLOB".to_owned()),
-    }
-}
-
 #[derive(Debug, Args)]
 pub struct ImageChangesArgs {
     #[arg(long, help = "Repository as owner/name")]
@@ -178,11 +167,10 @@ pub struct ImageChangesArgs {
         env = "VELNOR_IMAGE_MATCHES",
         value_delimiter = '\n',
         value_name = "IMAGE=GLOB",
-        value_parser = image_glob,
         required = true,
         help = "A path pattern that selects an image, written as the paths of an on.pull_request filter (`*` stays inside a path segment, `**` crosses them); repeat for each, or put one per line in $VELNOR_IMAGE_MATCHES"
     )]
-    pub matches: Vec<ImageGlob>,
+    pub matches: Vec<String>,
 }
 
 #[derive(Debug, Args)]

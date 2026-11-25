@@ -21,6 +21,7 @@ fn args(root: &Path, glibc: &str, openssl: OpensslMode, bins: &[&str]) -> ImageS
         glibc: glibc.to_owned(),
         openssl,
         to: root.join("dist"),
+        within: Some(root.to_path_buf()),
         bins: bins.iter().map(|bin| (*bin).to_owned()).collect(),
     }
 }
@@ -256,4 +257,32 @@ fn staged_binaries_are_executable_whatever_the_umask() {
     assert!(staged.is_ok());
     let mode = fs::metadata(root.join("dist/svc")).map(|m| m.permissions().mode() & 0o777);
     assert_eq!(mode.ok(), Some(0o755));
+}
+
+#[test]
+fn a_stage_directory_or_a_parent_that_is_a_symbolic_link_is_refused_before_anything_is_written() {
+    let root = fresh_dir("deploy", "stage-link");
+    built(&root, "svc", &Elf::dynamic_x86_64());
+    let elsewhere = root.join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&elsewhere, root.join("dist")).unwrap_or_else(|e| unreachable!("{e}"));
+    let message = refusal(&args(&root, "2.41", OpensslMode::None, &["svc"]));
+    assert!(message.contains("symbolic link"), "{message}");
+    assert!(
+        fs::read_dir(&elsewhere).is_ok_and(|mut entries| entries.next().is_none()),
+        "nothing was written through the link"
+    );
+    let root = fresh_dir("deploy", "stage-parent-link");
+    built(&root, "svc", &Elf::dynamic_x86_64());
+    let real = root.join("real");
+    fs::create_dir_all(&real).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&real, root.join("assets")).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut through = args(&root, "2.41", OpensslMode::None, &["svc"]);
+    through.to = root.join("assets").join("dist");
+    let message = refusal(&through);
+    assert!(message.contains("symbolic link"), "{message}");
+    assert!(
+        fs::read_dir(&real).is_ok_and(|mut entries| entries.next().is_none()),
+        "nothing was written through the parent link"
+    );
 }

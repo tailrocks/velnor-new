@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::github::pull_files_path;
-use velnor_ci::image_deploy::changes::{Selection, glob_matches, select};
+use velnor_ci::image_deploy::changes::{Selection, glob_matches, parse_matches, select};
 
 use crate::support::{FakeGitHub, repo};
 
@@ -118,4 +118,20 @@ fn a_pull_request_event_without_a_number_or_with_an_unreadable_listing_is_an_err
     let none = FakeGitHub::default();
     assert!(select(&none, &repo(), "pull_request", None, &matches()).is_err());
     assert!(select(&none, &repo(), "pull_request", Some(NUMBER), &matches()).is_err());
+}
+
+#[test]
+fn the_match_list_of_the_workflow_survives_blank_entries_and_refuses_a_malformed_one() {
+    let lines = |text: &str| -> Vec<String> { text.split('\n').map(str::to_owned).collect() };
+    let parsed = parse_matches(&lines("api=docker/api/**\nworker=**/Cargo.toml\n"));
+    assert_eq!(
+        parsed.ok(),
+        Some(vec![
+            ("api".to_owned(), "docker/api/**".to_owned()),
+            ("worker".to_owned(), "**/Cargo.toml".to_owned()),
+        ])
+    );
+    assert!(parse_matches(&lines("api")).is_err());
+    assert!(parse_matches(&lines("=x")).is_err());
+    assert!(parse_matches(&lines("\n\n")).is_err());
 }

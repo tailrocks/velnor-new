@@ -80,6 +80,27 @@ fn changed_files(
     Ok(None)
 }
 
+pub fn parse_matches(lines: &[String]) -> Result<Vec<(String, String)>, CiError> {
+    let mut matches = Vec::new();
+    for line in lines.iter().map(|line| line.trim_end_matches('\r')) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match line.split_once('=') {
+            Some((image, glob)) if !image.is_empty() && !glob.is_empty() => {
+                matches.push((image.to_owned(), glob.to_owned()));
+            }
+            _ => {
+                return Err(CiError::new(format!("`{line}` is not IMAGE=GLOB")));
+            }
+        }
+    }
+    if matches.is_empty() {
+        return Err(CiError::new("name at least one IMAGE=GLOB pattern"));
+    }
+    Ok(matches)
+}
+
 pub fn select(
     github: &dyn GitHub,
     repo: &Repo,
