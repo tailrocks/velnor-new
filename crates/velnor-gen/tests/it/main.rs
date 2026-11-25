@@ -219,7 +219,6 @@ mod private_base_http;
 mod private_base_order;
 mod private_base_plan_mode;
 mod private_base_prefix;
-mod private_base_recheck;
 mod private_base_shadowed_config;
 mod private_base_token_order;
 mod private_fetch_members;

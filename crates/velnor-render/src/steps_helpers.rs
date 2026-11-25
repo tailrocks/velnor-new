@@ -178,3 +178,15 @@ pub(super) fn after_setup(
 pub(super) fn setup_not_failed(id: &str) -> String {
     format!("steps.{id}.outcome != 'failure' && steps.{id}.outcome != 'cancelled'")
 }
+
+/// What the job around a step adds to it.
+pub(super) struct Around<'a> {
+    /// The id a compile or audit step gets so a save can wait for it.
+    pub(super) id: Option<&'a str>,
+    pub(super) saved_after: &'a [String],
+    pub(super) chained: bool,
+    pub(super) job_name: Option<&'a str>,
+    pub(super) privacy_gate: Option<&'a velnor_model::Gate>,
+    pub(super) after_setup: Vec<String>,
+    pub(super) rechecks: crate::private_steps::Rechecks,
+}

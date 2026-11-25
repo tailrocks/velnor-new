@@ -53,7 +53,8 @@ mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
 use steps_helpers::{
-    after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps, variable,
+    Around, after_setup, extra_conditions, leading_steps, root_key, rustup_add, trailing_steps,
+    variable,
 };
 use steps_outputs::{merge_group_output, test_outputs};
 
@@ -183,18 +184,6 @@ fn job_steps(
         )
         .flatten()
         .collect()
-}
-
-/// What the job around a step adds to it.
-struct Around<'a> {
-    /// The id a compile or audit step gets so a save can wait for it.
-    id: Option<&'a str>,
-    saved_after: &'a [String],
-    chained: bool,
-    job_name: Option<&'a str>,
-    privacy_gate: Option<&'a velnor_model::Gate>,
-    after_setup: Vec<String>,
-    rechecks: crate::private_steps::Rechecks,
 }
 
 fn rendered_steps(

@@ -21,6 +21,7 @@ mod plan;
 mod plan_gate;
 mod policy_table;
 mod public_sources;
+mod publication;
 mod release_asset;
 mod repo;
 mod repo_config;
@@ -83,6 +84,7 @@ pub use plan::{
     TOOLS_ANCHOR_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use plan_gate::{FetchedManifest, Gate, GateNeed, PlanFrom, group_output_name};
+pub use publication::Publication;
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
@@ -112,6 +114,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
-    PrivateVerdict, Publication, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily,
-    VerifiedSave,
+    PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };

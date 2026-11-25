@@ -8,6 +8,7 @@ use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::plan_gate::{FetchedManifest, PlanFrom};
+use crate::publication::Publication;
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,12 +32,6 @@ pub enum PrivateVerdict {
     Unset,
     Cleared,
     Checked,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Publication {
-    BuildDirectory,
-    Sources,
 }
 
 pub const BUDGET_JOB: &str = "rust-budget";
