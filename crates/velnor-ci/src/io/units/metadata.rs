@@ -60,13 +60,16 @@ fn metadata(
         if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
             build_dir::refuse_template(&build)?;
         }
-        if let (None, Some(step)) = (invocation, step) {
+        if invocation.is_none() {
             for name in DIRECTORY_VARIABLES {
                 if let Some(value) = std::env::var_os(name)
                     .map(PathBuf::from)
                     .filter(|value| value.is_relative())
                 {
-                    command.env(name, step.join(value));
+                    match step {
+                        Some(step) => command.env(name, step.join(value)),
+                        None => command.env_remove(name),
+                    };
                 }
             }
         }

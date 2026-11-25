@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use velnor_model::RepoFacts;
 use velnor_rust::resolve;
 
-use super::super::units::{MetadataInvocation, Workspace, own_workspace, same, workspace};
+use super::super::units::{MetadataInvocation, Workspace, own_workspace, physical, workspace};
 use super::options::AuditOptions;
 use crate::error::CiError;
 
@@ -54,8 +55,9 @@ pub(super) fn standalone(facts: &RepoFacts) -> Vec<bool> {
 
 pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
     let mut directories: Vec<PathBuf> = Vec::new();
+    let mut known = BTreeSet::new();
     for directory in workspaces.iter().flat_map(Workspace::directories) {
-        if !directories.iter().any(|known| same(known, &directory)) {
+        if known.insert(physical(directory.clone())) {
             directories.push(directory);
         }
     }

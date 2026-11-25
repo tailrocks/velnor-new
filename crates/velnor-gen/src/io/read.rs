@@ -43,9 +43,20 @@ pub(super) fn read_tracked(root: &Path) -> Result<RepoView, Error> {
     view_from(root, tracked_paths, symlinks, gitlinks)
 }
 
-pub(super) fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+pub(super) fn read_view(
+    root: &Path,
+    keep_metadata: bool,
+    toolchain: Option<&str>,
+) -> Result<Recorded, Error> {
     let (tracked_paths, symlinks, gitlinks) = tracked(root)?;
-    view_of(root, tracked_paths, symlinks, gitlinks, keep_metadata)
+    view_of(
+        root,
+        tracked_paths,
+        symlinks,
+        gitlinks,
+        keep_metadata,
+        toolchain,
+    )
 }
 
 pub fn view_of(
@@ -54,6 +65,7 @@ pub fn view_of(
     symlinks: BTreeSet<RepoPath>,
     gitlinks: BTreeSet<RepoPath>,
     keep_metadata: bool,
+    toolchain: Option<&str>,
 ) -> Result<Recorded, Error> {
     let mut view = view_from(root, tracked_paths, symlinks, gitlinks)?;
     let mut recorded = BTreeMap::new();
@@ -65,7 +77,7 @@ pub fn view_of(
         if known {
             continue;
         }
-        let output = cargo_metadata(root, &manifest)?;
+        let output = cargo_metadata(root, &manifest, toolchain)?;
         let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
         if keep_metadata {
             recorded.insert(workspace.clone(), output);

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
-use velnor_gen::io::read_checkout;
+use velnor_gen::io::read_checkout_under;
 use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
@@ -46,10 +46,11 @@ struct Builder<'a> {
 type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
-    let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
+    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
+    let checkout = read_checkout_under(directory, invocation.toolchain())
+        .map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
-    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;

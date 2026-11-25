@@ -29,7 +29,7 @@ pub fn record_sample(
     let name = sample_name(name)?;
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
-    let (view, metadata) = read_view(&checkout, true)?;
+    let (view, metadata) = read_view(&checkout, true, None)?;
     let recording = recording_of(&checkout, view, metadata, &mut std::io::stderr())?;
     write_sample(&destination, name, &recording)
 }

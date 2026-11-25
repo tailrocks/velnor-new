@@ -111,11 +111,11 @@ pub(in crate::io) fn unit_files_apart(
     Ok(found)
 }
 
-fn physical(path: PathBuf) -> PathBuf {
+pub(in crate::io) fn physical(path: PathBuf) -> PathBuf {
     fs::canonicalize(&path).unwrap_or(path)
 }
 
-pub(in crate::io) fn same(left: &Path, right: &Path) -> bool {
+fn same(left: &Path, right: &Path) -> bool {
     left == right || physical(left.to_path_buf()) == physical(right.to_path_buf())
 }
 

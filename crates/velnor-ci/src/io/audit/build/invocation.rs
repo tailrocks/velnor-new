@@ -168,15 +168,22 @@ impl Invocation {
         }
     }
 
-    fn executable(&self) -> &str {
-        if Path::new(&self.command[0])
-            .file_name()
-            .is_some_and(|name| name == "cargo")
+    fn executable(&self, directory: &Path) -> String {
+        let program = Path::new(&self.command[0]);
+        if program.file_name().is_some_and(|name| name == "cargo")
+            && program.components().count() > 1
         {
-            self.command[0].as_str()
+            directory.join(program).to_string_lossy().into_owned()
         } else {
-            "cargo"
+            "cargo".to_owned()
         }
+    }
+
+    pub(super) fn toolchain(&self) -> Option<&str> {
+        self.globals
+            .first()
+            .and_then(|word| word.strip_prefix('+'))
+            .filter(|name| !name.is_empty())
     }
 
     pub(super) fn baseline<'a>(
@@ -184,18 +191,9 @@ impl Invocation {
         directory: &Path,
         step: &'a Path,
     ) -> MetadataInvocation<'a> {
-        let selector = usize::from(
-            self.globals
-                .first()
-                .is_some_and(|word| word.starts_with('+') && word.len() > 1),
-        );
-        let executable = self.executable();
+        let selector = usize::from(self.toolchain().is_some());
         MetadataInvocation {
-            executable: if executable == "cargo" {
-                executable.to_owned()
-            } else {
-                directory.join(executable).to_string_lossy().into_owned()
-            },
+            executable: self.executable(directory),
             arguments: &self.globals[..selector],
             directory: step,
         }
@@ -268,9 +266,9 @@ impl Invocation {
                 .map(String::as_str)
                 .take_while(|word| *word != "--"),
         )?;
-        let executable = self.executable();
+        let executable = self.executable(directory);
         let invocation = MetadataInvocation {
-            executable: executable.to_owned(),
+            executable: executable.clone(),
             arguments: &self.globals,
             directory,
         };
@@ -278,7 +276,7 @@ impl Invocation {
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.root.join("Cargo.toml");
             let local = MetadataInvocation {
-                executable: executable.to_owned(),
+                executable: executable.clone(),
                 arguments: &local_arguments,
                 directory: &expected.root,
             };

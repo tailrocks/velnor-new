@@ -147,7 +147,7 @@ pub fn main() -> Exit {
 
 fn suggest(path: &Path) -> Exit {
     let result = toplevel(path)
-        .and_then(|root| read_view(&root, false))
+        .and_then(|root| read_view(&root, false, None))
         .and_then(|(view, _)| crate::suggest_groups(&view).map_err(Error::Generate));
     match result {
         Ok((text, notes)) => {
@@ -179,7 +179,7 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     wanted.push(METADATA_PATH);
     let workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
-    let view = read_view(&root, false)?.0;
+    let view = read_view(&root, false, None)?.0;
     let (expected, drifts) =
         plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
             .map_err(Error::Generate)?;
@@ -273,8 +273,12 @@ pub struct Checkout {
 }
 
 pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
+    read_checkout_under(path, None)
+}
+
+pub fn read_checkout_under(path: &Path, toolchain: Option<&str>) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
-    let view = read_view(&root, false)?.0;
+    let view = read_view(&root, false, toolchain)?.0;
     Ok(Checkout { root, view })
 }
 
