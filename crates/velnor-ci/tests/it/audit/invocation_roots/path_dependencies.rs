@@ -165,6 +165,8 @@ fn a_build_selects_the_optional_path_dependencies_its_features_enable() {
         &["-p", "other", "--features=mid"],
         &["-p", "other", "-F", "mid"],
         &["-p", "other", "-Fmid"],
+        &["-p", "other", "-qFmid"],
+        &["-p", "other", "-vF", "mid"],
         &["-p", "other", "--features", "dep:mid"],
         &["-p", "other", "--features", "mid/serde"],
         &["-p", "other", "--features", "a,mid"],

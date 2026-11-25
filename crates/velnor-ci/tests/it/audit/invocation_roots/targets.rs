@@ -48,6 +48,57 @@ fn a_package_with_no_target_of_the_named_kind_is_not_selected_by_a_plural_filter
     }
 }
 
+#[test]
+fn a_workspace_build_with_a_target_filter_selects_the_members_that_have_such_a_target() {
+    for (filter, selected) in [
+        (&["--bins"][..], true),
+        (&["--bin", "y"], true),
+        (&["--examples"], false),
+        (&["--benches"], true),
+    ] {
+        let mut selection = vec!["--workspace"];
+        selection.extend_from_slice(filter);
+        let stderr = stderr_with_untrusted_y(&with_a_binary_named_like_the_package(), &selection);
+        if selected {
+            assert_selected(&stderr, &format!("{filter:?}"));
+        } else {
+            assert_refused(&stderr, &format!("{filter:?}"));
+        }
+    }
+}
+
+fn with_only_a_test_that_does_not_run_by_default() -> Repo {
+    let repo = workspace_with_members();
+    unit(
+        &repo,
+        "y/Cargo.toml",
+        "[package]\nname = \"y\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[test]]\nname = \"t\"\npath = \"tests/t.rs\"\ntest = false\n",
+    );
+    unit(&repo, "y/tests/t.rs", "");
+    fs::remove_file(repo.root().join("y/src/lib.rs")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn a_test_target_with_test_false_is_built_only_when_it_is_named() {
+    for (filter, selected) in [
+        (&["--tests"][..], false),
+        (&["--all-targets"], false),
+        (&["--test", "t"], true),
+    ] {
+        let mut selection = vec!["-p", "y"];
+        selection.extend_from_slice(filter);
+        let stderr =
+            stderr_with_untrusted_y(&with_only_a_test_that_does_not_run_by_default(), &selection);
+        if selected {
+            assert_selected(&stderr, &format!("{filter:?}"));
+        } else {
+            assert_refused(&stderr, &format!("{filter:?}"));
+        }
+    }
+}
+
 fn with_a_binary_named_like_the_package() -> Repo {
     let repo = workspace_with_members();
     unit(&repo, "y/src/main.rs", "fn main() {}\n");

@@ -76,10 +76,9 @@ impl Invocation {
         let all_features = words.contains(&"--all-features");
         let features = feature_names(&words);
         let wanted = wanted(arguments, &words);
-        let workspace = !words.iter().any(|word| target_filter(word))
-            && words
-                .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"));
+        let workspace = words
+            .iter()
+            .any(|word| matches!(*word, "--workspace" | "--all"));
         let mut selected = Vec::new();
         let mut excluded = Vec::new();
         let mut provable = true;
@@ -140,25 +139,35 @@ impl Invocation {
     }
 }
 
-fn cluster_package(word: &str) -> Option<&str> {
+fn cluster_flag(word: &str, letter: char) -> Option<&str> {
     let flags = word.strip_prefix('-')?;
     if flags.starts_with('-') {
         return None;
     }
-    flags.trim_start_matches(['q', 'v', 'r']).strip_prefix('p')
+    flags
+        .trim_start_matches(['q', 'v', 'r'])
+        .strip_prefix(letter)
+}
+
+fn cluster_package(word: &str) -> Option<&str> {
+    cluster_flag(word, 'p')
 }
 
 fn feature_names<'a>(words: &[&'a str]) -> Vec<&'a str> {
     let mut names = Vec::new();
     for (index, word) in words.iter().enumerate() {
-        let value = if matches!(*word, "--features" | "-F") {
+        let value = if *word == "--features" {
             words.get(index + 1).copied()
         } else if let Some(value) = word.strip_prefix("--features=") {
             Some(value)
         } else {
-            word.strip_prefix("-F")
-                .filter(|value| !value.is_empty())
-                .map(|value| value.strip_prefix('=').unwrap_or(value))
+            cluster_flag(word, 'F').and_then(|rest| {
+                if rest.is_empty() {
+                    words.get(index + 1).copied()
+                } else {
+                    Some(rest.strip_prefix('=').unwrap_or(rest))
+                }
+            })
         };
         names.extend(
             value
@@ -237,7 +246,6 @@ fn wanted<'a>(arguments: &[&str], words: &[&'a str]) -> Wanted<'a> {
         } else if flag(word, &["--example"]) {
             kinds.push((TargetKind::Example, target_name(words, index, "--example")));
         } else if *word == "--tests" {
-            kinds.push((TargetKind::Test, None));
             harnesses = true;
         } else if flag(word, &["--test"]) {
             kinds.push((TargetKind::Test, target_name(words, index, "--test")));
@@ -268,6 +276,7 @@ fn compiles(member: &RustMember, wanted: &Wanted<'_>, all_features: bool) -> boo
             && (wanted.harnesses && target.tests
                 || wanted.kinds.iter().any(|(kind, name)| {
                     target.kinds.contains(kind)
+                        && (name.is_some() || *kind != TargetKind::Test || target.tests)
                         && name.is_none_or(|name| named(name, target.name.as_str()))
                 }))
     })
@@ -337,19 +346,4 @@ fn flag(word: &str, names: &[&str]) -> bool {
                 .strip_prefix(name)
                 .is_some_and(|rest| rest.starts_with('='))
     })
-}
-
-fn target_filter(word: &str) -> bool {
-    const FILTERS: [&str; 9] = [
-        "--lib",
-        "--bins",
-        "--bin",
-        "--examples",
-        "--example",
-        "--tests",
-        "--test",
-        "--benches",
-        "--bench",
-    ];
-    flag(word, &FILTERS)
 }
