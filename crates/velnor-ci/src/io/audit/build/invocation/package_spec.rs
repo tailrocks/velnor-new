@@ -119,7 +119,15 @@ fn encode(text: &str) -> String {
                 b' ' | b'"' | b'#' | b'%' | b'<' | b'>' | b'?' | b'`' | b'{' | b'}'
             )
         {
-            encoded.push_str(&format!("%{byte:02X}"));
+            encoded.push('%');
+            encoded.extend(
+                [byte >> 4, byte & 0xf]
+                    .map(|nibble| {
+                        char::from_digit(u32::from(nibble), 16).map(|c| c.to_ascii_uppercase())
+                    })
+                    .into_iter()
+                    .flatten(),
+            );
         } else {
             encoded.push(char::from(byte));
         }
