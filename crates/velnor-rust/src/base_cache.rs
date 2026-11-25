@@ -274,10 +274,7 @@ pub(crate) fn save_steps(
             ..step(StepKind::PrivateRecheck(publication))
         })
     };
-    let mut steps: Vec<Step> = recheck(Publication::BuildDirectory, When::SaveBase)
-        .into_iter()
-        .collect();
-    steps.extend([
+    let mut steps = vec![
         Step {
             directory: unit.directory(),
             when: When::SaveBase,
@@ -308,12 +305,13 @@ pub(crate) fn save_steps(
                     .then(|| cache_root.slug().clone()),
             })
         },
-        Step {
-            when: When::SaveBaseDecided,
-            skip_when_cold: checks_saves(facts),
-            ..step(StepKind::CacheSave(target))
-        },
-    ]);
+    ];
+    steps.extend(recheck(Publication::BuildDirectory, When::SaveBaseDecided));
+    steps.push(Step {
+        when: When::SaveBaseDecided,
+        skip_when_cold: checks_saves(facts),
+        ..step(StepKind::CacheSave(target))
+    });
     if sources {
         steps.extend(sources_fetches(facts, cache_root.slug()));
         steps.extend(recheck(Publication::Sources, When::SaveSources));

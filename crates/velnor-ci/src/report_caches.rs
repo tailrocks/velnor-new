@@ -34,7 +34,22 @@ fn no_crate_selected(steps: &Value, lane_modes: Option<&str>) -> bool {
     steps["plan"]["outcome"] == "success" && mode == Some("none")
 }
 
+const RECHECK_STEPS: [&str; 2] = ["private_recheck", "private_recheck_sources"];
+
 pub(crate) fn privacy_unavailable(steps: &Value, lane_modes: Option<&str>) -> bool {
+    lookup_unavailable(steps, lane_modes)
+        || RECHECK_STEPS
+            .iter()
+            .any(|id| recheck_unavailable(&steps[id]))
+}
+
+fn recheck_unavailable(step: &Value) -> bool {
+    !step.is_null()
+        && step["outcome"] != "skipped"
+        && (step["outcome"] != "success" || step["outputs"]["unavailable"] == "true")
+}
+
+fn lookup_unavailable(steps: &Value, lane_modes: Option<&str>) -> bool {
     let step = &steps["private_repo"];
     if step.is_null() {
         return false;

@@ -76,7 +76,7 @@ impl Rechecks {
     fn verdict(self, step: &Step) -> &'static str {
         match (&step.kind, step.when) {
             (StepKind::PrivateRecheck(_), _) => PRIVACY_STEP,
-            (_, When::SaveBase | When::SaveBaseDecided) if self.build => RECHECK_STEP,
+            (StepKind::CacheSave(_), When::SaveBaseDecided) if self.build => RECHECK_STEP,
             (_, When::SaveSources) if self.sources => RECHECK_SOURCES_STEP,
             _ => PRIVACY_STEP,
         }
@@ -100,7 +100,7 @@ pub(crate) fn repository_conditions(step: &Step, rechecks: Rechecks) -> Vec<Stri
 /// `cache decide` trusts `VELNOR_REPOSITORY_PRIVATE` alone, and a step `env` overrides
 /// `$GITHUB_ENV`, so the step always sets it itself: to the privacy step's answer, or to an
 /// empty string that refuses every private source.
-pub(crate) fn decide_env(step: &Step, rechecks: Rechecks) -> Vec<(String, Value)> {
+pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
     let StepKind::CacheDecide {
         private,
         sources_restore,
@@ -118,14 +118,7 @@ pub(crate) fn decide_env(step: &Step, rechecks: Rechecks) -> Vec<(String, Value)
         )),
         PrivateVerdict::Checked => env.push((
             "VELNOR_REPOSITORY_PRIVATE".to_owned(),
-            Value::Expr(format!(
-                "${{{{ steps.{}.outputs.private }}}}",
-                if rechecks.build {
-                    RECHECK_STEP
-                } else {
-                    PRIVACY_STEP
-                }
-            )),
+            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}")),
         )),
     }
     if let Some(lane) = sources_restore {

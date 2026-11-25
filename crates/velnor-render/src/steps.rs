@@ -246,8 +246,7 @@ fn rendered_steps(
             around.saved_after,
             body.condition.take(),
         );
-        body.env
-            .extend(crate::private_steps::decide_env(step, around.rechecks));
+        body.env.extend(crate::private_steps::decide_env(step));
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })

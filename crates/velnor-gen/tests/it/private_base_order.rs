@@ -228,9 +228,10 @@ fn the_privacy_is_looked_up_again_without_a_token_right_before_each_private_save
             .position(|each| each == name)
             .unwrap_or(usize::MAX)
     };
-    assert!(at(BUILD_RECHECK) < at("velnor-ci inputs save"), "{names:?}");
     assert!(
-        at("velnor-ci inputs save") < at("Decide whether to save the build directory"),
+        at("velnor-ci inputs save") < at("Decide whether to save the build directory")
+            && at("Decide whether to save the build directory") < at(BUILD_RECHECK)
+            && at(BUILD_RECHECK) + 1 == at("Save the target cache"),
         "{names:?}"
     );
     assert!(
@@ -258,11 +259,9 @@ fn the_privacy_is_looked_up_again_without_a_token_right_before_each_private_save
 }
 
 #[test]
-fn every_private_save_waits_for_the_fresh_verdict_and_not_for_the_first_one() -> TestResult {
+fn every_private_publication_waits_for_the_fresh_verdict_and_not_for_the_first_one() -> TestResult {
     let lane = lane("0.1.117")?;
     for (name, fresh, stale) in [
-        ("velnor-ci inputs save", BUILD, SOURCES),
-        ("Decide whether to save the build directory", BUILD, SOURCES),
         ("Save the target cache", BUILD, SOURCES),
         ("Save the sources cache", SOURCES, BUILD),
     ] {
@@ -273,13 +272,14 @@ fn every_private_save_waits_for_the_fresh_verdict_and_not_for_the_first_one() ->
     }
     let decide = step(&lane, "Decide whether to save the build directory").ok_or("no decide")?;
     assert!(
-        decide
-            .contains("VELNOR_REPOSITORY_PRIVATE: '${{ steps.private_recheck.outputs.private }}'"),
+        decide.contains("VELNOR_REPOSITORY_PRIVATE: '${{ steps.private_repo.outputs.private }}'"),
         "{decide}"
     );
     for name in [
         "Fetch the sources of every root",
         "Restore the target cache",
+        "velnor-ci inputs save",
+        "Decide whether to save the build directory",
     ] {
         assert!(condition(&lane, name)?.contains(FIRST), "{name}");
     }

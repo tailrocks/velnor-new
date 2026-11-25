@@ -197,3 +197,42 @@ fn the_lane_reads_its_own_mode_not_the_root_workspace_mode() {
         "one selected root selects the lane"
     );
 }
+
+#[test]
+fn an_unavailable_recheck_before_a_save_is_carried_into_the_metrics() {
+    let confirmed = r#""private_repo":{"outcome":"success","outputs":{"private":"true"}}"#;
+    for (label, recheck, expected) in [
+        (
+            "unavailable-build",
+            r#""private_recheck":{"outcome":"success","outputs":{"private":"false","unavailable":"true"}}"#,
+            true,
+        ),
+        (
+            "unavailable-sources",
+            r#""private_recheck_sources":{"outcome":"success","outputs":{"private":"false","unavailable":"true"}}"#,
+            true,
+        ),
+        (
+            "failed",
+            r#""private_recheck":{"outcome":"failure","outputs":{}}"#,
+            true,
+        ),
+        (
+            "public",
+            r#""private_recheck":{"outcome":"success","outputs":{"private":"false"}}"#,
+            false,
+        ),
+        (
+            "skipped",
+            r#""private_recheck":{"outcome":"skipped","outputs":{}}"#,
+            false,
+        ),
+    ] {
+        let steps = format!("{{{confirmed},{recheck}}}");
+        assert_eq!(
+            unavailable(&format!("report-recheck-{label}"), &steps, None),
+            expected,
+            "{label}"
+        );
+    }
+}
