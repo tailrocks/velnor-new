@@ -125,6 +125,7 @@ fn ansible_runs_for_every_changed_path_when_a_play_exists() -> TestResult {
                     doctest: false,
                     source: None,
                     requires_features: false,
+                    required_features: Vec::new(),
                 }],
             }],
         },

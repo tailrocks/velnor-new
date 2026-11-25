@@ -55,12 +55,14 @@ pub enum GenerateError {
     DeltaStagingCollision(RepoPath),
     ExternalWorkflow(ExternalWorkflowError),
     ExcludedLockRun(velnor_rust::ExcludedLockFinding),
+    Image(crate::ImageError),
 }
 
 impl fmt::Display for GenerateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ExternalWorkflow(error) => error.fmt(f),
+            Self::Image(error) => error.fmt(f),
             Self::DeltaStagingCollision(path) => write!(f, "tracked path {path} collides with delta cache staging"),
             Self::Detect(error) => error.fmt(f),
             Self::ExcludedLockRun(finding) => f.write_str(&finding.message()),
@@ -199,5 +201,11 @@ impl fmt::Display for ExternalWorkflowError {
                 "external_workflows names {path}, which velnor-gen writes; a generated file cannot be external"
             ),
         }
+    }
+}
+
+impl From<crate::ImageError> for GenerateError {
+    fn from(error: crate::ImageError) -> Self {
+        Self::Image(error)
     }
 }

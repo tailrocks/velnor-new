@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
@@ -48,6 +49,8 @@ struct Package {
     manifest_path: PathBuf,
     dependencies: Vec<Dependency>,
     targets: Vec<RawTarget>,
+    #[serde(default)]
+    features: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -98,7 +101,7 @@ pub fn reduce_metadata(
                 targets: package
                     .targets
                     .into_iter()
-                    .map(|target| target_of(repository, target))
+                    .map(|target| target_of(repository, target, &package.features))
                     .collect::<Result<_, _>>()?,
             })
         })
@@ -130,7 +133,11 @@ fn dependency_of(
     })
 }
 
-fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataError> {
+fn target_of(
+    repository: &Path,
+    target: RawTarget,
+    features: &BTreeMap<String, Vec<String>>,
+) -> Result<Target, MetadataError> {
     let kinds = target
         .kind
         .iter()
@@ -151,6 +158,7 @@ fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataErr
         tests: target.test,
         doctest: target.doctest,
         requires_features: !target.required_features.is_empty(),
+        required_features: crate::required_features::resolve(features, &target.required_features),
         source: target
             .src_path
             .and_then(|path| match locate(repository, &path, "") {
