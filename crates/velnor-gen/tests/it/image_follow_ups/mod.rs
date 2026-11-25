@@ -3,6 +3,7 @@
 
 mod advance;
 mod concurrency;
+mod guards;
 mod hardening;
 mod metadata_names;
 mod required_features;
