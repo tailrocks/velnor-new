@@ -24,7 +24,7 @@ pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
 const ANCHOR_KEY_PRUNE_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.112 via 1232b8d596
 pub(crate) const TOOLS_SAVED_KEY_HELPER: (u64, u64, u64) = (0, 1, 112);
-const ANCHOR_KEY_DROP_HELPER: (u64, u64, u64) = (0, 1, 116);
+const ANCHOR_KEY_DROP_HELPER: (u64, u64, u64) = (0, 1, 117);
 // helper-gate: first in tools-v0.1.112 via b9a341e37e
 const TOOLS_ANCHOR_ATTEMPT_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509

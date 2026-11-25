@@ -17,7 +17,7 @@ fn no_pinned_helper_renders_the_delete_entry_command() -> TestResult {
             );
             assert!(
                 !rendered.contains("delete-entry"),
-                "{helper} {config:?} renders the command that only helper 0.1.116 has"
+                "{helper} {config:?} renders the command that only helper 0.1.117 has"
             );
         }
     }

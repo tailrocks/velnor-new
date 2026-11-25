@@ -169,7 +169,7 @@ fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111_to_0_1_115() 
             );
         }
 
-        let dropped = verify_key_env(config, "0.1.116", "VELNOR_ANCHOR_CACHE_KEY")?;
+        let dropped = verify_key_env(config, "0.1.117", "VELNOR_ANCHOR_CACHE_KEY")?;
         assert_eq!(dropped.len(), before.len(), "{config:?}");
         assert!(
             dropped.iter().all(Option::is_none),
