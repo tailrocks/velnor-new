@@ -138,6 +138,7 @@ fn with_build_script(
                 doctest: false,
                 source: Some(path.clone()),
                 requires_features: false,
+                required_features: Vec::new(),
             });
         }
     }

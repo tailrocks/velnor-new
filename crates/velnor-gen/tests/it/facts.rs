@@ -134,6 +134,7 @@ pub(crate) fn package(
                     doctest: true,
                     source: None,
                     requires_features: false,
+                    required_features: Vec::new(),
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,

@@ -83,8 +83,9 @@ fn path_artifact() -> Value {
 #[test]
 fn an_empty_mbx_session_on_a_primed_store_is_waste() {
     for (evidence, expected) in [
-        (mbx(true, &[(0, 0, 567)]), true),
+        (mbx(true, &[(0, 0, 567)]), false),
         (mbx(true, &[(0, 12, 0)]), true),
+        (mbx(true, &[(0, 0, 567), (0, 3, 0)]), true),
         (mbx(true, &[(0, 0, 567), (40, 2, 0)]), false),
         (mbx(false, &[(0, 0, 567)]), false),
         (mbx(true, &[(0, 0, 0)]), false),
@@ -118,7 +119,7 @@ fn an_empty_mbx_session_that_compiled_only_path_units_is_not_waste() {
     ] {
         let mut value = quiet();
         value["invocations"][0]["artifacts"] = artifacts.clone();
-        value["mbx"] = mbx(true, &[(0, 0, 567)]);
+        value["mbx"] = mbx(true, &[(0, 12, 567)]);
         let found = waste(&metrics(value));
         assert_eq!(
             found.iter().any(|line| line.contains("MBX object cache")),
@@ -250,7 +251,7 @@ fn an_empty_mbx_session_after_a_truncated_seed_is_not_waste() {
         let mut value = quiet();
         value["invocations"][0]["artifacts"] =
             json!([artifact("target/debug/deps/libserde-abc.rlib")]);
-        value["mbx"] = mbx(true, &[(0, 0, 567)]);
+        value["mbx"] = mbx(true, &[(0, 12, 567)]);
         value["mbx"]["seed_truncated"] = json!(truncated);
         let found = waste(&metrics(value));
         assert_eq!(

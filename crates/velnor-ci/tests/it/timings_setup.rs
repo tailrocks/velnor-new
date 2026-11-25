@@ -27,6 +27,7 @@ fn view(timings: &str) -> RepoView {
             doctest: false,
             source: None,
             requires_features: false,
+            required_features: Vec::new(),
         }],
     };
     view.rust_metadata.insert(
