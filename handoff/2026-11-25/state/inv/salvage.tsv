@@ -1,0 +1,982 @@
+item	action	remote_ref	note
+wt:velnor-new	none		HEAD already on a remote branch
+wt:velnor-new	kept		main checkout
+wt:wt-audit	pushed	refs/heads/salvage/wt-audit	unique commits; no remote branch contains HEAD
+wt:wt-audit	removed		clean (untracked build output only: none); HEAD on remote
+wt:wt2779	pushed	refs/heads/salvage/wt2779	unique commits; no remote branch contains HEAD
+wt:wt2779	removed		clean (untracked build output only: none); HEAD on remote
+wt:gen-worktree	none		HEAD already on a remote branch
+wt:gen-worktree	removed		clean (untracked build output only: none); HEAD on remote
+wt:velnor-new-0115	none		HEAD already on a remote branch
+wt:velnor-new-0115	removed		clean (untracked build output only: none); HEAD on remote
+wt:velnor-new-docpath	pushed	refs/heads/salvage/velnor-new-docpath	unique commits; no remote branch contains HEAD
+wt:velnor-new-docpath	removed		clean (untracked build output only: none); HEAD on remote
+wt:velnor-new-main	pushed	refs/heads/salvage/velnor-new-main	unique commits; no remote branch contains HEAD
+wt:velnor-new-main	removed		clean (untracked build output only: none); HEAD on remote
+wt:velnor-new-pathkeep	pushed	refs/heads/salvage/velnor-new-pathkeep	unique commits; no remote branch contains HEAD
+wt:velnor-new-pathkeep	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0023b6f3f38c8897	pushed	refs/heads/salvage/agent-a0023b6f3f38c8897	unique commits; no remote branch contains HEAD
+wt:agent-a0023b6f3f38c8897	kept		locked by a claude agent; not unlocked
+wt:agent-a01a4e7dd035543bd	none		no commits beyond origin/main by patch
+wt:agent-a01a4e7dd035543bd	kept		locked by a claude agent; not unlocked
+wt:agent-a027769f49ed932ec	pushed	refs/heads/salvage/agent-a027769f49ed932ec	unique commits; no remote branch contains HEAD
+wt:agent-a027769f49ed932ec	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a04db9fb7aa64a27d	pushed	refs/heads/salvage/agent-a04db9fb7aa64a27d	unique commits; no remote branch contains HEAD
+wt:agent-a04db9fb7aa64a27d	kept		locked by a claude agent; not unlocked
+wt:agent-a05abaff3a02479b2	pushed	refs/heads/salvage/agent-a05abaff3a02479b2	unique commits; no remote branch contains HEAD
+wt:agent-a05abaff3a02479b2	kept		locked by a claude agent; not unlocked
+wt:agent-a0605e289ef75cb42	none		no commits beyond origin/main by patch
+wt:agent-a0605e289ef75cb42	kept		not clean or HEAD not on a remote branch
+wt:agent-a0853817357bb8254	none		HEAD already on a remote branch
+wt:agent-a0853817357bb8254	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a086f75f21dd1c9fa	pushed	refs/heads/salvage/agent-a086f75f21dd1c9fa	unique commits; no remote branch contains HEAD
+wt:agent-a086f75f21dd1c9fa	kept		locked by a claude agent; not unlocked
+wt:agent-a0a652971a1ada44c	none		HEAD already on a remote branch
+wt:agent-a0a652971a1ada44c	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0aa12b8913ad02ab	pushed	refs/heads/salvage/agent-a0aa12b8913ad02ab	unique commits; no remote branch contains HEAD
+wt:agent-a0aa12b8913ad02ab	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0ae269b013942858	pushed	refs/heads/salvage/agent-a0ae269b013942858	unique commits; no remote branch contains HEAD
+wt:agent-a0ae269b013942858	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0c2b43e9f5146aee	none		HEAD already on a remote branch
+wt:agent-a0c2b43e9f5146aee	kept		locked by a claude agent; not unlocked
+wt:agent-a0c54f9eff4a6291d	pushed	refs/heads/salvage/agent-a0c54f9eff4a6291d	unique commits; no remote branch contains HEAD
+wt:agent-a0c54f9eff4a6291d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0c6e20c1c09322f2	skipped		agent still running; not touched
+wt:agent-a0f19948b6962b73d	none		HEAD already on a remote branch
+wt:agent-a0f19948b6962b73d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0f2a89b90285f2f1	committed		uncommitted work saved as WIP commit
+wt:agent-a0f2a89b90285f2f1	pushed	refs/heads/salvage/agent-a0f2a89b90285f2f1	unique commits; no remote branch contains HEAD
+wt:agent-a0f2a89b90285f2f1	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a0f99e7b8ae54eeff	pushed	refs/heads/salvage/agent-a0f99e7b8ae54eeff	unique commits; no remote branch contains HEAD
+wt:agent-a0f99e7b8ae54eeff	kept		locked by a claude agent; not unlocked
+wt:agent-a0fd5dc3372d075c3	pushed	refs/heads/salvage/agent-a0fd5dc3372d075c3	unique commits; no remote branch contains HEAD
+wt:agent-a0fd5dc3372d075c3	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1056d45e3ed39d8a	none		HEAD already on a remote branch
+wt:agent-a1056d45e3ed39d8a	remove-failed		git worktree remove failed
+wt:agent-a119d3d5d3913d315	none		HEAD already on a remote branch
+wt:agent-a119d3d5d3913d315	kept		locked by a claude agent; not unlocked
+wt:agent-a136ce9f1ea41a5c1	none		HEAD already on a remote branch
+wt:agent-a136ce9f1ea41a5c1	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1551868d41a5d81a	pushed	refs/heads/salvage/agent-a1551868d41a5d81a	unique commits; no remote branch contains HEAD
+wt:agent-a1551868d41a5d81a	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1a238d5f59538f0b	pushed	refs/heads/salvage/agent-a1a238d5f59538f0b	unique commits; no remote branch contains HEAD
+wt:agent-a1a238d5f59538f0b	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1a2df2473f571a75	none		HEAD already on a remote branch
+wt:agent-a1a2df2473f571a75	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1ace198c0325f934	pushed	refs/heads/salvage/agent-a1ace198c0325f934	unique commits; no remote branch contains HEAD
+wt:agent-a1ace198c0325f934	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1b6ef92dfe9cf2bb	pushed	refs/heads/salvage/agent-a1b6ef92dfe9cf2bb	unique commits; no remote branch contains HEAD
+wt:agent-a1b6ef92dfe9cf2bb	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1c66f7ee57211523	pushed	refs/heads/salvage/agent-a1c66f7ee57211523	unique commits; no remote branch contains HEAD
+wt:agent-a1c66f7ee57211523	kept		locked by a claude agent; not unlocked
+wt:agent-a1d7c45ade795e0b0	none		HEAD already on a remote branch
+wt:agent-a1d7c45ade795e0b0	kept		locked by a claude agent; not unlocked
+wt:agent-a1df567537ba9fcca	none		no commits beyond origin/main by patch
+wt:agent-a1df567537ba9fcca	kept		locked by a claude agent; not unlocked
+wt:agent-a1ecec190e65bb990	none		HEAD already on a remote branch
+wt:agent-a1ecec190e65bb990	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1fcddfccead96a54	pushed	refs/heads/salvage/agent-a1fcddfccead96a54	unique commits; no remote branch contains HEAD
+wt:agent-a1fcddfccead96a54	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a1ffcdd0bd0b04993	none		HEAD already on a remote branch
+wt:agent-a1ffcdd0bd0b04993	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a22877b79e7b9d8a3	pushed	refs/heads/salvage/agent-a22877b79e7b9d8a3	unique commits; no remote branch contains HEAD
+wt:agent-a22877b79e7b9d8a3	kept		locked by a claude agent; not unlocked
+wt:agent-a23351b1f43e08ea6	none		HEAD already on a remote branch
+wt:agent-a23351b1f43e08ea6	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a23f8989d99169dca	none		HEAD already on a remote branch
+wt:agent-a23f8989d99169dca	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a2431f1790fca6f53	none		HEAD already on a remote branch
+wt:agent-a2431f1790fca6f53	remove-failed		git worktree remove failed
+wt:agent-a247c99cfdef7e6af	none		HEAD already on a remote branch
+wt:agent-a247c99cfdef7e6af	kept		locked by a claude agent; not unlocked
+wt:agent-a250ab763d3a62dde	none		HEAD already on a remote branch
+wt:agent-a250ab763d3a62dde	kept		locked by a claude agent; not unlocked
+wt:agent-a2563186ea31e5e20	none		no commits beyond origin/main by patch
+wt:agent-a2563186ea31e5e20	kept		not clean or HEAD not on a remote branch
+wt:agent-a259a934325e9ff19	pushed	refs/heads/salvage/agent-a259a934325e9ff19	unique commits; no remote branch contains HEAD
+wt:agent-a259a934325e9ff19	kept		locked by a claude agent; not unlocked
+wt:agent-a26384d62c3f72a50	pushed	refs/heads/salvage/agent-a26384d62c3f72a50	unique commits; no remote branch contains HEAD
+wt:agent-a26384d62c3f72a50	kept		locked by a claude agent; not unlocked
+wt:agent-a26cdef41a5393aac	none		HEAD already on a remote branch
+wt:agent-a26cdef41a5393aac	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a26d4fa18d1a015c8	pushed	refs/heads/salvage/agent-a26d4fa18d1a015c8	unique commits; no remote branch contains HEAD
+wt:agent-a26d4fa18d1a015c8	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a270d48ae4f05fdf0	none		HEAD already on a remote branch
+wt:agent-a270d48ae4f05fdf0	kept		locked by a claude agent; not unlocked
+wt:agent-a274d9ca795e1c522	pushed	refs/heads/salvage/agent-a274d9ca795e1c522	unique commits; no remote branch contains HEAD
+wt:agent-a274d9ca795e1c522	kept		locked by a claude agent; not unlocked
+wt:agent-a298fb2b63a8ff043	pushed	refs/heads/salvage/agent-a298fb2b63a8ff043	unique commits; no remote branch contains HEAD
+wt:agent-a298fb2b63a8ff043	kept		locked by a claude agent; not unlocked
+wt:agent-a2a01587f67092cec	none		HEAD already on a remote branch
+wt:agent-a2a01587f67092cec	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a2bb7a58507ffe8e4	none		HEAD already on a remote branch
+wt:agent-a2bb7a58507ffe8e4	kept		locked by a claude agent; not unlocked
+wt:agent-a2be13599ef569615	none		HEAD already on a remote branch
+wt:agent-a2be13599ef569615	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a2c16224f1c74c5cc	none		HEAD already on a remote branch
+wt:agent-a2c16224f1c74c5cc	remove-failed		git worktree remove failed
+wt:agent-a2d07f2f4c51bca4e	none		HEAD already on a remote branch
+wt:agent-a2d07f2f4c51bca4e	remove-failed		git worktree remove failed
+wt:agent-a2fefae4bd60c4aae	pushed	refs/heads/salvage/agent-a2fefae4bd60c4aae	unique commits; no remote branch contains HEAD
+wt:agent-a2fefae4bd60c4aae	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a357bfd5e536f30fb	pushed	refs/heads/salvage/agent-a357bfd5e536f30fb	unique commits; no remote branch contains HEAD
+wt:agent-a357bfd5e536f30fb	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a3764ffbf0e683941	none		HEAD already on a remote branch
+wt:agent-a3764ffbf0e683941	kept		locked by a claude agent; not unlocked
+wt:agent-a396c9d4d4350029e	pushed	refs/heads/salvage/agent-a396c9d4d4350029e	unique commits; no remote branch contains HEAD
+wt:agent-a396c9d4d4350029e	kept		locked by a claude agent; not unlocked
+wt:agent-a398ae2de300f85b5	pushed	refs/heads/salvage/agent-a398ae2de300f85b5	unique commits; no remote branch contains HEAD
+wt:agent-a398ae2de300f85b5	kept		locked by a claude agent; not unlocked
+wt:agent-a3ae7e9a9f866dbc3	none		HEAD already on a remote branch
+wt:agent-a3ae7e9a9f866dbc3	kept		locked by a claude agent; not unlocked
+wt:agent-a3af867d6138c9f87	none		HEAD already on a remote branch
+wt:agent-a3af867d6138c9f87	kept		locked by a claude agent; not unlocked
+wt:agent-a3d377ec419ce4c1c	pushed	refs/heads/salvage/agent-a3d377ec419ce4c1c	unique commits; no remote branch contains HEAD
+wt:agent-a3d377ec419ce4c1c	kept		locked by a claude agent; not unlocked
+wt:agent-a3e6cf710d5e2ac32	pushed	refs/heads/salvage/agent-a3e6cf710d5e2ac32	unique commits; no remote branch contains HEAD
+wt:agent-a3e6cf710d5e2ac32	kept		locked by a claude agent; not unlocked
+wt:agent-a3f1830fa50604f8d	none		no commits beyond origin/main by patch
+wt:agent-a3f1830fa50604f8d	kept		not clean or HEAD not on a remote branch
+wt:agent-a409ed0128db5161d	pushed	refs/heads/salvage/agent-a409ed0128db5161d	unique commits; no remote branch contains HEAD
+wt:agent-a409ed0128db5161d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a446a65fef5a70f6d	pushed	refs/heads/salvage/agent-a446a65fef5a70f6d	unique commits; no remote branch contains HEAD
+wt:agent-a446a65fef5a70f6d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a44ccb89d4e435f1d	pushed	refs/heads/salvage/agent-a44ccb89d4e435f1d	unique commits; no remote branch contains HEAD
+wt:agent-a44ccb89d4e435f1d	kept		locked by a claude agent; not unlocked
+wt:agent-a44f86b14d9e9368d	none		no commits beyond origin/main by patch
+wt:agent-a44f86b14d9e9368d	kept		not clean or HEAD not on a remote branch
+wt:agent-a4570e4bf740b8fe3	none		HEAD already on a remote branch
+wt:agent-a4570e4bf740b8fe3	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a45b06a6897843776	pushed	refs/heads/salvage/agent-a45b06a6897843776	unique commits; no remote branch contains HEAD
+wt:agent-a45b06a6897843776	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a46c35379a23bfb2e	none		no commits beyond origin/main by patch
+wt:agent-a46c35379a23bfb2e	kept		not clean or HEAD not on a remote branch
+wt:agent-a471b1f18746aa93f	none		HEAD already on a remote branch
+wt:agent-a471b1f18746aa93f	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a4836f1ce0e0443a1	none		HEAD already on a remote branch
+wt:agent-a4836f1ce0e0443a1	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a483828fd564214e2	none		HEAD already on a remote branch
+wt:agent-a483828fd564214e2	kept		locked by a claude agent; not unlocked
+wt:agent-a4aa9f20d39ce203f	pushed	refs/heads/salvage/agent-a4aa9f20d39ce203f	unique commits; no remote branch contains HEAD
+wt:agent-a4aa9f20d39ce203f	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a4c4a19b3fcd19878	pushed	refs/heads/salvage/agent-a4c4a19b3fcd19878	unique commits; no remote branch contains HEAD
+wt:agent-a4c4a19b3fcd19878	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a4c90ff7a02db9a93	none		no commits beyond origin/main by patch
+wt:agent-a4c90ff7a02db9a93	kept		not clean or HEAD not on a remote branch
+wt:agent-a4d15da867472eab0	none		HEAD already on a remote branch
+wt:agent-a4d15da867472eab0	kept		locked by a claude agent; not unlocked
+wt:agent-a4d41fb481eec84c2	none		HEAD already on a remote branch
+wt:agent-a4d41fb481eec84c2	kept		locked by a claude agent; not unlocked
+wt:agent-a4f532235d0767082	none		HEAD already on a remote branch
+wt:agent-a4f532235d0767082	kept		locked by a claude agent; not unlocked
+wt:agent-a4ff4cb80bbe04f2e	none		HEAD already on a remote branch
+wt:agent-a4ff4cb80bbe04f2e	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a5367fbf836d5b4e4	pushed	refs/heads/salvage/agent-a5367fbf836d5b4e4	unique commits; no remote branch contains HEAD
+wt:agent-a5367fbf836d5b4e4	kept		locked by a claude agent; not unlocked
+wt:agent-a54117788f9ae0793	pushed	refs/heads/salvage/agent-a54117788f9ae0793	unique commits; no remote branch contains HEAD
+wt:agent-a54117788f9ae0793	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a547b253ed370b73f	none		HEAD already on a remote branch
+wt:agent-a547b253ed370b73f	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a57493b1786521a92	none		HEAD already on a remote branch
+wt:agent-a57493b1786521a92	kept		locked by a claude agent; not unlocked
+wt:agent-a5792c697ddaff70e	none		HEAD already on a remote branch
+wt:agent-a5792c697ddaff70e	kept		locked by a claude agent; not unlocked
+wt:agent-a57e1c249b59fcea1	none		no commits beyond origin/main by patch
+wt:agent-a57e1c249b59fcea1	kept		not clean or HEAD not on a remote branch
+wt:agent-a5c2d30101a456222	pushed	refs/heads/salvage/agent-a5c2d30101a456222	unique commits; no remote branch contains HEAD
+wt:agent-a5c2d30101a456222	remove-failed		git worktree remove failed
+wt:agent-a5d584e1197051174	pushed	refs/heads/salvage/agent-a5d584e1197051174	unique commits; no remote branch contains HEAD
+wt:agent-a5d584e1197051174	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a5ff57b1efd1ac568	pushed	refs/heads/salvage/agent-a5ff57b1efd1ac568	unique commits; no remote branch contains HEAD
+wt:agent-a5ff57b1efd1ac568	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a6072afd8e45055ed	none		HEAD already on a remote branch
+wt:agent-a6072afd8e45055ed	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a63e072a0d9e34af1	none		HEAD already on a remote branch
+wt:agent-a63e072a0d9e34af1	kept		locked by a claude agent; not unlocked
+wt:agent-a65c8e8048df0221c	pushed	refs/heads/salvage/agent-a65c8e8048df0221c	unique commits; no remote branch contains HEAD
+wt:agent-a65c8e8048df0221c	kept		locked by a claude agent; not unlocked
+wt:agent-a6715efda220aa1b9	pushed	refs/heads/salvage/agent-a6715efda220aa1b9	unique commits; no remote branch contains HEAD
+wt:agent-a6715efda220aa1b9	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a6940e18a85fa5013	none		no commits beyond origin/main by patch
+wt:agent-a6940e18a85fa5013	kept		locked by a claude agent; not unlocked
+wt:agent-a6cd09c2f82d1abf4	pushed	refs/heads/salvage/agent-a6cd09c2f82d1abf4	unique commits; no remote branch contains HEAD
+wt:agent-a6cd09c2f82d1abf4	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a6e7842724b5fbab6	pushed	refs/heads/salvage/agent-a6e7842724b5fbab6	unique commits; no remote branch contains HEAD
+wt:agent-a6e7842724b5fbab6	kept		locked by a claude agent; not unlocked
+wt:agent-a710eaaac400df233	none		HEAD already on a remote branch
+wt:agent-a710eaaac400df233	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a711405cc399900b2	pushed	refs/heads/salvage/agent-a711405cc399900b2	unique commits; no remote branch contains HEAD
+wt:agent-a711405cc399900b2	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a72fc74d1e84c8428	none		no commits beyond origin/main by patch
+wt:agent-a72fc74d1e84c8428	kept		not clean or HEAD not on a remote branch
+wt:agent-a747c15def5dfc1f7	none		HEAD already on a remote branch
+wt:agent-a747c15def5dfc1f7	kept		locked by a claude agent; not unlocked
+wt:agent-a76559a1ad9b42693	none		no commits beyond origin/main by patch
+wt:agent-a76559a1ad9b42693	kept		locked by a claude agent; not unlocked
+wt:agent-a766054bcca78e002	pushed	refs/heads/salvage/agent-a766054bcca78e002	unique commits; no remote branch contains HEAD
+wt:agent-a766054bcca78e002	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a77cf00adc9940ef6	pushed	refs/heads/salvage/agent-a77cf00adc9940ef6	unique commits; no remote branch contains HEAD
+wt:agent-a77cf00adc9940ef6	kept		locked by a claude agent; not unlocked
+wt:agent-a7a1628ecc4bcbb6e	none		HEAD already on a remote branch
+wt:agent-a7a1628ecc4bcbb6e	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a7deac4f54c454d80	pushed	refs/heads/salvage/agent-a7deac4f54c454d80	unique commits; no remote branch contains HEAD
+wt:agent-a7deac4f54c454d80	kept		locked by a claude agent; not unlocked
+wt:agent-a7e6f46c4cbc19333	pushed	refs/heads/salvage/agent-a7e6f46c4cbc19333	unique commits; no remote branch contains HEAD
+wt:agent-a7e6f46c4cbc19333	remove-failed		git worktree remove failed
+wt:agent-a7eb167d059b7f9be	none		HEAD already on a remote branch
+wt:agent-a7eb167d059b7f9be	remove-failed		git worktree remove failed
+wt:agent-a7fdda0e7d58ebce6	pushed	refs/heads/salvage/agent-a7fdda0e7d58ebce6	unique commits; no remote branch contains HEAD
+wt:agent-a7fdda0e7d58ebce6	kept		locked by a claude agent; not unlocked
+wt:agent-a802b2f3407535f32	none		no commits beyond origin/main by patch
+wt:agent-a802b2f3407535f32	kept		not clean or HEAD not on a remote branch
+wt:agent-a81001ef16f21b44c	none		HEAD already on a remote branch
+wt:agent-a81001ef16f21b44c	kept		locked by a claude agent; not unlocked
+wt:agent-a824f325abdbff4e3	none		no commits beyond origin/main by patch
+wt:agent-a824f325abdbff4e3	kept		not clean or HEAD not on a remote branch
+wt:agent-a8582b759fd6d5293	pushed	refs/heads/salvage/agent-a8582b759fd6d5293	unique commits; no remote branch contains HEAD
+wt:agent-a8582b759fd6d5293	kept		locked by a claude agent; not unlocked
+wt:agent-a85c5fd8486fc0c6e	none		HEAD already on a remote branch
+wt:agent-a85c5fd8486fc0c6e	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a87b680eec9e511ec	none		HEAD already on a remote branch
+wt:agent-a87b680eec9e511ec	kept		locked by a claude agent; not unlocked
+wt:agent-a88660f519543a86a	pushed	refs/heads/salvage/agent-a88660f519543a86a	unique commits; no remote branch contains HEAD
+wt:agent-a88660f519543a86a	kept		locked by a claude agent; not unlocked
+wt:agent-a89b82a33705d0c0e	none		no commits beyond origin/main by patch
+wt:agent-a89b82a33705d0c0e	kept		not clean or HEAD not on a remote branch
+wt:agent-a8acd3f68ed782884	none		HEAD already on a remote branch
+wt:agent-a8acd3f68ed782884	kept		locked by a claude agent; not unlocked
+wt:agent-a8ae6c5fdd8fb1882	none		HEAD already on a remote branch
+wt:agent-a8ae6c5fdd8fb1882	kept		locked by a claude agent; not unlocked
+wt:agent-a8ce942d08688199d	none		HEAD already on a remote branch
+wt:agent-a8ce942d08688199d	remove-failed		git worktree remove failed
+wt:agent-a8d0390566fd263c8	pushed	refs/heads/salvage/agent-a8d0390566fd263c8	unique commits; no remote branch contains HEAD
+wt:agent-a8d0390566fd263c8	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a8f639b687655851c	pushed	refs/heads/salvage/agent-a8f639b687655851c	unique commits; no remote branch contains HEAD
+wt:agent-a8f639b687655851c	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a8f8675dc2e0eb832	none		no commits beyond origin/main by patch
+wt:agent-a8f8675dc2e0eb832	kept		locked by a claude agent; not unlocked
+wt:agent-a8fe18a648c0d3b0b	none		no commits beyond origin/main by patch
+wt:agent-a8fe18a648c0d3b0b	kept		locked by a claude agent; not unlocked
+wt:agent-a919b708ef69567f4	pushed	refs/heads/salvage/agent-a919b708ef69567f4	unique commits; no remote branch contains HEAD
+wt:agent-a919b708ef69567f4	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a91d083f3f38b3e15	none		HEAD already on a remote branch
+wt:agent-a91d083f3f38b3e15	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a92223cc741c61728	none		HEAD already on a remote branch
+wt:agent-a92223cc741c61728	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a932d6db2228f11f2	none		HEAD already on a remote branch
+wt:agent-a932d6db2228f11f2	kept		locked by a claude agent; not unlocked
+wt:agent-a951ef0ec02b10508	pushed	refs/heads/salvage/agent-a951ef0ec02b10508	unique commits; no remote branch contains HEAD
+wt:agent-a951ef0ec02b10508	kept		locked by a claude agent; not unlocked
+wt:agent-a9679da9f2183124b	none		HEAD already on a remote branch
+wt:agent-a9679da9f2183124b	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a985529b55367570e	none		no commits beyond origin/main by patch
+wt:agent-a985529b55367570e	kept		not clean or HEAD not on a remote branch
+wt:agent-a9883fa535f02c83e	pushed	refs/heads/salvage/agent-a9883fa535f02c83e	unique commits; no remote branch contains HEAD
+wt:agent-a9883fa535f02c83e	kept		locked by a claude agent; not unlocked
+wt:agent-a9901e28d391eb9fc	none		HEAD already on a remote branch
+wt:agent-a9901e28d391eb9fc	kept		locked by a claude agent; not unlocked
+wt:agent-a995291e9bc1e6978	pushed	refs/heads/salvage/agent-a995291e9bc1e6978	unique commits; no remote branch contains HEAD
+wt:agent-a995291e9bc1e6978	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a99c8fb7649aa430b	pushed	refs/heads/salvage/agent-a99c8fb7649aa430b	unique commits; no remote branch contains HEAD
+wt:agent-a99c8fb7649aa430b	kept		locked by a claude agent; not unlocked
+wt:agent-a99e552b6539bf64d	pushed	refs/heads/salvage/agent-a99e552b6539bf64d	unique commits; no remote branch contains HEAD
+wt:agent-a99e552b6539bf64d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-a99f4d87e22844cc6	none		HEAD already on a remote branch
+wt:agent-a99f4d87e22844cc6	remove-failed		git worktree remove failed
+wt:agent-aa1016ec0f1fcc418	pushed	refs/heads/salvage/agent-aa1016ec0f1fcc418	unique commits; no remote branch contains HEAD
+wt:agent-aa1016ec0f1fcc418	kept		locked by a claude agent; not unlocked
+wt:agent-aa2cb22fb149c7df8	pushed	refs/heads/salvage/agent-aa2cb22fb149c7df8	unique commits; no remote branch contains HEAD
+wt:agent-aa2cb22fb149c7df8	kept		locked by a claude agent; not unlocked
+wt:agent-aa30742b5c78115d1	none		no commits beyond origin/main by patch
+wt:agent-aa30742b5c78115d1	kept		not clean or HEAD not on a remote branch
+wt:agent-aa438ef22c223f658	none		HEAD already on a remote branch
+wt:agent-aa438ef22c223f658	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aa7795c6fa31cbc81	none		no commits beyond origin/main by patch
+wt:agent-aa7795c6fa31cbc81	kept		locked by a claude agent; not unlocked
+wt:agent-aaacea06745a5eec9	none		HEAD already on a remote branch
+wt:agent-aaacea06745a5eec9	remove-failed		git worktree remove failed
+wt:agent-aaafea1bf687423cc	none		HEAD already on a remote branch
+wt:agent-aaafea1bf687423cc	kept		locked by a claude agent; not unlocked
+wt:agent-aac7dcc544d5abd81	pushed	refs/heads/salvage/agent-aac7dcc544d5abd81	unique commits; no remote branch contains HEAD
+wt:agent-aac7dcc544d5abd81	kept		locked by a claude agent; not unlocked
+wt:agent-aaceaed5c578ea261	none		no commits beyond origin/main by patch
+wt:agent-aaceaed5c578ea261	kept		not clean or HEAD not on a remote branch
+wt:agent-aadbeda3060602d32	none		HEAD already on a remote branch
+wt:agent-aadbeda3060602d32	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aae762b88a4194582	none		no commits beyond origin/main by patch
+wt:agent-aae762b88a4194582	kept		not clean or HEAD not on a remote branch
+wt:agent-ab1b866c08c2e8d47	none		HEAD already on a remote branch
+wt:agent-ab1b866c08c2e8d47	remove-failed		git worktree remove failed
+wt:agent-ab1f9d6bdd17508de	none		HEAD already on a remote branch
+wt:agent-ab1f9d6bdd17508de	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ab24919711a72e346	pushed	refs/heads/salvage/agent-ab24919711a72e346	unique commits; no remote branch contains HEAD
+wt:agent-ab24919711a72e346	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ab3dafe0677b506b6	pushed	refs/heads/salvage/agent-ab3dafe0677b506b6	unique commits; no remote branch contains HEAD
+wt:agent-ab3dafe0677b506b6	kept		locked by a claude agent; not unlocked
+wt:agent-ab4026401009d7aa6	none		HEAD already on a remote branch
+wt:agent-ab4026401009d7aa6	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ab5a6aee59fe7ca1f	none		HEAD already on a remote branch
+wt:agent-ab5a6aee59fe7ca1f	kept		locked by a claude agent; not unlocked
+wt:agent-ab71929595c49dfcb	pushed	refs/heads/salvage/agent-ab71929595c49dfcb	unique commits; no remote branch contains HEAD
+wt:agent-ab71929595c49dfcb	kept		locked by a claude agent; not unlocked
+wt:agent-ababa5ad60947cb87	none		HEAD already on a remote branch
+wt:agent-ababa5ad60947cb87	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-abb0b797cd9157c1e	none		HEAD already on a remote branch
+wt:agent-abb0b797cd9157c1e	remove-failed		git worktree remove failed
+wt:agent-abbbb86514dab0d8d	pushed	refs/heads/salvage/agent-abbbb86514dab0d8d	unique commits; no remote branch contains HEAD
+wt:agent-abbbb86514dab0d8d	kept		locked by a claude agent; not unlocked
+wt:agent-abd279949d365426d	none		HEAD already on a remote branch
+wt:agent-abd279949d365426d	kept		locked by a claude agent; not unlocked
+wt:agent-abd56d7c53d0c84e2	none		HEAD already on a remote branch
+wt:agent-abd56d7c53d0c84e2	remove-failed		git worktree remove failed
+wt:agent-abec44eeb6a1ed314	pushed	refs/heads/salvage/agent-abec44eeb6a1ed314	unique commits; no remote branch contains HEAD
+wt:agent-abec44eeb6a1ed314	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-abf1e1a9c1ac74635	none		no commits beyond origin/main by patch
+wt:agent-abf1e1a9c1ac74635	kept		not clean or HEAD not on a remote branch
+wt:agent-abf4d6591663f3fd5	pushed	refs/heads/salvage/agent-abf4d6591663f3fd5	unique commits; no remote branch contains HEAD
+wt:agent-abf4d6591663f3fd5	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ac1b39dfb960f5288	none		HEAD already on a remote branch
+wt:agent-ac1b39dfb960f5288	remove-failed		git worktree remove failed
+wt:agent-ac36e8c663f6a8a5c	none		no commits beyond origin/main by patch
+wt:agent-ac36e8c663f6a8a5c	kept		not clean or HEAD not on a remote branch
+wt:agent-ac46801f0e37f7760	none		HEAD already on a remote branch
+wt:agent-ac46801f0e37f7760	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ac4f7ad39d4a9b3ad	none		HEAD already on a remote branch
+wt:agent-ac4f7ad39d4a9b3ad	remove-failed		git worktree remove failed
+wt:agent-ac5e3b3260426a633	none		HEAD already on a remote branch
+wt:agent-ac5e3b3260426a633	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ac6d6918c3fcee2a0	none		HEAD already on a remote branch
+wt:agent-ac6d6918c3fcee2a0	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ac7b03debf99ac889	none		HEAD already on a remote branch
+wt:agent-ac7b03debf99ac889	kept		locked by a claude agent; not unlocked
+wt:agent-ac8065c95424652a5	pushed	refs/heads/salvage/agent-ac8065c95424652a5	unique commits; no remote branch contains HEAD
+wt:agent-ac8065c95424652a5	kept		locked by a claude agent; not unlocked
+wt:agent-ac8975b5d6b468457	none		HEAD already on a remote branch
+wt:agent-ac8975b5d6b468457	kept		locked by a claude agent; not unlocked
+wt:agent-ac9631eb9354e25b3	pushed	refs/heads/salvage/agent-ac9631eb9354e25b3	unique commits; no remote branch contains HEAD
+wt:agent-ac9631eb9354e25b3	kept		locked by a claude agent; not unlocked
+wt:agent-aca39f55efc754eb5	none		HEAD already on a remote branch
+wt:agent-aca39f55efc754eb5	kept		locked by a claude agent; not unlocked
+wt:agent-acaf577378d013f88	pushed	refs/heads/salvage/agent-acaf577378d013f88	unique commits; no remote branch contains HEAD
+wt:agent-acaf577378d013f88	kept		locked by a claude agent; not unlocked
+wt:agent-acc9cb75e3efca3bb	none		no commits beyond origin/main by patch
+wt:agent-acc9cb75e3efca3bb	kept		not clean or HEAD not on a remote branch
+wt:agent-acccc2c99b7cfd5fb	none		HEAD already on a remote branch
+wt:agent-acccc2c99b7cfd5fb	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ace7fd49a79719f8d	none		HEAD already on a remote branch
+wt:agent-ace7fd49a79719f8d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-acf4877d86fe931f3	none		HEAD already on a remote branch
+wt:agent-acf4877d86fe931f3	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ad13e3f4f60cd23c9	none		no commits beyond origin/main by patch
+wt:agent-ad13e3f4f60cd23c9	kept		locked by a claude agent; not unlocked
+wt:agent-ad14844bb8e6570b6	pushed	refs/heads/salvage/agent-ad14844bb8e6570b6	unique commits; no remote branch contains HEAD
+wt:agent-ad14844bb8e6570b6	kept		locked by a claude agent; not unlocked
+wt:agent-ad2355dff66f470a6	pushed	refs/heads/salvage/agent-ad2355dff66f470a6	unique commits; no remote branch contains HEAD
+wt:agent-ad2355dff66f470a6	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ad316002e86c5aa90	pushed	refs/heads/salvage/agent-ad316002e86c5aa90	unique commits; no remote branch contains HEAD
+wt:agent-ad316002e86c5aa90	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ad31b66e0e8c01b0d	pushed	refs/heads/salvage/agent-ad31b66e0e8c01b0d	unique commits; no remote branch contains HEAD
+wt:agent-ad31b66e0e8c01b0d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ad42b65dd9740b9f4	none		HEAD already on a remote branch
+wt:agent-ad42b65dd9740b9f4	remove-failed		git worktree remove failed
+wt:agent-ad4de69a04868380e	pushed	refs/heads/salvage/agent-ad4de69a04868380e	unique commits; no remote branch contains HEAD
+wt:agent-ad4de69a04868380e	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ad80c53348c3b88b4	none		no commits beyond origin/main by patch
+wt:agent-ad80c53348c3b88b4	kept		not clean or HEAD not on a remote branch
+wt:agent-ada6d9b759ccf8b56	pushed	refs/heads/salvage/agent-ada6d9b759ccf8b56	unique commits; no remote branch contains HEAD
+wt:agent-ada6d9b759ccf8b56	remove-failed		git worktree remove failed
+wt:agent-adce50b7af51e35bb	pushed	refs/heads/salvage/agent-adce50b7af51e35bb	unique commits; no remote branch contains HEAD
+wt:agent-adce50b7af51e35bb	remove-failed		git worktree remove failed
+wt:agent-addcc7999dd3345bc	pushed	refs/heads/salvage/agent-addcc7999dd3345bc	unique commits; no remote branch contains HEAD
+wt:agent-addcc7999dd3345bc	kept		locked by a claude agent; not unlocked
+wt:agent-adfcaf177a424d0de	none		no commits beyond origin/main by patch
+wt:agent-adfcaf177a424d0de	kept		locked by a claude agent; not unlocked
+wt:agent-ae0295c37da7b31b7	none		HEAD already on a remote branch
+wt:agent-ae0295c37da7b31b7	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ae08dcb49d6bed58f	none		HEAD already on a remote branch
+wt:agent-ae08dcb49d6bed58f	kept		locked by a claude agent; not unlocked
+wt:agent-ae1212f7343e6b735	none		HEAD already on a remote branch
+wt:agent-ae1212f7343e6b735	kept		locked by a claude agent; not unlocked
+wt:agent-ae4d547dfd41f5b50	pushed	refs/heads/salvage/agent-ae4d547dfd41f5b50	unique commits; no remote branch contains HEAD
+wt:agent-ae4d547dfd41f5b50	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ae4ed1f9e721e768e	none		HEAD already on a remote branch
+wt:agent-ae4ed1f9e721e768e	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ae5d5222fa60357f1	pushed	refs/heads/salvage/agent-ae5d5222fa60357f1	unique commits; no remote branch contains HEAD
+wt:agent-ae5d5222fa60357f1	kept		locked by a claude agent; not unlocked
+wt:agent-ae6c2c9a28326dba9	none		HEAD already on a remote branch
+wt:agent-ae6c2c9a28326dba9	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ae7016064bbd4c678	none		HEAD already on a remote branch
+wt:agent-ae7016064bbd4c678	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-ae86747429b28135a	pushed	refs/heads/salvage/agent-ae86747429b28135a	unique commits; no remote branch contains HEAD
+wt:agent-ae86747429b28135a	kept		locked by a claude agent; not unlocked
+wt:agent-ae90b7e97c6261ed2	none		HEAD already on a remote branch
+wt:agent-ae90b7e97c6261ed2	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aea1c95f1761ed073	pushed	refs/heads/salvage/agent-aea1c95f1761ed073	unique commits; no remote branch contains HEAD
+wt:agent-aea1c95f1761ed073	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aec5ad171839716a3	none		HEAD already on a remote branch
+wt:agent-aec5ad171839716a3	remove-failed		git worktree remove failed
+wt:agent-aec5cf97252e36b65	pushed	refs/heads/salvage/agent-aec5cf97252e36b65	unique commits; no remote branch contains HEAD
+wt:agent-aec5cf97252e36b65	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aed3748dd3df05c00	none		HEAD already on a remote branch
+wt:agent-aed3748dd3df05c00	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aed9cceeffa74a096	none		HEAD already on a remote branch
+wt:agent-aed9cceeffa74a096	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aeddd8b149e220879	none		HEAD already on a remote branch
+wt:agent-aeddd8b149e220879	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-aef82e59068ba9502	pushed	refs/heads/salvage/agent-aef82e59068ba9502	unique commits; no remote branch contains HEAD
+wt:agent-aef82e59068ba9502	kept		locked by a claude agent; not unlocked
+wt:agent-af11b4878c79fb105	none		HEAD already on a remote branch
+wt:agent-af11b4878c79fb105	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-af13d9afeca65a069	pushed	refs/heads/salvage/agent-af13d9afeca65a069	unique commits; no remote branch contains HEAD
+wt:agent-af13d9afeca65a069	kept		locked by a claude agent; not unlocked
+wt:agent-af312f85441ff0381	none		HEAD already on a remote branch
+wt:agent-af312f85441ff0381	kept		locked by a claude agent; not unlocked
+wt:agent-af374e12a0a96f520	pushed	refs/heads/salvage/agent-af374e12a0a96f520	unique commits; no remote branch contains HEAD
+wt:agent-af374e12a0a96f520	kept		locked by a claude agent; not unlocked
+wt:agent-af46d5a9329f2797f	none		HEAD already on a remote branch
+wt:agent-af46d5a9329f2797f	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-af4f0e87cdc84c729	pushed	refs/heads/salvage/agent-af4f0e87cdc84c729	unique commits; no remote branch contains HEAD
+wt:agent-af4f0e87cdc84c729	kept		locked by a claude agent; not unlocked
+wt:agent-af52b8784eeec5863	none		HEAD already on a remote branch
+wt:agent-af52b8784eeec5863	kept		locked by a claude agent; not unlocked
+wt:agent-af78aa228947cea13	pushed	refs/heads/salvage/agent-af78aa228947cea13	unique commits; no remote branch contains HEAD
+wt:agent-af78aa228947cea13	kept		locked by a claude agent; not unlocked
+wt:agent-af8f078b32bc069cc	pushed	refs/heads/salvage/agent-af8f078b32bc069cc	unique commits; no remote branch contains HEAD
+wt:agent-af8f078b32bc069cc	kept		locked by a claude agent; not unlocked
+wt:agent-af91b211b449dd389	pushed	refs/heads/salvage/agent-af91b211b449dd389	unique commits; no remote branch contains HEAD
+wt:agent-af91b211b449dd389	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-afa8afb24f906dd2d	none		HEAD already on a remote branch
+wt:agent-afa8afb24f906dd2d	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-afcc6ebbca4e8c990	none		HEAD already on a remote branch
+wt:agent-afcc6ebbca4e8c990	removed		clean (untracked build output only: none); HEAD on remote
+wt:agent-afe160c03240541e2	pushed	refs/heads/salvage/agent-afe160c03240541e2	unique commits; no remote branch contains HEAD
+wt:agent-afe160c03240541e2	kept		locked by a claude agent; not unlocked
+wt:agent-affd70977493aaec2	none		no commits beyond origin/main by patch
+wt:agent-affd70977493aaec2	kept		locked by a claude agent; not unlocked
+wt:velnor-review-fixes	pushed	refs/heads/salvage/velnor-review-fixes	unique commits; no remote branch contains HEAD
+wt:velnor-review-fixes	removed		clean (untracked build output only: none); HEAD on remote
+branch:chore/tools-0.1.112	pushed	refs/heads/salvage/chore/tools-0.1.112	unique commits; no remote branch contains it
+branch:ciw-086	pushed	refs/heads/salvage/ciw-086	unique commits; no remote branch contains it
+branch:fast/2308-policy-docs	pushed	refs/heads/salvage/fast/2308-policy-docs	unique commits; no remote branch contains it
+branch:fast/2435-missing-input-cascade	pushed	refs/heads/salvage/fast/2435-missing-input-cascade	unique commits; no remote branch contains it
+branch:fast/2648-cache-restore-status	pushed	refs/heads/salvage/fast/2648-cache-restore-status	unique commits; no remote branch contains it
+branch:feat/ci-for-present-stacks	pushed	refs/heads/salvage/feat/ci-for-present-stacks	unique commits; no remote branch contains it
+branch:fix/2724-cache-job-producer-gate	pushed	refs/heads/salvage/fix/2724-cache-job-producer-gate	unique commits; no remote branch contains it
+branch:fix/2742-inputs-build-run-bench-rustc	pushed	refs/heads/salvage/fix/2742-inputs-build-run-bench-rustc	unique commits; no remote branch contains it
+branch:fix/keep-path-units	pushed	refs/heads/salvage/fix/keep-path-units	unique commits; no remote branch contains it
+branch:fix/velnor-ci-audit-batch	pushed	refs/heads/salvage/fix/velnor-ci-audit-batch	unique commits; no remote branch contains it
+branch:fu/2436-early-list-followups	pushed	refs/heads/salvage/fu/2436-early-list-followups	unique commits; no remote branch contains it
+branch:handoff/goal-2026-11-25	pushed	refs/heads/salvage/handoff/goal-2026-11-25	unique commits; no remote branch contains it
+branch:pr2506c	pushed	refs/heads/salvage/pr2506c	unique commits; no remote branch contains it
+branch:pr2579	pushed	refs/heads/salvage/pr2579	unique commits; no remote branch contains it
+branch:pr2679	pushed	refs/heads/salvage/pr2679	unique commits; no remote branch contains it
+branch:pr2735	pushed	refs/heads/salvage/pr2735	unique commits; no remote branch contains it
+branch:pr2859	pushed	refs/heads/salvage/pr2859	unique commits; no remote branch contains it
+branch:pr2866	pushed	refs/heads/salvage/pr2866	unique commits; no remote branch contains it
+branch:preserve/w2865-uncommitted-2026-11-25	push-failed	refs/heads/salvage/preserve/w2865-uncommitted-2026-11-25	push refused or failed (no force used)
+branch:renovate/github-asamarts-alint-0.x	pushed	refs/heads/salvage/renovate/github-asamarts-alint-0.x	unique commits; no remote branch contains it
+branch:renovate/kingfisher-2.x	pushed	refs/heads/salvage/renovate/kingfisher-2.x	unique commits; no remote branch contains it
+branch:renovate/mr-boxington-1.x	pushed	refs/heads/salvage/renovate/mr-boxington-1.x	unique commits; no remote branch contains it
+branch:renovate/opentofu-1.x	pushed	refs/heads/salvage/renovate/opentofu-1.x	unique commits; no remote branch contains it
+branch:review-2171	pushed	refs/heads/salvage/review-2171	unique commits; no remote branch contains it
+branch:chore/2183-cargo-minor-patch-no-turso	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/2219-rust-1100-msrv	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/2703-mbx-comments	kept		not contained in any remote branch
+branch:chore/2745-delete-dead-audit-job-guard	kept		not contained in any remote branch
+branch:chore/2746-opentofu-1.13.10	kept		not contained in any remote branch
+branch:chore/2758-hk-2.14.0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/2777-mr-boxington-1.31.0	kept		not contained in any remote branch
+branch:chore/2842-cargo-deny-0.22.1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/2844-rumdl-0.3.6	kept		not contained in any remote branch
+branch:chore/alint-0.23.0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/alint-0.23.0-w	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/kingfisher-2.20.0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/pin-tools-0.1.115	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/tools-0.1.112	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:chore/tools-0.1.113	kept		not contained in any remote branch
+branch:ci/2048-generated-check-lint	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:ci/2816-isolate-app-keys	deleted		contained in a remote branch
+branch:ciw-086	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:docs/2438-anchor-helper-release	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:docs/2670-v2-architecture-link	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:docs/migrating-velnor-gen	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2273-policy-lane-skip	kept		not contained in any remote branch
+branch:fast/2308-policy-docs	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2349-no-doctests-followups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2371-generated-check-from-source	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2381-build-dir-followups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2403-followups-2387	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2432-no-doctests-followups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2435-missing-input-cascade	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2483-helper-gate-checker-gaps	deleted		contained in a remote branch
+branch:fast/2489-deferred-2384-findings	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2493-audit-failure-identity	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2494-private-cache-gaps	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2520-mbx-socket-stale	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2529-verify-repin-hint	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2540-deferred-notice-host	deleted		contained in a remote branch
+branch:fast/2551-comment-cleanup	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2588-no-doctests-false-positives	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2599-credential-scan-gaps	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2608-mbx-scope-review	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2627-scratch-dirs	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/2648-cache-restore-status	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/alint-line-cap-probe-annotation	kept		not contained in any remote branch
+branch:fast/followups-2066	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/i2311-followups-2167	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/i2460-absolute-local-paths	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/i2684-scrub-private-names	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/i624-ci-overview	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fast/local-mode-lane-parallel	deleted		contained in a remote branch
+branch:fast/mbx-shared-store-stopgap	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/1447-image-build	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/1449-image-publish	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/2471-purge-private-if-public	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/2816-app-token-relay	deleted		contained in a remote branch
+branch:feat/2816-render-relay	deleted		contained in a remote branch
+branch:feat/2870-image-promote-tag-version	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/ci-for-present-stacks	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/image-publish-producer-artifact	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:feat/velnor-metadata-target-schema	deleted		contained in a remote branch
+branch:fix/1548-mbx-objects-budget-family	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2173-private-fill-every-root	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2207-incremental-lookup-total	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2268-trusted-runner-follow-ups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2270-public-probe-followups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2275-mise-trust-colon	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2279-scan-memo-physical-target	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2289-credential-scan-hardening	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2420-shared-build-dir-scan	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2440-generated-check-structure	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2444-release-app-token	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2528-mirror-inherited-off	deleted		contained in a remote branch
+branch:fix/2530-clear-fifo-entry	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2535-speed-budget-skipped-title	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2553-toolchain-neutral-build-layout	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2585-cat-file-nul	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2619-test-plan	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2622-keep-inflight-quarantine	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2654-anchor-guard-and-parse	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2669-retired-leftover-read-only	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2675-compat-digest-and-check-notices	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2701-mbx-total-bytes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2709-mbx-report-missing	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2709-mbx-switch-test-processes	kept		not contained in any remote branch
+branch:fix/2712-pr-inputs-audit	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2724-cache-job-producer-gate	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2724-test-setup-lane-golden	kept		not contained in any remote branch
+branch:fix/2741-orphan-build-outputs	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2742-inputs-build-run-bench-rustc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2744-public-git-unreachable-port	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2748-scrub-before-sources-save	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2752-tools-prune-lease	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2753-early-list-deadline	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2757-rust-trim-zero-roots	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2760-runner-host-journal-flake	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2768-restore-dir-mtimes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2771-ansible-gate-0-1-113	kept		not contained in any remote branch
+branch:fix/2773-helper-gates-merge-queue	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2775-rust-inputs-lock	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2800-tools-key-lock-takeover	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2811-job-image-source-sha	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2814-tools-save-timeout	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2817-supervisor-setsid-drain	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2820-docker-client-hash	kept		not contained in any remote branch
+branch:fix/2820-pin-docker-client	deleted		contained in a remote branch
+branch:fix/2821-image-build-secret-env	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2836-private-fetch-manifests	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2846-tar-shim-gnu-long-options	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2848-split-lane-audit-before-save	kept		not contained in any remote branch
+branch:fix/2853-setup-velnor-clear-entry-race	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2854-setup-velnor-download-error	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/2856-mbx-waste-no-lookup	kept		not contained in any remote branch
+branch:fix/audit-script-dep-info-2720	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/ci-cache-credentials-batch	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/ci-review-findings	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/early-list-own-extraction-2442	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/generator-review-batch	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/helper-gates-required-verdict	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/image-build-detached-descendants	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/keep-path-units	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/mbx-store-share-out-dir	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/no-doctests-2560-2602	deleted		contained in a remote branch
+branch:fix/pruned-output-waste	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/public-sources-before-token	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/public-sources-before-token-wt	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/relative-doc-waste	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/remove-python-image-candidate-builder	kept		not contained in any remote branch
+branch:fix/report-save-steps-not-rendered	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/scripts-lints-batch-1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/velnor-ci-audit-batch	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/velnor-ci-audit-selection	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix/velnor-ci-audit-units	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fix2852	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:fu-2437-no-doctests-list	deleted		contained in a remote branch
+branch:fu/2436-early-list-followups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:handoff/goal-2026-11-25	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:handoff/roadmap-2026-11-15	deleted		contained in a remote branch
+branch:i624-review-fix	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:i624-tmp	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:issue-2680-follow-ups	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:keepready-2785	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:notes/local-machine-2026-11-25	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:perf/2419-report-waste-scan	kept		not contained in any remote branch
+branch:post-merge-2580-fixes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2525-refresh	deleted		contained in a remote branch
+branch:pr-2764-review	kept		not contained in any remote branch
+branch:pr-2770	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2781	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2790	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2790-v2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2793	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2796	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2799	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2807	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2807b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2809	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2809b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2810	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2823	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2826	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2834	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2835	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr-2838	kept		not contained in any remote branch
+branch:pr1751	deleted		contained in a remote branch
+branch:pr2379	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2394	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2397-work	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2411	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2445	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2448	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2501	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2506	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2506b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2506c	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2525	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2559	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2559-work	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2577	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2577-work	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2579	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2604	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2610	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2615	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2616	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2637	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2650	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2657	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2659	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2660	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2679	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2683	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2693-work	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2699	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2716	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2722	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2733	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2734	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2735	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2739	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2740	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2743	kept		not contained in any remote branch
+branch:pr2747	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2749	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2750	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2755	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2761	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2761-w	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2764	kept		not contained in any remote branch
+branch:pr2774	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2778	kept		not contained in any remote branch
+branch:pr2779	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2785	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2786	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2787	kept		not contained in any remote branch
+branch:pr2791	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2794	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2797	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2802	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2805	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2806	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2812	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2819	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2824	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2828	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2832	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2833	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2843	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2845	kept		not contained in any remote branch
+branch:pr2847	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2847b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2850	kept		not contained in any remote branch
+branch:pr2857	kept		not contained in any remote branch
+branch:pr2858	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2859	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2861	kept		not contained in any remote branch
+branch:pr2863	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2864	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2865	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2866	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2867	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:pr2869	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:preserve/w2865-uncommitted-2026-11-25	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:refactor/2389-inventory-probe-seam	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:remerge/fast-1555-test-cargo-guard	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:renovate/github-asamarts-alint-0.x	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:renovate/kingfisher-2.x	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:renovate/mr-boxington-1.x	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:renovate/opentofu-1.x	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:research/velnor-gen-rebase-2026-11	deleted		contained in a remote branch
+branch:review-2171	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:review-2525-fixes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:review-2860-fixes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:review-2862-fixes	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:scan-fix	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:stash/pr2-wip-relay-render	deleted		contained in a remote branch
+branch:stash/release-golden-wip	deleted		contained in a remote branch
+branch:stash/runner-host-minted-wip	deleted		contained in a remote branch
+branch:stash/runner-host-slot-wip	deleted		contained in a remote branch
+branch:test/2212-checkpoint-and-audit-race	kept		not contained in any remote branch
+branch:test/2212-fail-closed-races	kept		not contained in any remote branch
+branch:test/2421-policy-gate-variant	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:test/2646-purge-private-fail-closed	kept		not contained in any remote branch
+branch:test/2690-nested-root-sample	kept		not contained in any remote branch
+branch:test/2754-hang-up-fake	kept		not contained in any remote branch
+branch:test/2801-write-request-timeouts	kept		not contained in any remote branch
+branch:test/2818-setup-velnor-action-ci	deleted		contained in a remote branch
+branch:test/deferral-evidence-gaps	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:test/scanner-fixture-ancestry	kept		not contained in any remote branch
+branch:w2525	deleted		contained in a remote branch
+branch:w2860	deleted		contained in a remote branch
+branch:w2864	deleted		contained in a remote branch
+branch:w2865	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:work	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:work-2616	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0023b6f3f38c8897	deleted		contained in a remote branch
+branch:worktree-agent-a01a4e7dd035543bd	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a027769f49ed932ec	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a04db9fb7aa64a27d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a05abaff3a02479b2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0605e289ef75cb42	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0853817357bb8254	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a086f75f21dd1c9fa	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a090db907ccad5439	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0a652971a1ada44c	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0aa12b8913ad02ab	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0ae269b013942858	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0c2b43e9f5146aee	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0c54f9eff4a6291d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0c6e20c1c09322f2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0f19948b6962b73d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0f2a89b90285f2f1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0f63675120d6b666	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0f99e7b8ae54eeff	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a0fd5dc3372d075c3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1056d45e3ed39d8a	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a119d3d5d3913d315	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a136ce9f1ea41a5c1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1551868d41a5d81a	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1a238d5f59538f0b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1a2df2473f571a75	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1ace198c0325f934	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1b6ef92dfe9cf2bb	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1c66f7ee57211523	deleted		contained in a remote branch
+branch:worktree-agent-a1d7c45ade795e0b0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1df567537ba9fcca	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1ecec190e65bb990	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a1fcddfccead96a54	deleted		contained in a remote branch
+branch:worktree-agent-a1ffcdd0bd0b04993	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a22877b79e7b9d8a3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a23351b1f43e08ea6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a23f8989d99169dca	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2431f1790fca6f53	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a247c99cfdef7e6af	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a250ab763d3a62dde	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2563186ea31e5e20	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a259a934325e9ff19	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a26384d62c3f72a50	deleted		contained in a remote branch
+branch:worktree-agent-a26cdef41a5393aac	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a26d4fa18d1a015c8	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a270d48ae4f05fdf0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a274d9ca795e1c522	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a298fb2b63a8ff043	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2a01587f67092cec	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2bb7a58507ffe8e4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2be13599ef569615	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2c16224f1c74c5cc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2d07f2f4c51bca4e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a2fefae4bd60c4aae	deleted		contained in a remote branch
+branch:worktree-agent-a357bfd5e536f30fb	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a3764ffbf0e683941	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a396c9d4d4350029e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a398ae2de300f85b5	deleted		contained in a remote branch
+branch:worktree-agent-a3ae7e9a9f866dbc3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a3af867d6138c9f87	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a3d377ec419ce4c1c	deleted		contained in a remote branch
+branch:worktree-agent-a3e6cf710d5e2ac32	deleted		contained in a remote branch
+branch:worktree-agent-a3f1830fa50604f8d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a409ed0128db5161d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a446a65fef5a70f6d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a44ccb89d4e435f1d	deleted		contained in a remote branch
+branch:worktree-agent-a44f86b14d9e9368d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4570e4bf740b8fe3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a45b06a6897843776	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a46c35379a23bfb2e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a471b1f18746aa93f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4836f1ce0e0443a1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a483828fd564214e2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4aa9f20d39ce203f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4c4a19b3fcd19878	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4c90ff7a02db9a93	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4d15da867472eab0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4d41fb481eec84c2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4f532235d0767082	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a4ff4cb80bbe04f2e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a50d10bcace00b04a	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a5367fbf836d5b4e4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a54117788f9ae0793	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a547b253ed370b73f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a57493b1786521a92	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a5792c697ddaff70e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a57e1c249b59fcea1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a5c2d30101a456222	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a5d584e1197051174	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a5ff57b1efd1ac568	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a6072afd8e45055ed	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a65c8e8048df0221c	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a6715efda220aa1b9	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a6940e18a85fa5013	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a6cd09c2f82d1abf4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a6e7842724b5fbab6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a710eaaac400df233	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a711405cc399900b2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a72fc74d1e84c8428	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a747c15def5dfc1f7	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a76559a1ad9b42693	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a766054bcca78e002	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a77cf00adc9940ef6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a7a1628ecc4bcbb6e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a7deac4f54c454d80	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a7e6f46c4cbc19333	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a7eb167d059b7f9be	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a7fdda0e7d58ebce6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a802b2f3407535f32	deleted		contained in a remote branch
+branch:worktree-agent-a81001ef16f21b44c	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a824f325abdbff4e3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8582b759fd6d5293	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a85c5fd8486fc0c6e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a87b680eec9e511ec	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a88660f519543a86a	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a89b82a33705d0c0e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8acd3f68ed782884	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8ae6c5fdd8fb1882	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8ce942d08688199d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8d0390566fd263c8	deleted		contained in a remote branch
+branch:worktree-agent-a8f639b687655851c	deleted		contained in a remote branch
+branch:worktree-agent-a8f8675dc2e0eb832	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a8fe18a648c0d3b0b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a919b708ef69567f4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a91d083f3f38b3e15	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a92223cc741c61728	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a932d6db2228f11f2	deleted		contained in a remote branch
+branch:worktree-agent-a951ef0ec02b10508	deleted		contained in a remote branch
+branch:worktree-agent-a9679da9f2183124b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a985529b55367570e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a9883fa535f02c83e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a9901e28d391eb9fc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a995291e9bc1e6978	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a99c8fb7649aa430b	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a99e552b6539bf64d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-a99f4d87e22844cc6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aa1016ec0f1fcc418	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aa12369ec9564c8fd	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aa2cb22fb149c7df8	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aa30742b5c78115d1	deleted		contained in a remote branch
+branch:worktree-agent-aa438ef22c223f658	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aa62befce795b6e37	deleted		contained in a remote branch
+branch:worktree-agent-aa7795c6fa31cbc81	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aaacea06745a5eec9	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aaafea1bf687423cc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aac7dcc544d5abd81	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aaceaed5c578ea261	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aadbeda3060602d32	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aae762b88a4194582	deleted		contained in a remote branch
+branch:worktree-agent-ab1b866c08c2e8d47	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab1f9d6bdd17508de	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab24919711a72e346	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab3dafe0677b506b6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab4026401009d7aa6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab5a6aee59fe7ca1f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab71929595c49dfcb	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ab96f3aee62bf6365	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ababa5ad60947cb87	deleted		contained in a remote branch
+branch:worktree-agent-abb0b797cd9157c1e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-abbbb86514dab0d8d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-abd279949d365426d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-abd56d7c53d0c84e2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-abec44eeb6a1ed314	deleted		contained in a remote branch
+branch:worktree-agent-abf1e1a9c1ac74635	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-abf4d6591663f3fd5	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac1576b4af7f0e7bf	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac1b39dfb960f5288	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac36e8c663f6a8a5c	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac46801f0e37f7760	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac4f7ad39d4a9b3ad	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac5e3b3260426a633	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac6d6918c3fcee2a0	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac7839ab8be4c1af9	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac7b03debf99ac889	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac8065c95424652a5	deleted		contained in a remote branch
+branch:worktree-agent-ac8975b5d6b468457	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ac9631eb9354e25b3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aca39f55efc754eb5	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-acaf577378d013f88	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-acc9cb75e3efca3bb	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-acccc2c99b7cfd5fb	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-accf595d05effa090	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ace7fd49a79719f8d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-acf4877d86fe931f3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ad13e3f4f60cd23c9	deleted		contained in a remote branch
+branch:worktree-agent-ad14844bb8e6570b6	deleted		contained in a remote branch
+branch:worktree-agent-ad2355dff66f470a6	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ad316002e86c5aa90	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ad31b66e0e8c01b0d	deleted		contained in a remote branch
+branch:worktree-agent-ad42b65dd9740b9f4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ad4de69a04868380e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ad80c53348c3b88b4	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ada6d9b759ccf8b56	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-adc25f7f38d38b867	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-adce50b7af51e35bb	deleted		contained in a remote branch
+branch:worktree-agent-addcc7999dd3345bc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-adfcaf177a424d0de	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae0295c37da7b31b7	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae08dcb49d6bed58f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae1212f7343e6b735	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae4d547dfd41f5b50	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae4ed1f9e721e768e	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae5d5222fa60357f1	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae6c2c9a28326dba9	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae7016064bbd4c678	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-ae86747429b28135a	deleted		contained in a remote branch
+branch:worktree-agent-ae90b7e97c6261ed2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aea1c95f1761ed073	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aec5ad171839716a3	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aec5cf97252e36b65	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aed3748dd3df05c00	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aed9cceeffa74a096	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aeddd8b149e220879	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-aef82e59068ba9502	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af11b4878c79fb105	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af13d9afeca65a069	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af312f85441ff0381	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af374e12a0a96f520	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af46d5a9329f2797f	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af4f0e87cdc84c729	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af52b8784eeec5863	deleted		contained in a remote branch
+branch:worktree-agent-af78aa228947cea13	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af8f078b32bc069cc	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-af91b211b449dd389	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-afa8afb24f906dd2d	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-afcc6ebbca4e8c990	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-afe160c03240541e2	kept		git branch -d refused (not merged into main or upstream, or checked out)
+branch:worktree-agent-affd70977493aaec2	kept		git branch -d refused (not merged into main or upstream, or checked out)
