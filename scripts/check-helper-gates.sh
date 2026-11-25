@@ -128,6 +128,7 @@ scan() {
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
   function versions(line, out,    rest, n, v, off, before, after) {
     n = 0
+    gsub(/\047([^\047\\]|\\.)\047/, "\047\047", line)
     gsub(/"([^"\\]|\\.)*"/, "\"\"", line)
     rest = line
     off = 0
