@@ -141,6 +141,19 @@ fn the_gate_names_every_job_the_verdict_job_needs() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn the_pull_request_audit_of_a_lane_leaves_the_verdict_of_every_job_unchanged() -> TestResult {
+    let roots = ["Cargo.toml", "lab/Cargo.toml"];
+    let before = released("0.1.115", &roots)?;
+    let after = released("0.1.117", &roots)?;
+    assert_eq!(gate_line(&after)?, gate_line(&before)?);
+    assert_eq!(
+        gate_line(&after)?,
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --tests rust-root=root --tests rust-lab=lab"
+    );
+    Ok(())
+}
+
 fn built_from_source() -> Result<String, Box<dyn std::error::Error>> {
     let view = load(&samples().join("helper-source"))?;
     let mut files = expected_files(&view)?;

@@ -12,6 +12,7 @@ use crate::units::Unit;
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
 const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 102);
+const PULL_REQUEST_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 117);
 
 // helper-gate: first in tools-v0.1.116 via 3797db0eb5
 const AUDIT_BEFORE_SAVES_HELPER: (u64, u64, u64) = (0, 1, 116);
@@ -24,6 +25,13 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
+}
+
+pub(crate) fn audits_pull_requests(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
 }
 
 pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {
@@ -104,8 +112,10 @@ pub(crate) fn audit_when(facts: &RepoFacts) -> Option<velnor_model::When> {
             (OnMain::Affected, _) => Some(When::Scheduled),
         };
     }
-    Some(match facts.config.on_main {
-        OnMain::Everything => When::FullAuditOrPush,
-        OnMain::Affected => When::FullAudit,
+    Some(match (facts.config.on_main, audits_pull_requests(facts)) {
+        (OnMain::Everything, false) => When::FullAuditOrPush,
+        (OnMain::Everything, true) => When::FullAuditOrPushOrPullRequest,
+        (OnMain::Affected, false) => When::FullAudit,
+        (OnMain::Affected, true) => When::FullAuditOrPullRequest,
     })
 }
