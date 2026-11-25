@@ -53,7 +53,7 @@ if [ -z "$diff_file" ]; then
         done ;;
     esac
   done < <(git diff -M -z --name-status "$base...HEAD")
-  git diff -M "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
+  git diff -M --src-prefix=a/ --dst-prefix=b/ "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
@@ -152,6 +152,7 @@ scan() {
     return n
   }
   function const_item(s) {
+    while (match(s, /^[ \t]*#!?\[[^\]]*\]/)) s = substr(s, RLENGTH + 1)
     if (s !~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?(const|static)[ \t]+(mut[ \t]+)?[A-Za-z_]/) return 0
     if (s ~ /^[ \t]*(pub([ \t]*\([^)]*\))?[ \t]+)?const[ \t]+(fn|unsafe|async|extern)[ \t(]/) return 0
     if (s !~ /\([ \t]*u64[ \t]*,[ \t]*u64[ \t]*,[ \t]*u64[ \t]*\)/) return 0
@@ -172,16 +173,20 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { hdr = $0; cut = 0; while ((at = index(substr(hdr, cut + 1), " b/")) > 0) cut += at; file = substr(hdr, cut + 3); if (match(hdr, / "b\/[^"]*"$/)) file = substr(hdr, RSTART + 4, RLENGTH - 5); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; prevmk = ""; next }
-  /^@@/ { prevnew = ""; prevadded = 0; prevmk = ""; next }
+  /^diff --git / { hdr = $0; cut = 0; while ((at = index(substr(hdr, cut + 1), " b/")) > 0) cut += at; file = substr(hdr, cut + 3); if (match(hdr, / "b\/[^"]*"$/)) file = substr(hdr, RSTART + 4, RLENGTH - 5); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; prevmk = ""; prevattr = 0; depth = 0; next }
+  /^@@/ { prevnew = ""; prevadded = 0; prevmk = ""; prevattr = 0; depth = 0; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
     above = prevnew
     aboveadded = prevadded
-    if (above ~ /^[ \t]*#!?\[/ && prevmk != "") above = prevmk
-    prevmk = (text ~ /^[ \t]*#!?\[/ && marker(above, carry)) ? above : ""
+    inattr = depth > 0
+    if (prevattr && prevmk != "") above = prevmk
+    isattr = inattr || text ~ /^[ \t]*#!?\[/
+    if (isattr) { tmp = text; depth += gsub(/\[/, "", tmp); tmp = text; depth -= gsub(/\]/, "", tmp); if (depth < 0) depth = 0 }
+    prevmk = (isattr && marker(above, carry)) ? above : ""
+    prevattr = isattr
     delete carry
     prevnew = text
     prevadded = ($0 ~ /^\+/)

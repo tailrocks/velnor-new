@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-rust/src/policy.rs b/crates/velnor-rust/src/policy.rs
+--- a/crates/velnor-rust/src/policy.rs
++++ b/crates/velnor-rust/src/policy.rs
+@@ -0,0 +1 @@
++#[cfg(unix)] const POLICY: (u64, u64, u64) = (0, 1, 110);

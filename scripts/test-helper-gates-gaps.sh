@@ -5,13 +5,13 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-helper-gates.sh"
 fixtures="$root/scripts/fixtures"
 
-for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-underscore gate-const-suffix gate-const-pub-in gate-const-pub-space gate-string-marker gate-char-literal; do
+for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-underscore gate-const-suffix gate-const-pub-in gate-const-pub-space gate-string-marker gate-char-literal gate-const-attr-inline; do
   if bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110; then
     echo "the check accepted $f.diff" >&2
     exit 1
   fi
 done
-for f in gate-const-marked gate-const-fn gate-const-block gate-const-help-string gate-const-rgb gate-macro-tuple gate-macro-space gate-const-attr-marked gate-pattern-tuple gate-pattern-nested gate-pattern-guard; do
+for f in gate-const-marked gate-const-fn gate-const-block gate-const-help-string gate-const-rgb gate-macro-tuple gate-macro-space gate-const-attr-marked gate-pattern-tuple gate-pattern-nested gate-pattern-guard gate-const-attr-multiline-marked; do
   bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110
 done
 
@@ -26,6 +26,7 @@ git config tag.gpgsign false
 git config core.hooksPath /dev/null
 git config core.excludesFile /dev/null
 git config core.attributesFile /dev/null
+git config diff.noprefix true
 mkdir -p crates/velnor-ci generator "generator/old dir" "generator/old ü"
 printf '[package]\nname = "velnor-ci"\nversion = "0.1.110"\n' >crates/velnor-ci/Cargo.toml
 echo 'gate(RustCi, "budget", (0, 1, 110)),' >generator/gates.rs
@@ -49,6 +50,7 @@ if bash "$checker" "$base"; then
   echo "the check accepted a new unmarked released gate in a moved file" >&2
   exit 1
 fi
+git reset -q --hard HEAD~1
 mkdir -p crates/velnor-gen/src/ü
 git mv crates/velnor-gen/src/wide.rs crates/velnor-gen/src/ü/gates.rs
 echo 'gate(RustCi, "lint2", (0, 1, 110)),' >>crates/velnor-gen/src/ü/gates.rs
