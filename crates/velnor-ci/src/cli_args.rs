@@ -3,6 +3,10 @@
 
 use std::path::PathBuf;
 
+use crate::cli_image::{
+    ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImageGhcrArgs,
+    ImagePreflightArgs, ImagePromoteArgs, ImageStageArgs, ImageSysrootArgs, ImageVerifyArgs,
+};
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
@@ -206,6 +210,50 @@ pub enum ImageCommand {
         about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; the checkout is at GITHUB_SHA, which is the tip of main; the candidate record and archive verify against --root; the run has one unexpired candidate artifact; the latest canonical ci.yml push run of the commit succeeded; and `gh attestation verify` passes for the archive and the record with the repository, workflow, ref and commit pinned. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
     )]
     Publish(ImagePublishArgs),
+    #[command(
+        about = "Copy the compiled binaries out of the Cargo target directory, which may be a link, into a real directory, and refuse to stage any that is not an x86-64 dynamic binary whose newest GLIBC_ symbol version is within --glibc, that carries a library search path outside $ORIGIN, or whose libssl and libcrypto dependency does not match --openssl. Stages nothing when any binary is refused"
+    )]
+    Stage(ImageStageArgs),
+    #[command(
+        about = "Wait until every required check of the commit has passed, as release-gate judges them, then write ready=true to $GITHUB_OUTPUT. Exit 1 when a check failed or the checks were not green within --wait-seconds. With --require-tip, write ready=false and exit 0 when the commit is no longer the tip of the default branch. Reads GITHUB_TOKEN, which needs actions: read, contents: read and statuses: read"
+    )]
+    Gate(ImageGateArgs),
+    #[command(
+        about = "Write IMAGE=true or IMAGE=false to $GITHUB_OUTPUT for each image named by --match: on a pull_request event an image is true when a file of the pull request, or the path it was renamed from, matches one of its globs; any other event, and a pull request of more than 3000 files, select every image. Reads GITHUB_TOKEN, which needs pull-requests: read"
+    )]
+    Changes(ImageChangesArgs),
+    #[command(
+        about = "Check that the downloaded staged binaries are exactly the ones that the build job staged: the directory holds only the files named by --sums, each a regular file with the given sha256, so an artifact that was changed after staging (a swapped file or a link) is refused. Never builds or pushes"
+    )]
+    Verify(ImageVerifyArgs),
+    #[command(
+        about = "Exit 1 when RUSTFLAGS, CARGO_ENCODED_RUSTFLAGS, CARGO_BUILD_RUSTFLAGS or CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS in the environment set target-cpu or target-feature (either spelling), because the published binary must run on any x86-64 CPU"
+    )]
+    CpuFlags,
+    #[command(
+        about = "Refuse to push to a ghcr.io package that already exists as public, because GitHub cannot make a public package private again; a missing package is fine. Reads GITHUB_TOKEN, which needs packages: read"
+    )]
+    GhcrPreflight(ImageGhcrArgs),
+    #[command(
+        about = "Point the default-branch tag of every --image at the image of the tip of the default branch, under the lock that the workflow holds: the digest this run pushed when --commit is the tip, otherwise the digest of sha-<tip> read from each registry (nothing moves when the tip has no image there). Then read the tag back in every registry and exit 1, saying that a re-run repairs it, when any registry names another digest. Reads GITHUB_TOKEN, which needs contents: read, and the docker login of the job"
+    )]
+    Advance(ImageAdvanceArgs),
+    #[command(
+        about = "Refuse to push to a Docker Hub repository that is missing or public: log in with VELNOR_HUB_USERNAME and VELNOR_HUB_TOKEN, exit 1 unless the repository exists and is private. Never prints a credential"
+    )]
+    Preflight(ImagePreflightArgs),
+    #[command(
+        about = "Refuse a release tag that no trusted authority created: exit 0 only when --actor is one of the --release-actor logins, or an active tag ruleset (own, organization or enterprise) forbids creating, updating and deleting the tag. Reads GITHUB_TOKEN, which needs only the default read access"
+    )]
+    Authorize(ImageAuthorizeArgs),
+    #[command(
+        about = "Tag sha-<commit> as <version> in every --image, after checking all of them: exit 1 when sha-<commit> is missing or when <version> already names a different digest, and create nothing then. A version that already names the same digest is left alone. Uses the docker login of the job"
+    )]
+    Promote(ImagePromoteArgs),
+    #[command(
+        about = "Download the Debian packages named in the sysroot lock, check each sha256, unpack them with dpkg-deb into --out, keep only the shared OpenSSL libraries and the merged headers, and append X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR and X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR to $GITHUB_ENV"
+    )]
+    Sysroot(ImageSysrootArgs),
 }
 
 #[derive(Debug, Args)]

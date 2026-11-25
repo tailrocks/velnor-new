@@ -25,6 +25,17 @@ mod gate;
 mod gate_needs;
 mod helper_integrity;
 mod helper_steps;
+mod image;
+mod image_advance;
+mod image_boundary;
+mod image_build;
+mod image_changes;
+mod image_check;
+mod image_gate;
+mod image_group;
+mod image_publish;
+mod image_release;
+mod image_stage;
 mod install_steps;
 mod job_helper;
 mod key_length;
@@ -72,6 +83,11 @@ mod yaml;
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 pub use crate::delta_cleanup::{DELTA_CLEANUP_HELPER, DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::document::document;
+pub use crate::image::{
+    IMAGE_BUILDKIT, IMAGE_ENVIRONMENT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, IMAGE_WORKFLOW_PATH,
+    ImageBuild, ImageMbx, ImageWorkflow, render_image,
+};
+pub use crate::image_boundary::check_image_boundary;
 pub use crate::mise_digest::{MISE_BINARIES, MiseBinary, UnknownMiseVersion, mise_sha256_input};
 pub(crate) use crate::permission_yaml::permission_pairs;
 pub use crate::pinned_actions::{

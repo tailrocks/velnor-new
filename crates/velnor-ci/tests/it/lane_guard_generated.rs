@@ -39,6 +39,7 @@ fn view(helper: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {
             doctest: false,
             source: None,
             requires_features: false,
+            required_features: Vec::new(),
         }],
     };
     view.rust_metadata.insert(

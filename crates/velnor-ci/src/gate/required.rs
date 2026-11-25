@@ -24,6 +24,7 @@ pub(super) fn required_checks(
     repo: &Repo,
     branch: &str,
     pr_only_checks: &[String],
+    verify_exemptions: bool,
 ) -> Result<RequiredChecks, CiError> {
     let mut checks = BTreeSet::new();
     let mut app_checks = Vec::new();
@@ -73,7 +74,7 @@ pub(super) fn required_checks(
             )));
         }
     }
-    if !pr_only_checks.is_empty() {
+    if verify_exemptions && !pr_only_checks.is_empty() {
         exemptions::require_enforcement(
             github,
             repo,

@@ -142,6 +142,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `private_sources` | none | private dependencies, see above |
 | `public_sources` | none | public git dependencies that may be cached, see [`generator/CONFIG.md`](../generator/CONFIG.md#optional-public-git-dependencies) (needs `velnor-ci` 0.1.111) |
 | `release_assets` | none | `[[release_assets]]` entries: private release assets that a build script or test reads, fetched with the `[private_sources]` App, checked against a required `sha256` and cached by it, see `generator/CONFIG.md` (needs `velnor-ci` 0.1.109) |
+| `image` | none | `[[image]]` entries: a Docker image built from Cargo binaries compiled with `cargo zigbuild`, published by a generated `.github/workflows/image.yml`, see [`generator/CONFIG.md`](../generator/CONFIG.md#container-images) (needs `velnor-ci` 0.1.116) |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |

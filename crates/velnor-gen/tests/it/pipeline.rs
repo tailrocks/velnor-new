@@ -36,6 +36,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
                 doctest: false,
                 source: None,
                 requires_features: false,
+                required_features: Vec::new(),
             }],
         };
         view.rust_metadata.insert(

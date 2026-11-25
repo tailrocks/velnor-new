@@ -107,11 +107,21 @@ fn status_error(what: &str, response: &mut Response<ureq::Body>) -> CiError {
     let message = format!("{what}: http status: {status}{suffix}");
     if matches!(status, 404 | 410) {
         CiError::missing(message)
-    } else if status == 429 || status >= 500 {
+    } else if status == 429 || status >= 500 || rate_limited(status, &details) {
         CiError::transient(message)
     } else {
         CiError::new(message)
     }
+}
+
+fn rate_limited(status: u16, details: &[String]) -> bool {
+    status == 403
+        && details.iter().any(|detail| {
+            let detail = detail.to_ascii_lowercase();
+            detail.contains("rate limit")
+                || detail.starts_with("retry-after")
+                || detail == "x-ratelimit-remaining: 0"
+        })
 }
 
 fn describe_body(raw: &[u8]) -> Vec<String> {
@@ -261,6 +271,10 @@ mod tests {
     use super::*;
 
     fn api_answering(status: u16) -> HttpGitHub {
+        api_answering_with(status, "")
+    }
+
+    fn api_answering_with(status: u16, body: &'static str) -> HttpGitHub {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let api = format!("http://{}", listener.local_addr().expect("addr"));
         thread::spawn(move || {
@@ -274,7 +288,8 @@ mod tests {
                 stream
                     .write_all(
                         format!(
-                            "HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
                         )
                         .as_bytes(),
                     )
@@ -308,6 +323,17 @@ mod tests {
                 "POST {status}"
             );
         }
+    }
+
+    #[test]
+    fn a_secondary_rate_limit_answer_is_transient_and_a_plain_403_is_not() {
+        let limited = api_answering_with(
+            403,
+            r#"{"message":"You have exceeded a secondary rate limit."}"#,
+        );
+        assert!(limited.get("/x").expect_err("failure").is_transient());
+        let denied = api_answering_with(403, r#"{"message":"Resource not accessible"}"#);
+        assert!(!denied.get("/x").expect_err("failure").is_transient());
     }
 
     #[test]
