@@ -81,6 +81,8 @@ struct RawConfig {
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
     policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
+    #[serde(default)]
+    image: Vec<crate::config_image::RawImage>,
 }
 
 #[derive(Deserialize)]
@@ -117,8 +119,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let full_run =
         crate::config_events::full_run_or(raw.full_run, defaults.full_run).map_err(invalid)?;
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
-    let ci_debuginfo =
-        debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let private_sources = crate::config_private::optional(raw.private_sources).map_err(invalid)?;
     let release_assets =
@@ -171,6 +171,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         public_sources: crate::config_public::optional(raw.public_sources).map_err(invalid)?,
         private_sources,
         release_assets,
+        images: crate::config_image::parse(raw.image).map_err(invalid)?,
         mbx_store,
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
@@ -180,7 +181,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         full_run,
         helper,
         shape,
-        ci_debuginfo,
+        ci_debuginfo: debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo)
+            .map_err(invalid)?,
         required_check,
         non_inputs,
         inputs,

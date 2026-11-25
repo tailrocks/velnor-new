@@ -17,6 +17,7 @@ const PUBLIC_SOURCES: &[&str] = &[
     "sparse+https://index.crates.io/",
 ];
 
+// helper-gate: first in tools-v0.1.116 via 974de6fae1
 const HTTP_GIT_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 const NOT_SAVED: &str =
