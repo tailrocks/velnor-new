@@ -52,8 +52,8 @@ if [ -z "$diff_file" ]; then
           case "$dest" in "$d"/*) moved_from+=("$old"); break ;; esac
         done ;;
     esac
-  done < <(git diff -M -z --name-status "$base...HEAD")
-  git diff -M --src-prefix=a/ --dst-prefix=b/ "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
+  done < <(git --literal-pathspecs diff --no-ext-diff -M -z --name-status "$base...HEAD")
+  git --literal-pathspecs diff --no-ext-diff -M --src-prefix=a/ --dst-prefix=b/ "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
@@ -184,7 +184,7 @@ scan() {
     inattr = depth > 0
     if (prevattr && prevmk != "") above = prevmk
     isattr = inattr || text ~ /^[ \t]*#!?\[/
-    if (isattr) { tmp = text; depth += gsub(/\[/, "", tmp); tmp = text; depth -= gsub(/\]/, "", tmp); if (depth < 0) depth = 0 }
+    if (isattr) { tmp = text; gsub(/\047([^\047\\]|\\.)\047/, "", tmp); gsub(/"([^"\\]|\\.)*"/, "", tmp); t2 = tmp; depth += gsub(/\[/, "", tmp); depth -= gsub(/\]/, "", t2); if (depth < 0) depth = 0 }
     prevmk = (isattr && marker(above, carry)) ? above : ""
     prevattr = isattr
     delete carry

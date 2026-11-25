@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 checker="$root/scripts/check-helper-gates.sh"
 fixtures="$root/scripts/fixtures"
 
-for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-underscore gate-const-suffix gate-const-pub-in gate-const-pub-space gate-string-marker gate-char-literal gate-const-attr-inline; do
+for f in gate-const-unmarked gate-const-trailing-comma gate-spaced-dest gate-spaced-old gate-quoted-dest gate-const-underscore gate-const-suffix gate-const-pub-in gate-const-pub-space gate-string-marker gate-char-literal gate-const-attr-inline gate-attr-bracket-literal; do
   if bash "$checker" --diff "$fixtures/$f.diff" --current 0.1.110; then
     echo "the check accepted $f.diff" >&2
     exit 1
@@ -27,7 +27,12 @@ git config core.hooksPath /dev/null
 git config core.excludesFile /dev/null
 git config core.attributesFile /dev/null
 git config diff.noprefix true
+printf '#!/bin/sh\nexit 1\n' >"$work/ext-diff"
+chmod +x "$work/ext-diff"
+git config diff.external "$work/ext-diff"
+export GIT_EXTERNAL_DIFF="$work/ext-diff"
 mkdir -p crates/velnor-ci generator "generator/old dir" "generator/old ü"
+printf 'gate(RustCi, "colon", (0, 1, 110)),\n' >":(exclude)old.rs"
 printf '[package]\nname = "velnor-ci"\nversion = "0.1.110"\n' >crates/velnor-ci/Cargo.toml
 echo 'gate(RustCi, "budget", (0, 1, 110)),' >generator/gates.rs
 echo "gate(RustCi, \"spaced\", (0, 1, 110))," >"generator/old dir/gates.rs"
@@ -42,6 +47,7 @@ mkdir -p crates/velnor-gen/src
 git mv generator/gates.rs crates/velnor-gen/src/gates.rs
 git mv "generator/old dir/gates.rs" crates/velnor-gen/src/spaced.rs
 git mv "generator/old ü/gates.rs" crates/velnor-gen/src/wide.rs
+git mv ":(exclude)old.rs" crates/velnor-gen/src/colon.rs
 git commit -qm "move files into the gate crates unchanged"
 bash "$checker" "$base"
 echo 'gate(RustCi, "lint", (0, 1, 110)),' >>crates/velnor-gen/src/gates.rs
