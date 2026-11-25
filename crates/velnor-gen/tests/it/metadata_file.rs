@@ -357,3 +357,5 @@ fn only_a_pin_whose_helper_reads_target_dir_gets_it_recorded() -> TestResult {
     assert!(newer.contains("\"target_dir\""), "{newer}");
     Ok(())
 }
+
+mod fields;

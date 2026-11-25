@@ -4,8 +4,8 @@
 use velnor_model::{RepoView, RequiredFeature};
 use velnor_rust::recorded_metadata;
 
+use super::{pin, recorded, two_workspaces};
 use crate::facts::{TestResult, path};
-use crate::metadata_file::{pin, recorded, two_workspaces};
 
 fn gated(files: &mut RepoView) -> TestResult {
     let root = files

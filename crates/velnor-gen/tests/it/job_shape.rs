@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use velnor_gen::io::recording_of;
 use velnor_gen::{GenerateError, expected_with_notes, plan_generate};
 use velnor_model::{
     CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RequiredFeature, RustMember, Shape,
@@ -389,17 +388,4 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
     Ok(())
 }
 
-#[test]
-fn recording_a_sample_reports_a_stale_timings_entry_to_its_output() -> TestResult {
-    let mut out = Vec::new();
-    let view = timed_view(GONE, "")?;
-    recording_of(
-        std::path::Path::new("/checkout"),
-        view,
-        BTreeMap::new(),
-        &mut out,
-    )?;
-    let text = String::from_utf8(out)?;
-    assert!(text.contains("gone/Cargo.toml"), "{text}");
-    Ok(())
-}
+mod recording;
