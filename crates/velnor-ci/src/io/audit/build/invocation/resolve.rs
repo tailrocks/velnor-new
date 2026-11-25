@@ -47,9 +47,15 @@ fn script_of(member: &RustMember) -> bool {
         .any(|target| target.kinds.contains(&TargetKind::BuildScript))
 }
 
-pub(super) fn tests_of(member: &RustMember) -> bool {
+pub(super) fn tests_of(member: &RustMember, doctests: bool) -> bool {
     member.targets.iter().any(|target| {
         target.tests
+            || (doctests
+                && target.doctest
+                && target
+                    .kinds
+                    .iter()
+                    .any(|kind| matches!(kind, TargetKind::Lib | TargetKind::ProcMacro)))
             || target.kinds.iter().any(|kind| {
                 matches!(
                     kind,
@@ -57,6 +63,19 @@ pub(super) fn tests_of(member: &RustMember) -> bool {
                 )
             })
     })
+}
+
+fn implicit(package: &Package<'_>, alias: &str) -> bool {
+    let suppressed = format!("dep:{alias}");
+    package
+        .dependencies
+        .iter()
+        .any(|dependency| dependency.optional && dependency.feature == alias)
+        && !package
+            .features
+            .values()
+            .flatten()
+            .any(|entry| *entry == suppressed)
 }
 
 impl<'a, 'p> Resolver<'a, 'p> {
@@ -95,12 +114,16 @@ impl<'a, 'p> Resolver<'a, 'p> {
                 .map(|dependency| dependency.feature.as_str())
                 .collect();
             for alias in optional {
-                self.enable(&member.manifest, alias);
+                if implicit(&package, alias) {
+                    self.activate(&member.manifest, alias);
+                } else {
+                    self.enable(&member.manifest, alias);
+                }
             }
             return;
         }
         if request.defaults {
-            self.activate(&member.manifest, "default");
+            self.default_features(&member.manifest);
         }
         for name in request.names {
             match name.split_once('/') {
@@ -152,14 +175,18 @@ impl<'a, 'p> Resolver<'a, 'p> {
             })
     }
 
+    fn default_features(&mut self, manifest: &'a RepoPath) {
+        if self
+            .package(manifest)
+            .is_some_and(|package| package.features.contains_key("default"))
+        {
+            self.activate(manifest, "default");
+        }
+    }
+
     fn declares(&self, manifest: &RepoPath, name: &str) -> bool {
-        self.package(manifest).is_some_and(|package| {
-            package.features.contains_key(name)
-                || package
-                    .dependencies
-                    .iter()
-                    .any(|dependency| dependency.optional && dependency.feature == name)
-        })
+        self.package(manifest)
+            .is_some_and(|package| package.features.contains_key(name) || implicit(&package, name))
     }
 
     fn live(
@@ -202,7 +229,7 @@ impl<'a, 'p> Resolver<'a, 'p> {
     fn enter(&mut self, dependency: &'a MemberDependency) {
         self.visit(&dependency.manifest);
         if dependency.default_features {
-            self.activate(&dependency.manifest, "default");
+            self.default_features(&dependency.manifest);
         }
         for feature in &dependency.features {
             self.activate(&dependency.manifest, feature);
@@ -303,11 +330,7 @@ impl<'a, 'p> Resolver<'a, 'p> {
                 }
             }
             None => {
-                if package
-                    .dependencies
-                    .iter()
-                    .any(|dependency| dependency.optional && dependency.feature == feature)
-                {
+                if implicit(&package, feature) {
                     self.enable(manifest, feature);
                 }
             }

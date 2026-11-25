@@ -8,6 +8,7 @@ use std::process::Command;
 pub(in super::super) enum Which<'a> {
     Host,
     Target(Option<&'a str>),
+    Unresolved,
 }
 
 pub(in super::super) enum Configured {
@@ -37,6 +38,7 @@ impl Platform {
     ) -> Option<Self> {
         match which {
             Which::Host => Self::probe(location, None),
+            Which::Unresolved => None,
             Which::Target(Some(target)) => Self::probe(location, Some(target)),
             Which::Target(None) => match configured_target(repository, location) {
                 Configured::Absent => Self::probe(location, None),
@@ -173,6 +175,36 @@ impl<'a> Parser<'a> {
     }
 }
 
+pub(super) fn command_target(words: &[&str]) -> Configured {
+    let mut found = Configured::Absent;
+    for (index, word) in words.iter().enumerate() {
+        let value = word.strip_prefix("--config=").or_else(|| {
+            (*word == "--config")
+                .then(|| words.get(index + 1).copied())
+                .flatten()
+        });
+        let Some(value) = value else { continue };
+        let Some((key, text)) = value.split_once('=') else {
+            found = Configured::Unknown;
+            continue;
+        };
+        match key.trim() {
+            "build.target" => {
+                found = match format!("target = {text}").parse::<toml::Table>() {
+                    Ok(table) => match table.get("target") {
+                        Some(toml::Value::String(triple)) => Configured::Triple(triple.clone()),
+                        _ => Configured::Unknown,
+                    },
+                    Err(_) => Configured::Unknown,
+                };
+            }
+            "build" => found = Configured::Unknown,
+            _ => {}
+        }
+    }
+    found
+}
+
 fn configured_target(repository: &Path, location: &Path) -> Configured {
     if let Some(triple) = std::env::var("CARGO_BUILD_TARGET")
         .ok()
@@ -187,7 +219,7 @@ fn configured_target(repository: &Path, location: &Path) -> Configured {
         .map(|directory| directory.join(".cargo"))
         .chain(home);
     for directory in directories {
-        for name in ["config.toml", "config"] {
+        for name in ["config", "config.toml"] {
             let Ok(text) = std::fs::read_to_string(directory.join(name)) else {
                 continue;
             };

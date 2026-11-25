@@ -10,6 +10,7 @@ mod features;
 mod glob;
 mod package_ids;
 mod path_dependencies;
+mod semantics;
 mod targets;
 
 const GROUP_LOCK: &str =

@@ -190,7 +190,7 @@ fn requested(
     entry: &Value,
 ) -> (Vec<String>, bool) {
     let mut features = entry.get("features").map_or_else(Vec::new, strings);
-    let mut defaults = entry.get("default-features").and_then(Value::as_bool);
+    let mut defaults = default_flag(entry);
     if entry.get("workspace").is_some()
         && let Some((_, workspace)) = workspace(view, manifest, own)
         && let Some(shared) = workspace
@@ -199,9 +199,16 @@ fn requested(
             .and_then(|dependencies| dependencies.get(key))
     {
         features.extend(shared.get("features").map_or_else(Vec::new, strings));
-        defaults = defaults.or_else(|| shared.get("default-features").and_then(Value::as_bool));
+        defaults = defaults.or_else(|| default_flag(shared));
     }
     (features, defaults.unwrap_or(true))
+}
+
+fn default_flag(entry: &Value) -> Option<bool> {
+    entry
+        .get("default-features")
+        .or_else(|| entry.get("default_features"))
+        .and_then(Value::as_bool)
 }
 
 fn optional(entry: &Value) -> bool {
