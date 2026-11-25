@@ -1,0 +1,18 @@
+604	Owner decision: approve cutover to generator; gates 608
+623	Owner: confirm velnor-lab nightly pin and run
+645	Owner decision on sparse checkout scope
+646	Overlaps security issue 2444
+648	Owner: auto-update policy for consumers
+649	Owner: adopt generator in own projects
+680	Owner yes/no on exemption
+682	Owner: restrict rust-ci-v* tag creation to admins
+732	Owner: App-only bypass on release-tags
+949	Owner yes/no on admin-read secret for drift check
+1047	Owner decision on doc truth; plus drift fixes
+1429	Q: keep rust-ci-v* or move to v<version>; family tag?
+1432	Owner must apply the ruleset
+2107	Q: confirm declared workflows never mint app tokens
+2337	Q: keep cache-generation v1 key or include mbx release
+2425	Q: file mbx feature request upstream?
+2433	Q: accept PR cost of Documentation step?
+2711	Q: same as 2589 decision (keep schema 1)?

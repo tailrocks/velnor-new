@@ -1,0 +1,77 @@
+branch	last_commit_date	behind	ahead	unique_commits	open_pr	newest_pr	newest_pr_state	class	evidence	note
+fast/2349-no-doctests-followups	2026-11-22	37	36	30	2379	2379	OPEN	open-pr	open PR 2379	
+fast/2361-archive-exec-diagnostics	2026-11-21	154	1	1	none	2375	CLOSED	unique-work	io/exec_diagnostics.rs absent from main; closed PR 2375	log stat and mount of a binary a test step cannot exec (velnor-ci); issue not in name
+fast/2371-generated-check-from-source	2026-11-22	9	19	12	2394	2394	OPEN	open-pr	open PR 2394	
+fast/2381-build-dir-followups	2026-11-22	5	34	21	2397	2397	OPEN	open-pr	open PR 2397	
+fast/2403-followups-2387	2026-11-22	9	10	5	2644	2644	OPEN	open-pr	open PR 2644	
+fast/2430-relative-build-dir-probe	2026-11-22	9	48	31	2454	2454	OPEN	open-pr	open PR 2454	
+fast/2432-no-doctests-followups	2026-11-22	5	66	49	2448	2448	OPEN	open-pr	open PR 2448	
+fast/2438-tools-verify-followups	2026-11-21	141	13	9	none	2463	CLOSED	unique-work	partly superseded, see note	9 commits; core fail-closed fix in #2593; remaining: docs/0.1.111 digest, tools_local tests
+fast/2440-fu-from-source-reuse	2026-11-21	42	15	9	2458	2458	OPEN	open-pr	open PR 2458	
+fast/2470-audit-ctime-relist	2026-11-22	9	24	21	2477	2477	OPEN	open-pr	open PR 2477	
+fast/2471-purge-private	2026-11-21	90	1	1	none	2647	CLOSED	superseded	main 66d1daef7b / (#2471) (#2591) same subject	merged via #2591
+fast/2474-anchor-steps-ref	2026-11-21	132	2	2	none	2476	CLOSED	superseded	main 368c678544 "Refs #2474" (#2547)	step-ref test merged via #2547; closed PR 2476
+fast/2483-helper-gate-checker-gaps	2026-11-22	5	24	16	2525	2525	OPEN	open-pr	open PR 2525	
+fast/2489-deferred-2384-findings	2026-11-22	30	13	10	2506	2506	OPEN	open-pr	open PR 2506	
+fast/2491-lock-review-followups	2026-11-22	5	16	10	2505	2505	OPEN	open-pr	open PR 2505	
+fast/2493-audit-failure-identity	2026-11-22	35	14	8	2501	2501	OPEN	open-pr	open PR 2501	
+fast/2494-private-cache-gaps	2026-11-22	5	22	15	2508	2508	OPEN	open-pr	open PR 2508	
+fast/2514-credential-report-order	2026-11-21	124	1	1	none	2515	CLOSED	unique-work	unverified: cache_credentials.rs sort not confirmed	report first credential file in name order; closed PR 2515; may be stale
+fast/2520-mbx-socket-stale	2026-11-22	7	25	17	2559	2559	OPEN	open-pr	open PR 2559	
+fast/2529-binary-digest-docs	2026-11-22	16	16	12	2642	2642	OPEN	open-pr	open PR 2642	
+fast/2529-verify-repin-hint	2026-11-22	5	11	4	2565	2565	OPEN	open-pr	open PR 2565	
+fast/2540-deferred-notice-host	2026-11-22	5	43	25	2577	2577	OPEN	open-pr	open PR 2577	
+fast/2551-comment-cleanup	2026-11-22	9	12	7	2637	2637	OPEN	open-pr	open PR 2637	
+fast/2562-step-refs-all-families	2026-11-22	5	14	8	2579	2579	OPEN	open-pr	open PR 2579	
+fast/2580-steps-shapes	2026-11-21	47	1	1	none			unique-work	main step_refs.rs has no gated-shape check	steps.<id> invariant covers gated shapes (follow-up to #2580); overlaps open 2582/2610
+fast/2582-steps-invariant-gaps	2026-11-22	5	19	14	2610	2610	OPEN	open-pr	open PR 2610	
+fast/2584-mise-version-exact-set	2026-11-21	105	6	4	none	2605	CLOSED	unique-work	mise_version_pin.rs and mise_version_plan.rs absent from main; closed PR 2605	pin the packages a .mise-version change selects; 4 commits
+fast/2588-no-doctests-false-positives	2026-11-21	47	10	7	2604	2604	OPEN	open-pr	open PR 2604	
+fast/2599-credential-scan-gaps	2026-11-22	5	21	16	2615	2615	OPEN	open-pr	open PR 2615	
+fast/2608-mbx-scope-review	2026-11-22	19	25	19	2616	2616	OPEN	open-pr	open PR 2616	
+fast/2627-scratch-dirs	2026-11-22	18	20	14	2633	2633	OPEN	open-pr	open PR 2633	
+fast/2648-cache-restore-status	2026-11-22	5	20	11	2660	2660	OPEN	open-pr	open PR 2660	
+fast/docs-wave-6	2026-11-21	58	6	4	2098	2098	OPEN	open-pr	open PR 2098	
+fast/followups-2066	2026-11-22	9	13	8	2325	2325	OPEN	open-pr	open PR 2325	
+fast/i2311-followups-2167	2026-11-22	5	14	9	2694	2694	OPEN	open-pr	open PR 2694	
+fast/i2365-cache-guard	2026-11-22	30	8	4	2510	2510	OPEN	open-pr	open PR 2510	
+fast/i2460-absolute-local-paths	2026-11-22	9	41	27	2464	2464	OPEN	open-pr	open PR 2464	
+fast/i2475-audit-fd-bound	2026-11-22	5	31	23	2495	2495	OPEN	open-pr	open PR 2495	
+fast/i2684-scrub-private-names	2026-11-22	11	27	21	2699	2699	OPEN	open-pr	open PR 2699	
+fast/i624-ci-overview	2026-11-21	107	7	4	2411	2411	OPEN	open-pr	open PR 2411	
+fast/local-mode-lane-parallel	2026-11-20	209	1	1	2260	2260	OPEN	open-pr	open PR 2260	
+fast/mbx-shared-store-stopgap	2026-11-20	362	1	1	1986	1986	OPEN	open-pr	open PR 1986	
+fast/repin-tools-0.1.110	2026-11-21	113	6	1	2345	2345	OPEN	open-pr	open PR 2345	
+fix/2553-toolchain-neutral-build-layout	2026-11-22	33	1	1	2721	2721	OPEN	open-pr	open PR 2721	
+fix/2619-test-plan	2026-11-22	33	1	1	2722	2722	OPEN	open-pr	open PR 2722	
+fix/2669-retired-leftover-read-only	2026-11-22	15	14	9	2683	2683	OPEN	open-pr	open PR 2683	
+fix/2675-compat-digest-and-check-notices	2026-11-22	73	4	4	2692	2692	OPEN	open-pr	open PR 2692	
+fix/2682-tools-heal-removal-precondition	2026-11-21	59	1	1	none	2705	CLOSED	unique-work	tools_heal.rs in main has no removal-precondition test; closed PR 2705	test: removal-failure precondition in tools_heal
+fix/2696-restore-only-tools-save	2026-11-22	30	5	3	2710	2710	OPEN	open-pr	open PR 2710	
+fix/audit-script-dep-info-2720	2026-11-22	29	2	2	2723	2723	OPEN	open-pr	open PR 2723	
+fix/early-list-own-extraction-2442	2026-11-22	5	21	16	2650	2650	OPEN	open-pr	open PR 2650	
+fix/no-doctests-2560-2602	2026-11-21	58	8	6	2657	2657	OPEN	open-pr	open PR 2657	
+fix/refresh-rust-inputs-lock	2026-11-22	36	1	1	none	2719	CLOSED	superseded	main a4ec3cc6f7 repin 0.1.111 (#2679) rewrote .velnor/rust-inputs.lock	closed PR 2719; lock refreshed later on main
+fix/report-save-steps-not-rendered	2026-11-22	9	19	11	2507	2507	OPEN	open-pr	open PR 2507	
+fu-2437-no-doctests-list	2026-11-22	9	35	29	2445	2445	OPEN	open-pr	open PR 2445	
+fx-2545	2026-11-21	105	6	5	none			unique-work	main 1203e949e5 (#2545) lacks newest-three quarantine prune	follow-up to #2545: prune kept eviction quarantines to newest 3; keep verified archive
+g4-submodule-fixture	2026-10-03	1534	1	1	none			empty	origin/main...branch tree diff is empty (0 files)	1 commit with no net change vs main; 1534 behind
+handoff/roadmap-2026-11-15	2026-11-20	1016	7	7	none			unique-work	HANDOFF.md absent in main	7 handoff docs from 2026-11-20; likely stale
+issue-2680-follow-ups	2026-11-22	5	10	6	2693	2693	OPEN	open-pr	open PR 2693	
+issues-2587-2613-2620	2026-11-22	42	14	11	2659	2659	OPEN	open-pr	open PR 2659	
+post-merge-2580-fixes	2026-11-22	9	10	9	2716	2716	OPEN	open-pr	open PR 2716	
+renovate/cargo-minorpatch	2026-11-21	130	2	2	2183	2183	OPEN	open-pr	open PR 2183	
+renovate/github-asamarts-alint-0.x	2026-11-22	1	1	1	2727	2727	OPEN	open-pr	open PR 2727	
+renovate/kingfisher-2.x	2026-11-22	1	1	1	2728	2728	OPEN	open-pr	open PR 2728	
+rescue/docs-migrating-velnor-gen-20261120	2026-11-20	264	1	0	none			merged	git cherry: commit patch-equivalent in main (0 unique)	docs/migrating-to-velnor-gen.md commit already in main
+rescue/fast-1555-cargo-guard-remerge-20261120	2026-11-20	309	5	2	none			unique-work	archive-guard crate and test files absent in main; 309 behind	rescue of #1555 cargo guard remerge; 34 files; stale, needs rebase or drop
+rescue/fast-1593-per-root-20261120	2026-11-20	309	3	2	none			superseded	main 03507c96ce (#1593)(#1900) same subjects	per-root lock key work merged via #1900 (moderate confidence)
+rescue/fix-local-strip-conformance-20261120	2026-11-20	332	3	2	none			superseded	main 68b727d38a (#2021,#2022,#2023)(#2043) same subjects	merged via #2043
+rescue/gen-0107-20261120	2026-11-20	249	0	0	none			merged	ancestor of origin/main	rescue copy already in main
+rescue/mig-bn-gen-src-20261120	2026-11-20	372	0	0	none			merged	ancestor of origin/main	rescue copy already in main
+rescue/velnor-new-gen-20261120	2026-11-20	372	0	0	none			merged	ancestor of origin/main	rescue copy already in main
+research/velnor-gen-rebase-2026-11	2026-11-20	588	29	29	1751	1751	OPEN	open-pr	open PR 1751	
+salvage/2701-mbx-total-bytes	2026-11-21	59	1	1	none			unique-work	total-bytes bound absent from mbx_reports.rs	bound total bytes read across MBX reports (#2701); no PR
+salvage/2702-mbx-report-tests-wip	2026-11-22	59	1	1	none			unique-work	unreviewed WIP	salvage of uncommitted MBX report tests from a stale worktree
+salvage/2703-mbx-comments	2026-11-21	59	1	1	none			unique-work	mbx_report.rs still has explanatory comments	drop explanatory comments from MBX report reader; low value
+speed/rh-slow-public-qualifier-split	2026-11-21	146	1	1	none	2404	CLOSED	unique-work	main runner_image_qualification_public.rs has 17 tests, branch 26	split public qualifier stall bounds into eight tests; closed PR 2404

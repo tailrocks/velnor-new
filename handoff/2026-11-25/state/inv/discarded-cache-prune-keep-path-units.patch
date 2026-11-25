@@ -1,0 +1,115 @@
+diff --git a/crates/velnor-ci/src/cache_prune.rs b/crates/velnor-ci/src/cache_prune.rs
+index b725e63913..945a173d9b 100644
+--- a/crates/velnor-ci/src/cache_prune.rs
++++ b/crates/velnor-ci/src/cache_prune.rs
+@@ -1,9 +1,10 @@
+ // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+ // SPDX-License-Identifier: Apache-2.0
+ 
+-//! What a build directory keeps when it is saved as a base: the dependency units this run used.
+-//! Workspace crates rebuild on any code change and are cheap, so their artifacts, test
+-//! executables, documentation and units this run did not use are not worth the cache space.
++//! What a build directory keeps when it is saved as a base: the units this run used.
++//! Test executables, documentation, and units this run did not use are not worth the cache
++//! space. Path units are kept too: the next run would otherwise compile them again and the
++//! cache report would call that waste.
+ 
+ use std::collections::BTreeSet;
+ use std::path::Path;
+@@ -66,12 +67,8 @@ pub struct UsedUnits {
+     hashes: BTreeSet<String>,
+ }
+ 
+-fn is_dependency(package_id: &str) -> bool {
+-    PackageIdentity::parse(package_id).is_some_and(|package| {
+-        package
+-            .source
+-            .is_none_or(|source| !source.starts_with("path+"))
+-    })
++fn is_recorded(package_id: &str) -> bool {
++    PackageIdentity::parse(package_id).is_some()
+ }
+ 
+ impl UsedUnits {
+@@ -94,14 +91,14 @@ impl UsedUnits {
+             for artifact in invocation
+                 .artifacts
+                 .iter()
+-                .filter(|artifact| is_dependency(&artifact.package_id))
++                .filter(|artifact| is_recorded(&artifact.package_id))
+             {
+                 used.insert_all(artifact.filenames.iter().map(String::as_str));
+             }
+             for script in invocation
+                 .build_scripts
+                 .iter()
+-                .filter(|script| is_dependency(&script.package_id))
++                .filter(|script| is_recorded(&script.package_id))
+             {
+                 let run = Path::new(&script.out_dir).parent();
+                 used.insert_all(run.and_then(Path::to_str));
+diff --git a/crates/velnor-ci/tests/it/cache_prune.rs b/crates/velnor-ci/tests/it/cache_prune.rs
+index 2a45eb94ac..40bd17c6cb 100644
+--- a/crates/velnor-ci/tests/it/cache_prune.rs
++++ b/crates/velnor-ci/tests/it/cache_prune.rs
+@@ -97,6 +97,10 @@ fn kept_dependency_units() -> Vec<String> {
+         format!("build/serde-{SERDE_RUN_HASH}/output"),
+         format!("build/serde-{SERDE_RUN_HASH}/out/generated.rs"),
+         "deps/libunhashed.rlib".to_owned(),
++        format!("deps/libapp-{APP_HASH}.rlib"),
++        format!("deps/libapp-{APP_HASH}.rmeta"),
++        format!(".fingerprint/app-{APP_HASH}/lib-app.json"),
++        format!("build/app-{APP_HASH}/output"),
+         ".cargo-lock".to_owned(),
+     ]
+     .into_iter()
+@@ -148,11 +152,7 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
+         assert!(exists(&repo, &kept), "{kept} must stay\n{stdout}");
+     }
+     for gone in [
+-        format!("deps/libapp-{APP_HASH}.rlib"),
+-        format!("deps/libapp-{APP_HASH}.rmeta"),
+         format!("deps/app-{APP_HASH}"),
+-        format!(".fingerprint/app-{APP_HASH}"),
+-        format!("build/app-{APP_HASH}"),
+         format!("deps/libold-{OLD_HASH}.rlib"),
+         format!(".fingerprint/old-{OLD_HASH}"),
+         format!("build/old-{OLD_HASH}"),
+@@ -189,7 +189,7 @@ fn the_size_budget_is_judged_after_the_prune() {
+         &"w".repeat(50_000),
+     );
+     repo.write_unstaged("target/doc/app/big.html", &"d".repeat(50_000));
+-    let (output, written) = decide(&repo, &[invocation(true)], Some("10000"));
++    let (output, written) = decide(&repo, &[invocation(true)], Some("80000"));
+     let stdout = String::from_utf8_lossy(&output.stdout);
+     assert!(output.status.success(), "{stdout}");
+     assert_eq!(written, "save=true\nsources=true\n", "{stdout}");
+diff --git a/crates/velnor-ci/tests/it/cache_prune_layout.rs b/crates/velnor-ci/tests/it/cache_prune_layout.rs
+index 4e3d01e31b..8f471ff315 100644
+--- a/crates/velnor-ci/tests/it/cache_prune_layout.rs
++++ b/crates/velnor-ci/tests/it/cache_prune_layout.rs
+@@ -91,6 +91,8 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
+         format!(
+             "build/serde/{SERDE_RUN_HASH}/fingerprint/run-build-script-build-script-build.json"
+         ),
++        format!("build/app/{APP_HASH}/out/libapp-{APP_HASH}.rlib"),
++        format!("build/app/{APP_HASH}/fingerprint/lib-app.json"),
+         ".cargo-build-lock".to_owned(),
+         ".cargo-artifact-lock".to_owned(),
+     ] {
+@@ -101,7 +103,6 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
+     }
+     for gone in [
+         format!("build/serde/{SERDE_HASH}/out/serde-test"),
+-        format!("build/app/{APP_HASH}"),
+         format!("build/old/{OLD_HASH}"),
+         "app".to_owned(),
+         "app.d".to_owned(),
+@@ -115,7 +116,6 @@ fn a_saved_build_directory_keeps_only_the_dependency_units_the_run_used() {
+     }
+     assert!(!exists(&repo, "target/doc"));
+     assert!(stdout.contains("pruned from"), "{stdout}");
+-    assert!(stdout.contains("unused or workspace artifacts"), "{stdout}");
+     assert!(stdout.contains("fingerprints"), "{stdout}");
+ }
+ 

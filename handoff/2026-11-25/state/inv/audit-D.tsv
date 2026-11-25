@@ -1,0 +1,23 @@
+1555	closed	-	done: green-Required gate restored, fallout fixed	https://github.com/tailrocks/velnor-new/issues/1555#issuecomment-7123399262
+680	closed	-	obsolete: old engine and exemption deleted (#1747), generated release.yml	https://github.com/tailrocks/velnor-new/issues/680#issuecomment-7123400035
+1606	closed	-	remaining #622 tick tracked on #622; evidence of 3 full green Speed budget runs	https://github.com/tailrocks/velnor-new/issues/1606#issuecomment-7123400886
+1702	open	M	lab proof that a delta hit after #2112 recompiles only the changed crate (new lab PR needed)	https://github.com/tailrocks/velnor-new/issues/1702#issuecomment-7123401578
+1693	open	L	wall/queue-time baseline at first image-job port (blocked on #1447, #1449)	https://github.com/tailrocks/velnor-new/issues/1693#issuecomment-7123402068
+1682	open	H	node store isolation (split trusted pool approval) + perf proof	https://github.com/tailrocks/velnor-new/issues/1682#issuecomment-7123402476
+1680	open	H	bind node-store saves to trusted events: owner approval of trusted scale set split	https://github.com/tailrocks/velnor-new/issues/1680#issuecomment-7123402946
+1582	open	M	proof of target-cache reuse after workspace-member version change	https://github.com/tailrocks/velnor-new/issues/1582#issuecomment-7123403377
+1572	open	H	accept verdict a for custom-harness push-skip (merge_group_skip.rs:20) or set new rule	https://github.com/tailrocks/velnor-new/issues/1572#issuecomment-7123403811
+1548	open	M	budget family for MBX objects cache	https://github.com/tailrocks/velnor-new/issues/1548#issuecomment-7123404235
+1536	open	M	runtime private-source guard for mbx_remote; deferred until fix-now trigger	https://github.com/tailrocks/velnor-new/issues/1536#issuecomment-7123404707
+1499	open	H	five owner decisions (tools-v* tag protection, check_tag prefixes, fork merge_group, mbx mount, gate evidence)	https://github.com/tailrocks/velnor-new/issues/1499#issuecomment-7123405161
+1449	open	L	image publish helper not started	https://github.com/tailrocks/velnor-new/issues/1449#issuecomment-7123405712
+1447	open	L	image build helper not started	https://github.com/tailrocks/velnor-new/issues/1447#issuecomment-7123406210
+2773	open	M	run Helper gates in merge_group	https://github.com/tailrocks/velnor-new/issues/2773#issuecomment-7123406613
+2757	open	M	rust-trim job with no Cargo root never runs purge-private	https://github.com/tailrocks/velnor-new/issues/2757#issuecomment-7123407015
+2754	open	M	replace 127.0.0.1:1 in io_gate/crates_mirror tests	https://github.com/tailrocks/velnor-new/issues/2754#issuecomment-7123407458
+2753	open	M	early nextest list hang, output ceiling, signals	https://github.com/tailrocks/velnor-new/issues/2753#issuecomment-7123407989
+2752	open	M	tools cache prune race	https://github.com/tailrocks/velnor-new/issues/2752#issuecomment-7123408383
+2748	open	M	scrub before sources save	https://github.com/tailrocks/velnor-new/issues/2748#issuecomment-7123408896
+2745	open	S	delete dead AUDIT_JOB filter	https://github.com/tailrocks/velnor-new/issues/2745#issuecomment-7123409361
+2742	open	M	run/bench/rustc skip inputs-build invalidation	https://github.com/tailrocks/velnor-new/issues/2742#issuecomment-7123409775
+2741	open	M	refuse orphan build outputs	https://github.com/tailrocks/velnor-new/issues/2741#issuecomment-7123410226

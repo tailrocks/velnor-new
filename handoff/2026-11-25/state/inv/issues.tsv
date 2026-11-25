@@ -1,0 +1,207 @@
+number	title	labels	class	evidence	size	area	tier	deps	note
+574	[FAST] Roadmap: the fastest Rust CI a generator can produce	fast-ci,epic	epic/tracking	children open (578,579,581,626,627)	-	-	-	578,579,581,626,627	Roadmap parent
+578	[FAST-3] Job shape: one job by default, more only when it pays	fast-ci,epic	epic/tracking	labelled epic; children open	-	-	-	645,649	Job-shape epic
+579	[FAST-4] Cache: a restored build that cargo treats as fresh	fast-ci,epic	epic/tracking	labelled epic; children open	-	-	-	609,610	Cache epic
+581	[FAST-6] Guard and document	fast-ci,epic	epic/tracking	labelled epic; children open	-	-	-	622,624	Guard/docs epic
+604	[FAST-5.3] Switch velnor-new's Rust CI to the new generator	fast-ci,exec:opus,effort:high,needs-owner	needs-human	needs-owner label; cutover of velnor-new Rust CI	S	.github	-	-	Owner decision: approve cutover to generator; gates 608
+608	[FAST-5.5] Delete the existing engine's Rust CI path	fast-ci,exec:opus,effort:medium,in-progress	blocked-by-dependency	body gated on #621 targets; residue removed by PR #2156 (refs 608)	M	generator/,.github	opus/high	604	Delete old engine Rust path; wait for 604 cutover
+609	[FAST-4.5] PR delta layer: the second push of a PR reuses the first	fast-ci,exec:opus,effort:high,in-progress	actionable	labelled in-progress, opus; #1107 merged refs 609	L	ci-helper/,generator/	opus/high	-	PR delta layer; verify Done-when
+610	[FAST-4.4] Budget manager: stay under 8 GB without losing the base	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	in-progress; no open PR	M	ci-helper/	sonnet/high	-	Budget manager
+622	[FAST-6.1] Speed budget: fail loudly when CI gets slower	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	in-progress; #1259 merged refs; checklist partly done	M	generator/	sonnet/high	-	Speed budget
+623	[FAST-5.1] velnor-lab runs the generator for real every night	fast-ci,exec:sonnet,effort:medium,needs-owner	needs-human	needs-owner label; lab nightly run	M	.github	-	-	Owner: confirm velnor-lab nightly pin and run
+624	[FAST-6.2] Documentation: one page on how Velnor keeps Rust CI fast	fast-ci,exec:sonnet,effort:medium	in-open-PR	open PR #2411 refs #624	S	docs	-	-	Docs page
+626	[FAST-5] Dogfood: velnor-new's own Rust CI comes from the new generator	fast-ci,epic	epic/tracking	labelled epic	-	-	-	604,608,624	Dogfood epic
+627	[FAST-L] Local GitHub: the official runner, a stand-in service and our own cache, all on one machine (P4: velnor-new on macOS local runner)	fast-ci,epic	epic/tracking	labelled epic	-	-	-	-	Local GitHub epic
+645	[FAST-3.7] Checking out only what Rust needs	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked	needs-human	needs-owner+blocked label	M	generator/	sonnet/medium	-	Owner decision on sparse checkout scope
+646	[FAST-3.8] Private dependencies: fetch with a short-lived token, then build offline	fast-ci,exec:opus,effort:high,needs-owner	needs-human	needs-owner label; opus	L	generator/,ci-helper/	opus/xhigh	2444	Overlaps security issue 2444
+648	[FAST-6.3] Projects receive new Velnor versions automatically	fast-ci,exec:opus,effort:high,needs-owner	needs-human	needs-owner label	L	generator/	opus/high	-	Owner: auto-update policy for consumers
+649	[FAST-6.4] Adopt the new generator in the owner's Rust projects	fast-ci,exec:sonnet,effort:high,needs-owner	needs-human	needs-owner label	M	-	sonnet/high	604	Owner: adopt generator in own projects
+680	[OWNER] Approve the existing engine's exemption for the hand-written release workflow	owner-action	needs-human	owner-action; approve exemption for hand-written release workflow	S	.github	-	-	Owner yes/no on exemption
+682	[OWNER] Allow only admins to create rust-ci-v* tags	owner-action	needs-human	owner-action; ruleset change in github-terraform	S	.github	-	-	Owner: restrict rust-ci-v* tag creation to admins
+729	[FAST-REL.9] Prove the whole release flow on velnor-lab	fast-ci,exec:sonnet,effort:high,blocked	blocked-by-dependency	labelled blocked; FAST-REL.9 needs release design	M	.github	sonnet/high	732,733	Prove release on velnor-lab
+732	[OWNER] Switch the release-tags ruleset to the App-only bypass (for FAST-REL.11)	owner-action	needs-human	owner-action; ruleset bypass switch	S	.github	-	-	Owner: App-only bypass on release-tags
+733	[FAST-REL.11] Generate this repository's release.yml and delete the #676 exemption	fast-ci,exec:opus,effort:medium	blocked-by-dependency	opus; needs owner ruleset change first	M	generator/,.github	opus/high	732	Generate release.yml; delete #676 exemption
+934	Require velnor-ci 0.1.80+ for release generation once it is released	fast-ci,exec:sonnet,effort:low,blocked	actionable	labelled blocked but blocker is a released velnor-ci 0.1.80; helper pins are at 0.1.111, so likely unblocked	S	generator/	sonnet/low	-	Verify 0.1.80 release then implement
+941	CI speed: generator follow-ups from consumer repos		epic/tracking	tracker with owner-waiting items (Playwright cache waits on owner)	-	-	-	-	Consumer CI tracker
+949	[OWNER] Approve an admin-read secret for the daily tag-ruleset drift check (#931)	needs-owner,owner-action	needs-human	owner-action; approve admin-read secret	S	.github	-	-	Owner yes/no on admin-read secret for drift check
+966	Wire the in-cluster crates.io mirror explicitly in velnor-gen config	fast-ci,exec:sonnet,effort:medium,blocked	blocked-by-dependency	labelled blocked; blocker not named in body	S	generator/	sonnet/medium	unnamed (label only)	Explicit crates mirror wiring
+1047	Docs drift: statements in the contracts that no longer match the code	fast-ci,needs-owner,blocked	needs-human	needs-owner+blocked; which contract docs are authoritative	M	docs	-	-	Owner decision on doc truth; plus drift fixes
+1218	Cargo Deny fails on main: chrono unmaintained (RUSTSEC-2026-0543) via turso	fast-ci,blocked	blocked-by-dependency	blocked; upstream turso still pulls chrono (not checked live); R:1219 merged refs	S	generator/	-	upstream turso	Check cargo deny on main first
+1233	Dependency Dashboard		epic/tracking	Renovate dependency dashboard (bot)	-	-	-	-	Bot tracking issue, not agent work
+1290	P1: velnor-new runs entirely on velnor-gen (Rust CI + Rust releases)	fast-ci	epic/tracking	owner P1 tracker; children 1432-1456 open	-	-	-	1432,1447,1449,1450,1452,1456	P1 parent
+1305	P3: CI/CD performance for velnor-new (tracker)		epic/tracking	tracker (part of #574)	-	-	-	-	Performance tracker
+1370	docs: pr_ci = "label" is safe only with a merge queue that runs the full suite on merge_group		actionable	docs-only; no PR	S	docs	sonnet/medium	-	Document pr_ci=label safety
+1429	[P1][owner decision] Tag prefix: rust-ci-v* vs v<version>, and the source-SHA family tag		needs-human	owner decision: tag prefix and family tag	S	.github,generator/	-	-	Q: keep rust-ci-v* or move to v<version>; family tag?
+1432	[P1] velnor-gen: non-Rust lint lane and aggregate Required gate, with the github-terraform ruleset change		needs-human	generator lane is agent work; terraform ruleset change is owner-only	L	generator/,.github	opus/high	owner terraform change	Owner must apply the ruleset
+1447	[P1] velnor-ci: image build helper (build, save, inspect, write manifest)		actionable	P1 child; no open PR	L	ci-helper/	sonnet/high	-	image build helper
+1449	[P1] velnor-ci: image publish helper from publish.py (login, push by digest, attestation check)		actionable	P1 child; no open PR	L	ci-helper/	sonnet/high	-	image publish helper; registry auth
+1450	[P1] velnor-gen: product-release-images.yml as workflow_call with verify-release-caller and a release.yml caller		blocked-by-dependency	P1 child; publish job needs helper	M	generator/,.github	sonnet/high	1449	workflow_call release caller
+1452	[P1] Images proof: PR dry run, one real publish, digest comparison with the engine image		blocked-by-dependency	P1 child; needs helpers and a real publish on main	M	.github	sonnet/high	1449,1450	Real publish needs owner go-ahead
+1456	[P1] Qualification proof: every mode on hosted and scale set matches the engine output		blocked-by-dependency	needs verify-hosted/verify-scale-set jobs and runner infra	M	.github,generator/	sonnet/high	runner infrastructure	Qualification proof
+1499	Follow-ups from #1337 review: deferred release-stack findings		actionable	mostly comment removal and small follow-ups	S	generator/	sonnet/medium	-	Part of 1290
+1526	[Epic] Deferred review findings from the fast-delivery phase	epic	epic/tracking	labelled epic; children open	-	-	-	-	Fast-delivery deferred epic
+1535	Follow-ups from #1322 review		actionable	P2 checklist items unchecked	M	generator/	sonnet/high	-	Verify remaining unchecked items
+1536	Follow-ups from #1323 review		actionable	P2 security hardening, cache.mbx_remote guard unchecked	M	generator/	opus/high	-	Security: RepoView scan gap
+1548	Deferred review findings from #1323		actionable	deferred Later findings; unchecked	M	generator/	sonnet/high	-	-
+1555	Main fallout from the fast-merge phase (fix in one cleanup wave)		actionable	partly checked fallout list; no PR	M	generator/,ci-helper/	sonnet/high	-	Verify each unchecked box on main
+1569	Deferred review findings from #1520		actionable	deferred non-P1 items from #1520	M	generator/	sonnet/high	-	-
+1572	Deferred review findings from #1322		actionable	deferred non-P1 items from #1322	M	generator/	sonnet/high	-	-
+1582	Deferred review findings from #1566		actionable	deferred P1 item: prove normalized target reuse	M	.github,generator/	sonnet/high	-	Cache correctness
+1593	Deferred review findings from #1396	in-progress	actionable	in-progress label; deferred items from #1396	M	generator/	sonnet/high	-	-
+1606	Deferred review findings from #1259		actionable	partly checked deferred items from #1259	S	generator/	sonnet/medium	-	Remaining unchecked boxes
+1618	Deferred review findings from #1262		actionable	critical-path item unchecked (policy waits on rust)	M	generator/	sonnet/high	-	Related to 2258
+1628	Deferred review findings from #1307		actionable	partly checked	S	crates/velnor-runner/	sonnet/medium	-	-
+1639	Deferred review findings from #1365		actionable	docs reconciliation with governing goals	S	docs	sonnet/medium	-	-
+1666	Deferred review findings from #1531		actionable	release workflow must restore Required check before publish	S	.github	sonnet/high	680,682	Release workflow, related to owner items
+1678	Deferred review findings from #1576		actionable	rustdoc failures out of merged code	S	generator/	sonnet/medium	-	-
+1680	Deferred review findings from #1587		actionable	partly checked; tools seed isolation	S	ci-helper/	sonnet/medium	-	-
+1682	Deferred review findings from #1591		actionable	node tools store isolation before restore	M	.github	opus/high	-	Supply-chain isolation
+1692	[Epic] Deferred review findings from the fast-delivery phase (part 2)	epic	epic/tracking	labelled? epic continuation; children open	-	-	-	2258,2281	Continuation epic
+1693	Deferred review findings from #1509		actionable	partly checked	S	generator/	sonnet/medium	-	-
+1702	Follow-ups from #1107 review		actionable	P2 codex finding on snapshot::capture; no PR	M	ci-helper/	sonnet/high	-	Related to 609
+2048	Generated-workflow seal can be forged by a PR without a drift check	fast-ci,exec:opus,effort:high,blocked	fixed	commit ef61950555 "generator: run velnor-gen check on every PR as a Required job (#2048) (#2066)" on main; Required now runs check	-	.github	-	-	Close candidate; labels stale
+2107	Design: a generator-owned app-token step for image and release workflows	owner-action	needs-human	owner-action label; coordinator decision recorded	S	generator/	-	-	Q: confirm declared workflows never mint app tokens
+2173	Follow-ups deferred from #2140 (private-repo base caches)	fast-ci,exec:opus,effort:high,blocked	blocked-by-dependency	labelled blocked, opus; overlaps 2494/2289/2471	L	ci-helper/	opus/high	unnamed (label only)	-
+2205	Deferred review findings from #2066 (generated-check Required job)	fast-ci,exec:sonnet,effort:high,blocked	in-open-PR	open PR #2325 refs 2205	-	-	-	-	-
+2207	Follow-up: deferred review findings from #2153 (hosted-phase MBX summary)	fast-ci,exec:haiku,effort:low,in-progress	actionable	fix PR #2225 merged only to deleted base fast/mbx-summary-py, never to main	S	ci-helper/	sonnet/medium	-	Re-land the fix on main
+2210	Follow-ups deferred from #2132	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	commit "test_groups artifacts: follow-ups ... (#2210) (#2293)" on main; PR body only Refs	S	generator/	sonnet/medium	-	Verify remaining items, then close
+2211	Follow-up: deferred review findings from #2105 (fail-closed MBX)	fast-ci,exec:sonnet,effort:high,in-progress	actionable	#2330 refs 2211 on main; PR #2235 went to deleted base only	M	ci-helper/	sonnet/high	2235 (not on main)	-
+2212	Follow-up: deferred review findings from #2142 (audit vanished directory)	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	PR #2228 refs 2212 on main; item open	S	ci-helper/	sonnet/medium	-	-
+2213	Follow-up: deferred review findings from #2150 (mbx 1.30 summaries)	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	#2329 on main refs 2213; items in waste_evidence.rs remain	S	ci-helper/	sonnet/medium	-	Overlaps 2703
+2219	Deferred review findings from #2151 (Rust 1.100.0 pins)	fast-ci,exec:sonnet,effort:medium,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	.github	sonnet/medium	unnamed (label only)	Rust 1.100 pins
+2242	mbx summary: drop the labelled-form compatibility branch	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	blocked; depends on 2207 landing (#2225 not on main)	S	ci-helper/	sonnet/low	2207	-
+2257	velnor-ci tests: run in parallel; serial group limited to 38 tests	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	in-progress; #2327 refs 2257 on main	M	ci-helper/	sonnet/medium	-	Nextest parallelism
+2258	fast-ci: run the policy job in parallel with rust (off the critical path)	fast-ci,exec:sonnet,effort:medium,in-progress	actionable	in-progress; #2265 refs 2258 on main; verify	M	.github,generator/	sonnet/medium	-	Part of 1692
+2259	velnor-new CI: run the local-mode lane as a parallel job	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2260 refs 2259	-	-	-	-	-
+2262	Follow-ups deferred from #2201	fast-ci,exec:sonnet,effort:high,in-progress	actionable	in-progress; #2496 and #2301 on main refs 2262; items remain	M	ci-helper/	sonnet/high	-	-
+2268	Follow-ups deferred from #2133	fast-ci,exec:opus,effort:high,blocked	blocked-by-dependency	labelled blocked; trusted_runner fence; blocker unnamed	M	.github	opus/high	unnamed (label only)	Security-related
+2270	Follow-ups deferred from #2136		actionable	deferred items unchecked; no PR	M	ci-helper/	sonnet/high	-	-
+2275	Follow-ups deferred from #2236		actionable	deferred test-suite items; no PR	S	ci-helper/	sonnet/medium	-	-
+2277	Declare [[lint]] inputs in this repository's rust-ci.toml once velnor-ci 0.1.110 is tagged	fast-ci	actionable	tools-v0.1.110 tag exists (git tag); blocker resolved	S	.velnor/	sonnet/low	-	Declare [[lint]] inputs
+2279	Follow-ups deferred from #2239		actionable	style/comments items unchecked	S	ci-helper/	sonnet/low	-	-
+2280	Follow-ups deferred from #2271		actionable	#2300/#2390 on main refs 2280; HOME path validation item open	M	ci-helper/	opus/high	-	Symlink-safe path validation
+2281	[Epic] Deferred review findings from the fast-delivery phase (part 3)	epic	epic/tracking	labelled epic; children open	-	-	-	-	Deferred epic part 3
+2283	Follow-ups deferred from #2215		actionable	#2316/#2388 on main refs 2283; some items unchecked	S	ci-helper/	sonnet/medium	-	-
+2287	Follow-ups deferred from #2218		actionable	mismatched tool-cache entry unlinked by path (race)	M	actions/,ci-helper/	opus/high	-	Concurrency
+2289	Private base caches: credential-scan hardening (ssh userinfo, unscanned git files, symlinked configs)		actionable	no PR; #2449 refs as partial	M	ci-helper/	opus/high	-	Credential scan hardening
+2311	Follow-ups deferred from #2167		in-open-PR	open PR #2694 refs 2311	-	-	-	-	-
+2337	Owner decisions: mbx fallback and mbx cache key (follow-ups of #2249)	fast-ci,exec:sonnet,effort:low,needs-owner	needs-human	needs-owner; cache key decision for mbx release	S	.github,generator/	-	-	Q: keep cache-generation v1 key or include mbx release
+2341	Follow-ups deferred from #2165		actionable	style/docs items; #2578 refs 2341 on main	S	docs	sonnet/low	-	-
+2344	alint no-doctests: escape-encoded and concat!-split doc attribute fences pass	fast-ci,in-progress	in-open-PR	open PR #2379 closes 2344	-	-	-	-	-
+2349	alint no-doctests: block indentation rule flags paragraph-continuation lines	fast-ci,in-progress	in-open-PR	open PR #2379 closes 2349	-	-	-	-	-
+2353	lint-alint: declare the pinned python for the no-doctests-block scanner	fast-ci,in-progress	in-open-PR	open PR #2379 closes 2353	-	-	-	-	-
+2356	MBX JSON reports: follow-ups deferred from #2348	blocked	blocked-by-dependency	labelled blocked; needs mbx upstream feature (2425 unfiled)	M	ci-helper/	sonnet/high	2425	-
+2359	Follow-ups deferred from #2318		actionable	report.rs refusal suffix; no PR	S	ci-helper/	sonnet/medium	-	-
+2361	Archived test binary under build/*/out failed with Permission denied once: record stat and mount on exec failures	fast-ci,exec:haiku,effort:low,in-progress	actionable	in-progress; no PR	M	ci-helper/	sonnet/high	-	Record stat and mount on exec failure
+2365	Follow-ups deferred from #2345		in-open-PR	open PR #2510 refs 2365	-	-	-	-	-
+2371	velnor-new: run the generated-check lint with velnor-gen built from the checkout	fast-ci,in-progress	in-open-PR	open PR #2394 refs 2371	-	-	-	-	-
+2381	Follow-ups from #2351 review: keep the inputs build layout check; resolve a relative CARGO_BUILD_BUILD_DIR like cargo	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2397 closes 2381	-	-	-	-	-
+2389	Follow-ups deferred from #2386 (handle-based inventory walk)		actionable	walk root and canonical symlinks opened by path (race)	M	ci-helper/	opus/high	-	Concurrency
+2403	Follow-ups from #2387: mbx steps only in compiling jobs; seeded-store test list from one source; end-to-end proof after 0.1.111	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2644 refs 2403	-	-	-	-	-
+2413	Follow-ups deferred from #2391		actionable	#2549/#2418 on main refs 2413; P2 item	S	generator/	sonnet/medium	-	Verify
+2419	MBX report: bounded log copy and configuration-check priming time		actionable	P2 bounded log copy; no PR	M	ci-helper/	sonnet/high	-	-
+2420	velnor-ci: scan a shared build directory once; refuse build directories that overlap tracked inputs		actionable	P2 shared build dir scan; no PR	M	ci-helper/	sonnet/high	-	-
+2421	Follow-ups deferred from #2401	fast-ci,blocked	actionable	partly checked	S	ci-helper/	sonnet/medium	-	Verify unchecked items
+2425	mbx upstream feature request (draft, not filed upstream): per-session stats reports	fast-ci,needs-owner	needs-human	needs-owner; owner OK required to file upstream	S	-	-	-	Q: file mbx feature request upstream?
+2430	velnor-ci: normalize a relative CARGO_BUILD_BUILD_DIR on the inputs build invocation probe	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2454 closes 2430	-	-	-	-	-
+2432	no-doctests scanner: deferred P2 edge cases from #2382	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2448 closes 2432	-	-	-	-	-
+2433	Measure and accept the PR cost of the Documentation step (#2226 deferred)	fast-ci,exec:haiku,effort:low,needs-owner	needs-human	needs-owner; cost acceptance	S	.github	-	-	Q: accept PR cost of Documentation step?
+2436	Deferred review findings from PR #2407 (early nextest list)	fast-ci,exec:haiku,effort:low,blocked	in-open-PR	open PR #2650 refs 2436	-	-	-	-	-
+2437	no-doctests: ordered list marker that cannot interrupt a paragraph is flagged	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2445 closes 2437	-	-	-	-	-
+2438	Deferred review findings from #2333 (tools-verify heal and digest)	fast-ci,exec:haiku,effort:low,in-progress	actionable	P2 tools-verify items; no PR	M	ci-helper/	sonnet/high	-	-
+2439	check_configurations follow-ups from PR #2310: grouped-root insertion point and runtime gitlinks	fast-ci,exec:haiku,effort:low,in-progress	actionable	#2455 refs 2439 on main; grouped-root insertion item	S	ci-helper/	sonnet/medium	-	-
+2440	Deferred review findings from #2394: from_source generated-check reuse and package lookup	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2458 refs 2440	-	-	-	-	-
+2442	Early nextest list: disk budget and noexec temp dir (follow-up of #2436)	fast-ci,in-progress	in-open-PR	open PR #2650 refs 2442	-	-	-	-	-
+2444	Private-dependency App key: the token action's post step runs after checkout code with the private key in its inputs	fast-ci,exec:opus,effort:high	actionable	App key in token action post step; security; no PR	M	.github,generator/	opus/xhigh	-	Security
+2460	Docs: remove absolute local paths and guard against them	fast-ci	in-open-PR	open PR #2464 closes 2460	-	-	-	-	-
+2470	Follow-ups deferred from #2428 (audit freshness at decision time)	fast-ci,exec:haiku,in-progress	in-open-PR	open PR #2477 refs 2470	-	-	-	-	-
+2471	Follow-ups deferred from #2469 (private-base key prefix)	fast-ci,exec:haiku,in-progress	actionable	#2591 on main refs 2471; docs item open	S	docs	sonnet/medium	-	-
+2473	fix(velnor-ci): prune keeps a build script run's fingerprint but removes its output	fast-ci,exec:sonnet,effort:medium,blocked	blocked-by-dependency	labelled blocked; blocker not named; correctness bug	M	ci-helper/	sonnet/medium	unnamed (label only)	Prune removes build output
+2479	Deferred review findings from #2326 (build-phase-setup sample cleanup)	fast-ci,exec:haiku,effort:low,in-progress	actionable	#2498 refs 2479; Codex P1 items unresolved	M	generator/	sonnet/high	-	-
+2483	Deferred review findings from #2369 (helper gate checker gaps)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2525 closes 2483	-	-	-	-	-
+2489	Deferred review findings from #2384 (Failed-build marker package scope and selection tests)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2506 closes 2489	-	-	-	-	-
+2491	Deferred review findings from #2340 (lock digest validation, contract docs, comments)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2505 closes 2491	-	-	-	-	-
+2493	Deferred review findings from #2357 (failure marker scope and run identity)	fast-ci,exec:sonnet,effort:low,in-progress	in-open-PR	open PR #2501 closes 2493	-	-	-	-	-
+2494	Deferred review findings from #2140 (private base cache verdict and scan gaps)	fast-ci,exec:sonnet,effort:low,in-progress	in-open-PR	open PR #2508 refs/closes part of 2494	-	-	-	-	-
+2497	Cache report names save steps that a job with refused base caches does not render	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2507 closes 2497	-	-	-	-	-
+2512	Unresolved review findings from #2358 (policy selection evidence)	fast-ci,exec:haiku,effort:medium,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	generator/	sonnet/medium	unnamed (label only)	Policy selection evidence
+2520	Deferred review findings from #2348 (MBX_SOCKET silently skips report assignment)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2559 closes 2520	-	-	-	-	-
+2523	Deferred review findings from #2383 (plan advice and exclude globs)	fast-ci,exec:haiku,effort:low,in-progress	actionable	#2548 on main refs 2523; second item unverified	S	ci-helper/	sonnet/medium	-	Verify both items
+2528	Deferred review findings from #2330 (crates-mirror and MBX seed follow-ups)	fast-ci,exec:sonnet,effort:low,in-progress	actionable	#2546 refs 2528 on main; crates-mirror items remain	M	ci-helper/	sonnet/high	-	-
+2529	Deferred review findings from #2340 (velnor-gen binary digest section)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PRs #2642 and #2565 refs 2529	-	-	-	-	-
+2530	Deferred review findings from #2336 (setup-velnor tool-cache eviction)	fast-ci,exec:sonnet,effort:low,in-progress	actionable	#2545 refs 2530 on main; eviction items; concurrency	M	actions/setup-velnor	opus/high	-	-
+2535	Deferred review findings from #2297 (speed budget job title)	fast-ci,exec:sonnet,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/medium	unnamed (label only)	-
+2536	Deferred review findings from #2298 (mbx remote version wording and fallback)	fast-ci,exec:sonnet,effort:low,in-progress	actionable	#2543 on main mentions qualify pin; remaining items unverified	S	docs	sonnet/low	-	Verify
+2539	Deferred review findings from #2307 (tools anchor lookup cost on the plan job)	fast-ci,exec:sonnet,effort:low,in-progress	actionable	#2550 refs 2539; tools anchor lookup item	S	generator/	sonnet/medium	-	-
+2540	Deferred review findings from #2321 (anchor key for planned lanes and notice host)	fast-ci,exec:sonnet,effort:low,in-progress	in-open-PR	open PR #2577 refs 2540	-	-	-	-	-
+2541	[Epic] Deferred review findings from the fast-delivery phase (part 4)	fast-ci	epic/tracking	labelled? epic-like parent of 2556-2725 items	-	-	-	-	Deferred epic part 4
+2556	plan_diff tests need a 30 s timeout override; find and remove the slowness	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2557	test(nextest): check serial-group membership with nextest's own filter evaluation	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	generator/	sonnet/low	unnamed (label only)	-
+2558	velnor-ci: serialize or remove the shared mise wrapper contention across plan callers	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	M	ci-helper/	sonnet/low	unnamed (label only)	-
+2560	alint no-doctests: pin the Python the scanner runs on	in-progress	in-open-PR	open PR #2657 refs 2560	-	-	-	-	-
+2561	Cache waste check fails on cross-job duplicates that no job can restore (termrock main)		actionable	termrock main red; no PR; #2648 open touches waste check	M	ci-helper/	sonnet/high	-	-
+2562	test(velnor-gen): steps.<id> invariant covers every generated workflow file	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2579 refs 2562	-	-	-	-	-
+2563	test(velnor-gen): steps.<id> invariant covers helpers below 0.1.109	fast-ci,exec:haiku,effort:low,in-progress	actionable	#2580 refs 2563 on main; helper list items remain	S	generator/	sonnet/low	-	-
+2568	velnor-ci: the 4096-directory target traversal limit fails real workspaces under the Cargo 1.100 build layout	fast-ci,exec:haiku,effort:low,in-progress	actionable	in-progress; no PR	M	ci-helper/	sonnet/high	-	Traversal limit
+2570	Publish performance evidence for the declaration-budget change (#2552)		actionable	evidence items for #2552; needs CI measurements	S	ci-helper/	sonnet/medium	-	Evidence only
+2571	Record independent plan and red-green verification for audit declaration tests (#2552)		actionable	process: independent red/green review	S	ci-helper/	sonnet/low	-	Process item
+2572	Route every audit test launcher through the entry-limit sanitizer (#2552)		actionable	launchers bypass sanitizer; no PR	S	ci-helper/	sonnet/medium	-	-
+2574	velnor-ci: audit of a build directory spelled through a symlink and .. cannot match dep-info paths		actionable	symlink and .. audit paths; no PR	M	ci-helper/	sonnet/high	-	-
+2582	steps.<id> invariant test: render test_groups, pr_only_checks and release gates	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2610 refs 2582	-	-	-	-	-
+2583	velnor-gen: compare .mise-version with min_version by requirement, not exact equality	fast-ci,exec:haiku,effort:low,in-progress	actionable	in-progress; no PR	S	generator/	sonnet/low	-	Test compare by requirement
+2584	velnor-ci: assert the exact package set selected for a .mise-version change	fast-ci,exec:haiku,effort:low,in-progress,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2585	plan_diff: a routed package under a newline-containing path falls back to a full run	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2586	plan_diff: attach reproducible baseline/head evidence for the batched blob read	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; needs reproducible evidence	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2587	test(velnor-gen): prove the steps.<id> invariant red on a planted dangling reference	in-progress	in-open-PR	open PR #2659 refs 2587	-	-	-	-	-
+2588	no-doctests scanner: false positives on valid quote, HTML and code-span docs	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2604 closes 2588	-	-	-	-	-
+2589	Decide whether the report schema must bump when save_step became optional	fast-ci,exec:sonnet,effort:medium,in-progress	fixed	PR #2597 "Refs #2589: keep report schema 1" on main (decision recorded)	-	ci-helper/	-	-	Decision landed; confirm and close
+2590	velnor-ci tests: MBX socket test directory is named by PID and can collide with an abandoned run	fast-ci,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/medium	unnamed (label only)	-
+2596	Deferred review findings from #2291 (stall readiness margin in parallel run)	fast-ci,exec:haiku,effort:low,in-progress	actionable	#2618 refs 2596 on main; margin item open	S	crates/velnor-runner/	sonnet/low	-	-
+2599	Deferred review findings from #2449 (credential scan detection gaps)	fast-ci,exec:opus,effort:low,in-progress	in-open-PR	open PR #2615 closes 2599	-	-	-	-	-
+2602	no-doctests scanner: conservative false positives left after #2588	in-progress	in-open-PR	open PR #2657 refs 2602	-	-	-	-	-
+2608	Deferred review findings from #2472 (MBX scope: -C, aliases, script paths)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2616 closes 2608 (#2665 merged refs)	-	-	-	-	-
+2613	steps.<id> invariant: render the test_groups sub-shapes (artifacts, partitions, restore_cache, hosted, no_tests)	in-progress	in-open-PR	open PR #2659 refs 2613	-	-	-	-	-
+2620	test(velnor-gen): steps.<id> invariant skips the cache-cleanup workflow	in-progress	in-open-PR	open PR #2659 refs 2620	-	-	-	-	-
+2622	setup-velnor: keep a quarantine in flight from concurrent prune		actionable	quarantine prune concurrency; no PR	M	actions/setup-velnor	opus/high	-	-
+2623	setup-velnor eviction: CI-performance evidence for quarantine retention (#2545)		blocked-by-dependency	needs 2622 policy change, then CI measurement	S	actions/setup-velnor	sonnet/medium	2622	-
+2624	no-doctests: P2 scanner gaps for CDATA case, type-6 tags, blockquote raw state, list-item prose		actionable	P2 scanner gaps; no PR	M	docs,scripts	sonnet/medium	-	-
+2625	Deferred review findings from #2611 (audit root-replaced-by-dir test): workload evidence and test-plan confirmation	fast-ci,exec:sonnet,effort:medium,blocked	blocked-by-dependency	labelled blocked; evidence and process items	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2627	Tests leak temp directories (velnor-local-it, velnor-ci-prepare, velnor-ci-run, velnor-resolve-*)	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2633 refs 2627	-	-	-	-	-
+2636	Deferred review findings from #2502 and #2533: nextest evidence for tools-verify and HOME regressions		actionable	evidence-only nextest runs	S	ci-helper/	sonnet/low	-	-
+2639	Deferred review findings from #2633 (scratch directory cleanup)	fast-ci,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/medium	unnamed (label only)	-
+2646	Follow-ups from #2591: purge-private fail-closed test and the leftover race in the help	fast-ci,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/medium	unnamed (label only)	-
+2648	Main Cache job red: build-script crates and workspace crates recompile on warm restores and are flagged as restored waste	fast-ci,in-progress	in-open-PR	open PR #2660 refs 2648 scope	-	-	-	-	-
+2649	Deferred review findings from #2645 (audit inventory walk descriptor bound)		actionable	P2 descriptor bound; no PR	S	ci-helper/	sonnet/high	-	-
+2651	audit: a file link target with a trailing slash resolves to the file (Linux gives ENOTDIR)	exec:haiku,blocked	actionable	blocker #2428 is merged; no PR	S	ci-helper/	sonnet/high	-	Trailing slash link
+2654	Follow-up from #2328 review: anchor test provenance, retention policy, classify strictness		actionable	P2/P3 test provenance and classify strictness	S	ci-helper/	sonnet/medium	-	-
+2656	Sources credential scan misses Basic payloads containing control bytes		actionable	credential scan Basic payload; security	S	ci-helper/	opus/high	-	-
+2663	secret-scan is not a merge gate: Required does not depend on the Secret scanners job	fast-ci,blocked	actionable	Required does not depend on Secret scanners job; no PR	S	.github	sonnet/high	-	CI wiring
+2664	waste_evidence: do not infer MBX absence from the restored Target base		actionable	waste_evidence MBX absence; no PR	M	ci-helper/	sonnet/high	-	-
+2667	Deferred review findings from #2653 (audit link test assertions)	fast-ci,exec:sonnet,effort:medium,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/medium	unnamed (label only)	-
+2668	steps.<id> invariant: reject later-step references and quoted-brace expressions (deferred from #2547)		actionable	step ref invariant; no PR	M	generator/	sonnet/high	-	-
+2670	Deferred Codex P2 on #2459: docs Architecture link retargeted to v3		actionable	docs link retarget; no PR	S	docs	sonnet/low	-	-
+2671	Deferred Codex P2 on #2508: pass the Sources restore result to every cache decision lane		actionable	Sources restore result to lanes; no PR	S	generator/	sonnet/high	-	-
+2673	Record independent plan and red-green review for the job-name refusal test (#2517)		actionable	process: independent review record	S	generator/	sonnet/low	-	-
+2675	Deferred Codex P2s from #2660: fingerprint namespace, empty CARGO_LOG, MBX compat identity, dropped restore notices	fast-ci,in-progress	in-open-PR	open PR #2692 covers part (refs 2660)	-	-	-	-	-
+2677	no-doctests scanner: quote-depth and list-outdent HTML cases still missed (from #2657)	fast-ci,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2678	Early nextest list: size the extraction admission from the archive's real expanded size (from #2650)	fast-ci,blocked	blocked-by-dependency	depends on open PR #2650 (early nextest list)	S	ci-helper/	sonnet/medium	2650	-
+2680	Follow-ups from #2509: restore the 'current run is not blamed' check; quarantine or speed up the 100000-entry audit test	fast-ci,in-progress	in-open-PR	open PR #2693 moves audit test; item 1 unverified	-	-	-	-	-
+2681	Pin the saved-key gate: a 0.1.111 pin must get no save_key_step (follow-up from #2408)		actionable	pin gate test; no PR	S	generator/	sonnet/low	-	-
+2684	Remove private downstream names from tracked files and guard against them	fast-ci	in-open-PR	open PR #2699 closes/guards names	-	-	-	-	-
+2685	Target cache: a helper bump restores an older helper's target through the restore-key fallback	fast-ci	actionable	target key lacks helper version; no PR	M	ci-helper/,actions	sonnet/high	-	Cache correctness
+2688	from_source: velnor-gen package must have one runnable binary target	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; same file as open PR #2458	S	generator/	sonnet/medium	2458	-
+2690	generated-check nested-root sample: record it once velnor-ci 0.1.112 is released (blocked on 0.1.112)	fast-ci,blocked	blocked-by-dependency	needs velnor-ci 0.1.112; no tools-v0.1.112 tag exists	S	generator/	sonnet/low	velnor-ci 0.1.112 release	-
+2691	from_source generator build reuse: planner cache family and helper release (blocked on velnor-ci 0.1.112, #2440)	fast-ci,blocked	blocked-by-dependency	needs velnor-ci 0.1.112 (#2440); no 0.1.112 tag	M	generator/	sonnet/high	velnor-ci 0.1.112 release	-
+2695	from_source: refuse leading-dot release-asset repositories the helper rejects	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	ci-helper/	sonnet/low	unnamed (label only)	-
+2696	report: restore-only tools paths emit a save step	fast-ci,exec:haiku,effort:low,in-progress	in-open-PR	open PR #2710 closes save-step item	-	-	-	-	-
+2698	from_source generated check: require Rust and derive the build target from the host	fast-ci,exec:haiku,effort:low,blocked	blocked-by-dependency	labelled blocked; blocker not named	S	generator/	sonnet/medium	unnamed (label only)	-
+2701	MBX reports: bound the total decode work across all reports in a run	fast-ci,exec:sonnet,in-progress	actionable	bound decode work across reports; no PR	M	ci-helper/	sonnet/high	-	-
+2702	MBX reports: check that the socket's owner is alive before trusting an orphaned MBX_SOCKET	fast-ci,exec:sonnet,in-progress	actionable	in-progress; socket owner liveness	M	ci-helper/	sonnet/high	-	-
+2703	Remove explanatory doc comments from the MBX report code	fast-ci,exec:haiku,in-progress	actionable	in-progress; comment removal	S	ci-helper/	sonnet/low	-	Overlaps 2213
+2704	tools_local: sweep legacy random retired trees and failed staging copies with the read-only-aware remover (from #2683)	fast-ci,effort:low	actionable	tools_local remover gaps; no PR	S	local/,ci-helper/	sonnet/medium	-	-
+2709	Cache waste check errors when MBX stats reports are missing on a cold run	fast-ci	actionable	cache waste check fails on cold run; no PR	M	ci-helper/	sonnet/high	-	-
+2711	Cache report: decide the schema version for saved_key (deferred from #2393)		needs-human	decision: bump SCHEMA or not for saved_key	S	ci-helper/	-	-	Q: same as 2589 decision (keep schema 1)?
+2712	inputs audit: lock differs by platform, and PR runs can skip the audit that push runs enforce		actionable	PR runs skip audit; generated workflow change	M	generator/,.github	sonnet/high	-	-
+2713	Hardening: publish private caches from a separate job that runs no repository code	fast-ci	actionable	private cache publish from separate job; security	L	.github,ci-helper/	opus/xhigh	-	-
+2720	mbx replays a build-script run without its recorded inputs, so `inputs audit` can't prove build.rs freshness	fast-ci	in-open-PR	PR #2723 is a diagnosis refs #2720; fix not merged	-	-	-	-	-
+2724	Skip the cache aggregate job when no producer ran	fast-ci	actionable	no open PR; plan-skipped aggregate job	S	.github,generator/	sonnet/low	-	-

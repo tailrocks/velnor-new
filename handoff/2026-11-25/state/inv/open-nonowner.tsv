@@ -1,0 +1,129 @@
+2773	new	Helper gates not run in merge queue (CI gap)
+2757	new	follow-up from 2755 (no rust-trim -> no purge)
+2754	new	port-1 host-state tests (from 2750)
+2753	new	nextest list hang risk / no output ceiling (from 2650)
+2752	new	prune race vs restore/replacing saves (from 2683)
+2748	new	deferred from 2615 (scrub before sources fetch)
+2745	new	delete dead AUDIT_JOB guard (from 2722)
+2742	new	follow-up from 2397 (run/bench/rustc invalidation)
+2741	new	follow-up from 2397 (orphan outputs)
+2720	triaged	in-open-PR
+2712	in-progress	
+2711	actionable	schema stays 1 (#2589); remaining checks agent work
+2709	triaged	actionable
+2704	triaged	actionable
+2702	triaged	actionable
+2698	triaged	blocked-by-dependency
+2695	triaged	blocked-by-dependency
+2691	triaged	blocked-by-dependency
+2690	triaged	blocked-by-dependency
+2688	triaged	blocked-by-dependency
+2685	actionable	gather evidence then decide
+2681	triaged	actionable
+2680	triaged	in-open-PR
+2678	triaged	blocked-by-dependency
+2677	triaged	blocked-by-dependency
+2673	triaged	actionable
+2651	tied-to-pr	likely delivered by PR #2637 (trailing / requires dir); verify after 2637 lands
+2649	triaged	actionable
+2648	triaged	in-open-PR
+2646	triaged	blocked-by-dependency
+2639	triaged	blocked-by-dependency
+2636	triaged	actionable
+2623	triaged	blocked-by-dependency
+2622	triaged	actionable
+2602	triaged	in-open-PR
+2596	triaged	actionable
+2590	triaged	blocked-by-dependency
+2588	triaged	in-open-PR
+2586	triaged	blocked-by-dependency
+2574	triaged	actionable
+2571	triaged	actionable
+2570	triaged	actionable
+2568	triaged	actionable
+2560	triaged	in-open-PR
+2541	triaged	epic/tracking
+2540	triaged	in-open-PR
+2539	triaged	actionable
+2535	triaged	blocked-by-dependency
+2530	triaged	actionable
+2528	triaged	actionable
+2497	triaged	in-open-PR
+2489	triaged	in-open-PR
+2483	triaged	in-open-PR
+2479	actionable	executor test-structure choice
+2444	triaged	actionable
+2440	triaged	in-open-PR
+2437	triaged	in-open-PR
+2436	triaged	in-open-PR
+2432	triaged	in-open-PR
+2430	triaged	in-open-PR
+2421	triaged	actionable
+2420	triaged	actionable
+2403	triaged	in-open-PR
+2389	triaged	actionable
+2371	triaged	in-open-PR
+2365	triaged	in-open-PR
+2356	triaged	blocked-by-dependency
+2353	triaged	in-open-PR
+2349	triaged	in-open-PR
+2344	triaged	in-open-PR
+2341	triaged	actionable
+2311	triaged	in-open-PR
+2289	triaged	actionable
+2287	triaged	actionable
+2281	triaged	epic/tracking
+2279	triaged	actionable
+2277	triaged	actionable
+2275	triaged	actionable
+2270	triaged	actionable
+2268	triaged	blocked-by-dependency
+2262	triaged	actionable
+2259	triaged	in-open-PR
+2257	triaged	actionable
+2242	triaged	blocked-by-dependency
+2219	triaged	blocked-by-dependency
+2213	triaged	actionable
+2212	triaged	actionable
+2210	needs-human	remaining: isolate/terminate test descendants before RUNNER_TEMP artifact staging (owner decision)
+2207	triaged	actionable
+2205	triaged	in-open-PR
+2173	triaged	blocked-by-dependency
+2048	triaged	fixed
+1702	triaged	actionable
+1693	triaged	actionable
+1692	triaged	epic/tracking
+1682	triaged	actionable
+1680	triaged	actionable
+1606	triaged	actionable
+1582	triaged	actionable
+1572	triaged	actionable
+1555	triaged	actionable
+1548	triaged	actionable
+1536	triaged	actionable
+1526	triaged	epic/tracking
+1499	triaged	actionable
+1456	triaged	blocked-by-dependency
+1452	triaged	blocked-by-dependency
+1450	triaged	blocked-by-dependency
+1449	triaged	actionable
+1447	triaged	actionable
+1305	triaged	epic/tracking
+1290	triaged	epic/tracking
+1233	triaged	epic/tracking
+1218	triaged	blocked-by-dependency
+966	triaged	blocked-by-dependency
+941	triaged	epic/tracking
+934	triaged	actionable
+733	triaged	blocked-by-dependency
+729	triaged	blocked-by-dependency
+680	actionable-later	FAST-REL.11 agent work (release chain)
+627	triaged	epic/tracking
+626	triaged	epic/tracking
+624	triaged	in-open-PR
+609	triaged	actionable
+608	triaged	blocked-by-dependency
+581	triaged	epic/tracking
+579	triaged	epic/tracking
+578	triaged	epic/tracking
+574	triaged	epic/tracking

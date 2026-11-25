@@ -1,0 +1,27 @@
+2720	open	L	mbx replay of a build-script run lacks dep-info; root cause unreproduced (#2723 only reworded the message)	https://github.com/tailrocks/velnor-new/issues/2720#issuecomment-7123425845
+2680	open	S	item 2 only: 100k audit test to slow nextest profile (PR #2693 open)	https://github.com/tailrocks/velnor-new/issues/2680#issuecomment-7123426196
+2648	closed	-	symptom fixed by #2660/#2743/#2747; current Cache red is #2709	https://github.com/tailrocks/velnor-new/issues/2648#issuecomment-7123419560
+2602	open	M	HTML blocks in block comments/quotes/types 1-5, fence-info fixtures (PR #2657)	https://github.com/tailrocks/velnor-new/issues/2602#issuecomment-7123426604
+2588	open	M	all 3 false positives still on main (PR #2604 draft, #2657)	https://github.com/tailrocks/velnor-new/issues/2588#issuecomment-7123427015
+2560	open	S	pin Python via mise-task lint (PR #2657 open)	https://github.com/tailrocks/velnor-new/issues/2560#issuecomment-7123427388
+2540	open	M	item 3: cache delete-entry by ID (PR #2577 open); scope question	https://github.com/tailrocks/velnor-new/issues/2540#issuecomment-7123427863
+2497	closed	-	delivered by #2507/#2619, test report_not_generated.rs:149	https://github.com/tailrocks/velnor-new/issues/2497#issuecomment-7123416329
+2489	open	M	item 1: scope failed-build packages to invoked root (PR #2506 open)	https://github.com/tailrocks/velnor-new/issues/2489#issuecomment-7123428457
+2483	open	M	helper-gate checker gaps 1-3 + CONFIG.md prose (PR #2525 open)	https://github.com/tailrocks/velnor-new/issues/2483#issuecomment-7123428961
+2440	open	L	build reuse for from_source (tracked in #2691) + 2 small items; label removed	https://github.com/tailrocks/velnor-new/issues/2440#issuecomment-7123429382
+2437	open	S	ordered marker not 1 false positive (PR #2445 open)	https://github.com/tailrocks/velnor-new/issues/2437#issuecomment-7123429833
+2436	closed	-	all items done (#2462, #2650; 8x admission decision in #2442)	https://github.com/tailrocks/velnor-new/issues/2436#issuecomment-7123417368
+2432	open	H	4 scanner bypasses remain; keep Python scanner or replace with rustdoc check (#2448)?	https://github.com/tailrocks/velnor-new/issues/2432#issuecomment-7123430336
+2430	closed	-	delivered by #2397 (41ee460e35)	https://github.com/tailrocks/velnor-new/issues/2430#issuecomment-7123416847
+2403	open	S	end-to-end proof after repin (lock still 0.1.111); label removed	https://github.com/tailrocks/velnor-new/issues/2403#issuecomment-7123430813
+2371	open	S	re-enable generated-check lint in velnor-new after repin to 0.1.112 + private fetch; label removed	https://github.com/tailrocks/velnor-new/issues/2371#issuecomment-7123431202
+2365	closed	-	delivered by #2399/#2401/#2510	https://github.com/tailrocks/velnor-new/issues/2365#issuecomment-7123418283
+2353	open	S	pin python for alint scanner (same as #2560, PR #2657)	https://github.com/tailrocks/velnor-new/issues/2353#issuecomment-7123431597
+2349	closed	-	paragraph-continuation rule decided and fixtured in no-doctests.py; repo scan clean	https://github.com/tailrocks/velnor-new/issues/2349#issuecomment-7123417848
+2344	open	S	concat!-split fences pass; record decision/fixture (PR #2379)	https://github.com/tailrocks/velnor-new/issues/2344#issuecomment-7123432092
+2311	closed	-	delivered by #2694 + CONFIG.md:286	https://github.com/tailrocks/velnor-new/issues/2311#issuecomment-7123418690
+2259	open	H	close not planned or fund generator change keeping parallel lane out of quick set?; label removed	https://github.com/tailrocks/velnor-new/issues/2259#issuecomment-7123432530
+2205	open	H	4 items need owner decisions (mise isolation, install logic, fixture, guard pin)	https://github.com/tailrocks/velnor-new/issues/2205#issuecomment-7123432900
+624	open	S	docs/rust-ci.md is 233 lines, limit 150 (PR #2411 open)	https://github.com/tailrocks/velnor-new/issues/624#issuecomment-7123433368
+2651	closed	-	delivered (resolve.rs:141, links.rs:70, #2653)	https://github.com/tailrocks/velnor-new/issues/2651#issuecomment-7123419113
+2712	open	H	via #2761	-

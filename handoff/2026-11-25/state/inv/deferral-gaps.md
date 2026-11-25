@@ -1,0 +1,17 @@
+# Deferral gaps (evidence-request threads where the evidence showed a real gap)
+
+Thread URL | file | gap
+
+https://github.com/tailrocks/velnor-new/pull/2615#discussion_r4670863962 | crates/velnor-ci/src/io/cache_credentials.rs | recursive pruning has wall-clock timings (median 140 ms against 100 ms) but no recorded peak memory or disk I/O; add a measured peak-RSS run on the 602 MiB clone
+https://github.com/tailrocks/velnor-new/pull/2740#discussion_r4670831005 | crates/velnor-ci/src/io/mbx_reports.rs | no peak-memory measurement of the old unbounded case (4096 reports of 1 MiB) against the 32 MiB budget
+https://github.com/tailrocks/velnor-new/pull/2770#discussion_r4674443254 | crates/velnor-model/src/step_setup.rs | no real run of a repository with both [public_sources] and [private_sources] in one root; the reorder is shown only by the generator output
+https://github.com/tailrocks/velnor-new/pull/2784#discussion_r4676203614 | mise.toml | MBX 1.31.0 cache lifecycle proven on this repository (miss, save, hit) but not for a consumer with [cache] mbx_remote = "github-actions"
+https://github.com/tailrocks/velnor-new/pull/2788#discussion_r4676251196 | crates/velnor-ci/src/io/audit/inventory/tests/root.rs | root-rejection tests call private scan_with; no test reaches the same behavior through the public audit entry (needs the seam from #2212 item 2)
+https://github.com/tailrocks/velnor-new/pull/2792#discussion_r4676389806 | crates/velnor-ci/src/io/audit/inventory/tests/settled.rs | settled-race tests compose private walk and newest_with; they still pass if the production audit stops running the freshness pass (#2212 item 2)
+https://github.com/tailrocks/velnor-new/pull/2795#discussion_r4676369818 | crates/velnor-ci/src/io/audit/inventory/tests.rs | vanished-entry test depends on the private scan_with listed hook ordering instead of the public audit path (#2212 item 2)
+https://github.com/tailrocks/velnor-new/pull/2796#discussion_r4676465287 | crates/velnor-ci/src/tools_local/store.rs | the three windowed race tests (restore copy, replacing save, replaced during copy) use private restore_with and save_with hooks; no public-path equivalent
+https://github.com/tailrocks/velnor-new/pull/2799#discussion_r4676943206 | crates/velnor-ci/src/io/units.rs | no micro-benchmark of the ancestor walk plus out probes on a large target directory; only a single noisy hosted pair
+https://github.com/tailrocks/velnor-new/pull/2802#discussion_r4676940538 | crates/velnor-ci/src/io/audit/build/invocation/preflight.rs | hosted pair shows rust job 497 s against 341 s (Test 161 s against 118 s) and the preflight cost is not isolated from the added real-cargo tests; measure the preflight alone cold and warm
+https://github.com/tailrocks/velnor-new/pull/2834#discussion_r4680770128 | crates/velnor-render/src/private_steps.rs | no real-run timing or transfer figure for the expanded fetch on a saving run; needs a private lab repository that declares [private_sources] roots
+https://github.com/tailrocks/velnor-new/pull/2788#discussion_r4676251981 | crates/velnor-ci/src/io/audit/inventory/tests/root.rs | only one root test was observed red under mutation; the other two tests of the file were not mutated and stay unproven red
+https://github.com/tailrocks/velnor-new/pull/2837#discussion_r4682005070 | crates/velnor-render/src/private_steps/fetch_step.rs | full six-crate scoped verification and clippy rest on the author's runs; only the velnor-gen tests of the PR were independently re-run
