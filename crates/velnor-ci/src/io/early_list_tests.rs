@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Environment, Failure, try_list};
+use super::{Environment, Failure, Supervisor, accepted, try_list};
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
@@ -155,4 +155,24 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
         "{message}"
     );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+const LISTING: &str = r#"{"rust-build-meta":{},"test-count":1,"rust-suites":{"a::lib":{"package-name":"a","testcases":{"t":{"filter-match":{"status":"matches"}}}}}}"#;
+
+#[test]
+fn a_listing_is_accepted_while_nothing_has_stopped_the_list() {
+    let listing = accepted(&Supervisor::default(), LISTING.as_bytes())
+        .unwrap_or_else(|failure| unreachable!("{}", failure.reason));
+    assert_eq!(listing.packages.get("a"), Some(&1));
+}
+
+#[test]
+fn a_stop_that_lands_while_the_listing_is_parsed_discards_the_listing() {
+    let supervisor = Supervisor::default();
+    supervisor.stop("it did not finish within 60000 ms of the run ending");
+    let message = report(accepted(&supervisor, LISTING.as_bytes()));
+    assert_eq!(
+        message,
+        "it did not finish within 60000 ms of the run ending"
+    );
 }

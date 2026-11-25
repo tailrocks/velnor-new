@@ -20,6 +20,7 @@ use crate::image_candidate::record::{INPUT_PATHS, validate};
 
 mod build;
 mod client;
+mod descendants;
 mod docker;
 mod output;
 mod process;
