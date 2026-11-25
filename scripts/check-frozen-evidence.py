@@ -9,20 +9,64 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = Path(__file__).with_name("frozen-evidence.sha256")
 RULES = ("no-absolute-local-paths", "no-local-temp-paths")
-EXEMPT = re.compile(r"""^ {8}-\s+(?:"([^"]+)"|'([^']+)'|([^\s#'"][^#]*?))\s*(?:#.*)?$""")
+EXCLUDE = re.compile(r"^(\s*)exclude:\s*(.*?)\s*$")
+ITEM = re.compile(r"^(\s*)-\s+(.*?)\s*$")
+SCALAR = re.compile(r"""^(?:"([^"]+)"|'([^']+)'|([^\s#'",\[\]][^#]*?))\s*(?:#.*)?$""")
+FLOW_SCALAR = re.compile(r"""\s*(?:"([^"]*)"|'([^']*)'|([^\s,'"\[\]][^,\]]*?))\s*(?:,|$)""")
+
+
+def scalar(text):
+    found = SCALAR.match(text)
+    if not found:
+        raise ValueError(f"unsupported exemption entry: {text}")
+    return found.group(1) or found.group(2) or found.group(3)
+
+
+def flow_items(body):
+    items = []
+    position = 0
+    body = body.strip()
+    while position < len(body):
+        found = FLOW_SCALAR.match(body, position)
+        if not found or found.end() == position:
+            raise ValueError(f"unsupported exemption list: [{body}]")
+        items.append(found.group(1) or found.group(2) or found.group(3))
+        position = found.end()
+    return items
 
 
 def exempt_paths(config):
     paths = set()
     rule = None
+    block = None
     for line in config.read_text().splitlines():
         if line.startswith("  - id: "):
             rule = line.removeprefix("  - id: ").strip()
-        found = EXEMPT.match(line)
-        if found and rule in RULES:
-            path = found.group(1) or found.group(2) or found.group(3)
-            if path != ".alint.yml":
-                paths.add(path)
+            block = None
+            continue
+        if rule not in RULES:
+            continue
+        key = EXCLUDE.match(line)
+        if key:
+            block = None
+            rest = re.sub(r"\s+#.*$", "", key.group(2))
+            if rest.startswith("["):
+                if not rest.endswith("]"):
+                    raise ValueError(f"unsupported multi-line exemption list in {rule}")
+                paths.update(flow_items(rest[1:-1]))
+            elif rest:
+                raise ValueError(f"unsupported exemption list in {rule}: {rest}")
+            else:
+                block = len(key.group(1))
+            continue
+        if block is None:
+            continue
+        item = ITEM.match(line)
+        if item and len(item.group(1)) > block:
+            paths.add(scalar(item.group(2)))
+        elif line.strip() and not line.lstrip().startswith("#"):
+            block = None
+    paths.discard(".alint.yml")
     return paths
 
 
@@ -35,7 +79,10 @@ def load(manifest):
 
 
 def check(root, config, manifest):
-    exempt = exempt_paths(config)
+    try:
+        exempt = exempt_paths(config)
+    except ValueError as error:
+        return [str(error)]
     pinned = load(manifest)
     problems = [f"exempt but not pinned: {path}" for path in sorted(exempt - pinned.keys())]
     problems += [f"pinned but not exempt: {path}" for path in sorted(pinned.keys() - exempt)]

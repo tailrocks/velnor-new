@@ -61,6 +61,31 @@ class FrozenEvidence(unittest.TestCase):
             ["exempt but not pinned: docs/b.json", "exempt but not pinned: docs/c.json"],
         )
 
+    def test_flow_style_exemptions_are_read(self):
+        self.config.write_text(
+            CONFIG.replace(
+                '      exclude:\n        - ".alint.yml"\n        - "docs/a.json"\n',
+                '      exclude: [".alint.yml", "docs/a.json", \'docs/b.json\', docs/c.json]  # note\n',
+            )
+        )
+        self.assertEqual(
+            self.problems(),
+            ["exempt but not pinned: docs/b.json", "exempt but not pinned: docs/c.json"],
+        )
+
+    def test_a_multi_line_flow_list_fails_closed(self):
+        self.config.write_text(
+            CONFIG.replace(
+                '      exclude:\n        - ".alint.yml"\n        - "docs/a.json"\n',
+                '      exclude: [".alint.yml",\n        "docs/a.json"]\n',
+            )
+        )
+        self.assertEqual(self.problems(), ["unsupported multi-line exemption list in no-absolute-local-paths"])
+
+    def test_include_lists_are_not_exemptions(self):
+        self.config.write_text(CONFIG.replace('      exclude:\n', '      include:\n        - "**/*.md"\n      exclude:\n', 1))
+        self.assertEqual(self.problems(), [])
+
     def test_a_symlink_to_pinned_bytes_is_reported(self):
         (self.root / "docs/copy.json").write_text("{}")
         (self.root / "docs/a.json").unlink()

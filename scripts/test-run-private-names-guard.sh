@@ -73,6 +73,15 @@ git reset -q --hard "$head"
 expect weakened_head_policy_alone_is_silent pass env GITHUB_EVENT_NAME=push python3 -I scripts/private-names-guard.py
 expect push_uses_the_checked_out_policy pass env GITHUB_EVENT_NAME=push bash scripts/run-private-names-guard.sh
 
+printf 'import os, sys\nopen(os.environ["GUARD_RUNS"], "a").write("run\\n")\nsys.exit(0)\n' > scripts/private-names-guard.py
+: > "$work/runs"
+GUARD_RUNS="$work/runs" GITHUB_EVENT_NAME=push bash scripts/run-private-names-guard.sh
+if [ "$(wc -l < "$work/runs")" -eq 1 ]; then
+  echo "ok   push_scans_the_checked_out_policy_once"
+else
+  echo "FAIL push_scans_the_checked_out_policy_once: ran $(wc -l < "$work/runs") times"
+  fails=$((fails + 1))
+fi
 if [ "$fails" -ne 0 ]; then
   echo "private-names policy fixtures: $fails failing"
   exit 1

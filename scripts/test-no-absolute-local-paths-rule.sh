@@ -171,6 +171,9 @@ check temp_var_tmp_log     fail "retained ${vtmp}/velnor-audit/session.json" log
 check temp_var_tmp_bare    fail "see ${vtmp}/new.json"
 check temp_var_tmp_json    fail "{\"path\":\"\\${vtmp}\\/velnor-a\\/out.log\"}" json
 check temp_var_tmp_unicode fail "{\"path\":\"\\u002fva""r\\u002ft""mp\\u002fvelnor-a\\u002fout\"}" json
+check temp_var_tmp_dot_dir fail "retained ${vtmp}/.private/session.json"
+check temp_var_tmp_dash_dir fail "retained ${vtmp}/-capture/output.log"
+check temp_var_tmp_dot_dir_json fail "{\"path\":\"\\${vtmp}\\/.private\\/session.json\"}" json
 check temp_var_tmp_placeholder pass "retained <tmp>/velnor-audit/session.json"
 check temp_stderr_example  pass "use ${tmp}/example/file for the sample" stderr
 

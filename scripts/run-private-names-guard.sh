@@ -21,10 +21,7 @@ fi
 if [ -n "$base" ] && git cat-file -e "$base:$guard" 2>/dev/null && git cat-file -e "$base:$hashes" 2>/dev/null; then
   git show "$base:$guard" > "$trusted/private-names-guard.py"
   git show "$base:$hashes" > "$trusted/private-names-hashes.txt"
-else
-  cp "$guard" "$trusted/private-names-guard.py"
-  cp "$hashes" "$trusted/private-names-hashes.txt"
+  python3 -I "$trusted/private-names-guard.py"
 fi
 
-python3 -I "$trusted/private-names-guard.py"
 python3 -I "$guard"
