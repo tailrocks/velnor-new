@@ -55,4 +55,28 @@ git_in tag tools-v0.1.112 "$base"
 if gate_check; then got=accepted; else got=rejected; fi
 expect "a gate released between PR CI and the queue is rejected whichever entry added it" rejected "$got"
 
+ci="$work/ci"
+mkdir -p "$ci/crates/velnor-ci" "$ci/crates/velnor-gen/src" "$ci/scripts"
+git init -q -b main "$ci"
+printf 'version = "0.1.111"\n' > "$ci/crates/velnor-ci/Cargo.toml"
+printf 'pub const SOURCES: () = ();\n' > "$ci/crates/velnor-gen/src/lib.rs"
+cp "$repo/scripts/check-helper-gates.sh" "$repo/scripts/ci-helper-gates.sh" "$ci/scripts/"
+printf 'exit 0\n' > "$ci/scripts/test-check-helper-gates.sh"
+printf 'exit 0\n' > "$ci/scripts/test-helper-gates-merge-queue.sh"
+git -C "$ci" add -A
+git -C "$ci" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+git -C "$ci" -c user.name=t -c user.email=t@example.com -c tag.gpgsign=false tag tools-v0.1.111
+git clone -q "$ci" "$work/candidate"
+candidate_commit() { git -C "$work/candidate" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -am "$1"; }
+candidate_gate() { git -C "$work/candidate" remote set-url origin "$ci"; (cd "$work/candidate" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$work/event.json" bash scripts/ci-helper-gates.sh >/dev/null 2>&1); }
+printf '{"pull_request": {"base": {"ref": "main"}}}\n' > "$work/event.json"
+printf 'git remote set-url origin "$PWD"\n' > "$work/candidate/scripts/test-check-helper-gates.sh"
+candidate_commit "self-test that repoints origin"
+if candidate_gate; then got=accepted; else got=rejected; fi
+expect "a candidate that repoints origin without a released gate passes" accepted "$got"
+printf 'pub const MINIMUM_HELPER: (u32, u32, u32) = (0, 1, 111);\n' > "$work/candidate/crates/velnor-gen/src/lib.rs"
+candidate_commit "released gate"
+if candidate_gate; then got=accepted; else got=rejected; fi
+expect "candidate self-tests cannot repoint the base before the gate comparison" rejected "$got"
+
 [ "$fails" = 0 ]

@@ -29,15 +29,17 @@ else
 fi
 git fetch --force --quiet origin "$base_ref:refs/remotes/origin/$base_ref"
 
-bash scripts/test-check-helper-gates.sh
-bash scripts/test-helper-gates-merge-queue.sh
-git fetch --force --tags --quiet origin
+base_sha="$(git rev-parse "origin/$base_ref^{commit}")"
 checker=scripts/check-helper-gates.sh
 trusted="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/helper-gates-policy.XXXXXX")"
 trap 'rm -rf "$trusted"' EXIT
-if git cat-file -e "origin/$base_ref:$checker" 2>/dev/null; then
-  git show "origin/$base_ref:$checker" > "$trusted/check-helper-gates.sh"
+if git cat-file -e "$base_sha:$checker" 2>/dev/null; then
+  git show "$base_sha:$checker" > "$trusted/check-helper-gates.sh"
 else
   cp "$checker" "$trusted/check-helper-gates.sh"
 fi
-bash "$trusted/check-helper-gates.sh" "origin/$base_ref"
+git fetch --force --tags --quiet origin
+bash "$trusted/check-helper-gates.sh" "$base_sha"
+
+bash scripts/test-check-helper-gates.sh
+bash scripts/test-helper-gates-merge-queue.sh
