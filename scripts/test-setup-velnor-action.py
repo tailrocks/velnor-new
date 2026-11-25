@@ -91,10 +91,21 @@ fi
 exec "$REAL_MV" "$@"
 """
 
-STUB_REPLANTING_RM = """#!/bin/sh
+STUB_REPLANTING_CLEAR_MV = """#!/bin/sh
 for arg; do last="$arg"; done
-"$REAL_RM" "$@" || exit $?
-case "$last" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) mkdir -p "$last" ;; esac
+"$REAL_MV" "$@" || exit $?
+case "$last" in *.velnor-ci.evict*) mkdir -p "$STUB_ENTRY" ;; esac
+"""
+
+STUB_PUBLISHING_BEFORE_CLEAR = """#!/bin/sh
+for arg; do
+  if [ "$arg" = "$STUB_ENTRY" ] && [ ! -e "$STUB_RACE_MARK" ]; then
+    : > "$STUB_RACE_MARK"
+    "$REAL_RM" -rf -- "$STUB_ENTRY"
+    cp "$STUB_GOOD_ARCHIVE" "$STUB_ENTRY"
+  fi
+done
+exec "{real}" "$@"
 """
 
 STUB_REPLANTING_EVICT_MV = """#!/bin/sh
@@ -361,14 +372,6 @@ for arg; do
   case "$arg" in */.velnor-ci.evicting.*) rm -f -- "$arg"; : > "$STUB_TOUCH_MARK" ;; esac
 done
 exec "$REAL_TOUCH" "$@"
-"""
-
-STUB_STALE_CHANGE_STAT = """#!/bin/sh
-for arg; do last="$arg"; done
-if [ "$last" = "$STUB_STALE" ]; then
-  case "$*" in *%Z*|*%c*) echo $(($(date +%s) - 7200)); exit 0 ;; esac
-fi
-exec "$REAL_STAT" "$@"
 """
 
 WATCHED_TOOLS = (
@@ -1070,17 +1073,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         near_ahead.write_bytes(b"quarantine whose start is half an hour ahead of this clock\n")
         no_start = cached.parent / ".velnor-ci.evicting.x.13.13"
         no_start.write_bytes(b"quarantine with no start time\n")
-        older_in_flight = cached.parent / ".velnor-ci.evict.4242.9"
-        older_in_flight.write_bytes(b"archive an older setup-velnor version just moved aside, before its touch\n")
-        os.utime(older_in_flight, (now - 7200, now - 7200))
-        older_left = cached.parent / ".velnor-ci.evict.4243.10"
-        older_left.write_bytes(b"quarantine an older setup-velnor version left two hours ago\n")
-        stat = self.stub_bin / "stat"
-        stat.write_text(STUB_STALE_CHANGE_STAT)
-        stat.chmod(0o755)
-        result = self.install(
-            sha256(self.archive), extra_env={"REAL_STAT": shutil.which("stat"), "STUB_STALE": str(older_left)}
-        )
+        result = self.install(sha256(self.archive))
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(cached.read_bytes(), self.archive)
         self.assertFalse(abandoned.exists(), "the quarantine of an eviction that started two hours ago was not removed")
@@ -1088,8 +1081,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertFalse(far_ahead.exists(), "a quarantine whose start is two hours ahead was not removed")
         self.assertTrue(near_ahead.exists(), "a quarantine whose start is half an hour ahead was removed")
         self.assertFalse(no_start.exists(), "a quarantine with no start time was not removed")
-        self.assertTrue(older_in_flight.exists(), "an archive an older setup-velnor version had just moved aside was removed")
-        self.assertFalse(older_left.exists(), "a quarantine an older setup-velnor version left two hours ago was not removed")
 
     def test_a_job_that_publishes_removes_the_quarantine_of_an_eviction_that_died_over_an_hour_ago(self):
         cached = self.cached_archive()
@@ -1193,6 +1184,38 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertFalse(
             cached.exists() or cached.is_symlink(),
             "a directory at the store entry path survived a job that could not download",
+        )
+
+    def test_an_archive_published_between_the_type_check_and_the_clearing_of_the_store_entry_is_not_deleted(self):
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        (cached / "stale").write_bytes(b"left behind\n")
+        good = self.root / "good-archive"
+        good.write_bytes(self.archive)
+        for name in ("rm", "mv"):
+            real = str(self.mv_compat) if name == "mv" else shutil.which("rm")
+            stub = self.stub_bin / name
+            stub.write_text(STUB_PUBLISHING_BEFORE_CLEAR.replace("{real}", real))
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_RM": shutil.which("rm"),
+                "STUB_ENTRY": str(cached),
+                "STUB_GOOD_ARCHIVE": str(good),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertTrue((self.root / "race-mark").exists(), "the stub never published between the check and the clearing")
+        self.assertTrue(
+            cached.is_file() and cached.read_bytes() == self.archive,
+            "the archive another job published at the store entry path was deleted by the clearing of the directory it replaced",
+        )
+        self.assertEqual(
+            [path for path in cached.parent.glob(".velnor-ci.evicting.*")], [],
+            "a quarantine of the clearing was left behind",
         )
 
     def test_a_fifo_at_the_store_entry_path_is_removed_when_the_download_fails(self):
@@ -1476,12 +1499,18 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_a_directory_planted_at_the_store_entry_path_makes_publish_fail_and_is_not_moved_into(self):
-        stub = self.stub_bin / "rm"
-        stub.write_text(STUB_REPLANTING_RM)
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_REPLANTING_CLEAR_MV)
         stub.chmod(0o755)
         cached = self.cached_archive()
         cached.mkdir(parents=True)
-        result = self.install(sha256(self.archive), extra_env={"REAL_RM": shutil.which("rm")})
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+            },
+        )
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory at the store entry path")
         self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
