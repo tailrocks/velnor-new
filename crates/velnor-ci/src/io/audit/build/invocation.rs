@@ -10,10 +10,13 @@ use crate::error::CiError;
 mod alias;
 mod derived;
 mod package_spec;
+mod platform;
+mod resolve;
 mod root;
 mod selection;
 pub(super) use alias::resolve;
 use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
+pub(super) use platform::{Platform, configured_target};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 

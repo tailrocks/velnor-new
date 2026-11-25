@@ -6,6 +6,7 @@ use crate::io::Repo;
 use super::{command, placed, unit};
 
 mod descendant;
+mod features;
 mod glob;
 mod package_ids;
 mod path_dependencies;

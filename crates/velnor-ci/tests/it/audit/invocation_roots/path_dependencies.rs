@@ -295,7 +295,7 @@ fn a_qualified_feature_enables_an_optional_dependency_of_a_dependency() {
         (&["--features", "mid/leaf"][..], true),
         (&["--features", "mid/dep:leaf"], true),
         (&["--features", "leaf"], false),
-        (&["--features", "mid?/leaf"], false),
+        (&["--features", "mid?/leaf"], true),
         (&["--features", "other/leaf"], false),
     ] {
         let mut selection = vec!["-p", "other"];

@@ -25,7 +25,7 @@ use super::options::max_entries_from_env;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
-use invocation::{Invocation, invoked_root, root_directory};
+use invocation::{Invocation, Platform, configured_target, invoked_root, root_directory};
 use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
@@ -145,6 +145,12 @@ impl Builder<'_> {
             members,
             &self.facts.unowned,
             &[&self.repository, &canonical],
+            &|target| {
+                if target.is_none() && configured_target(&canonical, &self.location) {
+                    return None;
+                }
+                Platform::probe(&self.location, target)
+            },
         )
     }
 

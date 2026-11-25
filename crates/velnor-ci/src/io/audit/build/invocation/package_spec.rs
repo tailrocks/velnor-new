@@ -116,7 +116,7 @@ fn encode(text: &str) -> String {
             || !byte.is_ascii()
             || matches!(
                 byte,
-                b' ' | b'"' | b'#' | b'%' | b'<' | b'>' | b'?' | b'`' | b'{' | b'}'
+                b' ' | b'"' | b'#' | b'%' | b'<' | b'>' | b'?' | b'`' | b'{' | b'}' | b'\\'
             )
         {
             encoded.push('%');

@@ -74,7 +74,11 @@ fn workspace_with_beta() -> Repo {
 }
 
 fn workspace_with_beta_in(beta: &str) -> Repo {
-    let repo = Repo::new("audit-invocation-package-ids");
+    workspace_named("audit-invocation-package-ids", beta)
+}
+
+fn workspace_named(name: &str, beta: &str) -> Repo {
+    let repo = Repo::new(name);
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
     unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     unit(
@@ -226,6 +230,34 @@ fn a_package_id_that_escapes_a_character_the_member_url_keeps_literal_is_not_the
         };
         if !right {
             wrong.push(spec);
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "-p does not select as expected: {wrong:#?}"
+    );
+}
+
+#[test]
+fn a_package_id_encodes_a_backslash_in_the_checkout_path() {
+    let mut wrong = Vec::new();
+    for (form, selects) in [
+        ("path+file://@ROOT@/pkg-beta#beta@0.1.0", true),
+        ("path+file://@ROOT@/pkg-beta#beta", true),
+        ("path+file://@ROOT@/pkg-other#beta", false),
+    ] {
+        let repo = workspace_named("audit\\ids", "pkg-beta");
+        untrusted_output_of(&repo, "beta");
+        let root = std::fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+        let spec = form.replace(ROOT, &root.display().to_string().replace('\\', "%5C"));
+        let stderr = workspace_output(&repo, &["cargo", "build", "-p", &spec, "--no-such-flag"]);
+        let right = if selects {
+            !stderr.contains(REFUSAL) && stderr.contains("build command failed")
+        } else {
+            refused(&stderr, "beta")
+        };
+        if !right {
+            wrong.push(format!("{spec}: {stderr}"));
         }
     }
     assert!(
