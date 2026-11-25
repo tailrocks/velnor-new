@@ -145,6 +145,14 @@ fn a_target_variable_of_the_step_does_not_apply_to_a_root_the_step_is_not_in() {
             .unwrap_or_else(|e| unreachable!("{e}"));
         let stderr = String::from_utf8_lossy(&built.stderr);
         assert!(built.status.success(), "{variable}: {stderr}");
+<<<<<<< HEAD
         assert!(!stderr.contains("cannot be told apart"), "{variable}: {stderr}");
+||||||| 9394ee7399
+=======
+        assert!(
+            !stderr.contains("cannot be told apart"),
+            "{variable}: {stderr}"
+        );
+>>>>>>> origin/main
     }
 }

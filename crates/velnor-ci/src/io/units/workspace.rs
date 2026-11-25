@@ -72,8 +72,11 @@ impl Roots {
     }
 }
 
-fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
-    inner.starts_with(outer).then_some(inner)
+fn inside(outer: &Path, inner: &Path) -> Option<PathBuf> {
+    physical(inner.to_path_buf())
+        .strip_prefix(physical(outer.to_path_buf()))
+        .ok()
+        .map(|relative| outer.join(relative))
 }
 
 struct Apart {
@@ -83,8 +86,8 @@ struct Apart {
 
 fn apart(target: &Path, build: &Path) -> Result<Apart, CiError> {
     let limit = directory_limit()?;
-    let in_target = scan(target, limit, inside(target, build))?;
-    let in_build = scan(build, limit, inside(build, target))?;
+    let in_target = scan(target, limit, inside(target, build).as_deref())?;
+    let in_build = scan(build, limit, inside(build, target).as_deref())?;
     let (target_built, build_built) = (in_target.built, in_build.built);
     let mut found = in_build.found;
     found.extend(
@@ -111,7 +114,7 @@ pub(in crate::io) fn unit_files_apart(
     Ok(found)
 }
 
-fn physical(path: PathBuf) -> PathBuf {
+pub(in crate::io) fn physical(path: PathBuf) -> PathBuf {
     fs::canonicalize(&path).unwrap_or(path)
 }
 
@@ -121,21 +124,32 @@ fn same(left: &Path, right: &Path) -> bool {
 
 impl From<Printed> for Workspace {
     fn from(printed: Printed) -> Self {
-        let target_directory = physical(printed.target_directory);
+        let build_directory = printed
+            .build_directory
+            .unwrap_or_else(|| printed.target_directory.clone());
         Self {
-            build_directory: printed
-                .build_directory
-                .map_or_else(|| target_directory.clone(), physical),
+            shared_build: same(&build_directory, &printed.target_directory),
+            build_directory,
             root: printed.workspace_root,
-            target_directory,
+            target_directory: printed.target_directory,
         }
     }
 }
 
 impl Workspace {
+    pub(in crate::io) fn shares_build_directory(&self) -> bool {
+        self.shared_build
+    }
+
+    pub(in crate::io) fn same_directories(&self, other: &Self) -> bool {
+        self.root == other.root
+            && same(&self.target_directory, &other.target_directory)
+            && same(&self.build_directory, &other.build_directory)
+    }
+
     pub(in crate::io) fn directories(&self) -> Vec<PathBuf> {
         let mut directories = vec![self.target_directory.clone()];
-        if !same(&self.build_directory, &self.target_directory) {
+        if !self.shares_build_directory() {
             directories.push(self.build_directory.clone());
         }
         directories
@@ -147,7 +161,7 @@ impl Workspace {
         &self,
         workspaces: &[Workspace],
     ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-        if same(&self.target_directory, &self.build_directory) {
+        if self.shares_build_directory() {
             return Roots::new(workspaces).unit_files(&self.build_directory);
         }
         Ok(apart(&self.target_directory, &self.build_directory)?.found)

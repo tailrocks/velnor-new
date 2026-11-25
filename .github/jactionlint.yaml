@@ -2,8 +2,10 @@
 
 profile: default
 generated-files: report
-config-variables: []
+config-variables:
+  - VELNOR_DEPS_APP_ID
 self-hosted-runner:
   labels:
     - velnor
     - ubuntu-26.04-scale-set
+    - ubuntu-26.04-scale-set-publish

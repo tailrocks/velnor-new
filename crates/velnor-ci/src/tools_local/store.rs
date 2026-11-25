@@ -23,11 +23,20 @@ const COPY: &str = "/bin/cp";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Step {
+    Copied,
     Chosen,
     Breaking,
     Taken,
     Retiring,
 }
+
+#[cfg(test)]
+fn step(step: Step) {
+    hook::reached(step);
+}
+
+#[cfg(not(test))]
+const fn step(_: Step) {}
 
 fn base(dir: Option<&str>, owner: u32, read_only: bool) -> Result<PathBuf, Outcome> {
     let Some(dir) = dir.filter(|dir| !dir.is_empty()) else {
@@ -95,16 +104,6 @@ pub(super) fn restore(
     read_only: bool,
     owner: u32,
 ) -> Outcome {
-    restore_with(inputs, dir, read_only, owner, &|| {})
-}
-
-fn restore_with(
-    inputs: &Inputs<'_>,
-    dir: Option<&str>,
-    read_only: bool,
-    owner: u32,
-    copied: &dyn Fn(),
-) -> Outcome {
     if let Err(reason) = check_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
@@ -123,7 +122,7 @@ fn restore_with(
         if !copy_tree(&entry.join(slot(path)), &inputs.home.join(path)) {
             return Outcome::Rejected("a copy failed, so the cache action restores instead");
         }
-        copied();
+        step(Step::Copied);
     }
     if !published(&held, &entry) {
         return Outcome::Rejected(
@@ -161,10 +160,10 @@ fn owners(name: &str) -> Vec<&str> {
     keys
 }
 
-fn hold_owners(tools: &Path, name: &str, current: &str, pause: &dyn Fn(Step)) -> Option<Vec<Lock>> {
+fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
     let mut held = Vec::new();
     for key in owners(name).into_iter().filter(|key| *key != current) {
-        match claim(tools, key, pause) {
+        match claim(tools, key) {
             Claim::Won(lock) => held.push(lock),
             Claim::Held | Claim::Broken => return None,
         }
@@ -172,7 +171,7 @@ fn hold_owners(tools: &Path, name: &str, current: &str, pause: &dyn Fn(Step)) ->
     Some(held)
 }
 
-fn sweep(tools: &Path, current: &str, pause: &dyn Fn(Step)) {
+fn sweep(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
@@ -188,18 +187,14 @@ fn sweep(tools: &Path, current: &str, pause: &dyn Fn(Step)) {
             continue;
         }
         if let Some(key) = lock {
-            drop(claim(tools, key, pause));
-        } else if let Some(_held) = hold_owners(tools, &name, current, pause) {
+            drop(claim(tools, key));
+        } else if let Some(_held) = hold_owners(tools, &name, current) {
             remove_tree(&entry.path()).ok();
         }
     }
 }
 
 pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
-    save_with(inputs, owner, &|_| {})
-}
-
-fn save_with(inputs: &Inputs<'_>, owner: u32, pause: &dyn Fn(Step)) -> Outcome {
     let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
@@ -212,12 +207,12 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, pause: &dyn Fn(Step)) -> Outcome {
     if fs::create_dir_all(&tools).is_err() {
         return Outcome::Failed("cannot create the tools directory");
     }
-    let _lock = match claim(&tools, inputs.key, pause) {
+    let _lock = match claim(&tools, inputs.key) {
         Claim::Won(lock) => lock,
         Claim::Held => return Outcome::Busy,
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
-    sweep(&tools, inputs.key, pause);
+    sweep(&tools, inputs.key);
     if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
@@ -261,7 +256,7 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, pause: &dyn Fn(Step)) -> Outcome {
     if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
-    let kept = prune(&tools, inputs.key, pause);
+    let kept = prune(&tools, inputs.key);
     if replaced {
         Outcome::Healed { to: entry, kept }
     } else {
@@ -269,7 +264,7 @@ fn save_with(inputs: &Inputs<'_>, owner: u32, pause: &dyn Fn(Step)) -> Outcome {
     }
 }
 
-fn prune(tools: &Path, current: &str, pause: &dyn Fn(Step)) -> Vec<String> {
+fn prune(tools: &Path, current: &str) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
         return Vec::new();
     };
@@ -283,12 +278,12 @@ fn prune(tools: &Path, current: &str, pause: &dyn Fn(Step)) -> Vec<String> {
         .collect();
     older.sort_by_key(|(listed, _)| std::cmp::Reverse((listed.2, listed.3)));
     let candidates: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
-    pause(Step::Chosen);
+    step(Step::Chosen);
     let mut in_use = 0;
     candidates
         .into_iter()
         .filter(
-            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS, pause) {
+            |(listed, path)| match retire(tools, path, *listed, in_use < KEEP_KEYS) {
                 Retired::Settled => false,
                 Retired::InUse => {
                     in_use += 1;
@@ -307,13 +302,7 @@ enum Retired {
     Stuck,
 }
 
-fn retire(
-    tools: &Path,
-    path: &Path,
-    listed: Identity,
-    spare_in_use: bool,
-    pause: &dyn Fn(Step),
-) -> Retired {
+fn retire(tools: &Path, path: &Path, listed: Identity, spare_in_use: bool) -> Retired {
     let finished = |removal: std::io::Result<()>| match removal {
         Ok(()) => Retired::Settled,
         Err(_) => Retired::Stuck,
@@ -322,7 +311,7 @@ fn retire(
     if !valid_key(&name) {
         return finished(remove_tree(path));
     }
-    let _lock = match claim(tools, &name, pause) {
+    let _lock = match claim(tools, &name) {
         Claim::Won(lock) => lock,
         Claim::Held => return Retired::Settled,
         Claim::Broken => return Retired::Stuck,
@@ -346,7 +335,7 @@ fn retire(
     } else {
         None
     };
-    pause(Step::Retiring);
+    step(Step::Retiring);
     let grave = tools.join(format!("{STAGING_PREFIX}{name}-{:016x}", random_u64()));
     finished(fs::rename(path, &grave).and_then(|()| remove_tree(&grave)))
 }
@@ -363,6 +352,8 @@ fn plain(name: &str) -> String {
         .collect()
 }
 
+#[cfg(test)]
+mod hook;
 mod lock;
 #[cfg(test)]
 mod tests;

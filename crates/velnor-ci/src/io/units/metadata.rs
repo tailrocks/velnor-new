@@ -8,25 +8,21 @@ use super::{Workspace, build_dir};
 use crate::error::CiError;
 
 pub(in crate::io) struct MetadataInvocation<'a> {
-    pub(in crate::io) executable: &'a str,
+    pub(in crate::io) executable: String,
     pub(in crate::io) arguments: &'a [String],
     pub(in crate::io) directory: &'a Path,
 }
 
-impl<'a> MetadataInvocation<'a> {
-    pub(in crate::io) fn at(directory: &'a Path) -> Self {
-        Self {
-            executable: "cargo",
-            arguments: &[],
-            directory,
-        }
-    }
-}
+const DIRECTORY_VARIABLES: [&str; 3] = [
+    "CARGO_TARGET_DIR",
+    "CARGO_BUILD_TARGET_DIR",
+    "CARGO_BUILD_BUILD_DIR",
+];
 
 pub(in crate::io) fn workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
-    step: &Path,
+    step: Option<&Path>,
 ) -> Result<Workspace, CiError> {
     metadata(manifest, invocation, step, false)
 }
@@ -34,7 +30,7 @@ pub(in crate::io) fn workspace(
 pub(in crate::io) fn own_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
-    step: &Path,
+    step: Option<&Path>,
 ) -> Result<Workspace, CiError> {
     metadata(manifest, invocation, step, true)
 }
@@ -42,10 +38,13 @@ pub(in crate::io) fn own_workspace(
 fn metadata(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
-    step: &Path,
+    step: Option<&Path>,
     own_target: bool,
 ) -> Result<Workspace, CiError> {
-    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
+    let mut command = Command::new(invocation.map_or_else(
+        || "cargo".to_owned(),
+        |invocation| invocation.executable.clone(),
+    ));
     if let Some(invocation) = invocation {
         command
             .args(invocation.arguments)
@@ -54,20 +53,23 @@ fn metadata(
         command.current_dir(manifest.parent().unwrap_or(manifest));
     }
     if own_target {
-        command
-            .env_remove("CARGO_TARGET_DIR")
-            .env_remove("CARGO_BUILD_BUILD_DIR");
+        for name in DIRECTORY_VARIABLES {
+            command.env_remove(name);
+        }
     } else {
         if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
             build_dir::refuse_template(&build)?;
         }
         if invocation.is_none() {
-            for name in ["CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
+            for name in DIRECTORY_VARIABLES {
                 if let Some(value) = std::env::var_os(name)
                     .map(PathBuf::from)
                     .filter(|value| value.is_relative())
                 {
-                    command.env(name, step.join(value));
+                    match step {
+                        Some(step) => command.env(name, step.join(value)),
+                        None => command.env_remove(name),
+                    };
                 }
             }
         }

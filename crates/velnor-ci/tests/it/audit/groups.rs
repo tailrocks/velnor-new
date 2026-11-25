@@ -337,3 +337,26 @@ fn a_relative_target_variable_of_the_step_does_not_apply_to_the_roots_of_another
         assert!(built.status.success(), "{variable}: {stderr}");
     }
 }
+<<<<<<< HEAD
+||||||| 9394ee7399
+=======
+
+#[test]
+fn a_cargo_build_from_one_group_leaves_the_roots_of_another_group_at_their_own_targets() {
+    for variable in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        let repo = two_groups();
+        repo.git(&["add", "--all"]);
+        let built = velnor_ci()
+            .current_dir(repo.root().join("tools/a"))
+            .env(variable, "shared")
+            .args(["inputs", "build", "--", "cargo", "build", "--no-such-flag"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let stderr = String::from_utf8_lossy(&built.stderr);
+        assert!(
+            !stderr.contains("redirects the workspace"),
+            "{variable}: {stderr}"
+        );
+    }
+}
+>>>>>>> origin/main

@@ -1,0 +1,11 @@
+version = 1
+
+[[deb]]
+package = "libssl3t64"
+url = "https://snapshot.debian.org/archive/debian/20261124T000000Z/pool/main/o/openssl/libssl3t64_3.5.9-1~deb13u1_amd64.deb"
+sha256 = "ffefb9af363e0e4592251b2533eb06453c8e470f7772e40263c4b2129251a6d5"
+
+[[deb]]
+package = "libssl-dev"
+url = "https://snapshot.debian.org/archive/debian/20261124T000000Z/pool/main/o/openssl/libssl-dev_3.5.9-1~deb13u1_amd64.deb"
+sha256 = "9988be213bb31bb87b07a61e6e201b1b570b500a607e4449725442add3a4d3e8"

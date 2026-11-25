@@ -38,7 +38,7 @@ pub fn check_metadata(directory: &Path) -> Result<(), Error> {
     let on_disk = recorded.remove(&METADATA_PATH);
     view.rust_metadata =
         recorded_metadata(&view, on_disk.as_deref()).map_err(Error::MetadataFile)?;
-    let output = cargo_metadata(&root, &manifest)?;
+    let output = cargo_metadata(&root, &manifest, None)?;
     let (workspace, fresh) = reduce_metadata(&root, &output).map_err(Error::Metadata)?;
     view.rust_metadata.insert(workspace, fresh);
     let roots = metadata_roots(&view).map_err(Error::Detect)?;
@@ -52,13 +52,25 @@ pub fn check_metadata(directory: &Path) -> Result<(), Error> {
     }
 }
 
-pub(super) fn cargo_metadata(root: &Path, manifest: &RepoPath) -> Result<Vec<u8>, Error> {
+#[derive(Debug, Clone, Copy)]
+pub struct Cargo<'a> {
+    pub executable: &'a str,
+    pub toolchain: Option<&'a str>,
+}
+
+pub(super) fn cargo_metadata(
+    root: &Path,
+    manifest: &RepoPath,
+    cargo: Option<&Cargo<'_>>,
+) -> Result<Vec<u8>, Error> {
     let path = manifest_file(root, manifest)?;
     let directory = path.parent().unwrap_or(root);
-    program_trusting(
-        directory,
-        root,
-        "cargo",
+    let selector = cargo
+        .and_then(|cargo| cargo.toolchain)
+        .map(|name| format!("+{name}"));
+    let selected: Vec<&OsStr> = selector.iter().map(OsStr::new).collect();
+    let arguments = [
+        selected.as_slice(),
         &[
             OsStr::new("metadata"),
             OsStr::new("--format-version"),
@@ -68,5 +80,12 @@ pub(super) fn cargo_metadata(root: &Path, manifest: &RepoPath) -> Result<Vec<u8>
             OsStr::new("--manifest-path"),
             path.as_os_str(),
         ],
+    ]
+    .concat();
+    program_trusting(
+        directory,
+        root,
+        cargo.map_or("cargo", |cargo| cargo.executable),
+        &arguments,
     )
 }

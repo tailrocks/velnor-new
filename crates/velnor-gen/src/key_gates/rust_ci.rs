@@ -3,8 +3,11 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
 use crate::HELPER_MINIMUM;
+
+// helper-gate: first in tools-v0.1.116 via 1adc10de34
+const IMAGE_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.92 via 1605e9c34d
@@ -93,6 +96,33 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "full_run", HELPER_MINIMUM),
     gate(RustCi, "helper", HELPER_MINIMUM),
     gate(RustCi, "helper.path", HELPER_MINIMUM),
+    gate_untagged(RustCi, "image", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.attestations", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.bins", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.context", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.control_runner", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.default_features", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.dockerfile", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.features", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.glibc", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.inputs", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.name", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.openssl", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.package", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.pr_build", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.pr_only_checks", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.profile", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.publish_runner", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.host", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.repository", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.token", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.username", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.registry.visibility", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.release_actors", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.root", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.stage", IMAGE_HELPER),
+    gate_untagged(RustCi, "image.timeout_minutes", IMAGE_HELPER),
     // helper-gate: first in tools-v0.1.99 via 0b991d8ce7
     gate(RustCi, "hosted", (0, 1, 99)),
     gate(RustCi, "inputs", HELPER_MINIMUM),
@@ -104,8 +134,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.config", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.112 via 3b6bcec329
     gate(RustCi, "lint.from_source", (0, 1, 112)),
-    // helper-gate: first in tools-v0.1.112 via 7ee5c51932
-    gate(RustCi, "lint.gate_on_plan", (0, 1, 112)),
+    // helper-gate: first in tools-v0.1.113 via 10c0a52766
+    gate(RustCi, "lint.gate_on_plan", (0, 1, 113)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.id", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.111 via 78cb5295bf

@@ -94,3 +94,16 @@ pub(super) fn build_of(command: &[String], subcommand: usize) -> Vec<String> {
     "build".clone_into(&mut build[subcommand + 1]);
     build
 }
+
+pub(super) fn without_command_scope(globals: &[String]) -> Vec<String> {
+    let mut kept = Vec::new();
+    let mut words = globals.iter();
+    while let Some(word) = words.next() {
+        if word == "-C" || word == "--config" {
+            words.next();
+        } else if !word.starts_with("-C") && !word.starts_with("--config=") {
+            kept.push(word.clone());
+        }
+    }
+    kept
+}

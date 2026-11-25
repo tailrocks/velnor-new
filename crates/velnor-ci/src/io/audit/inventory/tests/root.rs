@@ -12,12 +12,7 @@ fn a_walk_root_that_is_a_regular_file_fails_the_scan_as_not_a_directory() {
     fs::create_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     let root = base.join("file");
     fs::write(&root, b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let result = scan_with(
-        &root,
-        &BTreeSet::new(),
-        &mut Budget::new(usize::MAX),
-        &Probe::default(),
-    );
+    let result = scan(&root, &BTreeSet::new(), &mut Budget::new(usize::MAX));
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     match result {
         Err(error) => {
@@ -29,6 +24,6 @@ fn a_walk_root_that_is_a_regular_file_fails_the_scan_as_not_a_directory() {
                 "a file root was reported as a race to retry: {error}"
             );
         }
-        Ok(entries) => panic!("a file root was scanned: {entries:?}"),
+        Ok(scanned) => panic!("a file root was scanned: {:?}", scanned.entries),
     }
 }

@@ -326,3 +326,59 @@ fn a_cancel_service_run_cancels_its_own_run_mid_step_and_a_check_job_asserts_the
     );
     Ok(())
 }
+
+fn mbx_versions_the_workflows_run(config: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
+    let table: toml::Table = config.parse()?;
+    Ok(table
+        .get("workflow")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|workflow| workflow.get("job")?.as_array())
+        .flatten()
+        .filter_map(|job| job.get("step")?.as_array())
+        .flatten()
+        .filter(|step| step.get("uses").and_then(toml::Value::as_str) == Some("mr-boxington"))
+        .filter_map(|step| step.get("with")?.get("version")?.as_str())
+        .map(str::to_owned)
+        .collect())
+}
+
+#[test]
+fn a_sample_that_runs_the_mbx_action_pins_that_version_in_its_mise_config_and_lock() -> TestResult {
+    let mut checked = 0;
+    for entry in fs::read_dir(repo("generator/samples"))? {
+        let view = entry?.path().join("view");
+        let Ok(config) = fs::read_to_string(view.join(".velnor/workflows.toml")) else {
+            continue;
+        };
+        let versions = mbx_versions_the_workflows_run(&config)?;
+        if versions.is_empty() {
+            continue;
+        }
+        let mise: toml::Table = fs::read_to_string(view.join("mise.toml"))?.parse()?;
+        let lock: toml::Table = fs::read_to_string(view.join("mise.lock"))?.parse()?;
+        let pinned = mise
+            .get("tools")
+            .and_then(|tools| tools.get("mr-boxington")?.get("version")?.as_str())
+            .ok_or_else(|| format!("{}: mise.toml pins no mr-boxington", view.display()))?;
+        let locked = lock
+            .get("tools")
+            .and_then(|tools| {
+                tools
+                    .get("mr-boxington")?
+                    .as_array()?
+                    .first()?
+                    .get("version")?
+                    .as_str()
+            })
+            .ok_or_else(|| format!("{}: mise.lock locks no mr-boxington", view.display()))?;
+        for version in &versions {
+            assert_eq!(pinned, format!("v{version}"), "{}", view.display());
+            assert_eq!(locked, version, "{}", view.display());
+        }
+        checked += 1;
+    }
+    assert!(checked >= 2, "{checked}");
+    Ok(())
+}

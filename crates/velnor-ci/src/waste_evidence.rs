@@ -200,23 +200,18 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .iter()
         .filter(|session| !session.probe_only)
         .collect();
-    let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
-        total.saturating_add(
-            session
-                .misses
-                .saturating_add(session.not_looked_up)
-                .saturating_add(session.bypassed),
-        )
-    });
+    let misses: u64 = sessions
+        .iter()
+        .fold(0_u64, |total, session| total.saturating_add(session.misses));
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated
         && metrics.mbx.unparsed == 0
         && sessions.iter().all(|session| session.hits == 0)
-        && lookups > 0
+        && misses > 0
         && compiled_registry_unit(metrics)
     {
         violations.push(format!(
-            "MBX object cache: 0 hits in {} sessions ({lookups} lookups missed or skipped) although the configured store held entries before the job",
+            "MBX object cache: 0 hits in {} sessions ({misses} lookups missed) although the configured store held entries before the job",
             sessions.len()
         ));
     }

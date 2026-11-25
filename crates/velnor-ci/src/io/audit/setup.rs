@@ -101,7 +101,7 @@ pub(super) fn gathered_files(
             continue;
         }
         let first = &workspaces[indices[0]];
-        let build = if first.build_directory == first.target_directory {
+        let build = if first.shares_build_directory() {
             directory
         } else {
             &first.build_directory

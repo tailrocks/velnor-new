@@ -11,6 +11,8 @@ mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use latest::newest;
+#[cfg(test)]
+pub(super) use probe::disturb;
 pub(super) use walk::{Budget, scan};
 
 use std::cell::RefCell;

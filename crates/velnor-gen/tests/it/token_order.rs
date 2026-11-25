@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::facts::{TestResult, path};
 use crate::pipeline::workflow;
 use crate::private_sources::{SECTION, jobs, private_repo};
+use crate::step_refs_shapes::mixed_lock;
 
 const GIT_LOCK: &str = "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#0123456789abcdef\"\n";
 pub(crate) const ASSETS: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
@@ -118,5 +119,41 @@ fn nothing_restores_the_tool_directory_before_the_fetch() -> TestResult {
         }
     }
     assert!(fetches > 0, "no job fetches");
+    Ok(())
+}
+
+#[test]
+fn a_repository_with_public_and_private_sources_checks_public_sources_before_the_token_phase()
+-> TestResult {
+    let config =
+        format!("{SECTION}[public_sources]\ngit = ['https://github.com/acme/public-lib']\n");
+    let mut repo = private_repo(&["Cargo.toml"], &config, "0.1.112")?;
+    repo.files
+        .insert(path("Cargo.lock")?, mixed_lock().into_bytes());
+    let text = workflow(&repo)?;
+    assert_tokens_first("public and private sources", &text)?;
+    let mut checked = 0;
+    for job in jobs(&text)? {
+        let steps = job["steps"].as_array().ok_or("a job without steps")?;
+        let public = steps.iter().position(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("cache public-sources"))
+        });
+        let token = steps.iter().position(|step| step["id"] == "private-token");
+        let (Some(public), Some(token)) = (public, token) else {
+            continue;
+        };
+        checked += 1;
+        assert!(
+            public < token,
+            "{}: public sources run after the token",
+            job["name"]
+        );
+    }
+    assert!(
+        checked > 0,
+        "no job checks public sources and fetches privately"
+    );
     Ok(())
 }

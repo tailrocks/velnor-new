@@ -14,12 +14,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
-use velnor_gen::io::read_checkout;
 use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{MetadataInvocation, Roots, Workspace, apart, outside_tracked};
-use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
+use super::super::units::{Roots, Workspace, apart, outside_tracked};
+use super::groups::{
+    group_dirs, inheriting, scan_dirs, shared_groups, standalone, stepped, workspaces,
+};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
 use super::timing;
@@ -46,15 +47,15 @@ struct Builder<'a> {
 type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
-    let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
+    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
+    let checkout = invocation.checkout(directory)?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
-    let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
     let step = invocation.step(directory);
-    let baseline = MetadataInvocation::at(&step);
+    let baseline = invocation.baseline(directory, &step);
     let workspaces = workspaces(
         &facts,
         &checkout.root,
@@ -70,6 +71,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         &workspaces,
         &standalone,
         &inherit,
+        &stepped(&facts, &checkout.root, &location, &inherit)?,
         &group_dirs(&facts, &checkout.root),
     )?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);
