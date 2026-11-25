@@ -179,16 +179,25 @@ impl Invocation {
         }
     }
 
-    pub(super) fn baseline<'a>(&'a self, directory: &'a Path) -> MetadataInvocation<'a> {
+    pub(super) fn baseline<'a>(
+        &'a self,
+        directory: &Path,
+        step: &'a Path,
+    ) -> MetadataInvocation<'a> {
         let selector = usize::from(
             self.globals
                 .first()
                 .is_some_and(|word| word.starts_with('+') && word.len() > 1),
         );
+        let executable = self.executable();
         MetadataInvocation {
-            executable: self.executable(),
+            executable: if executable == "cargo" {
+                executable.to_owned()
+            } else {
+                directory.join(executable).to_string_lossy().into_owned()
+            },
             arguments: &self.globals[..selector],
-            directory,
+            directory: step,
         }
     }
 
@@ -261,7 +270,7 @@ impl Invocation {
         )?;
         let executable = self.executable();
         let invocation = MetadataInvocation {
-            executable,
+            executable: executable.to_owned(),
             arguments: &self.globals,
             directory,
         };
@@ -269,7 +278,7 @@ impl Invocation {
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.root.join("Cargo.toml");
             let local = MetadataInvocation {
-                executable,
+                executable: executable.to_owned(),
                 arguments: &local_arguments,
                 directory: &expected.root,
             };

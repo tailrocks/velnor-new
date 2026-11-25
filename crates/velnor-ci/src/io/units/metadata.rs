@@ -8,7 +8,7 @@ use super::{Workspace, build_dir};
 use crate::error::CiError;
 
 pub(in crate::io) struct MetadataInvocation<'a> {
-    pub(in crate::io) executable: &'a str,
+    pub(in crate::io) executable: String,
     pub(in crate::io) arguments: &'a [String],
     pub(in crate::io) directory: &'a Path,
 }
@@ -41,7 +41,10 @@ fn metadata(
     step: Option<&Path>,
     own_target: bool,
 ) -> Result<Workspace, CiError> {
-    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
+    let mut command = Command::new(invocation.map_or_else(
+        || "cargo".to_owned(),
+        |invocation| invocation.executable.clone(),
+    ));
     if let Some(invocation) = invocation {
         command
             .args(invocation.arguments)

@@ -219,6 +219,7 @@ fn sharing(root: &std::path::Path, build: &std::path::Path) -> Workspace {
         root: root.join("..").join(build.file_name().unwrap_or_default()),
         target_directory: root.to_owned(),
         build_directory: build.to_owned(),
+        shared_build: root == build,
     }
 }
 
@@ -248,4 +249,23 @@ fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_buil
     let found = group[1].build_units(&group);
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(found.is_ok(), "{found:?}");
+}
+
+#[test]
+fn a_build_directory_that_names_the_target_keeps_doing_so_after_its_link_is_retargeted() {
+    let root = target_with(&["a/keep", "b/keep"]);
+    let link = root.join("link");
+    std::os::unix::fs::symlink(root.join("a"), &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let printed = serde_json::json!({
+        "workspace_root": root,
+        "target_directory": root.join("a"),
+        "build_directory": link,
+    });
+    let workspace: Workspace =
+        serde_json::from_value(printed).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_file(&link).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(root.join("b"), &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let directories = workspace.directories();
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(directories, vec![root.join("a")]);
 }

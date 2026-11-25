@@ -45,6 +45,7 @@ pub(super) struct Workspace {
     pub(super) root: PathBuf,
     pub(super) target_directory: PathBuf,
     pub(super) build_directory: PathBuf,
+    pub(super) shared_build: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,13 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsString;
 use std::fs;
+use std::path::PathBuf;
+use std::process::Output;
 
 use super::{command, own_units, workspace_below_the_root};
+use crate::io::Repo;
 use velnor_test_support::real_cargo_str;
 
-#[test]
-fn every_metadata_probe_runs_under_the_toolchain_the_command_selects() {
+fn driven_repository() -> (Repo, PathBuf, OsString) {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     repo.write_unstaged(
@@ -44,15 +47,40 @@ fn main() {
     ))
     .unwrap_or_else(|error| unreachable!("{error}"));
     let log = repo.root().join("probes.log");
-    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root().join("rust"))
+    (repo, log, path)
+}
+
+fn run_from(
+    repo: &Repo,
+    directory: &str,
+    log: &PathBuf,
+    path: &OsString,
+    cargo: &str,
+    arguments: &[&str],
+) -> Output {
+    command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join(directory))
         .env("PATH", path)
-        .env("PROBE_LOG", &log)
+        .env("PROBE_LOG", log)
+        .env("RUSTC_BOOTSTRAP", "1")
         .args(["inputs", "build", "--"])
-        .arg(repo.root().join("driver/cargo"))
-        .args(["+nightly", "build", "--workspace"])
+        .arg(cargo)
+        .args(arguments)
         .output()
-        .unwrap_or_else(|error| unreachable!("{error}"));
+        .unwrap_or_else(|error| unreachable!("{error}"))
+}
+
+#[test]
+fn every_metadata_probe_runs_under_the_toolchain_the_command_selects() {
+    let (repo, log, path) = driven_repository();
+    let built = run_from(
+        &repo,
+        "rust",
+        &log,
+        &path,
+        &repo.root().join("driver/cargo").to_string_lossy(),
+        &["+nightly", "build", "--workspace"],
+    );
     let probes = fs::read_to_string(&log).unwrap_or_else(|error| unreachable!("{error} {built:?}"));
     let selected = probes
         .lines()
@@ -64,4 +92,25 @@ fn main() {
         plain <= 1,
         "only the probe that reads the repository facts may ignore the selected toolchain: {probes}"
     );
+}
+
+#[test]
+fn a_relative_cargo_executable_is_probed_from_the_directory_the_command_started_in() {
+    let (repo, log, path) = driven_repository();
+    let built = run_from(
+        &repo,
+        "",
+        &log,
+        &path,
+        "./driver/cargo",
+        &[
+            "-Z",
+            "unstable-options",
+            "-C",
+            "rust",
+            "build",
+            "--workspace",
+        ],
+    );
+    assert!(built.status.success(), "{built:?}");
 }

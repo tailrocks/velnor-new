@@ -121,10 +121,12 @@ pub(in crate::io) fn same(left: &Path, right: &Path) -> bool {
 
 impl From<Printed> for Workspace {
     fn from(printed: Printed) -> Self {
+        let build_directory = printed
+            .build_directory
+            .unwrap_or_else(|| printed.target_directory.clone());
         Self {
-            build_directory: printed
-                .build_directory
-                .unwrap_or_else(|| printed.target_directory.clone()),
+            shared_build: same(&build_directory, &printed.target_directory),
+            build_directory,
             root: printed.workspace_root,
             target_directory: printed.target_directory,
         }
@@ -133,7 +135,7 @@ impl From<Printed> for Workspace {
 
 impl Workspace {
     pub(in crate::io) fn shares_build_directory(&self) -> bool {
-        same(&self.build_directory, &self.target_directory)
+        self.shared_build
     }
 
     pub(in crate::io) fn same_directories(&self, other: &Self) -> bool {
