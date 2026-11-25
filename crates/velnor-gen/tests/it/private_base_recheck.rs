@@ -37,7 +37,7 @@ fn condition<'a>(lane: &'a str, name: &str) -> Result<&'a str, Box<dyn std::erro
 
 #[test]
 fn the_privacy_is_looked_up_again_without_a_token_right_before_each_private_save() -> TestResult {
-    let lane = lane("0.1.116")?;
+    let lane = lane("0.1.117")?;
     let names = names(&lane);
     let at = |name: &str| {
         names
@@ -76,7 +76,7 @@ fn the_privacy_is_looked_up_again_without_a_token_right_before_each_private_save
 
 #[test]
 fn every_private_save_waits_for_the_fresh_verdict_and_not_for_the_first_one() -> TestResult {
-    let lane = lane("0.1.116")?;
+    let lane = lane("0.1.117")?;
     for (name, fresh, stale) in [
         ("velnor-ci inputs save", BUILD, SOURCES),
         ("Decide whether to save the build directory", BUILD, SOURCES),
