@@ -14,12 +14,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
-use velnor_gen::io::read_checkout_under;
+use velnor_gen::io::{Cargo, read_checkout_under};
 use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
 use super::super::units::{Roots, Workspace, apart, outside_tracked};
-use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
+use super::groups::{
+    group_dirs, inheriting, scan_dirs, shared_groups, standalone, stepped, workspaces,
+};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
 use super::timing;
@@ -47,8 +49,15 @@ type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
     let invocation = Invocation::new(&invocation::resolve(&args.command, directory)?);
-    let checkout = read_checkout_under(directory, invocation.toolchain())
-        .map_err(|e| CiError::new(e.to_string()))?;
+    let executable = invocation.executable(directory);
+    let checkout = read_checkout_under(
+        directory,
+        Some(&Cargo {
+            executable: &executable,
+            toolchain: invocation.toolchain(),
+        }),
+    )
+    .map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
     let location = fs::canonicalize(invocation.location(directory))
@@ -71,6 +80,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         &workspaces,
         &standalone,
         &inherit,
+        &stepped(&facts, &checkout.root, &location, &inherit)?,
         &group_dirs(&facts, &checkout.root),
     )?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);

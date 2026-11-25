@@ -21,7 +21,7 @@ fn a_command_local_target_dir_is_refused_for_every_subcommand_that_builds() {
         .map(str::to_owned)
         .to_vec();
         let refused = Invocation::new(&command)
-            .validate_targets(Path::new("/repo"), &[], &[], &[], &[])
+            .validate_targets(Path::new("/repo"), &[], &[], &[], &[], &[])
             .expect_err(subcommand);
         assert!(
             refused.to_string().contains("--target-dir"),

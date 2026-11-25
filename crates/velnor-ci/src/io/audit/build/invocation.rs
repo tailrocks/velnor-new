@@ -168,7 +168,7 @@ impl Invocation {
         }
     }
 
-    fn executable(&self, directory: &Path) -> String {
+    pub(super) fn executable(&self, directory: &Path) -> String {
         let program = Path::new(&self.command[0]);
         if program.file_name().is_some_and(|name| name == "cargo")
             && program.components().count() > 1
@@ -242,6 +242,7 @@ impl Invocation {
         workspaces: &[Workspace],
         standalone: &[bool],
         inherit: &[bool],
+        stepped: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
         if let Some(refusal) = self.refusal {
@@ -273,21 +274,27 @@ impl Invocation {
             directory,
         };
         let local_arguments = without_command_scope(&self.globals);
-        for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
+        for (((expected, alone), inherit), stepped) in
+            workspaces.iter().zip(standalone).zip(inherit).zip(stepped)
+        {
             let manifest = expected.root.join("Cargo.toml");
             let local = MetadataInvocation {
                 executable: executable.clone(),
                 arguments: &local_arguments,
                 directory: &expected.root,
             };
-            let actual = root_workspace(
-                &manifest,
-                Some(if *inherit { &invocation } else { &local }),
-                Some(directory),
-                *inherit,
-                *alone,
-                groups,
-            )?;
+            let actual = if *inherit && !*stepped {
+                root_workspace(&manifest, None, None, true, *alone, groups)?
+            } else {
+                root_workspace(
+                    &manifest,
+                    Some(if *inherit { &invocation } else { &local }),
+                    Some(directory),
+                    *inherit,
+                    *alone,
+                    groups,
+                )?
+            };
             if !actual.same_directories(expected) {
                 return Err(CiError::new(
                     "Cargo invocation configuration redirects the workspace, target or build directory away from inputs audit; use persistent Cargo configuration, CARGO_TARGET_DIR or CARGO_BUILD_BUILD_DIR for both build and audit",

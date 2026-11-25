@@ -52,14 +52,22 @@ pub fn check_metadata(directory: &Path) -> Result<(), Error> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Cargo<'a> {
+    pub executable: &'a str,
+    pub toolchain: Option<&'a str>,
+}
+
 pub(super) fn cargo_metadata(
     root: &Path,
     manifest: &RepoPath,
-    toolchain: Option<&str>,
+    cargo: Option<&Cargo<'_>>,
 ) -> Result<Vec<u8>, Error> {
     let path = manifest_file(root, manifest)?;
     let directory = path.parent().unwrap_or(root);
-    let selector = toolchain.map(|name| format!("+{name}"));
+    let selector = cargo
+        .and_then(|cargo| cargo.toolchain)
+        .map(|name| format!("+{name}"));
     let selected: Vec<&OsStr> = selector.iter().map(OsStr::new).collect();
     let arguments = [
         selected.as_slice(),
@@ -74,5 +82,10 @@ pub(super) fn cargo_metadata(
         ],
     ]
     .concat();
-    program_trusting(directory, root, "cargo", &arguments)
+    program_trusting(
+        directory,
+        root,
+        cargo.map_or("cargo", |cargo| cargo.executable),
+        &arguments,
+    )
 }

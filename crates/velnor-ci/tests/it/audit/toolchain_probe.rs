@@ -120,3 +120,22 @@ fn a_relative_cargo_executable_is_probed_for_every_root_from_the_directory_the_c
     let built = run_from(&repo, "web", &path, &["../driver/cargo", "build"]);
     assert!(built.status.success(), "{built:?}");
 }
+
+#[test]
+fn checkout_discovery_runs_the_cargo_executable_the_command_names() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    let _ = install_driver(&repo);
+    repo.write_unstaged("wrong/cargo", "#!/bin/sh\necho wrong cargo >&2\nexit 7\n");
+    let wrong = repo.root().join("wrong/cargo");
+    fs::set_permissions(&wrong, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let path = std::env::join_paths(std::iter::once(repo.root().join("wrong")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .unwrap_or_else(|error| unreachable!("{error}"));
+    let driver = repo.root().join("driver/cargo");
+    let driver = driver.to_str().unwrap_or_else(|| unreachable!());
+    let built = run_from(&repo, "rust", &path, &[driver, "build", "--workspace"]);
+    assert!(built.status.success(), "{built:?}");
+}

@@ -28,7 +28,7 @@ mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
 use crate::{Drift, check_tag, notes, plan_generate};
-pub use check::check_metadata;
+pub use check::{Cargo, check_metadata};
 pub use error::Error;
 use pin::{check_lock, pin_helper};
 pub use pin::{lock_root, retry_download, write_lock};
@@ -276,9 +276,9 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     read_checkout_under(path, None)
 }
 
-pub fn read_checkout_under(path: &Path, toolchain: Option<&str>) -> Result<Checkout, Error> {
+pub fn read_checkout_under(path: &Path, cargo: Option<&Cargo<'_>>) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
-    let view = read_view(&root, false, toolchain)?.0;
+    let view = read_view(&root, false, cargo)?.0;
     Ok(Checkout { root, view })
 }
 

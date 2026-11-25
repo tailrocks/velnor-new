@@ -11,7 +11,7 @@ use velnor_rust::{
     build_script_sources, is_rust_source, manifests, metadata_roots, reduce_metadata, wanted_files,
 };
 
-use super::check::cargo_metadata;
+use super::check::{Cargo, cargo_metadata};
 use super::error::Error;
 use super::identity;
 use super::tracked::tracked;
@@ -46,7 +46,7 @@ pub(super) fn read_tracked(root: &Path) -> Result<RepoView, Error> {
 pub(super) fn read_view(
     root: &Path,
     keep_metadata: bool,
-    toolchain: Option<&str>,
+    cargo: Option<&Cargo<'_>>,
 ) -> Result<Recorded, Error> {
     let (tracked_paths, symlinks, gitlinks) = tracked(root)?;
     view_of(
@@ -55,7 +55,7 @@ pub(super) fn read_view(
         symlinks,
         gitlinks,
         keep_metadata,
-        toolchain,
+        cargo,
     )
 }
 
@@ -65,7 +65,7 @@ pub fn view_of(
     symlinks: BTreeSet<RepoPath>,
     gitlinks: BTreeSet<RepoPath>,
     keep_metadata: bool,
-    toolchain: Option<&str>,
+    cargo: Option<&Cargo<'_>>,
 ) -> Result<Recorded, Error> {
     let mut view = view_from(root, tracked_paths, symlinks, gitlinks)?;
     let mut recorded = BTreeMap::new();
@@ -77,7 +77,7 @@ pub fn view_of(
         if known {
             continue;
         }
-        let output = cargo_metadata(root, &manifest, toolchain)?;
+        let output = cargo_metadata(root, &manifest, cargo)?;
         let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
         if keep_metadata {
             recorded.insert(workspace.clone(), output);
