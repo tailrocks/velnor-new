@@ -30,6 +30,7 @@ pub struct RustCiConfig {
     pub private_sources: Option<PrivateSources>,
     pub public_sources: Option<PublicSources>,
     pub release_assets: Vec<crate::ReleaseAsset>,
+    pub images: Vec<crate::ImageConfig>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,

@@ -160,6 +160,8 @@ pub struct ApiPage<T> {
 #[derive(Debug, Deserialize)]
 pub struct ApiWorkflowRun {
     pub id: u64,
+    #[serde(default)]
+    pub workflow_id: Option<u64>,
     pub event: String,
     pub status: String,
     pub head_branch: Option<String>,
@@ -284,6 +286,11 @@ pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/actions/runs?head_sha={sha}&exclude_pull_requests=true&per_page=100&page={page}"
     )
+}
+
+#[must_use]
+pub fn pull_files_path(repo: &Repo, number: u64, page: u32) -> String {
+    format!("/repos/{repo}/pulls/{number}/files?per_page=100&page={page}")
 }
 
 #[must_use]
