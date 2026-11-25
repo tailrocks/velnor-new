@@ -5,10 +5,6 @@
 
 set -uo pipefail
 
-if [ -z "${ALINT_PROBE_PINNED_PYTHON:-}" ]; then
-  ALINT_PROBE_PINNED_PYTHON=1 exec mise exec python -- bash "${BASH_SOURCE[0]}" "$@"
-fi
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 PROBE="$ROOT/crates/velnor-ci/src/alint_line_cap_probe.rs"
 LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/alint-line-cap-probe.log"
@@ -19,11 +15,6 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$ROOT" || exit 1
-
-python3 -m unittest scripts/test_private_names_guard.py scripts/test_private_names_spellings.py scripts/test_frozen_evidence.py || exit 1
-bash scripts/test-run-private-names-guard.sh || exit 1
-python3 scripts/check-frozen-evidence.py || exit 1
-bash scripts/run-private-names-guard.sh || exit 1
 
 for lines in 401 400; do
   rm -f "$PROBE"

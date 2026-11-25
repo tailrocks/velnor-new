@@ -87,6 +87,14 @@ inputs = ["scripts/hosted_phase_measurement/__init__.py", "scripts/hosted_phase_
 
 [[lint]]
 kind = "mise-task"
+id = "private-names"
+name = "Private names guard"
+task = "lint-private-names"
+tools = ["python"]
+timeout_minutes = 10
+
+[[lint]]
+kind = "mise-task"
 id = "mise-binary-digests"
 name = "mise binary digest signature tests"
 task = "test-mise-binary-digests"
