@@ -13,7 +13,7 @@ use crate::support::fresh_dir;
 use serve::{Reply, Served, serve};
 
 mod hardening;
-mod serve;
+pub(crate) mod serve;
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
 

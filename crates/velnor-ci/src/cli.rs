@@ -14,7 +14,7 @@ pub use crate::cli_inputs::{
 mod gate;
 mod report;
 mod resolve_qualification;
-pub use app_token::AppTokenArgs;
+pub use app_token::{AppTokenArgs, AwaitArgs, Handshake, JobArgs, MintArgs, RelayArgs, WaitArgs};
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{

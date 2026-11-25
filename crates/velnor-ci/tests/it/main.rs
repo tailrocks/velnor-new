@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod ansible_select;
+mod app_relay;
 mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;

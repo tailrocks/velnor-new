@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod activity;
+mod app_relay;
 mod app_token;
 mod archive_witness;
 mod artifact_api;

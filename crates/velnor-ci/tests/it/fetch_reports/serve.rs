@@ -95,6 +95,13 @@ fn answer(mut stream: TcpStream, base: &str, routes: &Routes, hits: &Mutex<Vec<H
         request.push(byte[0]);
     }
     let text = String::from_utf8_lossy(&request).to_lowercase();
+    let length: usize = text
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length:"))
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(0);
+    let mut body = vec![0_u8; length];
+    stream.read_exact(&mut body).ok();
     let original = String::from_utf8_lossy(&request).into_owned();
     let path = original
         .split_whitespace()
