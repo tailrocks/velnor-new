@@ -1,0 +1,1419 @@
+item	agent	status	decision	evidence
+branch:fast/2361-archive-exec-diagnostics	sonnet+opus	done	REJECTED (safe to delete)	owner closed #2375; root cause fixed by #2407
+branch:fast/2438-tools-verify-followups	sonnet+opus	done	REJECTED (safe to delete)	all behaviour on main via #2333/#2593; 10-file conflict
+branch:fast/2514-credential-report-order	sonnet+opus	done	REJECTED (safe to delete)	superseded by #2151 (stronger sort)
+branch:fast/2580-steps-shapes	sonnet+opus	done	REJECTED (safe to delete)	superseded by open #2610 (carries #2582); branch conflicts, step_refs split on main
+branch:fast/2584-mise-version-exact-set	sonnet+opus	done	REJECTED (safe to delete)	in main via #2567; main test stricter; issue #2584 should close
+branch:fix/2682-tools-heal-removal-precondition	sonnet+opus	done	REJECTED (safe to delete)	premise removed by #2593; test would fail on main
+branch:fx-2545	sonnet+opus	done	REJECTED (safe to delete)	#2545 merged 1203e949e5; main superset; would revert move_file
+branch:handoff/roadmap-2026-11-15	sonnet+opus	done	REJECTED (safe to delete)	session note, stale; docs/roadmap.md covers; 1016 behind
+branch:rescue/fast-1555-cargo-guard-remerge-20261120	sonnet+opus	done	REJECTED (safe to delete)	re-merge of #2058 already in main (02328046a0); main is superset; conflicts
+branch:salvage/2701-mbx-total-bytes	sonnet+opus	pr-pending	KEEP -> open PR	#2701 open, main lacks total cap; merges clean; 2 tests
+branch:salvage/2702-mbx-report-tests-wip	sonnet+opus	done	REJECTED (safe to delete)	WIP tests only; weakens assertion; conflicts
+branch:salvage/2703-mbx-comments	sonnet+opus	pr-pending	KEEP -> open PR	#2703 open; 3 doc blocks still on main
+branch:speed/rh-slow-public-qualifier-split	sonnet+opus	done	REJECTED (safe to delete)	in main via #2291 (stall_bounds.rs 8 tests)
+branch:fast/2471-purge-private	haiku-verify	sonnet-review done	PR w/ rework pending opus	#2471 open, visibility box left open in #2591; conflicts; rework onto main command
+branch:fast/2474-anchor-steps-ref	haiku-verify	verified	superseded #2547	368c678544
+branch:rescue/fix-local-strip-conformance-20261120	haiku-verify	verified	superseded #2043	68b727d38a content match
+branch:rescue/fast-1593-per-root-20261120	haiku-verify	sonnet-review done	PR pending opus	#1593 box1 unchecked; setup.rs owned union bug real; merges clean
+branch:fix/refresh-rust-inputs-lock	haiku-verify	verified	superseded #2679	a4ec3cc6f7
+branch:rescue/gen-0107-20261120	haiku-verify	verified	merged	ancestor of main
+branch:rescue/mig-bn-gen-src-20261120	haiku-verify	verified	merged	ancestor of main
+branch:rescue/velnor-new-gen-20261120	haiku-verify	verified	merged	ancestor of main
+branch:rescue/docs-migrating-velnor-gen-20261120	haiku-verify	verified	merged	patch-equiv b4670d3d58 (#2144)
+branch:g4-submodule-fixture	haiku-verify	verified	KEEP-AS-FIXTURE (never delete)	.gitmodules branch=g4-submodule-fixture; gitlink 85e202a944; qualification.yml:519
+issue:2584	-	note	close: fixed by #2567	from branch review
+issue:2361	-	note	close candidate: fixed by #2407	branch review
+issue:2438	-	note	close candidate: delivered by #2333/#2593, gaps in closed #2592	branch review
+issue:574	haiku-triage	triaged	epic/tracking	children open (578,579,581,626,627)
+issue:578	haiku-triage	triaged	epic/tracking	labelled epic; children open
+issue:579	haiku-triage	triaged	epic/tracking	labelled epic; children open
+issue:581	haiku-triage	triaged	epic/tracking	labelled epic; children open
+issue:604	haiku-triage	triaged	needs-human	needs-owner label; cutover of velnor-new Rust CI
+issue:608	haiku-triage	triaged	blocked-by-dependency	body gated on #621 targets; residue removed by PR #2156 (refs 608)
+issue:609	haiku-triage	triaged	actionable	labelled in-progress, opus; #1107 merged refs 609
+issue:610	haiku-triage	triaged	actionable	in-progress; no open PR
+issue:622	haiku-triage	triaged	actionable	in-progress; #1259 merged refs; checklist partly done
+issue:623	haiku-triage	triaged	needs-human	needs-owner label; lab nightly run
+issue:624	haiku-triage	triaged	in-open-PR	open PR #2411 refs #624
+issue:626	haiku-triage	triaged	epic/tracking	labelled epic
+issue:627	haiku-triage	triaged	epic/tracking	labelled epic
+issue:645	haiku-triage	triaged	needs-human	needs-owner+blocked label
+issue:646	haiku-triage	triaged	needs-human	needs-owner label; opus
+issue:648	haiku-triage	triaged	needs-human	needs-owner label
+issue:649	haiku-triage	triaged	needs-human	needs-owner label
+issue:680	haiku-triage	triaged	needs-human	owner-action; approve exemption for hand-written release workflow
+issue:682	haiku-triage	triaged	needs-human	owner-action; ruleset change in github-terraform
+issue:729	haiku-triage	triaged	blocked-by-dependency	labelled blocked; FAST-REL.9 needs release design
+issue:732	haiku-triage	triaged	needs-human	owner-action; ruleset bypass switch
+issue:733	haiku-triage	triaged	blocked-by-dependency	opus; needs owner ruleset change first
+issue:934	haiku-triage	triaged	actionable	labelled blocked but blocker is a released velnor-ci 0.1.80; helper pins are at 0.1.111, so likely unblocked
+issue:941	haiku-triage	triaged	epic/tracking	tracker with owner-waiting items (Playwright cache waits on owner)
+issue:949	haiku-triage	triaged	needs-human	owner-action; approve admin-read secret
+issue:966	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named in body
+issue:1047	haiku-triage	triaged	needs-human	needs-owner+blocked; which contract docs are authoritative
+issue:1218	haiku-triage	triaged	blocked-by-dependency	blocked; upstream turso still pulls chrono (not checked live); R:1219 merged refs
+issue:1233	haiku-triage	triaged	epic/tracking	Renovate dependency dashboard (bot)
+issue:1290	haiku-triage	triaged	epic/tracking	owner P1 tracker; children 1432-1456 open
+issue:1305	haiku-triage	triaged	epic/tracking	tracker (part of #574)
+issue:1370	haiku-triage	triaged	actionable	docs-only; no PR
+issue:1429	haiku-triage	triaged	needs-human	owner decision: tag prefix and family tag
+issue:1432	haiku-triage	triaged	needs-human	generator lane is agent work; terraform ruleset change is owner-only
+issue:1447	haiku-triage	triaged	actionable	P1 child; no open PR
+issue:1449	haiku-triage	triaged	actionable	P1 child; no open PR
+issue:1450	haiku-triage	triaged	blocked-by-dependency	P1 child; publish job needs helper
+issue:1452	haiku-triage	triaged	blocked-by-dependency	P1 child; needs helpers and a real publish on main
+issue:1456	haiku-triage	triaged	blocked-by-dependency	needs verify-hosted/verify-scale-set jobs and runner infra
+issue:1499	haiku-triage	triaged	actionable	mostly comment removal and small follow-ups
+issue:1526	haiku-triage	triaged	epic/tracking	labelled epic; children open
+issue:1535	haiku-triage	triaged	actionable	P2 checklist items unchecked
+issue:1536	haiku-triage	triaged	actionable	P2 security hardening, cache.mbx_remote guard unchecked
+issue:1548	haiku-triage	triaged	actionable	deferred Later findings; unchecked
+issue:1555	haiku-triage	triaged	actionable	partly checked fallout list; no PR
+issue:1569	haiku-triage	triaged	actionable	deferred non-P1 items from #1520
+issue:1572	haiku-triage	triaged	actionable	deferred non-P1 items from #1322
+issue:1582	haiku-triage	triaged	actionable	deferred P1 item: prove normalized target reuse
+issue:1593	haiku-triage	triaged	actionable	in-progress label; deferred items from #1396
+issue:1606	haiku-triage	triaged	actionable	partly checked deferred items from #1259
+issue:1618	haiku-triage	triaged	actionable	critical-path item unchecked (policy waits on rust)
+issue:1628	haiku-triage	triaged	actionable	partly checked
+issue:1639	haiku-triage	triaged	actionable	docs reconciliation with governing goals
+issue:1666	haiku-triage	triaged	actionable	release workflow must restore Required check before publish
+issue:1678	haiku-triage	triaged	actionable	rustdoc failures out of merged code
+issue:1680	haiku-triage	triaged	actionable	partly checked; tools seed isolation
+issue:1682	haiku-triage	triaged	actionable	node tools store isolation before restore
+issue:1692	haiku-triage	triaged	epic/tracking	labelled? epic continuation; children open
+issue:1693	haiku-triage	triaged	actionable	partly checked
+issue:1702	haiku-triage	triaged	actionable	P2 codex finding on snapshot::capture; no PR
+issue:2048	haiku-triage	triaged	fixed	"commit ef61950555 ""generator: run velnor-gen check on every PR as a Required job (#2048) (#2066)"" on main; Required now runs check"
+issue:2107	haiku-triage	triaged	needs-human	owner-action label; coordinator decision recorded
+issue:2173	haiku-triage	triaged	blocked-by-dependency	labelled blocked, opus; overlaps 2494/2289/2471
+issue:2205	haiku-triage	triaged	in-open-PR	open PR #2325 refs 2205
+issue:2207	haiku-triage	triaged	actionable	fix PR #2225 merged only to deleted base fast/mbx-summary-py, never to main
+issue:2210	haiku-triage	triaged	actionable	"commit ""test_groups artifacts: follow-ups ... (#2210) (#2293)"" on main; PR body only Refs"
+issue:2211	haiku-triage	triaged	actionable	#2330 refs 2211 on main; PR #2235 went to deleted base only
+issue:2212	haiku-triage	triaged	actionable	PR #2228 refs 2212 on main; item open
+issue:2213	haiku-triage	triaged	actionable	#2329 on main refs 2213; items in waste_evidence.rs remain
+issue:2219	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2242	haiku-triage	triaged	blocked-by-dependency	blocked; depends on 2207 landing (#2225 not on main)
+issue:2257	haiku-triage	triaged	actionable	in-progress; #2327 refs 2257 on main
+issue:2258	haiku-triage	triaged	actionable	in-progress; #2265 refs 2258 on main; verify
+issue:2259	haiku-triage	triaged	in-open-PR	open PR #2260 refs 2259
+issue:2262	haiku-triage	triaged	actionable	in-progress; #2496 and #2301 on main refs 2262; items remain
+issue:2268	haiku-triage	triaged	blocked-by-dependency	labelled blocked; trusted_runner fence; blocker unnamed
+issue:2270	haiku-triage	triaged	actionable	deferred items unchecked; no PR
+issue:2275	haiku-triage	triaged	actionable	deferred test-suite items; no PR
+issue:2277	haiku-triage	triaged	actionable	tools-v0.1.110 tag exists (git tag); blocker resolved
+issue:2279	haiku-triage	triaged	actionable	style/comments items unchecked
+issue:2280	haiku-triage	triaged	actionable	#2300/#2390 on main refs 2280; HOME path validation item open
+issue:2281	haiku-triage	triaged	epic/tracking	labelled epic; children open
+issue:2283	haiku-triage	triaged	actionable	#2316/#2388 on main refs 2283; some items unchecked
+issue:2287	haiku-triage	triaged	actionable	mismatched tool-cache entry unlinked by path (race)
+issue:2289	haiku-triage	triaged	actionable	no PR; #2449 refs as partial
+issue:2311	haiku-triage	triaged	in-open-PR	open PR #2694 refs 2311
+issue:2337	haiku-triage	triaged	needs-human	needs-owner; cache key decision for mbx release
+issue:2341	haiku-triage	triaged	actionable	style/docs items; #2578 refs 2341 on main
+issue:2344	haiku-triage	triaged	in-open-PR	open PR #2379 closes 2344
+issue:2349	haiku-triage	triaged	in-open-PR	open PR #2379 closes 2349
+issue:2353	haiku-triage	triaged	in-open-PR	open PR #2379 closes 2353
+issue:2356	haiku-triage	triaged	blocked-by-dependency	labelled blocked; needs mbx upstream feature (2425 unfiled)
+issue:2359	haiku-triage	triaged	actionable	report.rs refusal suffix; no PR
+issue:2361	haiku-triage	triaged	actionable	in-progress; no PR
+issue:2365	haiku-triage	triaged	in-open-PR	open PR #2510 refs 2365
+issue:2371	haiku-triage	triaged	in-open-PR	open PR #2394 refs 2371
+issue:2381	haiku-triage	triaged	in-open-PR	open PR #2397 closes 2381
+issue:2389	haiku-triage	triaged	actionable	walk root and canonical symlinks opened by path (race)
+issue:2403	haiku-triage	triaged	in-open-PR	open PR #2644 refs 2403
+issue:2413	haiku-triage	triaged	actionable	#2549/#2418 on main refs 2413; P2 item
+issue:2419	haiku-triage	triaged	actionable	P2 bounded log copy; no PR
+issue:2420	haiku-triage	triaged	actionable	P2 shared build dir scan; no PR
+issue:2421	haiku-triage	triaged	actionable	partly checked
+issue:2425	haiku-triage	triaged	needs-human	needs-owner; owner OK required to file upstream
+issue:2430	haiku-triage	triaged	in-open-PR	open PR #2454 closes 2430
+issue:2432	haiku-triage	triaged	in-open-PR	open PR #2448 closes 2432
+issue:2433	haiku-triage	triaged	needs-human	needs-owner; cost acceptance
+issue:2436	haiku-triage	triaged	in-open-PR	open PR #2650 refs 2436
+issue:2437	haiku-triage	triaged	in-open-PR	open PR #2445 closes 2437
+issue:2438	haiku-triage	triaged	actionable	P2 tools-verify items; no PR
+issue:2439	haiku-triage	triaged	actionable	#2455 refs 2439 on main; grouped-root insertion item
+issue:2440	haiku-triage	triaged	in-open-PR	open PR #2458 refs 2440
+issue:2442	haiku-triage	triaged	in-open-PR	open PR #2650 refs 2442
+issue:2444	haiku-triage	triaged	actionable	App key in token action post step; security; no PR
+issue:2460	haiku-triage	triaged	in-open-PR	open PR #2464 closes 2460
+issue:2470	haiku-triage	triaged	in-open-PR	open PR #2477 refs 2470
+issue:2471	haiku-triage	triaged	actionable	#2591 on main refs 2471; docs item open
+issue:2473	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named; correctness bug
+issue:2479	haiku-triage	triaged	actionable	#2498 refs 2479; Codex P1 items unresolved
+issue:2483	haiku-triage	triaged	in-open-PR	open PR #2525 closes 2483
+issue:2489	haiku-triage	triaged	in-open-PR	open PR #2506 closes 2489
+issue:2491	haiku-triage	triaged	in-open-PR	open PR #2505 closes 2491
+issue:2493	haiku-triage	triaged	in-open-PR	open PR #2501 closes 2493
+issue:2494	haiku-triage	triaged	in-open-PR	open PR #2508 refs/closes part of 2494
+issue:2497	haiku-triage	triaged	in-open-PR	open PR #2507 closes 2497
+issue:2512	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2520	haiku-triage	triaged	in-open-PR	open PR #2559 closes 2520
+issue:2523	haiku-triage	triaged	actionable	#2548 on main refs 2523; second item unverified
+issue:2528	haiku-triage	triaged	actionable	#2546 refs 2528 on main; crates-mirror items remain
+issue:2529	haiku-triage	triaged	in-open-PR	open PRs #2642 and #2565 refs 2529
+issue:2530	haiku-triage	triaged	actionable	#2545 refs 2530 on main; eviction items; concurrency
+issue:2535	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2536	haiku-triage	triaged	actionable	#2543 on main mentions qualify pin; remaining items unverified
+issue:2539	haiku-triage	triaged	actionable	#2550 refs 2539; tools anchor lookup item
+issue:2540	haiku-triage	triaged	in-open-PR	open PR #2577 refs 2540
+issue:2541	haiku-triage	triaged	epic/tracking	labelled? epic-like parent of 2556-2725 items
+issue:2556	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2557	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2558	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2560	haiku-triage	triaged	in-open-PR	open PR #2657 refs 2560
+issue:2561	haiku-triage	triaged	actionable	termrock main red; no PR; #2648 open touches waste check
+issue:2562	haiku-triage	triaged	in-open-PR	open PR #2579 refs 2562
+issue:2563	haiku-triage	triaged	actionable	#2580 refs 2563 on main; helper list items remain
+issue:2568	haiku-triage	triaged	actionable	in-progress; no PR
+issue:2570	haiku-triage	triaged	actionable	evidence items for #2552; needs CI measurements
+issue:2571	haiku-triage	triaged	actionable	process: independent red/green review
+issue:2572	haiku-triage	triaged	actionable	launchers bypass sanitizer; no PR
+issue:2574	haiku-triage	triaged	actionable	symlink and .. audit paths; no PR
+issue:2582	haiku-triage	triaged	in-open-PR	open PR #2610 refs 2582
+issue:2583	haiku-triage	triaged	actionable	in-progress; no PR
+issue:2584	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2585	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2586	haiku-triage	triaged	blocked-by-dependency	labelled blocked; needs reproducible evidence
+issue:2587	haiku-triage	triaged	in-open-PR	open PR #2659 refs 2587
+issue:2588	haiku-triage	triaged	in-open-PR	open PR #2604 closes 2588
+issue:2589	haiku-triage	triaged	fixed	"PR #2597 ""Refs #2589: keep report schema 1"" on main (decision recorded)"
+issue:2590	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2596	haiku-triage	triaged	actionable	#2618 refs 2596 on main; margin item open
+issue:2599	haiku-triage	triaged	in-open-PR	open PR #2615 closes 2599
+issue:2602	haiku-triage	triaged	in-open-PR	open PR #2657 refs 2602
+issue:2608	haiku-triage	triaged	in-open-PR	open PR #2616 closes 2608 (#2665 merged refs)
+issue:2613	haiku-triage	triaged	in-open-PR	open PR #2659 refs 2613
+issue:2620	haiku-triage	triaged	in-open-PR	open PR #2659 refs 2620
+issue:2622	haiku-triage	triaged	actionable	quarantine prune concurrency; no PR
+issue:2623	haiku-triage	triaged	blocked-by-dependency	needs 2622 policy change, then CI measurement
+issue:2624	haiku-triage	triaged	actionable	P2 scanner gaps; no PR
+issue:2625	haiku-triage	triaged	blocked-by-dependency	labelled blocked; evidence and process items
+issue:2627	haiku-triage	triaged	in-open-PR	open PR #2633 refs 2627
+issue:2636	haiku-triage	triaged	actionable	evidence-only nextest runs
+issue:2639	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2646	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2648	haiku-triage	triaged	in-open-PR	open PR #2660 refs 2648 scope
+issue:2649	haiku-triage	triaged	actionable	P2 descriptor bound; no PR
+issue:2651	haiku-triage	triaged	actionable	blocker #2428 is merged; no PR
+issue:2654	haiku-triage	triaged	actionable	P2/P3 test provenance and classify strictness
+issue:2656	haiku-triage	triaged	actionable	credential scan Basic payload; security
+issue:2663	haiku-triage	triaged	actionable	Required does not depend on Secret scanners job; no PR
+issue:2664	haiku-triage	triaged	actionable	waste_evidence MBX absence; no PR
+issue:2667	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2668	haiku-triage	triaged	actionable	step ref invariant; no PR
+issue:2670	haiku-triage	triaged	actionable	docs link retarget; no PR
+issue:2671	haiku-triage	triaged	actionable	Sources restore result to lanes; no PR
+issue:2673	haiku-triage	triaged	actionable	process: independent review record
+issue:2675	haiku-triage	triaged	in-open-PR	open PR #2692 covers part (refs 2660)
+issue:2677	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2678	haiku-triage	triaged	blocked-by-dependency	depends on open PR #2650 (early nextest list)
+issue:2680	haiku-triage	triaged	in-open-PR	open PR #2693 moves audit test; item 1 unverified
+issue:2681	haiku-triage	triaged	actionable	pin gate test; no PR
+issue:2684	haiku-triage	triaged	in-open-PR	open PR #2699 closes/guards names
+issue:2685	haiku-triage	triaged	actionable	target key lacks helper version; no PR
+issue:2688	haiku-triage	triaged	blocked-by-dependency	labelled blocked; same file as open PR #2458
+issue:2690	haiku-triage	triaged	blocked-by-dependency	needs velnor-ci 0.1.112; no tools-v0.1.112 tag exists
+issue:2691	haiku-triage	triaged	blocked-by-dependency	needs velnor-ci 0.1.112 (#2440); no 0.1.112 tag
+issue:2695	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2696	haiku-triage	triaged	in-open-PR	open PR #2710 closes save-step item
+issue:2698	haiku-triage	triaged	blocked-by-dependency	labelled blocked; blocker not named
+issue:2701	haiku-triage	triaged	actionable	bound decode work across reports; no PR
+issue:2702	haiku-triage	triaged	actionable	in-progress; socket owner liveness
+issue:2703	haiku-triage	triaged	actionable	in-progress; comment removal
+issue:2704	haiku-triage	triaged	actionable	tools_local remover gaps; no PR
+issue:2709	haiku-triage	triaged	actionable	cache waste check fails on cold run; no PR
+issue:2711	haiku-triage	triaged	needs-human	decision: bump SCHEMA or not for saved_key
+issue:2712	haiku-triage	triaged	actionable	PR runs skip audit; generated workflow change
+issue:2713	haiku-triage	triaged	actionable	private cache publish from separate job; security
+issue:2720	haiku-triage	triaged	in-open-PR	PR #2723 is a diagnosis refs #2720; fix not merged
+issue:2724	haiku-triage	triaged	actionable	no open PR; plan-skipped aggregate job
+pr:1751	-	inventoried	BLOCKED	conflict,draft,behind_base|research: rebase the Velnor runner plan on velnor-gen (2026-11-20)
+pr:1986	-	inventoried	BLOCKED	conflict,draft,behind_base|ci(security): stop trusted builds using the node-shared MBX store (stopgap for #
+pr:2098	-	inventoried	BLOCKED	github_disagrees,behind_base|docs: the recompile exemption starts at velnor-ci 0.1.107
+pr:2183	-	inventoried	BLOCKED	conflict,dco_missing,threads_unresolved,check_missing,behind_base|fix(deps): update cargo minor/patch
+pr:2260	-	inventoried	BLOCKED	conflict,behind_base,done_when_unchecked,non_required_failing|ci: run the local-mode lane as a parallel job
+pr:2325	-	inventoried	BLOCKED	conflict,check_failed,behind_base,non_required_failing|velnor-gen: retry release downloads, require a macOS generator digest, tracked-o
+pr:2345	-	inventoried	BLOCKED	conflict,check_failed,behind_base,non_required_failing|chore: pin velnor tools 0.1.110
+pr:2379	-	inventoried	BLOCKED	threads_unresolved,behind_base|alint no-doctests follow-ups: indented code, pinned python, escape decision
+pr:2394	-	inventoried	BLOCKED	github_disagrees,behind_base,non_required_failing|feat(gen): generated-check from_source builds velnor-gen from the checkout (#237
+pr:2397	-	inventoried	BLOCKED	threads_unresolved,behind_base,non_required_failing|fix(velnor-ci): unknown plain layout refused in build; relative CARGO_BUILD_BUIL
+pr:2411	-	inventoried	BLOCKED	conflict,draft,behind_base|docs(rust-ci): tighten the Rust CI page to 150 lines (#624)
+pr:2445	-	inventoried	BLOCKED	stacked,conflict,dco_missing,threads_unresolved,behind_base|alint: no-doctests lets an ordered marker that is not 1 continue a paragraph
+pr:2448	-	inventoried	BLOCKED	conflict,threads_unresolved,check_failed,behind_base,non_required_failing|ci: enforce no doctests with a rustdoc listing check; remove the alint scanner (
+pr:2454	-	inventoried	BLOCKED	stacked,threads_unresolved,behind_base,non_required_failing|fix(velnor-ci): normalize a relative CARGO_BUILD_BUILD_DIR on the inputs build i
+pr:2458	-	inventoried	BLOCKED	stacked,conflict,behind_base|fix(gen): from_source finds the velnor-gen package (#2440)
+pr:2464	-	inventoried	BLOCKED	conflict,threads_unresolved,behind_base,done_when_unchecked,non_required_failing|Docs: remove absolute local paths and guard against them
+pr:2477	-	inventoried	BLOCKED	threads_unresolved,behind_base|fix(audit): compare change times in freshness and pin the directory re-list (#24
+pr:2495	-	inventoried	BLOCKED	threads_unresolved,behind_base,non_required_failing|fix(audit): raise the open-file limit and name descriptor exhaustion
+pr:2501	-	inventoried	BLOCKED	draft,behind_base|fix(velnor-ci): failure marker run identity and --exclude (Closes #2493)
+pr:2505	-	inventoried	BLOCKED	github_disagrees,behind_base,done_when_unchecked,non_required_failing|fix(velnor-rust): validate the lock's velnor-gen-binary table and drop lock comm
+pr:2506	-	inventoried	BLOCKED	conflict,threads_unresolved,check_missing,behind_base,done_when_unchecked|fix(velnor-ci): scope failed-build packages to the invoked root (#2489)
+pr:2507	-	inventoried	READY	behind_base,non_required_failing|fix(report): name only the save steps a job renders
+pr:2508	-	inventoried	BLOCKED	conflict,threads_unresolved,behind_base,done_when_unchecked,non_required_failing|Private cache gaps from #2494 (part of #2494)
+pr:2510	-	inventoried	READY	behind_base,non_required_failing|fix(velnor-rust): keep recently read tools anchors out of the budget plan (Refs 
+pr:2525	-	inventoried	BLOCKED	conflict,threads_unresolved,behind_base,non_required_failing|fix(gates): close the helper-gate checker gaps from #2369
+pr:2559	-	inventoried	BLOCKED	conflict,check_failed,behind_base,non_required_failing|fix(velnor-ci): a leftover MBX_SOCKET no longer skips MBX report assignment
+pr:2565	-	inventoried	READY	behind_base,done_when_unchecked,non_required_failing|fix(velnor-rust): name the re-pin when the online velnor-gen binary digests diff
+pr:2577	-	inventoried	BLOCKED	threads_unresolved,behind_base,non_required_failing|fix(velnor-ci): name the bare repository in the tools-verify notice on github.co
+pr:2579	-	inventoried	READY	behind_base,non_required_failing|test(velnor-gen): steps.<id> invariant covers cleanup, release and reusable file
+pr:2604	-	inventoried	BLOCKED	draft,behind_base|fix(no-doctests): stop false positives on quote, HTML and code-span docs
+pr:2610	-	inventoried	BLOCKED	conflict,threads_unresolved,check_failed,behind_base|test(velnor-gen): steps.<id> invariant renders test_groups, pr_only_checks and r
+pr:2615	-	inventoried	BLOCKED	threads_unresolved,behind_base,non_required_failing|Close credential scan gaps for hook trees, encoded and split tokens (#2599)
+pr:2616	-	inventoried	BLOCKED	conflict,behind_base,done_when_unchecked|fix(velnor-ci): scope MBX by cargo -C, script targets and alias overrides (#2608
+pr:2633	-	inventoried	BLOCKED	conflict,threads_unresolved,behind_base,non_required_failing|test: remove temp directories that test helpers leave behind
+pr:2637	-	inventoried	BLOCKED	conflict,check_failed,behind_base,non_required_failing|audit: remove explanatory comments left by #2551
+pr:2642	-	inventoried	BLOCKED	check_failed,behind_base,done_when_unchecked,non_required_failing|fix(gen): document the velnor-gen-binary lock section; name the re-pin on its mi
+pr:2644	-	inventoried	BLOCKED	check_failed,behind_base,non_required_failing|fix(velnor-rust): shared-store steps only in compiling jobs; derive seed fixture
+pr:2650	-	inventoried	BLOCKED	threads_unresolved,behind_base,non_required_failing|fix(velnor-ci): give the early nextest list its own extraction directory
+pr:2657	-	inventoried	BLOCKED	threads_unresolved,check_failed,behind_base,non_required_failing|fix(lint): run no-doctests scanner as a pinned mise-task lint; track doc context
+pr:2659	-	inventoried	BLOCKED	stacked,conflict,behind_base|test(velnor-gen): steps.<id> invariant covers cache cleanup and group sub-shapes
+pr:2660	-	inventoried	BLOCKED	check_failed,behind_base,done_when_unchecked,non_required_failing|fix(velnor-ci): unknown restore status is not cache waste; keep mbx build-script
+pr:2683	-	inventoried	BLOCKED	threads_unresolved,check_failed,behind_base,non_required_failing|tools cache: clear a read-only retired leftover on the next save
+pr:2692	-	inventoried	BLOCKED	github_disagrees,behind_base,non_required_failing|fix(velnor-ci): key compat digest on MBX out-dir setting; keep restore notices o
+pr:2693	-	inventoried	BLOCKED	conflict,threads_unresolved,check_failed,behind_base,non_required_failing|test(velnor-ci): move the 100000-entry audit test to a slow nextest profile
+pr:2694	-	inventoried	READY	behind_base,non_required_failing|velnor-gen: a filtered test lane waits for a failed test setup (Refs #2311)
+pr:2699	-	inventoried	BLOCKED	conflict,threads_unresolved,check_failed,behind_base,done_when_unchecked,non_required_failing|Remove private downstream names from tracked files and add a guard
+pr:2710	-	inventoried	BLOCKED	conflict,check_missing,behind_base|report: name the tools save step only when the job saves tools
+pr:2716	-	inventoried	BLOCKED	threads_unresolved,check_failed,behind_base,non_required_failing|Post-merge fixes for #2580
+pr:2721	-	inventoried	READY	behind_base|test(audit): read build-script outputs in either cargo build layout (closes #255
+pr:2722	-	inventoried	BLOCKED	draft,behind_base|test(velnor-gen): pin the helper label below its gate and where refusal lifts
+pr:2723	-	inventoried	READY	behind_base,non_required_failing|fix(audit): name a build-script run that lacks its compile dep-info (diagnosis; 
+pr:2727	-	inventoried	BLOCKED	dco_missing,threads_unresolved,behind_base,non_required_failing|chore(deps): update dependency github:asamarts/alint to v0.23.0
+pr:2728	-	inventoried	BLOCKED	dco_missing,threads_unresolved,behind_base,non_required_failing|chore(deps): update dependency kingfisher to v2.20.0
+QUEUE	-	queued	c11 deps (2183,2727,2728,2345); c12 docs (1751,2098,2411,2260); fleet-plan	-
+issue:1370	sonnet-exec	needs-human	ask owner	"Q: approve adding pr_ci=""label"" merge-queue requirement sentence to docs/goals.md? (AGENTS.md:32 forbids unapproved goals.md edits). Suggested: ""With pr_ci = \""label\"", an unlabeled pull request runs only the quick set. The full suite is guaranteed only by the merge queue run, so the project must require a merge queue that runs the full suite and requires Required."""
+pr-cluster:c1	sonnet-review	reviewed	2448 KEEP carrier; 2379/2445/2604/2657 SUPERSEDED-BY 2448	prrev_c1.tsv
+pr-cluster:c5	sonnet-review	reviewed	2397 KEEP,2454 KEEP,2506 KEEP(glob fix),2616 REWORK	prrev_c5.tsv
+pr-cluster:c9	sonnet-review	reviewed	2507 KEEP,2710 SUPERSEDED-BY 2507,2501 KEEP undraft,2525 REWORK	prrev_c9.tsv
+pr-cluster:c10	sonnet-review	reviewed	2464,2699,2615,2633 KEEP w/ fixes	prrev_c10.tsv
+pr-cluster:c11	sonnet-review	reviewed	2345 CLOSE (superseded #2679); 2727 KEEP; 2728 REWORK; 2183 REWORK/close	prrev_c11.tsv
+QUEUE	-	queued	2703 PR (haiku/medium); opus verdict 2471+1593 branches	
+pr-cluster:c7	sonnet-review	reviewed	2721 KEEP(body Refs),2723 KEEP,2637 KEEP refresh,2693 KEEP refresh,2477 HUMAN,2495 REJECT	prrev_c7.tsv
+QUEUE	-	queued	opus verdict c7 (2477,2495,2693,2721,2723,2637)	
+ci-health	sonnet	done	Cache job advisory, not in Required; tracked #2648; MBX-stats-missing variant untracked	runs 45203266125 45201200973
+pr-cluster:c8	sonnet-review	reviewed	2510 KEEP,2644 KEEP refresh,2508 KEEP fix threads,2650 KEEP fix pgid,2683 REWORK,2577 REWORK cut scope	prrev_c8.tsv
+QUEUE	-	queued	opus verdict c8 (2510,2644,2508,2650,2683,2577)	
+issue:2557	sonnet-exec	needs-human	ask owner	Q: nextest evaluation cannot run hermetically inside the no-programs wrapper. Pick: A) add nextest-filtering+guppy dev-deps to velnor-gen; B) small evaluator for the filter grammar the config uses (no new deps, recommended if acceptable); C) move the guard to a CI step running cargo nextest list/show-config.
+pr:2345	opus	decided	CLOSE: superseded by #2679 (main pins 0.1.111)	opus deps verdict
+pr:2727	opus	decided	MERGE after .alint.yml:10-13 comment fix (0.23.0, 59 rules)	opus deps verdict
+pr:2728	opus	decided	MERGE after bumping scripts/install-secret-scanners.sh to 2.20.0 + sha256s	opus deps verdict
+pr:2183	opus	blocked-human	owner hold until ~2026-12-04 (turso release-age); then Renovate rebase box, regen metadata, runner.lock turso =0.8.4	opus deps verdict
+branch:fast/2471-purge-private	sonnet+opus	done	REJECTED (owner closed #2647 same head; box 4 to be rebuilt on #2591 command)	opus verdict
+branch:rescue/fast-1593-per-root-20261120	sonnet+opus	blocked-human	HUMAN: Should a member release-version bump in root B move the Target lock key of root A that path-depends on it (replacing #1900 cross-root union)?	opus verdict
+pr:2397	opus	decided	REWORK: cut to #2381 scope; orphan check + P1 to own issues	opus c5
+pr:2454	opus	decided	CLOSE: superseded by #2397	opus c5
+pr:2506	opus	decided	MERGE after linear glob + many-* red test, rebase after 2397	opus c5
+pr:2616	opus	decided	REWORK: rebase on #2665, one -C parser	opus c5
+pr-cluster:c1	opus	decided	2448 HUMAN(cost) then MERGE; 2379/2445/2604/2657 CLOSE when 2448 lands (fallback 2604)	opus c1
+pr:2345	haiku-closer	CLOSED	superseded #2679	https://github.com/tailrocks/velnor-new/pull/2345
+pr:2454	haiku-closer	CLOSED	superseded #2397	https://github.com/tailrocks/velnor-new/pull/2454
+issue:1593	haiku-closer	blocked-human	question posted, needs-owner	https://github.com/tailrocks/velnor-new/issues/1593#issuecomment-7110064619
+issue:2471	haiku-closer	actionable	rebuild spec posted (box 4)	https://github.com/tailrocks/velnor-new/issues/2471#issuecomment-7110054000
+pr:2579	opus	decided	MERGE now (closes #2562)	opus c2
+pr:2716	opus	decided	REWORK: carrier; port 2610/2659 rows into step_refs_shapes.rs, key_gates(), gate patches only, drop declared test, Closes #2582 #2613 #2620 #2587	opus c2
+pr:2610	opus	decided	REWORK: alias fix only (crates_mirror_alias.rs + 3 tests), retitle fix(velnor-ci), drop Closes #2582	opus c2
+pr:2659	opus	decided	CLOSE: rows ported into #2716	opus c2
+pr:2722	opus	decided	REWORK: drop 0.1.110 test, keep bootstrap()+writes_base test, undraft; open issue: delete dead AUDIT_JOB guard	opus c2
+QUEUE	-	queued	merge 2579; rework 2716 (sonnet/high); 2610 (sonnet/medium); 2722 (sonnet/medium); close 2659	
+issue:2258	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2359	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2413	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2523	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2563	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2572	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2584	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2589	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2667	sonnet-closer	CLOSED	completed	comment with PR evidence
+issue:2361	sonnet-closer	CLOSED	not planned	obsolete, comment
+issue:2624	sonnet-closer	CLOSED	not planned	obsolete, comment
+issue:2210	sonnet-closer	needs-human	remaining: isolate/terminate test descendants before RUNNER_TEMP artifact staging (owner decision)	
+issue:2656	-	tied-to-pr	finding on PR #2615 (Basic payload decoding)	
+issue:2664	-	tied-to-pr	finding on PR #2644	
+issue:2671	-	tied-to-pr	finding on PR #2508	
+pr:2633	opus	decided	MERGE after: merge main+regen metadata, rerun cancelled checks, independent red/green of fresh_dir_sweep	opus c10
+pr:2615	opus	decided	MERGE after: de-tokenize secret-scan fixtures at runtime (no allowlist), probe counts vs MAX_ENTRIES, answer threads (reject linked-worktree/race with reasons), one timing	opus c10
+pr:2699	opus	decided	REWORK: merge main, cut pseudonym checker, fix JSON \/ bypass, reject trusted-policy P1 w/ reason, Refs #2460; runner.lock: orchestrator decision = keep byte-identical, exempt by exact path	opus c10
+pr:2464	opus	decided	REWORK after 2699: take main side on private names, drop digest checker+attack cases, fix placeholder P2s, Closes #2460	opus c10
+QUEUE	-	queued	2633 fix; 2615 fix; 2699 rework; (2464 after 2699)	
+pr:2723	opus	decided	MERGE now	opus c7
+pr:2721	opus	decided	REWORK small: merge main, move stale_run.rs run/stdout readers (#2509) to run_outputs, re-run 1.99.1+1.100.0 pins, Refs #2553	opus c7
+pr:2637	opus	decided	MERGE after: merge main, drop racing.rs hunk (dup of #2611), retitle fix(audit), get Required green	opus c7
+pr:2693	opus	blocked-human	Q: May generated CI honor a project's nextest default-filter so excluded tests never run in CI, or must the 100000-entry test stay in CI as a test group with its own time limit (design rule 6)?	opus c7
+pr:2495	opus	decided	CLOSE: #2475 closed by #2645; main caps walk at DESCRIPTOR_BUDGET=64; 391-line ulimit wrapper not needed	opus c7
+pr:2477	opus	decided	CLOSE+split: 8 real Codex bugs from trust-record design; replacement small PR for #2470 item 2 + excluded-name filter; owner Q on ctime	opus c7
+issue:2470	opus	needs-human	Q: Should the audit use change time (ctime) as evidence at all given Velnor restore resets times, or should restore verify content hashes and the audit trust mtime as cargo does?	opus c7
+pr:2565	opus	decided	MERGE after: Closes #2529, remove /// binary_digests lock.rs:179 + lock_check.rs leftovers, CONFIG.md mention velnor-gen-binary format check, Closes #2491	opus c3
+pr:2642	opus	decided	CLOSE: duplicate of #2565, over-scoped	opus c3
+pr:2505	opus	decided	CLOSE: core landed in #2686; rest covered by #2565	opus c3
+pr:2728	haiku	in-progress	refresh blocked not_owner (renovate) -> replacement PR on chore/ branch	
+QUEUE	-	queued	merge 2723; 2721 rework; 2637 fix; 2565 fix; close 2495,2477,2642,2505,2659 + post 2693 Q; #2470 replacement PR	
+pr:2098	opus	decided	MERGE now (queue)	opus c12
+pr:2411	opus	decided	REWORK after 2098: merge main, tighten to <=150 lines keeping 2098 paragraph, fresh review, undraft	opus c12
+pr:2260	opus	decided	REWORK: merge main+regen, measure >=3 runs full/quick/nothing-selected, check runner budgets	opus c12
+pr:1751	opus	blocked-human	Q: land research as dated record (alias private names, merge main) or stay draft until 23 questions answered? #624 asks to delete folder	opus c12
+QUEUE	-	queued	2721,2637,2565,2633,2615,2699,2610,2722,2411,2260 work; #2470 replacement PR	
+pr:2736	sonnet-exec(2703)	open-draft	needs independent review then ready+merge	https://github.com/tailrocks/velnor-new/pull/2736 Required green
+branch:salvage/2703-mbx-comments	-	PRd	carried by #2736	
+pr:2507	opus	decided	MERGE after: Closes #2696 (keep Refs #2497), port #2710 test a_restore_only_tools_job_names_no_save_step_from_helper_0_1_112	opus c9
+pr:2710	opus	decided	CLOSE after 2507 lands (superseded)	opus c9
+pr:2501	opus	decided	REWORK: narrow target-filter rule (-p X --bin Y / --test T still select X), decide --doc --workspace, CLI case for BuildBinary/Doctest, undraft, full CI	opus c9
+pr:2525	opus	decided	REWORK: cut to #2483 items 1-3 + 9, move edits to repository-checks.yml, shell loops to scripts/, resolve 2 threads	opus c9
+pr:2098	merge-agent	needs-refresh	github_disagrees; fresh push to clear stale skipped run, then merge	
+pr:2495	haiku-closer	CLOSED	unneeded (#2645, DESCRIPTOR_BUDGET)	https://github.com/tailrocks/velnor-new/pull/2495
+pr:2477	haiku-closer	CLOSED	split; design holes	https://github.com/tailrocks/velnor-new/pull/2477
+pr:2642	haiku-closer	CLOSED	dup of #2565	https://github.com/tailrocks/velnor-new/pull/2642
+pr:2505	haiku-closer	CLOSED	core in #2686, rest in #2565	https://github.com/tailrocks/velnor-new/pull/2505
+pr:2659	haiku-closer	CLOSED	rows ported to #2716	https://github.com/tailrocks/velnor-new/pull/2659
+pr:2693	haiku-closer	blocked-human	Q posted, needs-owner	https://github.com/tailrocks/velnor-new/pull/2693#issuecomment-7110167929
+issue:2470	haiku-closer	blocked-human	Q posted	https://github.com/tailrocks/velnor-new/issues/2470#issuecomment-7110169913
+pr:1751	haiku-closer	blocked-human	Q posted	https://github.com/tailrocks/velnor-new/pull/1751#issuecomment-7110171714
+issue:1370	haiku-closer	blocked-human	Q posted	https://github.com/tailrocks/velnor-new/issues/1370#issuecomment-7110173926
+issue:2557	haiku-closer	blocked-human	Q posted	https://github.com/tailrocks/velnor-new/issues/2557#issuecomment-7110175645
+pr:2723	orchestrator	queued	merge queue pos 2, watch bwev10hu3	
+pr:2510	opus	decided	MERGE after refresh	opus c8
+pr:2508	opus	decided	MERGE after: read lane's own mode output (rust_{slug}_mode) red-first, resolve .betterleaks.toml, CONFIG.md 0.1.112-only, public-path tests	opus c8
+pr:2644	opus	decided	REWORK: drop absent_from_base exclusion in waste_evidence.rs (+test), keep prepares_cargo + SUBSETS assert, refresh	opus c8
+pr:2650	opus	decided	REWORK: keep items 1,3; cut Cancel/process groups to own issue; weigh reuse-extraction vs 8x; fix kill_group if bounded.rs stays	opus c8
+pr:2683	opus	decided	REWORK: keep remove_tree changes; cut prune locking + legacy branch; fix node= suffix + wall-clock test; fix body	opus c8
+pr:2577	opus	blocked-human	Q: poisoned-tools notice: delete restored entry by ID via new cache delete-entry two-step, or keep gh cache delete <key> (all refs)? If key-wide: close + small PR for host form (item 2)	opus c8
+pr:2728	haiku	CLOSED	superseded by #2737	
+pr:2737	haiku(2728)	open-draft	needs independent review, then ready+merge	chore/kingfisher-2.20.0 e28da8d; Required green
+QUEUE	-	queued	2615 fix (sonnet/high); new-PR review batch: 2736, 2737, alint replacement; post 2577 Q	
+pr:2735	sonnet-exec(2670)	open-ready	needs independent review (also line 40 Design v2 link same defect)	https://github.com/tailrocks/velnor-new/pull/2735
+pr:2730	sonnet-exec	CLOSED	auto-closed by branch rename, replaced by #2735	
+pr:2734	sonnet-exec(2438)	open-ready	needs independent review	https://github.com/tailrocks/velnor-new/pull/2734
+pr:2731	sonnet-exec	CLOSED	replaced by #2734 (branch rename)	
+pr:2510	orchestrator	queued	merge queue pos 3	refresh script bug: baseRefOid stale -> sync no-op (report to skill owner)
+pr:2727	haiku	CLOSED	superseded by #2738	
+pr:2738	haiku(2727)	open-ready	needs independent review; marked ready by orchestrator	chore/alint-0.23.0
+pr:2736	-	open-ready	marked ready; in review batch 1	
+pr:2737	-	open-ready	marked ready; in review batch 1	
+pr:2394	opus	decided	MERGE after: merge main, helper_gate.rs:137 matches GeneratedCheck { .. }, CI	opus c4
+pr:2458	opus	decided	CLOSE after 2394 lands (covered by 2394); optional follow-up build-phase test_setup under #2440	opus c4
+pr:2325	opus	decided	MERGE after refresh onto 2394 (imports + MisePlatform; matches! fix), fix title/body (no drift change)	opus c4
+pr:2694	opus	decided	MERGE after: merge main, UPDATE_GOLDENS=1 regen test-setup-lane golden (rust-ci.yml->ci.yml)	opus c4
+QUEUE	-	queued	2394 fix; 2694 golden; (2325 after 2394); 2738 review	
+pr:2734	-	green	in review batch 1	Required+rust green
+issue:2651	-	tied-to-pr	likely delivered by PR #2637 (trailing / requires dir); verify after 2637 lands	
+issue:2439	sonnet-exec	in-progress	-	
+pr:2733	sonnet-exec(2724)	open-ready	in sonnet review; then opus verdict	https://github.com/tailrocks/velnor-new/pull/2733 Required green
+pr:2732	sonnet-exec	CLOSED	replaced by #2733 (branch rename)	
+pr:2736	sonnet-review	approved	pending opus	
+pr:2737	sonnet-review	approved	pending opus	
+pr:2738	sonnet-review	approved	pending opus	
+pr:2734	sonnet-review	changes	wrong body (Fixes #2724) -> fix	
+pr:2735	sonnet-review	changes	wrong body + line 40 link	
+pr:2559	opus	decided	MERGE after: sync main (2 test conflicts), drop unrelated is_identifier tests, Required green	opus c6
+pr:2660	opus	decided	REWORK: rebase onto 2692, drop own mbx_out_dir + notice code, remove run.rs CARGO_LOG injection, split mbx-store writer move, Closes #2648 -> Refs	opus c6
+pr:2692	opus	decided	MERGE after: Closes #2675 -> Refs + fix body items 1-2, sync; one-time cold Target miss from COMPAT_SCHEMA bump accepted by orchestrator (documented mechanism)	opus c6
+pr:1986	opus	blocked-human	Q: accept mbx_shared_store=false (cold MBX/no node-store tools restore on main+PR, cost unmeasured) as interim fix for #1680, or keep shared store until trusted/PR scale-set split?	opus c6
+ci-health	opus	root-cause	Cache red since 0.1.111 repin (#2679): MBX stats report missing for 253 sessions; hypothesis: velnor-ci tests inherit VELNOR_MBX_REPORTS=true (ci.yml:142)	opus c6
+pr:2579	merge-agent	MERGED	c31798a309	https://github.com/tailrocks/velnor-new/pull/2579 (closes #2562)
+issue:2439	haiku-closer	CLOSED	done by #2310/#2455	https://github.com/tailrocks/velnor-new/issues/2439
+pr:1986	haiku-closer	blocked-human	Q posted needs-owner	https://github.com/tailrocks/velnor-new/pull/1986
+pr:2577	haiku-closer	blocked-human	Q posted needs-owner	https://github.com/tailrocks/velnor-new/pull/2577
+pr:2098	orchestrator	queued	merge queue pos 3 (fresh push cleared github_disagrees)	
+pr:2565	orchestrator	queued	merge queue pos 4	
+pr:2733	sonnet-review	changes	exact if: assertion (3 mutations survived), drop doc comment -> sent to author	
+pr:2739	sonnet-exec(2585)	open-ready	in sonnet review (git>=2.43 risk)	https://github.com/tailrocks/velnor-new/pull/2739 Required green
+pr:2723	orchestrator	ejected	queue UNMERGEABLE: main+2723 audit/mod.rs 401 lines (Alint) -> haiku fix	run 45238543586
+pr:2510	orchestrator	ejected?	queue group behind 2723 failed Alint; re-enqueue once queue clears	run 45239340804
+pr:2735	haiku	READY	both v2 links removed, body fixed	head aefb993
+pr:2734	haiku	green	body fixed; pr-status pending (rate limit)	head f2d7fb0
+pr:2637	sonnet	in-progress	2 Codex threads (perf, public-path test)	head a992aea
+pr:2397	sonnet	reworked	cut to #2381; orphan check -> #2741, run/bench/rustc P1 -> #2742; threads 0; CI pending	head 390a487; needs re-review then merge
+pr:2694	haiku	fixed	golden regen; CI pending	head 1c27b29
+issue:2741	sonnet	new	follow-up from 2397 (orphan outputs)	
+issue:2742	sonnet	new	follow-up from 2397 (run/bench/rustc invalidation)	
+RATE	-	note	GitHub API rate limit exhausted ~35min; pause new dispatch	
+pr:2510	orchestrator	re-enqueue	main+2510 has no over-cap file; failure was 2723 ahead of it	
+pr:2616	sonnet	reworked	one -C parser (main), kept #2608 parts, 23/38 red->green; CI pending; deleted 7 dup/conflicting tests (clustered -qm parse dropped)	head 14d7de0; needs re-review
+pr:2098	orchestrator	ejected	queue group behind 2723 (Alint cap); re-enqueue	
+pr:2740	sonnet(2701)	open-ready	Required green; 2 Codex P1 process threads pending; needs independent review	https://github.com/tailrocks/velnor-new/pull/2740
+branch:salvage/2701-mbx-total-bytes	-	PRd	carried by #2740	
+pr:2394	sonnet	fixed-ci-red	helper_gate.rs fix pushed 1b6b83f; rust job failed (log blocked by rate limit)	https://github.com/tailrocks/velnor-new/actions/runs/45240543709/job/137923985563
+LOAD	-	note	local load avg 49-67 -> cap concurrent cargo-building agents (~6)	
+pr:2739	sonnet-review	changes	doc git>=2.43 + git_too_old reason; test NUL guard -> sent to author	
+pr:2448	sonnet	reworked	merge main, skip_push gate fixed red/green, default pass conditional; cost table pending; fixture independent review needed; then owner Q on cost	head ace3f7a
+pr:2723	haiku	fixed-local	mod.rs split (294 lines) committed 3b45c15, push pending rate limit	
+pr:2721	sonnet	reworked	stale_run readers moved; 276/276 on 1.99.1+1.100.0; Required green; Refs #2553	head 35429917ef; merge candidate
+pr:2739	sonnet	fixed	review fixes pushed 517b8c2; CI pending	
+pr:2733	sonnet	fixed	exact if: pinned, 3 mutations now red, guard removed; Required green	head c0481a6; needs opus verdict
+QUEUE	-	queued	after reset: opus verdict 2733+2739; re-review 2397,2616,2721; merges 2723(after push),2510,2098,2565,2735,2734,2736-2738; 2740 threads+review; 2448 cost+fixture review	
+pr:2508	sonnet	fixed	4 fixes red/green; Required green; Cache red MUST be checked (PR touches report)	head f84007c
+issue:2671	sonnet	not-applicable	VELNOR_SOURCES_RESTORED set for every Sources lane on 2508 head; close when 2508 lands	
+pr:2692	sonnet	fixed	body fixed, rust green; pr-status pending	head b604233
+pr:2510	orchestrator	MERGED	via queue	
+pr:2098	orchestrator	MERGED	via queue	
+pr:2565	orchestrator	MERGED	via queue (closes #2529 #2491)	
+pr:2692	orchestrator	queued	pos 1	
+pr:2507	orchestrator	queued	pos 2 (close #2710 after)	
+pr:2736	orchestrator	queued	pos 3	
+pr:2721	orchestrator	blocked-human	merge script high-risk refusal (tests/it/audit/migration/*); needs owner --accept-risk confirmation	READY head 3542991
+pr:2694	haiku	READY	golden fixed; enqueue next pass	head 1c27b29
+pr:2737	opus	changes	flaky public_git rerun + body path fix -> haiku	
+pr:2738	opus	changes	contract §8 pin, evergreen header, body -> haiku	
+pr:2736	opus	MERGE	enqueued	
+pr:2448	sonnet	await-review+owner	cost: step 54s cold, Required +32-44s; fixture review running; then owner Q	https://github.com/tailrocks/velnor-new/pull/2448#issuecomment-7111562879
+pr:2740	sonnet(2701)	READY	threads resolved; independent review running	
+issue:2744	haiku	new	flaky cache::public_git tests (found on 2737 CI); actionable	
+pr:2733	opus	changes	cache_check_blocks=true makes Required red on docs-only PRs; 3 P1 threads -> author	
+pr:2633	haiku	thread1 resolved	sweep test independently red/green; 2nd thread (3 follow-up tests) verifier running	
+pr:2633	harness	READY	all threads resolved w/ independent red/green; enqueue next pass	head 2eeccdb
+NEXTPASS	-	queued	enqueue 2633, 2694 after current 3 land	
+pr:2448	orchestrator	blocked-human	Q: accept +32-44s Required time for rustdoc listing? fixture review approved	https://github.com/tailrocks/velnor-new/pull/2448
+pr:2379	-	blocked-human	waits on #2448 decision	
+pr:2445	-	blocked-human	waits on #2448 decision	
+pr:2604	-	blocked-human	waits on #2448 decision (fallback carrier)	
+pr:2657	-	blocked-human	waits on #2448 decision	
+pr:2610	orchestrator	CLOSED	rows -> #2716; alias fix duplicated by #2616	https://github.com/tailrocks/velnor-new/pull/2610
+pr:2723	haiku	pushed	split applied c5fc13b; waiting rust/Required (CI backlog); next pass	
+pr:2692	orchestrator	MERGED	via queue (Refs #2675)	
+pr:2633	orchestrator	queued	pos 3	
+pr:2740	sonnet	fixed	edge tests kill both mutations; CI running	head 85d6609; needs opus verdict
+ci-health	-	note	recurring 2s nextest timeouts under CI load (io_required, plan_modes, cache::public_git #2744) -> report	
+pr:2743	opus(root-cause)	open-ready	Cache red root cause: VELNOR_MBX_REPORTS forwarded to all children; fix: only velnor-ci children; Required green; needs independent test-plan review + opus verdict; main green after tools release+repin	https://github.com/tailrocks/velnor-new/pull/2743
+pr:2507	orchestrator	MERGED	9ae30da2fc (closes #2696)	
+pr:2736	orchestrator	MERGED	4efdbb37f4 (closes #2703)	
+pr:2710	orchestrator	CLOSED	superseded by #2507	
+pr:2694	orchestrator	queued		
+pr:2723	orchestrator	re-ci	Required missing on c5fc13b; relabeled ci:run	
+pr:2616	sonnet	READY	rework done; opus re-verdict running	head 4e8fabc
+pr:2637	sonnet	READY	threads done + race fix; opus re-verdict running	head b859ba1
+pr:2739	sonnet	READY	review fixes done (git>=2.42, exit 129); opus verdict running	head bcedd8d
+pr:2738	sonnet	in-progress	3 new Codex threads (doc sync, fixtures, CI evidence)	
+issue:2744	opus-xhigh	in-progress	flaky public_git now ejects merge-queue groups (2633 run 45250798871) -> root-cause fix	
+pr:2637	opus	MERGE	re-verdict merge; enqueue when queue healthy	
+pr:2743	sonnet-review	approved	253 reproduced; opus verdict running	
+pr:2633	orchestrator	ejected?	queue group failed on flaky public_git (#2744)	
+pr:2743	orchestrator	queued	MERGE verdict; pos 3	
+pr:2637	orchestrator	queued	pos 4	
+pr:2633	orchestrator	re-enqueue	dequeue refused (entry gone?); re-enqueue next pass	
+pr:2722	sonnet	READY	trimmed + undrafted; enqueue next pass	head d0642d3
+issue:2745	sonnet	new	delete dead AUDIT_JOB guard (from 2722)	
+pr:2616	opus	changes(round2)	restore -- handling, -qm cluster, drop 2 tests -> sonnet	
+pr:2397	opus	changes(round2)	probe cwd regression, quadratic canonicalize, weak test, msg -> sonnet	
+pr:2733	sonnet	READY	opus fixes done (blocks=true keeps !cancelled()); next pass	head 1cd13c8
+NEXTPASS	-	queued	2733, 2722, 2633 (+2738 when READY)	
+pr:2739	opus	changes(small)	nextest override for plan_diff_paths, body fixes -> author	
+pr:2740	opus	changes(small)	move budget tests to own module (2559 merge >400 lines), green CI -> author	
+pr:2644	sonnet	READY-pending-body	exclusion removed; body fix + empty push	head 83e9d30
+issue:2664	-	tied-to-pr	obsolete once #2644 merges (exclusion removed)	
+pr:2660	sonnet	READY	reworked onto 2692, CARGO_LOG injection removed, writer move split to #2747; needs opus re-verdict	head d29a31a
+pr:2747	sonnet(2660 split)	open	mbx-store MBX_SHARE_OUT_DIR writer; readied+ci:run; needs review	
+pr:2694	orchestrator	MERGED	8843633902	
+pr:2743	orchestrator	MERGED	3e1ca983f2 (Refs #2709 #2648)	
+pr:2633	orchestrator	MERGED	c38989cae5 (closes #2627)	
+pr:2733	orchestrator	queued		
+pr:2722	orchestrator	queued		
+pr:2716	sonnet	READY	reworked carrier; opus re-verdict running	head ddad52f
+pr:2738	sonnet	READY	all opus changes done; next pass	head 15366ed
+NEXTPASS	-	queued	2738, 2737?, then 2716/2660/2740/2739 after verdicts	
+pr:2660	opus	MERGE	re-verdict merge; next pass	head d29a31a
+pr:2637	orchestrator	MERGED	f2dd506eb0	
+pr:2660	orchestrator	queued		
+pr:2716	opus	changes(small)	hard-coded DELTA_CLEANUP_HELPER=102, body family row -> author	
+pr:2740	sonnet	READY	opus fixes done; next pass	head 029cc54
+pr:2747	sonnet-review	approve+gap	add GITHUB_ENV e2e test -> author; then opus	
+SKILLBUG	-	note	tailrocks-pr-merge dequeue passes merge-queue entry id (MQE_...) where GitHub expects PR node id -> always "Could not resolve to PullRequest node"; tailrocks-pr-refresh sync uses stale baseRefOid -> no-op; report to owner	
+pr:2733	orchestrator	ejected	golden semantic conflict with main -> author regen	run 45256544457
+pr:2722	orchestrator	queue-stuck	UNMERGEABLE behind 2733; re-enqueue when cleared	
+pr:2660	orchestrator	MERGED	882adf85b8 (closes #2675)	
+pr:2722	orchestrator	MERGED	(merged by queue retry)	
+pr:2738	orchestrator	queued		
+pr:2740	orchestrator	queued		
+pr:2733	queue	MERGED	d937e8dfc6 (closes #2724) via queue retry; left main golden stale	
+pr:2751	sonnet(2733 author)	open	one-file golden regen to fix main; independent verify running; merge ASAP	
+pr:2750	opus(2744)	open	flake fix PR	
+pr:2749	sonnet(2654)	open	issue 2654 PR	
+pr:2746	renovate	new	opentofu 1.13.10 (needs-lock-refresh)	
+pr:2734	opus	MERGE	enqueue after 2751	
+pr:2735	opus	MERGE	enqueue after 2751	
+NEXTPASS	-	queued	2751 first, then 2734, 2735, (2738/2740 re-enqueue if ejected)	
+pr:2616	sonnet	READY	round2 done (-- subcommand, -qm cluster, 2 tests dropped), cargo-verified; enqueue after 2751	head 60eea11
+pr:2716	sonnet	READY	fixes done; also regenerated test-setup-lane golden (overlaps 2751) -> resync after 2751 then enqueue	head 2845cfa
+pr:2747	sonnet	fixed	e2e GITHUB_ENV test red/green; needs resync after 2751, then opus verdict	head da422a5
+pr:2644	sonnet	READY	exclusion removed, body fixed, golden regen; enqueue after 2751	head dadaf66
+pr:2739	sonnet	fixed	opus fixes done; red only from main golden -> resync after 2751	head e9e1437
+WAIT2751	-	note	after 2751 merges: resync 2739, 2747, 2716; enqueue 2734, 2735, 2616, 2644; re-enqueue 2738/2740 if ejected	
+pr:2738	queue	MERGED	ddf95bcc1a (supersedes #2727)	
+pr:2740	queue	MERGED	ffde29bf03 (closes #2701)	
+pr:2751	orchestrator	waiting	rust rerun in progress	
+pr:2749	sonnet(2654)	open	red only from main golden; review running; resync after 2751	https://github.com/tailrocks/velnor-new/pull/2749
+pr:2616	orchestrator	queued		
+pr:2734	orchestrator	queued		
+pr:2735	orchestrator	queued		
+pr:2749	opus	MERGE-after	after 2751: merge main, reply/resolve thread, body test name -> author	
+pr:2723	orchestrator	queued		
+pr:2751	orchestrator	queued	golden fix	
+pr:2508	-	READY	enqueue after 2751 (touches generator)	
+pr:2559	-	conflict	conflicts with main after 2740; needs merge (keep 2743 switch removal before early return)	
+pr:2737	haiku	rerun	Required red on old run; rerun failed jobs	
+pr:2737	haiku	rerun	Docker pull flake in runner-host test; rerun approved	
+issues-needs-human	haiku	in-progress	posting owner questions on 42 issues	inv/needs-human-*.tsv
+pr:2616	queue	MERGED	(closes #2608)	
+pr:2734	queue	MERGED	(closes #2438)	
+pr:2735	queue	MERGED	(closes #2670)	
+pr:2559	sonnet	resynced	head e204f4b; awaiting Required	
+pr:2650	sonnet	reworking	cut process-group code (+1899->+941); hang risk -> new issue #2753	
+issue:2753	sonnet	new	nextest list hang risk / no output ceiling (from 2650)	
+pr:2750	opus-xhigh(2744)	READY	root cause: bind-then-drop port reuse; fix hang_up fake; 6/200->0/200 Linux; body fix + review running	head 008d916
+issue:610	haiku	blocked-human	owner question posted + needs-owner	
+issue:622	haiku	blocked-human	owner question posted + needs-owner	
+issue:1535	haiku	blocked-human	owner question posted + needs-owner	
+issue:1569	haiku	blocked-human	owner question posted + needs-owner	
+issue:1618	haiku	blocked-human	owner question posted + needs-owner	
+issue:1628	haiku	blocked-human	owner question posted + needs-owner	
+issue:1639	haiku	blocked-human	owner question posted + needs-owner	
+issue:1666	haiku	blocked-human	owner question posted + needs-owner	
+issue:1678	haiku	blocked-human	owner question posted + needs-owner	
+issue:1429	haiku	blocked-human	owner question posted + needs-owner	
+issue:1432	haiku	blocked-human	owner question posted + needs-owner	
+issue:2280	haiku	blocked-human	owner question posted + needs-owner	
+issue:2283	haiku	blocked-human	owner question posted + needs-owner	
+issue:2473	haiku	blocked-human	owner question posted + needs-owner	
+issue:2512	haiku	blocked-human	owner question posted + needs-owner	
+issue:2556	haiku	blocked-human	owner question posted + needs-owner	
+issue:2558	haiku	blocked-human	owner question posted + needs-owner	
+issue:2625	haiku	blocked-human	owner question posted + needs-owner	
+issue:2561	haiku	blocked-human	owner question posted + needs-owner	
+issue:2583	haiku	blocked-human	owner question posted + needs-owner	
+issue:2713	haiku	blocked-human	owner question posted + needs-owner	
+issue:2107	haiku	blocked-human	owner question posted + needs-owner	
+issue:2337	haiku	blocked-human	owner question posted + needs-owner	
+issue:2425	haiku	blocked-human	owner question posted + needs-owner	
+issue:2433	haiku	blocked-human	owner question posted + needs-owner	
+issue:2536	haiku	blocked-human	owner question posted + needs-owner	
+issue:604	haiku	blocked-human	owner question posted + needs-owner	
+issue:623	haiku	blocked-human	owner question posted + needs-owner	
+issue:645	haiku	blocked-human	owner question posted + needs-owner	
+issue:646	haiku	blocked-human	owner question posted + needs-owner	
+issue:648	haiku	blocked-human	owner question posted + needs-owner	
+issue:649	haiku	blocked-human	owner question posted + needs-owner	
+issue:682	haiku	blocked-human	owner question posted + needs-owner	
+issue:732	haiku	blocked-human	owner question posted + needs-owner	
+issue:949	haiku	blocked-human	owner question posted + needs-owner	
+issue:2211	haiku	blocked-human	owner question posted + needs-owner	
+issue:2663	haiku	blocked-human	owner question posted + needs-owner	
+issue:1047	haiku	blocked-human	owner question posted + needs-owner	
+issue:680	-	actionable-later	FAST-REL.11 agent work (release chain)	
+issue:2685	-	actionable	gather evidence then decide	
+issue:2711	-	actionable	schema stays 1 (#2589); remaining checks agent work	
+issue:2479	-	actionable	executor test-structure choice	
+pr:2750	sonnet-review	changes	one more bind-drop race http.rs:314 -> author	
+pr:2751	queue	MERGED	main golden fixed	
+pr:2723	queue	MERGED		
+pr:2508	orchestrator	queued		
+pr:2683	sonnet	READY	reworked; opus re-verdict running (hold_owners Q)	head 112e6da
+issue:2752	sonnet	new	prune race vs restore/replacing saves (from 2683)	
+pr:2683	orchestrator	queued	MERGE re-verdict	
+pr:2749	orchestrator	queued	(Fixes #2654)	
+pr:2755	sonnet(2471)	open	purge-private --if-public; review running; Part of #2471 (close issue manually after)	https://github.com/tailrocks/velnor-new/pull/2755
+pr:2716	sonnet	READY	resynced; next pass	head d46c67b
+NEXTPASS	-	queued	2716, 2747(after resync+opus), 2739(after resync), 2644(after resync), 2559, 2737	
+pr:2755	sonnet-review	changes	multi-failure test gap + token/doc suggestions -> author	
+pr:2755	opus	changes	move purge after budget step (a), reply P1, Closes #2471 -> author	
+pr:2508	orchestrator	ejected	main+2508 report.rs 408 lines + golden -> author resync	run 45265377521
+pr:2644	sonnet	READY	resynced, no golden diff; next pass	head 55afb0f
+pr:2501	sonnet	READY	reworked (selection narrowed, 3 CLI cases red/green), undrafted; body fix + empty push; then opus re-verdict	head efad5c4
+pr:2755	sonnet	fixed	verdict changes done (purge last, Closes #2471); CI running	head 45740f7
+pr:2615	sonnet	READY	reworked; history-only scanner red (squash drops); opus re-verdict running	head c0bdf2e
+issue:2748	sonnet	new	deferred from 2615 (scrub before sources fetch)	
+pr:2394	sonnet	READY	2 Codex bugs fixed red-first + from_source doc note; opus re-verdict running	head b63b257
+pr:2683	queue	MERGED	(refs #2669)	
+pr:2501	sonnet	READY	body fixed; opus verdict running	head 3e3cd68
+pr:2699	sonnet	READY	reworked (+848); opus re-verdict running	head 1c6281f
+pr:2750	opus-xhigh	READY	http.rs race fixed; opus verdict running	head fc5b982
+issue:2754	opus	new	port-1 host-state tests (from 2750)	
+pr:2394	orchestrator	queued		
+pr:2716	orchestrator	queued		
+pr:2644	orchestrator	queued		
+pr:2749	-	READY	re-enqueue next pass (ejected behind 2508)	
+pr:2615	opus	changes(replies)	reject attack-a reply + Closes #2656 + empty push -> author	
+pr:2699	opus	MERGE	next pass; then rework #2464 on top	head 1c6281f
+pr:2750	orchestrator	queued	priority (flake); close #2744 by hand after merge	
+pr:2501	opus	MERGE	next pass	head 3e3cd68
+pr:2397	sonnet	round2 done	all 4 re-verdict items + 4 Codex rounds of real fixes; capped; CI running	head ee1456f; needs opus re-verdict after
+pr:2411	sonnet	reworked	150 lines, undrafted; 5 Codex threads -> triage	head ac297e3
+pr:2755	sonnet	READY	verdict changes done; next pass	head f43b85e
+TODO	-	file-issue	follow-up: repo that lost its last Cargo root gets no rust-trim -> no purge-private (from 2755 deferred P1)	
+NEXTPASS	-	queued	2501, 2699, 2749, 2755 (+2615 after replies)	
+pr:2411	sonnet	READY	8 doc threads fixed; opus re-verdict running	head 2d7f154
+pr:2615	sonnet	READY	replies done, Closes #2599 #2656; next pass	head 40259fb
+pr:2644	queue	MERGED	cf6c8b9e7d	
+pr:2394	queue	MERGED	3b6bcec329	
+pr:2716	queue	MERGED	baf21b01a4 (closes #2582 #2613 #2620 #2587)	
+pr:2750	queue	MERGED	74526b2e00	
+pr:2615	orchestrator	queued		
+pr:2501	orchestrator	queued		
+pr:2699	orchestrator	queued		
+pr:2411	opus	changes(small)	mise digest overclaim, bullet condition, typo -> author	
+pr:2397	sonnet	READY	round2 done; opus re-verdict running	head abdca45
+issue:2744	haiku	CLOSED	fixed by #2750	
+pr:2458	haiku	CLOSED	superseded by #2394	
+issue:2664	haiku	CLOSED	obsolete after #2644	
+issue:2757	haiku	new	follow-up from 2755 (no rust-trim -> no purge)	
+pr:2397	opus	MERGE	round2 verdict merge; next pass	head abdca45
+NEXTPASS	-	queued	2397, 2749, 2755 then 2411, 2325, 2464(after 2699)	
+pr:2411	sonnet	READY	3 doc fixes done; next pass	head 6f4f46c
+pr:2615	queue	MERGED	3aff1f320b (closes #2599 #2656)	
+pr:2699	queue	MERGED	46d28dd6fe (closes #2684)	
+pr:2501	queue	ejected-flake	velnor-runner-host Journal flake; re-enqueued	run 45276831541
+pr:2397	orchestrator	queued		
+pr:2749	orchestrator	queued		
+pr:2501	orchestrator	queued	retry	
+flake:runner-host-journal	opus-xhigh	in-progress	recurring Error: Journal in velnor-runner-host tests -> root cause	
+pr:2464	sonnet	reworking	after 2699: drop digest checker, fix placeholders, Closes #2460	
+pr:2525	sonnet	READY	cut to +169/-9; opus re-verdict running	head 8f11695
+pr:2464	sonnet	READY	reworked (+968/-686); opus re-verdict running	head 0fc2633
+pr:2525	opus	changes(small)	2 fixtures: spaced old path rename; string-blanking accept case -> author	
+pr:2464	opus	MERGE	next pass (closes #2460)	head 0fc2633
+pr:2397	queue	MERGED	41ee460e35 (closes #2381)	
+pr:2501	queue	ejected	invocation.rs 424 after 2397 -> author split	run 45282197858
+pr:2749	orchestrator	queued	retry (env failure)	
+pr:2755	orchestrator	queued		
+pr:2464	orchestrator	queued		
+pr:2525	sonnet	READY	2 fixtures added; next pass	head 37dea6c
+ci-health	-	note	Secret scanners intermittently flags main file crates/velnor-ci/tests/it/cache_credential_scrub_ancestry.rs (run 45288023269) -> report/issue	
+NEXTPASS	-	queued	2525, 2411, 2501(after split), 2325, 2739/2747/2559 after resync+verdict	
+pr:2737	-	READY	next pass	head df25171
+pr:2325	-	READY	refreshed; next pass	head 7902849
+pr:2739	sonnet	resync	Required red (stale golden) -> resync	
+pr:2747	sonnet	resync	Required red -> resync; then opus	
+pr:2559	sonnet	fix	Required red + 1 thread	
+pr:2260	sonnet	reworking	merge main + 3-run measurement	
+issue:2419	sonnet-exec	in-progress		
+issue:2712	sonnet-exec	in-progress		
+issue:2668	sonnet-exec	in-progress		
+pr:2755	queue	MERGED	81eb49accb (closes #2471)	
+pr:2749	queue	MERGED	a4d22d73d0 (closes #2654)	
+pr:2464	queue	MERGED	5dfe405fc0 (closes #2460)	
+pr:2525	orchestrator	blocked-human	high-risk path .github/workflows/repository-checks.yml; owner --accept-risk confirm requested	
+pr:2721	orchestrator	blocked-human	high-risk test paths; owner confirm requested	
+issue:2668	orchestrator	CLOSED	already done by #2547	
+pr:2737	orchestrator	queued		
+pr:2325	orchestrator	queued		
+pr:2501	sonnet	READY	split invocation.rs; next pass	head 7f5fd0a
+ci-health	sonnet	in-progress	scanner hit on main cache_credential_scrub_ancestry.rs:111 -> fix PR	
+pr:2761	sonnet(2712)	open	review running	https://github.com/tailrocks/velnor-new/pull/2761
+pr:2559	sonnet	pushed	head c1d4622; awaiting Required	
+pr:2737	queue	MERGED	(supersedes #2728)	
+pr:2325	queue	MERGED	(refs #2205)	
+pr:2739	orchestrator	queued		
+pr:2501	orchestrator	queued		
+pr:2761	sonnet-review	changes	switch to lock/manifest-only PR audit (no new cost), cover required_job arm, measure -> author	
+pr:2763	sonnet	READY	scanner fixture concat!; review running	https://github.com/tailrocks/velnor-new/pull/2763
+issue:2762	sonnet	new	scanner hit; fixed by #2763	
+pr:2747	opus	changes(process)	perf/job-selection section + resolve P1 thread + empty push -> author	
+pr:2763	orchestrator	queued	review MERGE	
+pr:2739	queue	MERGED	0d40def1cf (closes #2585)	
+pr:2501	queue	MERGED	a14cd053ab (closes #2493)	
+pr:2763	orchestrator	queued		
+pr:2747	orchestrator	queued		
+pr:2764	sonnet(2419)	open	Required green; review + test-plan review running	https://github.com/tailrocks/velnor-new/pull/2764
+pr:2260	orchestrator	CLOSED	measured: quick PRs +160s runner for 11s; fails rule 5; follow-up noted on #2259	https://github.com/tailrocks/velnor-new/pull/2260#issuecomment-7117926518
+pr:2759	-	foreign	opened 23:34Z by a concurrent session (fix/ci-review-findings, follow-up of #2729); not touched; report to owner	
+pr:2765	-	foreign	tools 0.1.112 release bump opened 00:14Z by a concurrent session; owner release work; not touched	
+pr:2758	renovate	review	hk 2.14.0; review running	
+issue:2760	opus(flake)	new	journal clock guards (from flake root-cause)	
+pr:2758	sonnet-review	blocked-human	Q: accept dropping Intel macOS for hk 2.14 (no x64 asset)? if yes replacement PR w/ hk.pkl + native-test pins	
+pr:2763	queue	MERGED	3852db809c (closes #2762)	
+pr:2747	queue	MERGED	df4507f681	
+pr:2764	orchestrator	queued	MERGE verdict	
+chainargos	opus-xhigh	diagnosing	fix processor CI (Cache red: tailrocks-type-proto recompiled; step-order bug / 384e86b040), then merge bitcoin#98 eth#134 tron#125 (user authorized merge)	
+chainargos	orchestrator	fixing	P1 generator ordering fix (keep 384e86b040 + exhaustive + single-root shape) -> PR; P2 velnor-ci dir mtimes restore -> PR; then tools release 0.1.113 + regen consumers + verify Cache + merge 3 PRs	
+chainargos	orchestrator	plan	release path: bump PR -> merge -> owner tag tools-v0.1.113 (irreversible; ask user before tag) -> release.yml -> pin follow-up -> consumers pin-helper 0.1.113 + regen -> verify Cache (save+restore) -> merge 3 PRs	
+pr:2765	-	MERGED	tools-v0.1.112 released by owner session	
+pr:2764	queue	MERGED	(closes #2419)	
+pr:2559	sonnet(new)	takeover	resync+CI	
+pr:2650	sonnet(new)	takeover	CI red	
+pr:2508	sonnet(new)	takeover	resync split	
+pr:2761	sonnet(new)	takeover	resync+threads; gate may need 0.1.113	
+audit	sonnet	in-progress	gates at 0.1.112 merged after tools-v0.1.112 tag?	
+bug:ansible-gate	sonnet	in-progress	#2759 gated at released 0.1.112 without helper code -> bump to 0.1.113 PR	
+pr:2508	-	note	gate must be 0.1.113	
+pr:2577	-	note	gate must be 0.1.113 if it proceeds (comment posted)	
+pr:2770	orchestrator	queued	ChainArgos P1 fix (fixes #2769)	
+pr:2650	sonnet	READY	nextest override fix; opus re-verdict running	head 4b75570
+pr:2772	sonnet(gate)	READY	ansible gate 0.1.113 (fixes #2771); independent review running	
+pr:2772	orchestrator	queued		
+issue:2773	sonnet	new	Helper gates not run in merge queue (CI gap)	
+pr:2770	queue	MERGED	c7ed490752 (fixes #2769) ChainArgos P1	
+pr:2774	sonnet(opus-author)	open	ChainArgos P2 dir mtimes; opus review running	
+pr:2650	opus	MERGE-after-body	body sentence fix -> author	
+pr:2559	orchestrator	queued	(closes #2520)	
+pr:2767	opus-xhigh(flake)	open	journal guard 1s tolerance + schema v61 (closes #2760); opus xhigh review running	https://github.com/tailrocks/velnor-new/pull/2767
+pr:2774	opus-review	changes	false Fresh with untracked/ignored/missing files -> record dir listings at save (additive field), exact-match at restore; scoped test; symlink doc; perf; threads	
+pr:2508	orchestrator	queued	gate 0.1.113	
+pr:2772	queue	MERGED	3a4114ea3d (fixes #2771)	
+pr:2559	queue	MERGED	5809bd0ba7 (closes #2520)	
+pr:2767	opus-xhigh	changes(test)	per-guard refusal test (surviving mutation) -> author	
+pr:2761	sonnet	READY	gate 0.1.113, lock/manifest-only + merge_group; audit fails on own stale rust-inputs.lock (platform) -> opus verdict running	head 3493762
+pr:2761	opus	blocked-human	Q: accept +1.9s/PR to audit every selecting PR? docs+hint fixes in progress; must not merge before 0.1.113 release	https://github.com/tailrocks/velnor-new/pull/2761#issuecomment-7120345282
+bug:rust-inputs-lock	sonnet	in-progress	velnor-new lock missing .velnor/rust-toolchain.toml line (#2566) -> PR	
+pr:2767	orchestrator	queued	journal flake fix	
+pr:2508	queue	MERGED	f5ced2b48c	
+issue:2671	orchestrator	CLOSED	not applicable after #2508	
+pr:2776	orchestrator	queued	lock line (fixes #2775)	
+pr:2767	queue	MERGED	4a479a70f6 (closes #2760) journal flake	
+pr:2776	orchestrator	queued		
+pr:2774	opus	changes(small)	remove test comment + rewrite body; fix verified correct	
+pr:2761	sonnet	blocked-human	docs/hints fixed, replan bug fixed; 1 thread open = owner cost question; hold until after 0.1.113	head 8dd92d5
+pr:2776	queue	MERGED	(fixes #2775)	
+pr:2774	orchestrator	queued	ChainArgos P2	
+pr:2650	orchestrator	queued	(closes #2442)	
+release:0.1.113	sonnet	preparing	bump PR after 2774 merges; NO tag without user confirmation	
+pr:2774	queue	MERGED	ChainArgos P2 dir mtimes	
+pr:2778	sonnet	open	tools 0.1.113 bump; independent review running	
+pr:2774	queue	MERGED	a30b708117	
+pr:2650	queue	MERGED	dcc76140b5 (closes #2442)	
+pr:2778	orchestrator	queued	tools 0.1.113 bump; tag needs user OK	
+pr:2778	queue	MERGED	017e09deb0; awaiting user OK to tag tools-v0.1.113	
+phase3:audit-A	sonnet-med	dispatched	27 issues (former in-open-PR)	inv/audit-A.tsv
+phase3:audit-B	sonnet-med	dispatched	19 issues	inv/audit-B.tsv
+phase3:audit-C	sonnet-med	dispatched	19 issues	inv/audit-C.tsv
+phase3:audit-D	sonnet-med	dispatched	23 issues (old + new follow-ups)	inv/audit-D.tsv
+pr:2411	sonnet-med	resync	conflict with main	
+pr:2506	sonnet-high	rework	linear glob + red test + resync	
+pr:2777	sonnet-med	refresh	renovate mr-boxington 1.31	
+pr:2746	sonnet-med	refresh	renovate opentofu 1.13.10	
+issue:2479	audit-B	open	H owner decision: keep the sample golden or narrow test_setup_phase	https://github.com/tailrocks/velnor-new/issues/2479#issuecomment-7123381495
+issue:2528	audit-B	open	S inherited VELNOR_CRATES_MIRROR=off unhandled; independent red/green and CI performance evidence missing	https://github.com/tailrocks/velnor-new/issues/2528#issuecomment-7123380301
+issue:2530	audit-B	open	S non-regular types other than dir/symlink not cleared; independent plan review evidence missing; #2545 thread items need a check	https://github.com/tailrocks/velnor-new/issues/2530#issuecomment-7123378970
+issue:2539	audit-B	open	H code gate done in #2550; only real-run timing evidence and nextest confirmation remain	https://github.com/tailrocks/velnor-new/issues/2539#issuecomment-7123377742
+issue:2568	audit-B	closed	- -	https://github.com/tailrocks/velnor-new/issues/2568#issuecomment-7123364095
+issue:2570	audit-B	open	H evidence-only: baseline/head performance evidence and four gate verdicts for #2552	https://github.com/tailrocks/velnor-new/issues/2570#issuecomment-7123377219
+issue:2571	audit-B	open	H evidence-only: independent plan and red/green record for #2552 declaration budget tests	https://github.com/tailrocks/velnor-new/issues/2571#issuecomment-7123376663
+issue:2574	audit-B	closed	- -	https://github.com/tailrocks/velnor-new/issues/2574#issuecomment-7123363049
+issue:2596	audit-B	open	H #2618 fixed the teardown wait but the 22 s readiness bound and 3 s margin are not met	https://github.com/tailrocks/velnor-new/issues/2596#issuecomment-7123375300
+issue:2622	audit-B	open	L setup-velnor prune_quarantine still keeps newest 3 by mtime with no reservation for in-flight quarantines	https://github.com/tailrocks/velnor-new/issues/2622#issuecomment-7123374757
+issue:2636	audit-B	open	H evidence-only: nextest reruns for #2502 and #2533 tests	https://github.com/tailrocks/velnor-new/issues/2636#issuecomment-7123374202
+issue:2649	audit-B	open	H perf item addressed; process and evidence items need an owner waiver or a measurement run	https://github.com/tailrocks/velnor-new/issues/2649#issuecomment-7123373615
+issue:2673	audit-B	open	H evidence-only: independent plan review and red/green record for job_id.rs test	https://github.com/tailrocks/velnor-new/issues/2673#issuecomment-7123372988
+issue:2681	audit-B	closed	- -	https://github.com/tailrocks/velnor-new/issues/2681#issuecomment-7123362083
+issue:2685	audit-B	open	L target-cache restore across a helper bump: evidence and option (a) vs (b) undecided, nothing implemented	https://github.com/tailrocks/velnor-new/issues/2685#issuecomment-7123383137
+issue:2702	audit-B	closed	- -	https://github.com/tailrocks/velnor-new/issues/2702#issuecomment-7123360310
+issue:2704	audit-B	closed	- -	https://github.com/tailrocks/velnor-new/issues/2704#issuecomment-7123361170
+issue:2709	audit-B	open	M report_waste still errors on missing MBX stats reports; mbx_report.rs still drops malformed compiler-work entries; docs not updated	https://github.com/tailrocks/velnor-new/issues/2709#issuecomment-7123372382
+issue:2711	audit-B	open	H owner decision on schema versioning for saved_key; helper 0.1.112 already tagged	https://github.com/tailrocks/velnor-new/issues/2711#issuecomment-7123382596
+issue:2709	sonnet-high	implementing	Cache waste MBX-missing root cause	
+issue:2528+2530	sonnet-med	implementing	S items	
+issue:1555	audit-D	closed	- done: green-Required gate restored, fallout fixed	https://github.com/tailrocks/velnor-new/issues/1555#issuecomment-7123399262
+issue:680	audit-D	closed	- obsolete: old engine and exemption deleted (#1747), generated release.yml	https://github.com/tailrocks/velnor-new/issues/680#issuecomment-7123400035
+issue:1606	audit-D	closed	- remaining #622 tick tracked on #622; evidence of 3 full green Speed budget runs	https://github.com/tailrocks/velnor-new/issues/1606#issuecomment-7123400886
+issue:1702	audit-D	open	M lab proof that a delta hit after #2112 recompiles only the changed crate (new lab PR needed)	https://github.com/tailrocks/velnor-new/issues/1702#issuecomment-7123401578
+issue:1693	audit-D	open	L wall/queue-time baseline at first image-job port (blocked on #1447, #1449)	https://github.com/tailrocks/velnor-new/issues/1693#issuecomment-7123402068
+issue:1682	audit-D	open	H node store isolation (split trusted pool approval) + perf proof	https://github.com/tailrocks/velnor-new/issues/1682#issuecomment-7123402476
+issue:1680	audit-D	open	H bind node-store saves to trusted events: owner approval of trusted scale set split	https://github.com/tailrocks/velnor-new/issues/1680#issuecomment-7123402946
+issue:1582	audit-D	open	M proof of target-cache reuse after workspace-member version change	https://github.com/tailrocks/velnor-new/issues/1582#issuecomment-7123403377
+issue:1572	audit-D	open	H accept verdict a for custom-harness push-skip (merge_group_skip.rs:20) or set new rule	https://github.com/tailrocks/velnor-new/issues/1572#issuecomment-7123403811
+issue:1548	audit-D	open	M budget family for MBX objects cache	https://github.com/tailrocks/velnor-new/issues/1548#issuecomment-7123404235
+issue:1536	audit-D	open	M runtime private-source guard for mbx_remote; deferred until fix-now trigger	https://github.com/tailrocks/velnor-new/issues/1536#issuecomment-7123404707
+issue:1499	audit-D	open	H five owner decisions (tools-v* tag protection, check_tag prefixes, fork merge_group, mbx mount, gate evidence)	https://github.com/tailrocks/velnor-new/issues/1499#issuecomment-7123405161
+issue:1449	audit-D	open	L image publish helper not started	https://github.com/tailrocks/velnor-new/issues/1449#issuecomment-7123405712
+issue:1447	audit-D	open	L image build helper not started	https://github.com/tailrocks/velnor-new/issues/1447#issuecomment-7123406210
+issue:2773	audit-D	open	M run Helper gates in merge_group	https://github.com/tailrocks/velnor-new/issues/2773#issuecomment-7123406613
+issue:2757	audit-D	open	M rust-trim job with no Cargo root never runs purge-private	https://github.com/tailrocks/velnor-new/issues/2757#issuecomment-7123407015
+issue:2754	audit-D	open	M replace 127.0.0.1:1 in io_gate/crates_mirror tests	https://github.com/tailrocks/velnor-new/issues/2754#issuecomment-7123407458
+issue:2753	audit-D	open	M early nextest list hang, output ceiling, signals	https://github.com/tailrocks/velnor-new/issues/2753#issuecomment-7123407989
+issue:2752	audit-D	open	M tools cache prune race	https://github.com/tailrocks/velnor-new/issues/2752#issuecomment-7123408383
+issue:2748	audit-D	open	M scrub before sources save	https://github.com/tailrocks/velnor-new/issues/2748#issuecomment-7123408896
+issue:2745	audit-D	open	S delete dead AUDIT_JOB filter	https://github.com/tailrocks/velnor-new/issues/2745#issuecomment-7123409361
+issue:2742	audit-D	open	M run/bench/rustc skip inputs-build invalidation	https://github.com/tailrocks/velnor-new/issues/2742#issuecomment-7123409775
+issue:2741	audit-D	open	M refuse orphan build outputs	https://github.com/tailrocks/velnor-new/issues/2741#issuecomment-7123410226
+pr:2746	sonnet-med	replacing	renovate commit unsigned; replacement signed PR then close 2746	
+issue:2745	haiku-med	implementing		
+issue:2773	sonnet-high	implementing		
+issue:2757	sonnet-high	implementing		
+issue:2754	sonnet-high	implementing		
+issue:2753	sonnet-high	implementing		
+issue:2752	opus-xhigh	implementing	prune race	
+issue:2748	sonnet-high	implementing		
+issue:2741+2742	sonnet-high	implementing		
+issue:2720	audit-A	open	L mbx replay of a build-script run lacks dep-info; root cause unreproduced (#2723 only reworded the message)	https://github.com/tailrocks/velnor-new/issues/2720#issuecomment-7123425845
+issue:2680	audit-A	open	S item 2 only: 100k audit test to slow nextest profile (PR #2693 open)	https://github.com/tailrocks/velnor-new/issues/2680#issuecomment-7123426196
+issue:2648	audit-A	closed	- symptom fixed by #2660/#2743/#2747; current Cache red is #2709	https://github.com/tailrocks/velnor-new/issues/2648#issuecomment-7123419560
+issue:2602	audit-A	open	M HTML blocks in block comments/quotes/types 1-5, fence-info fixtures (PR #2657)	https://github.com/tailrocks/velnor-new/issues/2602#issuecomment-7123426604
+issue:2588	audit-A	open	M all 3 false positives still on main (PR #2604 draft, #2657)	https://github.com/tailrocks/velnor-new/issues/2588#issuecomment-7123427015
+issue:2560	audit-A	open	S pin Python via mise-task lint (PR #2657 open)	https://github.com/tailrocks/velnor-new/issues/2560#issuecomment-7123427388
+issue:2540	audit-A	open	M item 3: cache delete-entry by ID (PR #2577 open); scope question	https://github.com/tailrocks/velnor-new/issues/2540#issuecomment-7123427863
+issue:2497	audit-A	closed	- delivered by #2507/#2619, test report_not_generated.rs:149	https://github.com/tailrocks/velnor-new/issues/2497#issuecomment-7123416329
+issue:2489	audit-A	open	M item 1: scope failed-build packages to invoked root (PR #2506 open)	https://github.com/tailrocks/velnor-new/issues/2489#issuecomment-7123428457
+issue:2483	audit-A	open	M helper-gate checker gaps 1-3 + CONFIG.md prose (PR #2525 open)	https://github.com/tailrocks/velnor-new/issues/2483#issuecomment-7123428961
+issue:2440	audit-A	open	L build reuse for from_source (tracked in #2691) + 2 small items; label removed	https://github.com/tailrocks/velnor-new/issues/2440#issuecomment-7123429382
+issue:2437	audit-A	open	S ordered marker not 1 false positive (PR #2445 open)	https://github.com/tailrocks/velnor-new/issues/2437#issuecomment-7123429833
+issue:2436	audit-A	closed	- all items done (#2462, #2650; 8x admission decision in #2442)	https://github.com/tailrocks/velnor-new/issues/2436#issuecomment-7123417368
+issue:2432	audit-A	open	H 4 scanner bypasses remain; keep Python scanner or replace with rustdoc check (#2448)?	https://github.com/tailrocks/velnor-new/issues/2432#issuecomment-7123430336
+issue:2430	audit-A	closed	- delivered by #2397 (41ee460e35)	https://github.com/tailrocks/velnor-new/issues/2430#issuecomment-7123416847
+issue:2403	audit-A	open	S end-to-end proof after repin (lock still 0.1.111); label removed	https://github.com/tailrocks/velnor-new/issues/2403#issuecomment-7123430813
+issue:2371	audit-A	open	S re-enable generated-check lint in velnor-new after repin to 0.1.112 + private fetch; label removed	https://github.com/tailrocks/velnor-new/issues/2371#issuecomment-7123431202
+issue:2365	audit-A	closed	- delivered by #2399/#2401/#2510	https://github.com/tailrocks/velnor-new/issues/2365#issuecomment-7123418283
+issue:2353	audit-A	open	S pin python for alint scanner (same as #2560, PR #2657)	https://github.com/tailrocks/velnor-new/issues/2353#issuecomment-7123431597
+issue:2349	audit-A	closed	- paragraph-continuation rule decided and fixtured in no-doctests.py; repo scan clean	https://github.com/tailrocks/velnor-new/issues/2349#issuecomment-7123417848
+issue:2344	audit-A	open	S concat!-split fences pass; record decision/fixture (PR #2379)	https://github.com/tailrocks/velnor-new/issues/2344#issuecomment-7123432092
+issue:2311	audit-A	closed	- delivered by #2694 + CONFIG.md:286	https://github.com/tailrocks/velnor-new/issues/2311#issuecomment-7123418690
+issue:2259	audit-A	open	H close not planned or fund generator change keeping parallel lane out of quick set?; label removed	https://github.com/tailrocks/velnor-new/issues/2259#issuecomment-7123432530
+issue:2205	audit-A	open	H 4 items need owner decisions (mise isolation, install logic, fixture, guard pin)	https://github.com/tailrocks/velnor-new/issues/2205#issuecomment-7123432900
+issue:624	audit-A	open	S docs/rust-ci.md is 233 lines, limit 150 (PR #2411 open)	https://github.com/tailrocks/velnor-new/issues/624#issuecomment-7123433368
+issue:2651	audit-A	closed	- delivered (resolve.rs:141, links.rs:70, #2653)	https://github.com/tailrocks/velnor-new/issues/2651#issuecomment-7123419113
+issue:2712	audit-A	open	H via #2761	-
+issue:2437,2588,2602,2560,2353,2344	orchestrator	blocked-human	follow owner decision on #2432/#2448 (keep scanner vs rustdoc listing)	
+issue:2403,2371,2440	orchestrator	blocked	need velnor-new repin to 0.1.113 (after tag)	
+issue:2680	sonnet-med	implementing		
+issue:2540	sonnet-high	implementing		
+issue:2720	opus-high	implementing		
+issue:2444	audit-C	open	M release-plz/tag/finalize jobs still use create-github-app-token with the App key; needs velnor-ci app-token with write scopes + test	https://github.com/tailrocks/velnor-new/issues/2444#issuecomment-7123428954
+issue:2421	audit-C	open	M Markdown selection by extension (lint_inputs.rs:171); policy_deny_key.rs:183 asserts message text; adoption measurements pending	https://github.com/tailrocks/velnor-new/issues/2421#issuecomment-7123429349
+issue:2420	audit-C	open	M shared build dir scanned repeatedly (audit/setup.rs); no overlap-with-tracked-inputs check for separate build dir	https://github.com/tailrocks/velnor-new/issues/2420#issuecomment-7123429838
+issue:2389	audit-C	open	S gate Probe behind cfg(test); root ENOTDIR/ELOOP test; decision.rs private seam	https://github.com/tailrocks/velnor-new/issues/2389#issuecomment-7123430368
+issue:2341	audit-C	open	H only owner decision left: where scripts/mise-binary-digests.sh lives	https://github.com/tailrocks/velnor-new/issues/2341#issuecomment-7123430854
+issue:2289	audit-C	open	L scan skipped after Sources hit; atomic scan+publish (L); GHE git+http admission (M); several S scan gaps	https://github.com/tailrocks/velnor-new/issues/2289#issuecomment-7123431275
+issue:2287	audit-C	open	S aggregate curl deadline; no-read test asserts calls not bytes	https://github.com/tailrocks/velnor-new/issues/2287#issuecomment-7123431921
+issue:2279	audit-C	open	S physical-target memo key; notice wording; perf/plan-review evidence	https://github.com/tailrocks/velnor-new/issues/2279#issuecomment-7123432355
+issue:2277	audit-C	open	H jactionlint inputs (S), slug check (S); owner: alint unconditional vs catch-all inputs	https://github.com/tailrocks/velnor-new/issues/2277#issuecomment-7123432788
+issue:2275	audit-C	open	S trusted_paths_with unreachable! on TMPDIR with colon; explain/fix 30s io_inputs_spec timeout	https://github.com/tailrocks/velnor-new/issues/2275#issuecomment-7123433242
+issue:2270	audit-C	open	S definitive-private verdict not an error; 30s probe deadline; public_advice text	https://github.com/tailrocks/velnor-new/issues/2270#issuecomment-7123433776
+issue:2262	audit-C	open	H owner: per-trust-level mbx roots (#1680); L: seed/clear followed target; S: empty target.root	https://github.com/tailrocks/velnor-new/issues/2262#issuecomment-7123434358
+issue:2257	audit-C	open	S third clean parallel run evidence only	https://github.com/tailrocks/velnor-new/issues/2257#issuecomment-7123434775
+issue:2213	audit-C	closed	- all items done (#2348, #2503, #2700, #2736)	
+issue:2212	audit-C	open	S deterministic vanished-entry test; public-path test; re-verify 3 fail-closed cases	https://github.com/tailrocks/velnor-new/issues/2212#issuecomment-7123435225
+issue:2207	audit-C	open	S add incremental to lookup_totals in report_counters.py	https://github.com/tailrocks/velnor-new/issues/2207#issuecomment-7123435733
+issue:934	audit-C	open	H consumer repo rollout in other orgs; owner picks migrate/drop requirement/close	https://github.com/tailrocks/velnor-new/issues/934#issuecomment-7123436250
+issue:609	audit-C	open	H two lab proof boxes; owner: allow merging a velnor-lab PR to warm main cache	https://github.com/tailrocks/velnor-new/issues/609#issuecomment-7123436707
+issue:2210	audit-C	open	H owner: isolate/terminate test descendants before staging (question posted)	https://github.com/tailrocks/velnor-new/issues/2210#issuecomment-7123437258
+issue:2389	sonnet-med	implementing		
+issue:2287	sonnet-med	implementing		
+issue:2279	sonnet-med	implementing		
+queue:next	orchestrator	queued	S: 2275 2270 2257 2212 2207; M: 2444(opus-xhigh sec) 2421 2420 2602? 2588? (no-doctests blocked) 1702 1582 1548 1536; L: 2289(opus-xhigh sec) 2622 2685 1693 1449 1447	
+issue:2680	sonnet-med	blocked-human	remaining item == PR #2693 (owner-blocked); note: verify nextest override priority before merging	https://github.com/tailrocks/velnor-new/issues/2680#issuecomment-7123454060
+issue:2275	sonnet-med	implementing		
+issue:2540	sonnet-high	blocked-human	items 1,2 done; item 3 == PR #2577 (needs-owner: keep repo-wide delete scope?)	
+issue:2270	sonnet-med	implementing		
+issue:2287	sonnet-med	blocked-human	nit not real; Q: total download budget wanted (value?) or close as accepted	https://github.com/tailrocks/velnor-new/issues/2287#issuecomment-7123462481
+issue:2257	sonnet-med	implementing		
+pr:2746	orchestrator	CLOSED	replaced by #2780 (DCO on bot commit)	
+pr:2780	sonnet-med	open	ready; independent review running	
+pr:2411	sonnet-high	approved	reviewer fixed 3 CONFIG.md sentences (orchestrator checked diff); waiting Required	head 8c2b42b
+pr:2777	orchestrator	CLOSED	replaced by #2784	
+pr:2784	opus-high	verdict running	mbx 1.31 drops cross-checkout incremental seeding	
+issue:2530	sonnet-med	PR #2779	2 of 3 items; waive Q posted	
+issue:2528	sonnet-med	PR #2781	test only; waive Q posted	
+pr:2506	sonnet-high	reworked	linear glob + red test + ported to selection.rs; opus re-verdict running	head 53e9bac
+issue:2257	haiku-low	evidence	only 3rd clean parallel run evidence left	
+issue:2212	sonnet-med	implementing		
+issue:2212	orchestrator	queued	concurrency limit; dispatch on next free slot	
+pr:2780	sonnet-med	approved	land.sh running (enqueue when READY)	
+issue:2745	haiku-med	PR #2787	body says Part of; close #2745 manually after merge	
+issue:2257	haiku-low	CLOSED	3 clean CI runs (retries=0)	https://github.com/tailrocks/velnor-new/issues/2257#issuecomment-7123689421
+issue:2207	sonnet-med	implementing		
+pr:2784	opus-high	MERGE	no seed_incremental use; hashes verified; land.sh running	
+pr:2784	sonnet-med	fixing	2 human threads + Required failed	
+issue:2279	sonnet-med	PR #2786	canonical memo key + notice text; CI pending	
+issue:2754	sonnet-high	PR #2789	hang_up listener; review running	
+pr:2786	opus-high	review running		
+issue:2207	sonnet-med	PR #2791	incremental counter; review running	
+pr:2784	orchestrator	landing	READY	
+pr:2787	opus-high	MERGE(code ok)	landing when CI green	
+pr:2779	opus-high	changes	clear_entry must not delete regular files (atomic replace) + 3 Codex fixes	
+pr:2786	opus-high	changes	memo alias unsafe: make scan path-spelling independent + alias test; timing evidence or Refs	
+issue:2757	sonnet-high	PR #2785	standalone trim job w/o roots; review running	
+pr:2781	orchestrator	CLOSED	redundant test (opus verdict close)	
+issue:2528	orchestrator	blocked-human	item 1 resolved by design; remaining = owner waive/record evidence Q	
+pr:2789	opus-high	MERGE	landing	
+pr:2791	opus-high	changes	new test not wired into CI task/trigger list -> author	
+issue:2720	opus-high	CLOSED	not reproducible on main/0.1.111; prune/restore path tracked in #2473	https://github.com/tailrocks/velnor-new/issues/2720#issuecomment-7123815893
+pr:2411	queue	MERGED	d29b0a74e0 (closes #624)	
+pr:2780	sonnet-med	queue-ejected	UNMERGEABLE in queue -> refresh	
+issue:2389	sonnet-med	PR #2788 (part)	Q posted: keep Hooks seam for race tests or drop them	
+pr:2779	sonnet-med	reworked	4 fixes; 1 thread = owner test-plan Q (#2530); re-verdict running	head 17caf9b
+issue:2212	sonnet-med	PR #2792 (part)	3 fail-closed race tests; items 1,2 in progress	
+pr:2506	opus-high	changes	--workspace path-dep regression; -qpx clusters; URL specs; 60s limit; char glob -> author	
+pr:2788	opus-high	changes	production callbacks remain; tests assert is_err only; improper defers -> author	
+pr:2786	sonnet-med	reworked	spelling-independent scan + alias test; Refs #2279; re-verdict running	head 7ca9853
+pr:2785	opus-high	blocked-human	Q: accept permanent trim job in rootless repos, or limit to [private_sources]/nightly	
+issue:2212	sonnet-med	PR #2795 (item 1); item 2 owner Q	add fs boundary for audit_inputs race test, or accept scan-level coverage	
+issue:2270	sonnet-med	PR #2794	probe errors on private verdict, 10s deadline, notes; opus verdict running (private-consumer risk)	
+pr:2779	opus-high	changes	find -prune / re-check before find; keep-regular test; rerun CI -> author	
+issue:2773	sonnet-high	PR #2782 (part)	helper-gates in merge_group; owner Q: make Helper gates required in ruleset; workflow = high-risk accept-risk needed	
+queue:flake	sonnet-med	diagnosed	write_request tests 2s timeout ejected 2780/2787 groups; re-enqueued 2780/2787/2789; opus-xhigh root-cause fix dispatched	
+issue:2748	sonnet-high	PR #2793 (part)	post-fetch credential scan; allowlist entry; opus-xhigh security verdict running	
+pr:2782	opus-high	changes(body)	code ok; body wrong -> author; merge needs owner --accept-risk (workflow path)	
+pr:2779	sonnet-med	blocked-human	all review fixes done (find -maxdepth 0 -type f, keep-regular test); only open thread = owner test-plan record/waive Q on #2530	head c90ebed
+pr:2795	opus-high	MERGE after threads	red/green confirmed by reviewer; author resolving 2 threads	
+issue:2753	sonnet-high	PR #2790 (part)	process group + deadline + ceilings; opus-xhigh verdict running	
+issue:2275	sonnet-med	PR #2783 (part)	mise_trust separator; review running	
+flake:velnor-local supervisor::down_stops_the_authority_recorded_at_start_by_its_exact_command	-	observed	one CI failure on #2783 first run; rerun passed	
+pr:2794	opus-high	changes	gate continue_on_error off at >=0.1.114 + generator test; fix CI comment -> author	
+pr:2792	opus-high	MERGE	landing	
+pr:2795	opus-high	MERGE	landing	
+pr:2780	queue	MERGED	54c50e6ad0 (opentofu 1.13.10)	
+pr:2787	queue	MERGED	f0f0b8a6a5; closed #2745	
+pr:2789	queue	MERGED	6ce2339861 (closes #2754)	
+pr:2791	queue	MERGED	9a2d394ea8 (closes #2207)	
+pr:2783	opus-high	changes	parent-trusted keep else clear panic; drop unwrap_or_default; body why+plan -> author	
+pr:2782	sonnet-high	READY	body fixed; needs owner --accept-risk (workflow)	head 6e5495e
+pr:2786	opus-high	MERGE after 1 thread	canonicalization verified; red at prev head; cost 0.2s	
+issue:2421	sonnet-high	PR #2798 (part)	markdown inputs for generated check; review running	
+pr:2793	opus-xhigh	changes(1)	concat! fixture for kingfisher -j1; rest verified -> author	
+pr:2795	queue	MERGED	de23c4b968 (part of #2212)	
+pr:2506	sonnet-high	reworked-2	path deps, clusters, URL specs, 60s, char glob; re-verdict running	head b6790a2
+pr:2794	sonnet-med	reworked	gated at 0.1.114; re-verdict running	head 4d3323e
+pr:2792	queue	MERGED	850a8101fb (part of #2212)	
+pr:2784	orchestrator	blocked-human	READY; high-risk path .github/workflows/qualification.yml (regenerated) -> owner --accept-risk	
+pr:2794	opus-high	changes-2	drop marker; docs; 10s only early probe; 4 threads -> author	
+pr:2798	opus-high	changes	drop compile_inputs rule (generator never reads include_*), keep task folders -> author	
+pr:2790	opus-xhigh	changes	flaky signal test; finish(false) waits; body; leak on early returns; PGID reuse -> author	
+issue:2709	sonnet-high	PR #2797 (part)	test processes inherited VELNOR_MBX_REPORTS (0.1.111 pin); remaining waste = #2774 fix after repin 0.1.113; review running	
+pr:2506	opus-high	escalated	2 failed rounds (sonnet) -> opus author; --workspace reach must respect --exclude	
+pr:2786	queue	MERGED	c53c4fd387 (refs #2279)	
+pr:2797	opus-high	MERGE	landing	
+issue:2752	opus-xhigh	PR #2796 (part)	flock + rename protocol; concurrency verdict running; follow-up #2800 opened	
+pr:2788	opus-high	MERGE	landing	
+pr:2783	opus-high	MERGE	landing	
+pr:2793	queue	MERGED	f4b81243c6; closed #2748	
+pr:2797	queue	MERGED?	see land output	
+pr:2796	opus-xhigh	changes	untrusted exclusive flock via RO mount forces trusted Miss -> continue unlocked + identity check; warning text	
+pr:2798	opus-high	changes-2	match task name of configured MiseTask lint only -> author	
+pr:2788	queue	MERGED	8d28df7bd7 (part of #2389)	
+pr:2797	queue	MERGED	0a55ccdd5e (part of #2709)	
+pr:2783	queue	MERGED	17daec968d (part of #2275)	
+pr:2506	opus-high	MERGE	round-3 fix in 69da30c; landing	
+pr:2798	opus-high	MERGE	final change done; landing	
+pr:2794	opus-high	MERGE	evidence added; landing	
+flake:write_request	opus-xhigh	PR #2803 (closes #2801)	fresh_dir_in rescanned temp dir per call; once per process; 2.6s->0.56s; review running	
+pr:2796	opus-xhigh	MERGE	landing	
+pr:2798	queue	MERGED	10c0a52766 (part of #2421)	
+pr:2794	queue	MERGED	ef3745e198 (part of #2270)	
+pr:2506	queue	MERGED	8cb7557a98; closed #2489	
+pr:2803	opus-high	MERGE	landing	
+pr:2790	opus-xhigh	MERGE	landing	
+pr:2803	queue	MERGED	ac332d7cb2 (closes #2801)	
+pr:2796	queue	MERGED	d298fb3674 (part of #2752; follow-up #2800)	
+pr:2790	queue	MERGED?	see output	
+pr:2790	queue	MERGED	8c8511b3d2 (part of #2753)	
+issue:2444	opus-xhigh	implementing	security	
+issue:2289	opus-xhigh	implementing	security	
+issue:2420	sonnet-high	implementing		
+issue:2800	opus-xhigh	implementing	claim() stale-lock race	
+issue:1702,1582,1548,1536	sonnet-high	implementing	sequential	
+issue:2622	opus-xhigh	implementing		
+issue:2685	sonnet-high	evidence+implement		
+issue:1447	sonnet-high	implementing	1449/1693 follow	
+issue:2741	sonnet-high	PR #2799	review running	
+issue:2742	sonnet-high	PR #2802	refuses cargo fix + bare cargo run; review running	
+issue:2420	sonnet-high	PR #2806 (part)	scan once + outside_tracked refusal; review running	
+pr:2802	opus-high	changes	rustdoc -- args in preflight; rustdoc --test not replayed; stale body -> author	
+pr:2799	opus-high	changes(small)	body + Fixes #2741; DepInfo.configuration String -> author	
+pr:2806	opus-high	changes(test)	add ".." case -> author; close #2420 manually after merge	
+issue:2685	sonnet-high	blocked-human	evidence posted; Q: docs-only (rec.) / record saving helper + notice gated 0.1.114 / helper in target key	https://github.com/tailrocks/velnor-new/issues/2685#issuecomment-7126337597
+issue:1449	sonnet-med	scoped	publish.py is an HTTPS OCI client; needs #1447 shared pieces; owner Qs (perf baseline, flags, Refs)	https://github.com/tailrocks/velnor-new/issues/1449#issuecomment-7126377419
+issue:1582	sonnet-high	CLOSED	evidence run 45335651753	
+issue:1702	sonnet-high	blocked-human	Q: velnor-lab proof PR/merge to warm cache, or drop item	https://github.com/tailrocks/velnor-new/issues/1702#issuecomment-7126108783
+issue:1536	orchestrator	CLOSED	trigger unmet (mbx_remote Off); reopen condition stated	
+issue:1548	sonnet-high	PR #2805	Objects cache family; review running	
+pr:2805	opus-high	MERGE	landing; close #1548 after	
+issue:2800	opus-xhigh	PR #2810	mkdir lock + atomic write-only takeover; concurrency review running	
+pr:2805	queue	MERGED	d89b5e18bd; closed #1548	
+pr:2806	queue	MERGED	801b14794f; closed #2420	
+pr:2799	opus-high	MERGE	landing (nohup)	
+pr:2802	opus-high	MERGE	landing (nohup)	
+pr:2810	opus-xhigh	changes(test)	marker step untested; move pause + probe test -> author	
+issue:1447	sonnet-high	PR #2808 (refs)	image build helper; follow-up #2811; review running	
+issue:2444	opus-xhigh	PR #2809 (part)	helper app-token mint + revoke from 0.1.114; security review running	
+pr:2799	queue	MERGED	1b0355c423 (fixes #2741)	
+pr:2802	queue	MERGED	75f9193d87 (part of #2742)	
+issue:2289	opus-xhigh	PR #2807	security review running	
+issue:2622	opus-xhigh	PR #2812	author finishing CI	
+pr:2813	foreign	observed	concurrent session (fix/pruned-output-waste); not touched	
+pr:2810	opus-xhigh	MERGE	landing; follow-up #2814 opened	
+pr:2808	opus-high	changes	buildx hashed after docker info runs it; signal cleanup -> author	
+pr:2807	opus-xhigh	changes	3 scan bypasses (escaped JSON, HEAD/config misclassify, _netrc anchor) -> author	
+pr:2809	opus-xhigh	changes	key-count test; threat model + follow-up issue w/ owner Q; stale body; title -> author	
+pr:2810	queue	MERGED	87b17a5794 (fixes #2800)	
+issue:2814	sonnet-med	PR #2815	save step timeout 30; review running; regenerates ci.yml -> owner accept-risk	
+issue:2622	opus-xhigh	PR #2812 (part)	evicting/kept names; concurrency review running; action tests not in CI?	
+pr:2815	opus-high	changes	share STALE_AFTER via velnor-model; test prime (groups shape) -> author	
+pr:2809	sonnet	reworked	key-count test; follow-up #2816 (owner Q); body/title fixed; re-verdict running	head e389743
+issue:2816	sonnet	blocked-human	runner-memory key exposure; owner question in body	
+pr:2809	opus-xhigh	MERGE	landing	
+pr:2808	sonnet-high	reworked	buildx copy+hash, Supervisor signals; Supervisor change shared w/ #2790; re-verdict running	
+pr:2815	opus-high	blocked-human	READY after review fixes; high-risk (ci.yml) -> owner --accept-risk	head f9b7020
+pr:2812	opus-xhigh	changes+owner-Q	body + 2 tests -> author; owner Q test-order posted	
+issue:2818	opus-xhigh	opened	setup-velnor action tests never run in CI	
+pr:2808	opus-high	changes-2	stream build logs; HOME outside output dir; 16MiB git show; docker PATH follow-up -> author	
+issue:2818	sonnet-med	PR #2819	lint wired, 53/53 on Linux; review running; ci.yml -> accept-risk	
+pr:2809	queue	MERGED	06e20aae7f (part of #2444; follow-up #2816)	
+pr:2819	opus-high	changes	perf evidence + finish #2818 scope -> author; then owner accept-risk	
+pr:2812	sonnet	blocked-human	review changes done (body, future-start/no-start tests, 14 mutants killed); owner Q test-order	head ca91325
+pr:2808	sonnet-high	reworked-2	streaming, HOME, 16MiB; follow-ups #2817 #2820; re-verdict running	head a7c210c
+pr:2808	opus-high	MERGE	landing; follow-ups #2817 #2820 #2821; nit: 1MiB-16MiB dockerfile test ~1s/2s	
+pr:2819	sonnet-med	reworked	perf evidence + scope done; refresh for github_disagrees; owner accept-risk (ci.yml)	head beb7a4a
+pr:2819	sonnet-med	blocked-human	READY; ci.yml -> owner --accept-risk	head 47a77d6
+issue:2822	sonnet-med	opened	setup-velnor symlink-publish fails on busybox; low priority (no busybox runner)	
+issue:2821	opus-xhigh	implementing	after 2808	
+issue:2820	sonnet-high	implementing	after 2808	
+issue:2817	opus-xhigh	implementing	after 2808	
+issue:2811	sonnet-high	implementing	after 2808	
+issue:2822	orchestrator	queued	low priority	
+issue:2820	sonnet-high	blocked-human	Q: docker binary hash in runner.lock (rec.) / archive extraction / path-only	https://github.com/tailrocks/velnor-new/issues/2820#issuecomment-7128831605
+pr:2808	queue	MERGED	a4a1bacda8 (refs #1447)	
+issue:1449	sonnet-high	implementing	builds on #2808 io/image_candidate	
+issue:2821	opus-xhigh	PR #2823 (part)	secret-named env refusal; review checks false refusals on runner env	
+issue:2811	sonnet-high	PR #2824	schema v2 + revision label; review running	
+pr:2824	opus-high	MERGE+fix	move ARG after RUN steps (build cache) -> author	
+pr:2824	opus-high	MERGE	landing	
+pr:2823	opus-xhigh	MERGE	landing	
+issue:2821	orchestrator	blocked-human	Q: OS isolation (no-sudo user) optional or scheduled; item 2 waits #1450	
+pr:2823	queue	ejected	conflict with main -> author resync	
+pr:2824	queue	MERGED	1423b6513d (closes #2811)	
+issue:1449	sonnet-high	PR #2826 (part)	image publish; security review running; owner Qs on #1449 + decision-8 deferrals	
+pr:2823	queue	MERGED	f99a56ac30 (part of #2821)	
+pr:2826	opus-xhigh	MERGE	landing	
+issue:2817	opus-xhigh	PR #2827	poll-loop drain + waitid; concurrency review running; 21 other Command::output sites unbounded (note)	
+pr:2826	queue	MERGED?	see output	
+pr:2826	queue	MERGED	6e19ab5b82 (part of #1449)	
+pr:2827	opus-xhigh	MERGE	landing	
+issue:1693	sonnet-high	implementing	after image helpers merged	
+issue:1693	orchestrator	CLOSED	remaining baseline tracked in #1450	
+phase3:audit-E	sonnet-med	dispatched	post-merge partial issues	inv/audit-E.tsv
+phase3:audit-F	sonnet-med	dispatched	blocked-by-dependency + epics	inv/audit-F.tsv
+release:0.1.113	external	TAGGED	tools-v0.1.113 d613fb0007 (+0.1.114, 0.1.115) by another actor; contain #2774 #2770	
+chainargos:bitcoin#98	sonnet-high	regenerating	pin 0.1.115 + generate/check	
+chainargos:eth#134	sonnet-high	regenerating		
+chainargos:tron#125	sonnet-high	regenerating		
+pr:2827	queue	MERGED	da0b0386d7 (fixes #2817)	
+repin:0.1.115	sonnet-high	preparing	velnor-new own pin 0.1.111->0.1.115; high-risk -> owner accept-risk	
+issue:2590,2639,2688,2698	audit-F	CLOSED	evidence	
+issue:2242,2586,2646	sonnet-med	implementing		
+issue:2690,2695	sonnet-med	implementing		
+issue:2219,2623	sonnet-high	implementing		
+issue:2535,2691,1456	sonnet-high	implementing		
+queue:L	orchestrator	queued	1450 (owner decision 8 Qs), 2173, 2268	
+chainargos:bitcoin#98	sonnet-high	READY	cold run green incl. Cache (no waste); drop 384e86b040; high-risk refused -> needs owner accept-risk	head b8b9749 run 45395025143
+chainargos:eth#134	sonnet-high	READY	cold run green, Cache no waste; drop 384e86b040; high-risk	head e5c69a5 run 45395314110
+chainargos:tron#125	sonnet-high	READY(draft->ready)	cold run green, Cache 3 lanes no waste; drop 384e86b040; high-risk	head d1513e5 run 45395493043
+chainargos:eth#134	sonnet-high	READY	green on 4cd0f7d (run 45396067826, no waste); awaiting owner accept-risk	
+chainargos:bitcoin#98	sonnet-high	READY	green on 2521de1 (run 45396068753, no waste); awaiting owner accept-risk	
+chainargos:tron#125	sonnet-high	READY	green on a706559 (run 45396441046, 3 lanes no waste); awaiting owner accept-risk	
+issue:2695	sonnet-med	CLOSED	already allowed since #2468	
+issue:2690	sonnet-med	PR #2829	nested sample; review running	
+pr:2829	opus-high	MERGE	landing	
+issue:2242	sonnet-med	CLOSED	labelled form still printed by mbx 1.30/1.31	
+issue:2586	sonnet-med	CLOSED	861->361 ms evidence (local)	
+issue:2646	sonnet-med	PR #2831	fail-closed tests + wording; review running	
+pr:2831	opus-high	MERGE	landing	
+repin:0.1.115	sonnet-high	PR #2828	ready; Cache green cold x2; review running; owner accept-risk	head 6b560b2
+issue:2219	sonnet-high	PR #2830	Dockerfile 1.100 + MSRV; review running	
+issue:2623	sonnet-high	CLOSED	measured evidence (timing/bytes/concurrency)	https://github.com/tailrocks/velnor-new/issues/2623#issuecomment-7132061085
+pr:2829	queue	MERGED	5bb18096b7 (for #2690)	
+pr:2830	opus-high	MERGE	landing; check cache recovery on next main run	
+pr:2831	queue	MERGED	91883c7de4; closed #2646	
+repin:#2828	opus-high	MERGE-pending-owner	byte-identical regen with released 0.1.115; perf evidence supplied; needs owner --accept-risk	
+issue:2173	opus-high	implementing		
+issue:2268	opus-high	implementing		
+issue:2048	opus-xhigh	implementing	generated-check not in Required	
+pr:2830	queue	MERGED	f0802a14dc (for #2219)	
+coord:chainargos-8e	orchestrator	replied	peer session plans [image] in velnor-gen; told overlaps (image helpers #2808/#2824/#2826, #1450 decision 8), asked to avoid ci/velnor-gen-tip and tell before tagging	
+coord:chainargos-8e	peer	agreed	not tagger of 0.1.113-115; builds on image helpers + #1450; will relay owner answers on decision 8/#1449/#2820/#2821; no tags; avoids processor PRs	
+issue:2535	sonnet-high	PR #2832 (part)	static job name + step-name selection gated 0.1.116; review running	
+issue:2691	sonnet-high	blocked-human	Q: generator-build cache family / reuse compiled-state / accept rebuild; which repo to measure	https://github.com/tailrocks/velnor-new/issues/2691#issuecomment-7131886922
+issue:1456	sonnet-high	blocked-human	needs real lab runs + owner waiver question (latest audit comment)	
+pr:2833	opus-xhigh	stacked	drift check in Required; stacked on #2828 (owner accept-risk); owner Q ruleset on #2048	
+issue:2048	orchestrator	blocked-human	Q: CODEOWNERS review for workflows vs base-branch required workflow vs accept	
+issue:2268	opus-high	PR #2835 (part) + owner Qs (a)(b)	security review running; GITHUB_REF_PROTECTED reliability	https://github.com/tailrocks/velnor-new/issues/2268#issuecomment-7132751089
+pr:2832	opus-high	MERGE after body fix	body 0.1.114->0.1.116 -> haiku	
+pr:2833	opus-xhigh	MERGE-after-2828	stacked; needs owner accept-risk + #2828; cost ~1 runner-min/run owner acceptance per goals	
+issue:2173	opus-high	PR #2834 (part) + owner Qs	fetch all roots on saving runs; security review running; Qs: storage boundary perm, private lab repo, test_groups+private_sources	https://github.com/tailrocks/velnor-new/issues/2173#issuecomment-7132752334
+env:mise-shim	observed	broken	~/.local/share/mise/shims/mise is a self-symlink (outside session); report to user	
+pr:2835	opus-xhigh	changes(docs)	keep not-supported statement + runner-group requirement -> author	
+pr:2834	opus-xhigh	changes	add private==true condition to all-roots fetch + test; body -> author	
+pr:2832	queue	MERGED	6ea2214e9e (part of #2535; live check after repin >=0.1.116)	
+pr:2835	queue	MERGED	80fa71be27 (part of #2268; owner Qs a/b)	
+pr:2834	opus-xhigh	MERGE	landing	
+issue:2836	sonnet-high	implementing	after 2834	
+pr:2834	queue	MERGED	5cf0b32c9a (part of #2173)	
+coord:chainargos-8e	peer	relayed owner decisions	decision8 A-then-B; #1449 Q2/Q3; #2820 binary pin; attest optional; #2816/#2821 not blocking images; asked peer to post on issues before I act	
+issue:2820	owner	decided	option 1 binary-hash pin; implementing	https://github.com/tailrocks/velnor-new/issues/2820#issuecomment-7135311960
+issue:2821	owner	decided	item3 not prerequisite; item2 waits #1450 (peer session)	
+issue:2816	owner	blocked-human	decide separately for all jobs	
+issue:1450	peer	in-progress	Variant A by chainargos-8e on feat/image-publish	
+issue:2836	sonnet-high	PR #2837	manifests-env JSON + per-member gating; security review running	
+pr:2837	opus-xhigh	changes	21000-char expression limit fallback + test; revocation assertion; thread -> author	
+issue:2820	opus-high	PR #2838	docker client hash pin; security review running	
+pr:2838	opus-xhigh	MERGE	landing	
+issue:2840	opus-xhigh	blocked-human	leftover-process race in image build (pre-existing); owner decision	
+pr:2837	opus-xhigh	MERGE	landing	
+pr:2839	peer	peer-owned	chainargos-8e Variant A image publish (feat/image-publish)	
+phase2	orchestrator	COMPLETE	64 branches: 27 open-PR, 21 closed-PR, 4 merged/content-on-main, 12 no-PR all classified (rejected/superseded/carried/fixture/owner-Q 1593); gh-readonly-queue refs are temp	inv/branches-final.tsv
+pr:2838	queue	MERGED	b71a5bda5a (closes #2820)	
+pr:2837	queue	MERGED?	see output (fixes #2836)	
+pr:2837	queue	MERGED	18440c1489 (fixes #2836)	
+phase3:final-check	sonnet-med	dispatched	open issues waits-on check	inv/issues-final.tsv
+phase3:final-check	sonnet-med	done	128 open: 86 owner-Q, 25 blocked-on, 13 epic, 1 bot; #2211 closed; 38 needs-owner labels added	inv/issues-final.tsv
+issue:2535	orchestrator	blocked	live check waits on 0.1.116 release + repin	
+issue:2440	sonnet-med	implementing	2 S items	
+issue:2440	sonnet-med	PR #2841 (part)	test-only structured asserts; item 2 already on main; timing waits repin; review running	
+pr:2839	peer	merging-by-peer	chainargos-8e independent review + owner accept-risk; told about #2838 docker pin + #2840	
+pr:2841	opus-high	MERGE	landing	
+coord:chainargos-8e	peer	ack	#2839 will sync with main, keep --docker pin path, check #2840 interaction; will ping before merge	
+pr:2807	opus-xhigh	MERGE	landing; nit duplicate dl key (cargo rejects)	
+pr:2841	queue	MERGED?	see output (part of #2440)	
+coord:chainargos-49	orchestrator	replied	gave PR state; image scheme owned by chainargos-8e; asked not to touch ci/velnor-gen-tip until merge; introduced 49 to 8e	
+pr:2841	queue	MERGED	09017caa5b (part of #2440)	
+pr:2807	queue	MERGED	974de6fae1 (part of #2289)	
+pr:2842	sonnet-med	replacing	renovate cargo-deny 0.22.1 unsigned -> signed replacement	
+coord:chainargos-e4	orchestrator	replied	processor PRs blocked on owner accept-risk; will notify on merge; pointed to 8e/49 for [[image]] + 0.1.116	
+pr:2842	orchestrator	CLOSED	replaced by #2843	
+pr:2843	sonnet-med	open	cargo-deny 0.22.1; review running	
+coord:chainargos-e4	orchestrator	declined push	processor-shared-rust regen out of scope; gave velnor-gen generate/check steps	
+pr:2843	sonnet-med	approved	landing; deny runs in merge queue rust job	
+pr:2843	queue	MERGED	4b513cebc7 (replaces #2842)	
+pr:2844	sonnet-med	replacing	renovate rumdl 0.3.6 unsigned -> signed replacement	
+pr:2844	orchestrator	CLOSED	replaced by #2845	
+pr:2845	sonnet-med	open	rumdl 0.3.6; review running	
+pr:2845	queue	MERGED	060522f6ca (replaces #2844)	
+final-report	orchestrator	POSTED	all open PRs/issues/branches resolved or owner-blocked	state/final-report.md
+branch:chore/2777-mr-boxington-1.31.0	orchestrator	FINAL	PR'd #2784	1 patches not on main
+branch:chore/pin-tools-0.1.115	orchestrator	FINAL	PR'd #2828	2 patches not on main
+branch:ci/2048-generated-check-lint	orchestrator	FINAL	PR'd #2833	3 patches not on main
+branch:fast/2349-no-doctests-followups	orchestrator	FINAL	PR'd #2379	30 patches not on main; old class: open-pr
+branch:fast/2361-archive-exec-diagnostics	orchestrator	FINAL	rejected: PR #2375 closed with reason; safe to delete	old class: unique-work
+branch:fast/2430-relative-build-dir-probe	orchestrator	FINAL	rejected: PR #2454 closed with reason; safe to delete	old class: open-pr
+branch:fast/2432-no-doctests-followups	orchestrator	FINAL	PR'd #2448	50 patches not on main; old class: open-pr
+branch:fast/2438-tools-verify-followups	orchestrator	FINAL	rejected: PR #2463 closed with reason; safe to delete	old class: unique-work
+branch:fast/2440-fu-from-source-reuse	orchestrator	FINAL	rejected: PR #2458 closed with reason; safe to delete	old class: open-pr
+branch:fast/2470-audit-ctime-relist	orchestrator	FINAL	rejected: PR #2477 closed with reason; safe to delete	old class: open-pr
+branch:fast/2471-purge-private	orchestrator	FINAL	rejected: PR #2647 closed with reason; safe to delete	old class: superseded
+branch:fast/2474-anchor-steps-ref	orchestrator	FINAL	rejected: PR #2476 closed with reason; safe to delete	old class: superseded
+branch:fast/2483-helper-gate-checker-gaps	orchestrator	FINAL	PR'd #2525	27 patches not on main; old class: open-pr
+branch:fast/2491-lock-review-followups	orchestrator	FINAL	rejected: PR #2505 closed with reason; safe to delete	old class: open-pr
+branch:fast/2514-credential-report-order	orchestrator	FINAL	rejected: PR #2515 closed with reason; safe to delete	old class: unique-work
+branch:fast/2529-binary-digest-docs	orchestrator	FINAL	rejected: PR #2642 closed with reason; safe to delete	old class: open-pr
+branch:fast/2540-deferred-notice-host	orchestrator	FINAL	PR'd #2577	25 patches not on main; old class: open-pr
+branch:fast/2580-steps-shapes	orchestrator	FINAL	rejected (reason in ledger); safe to delete	1 patches not on main; last: test(velnor-gen): steps.<id> invariant renders the gated shapes too (2026-11-21); old class: unique-work
+branch:fast/2582-steps-invariant-gaps	orchestrator	FINAL	rejected: PR #2610 closed with reason; safe to delete	old class: open-pr
+branch:fast/2584-mise-version-exact-set	orchestrator	FINAL	rejected: PR #2605 closed with reason; safe to delete	old class: unique-work
+branch:fast/2588-no-doctests-false-positives	orchestrator	FINAL	PR'd #2604	7 patches not on main; old class: open-pr
+branch:fast/i2475-audit-fd-bound	orchestrator	FINAL	rejected: PR #2495 closed with reason; safe to delete	old class: open-pr
+branch:fast/local-mode-lane-parallel	orchestrator	FINAL	rejected: PR #2260 closed with reason; safe to delete	old class: open-pr
+branch:fast/mbx-shared-store-stopgap	orchestrator	FINAL	PR'd #1986	1 patches not on main; old class: open-pr
+branch:fast/repin-tools-0.1.110	orchestrator	FINAL	rejected: PR #2345 closed with reason; safe to delete	old class: open-pr
+branch:feat/image-publish	orchestrator	FINAL	PR'd #2839	4 patches not on main
+branch:fix/2289-credential-scan-hardening	orchestrator	FINAL	PR'd #2807	2 patches not on main
+branch:fix/2528-mirror-inherited-off	orchestrator	FINAL	rejected: PR #2781 closed with reason; safe to delete	
+branch:fix/2530-clear-fifo-entry	orchestrator	FINAL	PR'd #2779	3 patches not on main
+branch:fix/2553-toolchain-neutral-build-layout	orchestrator	FINAL	PR'd #2721	2 patches not on main; old class: open-pr
+branch:fix/2622-keep-inflight-quarantine	orchestrator	FINAL	PR'd #2812	7 patches not on main
+branch:fix/2682-tools-heal-removal-precondition	orchestrator	FINAL	rejected: PR #2705 closed with reason; safe to delete	old class: unique-work
+branch:fix/2696-restore-only-tools-save	orchestrator	FINAL	rejected: PR #2710 closed with reason; safe to delete	old class: open-pr
+branch:fix/2712-pr-inputs-audit	orchestrator	FINAL	PR'd #2761	12 patches not on main
+branch:fix/2757-rust-trim-zero-roots	orchestrator	FINAL	PR'd #2785	1 patches not on main
+branch:fix/2773-helper-gates-merge-queue	orchestrator	FINAL	PR'd #2782	4 patches not on main
+branch:fix/2814-tools-save-timeout	orchestrator	FINAL	PR'd #2815	2 patches not on main
+branch:fix/2820-docker-client-hash	orchestrator	FINAL	PR'd #2838	1 patches not on main
+branch:fix/2836-private-fetch-manifests	orchestrator	FINAL	PR'd #2837	5 patches not on main
+branch:fix/no-doctests-2560-2602	orchestrator	FINAL	PR'd #2657	6 patches not on main; old class: open-pr
+branch:fix/refresh-rust-inputs-lock	orchestrator	FINAL	rejected: PR #2719 closed with reason; safe to delete	old class: superseded
+branch:fu-2437-no-doctests-list	orchestrator	FINAL	PR'd #2445	29 patches not on main; old class: open-pr
+branch:fx-2545	orchestrator	FINAL	rejected (reason in ledger); safe to delete	5 patches not on main; last: fix(setup-velnor): prune kept eviction quarantines to the newest three (2026-11-21); old class: unique-work
+branch:g4-submodule-fixture	orchestrator	FINAL	keep: live submodule fixture	1 patches not on main; last: test: qualification submodule marker (2026-10-03); old class: empty
+branch:gh-readonly-queue/main/pr-2837-b71a5bda5aace1ee2ba503021fcecde3d74bcb1c	orchestrator	FINAL	temporary merge-queue ref (auto-removed)	merge-queue ref, not a PR head; 2 patches not on main; last: fix(velnor-rust): list the private fetch manifests in a variable and fetch only the selected grouped members (#2836) (#2837) (2026-11-24)
+branch:gh-readonly-queue/main/pr-2838-5cf0b32c9aea115f87a1788e0748ede0bc5744da	orchestrator	FINAL	temporary merge-queue ref (auto-removed)	merge-queue ref, not a PR head; 1 patches not on main; last: fix(velnor-ci): pin the Docker client by binary hash before build-test.sh runs (#2820) (#2838) (2026-11-24)
+branch:handoff/roadmap-2026-11-15	orchestrator	FINAL	rejected (reason in ledger); safe to delete	7 patches not on main; last: handoff: #1985 is merged (2026-11-20); old class: unique-work
+branch:issue-2680-follow-ups	orchestrator	FINAL	PR'd #2693	6 patches not on main; old class: open-pr
+branch:issues-2587-2613-2620	orchestrator	FINAL	rejected: PR #2659 closed with reason; safe to delete	old class: open-pr
+branch:renovate/cargo-minorpatch	orchestrator	FINAL	PR'd #2183	2 patches not on main; old class: open-pr
+branch:renovate/hk-2.x	orchestrator	FINAL	PR'd #2758	1 patches not on main
+branch:rescue/docs-migrating-velnor-gen-20261120	orchestrator	FINAL	merged	squash/rebase-equivalent, cherry all -; old class: merged
+branch:rescue/fast-1555-cargo-guard-remerge-20261120	orchestrator	FINAL	rejected (reason in ledger); safe to delete	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into remerge/fast-1555-test-cargo-guard (2026-11-20); old class: unique-work
+branch:rescue/fast-1593-per-root-20261120	orchestrator	FINAL	blocked-human: owner question recorded	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into fast/1593-per-root (2026-11-20); old class: superseded
+branch:rescue/fix-local-strip-conformance-20261120	orchestrator	FINAL	rejected: superseded by #2043	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into fast/2021-2022-2023-local-strip-conformance (2026-11-20); old class: superseded
+branch:rescue/gen-0107-20261120	orchestrator	FINAL	merged	old class: merged
+branch:rescue/mig-bn-gen-src-20261120	orchestrator	FINAL	merged	old class: merged
+branch:rescue/velnor-new-gen-20261120	orchestrator	FINAL	merged	old class: merged
+branch:research/velnor-gen-rebase-2026-11	orchestrator	FINAL	PR'd #1751	29 patches not on main; old class: open-pr
+branch:salvage/2701-mbx-total-bytes	orchestrator	FINAL	merged: carried by #2740	1 patches not on main; last: fix(velnor-ci): bound the total bytes read across MBX reports (#2701) (2026-11-21); old class: unique-work
+branch:salvage/2702-mbx-report-tests-wip	orchestrator	FINAL	rejected (reason in ledger); safe to delete	1 patches not on main; last: wip: salvage uncommitted changes from a stale worktree (not reviewed) (2026-11-22); old class: unique-work
+branch:salvage/2703-mbx-comments	orchestrator	FINAL	merged: carried by #2736	1 patches not on main; last: chore(velnor-ci): drop explanatory comments from the MBX report reader (2026-11-21); old class: unique-work
+branch:speed/rh-slow-public-qualifier-split	orchestrator	FINAL	rejected: PR #2404 closed with reason; safe to delete	old class: unique-work
+branch:test/2818-setup-velnor-action-ci	orchestrator	FINAL	PR'd #2819	2 patches not on main
+phase3:verify	sonnet-high	done	46 verified vs main; 43 owner-blocked (named), epics refreshed; actionable: 1305, 627, 2371-S	inv/issues-verified.tsv
+issue:1305	sonnet-med	closing		
+issue:627	sonnet-high	acceptance re-run		
+issue:2371	sonnet-high	S item		
+issue:2371	sonnet-high	owner-blocked	S item already on main (#2394); remaining waits #2828 accept-risk	https://github.com/tailrocks/velnor-new/issues/2371#issuecomment-7140427123
+env:main-checkout	observed	foreign edits	uncommitted cache_prune edits in main checkout, not from this session; untouched	
+issue:1305	sonnet-med	CLOSED	all 6 items proven	https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-7140460121
+chainargos:bitcoin#98	orchestrator	MERGED	acaec2cb96 (owner confirmed accept-risk in-session)	
+chainargos:eth#134	orchestrator	MERGED	8e525eac35	
+chainargos:tron#125	orchestrator	MERGED	75b6a86ff8	
+policy:user	user	directive	>=5 parallel subagents; mostly haiku/sonnet, opus rarely, never fable	
+verify:warm-cache	haiku-low x3	dispatched	per repo	
+refresh:accept-risk PRs	sonnet-med x2	dispatched	2828 2833 2782 / 2784 2815 2819 2721 2525	
+watch:new-items	haiku-low	dispatched		
+watch:new-items	haiku-low	done	24 open PRs as expected; new issue #2846	
+issue:2846	sonnet-high	triage+implement	setup-velnor tar shim long options	
+refresh:group1	sonnet-med	done	2828 READY clean; 2833 stacked+draft (retarget after 2828); 2782 READY; no CI spent	
+refresh:group2	sonnet-med	done	2784 2815 2819 READY clean; 2721/2525 github_disagrees + far behind -> haiku refresh	
+verify:tron-warm	haiku-low	done	save 45467952079 ok; warm 45468671626 cache hit, no waste, 0 compiled-despite; BUT inputs audit failed: no dep-info for tron-migration -> root-cause dispatched	
+verify:bitcoin-warm	haiku-low	done	save 45467744801 ok; warm 45468776190 success, target hit, no waste, 0 compiled-despite	
+verify:eth-warm	haiku-low	done	save 45467848704 ok; warm 45469115966 success, hit, no waste	
+coord:chainargos-e4	orchestrator	notified	mains clear; tron audit issue under investigation	
+issue:2846	sonnet-high	PR #2847	tar shim long options; security review (sonnet-high per user model preference)	
+pr:2847	sonnet-high	MERGE	landing; image rebuild needed	
+pr:2525	haiku-med	refreshed	dd062d354f current, Required ok, scanners pass; 2 human threads -> sonnet triage	
+pr:2525	sonnet-med	READY	threads deferred (P2 bot) -> follow-up issue being filed; waits owner accept-risk	head dd062d3
+issue:2849	haiku-low	blocked-human	waits #2525 merge (owner accept-risk)	
+coord:chainargos-8e	orchestrator	replied	#2839 at 41d1c91 merging; no collision	
+pr:2847	sonnet-high	changes	9 Codex shim findings -> fixing	
+pr:2721	haiku-med	READY	current with main 0641a28; Required+rust green; waits owner accept-risk	
+phase3:ownerq-reverify	haiku-med x3	dispatched	86 owner-Q issues vs today merges	inv/ownerq-{A,B,C}.tsv
+issue:682	haiku-med	CLOSED	moot: release-tags ruleset covers rust-ci-v*	
+issue:1666	haiku-med	blocked-human	question updated (family_required_checks)	
+issue:2625,2556,2557	haiku-med	blocked-human	question premises updated	
+sweep:open-PRs	haiku-low	dispatched	pr-status all open	inv/pr-sweep.tsv
+issue:2107,2280,2470,2473	haiku-med	blocked-human	question premises updated	
+issue:2389	haiku-low	clarifying	item 1 done by #2788 (symlink cases dropped on review)	
+issue:627	sonnet-high	blocked-human	cold run fails (73 env-bound tests, storage flags, tar shim #2846); 3 owner Qs	https://github.com/tailrocks/velnor-new/issues/627#issuecomment-7142510051
+issue:2389	haiku-low	blocked-human	item1 done by #2788 (clarified); remaining owner Q	https://github.com/tailrocks/velnor-new/issues/2389#issuecomment-7142539245
+pr:2828	orchestrator	blocked-human	repin 0.1.115 READY; owner --accept-risk (workflows)	head 6b560b2
+issue:2848	sonnet-high	in-progress	tron audit-after-prune bug; root-cause agent implementing	
+pr:2847	sonnet-high	reworked	9 findings fixed; security re-check running	head 72b78bc
+sweep:open-PRs	haiku-low	done	8 READY (owner accept-risk); stale owner-blocked PRs -> keep-ready agents 2779 2761 2577 2693 2785	inv/pr-sweep.tsv
+pr:2761	haiku->sonnet	escalated	non-trivial conflicts (rust-ci.md, audit/setup.rs); thread tied to owner cost Q	
+pr:2847	sonnet-high	MERGE	code approved; landing when Required green	
+pr:2577	haiku-med	blocked-human	non-trivial conflicts (5 files); re-merge deferred until owner delete-scope answer (#2540)	
+pr:2761	sonnet-med	blocked-human	conflicts resolved; gate moved 0.1.113->0.1.116 (needs re-review before merge); owner cost Q; policy.rs thread tied to it	head 84a12ad
+issue:2848	sonnet-high	PR #2850	audit after prune in lint-test shape; audits_before_saves gate 0.1.116; review running	
+coord:chainargos-e4	orchestrator	notified	tron stopgap one-job or wait 0.1.116 repin	
+coord:chainargos-e4	peer	decided	no stopgap; tron picks up #2850 via 0.1.116 repin; red nightly accepted	
+pr:2779	sonnet-med	blocked-human	merged main bb62ab3; CI pending; owner test-plan Q (#2530)	
+pr:2847	queue	MERGED	b0b2e2ed34 (part of #2846)	
+issue:2846	orchestrator	blocked-human	remaining: rebuild/roll out runner image (owner/operator)	
+pr:2785	haiku-med	blocked-human	current with main feeea09; rust green; owner trim-job Q	
+pr:2758	sonnet-med	replacing	signed replacement; owner Intel-macOS Q	
+pr:2657	haiku-med	keep-ready		
+pr:2445	haiku-med	keep-ready		
+pr:2785	haiku-med	blocked-human	READY feeea09 all green; waits owner trim-job Q (verdict HUMAN)	
+pr:2445	haiku-med	blocked-human	non-trivial conflict with base #2379 (may be superseded); follows #2448 decision	
+pr:2448	haiku-med	keep-ready	conflicts with main; owner no-doctests decision	
+pr:2850	sonnet-high	MERGE	landing	
+pr:2448	haiku-med	blocked-human	current with main 40ddb28; CI running; owner no-doctests decision	
+pr:2850	queue	MERGED	3797db0eb5 (closes #2848)	
+pr:2183	sonnet-med	splitting	non-turso bumps into signed PR; turso stays on owner hold	
+pr:2657	haiku-med	blocked-human	current 0715e8e, Required green; 2 confirmed scanner bugs in threads; fix depends on no-doctests decision	
+pr:2758	sonnet-med	CLOSED	replaced by signed #2851 (Renovate commit lacked DCO)	
+pr:2851	sonnet-med	blocked-human	signed hk 2.14.0; checksums verified; CI running; owner Intel-macOS Q; needs independent review before merge	head 8c71bb0
+pr:2851	sonnet-high	blocked-human	reviewed merge-after-owner; Required green; waits owner Intel-macOS	
+pr:1751	haiku-med	keep-ready	draft, conflicts	
+pr:1751	haiku->sonnet	escalated	doc conflicts vs #2726 aliasing; keep PR rewrite + apply aliases	
+pr:2379	haiku-med	blocked-human	READY c39c4da; 3 scanner fixes; independent review running; follows no-doctests decision	
+pr:1986	haiku-med	blocked-human	current ad3d4e7, Required green; draft; owner Q	
+pr:2693	haiku->sonnet	escalated	current 814b307, Required green; 2 Codex threads (P2 real gap needs red test; P1 likely stale)	
+pr:2379	sonnet-high	CHANGES	review: html state not reset at container end -> 5 false negatives; fix round 1 dispatched	
+sweep:open-PRs-2	haiku-low	done	24 open: 11 READY (owner), 13 BLOCKED; 2851 thread = owner Intel-macOS Q; 2761 check_failed -> sonnet	inv/pr-sweep-2.tsv
+pr:1751	sonnet-med	blocked-human	current 5dad1a9, Required green; draft; Q5 + key-rename conflict noted for owner	
+branch:main	orchestrator	FINAL	keep - default branch, not a work branch	git ls-remote --heads origin; origin/main at 3797db0eb5
+branch:chore/2183-cargo-minor-patch-no-turso	orchestrator	FINAL	open-PR - PR #2852 open (zip 9.8.1 bump); branch has 1 commit not on main	gh pr list --head: #2852 OPEN; git cherry origin/main: 1 unique commit 669a37b734
+branch:chore/2758-hk-2.14.0	orchestrator	FINAL	open-PR - PR #2851 open (hk 2.14.0 bump); branch has 1 commit not on main	gh pr list --head: #2851 OPEN; git cherry origin/main: 1 unique commit 8c71bb065e
+audit:branches-delta	haiku-low	done	61 remote; 3 new FINAL rows (main, 2852, 2851 branches)	
+pr:2604	haiku-med	keep-ready		
+pr:2852	sonnet-med	opened	zip 9.8.0->9.8.1 (non-turso part of 2183; url/form_urlencoded already on main); review running	head 669a37b
+pr:2183	orchestrator	blocked-human	turso part only; owner hold ~12-04; split to #2852	
+pr:2604	haiku-med	blocked-human	current d79adef, Required green; draft; no-doctests decision	
+pr:2379	sonnet-high	fixed	fix round 7e8224f; re-review + 5 Codex threads dispatched	
+pr:2761	sonnet-med	refreshed	a4a8d39 (stale-base compile fix); CI watch	
+local:main-checkout-cache_prune	sonnet-high	evaluating	uncommitted keep-path-units diff; PR or superseded note	
+user-directive	user	2026-11-25	merge every PR created; never stockpile PRs or local changes	
+owner-decisions	user	2026-11-25	accept-risk 2828 2782 2784 2815 2819 2721 2525 (+2833 after 2828); no-doctests=rustdoc #2448 (close 2379 2657 2604 2445); hk 2.14 merge 2851; take proposals 2761 2785 2779 2812 2577	AskUserQuestion
+pr:2828 2782 2784 2815 2819 2721 2525	orchestrator	landing	accept-risk landers launched (scratchpad/landlogs)	
+pr:2785 2812 2851	orchestrator	landing	owner decisions posted; landers launched	
+pr:2761	sonnet-med	fixing	dead-code compile fix + decision	
+pr:2577	sonnet-high	fixing	re-merge + decision	
+pr:2779	sonnet-med	fixing	waive decision + threads	
+pr:2448	sonnet-med	fixing	cost check + decision	
+pr:2852	haiku-med	refreshing	stale checks	
+local:main-checkout-cache_prune	sonnet-high	DISCARDED	superseded by #2804 (d613fb0007, tighter); backup state/inv/discarded-cache-prune-keep-path-units.patch	inv/local-cache-prune-diff.md
+local:worktree-ada6-mise.lock	sonnet-high	DISCARDED	mise auto-lock artifact (unsupported_platforms); backup saved	
+pr:2815	haiku-med	refreshing	UNMERGEABLE in queue; merge.ts dequeue bug (passes MQE id as PR id); push removes it	
+pr:2815	haiku-med	waiting	push refused while queued (GH006); clean main merge a1b1256 ready locally in agent worktree; push after GitHub ejects it	
+pr:2779	sonnet-med	landing	READY bb62ab3; race deferral tracked https://github.com/tailrocks/velnor-new/issues/2853	
+pr:2693	sonnet-high	fixed	94f0e44; P2 fixed red/green, P1 stale answered; review dispatched	
+pr:2785	queue	MERGED	afecfa838a	
+pr:2812	queue	MERGED	9b73a5da0e	
+pr:2828	queue	MERGED	0ac26824c5 (repin 0.1.115)	
+pr:2784 2819 2525 2815	haiku-med	requeue-prep	UNMERGEABLE after 2828 repin; wait ejection, merge main, regenerate	
+pr:2833	sonnet-med	retarget	base->main after 2828; ready	
+pr:2852	orchestrator	landing	READY 05e9db3	
+pr:2782	queue	MERGED	e46b6c7a46	
+pr:2721	queue	MERGED	004eda1f44	
+pr:2779	queue	MERGED	fc5ec3722a	
+pr:2784	queue	MERGED		
+pr:2851	queue	MERGED		
+pr:2852	queue	MERGED		
+pr:2693	sonnet-high	CHANGES	review 2: CONFIG.md default-filter wording; inherits not resolved; fix round 2	
+pr:2833	sonnet-med	landing	retargeted main 0ac9cca; review MERGE; Required green	
+report:setup-velnor-flakes	haiku-med	triage	peer chainargos-8e report (0.1.110 download failures)	
+issue:2854	sonnet-med	implementing	setup-velnor download failure names no cause; filed from peer report	
+issue:2856	sonnet-high	implementing	MBX zero-hit check false positive (0 misses); from peer Q on #2839	
+pr:2855	sonnet-med	opened	Fixes #2854; red/green 502 test; Required green; review dispatched	head d78630d
+pr:2833	queue	MERGED		
+pr:2815 2819	haiku-med	refresh	stale cancelled-run Required blocks merge.ts; empty commit	
+pr:2855	sonnet-high	MERGE	review merge; landing	
+pr:2761	sonnet-med	READY	1960231; clippy.toml predicate + outside_selection wiring; review dispatched	
+pr:2525	haiku-med	landing	refreshed 002de6d; Required green	
+user-directive	user	2026-11-25	never defer: address all comments in-PR; batch multiple branches into one PR	
+batch:setup-velnor-deferrals	sonnet-high	implementing	#2853 race + #2855 000-status nit in one PR	
+sweep:deferred-threads	haiku-low	running		
+user-directive	user	2026-11-25	never use xhigh or max effort (replaces opus/xhigh tier: security/concurrency now opus/high at most)	
+pr:2855	haiku-med	refresh	github_disagrees -> empty commit	
+pr:2525	sonnet-med	threads	4 unresolved threads, address in-PR	
+sweep:deferred-threads	haiku-low	done	234 flagged/66 PRs (72 say fixed); 5 deferred issues 2816 2818 2821 2849 2853	inv/deferred-threads.tsv
+triage:deferral-batches	sonnet-med	running	group genuine open deferrals into batch PRs	
+triage:deferral-batches	sonnet-med	done	77 fixed,44 on main,36 owner-PR,46 open code + 31 evidence; 6 batches	inv/deferral-batches.md
+batch:audit cache-cred image render lints	sonnet	implementing	5 batch PRs + setup-velnor batch extended	
+batch:evidence-threads	sonnet-med	running	31 evidence replies	
+issue:2816	orchestrator	blocked-human	needs owner decision (ask)	
+owner-decision	user	2026-11-25	#2816: isolate App keys in key-only jobs + lint	AskUserQuestion
+new-prs	batches	open	2857 2858 2859 2860 2861 2862 2863 2864(draft) 2865 2866	
+reviews	sonnet-high	dispatched	R1 2693+2863; R2 2448; R3 2525+2860+2862; R4 2577+2857; R5 2858+2859+2861	
+fixes	sonnet	dispatched	2761 audit-every-PR; 2865/2866 finish+metadata schema; 2816 key isolation; evidence gaps; 2826 publish redesign; haiku 2815/2819 CI trigger	
+peer:chainargos-8e	orchestrator	replied	OK 0.1.116 bump in 2839; asked to fold #2821 item 2	
+peer:chainargos-8e	orchestrator	coord	2839 folds #2821 item2; asked to notify before tag request (0.1.116-gated PRs)	
+peer:chainargos-8e	peer	agreed	will notify on 2839 merge; owner chooses tag-now (re-gate 0.1.117) vs wait	
+release	peer/owner	TAGGED	tools-v0.1.116 on 5e3c38d (2839 merged)	
+regate	orchestrator	dispatch	2577 2761 2863 2864 2865 2868 -> 0.1.117	
+landers	orchestrator	launched	2693 2857 2861 2448 2858 2525 2860	
+release	peer	PUBLISHED	tools-v0.1.116 run 45569857070 ok; sums+attestations verified; ChainArgos repos migrating	
+issue:image-promote-version	sonnet-high	implementing	from chainargos-e4 Codex review; gate 0.1.117	
+owner-decision	user	2026-11-25	--accept-risk granted (blanket, in session) for high-risk paths on PRs from this goal	
+owner-decision	user	2026-11-25	ALWAYS --accept-risk when merging PRs (standing)	
+pr:2577	haiku-med	fixing	Alint 401-line test main.rs; split	
+pr:2855	sonnet-high	investigating	betterleaks 2 hits in PR history (fixture vs real)	
+pr:2866 2869	orchestrator	landing	review merge	
+pr:2867	sonnet-high	decide+fix	owner delegated signer decision (user-expectation/best practice); 5 Codex fixes	
+wind-down	user	2026-11-25	credits ~98%: agents told to commit+push WIP and stop; pollers stopped; bash landers continue	
+pr:2863	haiku-med	landing	regated 324299f, Required green, review merge	
+pr:2864	haiku-med	pushed	b283144 ready, regated; NEEDS independent review before merge	
+pr:2865	sonnet-med	pushed	f61f9d7 regated, folds 2868; NEEDS independent review + Required	
+pr:2868	sonnet-med	CLOSED	folded into #2865	
+pr:2761	sonnet-high	landing	re-review merge 68da21c	
+pr:2577	haiku-med	pushed	713d7cd split (unverified locally; CI decides); lander attached	
+pr:2448	sonnet-med	landing	fb6a2fc threads fixed	
+pr:2872	sonnet-high	draft	Fixes #2870 image release-version check (separate job, gate 0.1.117); NEEDS ready+CI+review	
+pr:2867	sonnet-high	decided	signer = ci.yml via dedicated no-repo-code attestation job; decision 8 reworded; Part B (impl + 4 Codex fixes) NOT done - resume after credit reset	
+pr:2871	sonnet-high	ready	#2816 part1 request/relay/await (crypto_box sealed box); NEEDS CI + independent security review	94fa84e
+pr:2873	sonnet-high	draft	#2816 part2 render split + lint gate 0.1.117; NEEDS full tests/goldens + review	a8e6a76
+issue:2816	orchestrator	in-progress	part3 (repo workflows, docs) after tools-v0.1.117	
+pr:2860	sonnet-med	threads-done	061002c all 5 threads fixed; body reworded; lander attached	
+pr:2525	sonnet-med	open-threads	c37e3dd; 3 NEW Codex threads (scratch-repo diff helpers, attribute bracket counting, rename pathspecs) - resume	
+pr:2525	sonnet-med	landing	c6a0dff 3 threads fixed	
+pr:2855	orchestrator	green	secret scan + Required pass; lander attached	
+pr:2860	sonnet-high	landing	f56b947 guard fix	
+pr:2864	sonnet-high	review-merge	711692d; 2 threads open	
+pr:2865	sonnet-high	CHANGES	~15 cargo-semantics threads	
+owner-decision	user	2026-11-25	nothing local: push all; state via sanitized handoff branch handoff/goal-2026-11-25 + pinned issue	

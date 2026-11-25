@@ -1,0 +1,274 @@
+job	task	model	effort	first_ci_green	review_P1/P2	done_was_true	tokens
+cxrev1164	Task: independent review of PR #1164 in tailrocks/velnor-new (head 3cd3c14aba59a	gpt-6.1-terra	high	n/a	none	y	unknown
+cxrev1166	Task: independent review of PR #1166 in tailrocks/velnor-new (head 25d6142f53cef	gpt-6.1-terra	high	n/a	P2x2	y	unknown
+cxrev1163	Task: independent review of PR #1163 in tailrocks/velnor-new (head 5408ac031ad97	gpt-6.1-terra	high	n/a	P2x2	y	unknown
+cxrev1165	Task: independent review of PR #1165 in tailrocks/velnor-new (head 260452ebc14ab	gpt-6.1-terra	high	n/a	P2x1	y	unknown
+cxfix1163	Task: fix the review findings on PR #1163 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	pending re-review	y	unknown
+cxfix1165	Task: fix the review findings on PR #1165 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	pending re-review	y	unknown
+cxfix1166	Task: fix the review findings on PR #1166 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	high	?	pending re-review	y	unknown
+cx-p3ci	Task: fix these P3 issues in tailrocks/velnor-new (ci-helper/): #1090, #1093, #1	gpt-6-luna	medium	?	?	?	unknown
+cx-p3gen		gpt-6-luna	medium	?	?	?	unknown
+cxfr1163	Task: fix the review findings on PR #1163 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1167	Task: fix the review findings on PR #1167 in tailrocks/velnor-new (branch fast/1	gpt-6.1-sol	medium	?	?	?	unknown
+cxfr1169	Task: fix the review findings on PR #1169 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1165	Task: fix the review findings on PR #1165 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	?	?	unknown
+cxfr1180	Task: fix the review findings on PR #1180 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	?	?	unknown
+cxfr1169	Task: fix the review findings on PR #1169 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxrev1107	Task: independent SECURITY review of PR #1107 in tailrocks/velnor-new (head e865	gpt-6.1-sol	medium	?	?	?	unknown
+cxfr1167	Task: fix the review findings on PR #1167 in tailrocks/velnor-new (branch fast/1	gpt-6.1-sol	medium	?	?	?	unknown
+cxfr1189	Task: fix the review findings on PR #1189 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1165	Task: fix the review findings on PR #1165 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	?	?	unknown
+cxfr1180	Task: fix the review findings on PR #1180 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	?	?	unknown
+cxfr1163	Task: fix the review findings on PR #1163 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1196-9b785f0	Task: independent review of PR #1196 in tailrocks/velnor-new (head 9b785f02953a5	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1205	Task: fix issue #1205 in tailrocks/velnor-new (read it). It's one module: genera	gpt-6-luna	high	?	?	?	unknown
+cxrv1192-0efb683	Task: independent review of PR #1192 in tailrocks/velnor-new (head 0efb6836a7508	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1195-1c50b24	Task: independent review of PR #1195 in tailrocks/velnor-new (head 1c50b24be4bb5	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1200-567bc3b	Task: independent review of PR #1200 in tailrocks/velnor-new (head 567bc3b396676	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1179	Task: fix the review findings on PR #1179 in tailrocks/velnor-new (branch fast/1	gpt-6-luna	high	?	?	?	unknown
+cxfr1181	Task: fix the review findings on PR #1181 in tailrocks/velnor-new (branch fast/1	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1198-5a0532a	Task: independent review of PR #1198 in tailrocks/velnor-new (head 5a0532ac9e9d5	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1197-4006a77	Task: independent review of PR #1197 in tailrocks/velnor-new (head 4006a770ed78e	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1208-7b384ff	Task: independent review of PR #1208 in tailrocks/velnor-new (head 7b384ff23328a	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1080-b8f027e	Task: independent review of PR #1080 in tailrocks/velnor-new (head b8f027ed697cc	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1199-8069f33	Task: independent review of PR #1199 in tailrocks/velnor-new (head 8069f33958f50	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1002-89d7740	Task: independent review of PR #1002 in tailrocks/velnor-new (head 89d774041ae0d	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1002b	Task: re-review PR #1002 in tailrocks/velnor-new (head 89d774041ae0db1003e26e966	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1026-3e4df6b	Task: independent review of PR #1026 in tailrocks/velnor-new (head 3e4df6baf1128	gpt-6.1-terra	medium	?	?	?	unknown
+cxmg1164	Task: PR #1164 in tailrocks/velnor-new (branch fast/1086-profile-include; for #1	gpt-6-luna	low	?	?	?	unknown
+cxrv1160-0f63402	Task: independent review of PR #1160 in tailrocks/velnor-new (head 0f6340228bd5f	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1111-9febd42	Task: independent review of PR #1111 in tailrocks/velnor-new (head 9febd4240ab5b	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1109-713d876	Task: independent review of PR #1109 in tailrocks/velnor-new (head 713d876177ac4	gpt-6.1-sol	medium	?	?	?	unknown
+cxfix1050r	Task: PR #1050 (branch fast/1047-docs-drift; docs-only) has one unresolved Codex	gpt-6-luna	medium	?	?	?	unknown
+cxfr1166b	Task: PR #1166 in tailrocks/velnor-new (branch fast/1088-1089-1091-1092-run-wrap	gpt-6-luna	high	?	?	?	unknown
+cxfix1035r	Task: PR #1035 (branch fast/607-base-cache; default-branch base caches for #607;	gpt-6.1-sol	medium	?	?	?	unknown
+cxfix1056r	Task: PR #1056 (branch fast/1031-per-package-tests) has unresolved P1 thread PRR	gpt-6-luna	high	?	?	?	unknown
+cxrv1035-92c60c2	Task: independent review of PR #1035 in tailrocks/velnor-new (head 92c60c23bcc8f	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1049	Task: finish PR #1049 in tailrocks/velnor-new (branch fast/840-file-cap; Refs #8	gpt-6-luna	high	?	?	?	unknown
+cxfix1017r	Task: PR #1017 (branch fast/1005-completion-cleanup; runner completion cleanup, 	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1056-748b131	Task: independent review of PR #1056 in tailrocks/velnor-new (head 748b131b1a354	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1017-0228a5b	Task: independent review of PR #1017 in tailrocks/velnor-new (head 0228a5b7a0a08	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1026-d3f4aff	Task: independent review of PR #1026 in tailrocks/velnor-new (head d3f4aff5f0204	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1080-72e560f	Task: independent review of PR #1080 in tailrocks/velnor-new (head 72e560f6552dd	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1027-4bb07f4	Task: independent review of PR #1027 in tailrocks/velnor-new (head 4bb07f43368e9	gpt-6.1-terra	medium	?	?	?	unknown
+cxfr1164c	Task: PR #1164 in tailrocks/velnor-new (branch fast/1086-profile-include; for #1	gpt-6-luna	high	?	?	?	unknown
+cxrv1192-5c1ab2c	Task: independent review of PR #1192 in tailrocks/velnor-new (head 5c1ab2cd1730d	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1199-0ce44a2	Task: independent review of PR #1199 in tailrocks/velnor-new (head 0ce44a26b512c	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1211-54e0527	Task: independent review of PR #1211 in tailrocks/velnor-new (head 54e052790deea	gpt-6-luna	medium	?	?	?	unknown
+cxrv1166-ad17073	Task: independent review of PR #1166 in tailrocks/velnor-new (head ad17073d53410	gpt-6-luna	medium	?	?	?	unknown
+cxrv1212-d377b29	Task: independent review of PR #1212 in tailrocks/velnor-new (head d377b293d769b	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1181u	Task: PR #1181 (branch fast/1094-1095-record-sample; sample recording safety, #1	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1167-cef58e7	Task: independent review of PR #1167 in tailrocks/velnor-new (head cef58e7ba3758	gpt-6.1-sol	medium	?	?	?	unknown
+cxfix1163t	Task: PR #1163 (branch fast/1082-build-target-check). Fix every P1 and P2 in the	gpt-6-luna	high	?	?	?	unknown
+cxfix1017s	Task: PR #1017 (runner completion cleanup, #1005). Latest review: /Users/donbeav	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1169t	Task: PR #1169 (branch fast/1066-qualification-skipped). Fix every P1 and P2 in 	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1056s	Task: PR #1056 (per-package test execution gate, #1031). Latest review: /Users/d	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1026-4e68c5e	Task: independent review of PR #1026 in tailrocks/velnor-new (head 4e68c5e107933	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1080-82828f6	Task: independent review of PR #1080 in tailrocks/velnor-new (head 82828f6b78998	gpt-6.1-terra	high	?	?	?	unknown
+cxfix1211u	Task: PR #1211 (branch fast/1099-repository-identity). Fix every P1 and P2 in th	gpt-6-luna	high	?	?	?	unknown
+cxrv1017-df50e14	Task: independent review of PR #1017 in tailrocks/velnor-new (head df50e147f9149	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1165t	Task: PR #1165 (branch fast/1098-golden-symlinks). Fix every P1 and P2 in the la	gpt-6-luna	high	?	?	?	unknown
+cxfix1050s	Task: PR #1050 (docs only, #1047). Latest review: /Users/donbeave/.local/share/v	gpt-6-luna	medium	?	?	?	unknown
+cxrv1056-748b131	Task: independent review of PR #1056 in tailrocks/velnor-new (head 748b131b1a354	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1035s	Task: PR #1035 (default-branch base caches, #607; release blocker). Latest revie	gpt-6.1-sol	medium	?	?	?	unknown
+cxfix1166u	Task: PR #1166 (branch fast/1088-1089-1091-1092-run-wrapper). Fix every P1 and P	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1035-5203be0	Task: independent review of PR #1035 in tailrocks/velnor-new (head 5203be095e184	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1160-554a6b3	Task: independent review of PR #1160 in tailrocks/velnor-new (head 554a6b3667d3b	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1199-dc0a783	Task: independent review of PR #1199 in tailrocks/velnor-new (head dc0a7837c87ec	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1180t	Task: PR #1180 (branch fast/1090-1093-timings). Fix every P1 and P2 in the lates	gpt-6-luna	high	?	?	?	unknown
+cxrv1166-ad17073	Task: independent review of PR #1166 in tailrocks/velnor-new (head ad17073d53410	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1026-4e68c5e	Task: independent review of PR #1026 in tailrocks/velnor-new (head 4e68c5e107933	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1192-a0adb75	Task: independent review of PR #1192 in tailrocks/velnor-new (head a0adb75ac76ee	gpt-6.1-terra	medium	?	?	?	unknown
+cxrev1107b	Task: independent SECURITY review of PR #1107 in tailrocks/velnor-new (head d88f	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1198-5a0532a	Task: independent review of PR #1198 in tailrocks/velnor-new (head 5a0532ac9e9d5	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1212-a7a5810	Task: independent review of PR #1212 in tailrocks/velnor-new (head a7a5810ac9b5d	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1199-c7707a9	Task: independent review of PR #1199 in tailrocks/velnor-new (head c7707a9e1472e	gpt-6.1-terra	high	?	?	?	unknown
+cxfix1035v	Task: PR #1035 in tailrocks/velnor-new (closes #607, base cache save/restore). F	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1165-bb839a3	Task: independent review of PR #1165 in tailrocks/velnor-new (head bb839a39feaa7	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1035-a8841f9	Task: independent review of PR #1035 in tailrocks/velnor-new (head a8841f9673d08	gpt-6.1-terra	high	?	?	?	unknown
+cxfr1049d	Task: PR #1049 in tailrocks/velnor-new (branch fast/840-file-cap; Closes #840: a	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1180-a9fec70	Task: independent review of PR #1180 in tailrocks/velnor-new (head a9fec7041a7c4	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1017w	Task: PR #1017 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1056-3a519da	Task: independent review of PR #1056 in tailrocks/velnor-new (head 3a519da182337	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1167-a7ff2cb	Task: independent review of PR #1167 in tailrocks/velnor-new (head a7ff2cbe063b0	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1160-4226525	Task: independent review of PR #1160 in tailrocks/velnor-new (head 42265255b031f	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1109-7bbb2a3	Task: independent review of PR #1109 in tailrocks/velnor-new (head 7bbb2a37b1951	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1181-fc6afd6	Task: independent review of PR #1181 in tailrocks/velnor-new (head fc6afd6ca5797	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1166-6b55742	Task: independent review of PR #1166 in tailrocks/velnor-new (head 6b55742668652	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1199-92c97a2	Task: independent review of PR #1199 in tailrocks/velnor-new (head 92c97a275af3b	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1191-e2c19ef	Task: independent review of PR #1191 in tailrocks/velnor-new (head e2c19ef96deb9	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1216-0df9d3b	Task: independent review of PR #1216 in tailrocks/velnor-new (head 0df9d3b052c2c	gpt-6.1-terra	high	?	?	?	unknown
+cxfix1189c	Task: PR #1189 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1168c	Task: PR #1168 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1166-30eee5d	Task: independent review of PR #1166 in tailrocks/velnor-new (head 30eee5da53ecf	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1165-e16aa15	Task: independent review of PR #1165 in tailrocks/velnor-new (head e16aa15351b8d	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1212-25824f5	Task: independent review of PR #1212 in tailrocks/velnor-new (head 25824f5507451	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1109-ea6ccb2	Task: independent review of PR #1109 in tailrocks/velnor-new (head ea6ccb241fedc	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1179-ed55593	Task: independent review of PR #1179 in tailrocks/velnor-new (head ed555936c376b	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1163-6a0f6eb	Task: independent review of PR #1163 in tailrocks/velnor-new (head 6a0f6ebc55ac9	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1056-3a519da	Task: independent review of PR #1056 in tailrocks/velnor-new (head 3a519da182337	gpt-6.1-terra	medium	?	?	?	unknown
+mmfix1163	Task: PR #1163 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+mmfix1167b	Task: PR #1167 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1211-d643d30	Task: independent review of PR #1211 in tailrocks/velnor-new (head d643d30f48d06	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1169-5c6033a	Task: independent review of PR #1169 in tailrocks/velnor-new (head 5c6033a7e2349	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1219-b6f2b5b	Task: independent review of PR #1219 in tailrocks/velnor-new (head b6f2b5b01efd3	gpt-6-luna	medium	?	?	?	unknown
+cxrv1050-0ee0bf8	Task: independent review of PR #1050 in tailrocks/velnor-new (head 0ee0bf875fc19	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1163-6a0f6eb	Task: independent review of PR #1163 in tailrocks/velnor-new (head 6a0f6ebc55ac9	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1200-d7d8c9e	Task: independent review of PR #1200 in tailrocks/velnor-new (head d7d8c9ec48d5b	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1167-a7ff2cb	Task: independent review of PR #1167 in tailrocks/velnor-new (head a7ff2cbe063b0	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1167-a7ff2cb	Task: independent review of PR #1167 in tailrocks/velnor-new (head a7ff2cbe063b0	gpt-6.1-sol	medium	?	?	?	unknown
+mmfix1056b	Task: PR #1056 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1181-fc6afd6	Task: independent review of PR #1181 in tailrocks/velnor-new (head fc6afd6ca5797	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1179-ed55593	Task: independent review of PR #1179 in tailrocks/velnor-new (head ed555936c376b	gpt-6.1-terra	medium	?	?	?	unknown
+mmfix1211	Task: PR #1211 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1017x	Task: PR #1017 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	high	?	?	?	unknown
+mmfix1200b	Task: PR #1200 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1056-3a519da	Task: independent review of PR #1056 in tailrocks/velnor-new (head 3a519da182337	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1211-7df1b91	Task: independent review of PR #1211 in tailrocks/velnor-new (head 7df1b916b1082	gpt-6.1-terra	medium	?	?	?	unknown
+mmfix1179b	Task: PR #1179 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1179-ed55593	Task: independent review of PR #1179 in tailrocks/velnor-new (head ed555936c376b	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1200-d7d8c9e	Task: independent review of PR #1200 in tailrocks/velnor-new (head d7d8c9ec48d5b	gpt-6-luna	high	?	?	?	unknown
+mmfix1169b	Task: PR #1169 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1199-59f5560	Task: independent review of PR #1199 in tailrocks/velnor-new (head 59f5560f31366	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1017-52c4f7e	Task: independent review of PR #1017 in tailrocks/velnor-new (head 52c4f7e1dae00	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1191-fee30e1	Task: independent review of PR #1191 in tailrocks/velnor-new (head fee30e10b4e57	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1109-16217a8	Task: independent review of PR #1109 in tailrocks/velnor-new (head 16217a8ad9916	gpt-6.1-sol	medium	?	?	?	unknown
+cxfix1056z	Task: PR #1056 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxfix1181z	Task: PR #1181 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1212-03b7f14	Task: independent review of PR #1212 in tailrocks/velnor-new (head 03b7f1445d0a5	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1169-5c6033a	Task: independent review of PR #1169 in tailrocks/velnor-new (head 5c6033a7e2349	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1192-56e9e9c	Task: independent review of PR #1192 in tailrocks/velnor-new (head 56e9e9c92ca36	gpt-6.1-terra	medium	?	?	?	unknown
+mmfix1050b	Task: PR #1050 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1163-6a0f6eb	Task: independent review of PR #1163 in tailrocks/velnor-new (head 6a0f6ebc55ac9	gpt-6-luna	medium	?	?	?	unknown
+cxfix1189z	Task: PR #1189 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1200-d7d8c9e	Task: independent review of PR #1200 in tailrocks/velnor-new (head d7d8c9ec48d5b	gpt-6-luna	medium	?	?	?	unknown
+cxrv1181-fc6afd6	Task: independent review of PR #1181 in tailrocks/velnor-new (head fc6afd6ca5797	gpt-6-luna	high	?	?	?	unknown
+cxrv1216-94a2e17	Task: independent review of PR #1216 in tailrocks/velnor-new (head 94a2e17bd8542	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1166-30eee5d	Task: independent review of PR #1166 in tailrocks/velnor-new (head 30eee5da53ecf	gpt-6-luna	medium	?	?	?	unknown
+cxrv1050-829d6cc	Task: independent review of PR #1050 in tailrocks/velnor-new (head 829d6ccdc4e00	gpt-6-luna	medium	?	?	?	unknown
+cxrv1056-3a519da	Task: independent review of PR #1056 in tailrocks/velnor-new (head 3a519da182337	gpt-6-luna	high	?	?	?	unknown
+cxfix1168z	Task: PR #1168 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1189-f355962	Task: independent review of PR #1189 in tailrocks/velnor-new (head f355962eb9f91	gpt-6-luna	high	?	?	?	unknown
+cxrv1167-a7ff2cb	Task: independent review of PR #1167 in tailrocks/velnor-new (head a7ff2cbe063b0	gpt-6-luna	medium	?	?	?	unknown
+cxfix1200z	Task: PR #1200 in tailrocks/velnor-new. Fix round. Read the latest review at /Us	gpt-6-luna	high	?	?	?	unknown
+cxrv1200-9dc3af1	Task: independent review of PR #1200 in tailrocks/velnor-new (head 9dc3af1011711	gpt-6-luna	high	?	?	?	unknown
+cxrv1165-8c27751	Task: independent review of PR #1165 in tailrocks/velnor-new (head 8c27751eafd19	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1168-4b129d7	Task: independent review of PR #1168 in tailrocks/velnor-new (head 4b129d7b2cd3b	gpt-6-luna	high	?	?	?	unknown
+cxrv1199-59f5560	Task: independent review of PR #1199 in tailrocks/velnor-new (head 59f5560f31366	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1109-41fc1b5	Task: independent review of PR #1109 in tailrocks/velnor-new (head 41fc1b539b537	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1211-7df1b91	Task: independent review of PR #1211 in tailrocks/velnor-new (head 7df1b916b1082	gpt-6-luna	medium	?	?	?	unknown
+cxrv1192-0b3169f	Task: independent review of PR #1192 in tailrocks/velnor-new (head 0b3169f38729f	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1017-52c4f7e	Task: independent review of PR #1017 in tailrocks/velnor-new (head 52c4f7e1dae00	gpt-6-luna	high	?	?	?	unknown
+cxmerge1167	Task: PR #1167 in tailrocks/velnor-new (branch fast/1064-publish-no-checkout) wa	gpt-6-luna	high	?	?	?	unknown
+cxrv1035-7f7d0ad	Task: independent review of PR #1035 in tailrocks/velnor-new (head 7f7d0ada4cd29	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1181-fc6afd6	Task: independent review of PR #1181 in tailrocks/velnor-new (head fc6afd6ca5797	gpt-6-luna	high	?	?	?	unknown
+cxrv1167-1c8a2a5	Task: independent review of PR #1167 in tailrocks/velnor-new (head 1c8a2a55b8aa5	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1166-e760b12	Task: independent review of PR #1166 in tailrocks/velnor-new (head e760b12d0e585	gpt-6-luna	high	?	?	?	unknown
+cxrv1191-5dad7d8	Task: independent review of PR #1191 in tailrocks/velnor-new (head 5dad7d88ff98f	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1053-33dc88e	Task: independent review of PR #1053 in tailrocks/velnor-new (head 33dc88ed2eb4f	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1035-7f7d0ad	Task: independent review of PR #1035 in tailrocks/velnor-new (head 7f7d0ada4cd29	gpt-6-luna	high	?	?	?	unknown
+cxrv1192-a1e9788	Task: independent review of PR #1192 in tailrocks/velnor-new (head a1e97882f736b	gpt-6-luna	high	?	?	?	unknown
+cxmerge1035	Task: PR #1035 in tailrocks/velnor-new (branch fast/607-base-cache) was approved	gpt-6-luna	high	?	?	?	unknown
+cxrv1035-5e1c3e9	Task: independent review of PR #1035 in tailrocks/velnor-new (head 5e1c3e99e9f0d	gpt-6-luna	high	?	?	?	unknown
+cxrv1191-bd6a07d	Task: independent review of PR #1191 in tailrocks/velnor-new (head bd6a07d3efe25	gpt-6-luna	high	?	?	?	unknown
+cxmerge1181	Task: PR #1181 in tailrocks/velnor-new (branch fast/1094-1095-record-sample) was	gpt-6-luna	high	?	?	?	unknown
+cxrv1181-9ccec68	Task: independent review of PR #1181 in tailrocks/velnor-new (head 9ccec68f5c4af	gpt-6-luna	medium	?	?	?	unknown
+cxrv1035-5e1c3e9	Task: independent review of PR #1035 in tailrocks/velnor-new (head 5e1c3e99e9f0d	gpt-6-luna	high	?	?	?	unknown
+cxmerge1216	Task: PR #1179 in tailrocks/velnor-new (branch fast/1102-audit-bounds) was appro	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1053-a14ed69	Task: independent review of PR #1053 in tailrocks/velnor-new (head a14ed698c256f	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1216-94a2e17	Task: independent review of PR #1216 in tailrocks/velnor-new (head 94a2e17bd8542	gpt-6-luna	high	?	?	?	unknown
+cxrv1035-23eed18	Task: independent review of PR #1035 in tailrocks/velnor-new (head 23eed185b4053	gpt-6.1-terra	high	?	?	?	unknown
+cxmerge1056	Task: PR #1056 in tailrocks/velnor-new (branch fast/1031-per-package-tests) was 	gpt-6-luna	high	?	?	?	unknown
+cxmerge1189	Task: PR #1189 in tailrocks/velnor-new (branch fast/1071-1072-helper-policy-plan	gpt-6-luna	high	?	?	?	unknown
+cxmerge1212	Task: PR #1212 in tailrocks/velnor-new (branch peer/1182-atomic-local-job-check)	gpt-6-luna	high	?	?	?	unknown
+cxfix1168t	Task: PR #1168 in tailrocks/velnor-new (branch peer/consumer-nonrust-repairs). S	gpt-6.1-terra	medium	?	?	?	unknown
+cxmerge1179	Task: PR #1179 in tailrocks/velnor-new (branch fast/1102-audit-bounds) was appro	gpt-6-luna	high	?	?	?	unknown
+cxrv1212-03b7f14	Task: independent review of PR #1212 in tailrocks/velnor-new (head 03b7f1445d0a5	gpt-6-luna	medium	?	?	?	unknown
+cxrv1189-f355962	Task: independent review of PR #1189 in tailrocks/velnor-new (head f355962eb9f91	gpt-6-luna	medium	?	?	?	unknown
+cxrv1179-5e0bcb9	Task: independent review of PR #1179 in tailrocks/velnor-new (head 5e0bcb9b36a17	gpt-6-luna	medium	?	?	?	unknown
+cxrv1168-4b129d7	Task: independent review of PR #1168 in tailrocks/velnor-new (head 4b129d7b2cd3b	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1035-23eed18	Task: independent review of PR #1035 in tailrocks/velnor-new (head 23eed185b4053	gpt-6-luna	high	?	?	?	unknown
+cxrv1056-ed7d367	Task: independent review of PR #1056 in tailrocks/velnor-new (head ed7d36786a15c	gpt-6-luna	medium	?	?	?	unknown
+cxrv1211-f25a1ba	Task: independent review of PR #1211 in tailrocks/velnor-new (head f25a1ba020a4c	gpt-6-luna	high	?	?	?	unknown
+cxrv1056-ed7d367	Task: independent review of PR #1056 in tailrocks/velnor-new (head ed7d36786a15c	gpt-6-luna	high	?	?	?	unknown
+cxrv994-d9a5156	Task: independent review of PR #994 in tailrocks/velnor-new (head d9a5156845241b	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1053-72a3f33	Task: independent review of PR #1053 in tailrocks/velnor-new (head 72a3f338fe68e	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1056-3624f27	Task: independent review of PR #1056 in tailrocks/velnor-new (head 3624f272c8891	gpt-6-luna	high	?	?	?	unknown
+cxrv1168-1574feb	Task: independent review of PR #1168 in tailrocks/velnor-new (head 1574feb79d287	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1045-eaf2c4f	Task: independent review of PR #1045 in tailrocks/velnor-new (head eaf2c4f0e749e	gpt-6-luna	medium	?	?	?	unknown
+cxrv1026-e6afe6d	Task: independent review of PR #1026 in tailrocks/velnor-new (head e6afe6dd2f623	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1107-0683010	Task: independent review of PR #1107 in tailrocks/velnor-new (head 0683010d8dba2	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1037-45398e1	Task: independent review of PR #1037 in tailrocks/velnor-new (head 45398e1ddc804	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1168-2497ac1	Task: independent review of PR #1168 in tailrocks/velnor-new (head 2497ac1577802	gpt-6-luna	high	?	?	?	unknown
+cxrv1107-0683010	Task: independent review of PR #1107 in tailrocks/velnor-new (head 0683010d8dba2	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1053-1852353	Task: independent review of PR #1053 in tailrocks/velnor-new (head 18523530210e2	gpt-6-luna	high	?	?	?	unknown
+cxrv1212-17ca363	Task: independent review of PR #1212 in tailrocks/velnor-new (head 17ca36379cd6e	gpt-6-luna	high	?	?	?	unknown
+cxrv1056-8425270	Task: independent review of PR #1056 in tailrocks/velnor-new (head 8425270e01a63	gpt-6-luna	high	?	?	?	unknown
+cxrv1200-9bf41f2	Task: independent review of PR #1200 in tailrocks/velnor-new (head 9bf41f25cc587	gpt-6-luna	high	?	?	?	unknown
+cxrv1109-f053d74	Task: independent review of PR #1109 in tailrocks/velnor-new (head f053d742561df	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1037-45398e1	Task: independent review of PR #1037 in tailrocks/velnor-new (head 45398e1ddc804	gpt-6-luna	high	?	?	?	unknown
+cxrv1107-3d130f9	Task: independent review of PR #1107 in tailrocks/velnor-new (head 3d130f97000c6	gpt-6.1-sol	high	?	?	?	unknown
+cxrv1026-604b178	Task: independent review of PR #1026 in tailrocks/velnor-new (head 604b178854831	gpt-6-luna	high	?	?	?	unknown
+cxrv1049-d5dee34	Task: independent review of PR #1049 in tailrocks/velnor-new (head d5dee3457955b	gpt-6-luna	high	?	?	?	unknown
+cxrv1216-74bca97	Task: independent review of PR #1216 in tailrocks/velnor-new (head 74bca977d240e	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1109-5b179d7	Task: independent review of PR #1109 in tailrocks/velnor-new (head 5b179d77d651b	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1056-ffe3ae8	Task: independent review of PR #1056 in tailrocks/velnor-new (head ffe3ae856c281	gpt-6-luna	high	?	?	?	unknown
+cxrv1107-3d130f9	Task: independent review of PR #1107 in tailrocks/velnor-new (head 3d130f97000c6	gpt-6-luna	high	?	?	?	unknown
+cxrv1109-5b179d7	Task: independent review of PR #1109 in tailrocks/velnor-new (head 5b179d77d651b	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1026-604b178	Task: independent review of PR #1026 in tailrocks/velnor-new (head 604b178854831	gpt-6-luna	high	?	?	?	unknown
+cxrv1026-d5423a8	Task: independent review of PR #1026 in tailrocks/velnor-new (head d5423a8a934fe	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1037-bc5bfc1	Task: independent review of PR #1037 in tailrocks/velnor-new (head bc5bfc13cec63	gpt-6-luna	high	?	?	?	unknown
+cxrv1222-e2fadd1	Task: independent review of PR #1222 in tailrocks/velnor-new (head e2fadd1e990c3	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1049-b686399	Task: independent review of PR #1049 in tailrocks/velnor-new (head b686399dad1f0	gpt-6-luna	high	?	?	?	unknown
+cxrv1037-bc5bfc1	Task: independent review of PR #1037 in tailrocks/velnor-new (head bc5bfc13cec63	gpt-6-luna	medium	?	?	?	unknown
+cxrv1194-208a6aa	Task: independent review of PR #1194 in tailrocks/velnor-new (head 208a6aad1d062	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1107-75d818a	Task: independent review of PR #1107 in tailrocks/velnor-new (head 75d818a907b45	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1193-f037cc1	Task: independent review of PR #1193 in tailrocks/velnor-new (head f037cc16b3f38	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1109-b3293fc	Task: independent review of PR #1109 in tailrocks/velnor-new (head b3293fc28efd1	gpt-6-luna	high	?	?	?	unknown
+cxrv1037-bc5bfc1	Task: independent review of PR #1037 in tailrocks/velnor-new (head bc5bfc13cec63	gpt-6-luna	high	?	?	?	unknown
+cxrv1216-74bca97	Task: independent review of PR #1216 in tailrocks/velnor-new (head 74bca977d240e	gpt-6-luna	high	?	?	?	unknown
+cxrv1168-836b5bb	Task: independent review of PR #1168 in tailrocks/velnor-new (head 836b5bb10a747	gpt-6-luna	high	?	?	?	unknown
+cxrv1046-4321da2	Task: independent review of PR #1046 in tailrocks/velnor-new (head 4321da2dc324c	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1222-e2fadd1	Task: independent review of PR #1222 in tailrocks/velnor-new (head e2fadd1e990c3	gpt-6-luna	high	?	?	?	unknown
+cxrv1049-8f875e1	Task: independent review of PR #1049 in tailrocks/velnor-new (head 8f875e19b7390	gpt-6-luna	high	?	?	?	unknown
+cxrv1193-f037cc1	Task: independent review of PR #1193 in tailrocks/velnor-new (head f037cc16b3f38	gpt-6-luna	high	?	?	?	unknown
+cxrv1193-38a4464	Task: independent review of PR #1193 in tailrocks/velnor-new (head 38a4464daec6d	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1168-a6aa227	Task: independent review of PR #1168 in tailrocks/velnor-new (head a6aa227d01de7	gpt-6-luna	high	?	?	?	unknown
+cxrv1224-94674fa	Task: independent review of PR #1224 in tailrocks/velnor-new (head 94674fa709ed8	gpt-6.1-terra	high	?	?	?	unknown
+cxrv1037-df5f4a0	Task: independent review of PR #1037 in tailrocks/velnor-new (head df5f4a0b3c7b5	gpt-6-luna	high	?	?	?	unknown
+cxrv1168-a6aa227	Task: independent review of PR #1168 in tailrocks/velnor-new (head a6aa227d01de7	gpt-6-luna	high	?	?	?	unknown
+cxrv1224-94674fa	Task: independent review of PR #1224 in tailrocks/velnor-new (head 94674fa709ed8	gpt-6-luna	high	?	?	?	unknown
+cxrv1227-0c26bfb	Task: independent review of PR #1227 in tailrocks/velnor-new (head 0c26bfb62a0a4	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1227-0c26bfb	Task: independent review of PR #1227 in tailrocks/velnor-new (head 0c26bfb62a0a4	gpt-6-luna	high	?	?	?	unknown
+cxrv1228-9de646d	Task: independent review of PR #1228 in tailrocks/velnor-new (head 9de646de89187	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1230-e48cf47	Task: independent review of PR #1230 in tailrocks/velnor-new (head e48cf47d3fec5	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1229-a00ba1c	Task: independent review of PR #1229 in tailrocks/velnor-new (head a00ba1c0b1867	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1168-c2838fb	Task: independent review of PR #1168 in tailrocks/velnor-new (head c2838fb0e7dd4	gpt-6-luna	high	?	?	?	unknown
+cxbug1070	Task: issue #1070 in tailrocks/velnor-new (generator, mise tool pins). tool_pins	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1241-dc95d2b	Task: independent review of PR #1241 in tailrocks/velnor-new (head dc95d2b6d16bc	gpt-6.1-terra	medium	?	?	?	unknown
+cxbug1136	Task: issue #1136 in tailrocks/velnor-new (runner, GitHub admin registration). v	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1230-3c43f57	Task: independent review of PR #1230 in tailrocks/velnor-new (head 3c43f5738ae3e	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1257-911c857	Task: independent review of PR #1257 in tailrocks/velnor-new (head 911c85779892c	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1255-01253c0	Task: independent review of PR #1255 in tailrocks/velnor-new (head 01253c0615b64	gpt-6-luna	high	?	?	?	unknown
+cxrv1282-b5043c6	Task: independent review of PR #1282 in tailrocks/velnor-new (head b5043c6f62687	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1107-08e0982	Task: independent review of PR #1107 in tailrocks/velnor-new (head 08e0982800833	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1260-1eb3bd3	Task: independent review of PR #1260 in tailrocks/velnor-new (head 1eb3bd36f83fa	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1228-742defb	Task: independent review of PR #1228 in tailrocks/velnor-new (head 742defb0be7b9	gpt-6-luna	high	?	?	?	unknown
+cxrv1263-2609cde	Task: independent review of PR #1263 in tailrocks/velnor-new (head 2609cde3b52bc	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1268-86c1891	Task: independent review of PR #1268 in tailrocks/velnor-new (head 86c189180e887	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1278-5fafc12	Task: independent review of PR #1278 in tailrocks/velnor-new (head 5fafc1224f5a9	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1264-d939f11	Task: independent review of PR #1264 in tailrocks/velnor-new (head d939f11ad137b	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1230-ba97542	Task: independent review of PR #1230 in tailrocks/velnor-new (head ba975427928d7	gpt-6.1-terra	medium	?	?	?	unknown
+cxrv1284-23c1dfc	Task: independent review of PR #1284 in tailrocks/velnor-new (head 23c1dfc3b690e	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1263-8d5a6cd	Task: independent review of PR #1263 in tailrocks/velnor-new (head 8d5a6cda3def0	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1297-aaf94e4	Task: independent review of PR #1297 in tailrocks/velnor-new (head aaf94e454fa95	gpt-6-luna	high	?	?	?	unknown
+cxrv1279-50840d2	Task: independent review of PR #1279 in tailrocks/velnor-new (head 50840d2442095	gpt-6-luna	high	?	?	?	unknown
+cxrv1251-c9c7aad	Task: independent review of PR #1251 in tailrocks/velnor-new (head c9c7aade3c09e	gpt-6-luna	high	?	?	?	unknown
+cxrv1309-2d21fec	Task: independent review of PR #1309 in tailrocks/velnor-new (head 2d21fec1a1e57	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1310-d57112b	Task: independent review of PR #1310 in tailrocks/velnor-new (head d57112bb92563	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1193-8e3d180	Task: independent review of PR #1193 in tailrocks/velnor-new (head 8e3d180ea76d1	gpt-6-luna	high	?	?	?	unknown
+cxrv1274-115277c	Task: independent review of PR #1274 in tailrocks/velnor-new (head 115277cf34998	gpt-6-luna	high	?	?	?	unknown
+cxrv1334-d8560af	Task: independent review of PR #1334 in tailrocks/velnor-new (head d8560af7155b2	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1326-77d9a0c	Task: independent review of PR #1326 in tailrocks/velnor-new (head 77d9a0cfae818	gpt-6-luna	high	?	?	?	unknown
+cxrv1363-1adf721	Task: independent review of PR #1363 in tailrocks/velnor-new (head 1adf721d08413	gpt-6.1-sol	medium	?	?	?	unknown
+cxrv1363-4758e38	Task: independent review of PR #1363 in tailrocks/velnor-new (head 4758e38c31b73	gpt-6-luna	high	?	?	?	unknown

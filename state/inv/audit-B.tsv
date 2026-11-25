@@ -1,0 +1,19 @@
+2479	open	H	owner decision: keep the sample golden or narrow test_setup_phase	https://github.com/tailrocks/velnor-new/issues/2479#issuecomment-7123381495
+2528	open	S	inherited VELNOR_CRATES_MIRROR=off unhandled; independent red/green and CI performance evidence missing	https://github.com/tailrocks/velnor-new/issues/2528#issuecomment-7123380301
+2530	open	S	non-regular types other than dir/symlink not cleared; independent plan review evidence missing; #2545 thread items need a check	https://github.com/tailrocks/velnor-new/issues/2530#issuecomment-7123378970
+2539	open	H	code gate done in #2550; only real-run timing evidence and nextest confirmation remain	https://github.com/tailrocks/velnor-new/issues/2539#issuecomment-7123377742
+2568	closed	-	-	https://github.com/tailrocks/velnor-new/issues/2568#issuecomment-7123364095
+2570	open	H	evidence-only: baseline/head performance evidence and four gate verdicts for #2552	https://github.com/tailrocks/velnor-new/issues/2570#issuecomment-7123377219
+2571	open	H	evidence-only: independent plan and red/green record for #2552 declaration budget tests	https://github.com/tailrocks/velnor-new/issues/2571#issuecomment-7123376663
+2574	closed	-	-	https://github.com/tailrocks/velnor-new/issues/2574#issuecomment-7123363049
+2596	open	H	#2618 fixed the teardown wait but the 22 s readiness bound and 3 s margin are not met	https://github.com/tailrocks/velnor-new/issues/2596#issuecomment-7123375300
+2622	open	L	setup-velnor prune_quarantine still keeps newest 3 by mtime with no reservation for in-flight quarantines	https://github.com/tailrocks/velnor-new/issues/2622#issuecomment-7123374757
+2636	open	H	evidence-only: nextest reruns for #2502 and #2533 tests	https://github.com/tailrocks/velnor-new/issues/2636#issuecomment-7123374202
+2649	open	H	perf item addressed; process and evidence items need an owner waiver or a measurement run	https://github.com/tailrocks/velnor-new/issues/2649#issuecomment-7123373615
+2673	open	H	evidence-only: independent plan review and red/green record for job_id.rs test	https://github.com/tailrocks/velnor-new/issues/2673#issuecomment-7123372988
+2681	closed	-	-	https://github.com/tailrocks/velnor-new/issues/2681#issuecomment-7123362083
+2685	open	L	target-cache restore across a helper bump: evidence and option (a) vs (b) undecided, nothing implemented	https://github.com/tailrocks/velnor-new/issues/2685#issuecomment-7123383137
+2702	closed	-	-	https://github.com/tailrocks/velnor-new/issues/2702#issuecomment-7123360310
+2704	closed	-	-	https://github.com/tailrocks/velnor-new/issues/2704#issuecomment-7123361170
+2709	open	M	report_waste still errors on missing MBX stats reports; mbx_report.rs still drops malformed compiler-work entries; docs not updated	https://github.com/tailrocks/velnor-new/issues/2709#issuecomment-7123372382
+2711	open	H	owner decision on schema versioning for saved_key; helper 0.1.112 already tagged	https://github.com/tailrocks/velnor-new/issues/2711#issuecomment-7123382596

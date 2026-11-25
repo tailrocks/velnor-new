@@ -1,0 +1,24 @@
+610	Owner: may the 8 GB save gate use a live usage query, which the issue's Do-not section forbids, or stay after-the-fact in cache budget?
+622	Box 1 (3 full runs): do pushes on the self-hosted scale-set runner count, given #574 rule 4 counts GitHub-hosted runs?
+1535	Keep cache-producing Clippy/doc/check steps on the saving push, or transfer the queue run's artifacts? Measure cost first; which one?
+1569	Decide the repo-wide style for module-level doc comments (item b), and whether held deferrals (a), (c)-(f) stay open
+1618	Should the one-root policy job get its own plan job (changing plan.rs and every policy job shape) so policy stops waiting on the whole rust build/test job?
+1628	Should release-plz release every crate the shipped binaries compile in (rest of item 2), and should tools-/runner- tag prefixes be protected by a creation ruleset?
+1639	Which owner decision first: native executor vs governing goals (architecture.md:273), or default evaluator Q4 (:300) and merge-group webhook D7?
+1666	Should the Required result check gate tools release tags again (family_required_checks=false) now that main has been green for a day?
+1678	Should docs/goals.md lines 36/40 be changed to require rustdoc failures to block merged code, or is docs=post_merge the accepted policy?
+2211	Owner: which helper version gates MBX enforcement (0.1.111 per owner comment vs 0.1.109 in checklist), and move fixture/.velnor pins? Also verify seed_truncated cleanup
+2280	Owner: should ancestor symlinks of HOME (macOS /var, /home -> /var/home) be accepted or refused by tools_local/clear.rs? (cold/warm timing is measurement, not code)
+2283	Who runs the baseline/head scan time and CPU/RAM/disk measurement on a 1,000,000-entry tree (owner or CI cluster), and is it required before closing?
+2479	Keep the build-phase-setup golden as the setup-placement proof, or narrow the parent test that repeats test_setup_phase.rs?
+2536	Owner: adopt cache-decisions P1 option A (keep v1-<job> key) or B (add mbx release to key), and keep or change the hard-coded 1.30.0 fallback for helpers before 0.1.109?
+2561	Owner: which fix: save base caches for public git deps, restore base in test_groups jobs, or count cross-job duplicates as expected via allowlist or threshold?
+2583	Owner: should .mise-version be required to equal min_version exactly, or only be >= min_version with required features checked?
+2663	Which option closes the gap: (1) move secret-scan into rust-ci.yml required.needs, (2) add Secret scanners as a required check in protect-main, or (3) make the job advisory?
+2685	Pick (a) add helper version or epoch to the target key (cold run per bump) or (b) keep the key and treat cross-helper fallback restore as a notice, once the older-target evidence is recorded?
+2713	Which token order governs: keep private-cache publish in the default-branch job with a fresh tokenless check, or move it to a separate job that runs no repo code (overriding #2346)?
+2473	Close as not reproducible after #2387, or supply the failing run's target/debug/build listing and velnor-invocations.jsonl?
+2512	Authorize three throwaway PRs (deny.toml-only, LICENSE-only, unrelated) for observed inventories, and name an independent reviewer for policy_deny_key.rs?
+2556	Accept the 60 s tier for that test, or approve re-recording a smaller snapshot (legacy op deleted in #1747)?
+2558	Close as not worth doing (reopen on a recorded mise-wrapper flake) or fund a CI runtime measurement of serializing the ~54 callers?
+2625	Owner: accept the inherited gate-1 FAIL (fail-closed OUT_DIR reads) as recorded on #2611, or open a follow-up to fix it?

@@ -1,0 +1,146 @@
+2822	bug
+2821	needs-owner,in-progress
+2820	fast-ci,needs-owner
+2818	bug,fast-ci,in-progress
+2817	fast-ci,in-progress
+2816	fast-ci,owner-decision
+2814	in-progress
+2773	in-progress
+2757	in-progress
+2753	in-progress
+2752	in-progress
+2742	fast-ci,in-progress
+2713	fast-ci,needs-owner
+2712	in-progress
+2711	
+2709	fast-ci,in-progress
+2698	fast-ci,exec:haiku,effort:low,blocked
+2695	fast-ci,exec:haiku,effort:low,blocked
+2691	fast-ci,blocked
+2690	fast-ci,blocked
+2688	fast-ci,exec:haiku,effort:low,blocked
+2685	fast-ci,needs-owner
+2680	fast-ci,in-progress
+2678	fast-ci,blocked
+2677	fast-ci,blocked
+2673	
+2663	fast-ci,needs-owner,blocked
+2649	
+2646	fast-ci,blocked
+2639	fast-ci,blocked
+2636	
+2625	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked
+2623	
+2622	in-progress
+2602	in-progress
+2596	fast-ci,exec:haiku,effort:low
+2590	fast-ci,blocked
+2588	fast-ci,exec:haiku,effort:low,in-progress
+2586	fast-ci,exec:haiku,effort:low,blocked
+2583	fast-ci,exec:haiku,effort:low,needs-owner,in-progress
+2571	
+2570	
+2561	needs-owner
+2560	in-progress
+2558	fast-ci,exec:haiku,effort:low,needs-owner,blocked
+2557	fast-ci,exec:haiku,effort:low,needs-owner,blocked
+2556	fast-ci,exec:haiku,effort:low,needs-owner,blocked
+2541	fast-ci
+2540	fast-ci,exec:sonnet,effort:low,in-progress
+2539	fast-ci,exec:sonnet,effort:low
+2536	fast-ci,exec:sonnet,effort:low,needs-owner,in-progress
+2535	fast-ci,exec:sonnet,effort:low,blocked
+2530	fast-ci,exec:sonnet,effort:low,in-progress
+2528	fast-ci,exec:sonnet,effort:low,in-progress
+2512	fast-ci,exec:haiku,effort:medium,needs-owner,blocked
+2483	fast-ci,exec:haiku,effort:low,in-progress
+2479	fast-ci,exec:haiku,effort:low
+2473	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked
+2470	fast-ci,exec:haiku,needs-owner,in-progress
+2444	fast-ci,exec:opus,effort:high,in-progress
+2440	fast-ci,exec:haiku,effort:low
+2437	fast-ci,exec:haiku,effort:low,in-progress
+2433	fast-ci,exec:haiku,effort:low,needs-owner
+2432	fast-ci,exec:haiku,effort:low,in-progress
+2425	fast-ci,needs-owner
+2421	fast-ci,in-progress,blocked
+2403	fast-ci,exec:haiku,effort:low
+2389	in-progress
+2371	fast-ci
+2356	blocked
+2353	fast-ci,in-progress
+2344	fast-ci,in-progress
+2341	
+2337	fast-ci,exec:sonnet,effort:low,needs-owner
+2289	in-progress
+2287	
+2283	needs-owner
+2281	epic
+2280	needs-owner
+2279	in-progress
+2277	fast-ci
+2275	in-progress
+2268	fast-ci,exec:opus,effort:high,blocked
+2262	fast-ci,exec:sonnet,effort:high
+2259	fast-ci,exec:haiku,effort:low
+2242	fast-ci,exec:haiku,effort:low,blocked
+2219	fast-ci,exec:sonnet,effort:medium,blocked
+2212	fast-ci,exec:sonnet,effort:medium
+2211	fast-ci,exec:sonnet,effort:high,needs-owner,in-progress
+2210	fast-ci,exec:sonnet,effort:medium
+2205	fast-ci,exec:sonnet,effort:high,blocked
+2173	fast-ci,exec:opus,effort:high,blocked
+2107	needs-owner,owner-action
+2048	fast-ci,exec:opus,effort:high,blocked
+1702	
+1692	epic
+1682	
+1680	
+1678	needs-owner
+1666	needs-owner
+1639	needs-owner
+1628	needs-owner
+1618	needs-owner
+1593	needs-owner,in-progress
+1572	
+1569	needs-owner
+1535	needs-owner
+1526	epic
+1499	
+1456	
+1452	
+1450	
+1449	in-progress
+1447	in-progress
+1432	needs-owner
+1429	needs-owner
+1370	needs-owner
+1305	
+1290	fast-ci
+1233	
+1218	fast-ci,blocked
+1047	fast-ci,needs-owner,blocked
+966	fast-ci,exec:sonnet,effort:medium,blocked
+949	needs-owner,owner-action
+941	
+934	fast-ci,exec:sonnet,effort:low,blocked
+733	fast-ci,exec:opus,effort:medium
+732	needs-owner,owner-action
+729	fast-ci,exec:sonnet,effort:high,blocked
+682	needs-owner,owner-action
+649	fast-ci,exec:sonnet,effort:high,needs-owner
+648	fast-ci,exec:opus,effort:high,needs-owner
+646	fast-ci,exec:opus,effort:high,needs-owner
+645	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked
+627	fast-ci,epic
+626	fast-ci,epic
+623	fast-ci,exec:sonnet,effort:medium,needs-owner
+622	fast-ci,exec:sonnet,effort:medium,needs-owner,in-progress
+610	fast-ci,exec:sonnet,effort:medium,needs-owner,in-progress
+609	fast-ci,exec:opus,effort:high
+608	fast-ci,exec:opus,effort:medium,in-progress
+604	fast-ci,exec:opus,effort:high,needs-owner
+581	fast-ci,epic
+579	fast-ci,epic
+578	fast-ci,epic
+574	fast-ci,epic

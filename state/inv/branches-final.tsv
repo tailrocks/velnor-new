@@ -1,0 +1,65 @@
+branch	class	pr#	unique-commits	note
+chore/2777-mr-boxington-1.31.0	open-pr	2784	1	1 patches not on main
+chore/pin-tools-0.1.115	open-pr	2828	2	2 patches not on main
+ci/2048-generated-check-lint	open-pr	2833	4	3 patches not on main
+fast/2349-no-doctests-followups	open-pr	2379	36	30 patches not on main; old class: open-pr
+fast/2361-archive-exec-diagnostics	closed-pr-unmerged	2375	1	old class: unique-work
+fast/2430-relative-build-dir-probe	closed-pr-unmerged	2454	48	old class: open-pr
+fast/2432-no-doctests-followups	open-pr	2448	68	50 patches not on main; old class: open-pr
+fast/2438-tools-verify-followups	closed-pr-unmerged	2463	13	old class: unique-work
+fast/2440-fu-from-source-reuse	closed-pr-unmerged	2458	15	old class: open-pr
+fast/2470-audit-ctime-relist	closed-pr-unmerged	2477	24	old class: open-pr
+fast/2471-purge-private	closed-pr-unmerged	2647	1	old class: superseded
+fast/2474-anchor-steps-ref	closed-pr-unmerged	2476	2	old class: superseded
+fast/2483-helper-gate-checker-gaps	open-pr	2525	42	27 patches not on main; old class: open-pr
+fast/2491-lock-review-followups	closed-pr-unmerged	2505	16	old class: open-pr
+fast/2514-credential-report-order	closed-pr-unmerged	2515	1	old class: unique-work
+fast/2529-binary-digest-docs	closed-pr-unmerged	2642	16	old class: open-pr
+fast/2540-deferred-notice-host	open-pr	2577	43	25 patches not on main; old class: open-pr
+fast/2580-steps-shapes	unique-no-PR	-	1	1 patches not on main; last: test(velnor-gen): steps.<id> invariant renders the gated shapes too (2026-11-21); old class: unique-work
+fast/2582-steps-invariant-gaps	closed-pr-unmerged	2610	19	old class: open-pr
+fast/2584-mise-version-exact-set	closed-pr-unmerged	2605	6	old class: unique-work
+fast/2588-no-doctests-false-positives	open-pr	2604	10	7 patches not on main; old class: open-pr
+fast/i2475-audit-fd-bound	closed-pr-unmerged	2495	31	old class: open-pr
+fast/local-mode-lane-parallel	closed-pr-unmerged	2260	3	old class: open-pr
+fast/mbx-shared-store-stopgap	open-pr	1986	1	1 patches not on main; old class: open-pr
+fast/repin-tools-0.1.110	closed-pr-unmerged	2345	6	old class: open-pr
+feat/image-publish	open-pr	2839	4	4 patches not on main
+fix/2289-credential-scan-hardening	open-pr	2807	2	2 patches not on main
+fix/2528-mirror-inherited-off	closed-pr-unmerged	2781	1	
+fix/2530-clear-fifo-entry	open-pr	2779	3	3 patches not on main
+fix/2553-toolchain-neutral-build-layout	open-pr	2721	4	2 patches not on main; old class: open-pr
+fix/2622-keep-inflight-quarantine	open-pr	2812	7	7 patches not on main
+fix/2682-tools-heal-removal-precondition	closed-pr-unmerged	2705	1	old class: unique-work
+fix/2696-restore-only-tools-save	closed-pr-unmerged	2710	5	old class: open-pr
+fix/2712-pr-inputs-audit	open-pr	2761	16	12 patches not on main
+fix/2757-rust-trim-zero-roots	open-pr	2785	1	1 patches not on main
+fix/2773-helper-gates-merge-queue	open-pr	2782	4	4 patches not on main
+fix/2814-tools-save-timeout	open-pr	2815	2	2 patches not on main
+fix/2820-docker-client-hash	open-pr	2838	1	1 patches not on main
+fix/2836-private-fetch-manifests	open-pr	2837	5	5 patches not on main
+fix/no-doctests-2560-2602	open-pr	2657	8	6 patches not on main; old class: open-pr
+fix/refresh-rust-inputs-lock	closed-pr-unmerged	2719	1	old class: superseded
+fu-2437-no-doctests-list	open-pr	2445	35	29 patches not on main; old class: open-pr
+fx-2545	unique-no-PR	-	6	5 patches not on main; last: fix(setup-velnor): prune kept eviction quarantines to the newest three (2026-11-21); old class: unique-work
+g4-submodule-fixture	unique-no-PR	-	1	1 patches not on main; last: test: qualification submodule marker (2026-10-03); old class: empty
+gh-readonly-queue/main/pr-2837-b71a5bda5aace1ee2ba503021fcecde3d74bcb1c	unique-no-PR	-	2	merge-queue ref, not a PR head; 2 patches not on main; last: fix(velnor-rust): list the private fetch manifests in a variable and fetch only the selected grouped members (#2836) (#2837) (2026-11-24)
+gh-readonly-queue/main/pr-2838-5cf0b32c9aea115f87a1788e0748ede0bc5744da	unique-no-PR	-	1	merge-queue ref, not a PR head; 1 patches not on main; last: fix(velnor-ci): pin the Docker client by binary hash before build-test.sh runs (#2820) (#2838) (2026-11-24)
+handoff/roadmap-2026-11-15	unique-no-PR	-	7	7 patches not on main; last: handoff: #1985 is merged (2026-11-20); old class: unique-work
+issue-2680-follow-ups	open-pr	2693	10	6 patches not on main; old class: open-pr
+issues-2587-2613-2620	closed-pr-unmerged	2659	14	old class: open-pr
+renovate/cargo-minorpatch	open-pr	2183	2	2 patches not on main; old class: open-pr
+renovate/hk-2.x	open-pr	2758	1	1 patches not on main
+rescue/docs-migrating-velnor-gen-20261120	content-on-main	-	1	squash/rebase-equivalent, cherry all -; old class: merged
+rescue/fast-1555-cargo-guard-remerge-20261120	unique-no-PR	-	5	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into remerge/fast-1555-test-cargo-guard (2026-11-20); old class: unique-work
+rescue/fast-1593-per-root-20261120	unique-no-PR	-	3	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into fast/1593-per-root (2026-11-20); old class: superseded
+rescue/fix-local-strip-conformance-20261120	unique-no-PR	-	3	2 patches not on main; last: Merge remote-tracking branch 'origin/main' into fast/2021-2022-2023-local-strip-conformance (2026-11-20); old class: superseded
+rescue/gen-0107-20261120	merged	-	0	old class: merged
+rescue/mig-bn-gen-src-20261120	merged	-	0	old class: merged
+rescue/velnor-new-gen-20261120	merged	-	0	old class: merged
+research/velnor-gen-rebase-2026-11	open-pr	1751	29	29 patches not on main; old class: open-pr
+salvage/2701-mbx-total-bytes	unique-no-PR	-	1	1 patches not on main; last: fix(velnor-ci): bound the total bytes read across MBX reports (#2701) (2026-11-21); old class: unique-work
+salvage/2702-mbx-report-tests-wip	unique-no-PR	-	1	1 patches not on main; last: wip: salvage uncommitted changes from a stale worktree (not reviewed) (2026-11-22); old class: unique-work
+salvage/2703-mbx-comments	unique-no-PR	-	1	1 patches not on main; last: chore(velnor-ci): drop explanatory comments from the MBX report reader (2026-11-21); old class: unique-work
+speed/rh-slow-public-qualifier-split	closed-pr-unmerged	2404	1	old class: unique-work
+test/2818-setup-velnor-action-ci	open-pr	2819	3	2 patches not on main

@@ -1,0 +1,19 @@
+2444	open	M	release-plz/tag/finalize jobs still use create-github-app-token with the App key; needs velnor-ci app-token with write scopes + test	https://github.com/tailrocks/velnor-new/issues/2444#issuecomment-7123428954
+2421	open	M	Markdown selection by extension (lint_inputs.rs:171); policy_deny_key.rs:183 asserts message text; adoption measurements pending	https://github.com/tailrocks/velnor-new/issues/2421#issuecomment-7123429349
+2420	open	M	shared build dir scanned repeatedly (audit/setup.rs); no overlap-with-tracked-inputs check for separate build dir	https://github.com/tailrocks/velnor-new/issues/2420#issuecomment-7123429838
+2389	open	S	gate Probe behind cfg(test); root ENOTDIR/ELOOP test; decision.rs private seam	https://github.com/tailrocks/velnor-new/issues/2389#issuecomment-7123430368
+2341	open	H	only owner decision left: where scripts/mise-binary-digests.sh lives	https://github.com/tailrocks/velnor-new/issues/2341#issuecomment-7123430854
+2289	open	L	scan skipped after Sources hit; atomic scan+publish (L); GHE git+http admission (M); several S scan gaps	https://github.com/tailrocks/velnor-new/issues/2289#issuecomment-7123431275
+2287	open	S	aggregate curl deadline; no-read test asserts calls not bytes	https://github.com/tailrocks/velnor-new/issues/2287#issuecomment-7123431921
+2279	open	S	physical-target memo key; notice wording; perf/plan-review evidence	https://github.com/tailrocks/velnor-new/issues/2279#issuecomment-7123432355
+2277	open	H	jactionlint inputs (S), slug check (S); owner: alint unconditional vs catch-all inputs	https://github.com/tailrocks/velnor-new/issues/2277#issuecomment-7123432788
+2275	open	S	trusted_paths_with unreachable! on TMPDIR with colon; explain/fix 30s io_inputs_spec timeout	https://github.com/tailrocks/velnor-new/issues/2275#issuecomment-7123433242
+2270	open	S	definitive-private verdict not an error; 30s probe deadline; public_advice text	https://github.com/tailrocks/velnor-new/issues/2270#issuecomment-7123433776
+2262	open	H	owner: per-trust-level mbx roots (#1680); L: seed/clear followed target; S: empty target.root	https://github.com/tailrocks/velnor-new/issues/2262#issuecomment-7123434358
+2257	open	S	third clean parallel run evidence only	https://github.com/tailrocks/velnor-new/issues/2257#issuecomment-7123434775
+2213	closed	-	all items done (#2348, #2503, #2700, #2736)	
+2212	open	S	deterministic vanished-entry test; public-path test; re-verify 3 fail-closed cases	https://github.com/tailrocks/velnor-new/issues/2212#issuecomment-7123435225
+2207	open	S	add incremental to lookup_totals in report_counters.py	https://github.com/tailrocks/velnor-new/issues/2207#issuecomment-7123435733
+934	open	H	consumer repo rollout in other orgs; owner picks migrate/drop requirement/close	https://github.com/tailrocks/velnor-new/issues/934#issuecomment-7123436250
+609	open	H	two lab proof boxes; owner: allow merging a velnor-lab PR to warm main cache	https://github.com/tailrocks/velnor-new/issues/609#issuecomment-7123436707
+2210	open	H	owner: isolate/terminate test descendants before staging (question posted)	https://github.com/tailrocks/velnor-new/issues/2210#issuecomment-7123437258

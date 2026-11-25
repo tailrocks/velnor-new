@@ -1,0 +1,171 @@
+2773		Helper gates check does not run in the merge queue, so a rel
+2757		rust-trim: a repository that lost its last Cargo root never 
+2754		velnor-ci tests: io_gate and crates_mirror depend on nothing
+2753		velnor-ci: the early nextest list can hang velnor-ci run and
+2752		Tools cache: prune can remove an entry that a restore or a r
+2748		Sources scrub runs before sources fetch, so a database fetch
+2745		report: delete the dead AUDIT_JOB guard
+2742	fast-ci	inputs build: cargo run, bench and rustc skip invalidation
+2741	fast-ci	audit: refuse build outputs that belong to no unit
+2720	fast-ci	mbx replays a build-script run without its recorded inputs, 
+2713	fast-ci,needs-owner	Hardening: publish private caches from a separate job that r
+2712	in-progress	inputs audit: lock differs by platform, and PR runs can skip
+2711		Cache report: decide the schema version for saved_key (defer
+2709	fast-ci	Cache waste check errors when MBX stats reports are missing 
+2704	fast-ci,effort:low	tools_local: sweep legacy random retired trees and failed st
+2702	fast-ci,exec:sonnet,in-progress	MBX reports: check that the socket's owner is alive before t
+2698	fast-ci,exec:haiku,effort:low,blocked	from_source generated check: require Rust and derive the bui
+2695	fast-ci,exec:haiku,effort:low,blocked	from_source: refuse leading-dot release-asset repositories t
+2691	fast-ci,blocked	from_source generator build reuse: planner cache family and 
+2690	fast-ci,blocked	generated-check nested-root sample: record it once velnor-ci
+2688	fast-ci,exec:haiku,effort:low,blocked	from_source: velnor-gen package must have one runnable binar
+2685	fast-ci	Target cache: a helper bump restores an older helper's targe
+2681		Pin the saved-key gate: a 0.1.111 pin must get no save_key_s
+2680	fast-ci,in-progress	Follow-ups from #2509: restore the 'current run is not blame
+2678	fast-ci,blocked	Early nextest list: size the extraction admission from the a
+2677	fast-ci,blocked	no-doctests scanner: quote-depth and list-outdent HTML cases
+2673		Record independent plan and red-green review for the job-nam
+2663	fast-ci,needs-owner,blocked	secret-scan is not a merge gate: Required does not depend on
+2651	exec:haiku,blocked	audit: a file link target with a trailing slash resolves to 
+2649		Deferred review findings from #2645 (audit inventory walk de
+2648	fast-ci,in-progress	Main Cache job red: build-script crates and workspace crates
+2646	fast-ci,blocked	Follow-ups from #2591: purge-private fail-closed test and th
+2639	fast-ci,blocked	Deferred review findings from #2633 (scratch directory clean
+2636		Deferred review findings from #2502 and #2533: nextest evide
+2625	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked	Deferred review findings from #2611 (audit root-replaced-by-
+2623		setup-velnor eviction: CI-performance evidence for quarantin
+2622		setup-velnor: keep a quarantine in flight from concurrent pr
+2602	in-progress	no-doctests scanner: conservative false positives left after
+2596	fast-ci,exec:haiku,effort:low,in-progress	Deferred review findings from #2291 (stall readiness margin 
+2590	fast-ci,blocked	velnor-ci tests: MBX socket test directory is named by PID a
+2588	fast-ci,exec:haiku,effort:low,in-progress	no-doctests scanner: false positives on valid quote, HTML an
+2586	fast-ci,exec:haiku,effort:low,blocked	plan_diff: attach reproducible baseline/head evidence for th
+2583	fast-ci,exec:haiku,effort:low,needs-owner,in-progress	velnor-gen: compare .mise-version with min_version by requir
+2574		velnor-ci: audit of a build directory spelled through a syml
+2571		Record independent plan and red-green verification for audit
+2570		Publish performance evidence for the declaration-budget chan
+2568	fast-ci,exec:haiku,effort:low,in-progress	velnor-ci: the 4096-directory target traversal limit fails r
+2561	needs-owner	Cache waste check fails on cross-job duplicates that no job 
+2560	in-progress	alint no-doctests: pin the Python the scanner runs on
+2558	fast-ci,exec:haiku,effort:low,needs-owner,blocked	velnor-ci: serialize or remove the shared mise wrapper conte
+2557	fast-ci,exec:haiku,effort:low,needs-owner,blocked	test(nextest): check serial-group membership with nextest's 
+2556	fast-ci,exec:haiku,effort:low,needs-owner,blocked	plan_diff tests need a 30 s timeout override; find and remov
+2541	fast-ci	[Epic] Deferred review findings from the fast-delivery phase
+2540	fast-ci,exec:sonnet,effort:low,in-progress	Deferred review findings from #2321 (anchor key for planned 
+2539	fast-ci,exec:sonnet,effort:low,in-progress	Deferred review findings from #2307 (tools anchor lookup cos
+2536	fast-ci,exec:sonnet,effort:low,needs-owner,in-progress	Deferred review findings from #2298 (mbx remote version word
+2535	fast-ci,exec:sonnet,effort:low,blocked	Deferred review findings from #2297 (speed budget job title)
+2530	fast-ci,exec:sonnet,effort:low,in-progress	Deferred review findings from #2336 (setup-velnor tool-cache
+2528	fast-ci,exec:sonnet,effort:low,in-progress	Deferred review findings from #2330 (crates-mirror and MBX s
+2512	fast-ci,exec:haiku,effort:medium,needs-owner,blocked	Unresolved review findings from #2358 (policy selection evid
+2497	fast-ci,exec:haiku,effort:low,in-progress	Cache report names save steps that a job with refused base c
+2489	fast-ci,exec:haiku,effort:low,in-progress	Deferred review findings from #2384 (Failed-build marker pac
+2483	fast-ci,exec:haiku,effort:low,in-progress	Deferred review findings from #2369 (helper gate checker gap
+2479	fast-ci,exec:haiku,effort:low,in-progress	Deferred review findings from #2326 (build-phase-setup sampl
+2473	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked	fix(velnor-ci): prune keeps a build script run's fingerprint
+2470	fast-ci,exec:haiku,needs-owner,in-progress	Follow-ups deferred from #2428 (audit freshness at decision 
+2444	fast-ci,exec:opus,effort:high	Private-dependency App key: the token action's post step run
+2440	fast-ci,exec:haiku,effort:low,in-progress	Deferred review findings from #2394: from_source generated-c
+2437	fast-ci,exec:haiku,effort:low,in-progress	no-doctests: ordered list marker that cannot interrupt a par
+2436	fast-ci,exec:haiku,effort:low,blocked	Deferred review findings from PR #2407 (early nextest list)
+2433	fast-ci,exec:haiku,effort:low,needs-owner	Measure and accept the PR cost of the Documentation step (#2
+2432	fast-ci,exec:haiku,effort:low,in-progress	no-doctests scanner: deferred P2 edge cases from #2382
+2430	fast-ci,exec:haiku,effort:low,in-progress	velnor-ci: normalize a relative CARGO_BUILD_BUILD_DIR on the
+2425	fast-ci,needs-owner	mbx upstream feature request (draft, not filed upstream): pe
+2421	fast-ci,blocked	Follow-ups deferred from #2401
+2420		velnor-ci: scan a shared build directory once; refuse build 
+2403	fast-ci,exec:haiku,effort:low,in-progress	Follow-ups from #2387: mbx steps only in compiling jobs; see
+2389		Follow-ups deferred from #2386 (handle-based inventory walk)
+2371	fast-ci,in-progress	velnor-new: run the generated-check lint with velnor-gen bui
+2365		Follow-ups deferred from #2345
+2356	blocked	MBX JSON reports: follow-ups deferred from #2348
+2353	fast-ci,in-progress	lint-alint: declare the pinned python for the no-doctests-bl
+2349	fast-ci,in-progress	alint no-doctests: block indentation rule flags paragraph-co
+2344	fast-ci,in-progress	alint no-doctests: escape-encoded and concat!-split doc attr
+2341		Follow-ups deferred from #2165
+2337	fast-ci,exec:sonnet,effort:low,needs-owner	Owner decisions: mbx fallback and mbx cache key (follow-ups 
+2311		Follow-ups deferred from #2167
+2289		Private base caches: credential-scan hardening (ssh userinfo
+2287		Follow-ups deferred from #2218
+2283	needs-owner	Follow-ups deferred from #2215
+2281	epic	[Epic] Deferred review findings from the fast-delivery phase
+2280	needs-owner	Follow-ups deferred from #2271
+2279		Follow-ups deferred from #2239
+2277	fast-ci	Declare [[lint]] inputs in this repository's rust-ci.toml on
+2275		Follow-ups deferred from #2236
+2270		Follow-ups deferred from #2136
+2268	fast-ci,exec:opus,effort:high,blocked	Follow-ups deferred from #2133
+2262	fast-ci,exec:sonnet,effort:high,in-progress	Follow-ups deferred from #2201
+2259	fast-ci,exec:haiku,effort:low,in-progress	velnor-new CI: run the local-mode lane as a parallel job
+2257	fast-ci,exec:sonnet,effort:medium,in-progress	velnor-ci tests: run in parallel; serial group limited to 38
+2242	fast-ci,exec:haiku,effort:low,blocked	mbx summary: drop the labelled-form compatibility branch
+2219	fast-ci,exec:sonnet,effort:medium,blocked	Deferred review findings from #2151 (Rust 1.100.0 pins)
+2213	fast-ci,exec:sonnet,effort:medium,in-progress	Follow-up: deferred review findings from #2150 (mbx 1.30 sum
+2212	fast-ci,exec:sonnet,effort:medium,in-progress	Follow-up: deferred review findings from #2142 (audit vanish
+2211	fast-ci,exec:sonnet,effort:high,needs-owner,in-progress	Follow-up: deferred review findings from #2105 (fail-closed 
+2210	fast-ci,exec:sonnet,effort:medium,in-progress	Follow-ups deferred from #2132
+2207	fast-ci,exec:haiku,effort:low,in-progress	Follow-up: deferred review findings from #2153 (hosted-phase
+2205	fast-ci,exec:sonnet,effort:high,blocked	Deferred review findings from #2066 (generated-check Require
+2173	fast-ci,exec:opus,effort:high,blocked	Follow-ups deferred from #2140 (private-repo base caches)
+2107	needs-owner,owner-action	Design: a generator-owned app-token step for image and relea
+2048	fast-ci,exec:opus,effort:high,blocked	Generated-workflow seal can be forged by a PR without a drif
+1702		Follow-ups from #1107 review
+1693		Deferred review findings from #1509
+1692	epic	[Epic] Deferred review findings from the fast-delivery phase
+1682		Deferred review findings from #1591
+1680		Deferred review findings from #1587
+1678	needs-owner	Deferred review findings from #1576
+1666	needs-owner	Deferred review findings from #1531
+1639	needs-owner	Deferred review findings from #1365
+1628	needs-owner	Deferred review findings from #1307
+1618	needs-owner	Deferred review findings from #1262
+1606		Deferred review findings from #1259
+1593	needs-owner,in-progress	Deferred review findings from #1396
+1582		Deferred review findings from #1566
+1572		Deferred review findings from #1322
+1569	needs-owner	Deferred review findings from #1520
+1555		Main fallout from the fast-merge phase (fix in one cleanup w
+1548		Deferred review findings from #1323
+1536		Follow-ups from #1323 review
+1535	needs-owner	Follow-ups from #1322 review
+1526	epic	[Epic] Deferred review findings from the fast-delivery phase
+1499		Follow-ups from #1337 review: deferred release-stack finding
+1456		[P1] Qualification proof: every mode on hosted and scale set
+1452		[P1] Images proof: PR dry run, one real publish, digest comp
+1450		[P1] velnor-gen: product-release-images.yml as workflow_call
+1449		[P1] velnor-ci: image publish helper from publish.py (login,
+1447		[P1] velnor-ci: image build helper (build, save, inspect, wr
+1432	needs-owner	[P1] velnor-gen: non-Rust lint lane and aggregate Required g
+1429	needs-owner	[P1][owner decision] Tag prefix: rust-ci-v* vs v<version>, a
+1370	needs-owner	docs: pr_ci = "label" is safe only with a merge queue that r
+1305		P3: CI/CD performance for velnor-new (tracker)
+1290	fast-ci	P1: velnor-new runs entirely on velnor-gen (Rust CI + Rust r
+1233		Dependency Dashboard
+1218	fast-ci,blocked	Cargo Deny fails on main: chrono unmaintained (RUSTSEC-2026-
+1047	fast-ci,needs-owner,blocked	Docs drift: statements in the contracts that no longer match
+966	fast-ci,exec:sonnet,effort:medium,blocked	Wire the in-cluster crates.io mirror explicitly in velnor-ge
+949	needs-owner,owner-action	[OWNER] Approve an admin-read secret for the daily tag-rules
+941		CI speed: generator follow-ups from consumer repos
+934	fast-ci,exec:sonnet,effort:low,blocked	Require velnor-ci 0.1.80+ for release generation once it is 
+733	fast-ci,exec:opus,effort:medium	[FAST-REL.11] Generate this repository's release.yml and del
+732	needs-owner,owner-action	[OWNER] Switch the release-tags ruleset to the App-only bypa
+729	fast-ci,exec:sonnet,effort:high,blocked	[FAST-REL.9] Prove the whole release flow on velnor-lab
+682	needs-owner,owner-action	[OWNER] Allow only admins to create rust-ci-v* tags
+680	owner-action	[OWNER] Approve the existing engine's exemption for the hand
+649	fast-ci,exec:sonnet,effort:high,needs-owner	[FAST-6.4] Adopt the new generator in the owner's Rust proje
+648	fast-ci,exec:opus,effort:high,needs-owner	[FAST-6.3] Projects receive new Velnor versions automaticall
+646	fast-ci,exec:opus,effort:high,needs-owner	[FAST-3.8] Private dependencies: fetch with a short-lived to
+645	fast-ci,exec:sonnet,effort:medium,needs-owner,blocked	[FAST-3.7] Checking out only what Rust needs
+627	fast-ci,epic	[FAST-L] Local GitHub: the official runner, a stand-in servi
+626	fast-ci,epic	[FAST-5] Dogfood: velnor-new's own Rust CI comes from the ne
+624	fast-ci,exec:sonnet,effort:medium	[FAST-6.2] Documentation: one page on how Velnor keeps Rust 
+623	fast-ci,exec:sonnet,effort:medium,needs-owner	[FAST-5.1] velnor-lab runs the generator for real every nigh
+622	fast-ci,exec:sonnet,effort:medium,needs-owner,in-progress	[FAST-6.1] Speed budget: fail loudly when CI gets slower
+610	fast-ci,exec:sonnet,effort:medium,needs-owner,in-progress	[FAST-4.4] Budget manager: stay under 8 GB without losing th
+609	fast-ci,exec:opus,effort:high,in-progress	[FAST-4.5] PR delta layer: the second push of a PR reuses th
+608	fast-ci,exec:opus,effort:medium,in-progress	[FAST-5.5] Delete the existing engine's Rust CI path
+604	fast-ci,exec:opus,effort:high,needs-owner	[FAST-5.3] Switch velnor-new's Rust CI to the new generator
+581	fast-ci,epic	[FAST-6] Guard and document
+579	fast-ci,epic	[FAST-4] Cache: a restored build that cargo treats as fresh
+578	fast-ci,epic	[FAST-3] Job shape: one job by default, more only when it pa
+574	fast-ci,epic	[FAST] Roadmap: the fastest Rust CI a generator can produce

@@ -1,0 +1,40 @@
+1218	open	upstream turso release without chrono (no repo-side decision; replacing turso ruled out by owner 2026-11-18)	https://github.com/tailrocks/velnor-new/issues/1218#issuecomment-7131566809
+1450	actionable-L	soft: #2821 (owner, helper refuses credentials in its own environment)	https://github.com/tailrocks/velnor-new/issues/1450#issuecomment-7131567430
+1452	open	#1450 (open; images workflow and release caller not on main), then a real publish on main	https://github.com/tailrocks/velnor-new/issues/1452#issuecomment-7131568000
+1456	actionable-M	none (deps #1454 and #1455 closed); owner question on the engine-output baseline	https://github.com/tailrocks/velnor-new/issues/1456#issuecomment-7131568612
+2173	actionable-L	owner decision for item 4 (may private dependencies enter fork-readable caches?)	https://github.com/tailrocks/velnor-new/issues/2173#issuecomment-7131569215
+2219	actionable-M	none (parent #2151 merged)	https://github.com/tailrocks/velnor-new/issues/2219#issuecomment-7131569813
+2242	actionable-S	none (condition appears met; confirm on a fresh log)	https://github.com/tailrocks/velnor-new/issues/2242#issuecomment-7131570457
+2268	actionable-L	owner decisions (below); parent #2133 merged	https://github.com/tailrocks/velnor-new/issues/2268#issuecomment-7131571060
+2356	open	upstream mbx capability: session id in each stats report (jdx/mr-boxington); see also #2425 (needs-owner draft)	https://github.com/tailrocks/velnor-new/issues/2356#issuecomment-7131571733
+2535	actionable-M	none	https://github.com/tailrocks/velnor-new/issues/2535#issuecomment-7131572552
+2586	actionable-S	none (parent #2457 merged)	https://github.com/tailrocks/velnor-new/issues/2586#issuecomment-7131573379
+2590	closed	-	https://github.com/tailrocks/velnor-new/issues/2590#issuecomment-7131574088
+2623	actionable-M	none (related #2622 open)	https://github.com/tailrocks/velnor-new/issues/2623#issuecomment-7131575647
+2639	closed	-	https://github.com/tailrocks/velnor-new/issues/2639#issuecomment-7131576230
+2646	actionable-S	none (parent #2591 merged)	https://github.com/tailrocks/velnor-new/issues/2646#issuecomment-7131577813
+2677	open	#2604 (open draft, rewrites the same scanner); #2604 belongs to the no-doctests series pending the #2448 / #2432 owner decision	https://github.com/tailrocks/velnor-new/issues/2677#issuecomment-7131578414
+2678	open	owner dependency decision: add a zstd decoder dependency to velnor-ci (no)?	https://github.com/tailrocks/velnor-new/issues/2678#issuecomment-7131579036
+2688	closed	-	https://github.com/tailrocks/velnor-new/issues/2688#issuecomment-7131579636
+2690	actionable-S	none (tools-v0.1.112 is released)	https://github.com/tailrocks/velnor-new/issues/2690#issuecomment-7131581336
+2691	actionable-M	none (tools-v0.1.112 is released)	https://github.com/tailrocks/velnor-new/issues/2691#issuecomment-7131582087
+2695	actionable-S	none (parent #2394 merged)	https://github.com/tailrocks/velnor-new/issues/2695#issuecomment-7131582706
+2698	closed	-	https://github.com/tailrocks/velnor-new/issues/2698#issuecomment-7131583289
+608	open	owner waiver of the byte-identical release and image workflows box (#1550 deleted them)	https://github.com/tailrocks/velnor-new/issues/608#issuecomment-7131584673
+729	open	owner: grant velnor-release App the Actions read, Checks read, Statuses read, Administration write permissions on the velnor-lab installation	https://github.com/tailrocks/velnor-new/issues/729#issuecomment-7131585367
+733	open	#732 (owner: App-only release-tags ruleset) and #682 (owner: rust-ci-v* tag restriction); docs wording S	https://github.com/tailrocks/velnor-new/issues/733#issuecomment-7131585968
+966	open	#604 (needs-owner: switch velnor-new Rust CI to the generator), then a live scale-set run	https://github.com/tailrocks/velnor-new/issues/966#issuecomment-7131586580
+1233	open	bot-managed Renovate Dependency Dashboard, left as is	-
+1290	open	#1450; implementation (L), soft #2821; owner decision; owner decision (helper credential refusal); owner decision (tag prefix); unblocked, M, owner question on engine-output baseline; unblocked, not s	https://github.com/tailrocks/velnor-new/issues/1290#issuecomment-7131593572
+1305	open	no open children; own done-when	https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-7131594156
+1526	open	its own children; owner decision (needs-owner); unblocked, not started	https://github.com/tailrocks/velnor-new/issues/1526#issuecomment-7131594862
+1692	open	actionable-L; actionable-M; actionable-S; blocked label, see the issue; in progress; its own children; owner decision (needs-owner); unblocked, not started	https://github.com/tailrocks/velnor-new/issues/1692#issuecomment-7131595722
+2281	open	actionable-M; blocked label, see the issue; in progress; open; owner decision (needs-owner); unblocked, not started	https://github.com/tailrocks/velnor-new/issues/2281#issuecomment-7131596408
+2541	open	actionable-M; actionable-S; in progress; open; owner decision (needs-owner); unblocked, not started	https://github.com/tailrocks/velnor-new/issues/2541#issuecomment-7131597146
+574	open	#1450; blocked label, see the issue; implementation (L), soft #2821; its own children; open; owner action; owner action (admin-read secret); owner action (after #729 proof); owner decision; owner deci	https://github.com/tailrocks/velnor-new/issues/574#issuecomment-7131597855
+578	open	owner decision (needs-owner)	https://github.com/tailrocks/velnor-new/issues/578#issuecomment-7131598530
+579	open	owner decision (needs-owner); unblocked, not started	https://github.com/tailrocks/velnor-new/issues/579#issuecomment-7131599100
+581	open	owner decision (needs-owner)	https://github.com/tailrocks/velnor-new/issues/581#issuecomment-7131599645
+626	open	open; owner decision (needs-owner); owner decision (switch Rust CI)	https://github.com/tailrocks/velnor-new/issues/626#issuecomment-7131600204
+627	open	no open children; own done-when	https://github.com/tailrocks/velnor-new/issues/627#issuecomment-7131600881
+941	open	no open children; own done-when	https://github.com/tailrocks/velnor-new/issues/941#issuecomment-7131601565

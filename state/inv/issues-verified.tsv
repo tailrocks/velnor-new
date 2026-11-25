@@ -1,0 +1,47 @@
+N	verified-against-main	result	comment URL
+574	yes	owner-blocked: children's owner actions (#2828 accept-risk, tag tools-v0.1.116, #2448/#2432, #1450 Variant A merge, #732/#682/#729, #604); #627 and #1305 actionable	https://github.com/tailrocks/velnor-new/issues/574#issuecomment-7140308688
+578	yes	owner-blocked: owner questions on #645, #646	https://github.com/tailrocks/velnor-new/issues/578#issuecomment-7140311283
+579	yes	owner-blocked: owner question on #610 (and #609)	https://github.com/tailrocks/velnor-new/issues/579#issuecomment-7140313025
+581	yes	owner-blocked: owner questions on #622, #648, #649	https://github.com/tailrocks/velnor-new/issues/581#issuecomment-7140314902
+626	yes	owner-blocked: #604 cutover approval, #608 waiver, #623	https://github.com/tailrocks/velnor-new/issues/626#issuecomment-7140316472
+627	yes	actionable-now: no owner decision (re-run P4 acceptance after the bad endpoint failure)	https://github.com/tailrocks/velnor-new/issues/627#issuecomment-7140327744
+733	yes	owner-blocked: owner steps #732 and #682 (release-tags ruleset)	https://github.com/tailrocks/velnor-new/issues/733#issuecomment-7140295359
+941	yes	owner-blocked: scope question (Playwright/Gradle/old-engine) and #610 budget	https://github.com/tailrocks/velnor-new/issues/941#issuecomment-7140329257
+966	yes	owner-blocked: approve the cutover in #604 (and the github-terraform change)	https://github.com/tailrocks/velnor-new/issues/966#issuecomment-7140293310
+1218	yes	owner-blocked: accept waiting for a turso release without chrono, or replace turso	https://github.com/tailrocks/velnor-new/issues/1218#issuecomment-7140291603
+1290	yes	owner-blocked: #1429, #1432, #1456, #1499 questions; #1450 Variant A merge (#2839)	https://github.com/tailrocks/velnor-new/issues/1290#issuecomment-7140318393
+1305	yes	actionable-now: no owner decision (record proof for items 2 and 5, tick, close)	https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-7140328516
+1450	yes	owner-blocked: owner: #1450 Variant A merge (#2839, session chainargos-8e)	https://github.com/tailrocks/velnor-new/issues/1450#issuecomment-7140288369
+1452	yes	owner-blocked: owner: #1450 Variant A merge (#2839, session chainargos-8e); baseline choice	https://github.com/tailrocks/velnor-new/issues/1452#issuecomment-7140290115
+1526	yes	owner-blocked: owner questions on all open children	https://github.com/tailrocks/velnor-new/issues/1526#issuecomment-7140320249
+1692	yes	owner-blocked: owner questions on all open children	https://github.com/tailrocks/velnor-new/issues/1692#issuecomment-7140322035
+2212	yes	owner-blocked: add an owned filesystem boundary to audit_inputs, or accept scan-level coverage?	https://github.com/tailrocks/velnor-new/issues/2212#issuecomment-7140255650
+2275	yes	closed	https://github.com/tailrocks/velnor-new/issues/2275#issuecomment-7131485109
+2279	yes	owner-blocked: accept the measured head figure as performance evidence and waive the retroactive evidence?	https://github.com/tailrocks/velnor-new/issues/2279#issuecomment-7140250760
+2281	yes	owner-blocked: owner actions on all open children	https://github.com/tailrocks/velnor-new/issues/2281#issuecomment-7140323749
+2344	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2344#issuecomment-7140272023
+2353	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2353#issuecomment-7140274380
+2356	yes	owner-blocked: approve filing the mbx upstream request (#2425), then wait for the mbx release	https://github.com/tailrocks/velnor-new/issues/2356#issuecomment-7140286812
+2371	yes	owner-blocked: owner: --accept-risk merge of #2828 (repin to 0.1.115)	https://github.com/tailrocks/velnor-new/issues/2371#issuecomment-7140247047
+2389	yes	owner-blocked: keep the Hooks seam for race tests, or drop them?	https://github.com/tailrocks/velnor-new/issues/2389#issuecomment-7140254154
+2403	yes	owner-blocked: owner: --accept-risk merge of #2828 (repin to 0.1.115)	https://github.com/tailrocks/velnor-new/issues/2403#issuecomment-7140248915
+2421	yes	owner-blocked: close and track gate_on_plan measurement in the first adopting project, or keep open?	https://github.com/tailrocks/velnor-new/issues/2421#issuecomment-7140252438
+2437	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2437#issuecomment-7140270439
+2440	yes	owner-blocked: decision on #2691 generator-build cache family	https://github.com/tailrocks/velnor-new/issues/2440#issuecomment-7140239106
+2444	yes	owner-blocked: owner: --accept-risk merge of #2828 (repin to 0.1.115)	https://github.com/tailrocks/velnor-new/issues/2444#issuecomment-7140244832
+2483	yes	owner-blocked: confirm merge of #2525 (high-risk: edits repository-checks.yml)	https://github.com/tailrocks/velnor-new/issues/2483#issuecomment-7140285104
+2535	yes	owner-blocked: owner: push tag tools-v0.1.116	https://github.com/tailrocks/velnor-new/issues/2535#issuecomment-7140241207
+2540	yes	owner-blocked: delete the poisoned tools entry by ID (new cache delete-entry flow, PR #2577) or keep gh cache delete <key>?	https://github.com/tailrocks/velnor-new/issues/2540#issuecomment-7140283218
+2541	yes	owner-blocked: owner actions on all open children	https://github.com/tailrocks/velnor-new/issues/2541#issuecomment-7140325630
+2560	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2560#issuecomment-7140276136
+2588	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2588#issuecomment-7140277841
+2602	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2602#issuecomment-7140279601
+2622	yes	owner-blocked: accept the PR #2812 test-plan record, or re-review the plan?	https://github.com/tailrocks/velnor-new/issues/2622#issuecomment-7140268865
+2677	yes	owner-blocked: owner: decision on #2448/#2432 (no-doctests approach)	https://github.com/tailrocks/velnor-new/issues/2677#issuecomment-7140281287
+2680	yes	owner-blocked: may generated CI honor a nextest default-filter (100000-entry test then runs in no CI job)?	https://github.com/tailrocks/velnor-new/issues/2680#issuecomment-7140267132
+2709	yes	owner-blocked: is the hard error for a missing MBX report the final behaviour?	https://github.com/tailrocks/velnor-new/issues/2709#issuecomment-7140243224
+2712	yes	owner-blocked: accept running the inputs audit on every selecting PR (about 1.9 s)?	https://github.com/tailrocks/velnor-new/issues/2712#issuecomment-7140264967
+2757	yes	owner-blocked: accept a permanent rust-trim job in rootless repositories, or limit it (a: only while [private_sources] is configured, b: schedule only)	https://github.com/tailrocks/velnor-new/issues/2757#issuecomment-7140263143
+2814	yes	owner-blocked: --accept-risk merge of #2815 (tools-local save timeout)	https://github.com/tailrocks/velnor-new/issues/2814#issuecomment-7140261093
+2818	yes	owner-blocked: --accept-risk merge of #2819 (setup-velnor action lint)	https://github.com/tailrocks/velnor-new/issues/2818#issuecomment-7140259120
+2821	yes	owner-blocked: owner: #1450 Variant A merge (#2839, session chainargos-8e)	https://github.com/tailrocks/velnor-new/issues/2821#issuecomment-7140257213

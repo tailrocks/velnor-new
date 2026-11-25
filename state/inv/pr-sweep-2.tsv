@@ -1,0 +1,27 @@
+number	draft	verdict	blocker_kinds	head	title
+2851	false	BLOCKED	threads_unresolved	8c71bb0	chore(deps): update hk to v2.14.0
+2839	false	BLOCKED	threads_unresolved	6659b4e	feat(velnor-gen): build and publish native images from [[image]]
+2833	true	BLOCKED	stacked,draft	0a03cb9	ci(velnor-gen): require the generated-check lint, built from the checkout
+2828	false	READY	-	6b560b2	chore(velnor-ci): pin the helper to 0.1.115
+2819	false	READY	-	47a77d6	ci(velnor-ci): run the setup-velnor action tests as a lint
+2815	false	READY	-	f9b7020	fix(velnor-render): bound the tools-local save step below the stale-lock age
+2812	false	READY	-	ca91325	fix(setup-velnor): keep a quarantine in flight from a concurrent prune
+2785	false	READY	-	feeea09	fix(velnor-rust): keep the private-cache purge job in a repository with no Cargo root
+2784	false	READY	-	009a847	chore(deps): update mbx (mr-boxington) to v1.31.0
+2782	false	READY	-	6e5495e	fix(ci): run the helper gates check in the merge queue
+2779	false	BLOCKED	threads_unresolved	bb62ab3	fix(setup-velnor): clear fifo store entries and evict entries found oversized while copying
+2761	false	BLOCKED	conflict,threads_unresolved,check_failed	84a12ad	fix(velnor-render): audit pull requests and merge groups when a lock or manifest changed (helper 0.1.113)
+2721	false	READY	-	0641a28	test(audit): read build-script outputs in either cargo build layout (refs #2553)
+2693	false	BLOCKED	threads_unresolved	814b307	test(velnor-ci): move the 100000-entry audit test to a slow nextest profile
+2657	false	BLOCKED	threads_unresolved	0715e8e	fix(lint): run no-doctests scanner as a pinned mise-task lint; track doc context
+2604	true	BLOCKED	draft	65031d2	fix(no-doctests): stop false positives on quote, HTML and code-span docs
+2577	false	BLOCKED	conflict,threads_unresolved	e241b92	fix(velnor-ci): name the bare repository in the tools-verify notice on github.com (#2540)
+2525	false	READY	-	dd062d3	fix(gates): close helper-gate checker gaps 1 to 3 from #2369
+2448	false	READY	-	40ddb28	ci: enforce no doctests with a rustdoc listing check; remove the alint scanner (#2432)
+2445	false	BLOCKED	stacked,conflict,dco_missing,threads_unresolved	92323f5	alint: no-doctests lets an ordered marker that is not 1 continue a paragraph
+2379	false	READY	-	c39c4da	alint no-doctests follow-ups: indented code, pinned python, escape decision
+2183	false	BLOCKED	conflict,dco_missing,threads_unresolved,check_missing	8378928	fix(deps): update cargo minor/patch
+1986	true	BLOCKED	draft	ad3d4e7	ci(security): stop trusted builds using the node-shared MBX store (stopgap for #1680)
+1751	true	BLOCKED	conflict,draft	11ac6e8	research: rebase the Velnor runner plan on velnor-gen (2026-11-20)
+# issues: total=127 needs-owner=126 without-needs-owner=1
+# merged-today: none (no PR merged after 2026-11-25T00:00Z among the last 200 merged)

@@ -1,0 +1,11 @@
+item	gh-state	latest-ledger-status	problem
+issue:2848	issue open	(none)	no ledger row
+pr:2847	PR open	changes	latest status is in-flight; no later row shows completion
+pr:2828	PR open	(none)	no ledger row
+issue:682	closed (not in open list)	CLOSED	in inv file as open-class; GitHub says closed
+issue:1305	closed (not in open list)	CLOSED	in inv file as open-class; GitHub says closed
+issue:2211	closed (not in open list)	blocked-human	in inv file as open-class; GitHub says closed
+issue:2275	closed (not in open list)	PR #2783 (part)	in inv file as open-class; GitHub says closed
+issue:2846	issue open	open	not classified in issues-final/issues-verified
+issue:2848	issue open	open	not classified in issues-final/issues-verified
+issue:2849	issue open	open	not classified in issues-final/issues-verified
