@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{EventKind, RepoPath};
-use velnor_rust::{detect, lint_runs};
+use velnor_model::{ChangeSet, EventKind, RepoPath};
+use velnor_rust::{detect, lint_runs, lint_runs_in};
 
 use crate::facts::TestResult;
 use crate::lint_inputs::{DECLARED, repo};
@@ -278,5 +278,56 @@ fn a_file_named_like_the_prefix_of_a_trailing_glob_is_not_a_tracked_input() -> T
 #[test]
 fn an_empty_change_list_on_a_pull_request_runs_the_lint() -> TestResult {
     assert!(hk(EventKind::PullRequest, Some(&[]))?);
+    Ok(())
+}
+
+const BARE: &str = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ninputs = ['hk.pkl']\n";
+const BASE_MISE: &str = "[tools]\njactionlint = '2.4.0'\nopentofu = '1.11.0'\n\n[tasks.lint-generator-samples]\nrun = 'jactionlint'\ndepends = ['prep']\n\n[tasks.prep]\nrun = 'true'\n\n[tasks.other]\nrun = 'true'\n";
+
+fn hk_with_mise(head: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let facts = detect(&repo(&["Cargo.toml"], BARE)?)?;
+    let path = RepoPath::new("mise.toml")?;
+    let changes = ChangeSet {
+        paths: changed(&["mise.toml"])?,
+        base_files: BTreeMap::from([(path.clone(), BASE_MISE.to_owned())]),
+        head_files: BTreeMap::from([(path, head.to_owned())]),
+    };
+    let runs = lint_runs_in(
+        &facts,
+        EventKind::PullRequest,
+        Some(&changes),
+        &tracked(),
+        &BTreeSet::new(),
+    );
+    Ok(*runs.values().next().ok_or("no decision")?)
+}
+
+#[test]
+fn a_mise_edit_that_leaves_the_task_and_its_tools_alone_skips_the_lint() -> TestResult {
+    let other_tool = BASE_MISE.replace("1.11.0", "1.12.0");
+    let other_task = BASE_MISE.replace(
+        "[tasks.other]\nrun = 'true'",
+        "[tasks.other]\nrun = 'false'",
+    );
+    assert!(!hk_with_mise(&other_tool)?, "an unrelated tool pin");
+    assert!(!hk_with_mise(&other_task)?, "an unrelated task");
+    Ok(())
+}
+
+#[test]
+fn a_mise_edit_to_the_task_its_tools_or_the_shared_settings_runs_the_lint() -> TestResult {
+    let pin = BASE_MISE.replace("2.4.0", "2.5.0");
+    let task = BASE_MISE.replace("run = 'jactionlint'", "run = 'jactionlint -v'");
+    let dependency = BASE_MISE.replace("[tasks.prep]\nrun = 'true'", "[tasks.prep]\nrun = 'false'");
+    let shared = format!("{BASE_MISE}\n[settings]\nlockfile = true\n");
+    for (head, why) in [
+        (pin, "its tool pin"),
+        (task, "its task"),
+        (dependency, "a task it depends on"),
+        (shared, "a shared setting"),
+        ("not = [toml".to_owned(), "an unreadable file"),
+    ] {
+        assert!(hk_with_mise(&head)?, "{why}");
+    }
     Ok(())
 }

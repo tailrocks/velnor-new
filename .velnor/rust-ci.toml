@@ -101,7 +101,7 @@ name = "setup-velnor action tests"
 task = "test-setup-velnor-action"
 tools = ["python"]
 timeout_minutes = 5
-inputs = ["actions/setup-velnor/**", "scripts/test-setup-velnor-action.py", "mise.toml", "mise.lock"]
+inputs = ["actions/setup-velnor/**", "scripts/test-setup-velnor-action.py"]
 
 [[lint]]
 kind = "mise-task"

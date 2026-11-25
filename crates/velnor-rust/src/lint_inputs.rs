@@ -6,18 +6,43 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_model::{
-    EventKind, JobId, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
+    ChangeSet, EventKind, JobId, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug,
+    WORKFLOW_PATH,
 };
 
 use crate::config::CONFIG_PATH;
+use crate::lint_mise::{is_mise_file, reaches_task};
 use crate::lint_tasks::{TASK_FOLDERS, task_names};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
+/// Selects the lints from the changed paths alone. A Mise edit then reaches
+/// every `mise-task` lint, because no file text is known to narrow it.
 #[must_use]
 pub fn lint_runs(
     facts: &RepoFacts,
     event: EventKind,
     changed: Option<&BTreeSet<RepoPath>>,
+    tracked: &BTreeSet<RepoPath>,
+    symlinks: &BTreeSet<RepoPath>,
+) -> BTreeMap<RootSlug, bool> {
+    let known = changed.map(paths_only);
+    lint_runs_in(facts, event, known.as_ref(), tracked, symlinks)
+}
+
+fn paths_only(paths: &BTreeSet<RepoPath>) -> ChangeSet {
+    ChangeSet {
+        paths: paths.clone(),
+        ..ChangeSet::default()
+    }
+}
+
+/// Like [`lint_runs`], and a Mise config or lock edit reaches a `mise-task`
+/// lint only through its own task, its tools or the shared settings.
+#[must_use]
+pub fn lint_runs_in(
+    facts: &RepoFacts,
+    event: EventKind,
+    changed: Option<&ChangeSet>,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> BTreeMap<RootSlug, bool> {
@@ -39,12 +64,12 @@ fn runs(
     facts: &RepoFacts,
     lint: &LintJob,
     event: EventKind,
-    changed: Option<&BTreeSet<RepoPath>>,
+    changed: Option<&ChangeSet>,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
     let Some(changed) =
-        changed.filter(|changed| event == EventKind::PullRequest && !changed.is_empty())
+        changed.filter(|changed| event == EventKind::PullRequest && !changed.paths.is_empty())
     else {
         return true;
     };
@@ -55,13 +80,13 @@ fn runs(
 fn triggered(
     facts: &RepoFacts,
     lint: &LintJob,
-    changed: &BTreeSet<RepoPath>,
+    changed: &ChangeSet,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
     symlinks
         .iter()
-        .chain(changed)
-        .any(|path| reached(facts, lint, path))
+        .chain(&changed.paths)
+        .any(|path| reached(facts, lint, path, changed))
 }
 
 #[must_use]
@@ -72,12 +97,18 @@ pub fn unmatched_inputs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
-    let changed = changed.filter(|_| event == EventKind::PullRequest);
+    let changed = changed
+        .filter(|_| event == EventKind::PullRequest)
+        .map(paths_only);
     let entries = facts
         .config
         .lint
         .iter()
-        .filter(|lint| !changed.is_some_and(|changed| triggered(facts, lint, changed, symlinks)))
+        .filter(|lint| {
+            !changed
+                .as_ref()
+                .is_some_and(|changed| triggered(facts, lint, changed, symlinks))
+        })
         .flat_map(|lint| {
             lint.inputs
                 .iter()
@@ -154,7 +185,12 @@ fn has_tracked_input(
     })
 }
 
-fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
+fn implicit(lint: &LintJob, path: &RepoPath, changes: &ChangeSet) -> bool {
+    if let LintKind::MiseTask { task, tools } = &lint.kind
+        && is_mise_file(path)
+    {
+        return reaches_task(path, task, tools, changes);
+    }
     [WORKFLOW_PATH, CONFIG_PATH, MISE_LOCK]
         .iter()
         .chain(&MISE_CONFIGS)
@@ -197,12 +233,12 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
     lint.inputs.iter().any(|glob| reaches(glob, path))
 }
 
-fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath) -> bool {
+fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath, changes: &ChangeSet) -> bool {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
         return from_source || !inert(facts, path);
     }
     declared(lint, path)
-        || implicit(lint, path)
+        || implicit(lint, path, changes)
         || below_one(lint, path)
         || (matches!(lint.kind, LintKind::MiseTask { .. })
             && TASK_FOLDERS.iter().any(|folder| {

@@ -67,6 +67,7 @@ mod lane;
 mod lint_error;
 mod lint_inputs;
 mod lint_jobs;
+mod lint_mise;
 mod lint_tasks;
 mod lint_tools;
 mod lock;
