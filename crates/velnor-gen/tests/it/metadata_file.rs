@@ -10,12 +10,12 @@ use velnor_rust::{
 use crate::facts::{TestResult, package, path};
 use crate::pipeline::{HELPER_LOCK, view};
 
-fn pin(files: &mut RepoView, version: &str) {
+pub(crate) fn pin(files: &mut RepoView, version: &str) {
     let lock = String::from_utf8_lossy(HELPER_LOCK).replace("0.1.81", version);
     files.files.insert(LOCK_PATH, lock.into_bytes());
 }
 
-fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut files = view(&["Cargo.toml", "tool/Cargo.toml"], None)?;
     pin(&mut files, "0.1.81");
     let core = package(
@@ -58,7 +58,7 @@ fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
     Ok(files)
 }
 
-fn recorded(files: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn recorded(files: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     Ok(metadata_file(files)?)
 }
 
@@ -355,54 +355,5 @@ fn only_a_pin_whose_helper_reads_target_dir_gets_it_recorded() -> TestResult {
     pin(&mut files, "0.1.85");
     let newer = recorded(&files)?;
     assert!(newer.contains("\"target_dir\""), "{newer}");
-    Ok(())
-}
-
-fn gated(files: &mut RepoView) -> TestResult {
-    let root = files
-        .rust_metadata
-        .get_mut(&path("Cargo.toml")?)
-        .ok_or("root")?;
-    let app = &mut root.members[0];
-    app.features
-        .insert("default".to_owned(), vec!["dep:helper".to_owned()]);
-    app.dependencies[0].default_features = false;
-    let target = &mut app.targets[0];
-    target.required_features = vec!["extra".to_owned()];
-    target.doc = false;
-    target.bench = false;
-    Ok(())
-}
-
-#[test]
-fn a_pin_that_reads_the_target_fields_gets_them_back_exactly() -> TestResult {
-    let mut files = two_workspaces()?;
-    pin(&mut files, "0.1.116");
-    gated(&mut files)?;
-    let text = recorded(&files)?;
-    let known = recorded_metadata(&files, Some(text.as_bytes()))?;
-    assert_eq!(known, files.rust_metadata);
-    Ok(())
-}
-
-#[test]
-fn a_pin_older_than_the_target_fields_gets_the_file_it_can_read() -> TestResult {
-    let mut files = two_workspaces()?;
-    pin(&mut files, "0.1.115");
-    gated(&mut files)?;
-    let text = recorded(&files)?;
-    for key in [
-        "\"doc\"",
-        "\"bench\"",
-        "\"required_features\"",
-        "\"default_features\"",
-        "\"features\": {",
-    ] {
-        assert!(!text.contains(key), "{key} in {text}");
-    }
-    assert!(text.contains("\"requires_features\": true"), "{text}");
-    let known = recorded_metadata(&files, Some(text.as_bytes()))?;
-    let target = &known[&path("Cargo.toml")?].members[0].targets[0];
-    assert!(target.requires_features());
     Ok(())
 }

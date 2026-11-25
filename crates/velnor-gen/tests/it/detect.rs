@@ -355,14 +355,8 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
         dependency("shared", Some("shared/Cargo.toml"))?,
         dependency("macros", None)?,
         PackageDependency {
-            default_features: true,
-            name: PackageName::new("proptest")?,
             kind: DependencyKind::Dev,
-            manifest: None,
-            features: vec![],
-            platform: None,
-            optional: false,
-            rename: None,
+            ..dependency("proptest", None)?
         },
     ];
     let view = repo(
