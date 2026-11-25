@@ -7,10 +7,13 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use velnor_rust::sha256_hex;
+use velnor_gen::io::Checkout;
+use velnor_model::RepoView;
+use velnor_rust::{detect, sha256_hex};
 
 use super::*;
 use crate::io::audit::inventory::{Evidence, disturb, receipt, receipt_path};
+use crate::io::audit::setup::begin;
 
 struct Declared {
     base: PathBuf,
@@ -59,11 +62,34 @@ fn declared(name: &str, build: &dyn Fn(&Path)) -> Declared {
     Declared { base, root, output }
 }
 
-fn stale(declared: &Declared) -> io::Result<bool> {
+fn stale(declared: &Declared) -> Result<bool, CiError> {
     let built = SystemTime::now() + Duration::from_hours(1);
-    let mut freshness =
-        Freshness::new(&[], &[], usize::MAX).unwrap_or_else(|e| unreachable!("{e}"));
-    freshness.changed(&declared.root, built, &declared.output, &BTreeSet::new())
+    let checkout = Checkout {
+        root: declared.base.clone(),
+        view: RepoView::default(),
+    };
+    let facts = detect(&checkout.view).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut audit =
+        begin(&checkout, &facts, &[], &[], usize::MAX).unwrap_or_else(|e| unreachable!("{e}"));
+    audit
+        .changed_inputs(
+            &declared.base,
+            &["declared".to_owned()],
+            built,
+            &declared.output,
+            false,
+            usize::MAX,
+        )
+        .map(|changed| !changed.is_empty())
+}
+
+fn refused(result: &Result<bool, CiError>) -> bool {
+    match result {
+        Ok(stale) => *stale,
+        Err(error) => error
+            .to_string()
+            .contains("changed while the audit scanned it"),
+    }
 }
 
 fn nested(root: &Path) {
@@ -108,7 +134,8 @@ fn an_alias_to_a_directory_removed_during_the_audit_scan_makes_the_input_stale()
         },
         |_| {},
     );
-    assert!(matches!(stale(&declared), Ok(true)));
+    let result = stale(&declared);
+    assert!(refused(&result), "{result:?}");
 }
 
 #[test]
