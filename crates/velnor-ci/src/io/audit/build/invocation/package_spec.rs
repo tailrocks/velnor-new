@@ -48,9 +48,11 @@ impl Spec<'_> {
 
 fn located(member: &RustMember, repositories: &[&Path], address: &str) -> bool {
     member.manifest.parent().is_some_and(|directory| {
-        repositories
-            .iter()
-            .any(|repository| repository.join(directory.as_str()) == Path::new(address))
+        repositories.iter().any(|repository| {
+            Path::new(&encode(
+                &repository.join(directory.as_str()).to_string_lossy(),
+            )) == Path::new(address)
+        })
     })
 }
 
@@ -90,22 +92,39 @@ pub(super) fn parse(spec: &str) -> Option<Spec<'_>> {
         .map_or((location, None), |(address, fragment)| {
             (address, Some(fragment))
         });
-    let address = decode(address);
     match fragment {
         Some(fragment) if !fragment.starts_with(|c: char| c.is_ascii_digit()) => {
-            versioned(fragment, Some(address))
+            versioned(fragment, Some(address.to_owned()))
         }
         Some(version) => Some(Spec {
-            name: Name::Exact(last_segment(&address).to_owned()),
+            name: Name::Exact(decode(last_segment(address))),
             version: Some(parse_version(version)?),
-            address: Some(address),
+            address: Some(address.to_owned()),
         }),
         None => Some(Spec {
-            name: Name::Exact(last_segment(&address).to_owned()),
+            name: Name::Exact(decode(last_segment(address))),
             version: None,
-            address: Some(address),
+            address: Some(address.to_owned()),
         }),
     }
+}
+
+fn encode(text: &str) -> String {
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_control()
+            || !byte.is_ascii()
+            || matches!(
+                byte,
+                b' ' | b'"' | b'#' | b'%' | b'<' | b'>' | b'?' | b'`' | b'{' | b'}'
+            )
+        {
+            encoded.push_str(&format!("%{byte:02X}"));
+        } else {
+            encoded.push(char::from(byte));
+        }
+    }
+    encoded
 }
 
 fn decode(text: &str) -> String {

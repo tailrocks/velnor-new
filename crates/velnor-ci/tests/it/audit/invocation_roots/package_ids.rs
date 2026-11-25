@@ -206,3 +206,30 @@ fn a_package_id_with_an_encoded_path_selects_the_member_in_that_directory() {
         "-p does not select as expected: {wrong:#?}"
     );
 }
+
+#[test]
+fn a_package_id_that_escapes_a_character_the_member_url_keeps_literal_is_not_the_member() {
+    let mut wrong = Vec::new();
+    for (form, selects) in [
+        ("path+file://@ROOT@/pkg-beta#beta", true),
+        ("path+file://@ROOT@/pkg%2Dbeta#beta", false),
+        ("path+file://@ROOT@/pkg%2dbeta#beta", false),
+    ] {
+        let repo = workspace_with_beta();
+        untrusted_output_of(&repo, "beta");
+        let spec = spec_in(&repo, form);
+        let stderr = workspace_output(&repo, &["cargo", "build", "-p", &spec, "--no-such-flag"]);
+        let right = if selects {
+            !stderr.contains(REFUSAL) && stderr.contains("build command failed")
+        } else {
+            refused(&stderr, "beta")
+        };
+        if !right {
+            wrong.push(spec);
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "-p does not select as expected: {wrong:#?}"
+    );
+}

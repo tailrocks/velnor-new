@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use velnor_model::{
-    DependencyKind, MemberDependency, RepoPath, RustMember, TargetKind, UnownedPackage,
+    DependencyKind, MemberDependency, RepoPath, RustMember, Target, TargetKind, UnownedPackage,
 };
 
 use super::package_spec::{Spec, named, parse};
@@ -179,19 +179,24 @@ fn feature_names<'a>(words: &[&'a str]) -> Vec<&'a str> {
     names
 }
 
-fn enables(features: &[&str], member: &RustMember, dependency: &MemberDependency) -> bool {
+fn enables(features: &[&str], owner: &str, dependency: &MemberDependency, selected: bool) -> bool {
     let name = dependency.feature.as_str();
     features.iter().any(|feature| {
-        if *feature == name || feature.strip_prefix("dep:") == Some(name) {
+        if selected && (*feature == name || feature.strip_prefix("dep:") == Some(name)) {
             return true;
         }
         let Some((left, right)) = feature.split_once('/') else {
             return false;
         };
-        left == name
-            || left == member.name.as_str()
-                && (right == name || right.strip_prefix("dep:") == Some(name))
+        selected && left == name
+            || left == owner && (right == name || right.strip_prefix("dep:") == Some(name))
     })
+}
+
+fn has_script(targets: &[Target]) -> bool {
+    targets
+        .iter()
+        .any(|target| target.kinds.contains(&TargetKind::BuildScript))
 }
 
 struct Wanted<'a> {
@@ -303,12 +308,16 @@ fn built<'a>(
                             )
                         })
                 });
+            let scripted = has_script(&member.targets);
             member
                 .dependencies
                 .iter()
                 .filter(move |dependency| tested || dependency.kind != DependencyKind::Dev)
+                .filter(move |dependency| scripted || dependency.kind != DependencyKind::Build)
                 .filter(move |dependency| {
-                    !dependency.optional || all_features || enables(features, member, dependency)
+                    !dependency.optional
+                        || all_features
+                        || enables(features, member.name.as_str(), dependency, true)
                 })
         })
         .collect();
@@ -318,23 +327,27 @@ fn built<'a>(
         if dependency.platform.is_some() || !visited.insert(&dependency.manifest) {
             continue;
         }
-        let next = if let Some(package) = unowned.get(&dependency.manifest) {
+        let (next, owner, scripted) = if let Some(package) = unowned.get(&dependency.manifest) {
             packages.insert(package.name.as_str());
-            &package.dependencies
+            (&package.dependencies, package.name.as_str(), true)
         } else if let Some(member) = members
             .iter()
             .find(|member| member.manifest == dependency.manifest)
         {
             packages.insert(member.name.as_str());
-            &member.dependencies
+            (
+                &member.dependencies,
+                member.name.as_str(),
+                has_script(&member.targets),
+            )
         } else {
             continue;
         };
-        pending.extend(
-            next.iter().filter(|dependency| {
-                dependency.kind != DependencyKind::Dev && !dependency.optional
-            }),
-        );
+        pending.extend(next.iter().filter(|dependency| {
+            dependency.kind != DependencyKind::Dev
+                && (scripted || dependency.kind != DependencyKind::Build)
+                && (!dependency.optional || enables(features, owner, dependency, false))
+        }));
     }
     packages
 }

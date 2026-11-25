@@ -242,31 +242,104 @@ fn all_features_enables_the_optional_dependencies_of_the_selected_package_only()
 
 #[test]
 fn a_run_selects_the_optional_path_dependencies_its_features_enable() {
+    for features in [
+        &["--features", "mid"][..],
+        &["-vF", "mid"],
+        &["-qp", "other"],
+    ] {
+        let repo = with_optional_path_dependency();
+        unit(
+            &repo,
+            "target/debug/build/mid-f000000000000005/output",
+            "cargo:rerun-if-changed=src/lib.rs\n",
+        );
+        let output = command(env!("CARGO_BIN_EXE_velnor-ci"))
+            .current_dir(repo.root())
+            .args([
+                "inputs", "build", "--", "cargo", "run", "-p", "other", "--bin", "other",
+            ])
+            .args(features)
+            .arg("--no-such-flag")
+            .env_remove("GITHUB_RUN_ID")
+            .env_remove("GITHUB_RUN_ATTEMPT")
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if features.contains(&"mid") {
+            assert_selected(&stderr, &format!("cargo run {features:?}"));
+        } else {
+            assert_refused(&stderr, &format!("cargo run {features:?}"));
+        }
+    }
+}
+
+fn with_an_optional_dependency_below_a_dependency() -> Repo {
     let repo = with_optional_path_dependency();
     unit(
         &repo,
-        "target/debug/build/mid-f000000000000005/output",
-        "cargo:rerun-if-changed=src/lib.rs\n",
+        "other/Cargo.toml",
+        "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[dependencies]\nmid = { path = \"../vendor/mid\" }\n",
     );
-    let output = command(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root())
-        .args([
-            "inputs",
-            "build",
-            "--",
-            "cargo",
-            "run",
-            "-p",
-            "other",
-            "--bin",
-            "other",
-            "--features",
-            "mid",
-            "--no-such-flag",
-        ])
-        .env_remove("GITHUB_RUN_ID")
-        .env_remove("GITHUB_RUN_ATTEMPT")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_selected(&String::from_utf8_lossy(&output.stderr), "cargo run");
+    unit(
+        &repo,
+        "vendor/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\", optional = true }\n",
+    );
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn a_qualified_feature_enables_an_optional_dependency_of_a_dependency() {
+    for (features, selected) in [
+        (&["--features", "mid/leaf"][..], true),
+        (&["--features", "mid/dep:leaf"], true),
+        (&["--features", "leaf"], false),
+        (&["--features", "mid?/leaf"], false),
+        (&["--features", "other/leaf"], false),
+    ] {
+        let mut selection = vec!["-p", "other"];
+        selection.extend_from_slice(features);
+        let stderr = stderr_of_build_with_untrusted_output_in(
+            &with_an_optional_dependency_below_a_dependency(),
+            "leaf",
+            &selection,
+        );
+        if selected {
+            assert_selected(&stderr, &format!("{features:?}"));
+        } else {
+            assert_refused(&stderr, &format!("{features:?}"));
+        }
+    }
+}
+
+#[test]
+fn a_build_dependency_is_built_only_when_the_package_has_a_build_script() {
+    let manifest = "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[build-dependencies]\nmid = { path = \"../vendor/mid\", optional = true }\n";
+    let without = with_optional_path_dependency();
+    unit(&without, "other/Cargo.toml", manifest);
+    without.git(&["add", "--all"]);
+    let stderr = stderr_of_build_with_untrusted_output_in(
+        &without,
+        "mid",
+        &["-p", "other", "--features", "mid"],
+    );
+    assert_refused(&stderr, "no build script");
+    let with = with_optional_path_dependency();
+    unit(
+        &with,
+        "other/Cargo.toml",
+        &manifest.replace(
+            "edition = \"2024\"",
+            "edition = \"2024\"\nbuild = \"build.rs\"",
+        ),
+    );
+    unit(&with, "other/build.rs", "fn main() {}\n");
+    with.git(&["add", "--all"]);
+    let stderr = stderr_of_build_with_untrusted_output_in(
+        &with,
+        "mid",
+        &["-p", "other", "--features", "mid"],
+    );
+    assert_selected(&stderr, "a build script");
 }

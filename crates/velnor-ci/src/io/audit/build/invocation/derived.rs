@@ -82,13 +82,19 @@ const RUN_VALUED: [&str; 18] = [
     "--artifact-dir",
 ];
 
+fn clustered_valued(word: &str) -> bool {
+    word.strip_prefix('-')
+        .filter(|flags| !flags.starts_with('-'))
+        .is_some_and(|flags| matches!(flags.trim_start_matches(['q', 'v', 'r']), "F" | "p" | "j"))
+}
+
 pub(super) fn run_program_arguments(command: &[String], subcommand: usize) -> usize {
     let mut index = subcommand + 2;
     while let Some(word) = command.get(index) {
         if word == "--" || !word.starts_with('-') {
             return index;
         }
-        index += if RUN_VALUED.contains(&word.as_str()) {
+        index += if RUN_VALUED.contains(&word.as_str()) || clustered_valued(word) {
             2
         } else {
             1
