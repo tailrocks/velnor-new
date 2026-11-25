@@ -204,7 +204,7 @@ fn a_ruleset_that_predates_the_push_vouches_and_an_unknown_push_time_never_does(
         assert!(run(&local, "mallory", &[]).is_ok(), "{earlier}");
     }
     let leap = api(&ruleset(|r| {
-        r["updated_at"] = json!("2024-02-29T12:00:00Z")
+        r["updated_at"] = json!("2024-02-29T12:00:00Z");
     }));
     assert!(
         run(&leap, "mallory", &[]).is_ok(),
