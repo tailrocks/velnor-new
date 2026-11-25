@@ -221,11 +221,9 @@ fn a_relative_build_directory_resolves_parent_components_through_a_symlink_as_ca
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
-    let resolved =
-        fs::canonicalize(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        stderr.contains("found no units in") && stderr.contains(&*resolved.to_string_lossy()),
+        stderr.contains("found no units in") && stderr.contains("/rust/app/link/../build;"),
         "the audit must read the directory cargo resolves through the link: {stderr}"
     );
 }

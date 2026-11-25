@@ -11,7 +11,7 @@ use super::{
 
 pub fn write_metadata(path: &Path) -> Result<(), Error> {
     let root = toplevel(path)?;
-    let view = read_view(&root, false)?.0;
+    let view = read_view(&root, false, None)?.0;
     let text = metadata_file(&view).map_err(Error::MetadataFile)?;
     replace(&root.join(METADATA_PATH.as_str()), text.as_bytes())
 }

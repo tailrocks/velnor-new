@@ -219,6 +219,7 @@ fn sharing(root: &std::path::Path, build: &std::path::Path) -> Workspace {
         root: root.join("..").join(build.file_name().unwrap_or_default()),
         target_directory: root.to_owned(),
         build_directory: build.to_owned(),
+        shared_build: root == build,
     }
 }
 
@@ -248,4 +249,56 @@ fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_buil
     let found = group[1].build_units(&group);
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(found.is_ok(), "{found:?}");
+}
+
+#[test]
+fn a_build_directory_that_names_the_target_keeps_doing_so_after_its_link_is_retargeted() {
+    let root = target_with(&["a/keep", "b/keep"]);
+    let link = root.join("link");
+    std::os::unix::fs::symlink(root.join("a"), &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let printed = serde_json::json!({
+        "workspace_root": root,
+        "target_directory": root.join("a"),
+        "build_directory": link,
+    });
+    let workspace: Workspace =
+        serde_json::from_value(printed).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_file(&link).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(root.join("b"), &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let directories = workspace.directories();
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(directories, vec![root.join("a")]);
+}
+
+#[test]
+fn a_build_directory_inside_a_target_reached_through_a_link_is_not_scanned_twice() {
+    let root = target_with(&[
+        "debug/CACHEDIR.TAG",
+        "debug/libapp.rlib",
+        "bd/CACHEDIR.TAG",
+        "bd/debug/CACHEDIR.TAG",
+        "bd/debug/libapp.rlib",
+    ]);
+    let alias = root.with_file_name(format!(
+        "{}-alias",
+        root.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    std::os::unix::fs::symlink(&root, &alias).unwrap_or_else(|e| unreachable!("{e}"));
+    let units = |target: &Path| {
+        let workspace = Workspace {
+            root: root.clone(),
+            target_directory: target.to_owned(),
+            build_directory: root.join("bd"),
+            shared_build: false,
+        };
+        workspace
+            .build_units(std::slice::from_ref(&workspace))
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .len()
+    };
+    let direct = units(&root);
+    let reached = units(&alias);
+    fs::remove_file(&alias).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(reached, direct);
 }

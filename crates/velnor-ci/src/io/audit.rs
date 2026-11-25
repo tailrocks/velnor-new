@@ -113,7 +113,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
                 .map_or_else(
                     || workspaces[index].build_directory.clone(),
                     |(_, directory)| {
-                        if workspaces[index].build_directory == workspaces[index].target_directory {
+                        if workspaces[index].shares_build_directory() {
                             directory.clone()
                         } else {
                             workspaces[index].build_directory.clone()

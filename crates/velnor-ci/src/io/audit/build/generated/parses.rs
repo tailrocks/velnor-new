@@ -34,6 +34,7 @@ impl Fixture {
             root: root.clone(),
             build_directory: target.clone(),
             target_directory: target.clone(),
+            shared_build: true,
         }];
         let mut targets =
             inventory::exclusions(&workspaces).unwrap_or_else(|e| unreachable!("{e}"));

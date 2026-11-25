@@ -3,6 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
+use velnor_gen::io::{Cargo, Checkout, read_checkout_under};
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
@@ -13,7 +15,9 @@ mod package_spec;
 mod root;
 mod selection;
 pub(super) use alias::resolve;
-use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
+use derived::{
+    build_of, refusal, run_program_arguments, runs_doctests, without_command_scope, without_open,
+};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
@@ -168,6 +172,49 @@ impl Invocation {
         }
     }
 
+    pub(super) fn executable(&self, directory: &Path) -> String {
+        let program = Path::new(&self.command[0]);
+        if program.file_name().is_some_and(|name| name == "cargo")
+            && program.components().count() > 1
+        {
+            directory.join(program).to_string_lossy().into_owned()
+        } else {
+            "cargo".to_owned()
+        }
+    }
+
+    pub(super) fn checkout(&self, directory: &Path) -> Result<Checkout, CiError> {
+        let executable = self.executable(directory);
+        read_checkout_under(
+            directory,
+            Some(&Cargo {
+                executable: &executable,
+                toolchain: self.toolchain(),
+            }),
+        )
+        .map_err(|e| CiError::new(e.to_string()))
+    }
+
+    pub(super) fn toolchain(&self) -> Option<&str> {
+        self.globals
+            .first()
+            .and_then(|word| word.strip_prefix('+'))
+            .filter(|name| !name.is_empty())
+    }
+
+    pub(super) fn baseline<'a>(
+        &'a self,
+        directory: &Path,
+        step: &'a Path,
+    ) -> MetadataInvocation<'a> {
+        let selector = usize::from(self.toolchain().is_some());
+        MetadataInvocation {
+            executable: self.executable(directory),
+            arguments: &self.globals[..selector],
+            directory: step,
+        }
+    }
+
     fn work(&self, directory: &Path) -> PathBuf {
         self.chdir
             .as_ref()
@@ -211,6 +258,7 @@ impl Invocation {
         workspaces: &[Workspace],
         standalone: &[bool],
         inherit: &[bool],
+        stepped: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
         if let Some(refusal) = self.refusal {
@@ -235,39 +283,35 @@ impl Invocation {
                 .map(String::as_str)
                 .take_while(|word| *word != "--"),
         )?;
-        let executable = if Path::new(&self.command[0])
-            .file_name()
-            .is_some_and(|name| name == "cargo")
-        {
-            self.command[0].as_str()
-        } else {
-            "cargo"
-        };
+        let executable = self.executable(directory);
         let invocation = MetadataInvocation {
-            executable,
+            executable: executable.clone(),
             arguments: &self.globals,
             directory,
         };
         let local_arguments = without_command_scope(&self.globals);
-        for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
+        for (((expected, alone), inherit), stepped) in
+            workspaces.iter().zip(standalone).zip(inherit).zip(stepped)
+        {
             let manifest = expected.root.join("Cargo.toml");
             let local = MetadataInvocation {
-                executable,
+                executable: executable.clone(),
                 arguments: &local_arguments,
                 directory: &expected.root,
             };
-            let actual = root_workspace(
-                &manifest,
-                Some(if *inherit { &invocation } else { &local }),
-                directory,
-                *inherit,
-                *alone,
-                groups,
-            )?;
-            if actual.root != expected.root
-                || actual.target_directory != expected.target_directory
-                || actual.build_directory != expected.build_directory
-            {
+            let actual = if *inherit && !*stepped {
+                root_workspace(&manifest, None, None, true, *alone, groups)?
+            } else {
+                root_workspace(
+                    &manifest,
+                    Some(if *inherit { &invocation } else { &local }),
+                    Some(directory),
+                    *inherit,
+                    *alone,
+                    groups,
+                )?
+            };
+            if !actual.same_directories(expected) {
                 return Err(CiError::new(
                     "Cargo invocation configuration redirects the workspace, target or build directory away from inputs audit; use persistent Cargo configuration, CARGO_TARGET_DIR or CARGO_BUILD_BUILD_DIR for both build and audit",
                 ));
@@ -275,19 +319,6 @@ impl Invocation {
         }
         Ok(())
     }
-}
-
-fn without_command_scope(globals: &[String]) -> Vec<String> {
-    let mut kept = Vec::new();
-    let mut words = globals.iter();
-    while let Some(word) = words.next() {
-        if word == "-C" || word == "--config" {
-            words.next();
-        } else if !word.starts_with("-C") && !word.starts_with("--config=") {
-            kept.push(word.clone());
-        }
-    }
-    kept
 }
 
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
