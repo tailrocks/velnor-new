@@ -3,7 +3,7 @@
 
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
-use crate::tools_verify::{STORES, jobs_of, repo_for, text};
+use crate::tools::tools_verify::{STORES, jobs_of, repo_for, text};
 
 const RECORD_NAME: &str = "Record the tools cache key";
 const SAVED_KEY_STEP: &str = "tools_saved_key";

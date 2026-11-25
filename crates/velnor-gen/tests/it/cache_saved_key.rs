@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::tools_verify::{STORES, jobs_of, repo_for, text};
+use crate::tools::tools_verify::{STORES, jobs_of, repo_for, text};
 
 const SOURCES_SAVED_KEY_STEP: &str = "sources_";
 const TARGET_SAVED_KEY_STEP: &str = "target_key";
