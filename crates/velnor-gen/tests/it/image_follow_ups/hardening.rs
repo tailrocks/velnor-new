@@ -216,10 +216,20 @@ fn several_images_are_selected_by_their_own_paths_and_one_image_needs_no_selecti
     assert!(single["jobs"]["image-plain-svc-build"]["needs"].is_null());
     let both = two_images(false)?;
     let changes = &both["jobs"]["image-changes"];
-    let run = text(&step_named(changes, "Select the images")?["run"]);
+    let select = step_named(changes, "Select the images")?;
+    let run = text(&select["run"]);
     assert!(run.contains("image changes"), "{run}");
-    assert!(run.contains("--match='plain-svc=**'"), "{run}");
-    assert!(run.contains("--match='other-svc=**/Cargo.toml'"), "{run}");
+    let matches = text(&select["env"]["VELNOR_IMAGE_MATCHES"]);
+    assert!(
+        matches.lines().any(|line| line == "plain-svc=**"),
+        "{matches}"
+    );
+    assert!(
+        matches
+            .lines()
+            .any(|line| line == "other-svc=**/Cargo.toml"),
+        "{matches}"
+    );
     for name in ["plain-svc", "other-svc"] {
         let build = &both["jobs"][format!("image-{name}-build").as_str()];
         assert!(

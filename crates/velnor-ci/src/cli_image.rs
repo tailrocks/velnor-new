@@ -175,10 +175,12 @@ pub struct ImageChangesArgs {
     #[arg(
         allow_hyphen_values = true,
         long = "match",
+        env = "VELNOR_IMAGE_MATCHES",
+        value_delimiter = '\n',
         value_name = "IMAGE=GLOB",
         value_parser = image_glob,
         required = true,
-        help = "A path pattern that selects an image, written as the paths of an on.pull_request filter (`*` stays inside a path segment, `**` crosses them); repeat for each"
+        help = "A path pattern that selects an image, written as the paths of an on.pull_request filter (`*` stays inside a path segment, `**` crosses them); repeat for each, or put one per line in $VELNOR_IMAGE_MATCHES"
     )]
     pub matches: Vec<ImageGlob>,
 }

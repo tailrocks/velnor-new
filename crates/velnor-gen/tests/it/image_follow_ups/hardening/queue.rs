@@ -18,7 +18,7 @@ fn the_merge_queue_commit_is_built_and_checked_but_never_published() -> TestResu
         );
         for (id, job) in jobs(&workflow)? {
             let condition = job["if"].as_str().unwrap_or_default();
-            let checked = id.ends_with("-build") || id.ends_with("-check");
+            let checked = id.ends_with("-build") || id.ends_with("-check") || id == "image-changes";
             assert_eq!(condition.contains(QUEUE), checked, "{name} {id}");
             if checked {
                 assert!(

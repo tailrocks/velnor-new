@@ -9,8 +9,8 @@ use crate::image::{Events, ImageWorkflow, image_paths};
 use crate::install_steps::install_helper;
 use crate::release::HOSTED_RUNNER;
 use crate::release_binaries::command;
-use crate::release_steps::{expression, permissions, shell_word, variables};
-use crate::rules::{RenderedJob, RenderedStep};
+use crate::release_steps::{expression, permissions, variables};
+use crate::rules::{RenderedJob, RenderedStep, Value};
 
 pub(crate) const CHANGES_JOB: &str = "image-changes";
 const CHANGES_STEP: &str = "changes";
@@ -32,7 +32,7 @@ pub(crate) fn changes_job(
     if !selective(workflow) {
         return None;
     }
-    let mut flags = String::new();
+    let mut matches = String::new();
     let mut outputs = Vec::new();
     for build in &workflow.images {
         let image = build.image;
@@ -45,11 +45,7 @@ pub(crate) fn changes_job(
             image_paths(build)
         };
         for glob in globs {
-            let _ = write!(
-                flags,
-                " --match={}",
-                shell_word(&format!("{}={glob}", image.name))
-            );
+            let _ = writeln!(matches, "{}={glob}", image.name);
         }
         outputs.push((
             image.name.clone(),
@@ -61,7 +57,7 @@ pub(crate) fn changes_job(
         condition: Some(expression(&format!(
             "({}) || ({})",
             events.branch_push(),
-            events.pull_request()
+            events.checked()
         ))),
         permissions: permissions(&[("contents", "read"), ("pull-requests", "read")]),
         outputs,
@@ -76,12 +72,13 @@ pub(crate) fn changes_job(
                     ("REPOSITORY", "${{ github.repository }}"),
                     ("EVENT", "${{ github.event_name }}"),
                     ("PULL_REQUEST", "${{ github.event.pull_request.number }}"),
-                ]),
+                ])
+                .into_iter()
+                .chain([("VELNOR_IMAGE_MATCHES".to_owned(), Value::Text(matches))])
+                .collect(),
                 ..command(
                     "Select the images that the pull request reaches".to_owned(),
-                    format!(
-                        "velnor-ci image changes --repo=\"$REPOSITORY\" --event=\"$EVENT\" --pull-request=\"$PULL_REQUEST\"{flags}"
-                    ),
+                    "velnor-ci image changes --repo=\"$REPOSITORY\" --event=\"$EVENT\" --pull-request=\"$PULL_REQUEST\"".to_owned(),
                 )
             },
         ],
