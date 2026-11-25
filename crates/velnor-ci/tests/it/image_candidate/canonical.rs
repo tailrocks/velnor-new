@@ -5,7 +5,7 @@ use serde_json::json;
 use velnor_ci::image_candidate::canonical::encode;
 
 #[test]
-fn encodes_sorted_compact_ascii_json_as_the_legacy_builder_does() {
+fn encodes_sorted_compact_ascii_json_as_the_golden_record_requires() {
     let value = json!({
         "b": [1, true, null, "\u{e9}"],
         "a": {"z": "\"\\\n\r\t\u{8}\u{c}\u{1}\u{7f}", "\u{43a}\u{43b}\u{44e}\u{447}": "\u{1f600} x"},
