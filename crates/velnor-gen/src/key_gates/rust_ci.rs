@@ -6,6 +6,7 @@
 use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
 use crate::HELPER_MINIMUM;
 
+// helper-gate: first in tools-v0.1.116 via 1adc10de34
 const IMAGE_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(super) const RUST_CI: &[KeyGate] = &[

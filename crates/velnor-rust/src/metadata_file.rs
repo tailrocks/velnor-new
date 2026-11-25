@@ -149,6 +149,7 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 }
 
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
+// helper-gate: first in tools-v0.1.116 via 3e88438447
 const REQUIRED_FEATURES_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {

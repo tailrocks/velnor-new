@@ -223,7 +223,7 @@ impl ImageError {
             ),
             Self::BinFeaturesUnrecorded { image, bin } => write!(
                 f,
-                "image {image}: binary `{bin}` has required-features that .velnor/rust-metadata.json does not name; run velnor-gen generate with velnor-ci 0.1.116 or later pinned"
+                "image {image}: binary `{bin}` has required-features that .velnor/rust-metadata.json does not name; run velnor-gen generate with a helper pin that records required-features"
             ),
             Self::PublishPoolShared { image, runner } => write!(
                 f,
