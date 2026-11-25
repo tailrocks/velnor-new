@@ -28,11 +28,10 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
 }
 
 pub(crate) fn audits_pull_requests(facts: &RepoFacts) -> bool {
-    audits_per_root(facts)
-        && facts
-            .helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
 }
 
 pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {
