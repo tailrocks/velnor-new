@@ -71,6 +71,7 @@ pub fn render_release(
     let jobs = jobs
         .into_iter()
         .map(revoke_app_token)
+        .flat_map(|job| crate::app_relay::split(job, Some(helper)))
         .map(|job| crate::mise_digest::pin_to_runner_platform(job, Some(helper)));
     let rendered = RenderedWorkflow {
         jobs: jobs.collect(),

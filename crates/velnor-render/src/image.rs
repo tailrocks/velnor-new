@@ -183,6 +183,7 @@ pub fn render_image(
                 ..job
             }
         })
+        .flat_map(|job| crate::app_relay::split(job, Some(workflow.helper)))
         .collect();
     let boundary = check_image_boundary(&jobs);
     if !boundary.is_empty() {

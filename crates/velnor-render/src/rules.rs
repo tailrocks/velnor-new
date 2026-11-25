@@ -76,6 +76,7 @@ pub enum Rule {
     UnreadableCommandInTokenJob,
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
+    KeyJobRunsRepositoryCode,
     WorkflowTooLarge(usize),
     SourceRootsEnvCollision(String),
     CacheKeyTooLong(usize),
@@ -154,6 +155,9 @@ impl fmt::Display for RuleViolation {
                 "an env value joins its expressions into one of {length} characters, and GitHub fails a step whose expression is over {MAX_EXPRESSION_CHARACTERS}; shorten it or pass a list without per-entry expressions"
             ),
             Rule::ImageBoundary(why) => f.write_str(why),
+            Rule::KeyJobRunsRepositoryCode => f.write_str(
+                "a job that references an App private key also runs repository code, so that code can read the key from the runner's memory; mint the token in a job of its own with velnor-ci app-token relay, as helper 0.1.117 or later renders",
+            ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"
