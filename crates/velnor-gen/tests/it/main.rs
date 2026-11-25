@@ -175,6 +175,7 @@ mod mbx_remote;
 mod mbx_reports;
 mod merge_group_build_inputs;
 mod merge_group_check;
+mod metadata_fields;
 mod metadata_file;
 mod mise_identity;
 mod mise_install;
