@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -27,8 +27,12 @@ use crate::image_deploy::hub::{HUB_URL, preflight};
 use crate::image_deploy::promote::{Promotion, live_tag_commit, promote};
 use crate::image_deploy::stage::{Glibc, Openssl, check};
 
+pub mod checks;
 mod registry;
+mod stage_dir;
 pub mod sysroot;
+
+use stage_dir::{no_link_on, only_staged_files, private_directory, staged_directory};
 
 const MAX_BINARY_BYTES: u64 = 1 << 30;
 
@@ -38,6 +42,8 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Build(args) => image_candidate::build(&args),
         ImageCommand::Publish(args) => image_candidate::publish::publish(&args),
         ImageCommand::Stage(args) => stage_command(&args),
+        ImageCommand::Verify(args) => checks::verify(&args),
+        ImageCommand::GhcrPreflight(args) => checks::ghcr_preflight(&args),
         ImageCommand::Gate(args) => gate(&args),
         ImageCommand::Changes(args) => changes(&args),
         ImageCommand::Advance(args) => advance_branch(&args),
@@ -60,89 +66,27 @@ fn read_binary(path: &Path) -> Result<Vec<u8>, String> {
     read_limited(file, MAX_BINARY_BYTES).map_err(|error| error.to_string())
 }
 
-fn no_link_on(to: &Path, within: &Path) -> Result<(), CiError> {
-    let below = to.strip_prefix(within).unwrap_or_else(|_| Path::new(""));
-    let mut so_far = within.to_path_buf();
-    let inspect = |path: &Path| match fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_symlink() => Err(CiError::new(format!(
-            "{} is a symbolic link, and the stage directory and its parents must be real directories",
-            path.display()
-        ))),
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(CiError::new(format!(
-            "cannot inspect {}: {error}",
-            path.display()
-        ))),
-    };
-    for part in below.components() {
-        so_far.push(part);
-        if !inspect(&so_far)? {
-            return Ok(());
-        }
-    }
-    inspect(to).map(|_| ())
-}
-
-fn staged_directory(to: &Path, within: &Path) -> Result<(), CiError> {
-    no_link_on(to, within)?;
-    match fs::read_dir(to) {
-        Ok(entries) => {
-            if entries.count() > 0 {
-                return Err(CiError::new(format!(
-                    "{} is not empty; the stage directory receives only the compiled binaries",
-                    to.display()
-                )));
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            fs::create_dir_all(to).map_err(|error| {
-                CiError::new(format!("cannot create {}: {error}", to.display()))
-            })?;
-        }
-        Err(error) => {
-            return Err(CiError::new(format!(
-                "cannot read {}: {error}",
-                to.display()
-            )));
-        }
-    }
-    no_link_on(to, within)
-}
-
 #[derive(Debug)]
 pub struct Staged {
     pub report: String,
     pub directory: PathBuf,
+    pub sums: String,
 }
 
 fn stage_command(args: &ImageStageArgs) -> Result<String, CiError> {
     let staged = stage_to(args)?;
     if args.private_under.is_some() {
-        append_outputs(&format!("dir={}\n", staged.directory.display()))?;
+        append_outputs(&format!(
+            "dir={}\nsums={}\n",
+            staged.directory.display(),
+            staged.sums
+        ))?;
     }
     Ok(staged.report)
 }
 
 pub fn stage(args: &ImageStageArgs) -> Result<String, CiError> {
     stage_to(args).map(|staged| staged.report)
-}
-
-fn private_directory(under: &Path) -> Result<PathBuf, CiError> {
-    let mut random = [0_u8; 16];
-    fs::File::open("/dev/urandom")
-        .and_then(|mut source| std::io::Read::read_exact(&mut source, &mut random))
-        .map_err(|error| CiError::new(format!("cannot read random bytes: {error}")))?;
-    let mut name = String::new();
-    for byte in random {
-        let _ = write!(name, "{byte:02x}");
-    }
-    let directory = under.join(format!("image-stage-{name}"));
-    fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&directory)
-        .map_err(|error| CiError::new(format!("cannot create {}: {error}", directory.display())))?;
-    Ok(directory)
 }
 
 pub fn stage_to(args: &ImageStageArgs) -> Result<Staged, CiError> {
@@ -231,34 +175,16 @@ pub fn stage_to(args: &ImageStageArgs) -> Result<Staged, CiError> {
             .map(|(bin, _, _)| (*bin).as_str())
             .collect::<Vec<_>>(),
     )?;
+    let sums = staged
+        .iter()
+        .map(|(bin, bytes, _)| format!("{bin}={}", sha256_hex(bytes)))
+        .collect::<Vec<_>>()
+        .join(",");
     Ok(Staged {
         report: report.join("\n") + "\n",
         directory: to,
+        sums,
     })
-}
-
-fn only_staged_files(to: &Path, names: &[&str]) -> Result<(), CiError> {
-    let entries = fs::read_dir(to)
-        .map_err(|error| CiError::new(format!("cannot read {}: {error}", to.display())))?;
-    for entry in entries {
-        let entry = entry
-            .map_err(|error| CiError::new(format!("cannot read {}: {error}", to.display())))?;
-        let meta = fs::symlink_metadata(entry.path()).map_err(|error| {
-            CiError::new(format!(
-                "cannot inspect {}: {error}",
-                entry.path().display()
-            ))
-        })?;
-        let name = entry.file_name();
-        if !meta.is_file() || !names.iter().any(|known| name == *known) {
-            return Err(CiError::new(format!(
-                "{} holds {} besides the staged binaries; nothing may be added to the stage directory",
-                to.display(),
-                name.to_string_lossy()
-            )));
-        }
-    }
-    Ok(())
 }
 
 fn gate(args: &ImageGateArgs) -> Result<String, CiError> {

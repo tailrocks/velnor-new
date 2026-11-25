@@ -62,46 +62,6 @@ fn a_default_branch_that_looks_like_a_release_version_is_refused() -> TestResult
     Ok(())
 }
 
-#[test]
-fn a_symlinked_dockerfile_or_ignore_file_is_refused() -> TestResult {
-    for path in ["Dockerfile", ".dockerignore", "Dockerfile.dockerignore"] {
-        let mut view = sample("image-plain")?;
-        view.tracked_paths.insert(RepoPath::new(path)?);
-        view.symlinks.insert(RepoPath::new(path)?);
-        assert!(
-            matches!(
-                expected_files(&view),
-                Err(GenerateError::Image(ImageError::DockerfileSymlink { .. }))
-            ),
-            "{path}"
-        );
-    }
-    let mut submodule = sample("image-plain")?;
-    submodule.tracked_paths.insert(RepoPath::new("Dockerfile")?);
-    submodule.gitlinks.insert(RepoPath::new("Dockerfile")?);
-    assert!(matches!(
-        expected_files(&submodule),
-        Err(GenerateError::Image(ImageError::DockerfileSymlink { .. }))
-    ));
-    let mut inside = sample("image-plain")?;
-    inside.gitlinks.insert(RepoPath::new("vendor")?);
-    inside
-        .tracked_paths
-        .insert(RepoPath::new("vendor/Dockerfile")?);
-    let nested = edited("image-plain", |text| {
-        text.replace(
-            "name = \"plain-svc\"\n",
-            "name = \"plain-svc\"\ndockerfile = \"vendor/Dockerfile\"\n",
-        )
-    })?;
-    inside.files = nested.files;
-    assert!(matches!(
-        expected_files(&inside),
-        Err(GenerateError::Image(ImageError::DockerfileSymlink { .. }))
-    ));
-    Ok(())
-}
-
 const MIRROR: &str = "\n[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
 fn step_index(job: &serde_json::Value, needle: &str) -> Option<usize> {

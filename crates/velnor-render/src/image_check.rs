@@ -7,6 +7,8 @@ use crate::image::{Events, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, job_id, labels, setup_buildx, staged};
 use crate::image_changes::{CHANGES_JOB, selected, selective};
 use crate::image_publish::{host_guard, restore_modes, sparse_checkout};
+use crate::image_stage::verify_step;
+use crate::install_steps::install_helper;
 use crate::pinned_actions::DOCKER_BUILD_PUSH;
 use crate::release_binaries::download_to;
 use crate::release_steps::{expression, permissions};
@@ -27,7 +29,9 @@ pub(crate) fn check_job(
     let mut steps = host_guard();
     steps.extend([
         sparse_checkout(image),
+        install_helper(workflow.helper),
         download_to(artifact(image), &staged(image)),
+        verify_step(compile, image),
         restore_modes(image),
         setup_buildx(),
         RenderedStep {

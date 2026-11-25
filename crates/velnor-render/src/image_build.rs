@@ -15,16 +15,17 @@ use crate::image::{
 use crate::image_changes::{CHANGES_JOB, selected, selective};
 use crate::image_group::Compile;
 use crate::image_publish::{TIP_STEP, host_guard, private_source_guard, tip};
+use crate::image_stage::{member_steps, stage_step, sums_output};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
 use crate::private_steps::{CHECK_STEP, queued_phase, release_mint};
-use crate::release_binaries::{command, upload};
+use crate::release_binaries::command;
 use crate::release_steps::{expression, join, permissions, shell_word};
 use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 use crate::steps::{CACHE_RESTORE, CHECKOUT, RUN};
 
-const ARTIFACT_RETENTION_DAYS: u64 = 7;
+pub(crate) const ARTIFACT_RETENTION_DAYS: u64 = 7;
 pub(crate) const LIVE_OUTPUT: &str = "live";
 const RECHECK_STEP: &str = "recheck";
 
@@ -181,12 +182,23 @@ pub(crate) fn build_job(
             group: format!("{id}-{}", sha_scope()),
             cancel_in_progress: true,
         }),
-        outputs: vec![(
+        outputs: [(
             LIVE_OUTPUT.to_owned(),
             format!(
                 "${{{{ github.run_attempt != 1 || (steps.{TIP_STEP}.outputs.ready == 'true' && steps.{RECHECK_STEP}.outputs.ready == 'true') }}}}"
             ),
-        )],
+        )]
+        .into_iter()
+        .chain(group.members.iter().map(|build| {
+            (
+                sums_output(build.image),
+                format!(
+                    "${{{{ steps.{}.outputs.sums }}}}",
+                    stage_step(build.image)
+                ),
+            )
+        }))
+        .collect(),
         id,
         condition: Some(expression(&reached)),
         needs: if selective && !reaching.is_empty() {
@@ -271,27 +283,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
     let before_compile = steps.len();
     steps.push(compile(workflow, group));
     for build in &group.members {
-        let picked = selected(build.image)
-            .filter(|_| selective(workflow))
-            .map(|text| expression(&text));
-        steps.push(RenderedStep {
-            condition: picked.clone(),
-            ..stage(build)
-        });
-        let mut artifact_step = upload(
-            artifact(build.image),
-            format!("${{{{ steps.{}.outputs.dir }}}}", stage_step(build.image)),
-        );
-        artifact_step.condition = picked;
-        for (name, value) in &mut artifact_step.with {
-            if name == "retention-days" {
-                *value = Value::Int(ARTIFACT_RETENTION_DAYS);
-            }
-        }
-        artifact_step
-            .with
-            .push(("include-hidden-files".to_owned(), Value::Bool(true)));
-        steps.push(artifact_step);
+        steps.extend(member_steps(workflow, build));
     }
     let after = steps.split_off(before_compile);
     let between = steps.split_off(3);
@@ -351,32 +343,4 @@ fn compile(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> RenderedStep {
         env,
         ..command(format!("Compile {name} with zigbuild"), run)
     }
-}
-
-fn stage(build: &ImageBuild<'_>) -> RenderedStep {
-    let image = build.image;
-    let mut run = format!(
-        "velnor-ci image stage --target-dir {} --profile {} --glibc {} --openssl {} --private-under \"$RUNNER_TEMP\"",
-        shell_word(&join(build.root, "target")),
-        shell_word(image.profile_directory()),
-        image.glibc,
-        image.openssl.name(),
-    );
-    for bin in &image.bins {
-        let _ = write!(run, " --bin {}", shell_word(bin));
-    }
-    RenderedStep {
-        id: Some(stage_step(image)),
-        ..command(
-            format!(
-                "Stage the {} binaries and check their glibc ceiling",
-                image.name
-            ),
-            run,
-        )
-    }
-}
-
-fn stage_step(image: &ImageConfig) -> String {
-    format!("stage-{}", image.name)
 }

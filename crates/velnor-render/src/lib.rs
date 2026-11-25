@@ -34,6 +34,7 @@ mod image_gate;
 mod image_group;
 mod image_publish;
 mod image_release;
+mod image_stage;
 mod install_steps;
 mod job_helper;
 mod key_length;

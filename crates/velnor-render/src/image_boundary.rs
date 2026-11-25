@@ -67,20 +67,20 @@ pub fn check_image_boundary(jobs: &[RenderedJob]) -> Vec<RuleViolation> {
                 "a job in an environment, which holds credentials, runs repository code",
             ));
         }
+        if job.environment.is_none()
+            && let Some(at) = job.steps.iter().position(|step| {
+                step.uses
+                    .as_deref()
+                    .is_some_and(|uses| uses.contains("login-action"))
+            })
+        {
+            found.push(violation(
+                job,
+                at,
+                "a registry login sits in a job that has no environment",
+            ));
+        }
         let Some(first) = first_code else {
-            if job.environment.is_none()
-                && let Some(at) = job.steps.iter().position(|step| {
-                    step.uses
-                        .as_deref()
-                        .is_some_and(|uses| uses.contains("login-action"))
-                })
-            {
-                found.push(violation(
-                    job,
-                    at,
-                    "a registry login sits in a job that has no environment",
-                ));
-            }
             continue;
         };
         if job

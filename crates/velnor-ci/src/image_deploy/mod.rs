@@ -6,6 +6,7 @@ pub mod authority;
 pub mod changes;
 pub mod elf;
 pub mod gate;
+pub mod ghcr;
 pub mod hub;
 pub mod lock;
 pub mod promote;

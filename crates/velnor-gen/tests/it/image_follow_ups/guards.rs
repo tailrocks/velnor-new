@@ -200,6 +200,18 @@ fn the_generator_refuses_an_image_job_that_mixes_repository_code_with_credential
         !check_image_boundary(&[late]).is_empty(),
         "a credential after the code"
     );
+    let mut login_then_code = building();
+    login_then_code.steps.insert(
+        0,
+        RenderedStep {
+            uses: Some("docker/login-action@abc".to_owned()),
+            ..RenderedStep::default()
+        },
+    );
+    assert!(
+        !check_image_boundary(&[login_then_code]).is_empty(),
+        "a login before the code in a job without an environment"
+    );
     let login = RenderedJob {
         id: "image-x-publish".to_owned(),
         steps: vec![RenderedStep {
@@ -237,5 +249,127 @@ fn every_generated_image_workflow_keeps_credentials_away_from_the_jobs_that_run_
             }
         }
     }
+    Ok(())
+}
+
+#[test]
+fn the_downloaded_binaries_are_checked_against_the_hashes_that_the_build_job_staged() -> TestResult
+{
+    for (name, build, check, publish) in [
+        (
+            "image-plain",
+            "image-plain-svc-build",
+            "image-plain-svc-check",
+            "image-plain-svc-publish",
+        ),
+        (
+            "image-ghcr",
+            "image-cluster-svc-build",
+            "image-cluster-svc-check",
+            "image-cluster-svc-publish",
+        ),
+    ] {
+        let workflow = rendered(name)?;
+        let image = build
+            .trim_start_matches("image-")
+            .trim_end_matches("-build");
+        assert!(
+            workflow["jobs"][build]["outputs"][format!("sums-{image}").as_str()]
+                .as_str()
+                .is_some_and(|text| text.contains(&format!("steps.stage-{image}.outputs.sums"))),
+            "{name}"
+        );
+        let build_job = &workflow["jobs"][build];
+        let order: Vec<&str> = steps(build_job)
+            .iter()
+            .filter_map(|step| step["name"].as_str())
+            .collect();
+        let staged = order
+            .iter()
+            .position(|text| text.starts_with("Stage the"))
+            .ok_or("no stage")?;
+        let rechecked = order
+            .iter()
+            .position(|text| text.contains("is unchanged right before the upload"))
+            .ok_or("no recheck")?;
+        let uploaded = order
+            .iter()
+            .position(|text| text.starts_with("Upload image-"))
+            .ok_or("no upload")?;
+        assert!(staged < rechecked && rechecked < uploaded, "{name}");
+        for id in [check, publish] {
+            let job = &workflow["jobs"][id];
+            let names: Vec<&str> = steps(job)
+                .iter()
+                .filter_map(|step| step["name"].as_str())
+                .collect();
+            let download = names
+                .iter()
+                .position(|text| text.starts_with("Download image-"))
+                .ok_or("no download")?;
+            let verify = names
+                .iter()
+                .position(|text| text.starts_with("Check that the downloaded binaries"))
+                .ok_or("no verify")?;
+            let docker = steps(job)
+                .iter()
+                .position(|step| {
+                    step["uses"]
+                        .as_str()
+                        .is_some_and(|uses| uses.starts_with("docker/"))
+                })
+                .ok_or("no docker step")?;
+            assert!(download < verify && verify < docker, "{name} {id}");
+            let step = step_named(job, "Check that the downloaded binaries")?;
+            assert!(
+                step["env"]["SUMS"].as_str().is_some_and(
+                    |text| text.contains(&format!("needs.{build}.outputs.sums-{image}"))
+                ),
+                "{name} {id}"
+            );
+            assert!(
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("image verify --dir")),
+                "{name} {id}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_ghcr_package_that_is_already_public_is_refused_before_the_push() -> TestResult {
+    let both = rendered("image-ghcr")?;
+    let publish = &both["jobs"]["image-cluster-svc-publish"];
+    let names: Vec<&str> = steps(publish)
+        .iter()
+        .filter_map(|step| step["name"].as_str())
+        .collect();
+    let preflight = names
+        .iter()
+        .position(|text| text.starts_with("Refuse to push to a ghcr.io package that is public"))
+        .ok_or("no ghcr preflight")?;
+    let push = names
+        .iter()
+        .position(|text| text.starts_with("Build and push"))
+        .ok_or("no push")?;
+    assert!(preflight < push);
+    let run = step_named(publish, "ghcr.io package that is public")?["run"]
+        .as_str()
+        .ok_or("no run")?;
+    assert!(
+        run.contains("image ghcr-preflight --repository ghcr.io/acme/cluster-svc"),
+        "{run}"
+    );
+    let plain = rendered("image-plain")?;
+    assert!(
+        steps(&plain["jobs"]["image-plain-svc-publish"])
+            .iter()
+            .all(|step| !step["name"]
+                .as_str()
+                .unwrap_or("")
+                .contains("ghcr.io package"))
+    );
     Ok(())
 }

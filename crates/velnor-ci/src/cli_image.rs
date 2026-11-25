@@ -234,3 +234,20 @@ pub struct ImageAdvanceArgs {
     )]
     pub images: Vec<String>,
 }
+
+#[derive(Debug, Args)]
+pub struct ImageVerifyArgs {
+    #[arg(long, help = "The directory that holds the downloaded staged binaries")]
+    pub dir: PathBuf,
+    #[arg(
+        long,
+        help = "<binary>=<sha256> pairs separated by commas, as the build job's stage step reported them; the directory must hold exactly these regular files with these hashes"
+    )]
+    pub sums: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ImageGhcrArgs {
+    #[arg(long, help = "The package as ghcr.io/owner/name")]
+    pub repository: String,
+}

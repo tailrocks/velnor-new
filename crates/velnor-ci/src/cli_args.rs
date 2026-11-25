@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use crate::cli_image::{
-    ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImagePreflightArgs,
-    ImagePromoteArgs, ImageStageArgs, ImageSysrootArgs,
+    ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImageGhcrArgs,
+    ImagePreflightArgs, ImagePromoteArgs, ImageStageArgs, ImageSysrootArgs, ImageVerifyArgs,
 };
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
@@ -222,6 +222,14 @@ pub enum ImageCommand {
         about = "Write IMAGE=true or IMAGE=false to $GITHUB_OUTPUT for each image named by --match: on a pull_request event an image is true when a file of the pull request, or the path it was renamed from, matches one of its globs; any other event, and a pull request of more than 3000 files, select every image. Reads GITHUB_TOKEN, which needs pull-requests: read"
     )]
     Changes(ImageChangesArgs),
+    #[command(
+        about = "Check that the downloaded staged binaries are exactly the ones that the build job staged: the directory holds only the files named by --sums, each a regular file with the given sha256, so an artifact that was changed after staging (a swapped file or a link) is refused. Never builds or pushes"
+    )]
+    Verify(ImageVerifyArgs),
+    #[command(
+        about = "Refuse to push to a ghcr.io package that already exists as public, because GitHub cannot make a public package private again; a missing package is fine. Reads GITHUB_TOKEN, which needs packages: read"
+    )]
+    GhcrPreflight(ImageGhcrArgs),
     #[command(
         about = "Point the default-branch tag of every --image at the image of the tip of the default branch, under the lock that the workflow holds: the digest this run pushed when --commit is the tip, otherwise the digest of sha-<tip> read from each registry (nothing moves when the tip has no image there). Then read the tag back in every registry and exit 1, saying that a re-run repairs it, when any registry names another digest. Reads GITHUB_TOKEN, which needs contents: read, and the docker login of the job"
     )]

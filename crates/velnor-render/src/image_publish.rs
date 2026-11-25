@@ -6,6 +6,7 @@ use velnor_model::{ImageConfig, ImageCredential, ImageHost, ImageRegistry, Image
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
 use crate::image_build::{LIVE_OUTPUT, artifact, checkout, job_id, labels, setup_buildx, staged};
 use crate::image_gate::GATE_JOB;
+use crate::image_stage::verify_step;
 use crate::install_steps::install_helper;
 use crate::pinned_actions::{DOCKER_BUILD_PUSH, DOCKER_LOGIN};
 use crate::release_binaries::{command, download_to};
@@ -90,6 +91,19 @@ fn private_hub(image: &ImageConfig) -> Option<Hub<'_>> {
             _ => None,
         }
     })
+}
+
+fn ghcr_preflight(registry: &ImageRegistry) -> RenderedStep {
+    RenderedStep {
+        env: variables(&[("GITHUB_TOKEN", "${{ github.token }}")]),
+        ..command(
+            "Refuse to push to a ghcr.io package that is public".to_owned(),
+            format!(
+                "velnor-ci image ghcr-preflight --repository {}",
+                registry.reference()
+            ),
+        )
+    }
 }
 
 fn preflight(hub: &Hub<'_>) -> RenderedStep {
@@ -263,8 +277,16 @@ pub(crate) fn publish_job(
         sparse_checkout(image),
         install_helper(workflow.helper),
         download_to(artifact(image), &staged(image)),
+        verify_step(compile, image),
     ]);
     steps.extend(hub.as_ref().map(preflight));
+    steps.extend(
+        image
+            .registries
+            .iter()
+            .filter(|registry| registry.host == ImageHost::Ghcr)
+            .map(ghcr_preflight),
+    );
     steps.push(restore_modes(image));
     steps.push(setup_buildx());
     steps.extend(image.registries.iter().map(login));
