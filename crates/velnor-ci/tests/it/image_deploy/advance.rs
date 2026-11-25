@@ -190,3 +190,50 @@ fn a_digest_a_branch_or_a_commit_that_cannot_be_valid_is_refused_before_any_requ
         assert!(outcome.is_err(), "{commit} {digest} {branch}");
     }
 }
+
+struct Moving<'a> {
+    inner: FakeGitHub,
+    reads: &'a std::cell::Cell<u32>,
+}
+
+impl velnor_ci::github::GitHub for Moving<'_> {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        if path == branch_path(&repo(), "main") {
+            self.reads.set(self.reads.get() + 1);
+            if self.reads.get() > 1 {
+                return Ok(json!({"commit": {"sha": TIP}}).to_string());
+            }
+        }
+        self.inner.get(path)
+    }
+}
+
+#[test]
+fn a_tip_that_moves_while_the_tag_is_written_stops_the_write_and_says_so() {
+    let fake = Fake::default();
+    let reads = std::cell::Cell::new(0);
+    let github = Moving {
+        inner: github(OWN),
+        reads: &reads,
+    };
+    let images = [HUB.to_owned(), GHCR.to_owned()];
+    let outcome = advance(
+        &github,
+        &repo(),
+        &fake,
+        &Advancement {
+            images: &images,
+            branch: "main",
+            commit: OWN,
+            digest: OWN_DIGEST,
+        },
+    );
+    let message = outcome
+        .err()
+        .map_or_else(String::new, |error| error.to_string());
+    assert!(message.contains("moved from"), "{message}");
+    assert!(
+        fake.tagged.borrow().is_empty(),
+        "nothing was written under a stale tip"
+    );
+}

@@ -43,6 +43,7 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Publish(args) => image_candidate::publish::publish(&args),
         ImageCommand::Stage(args) => stage_command(&args),
         ImageCommand::Verify(args) => checks::verify(&args),
+        ImageCommand::CpuFlags => checks::cpu_flags(),
         ImageCommand::GhcrPreflight(args) => checks::ghcr_preflight(&args),
         ImageCommand::Gate(args) => gate(&args),
         ImageCommand::Changes(args) => changes(&args),

@@ -4,6 +4,7 @@
 mod advance;
 mod authority;
 mod changes;
+mod cpu;
 mod elf;
 mod ghcr;
 mod hub;

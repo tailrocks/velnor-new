@@ -39,7 +39,10 @@ pub fn preflight(github: &dyn GitHub, repository: &str) -> Result<String, CiErro
                     Some("public") => Err(CiError::new(format!(
                         "{repository} is a public package, and GitHub cannot make a public package private again; pushing a private image there would publish it, so use another package name or delete the package first"
                     ))),
-                    Some(other) => Ok(format!("{repository} exists and is {other}\n")),
+                    Some("private") => Ok(format!("{repository} exists and is private\n")),
+                    Some(other) => Err(CiError::new(format!(
+                        "{repository} is an {other} package, which is visible beyond this repository; make it private or use another package name"
+                    ))),
                     None => Err(CiError::new(format!(
                         "GitHub answered the package lookup of {repository} without a visibility"
                     ))),

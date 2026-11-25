@@ -129,6 +129,13 @@ pub fn advance(
             let _ = writeln!(report, "{target} already names {digest}");
             continue;
         }
+        let now = tip_commit(github, repo)?;
+        if now != tip {
+            return Err(CiError::new(format!(
+                "the tip of the default branch moved from {tip} to {now} while {} was being moved; nothing more was written, and the advance job of the new tip points the tag at it (re-run this job when that one failed)",
+                advancement.branch
+            )));
+        }
         if let Err(error) = registry.tag(&format!("{name}@{digest}"), &target) {
             failures.push(format!("{target} could not be created: {error}"));
         }

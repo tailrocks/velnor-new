@@ -3,10 +3,13 @@
 
 mod advance;
 mod concurrency;
+mod cpu;
 mod guards;
 mod hardening;
 mod links;
 mod metadata_names;
+mod pins;
+mod required;
 mod required_features;
 mod runners;
 mod shared_compile;

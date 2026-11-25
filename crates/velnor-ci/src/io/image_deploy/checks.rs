@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::cli_image::{ImageGhcrArgs, ImageVerifyArgs};
 use crate::error::CiError;
 use crate::image_candidate::hashing::sha256_hex;
+use crate::image_deploy::cpu::refuse_cpu_flags;
 use crate::image_deploy::ghcr::preflight;
 use crate::io::{api_url, http, read_limited, token};
 
@@ -58,6 +59,10 @@ fn read_regular(path: &Path) -> Result<Vec<u8>, CiError> {
         .map_err(|error| CiError::new(format!("cannot read {}: {error}", path.display())))?;
     read_limited(file, MAX_BINARY_BYTES)
         .map_err(|error| CiError::new(format!("cannot read {}: {error}", path.display())))
+}
+
+pub(super) fn cpu_flags() -> Result<String, CiError> {
+    refuse_cpu_flags(&std::env::vars().collect::<Vec<_>>())
 }
 
 pub(super) fn verify(args: &ImageVerifyArgs) -> Result<String, CiError> {

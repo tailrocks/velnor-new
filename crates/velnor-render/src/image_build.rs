@@ -12,7 +12,7 @@ use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirro
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
-use crate::image_changes::{CHANGES_JOB, selected, selective};
+use crate::image_changes::{CHANGES_JOB, fail_when, failed, selected, selective};
 use crate::image_group::Compile;
 use crate::image_publish::{TIP_STEP, host_guard, private_source_guard, tip};
 use crate::image_stage::{member_steps, stage_step, sums_output};
@@ -168,10 +168,11 @@ pub(crate) fn build_job(
             .filter_map(|build| selected(build.image))
             .collect();
         format!(
-            "({}) || (({}) && ({}))",
+            "!cancelled() && (({}) || (({}) && ({} || {})))",
             events.branch_push(),
             events.checked(),
-            selected.join(" || ")
+            selected.join(" || "),
+            failed(CHANGES_JOB)
         )
     } else {
         format!("({}) || ({})", events.branch_push(), events.checked())
@@ -230,6 +231,12 @@ fn build_scopes(workflow: &ImageWorkflow<'_>) -> Vec<(&'static str, &'static str
 fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<RenderedStep> {
     let first = group.members[0];
     let mut steps = vec![checkout(), install_helper(workflow.helper), stands_down()];
+    if selective(workflow) {
+        steps.push(fail_when(
+            &failed(CHANGES_JOB),
+            "Fail because the image selection failed",
+        ));
+    }
     steps.extend(host_guard());
     if workflow.private.is_some() {
         steps.extend(private_source_guard());
@@ -280,6 +287,10 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
             ),
         ));
     }
+    steps.push(command(
+        "Refuse CPU-specific rustflags from the environment".to_owned(),
+        "velnor-ci image cpu-flags".to_owned(),
+    ));
     let before_compile = steps.len();
     steps.push(compile(workflow, group));
     for build in &group.members {

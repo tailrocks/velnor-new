@@ -73,7 +73,7 @@ fn private_source_binaries_are_never_staged_in_a_public_repository() -> TestResu
     assert!(
         guard["if"]
             .as_str()
-            .is_some_and(|text| text.contains("github.event.repository.private != true")),
+            .is_some_and(|text| text.contains("github.event.repository.visibility != 'private'")),
         "{guard}"
     );
     let names: Vec<&str> = steps(build)

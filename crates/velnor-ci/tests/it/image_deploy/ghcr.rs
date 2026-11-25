@@ -31,15 +31,16 @@ fn a_public_package_is_refused_in_the_organization_or_the_user_scope() {
 }
 
 #[test]
-fn a_private_or_internal_or_missing_package_is_accepted() {
-    for visibility in ["private", "internal"] {
-        let mut github = FakeGitHub::default();
-        github.respond(ORG.to_owned(), &package(visibility));
-        assert!(
-            preflight(&github, "ghcr.io/acme/svc").is_ok(),
-            "{visibility}"
-        );
-    }
+fn a_private_or_missing_package_is_accepted_and_an_internal_one_is_not() {
+    let mut github = FakeGitHub::default();
+    github.respond(ORG.to_owned(), &package("private"));
+    assert!(preflight(&github, "ghcr.io/acme/svc").is_ok());
+    let mut internal = FakeGitHub::default();
+    internal.respond(ORG.to_owned(), &package("internal"));
+    assert!(
+        preflight(&internal, "ghcr.io/acme/svc").is_err(),
+        "internal is visible enterprise-wide"
+    );
     let mut none = FakeGitHub::default();
     none.missing(ORG.to_owned());
     none.missing(USER.to_owned());

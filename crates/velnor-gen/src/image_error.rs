@@ -92,6 +92,11 @@ pub enum ImageError {
         image: String,
         path: String,
     },
+    MutableBase {
+        image: String,
+        path: String,
+        reference: String,
+    },
     DockerfileSymlink {
         image: String,
         path: String,
@@ -108,6 +113,11 @@ pub enum ImageError {
 impl fmt::Display for ImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BranchReleaseVersion { .. }
+            | Self::MutableBase { .. }
+            | Self::DockerfileSymlink { .. }
+            | Self::CpuBaseline { .. }
+            | Self::DockerfileMissing { .. } => self.dockerfile_or_branch(f),
             Self::BinNeedsFeatures { .. }
             | Self::BinFeaturesUnrecorded { .. }
             | Self::PublishPoolShared { .. }
@@ -166,22 +176,6 @@ impl fmt::Display for ImageError {
                 f,
                 "the default branch `{branch}` cannot be an image tag (letters, digits, `.`, `_` and `-`, at most 128 characters, no leading `.` or `-`); rename the branch or set default_branch"
             ),
-            Self::BranchReleaseVersion { branch } => write!(
-                f,
-                "the default branch `{branch}` looks like a release version or starts with `sha-`, so its image tag would collide with a tag that a release or a commit owns; rename the branch or set default_branch"
-            ),
-            Self::CpuBaseline { image, path } => write!(
-                f,
-                "image {image}: `{path}` sets target-cpu or target-feature in rustflags, which would leak into the published linux/amd64 binary and can crash on another CPU; remove them from that file, or build the image with its own root that does not read it"
-            ),
-            Self::DockerfileSymlink { image, path } => write!(
-                f,
-                "image {image}: `{path}` is a symbolic link or a git submodule; the publish job checks out only regular files and no submodules, so commit the file itself"
-            ),
-            Self::DockerfileMissing { image, path } => write!(
-                f,
-                "image {image}: the Dockerfile `{path}` is not a tracked file of this repository"
-            ),
             Self::InputUntracked { image, path } => write!(
                 f,
                 "image {image}: the input `{path}` is neither a tracked file nor a directory with tracked files, so the sparse checkout of the Dockerfile inputs would not fetch it"
@@ -211,6 +205,36 @@ impl fmt::Display for ImageError {
 }
 
 impl ImageError {
+    fn dockerfile_or_branch(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BranchReleaseVersion { branch } => write!(
+                f,
+                "the default branch `{branch}` looks like a release version or starts with `sha-`, so its image tag would collide with a tag that a release or a commit owns; rename the branch or set default_branch"
+            ),
+            Self::CpuBaseline { image, path } => write!(
+                f,
+                "image {image}: `{path}` sets target-cpu or target-feature in rustflags, which would leak into the published linux/amd64 binary and can crash on another CPU; remove them from that file, or build the image with its own root that does not read it"
+            ),
+            Self::MutableBase {
+                image,
+                path,
+                reference,
+            } => write!(
+                f,
+                "image {image}: `{reference}` in {path} is not pinned by digest; the publish job builds again, so a moved tag would publish an image that no check saw. Write name@sha256:<64 hex digits> (a stage name, a stage number and scratch are fine)"
+            ),
+            Self::DockerfileSymlink { image, path } => write!(
+                f,
+                "image {image}: `{path}` is a symbolic link or a git submodule; the publish job checks out only regular files and no submodules, so commit the file itself"
+            ),
+            Self::DockerfileMissing { image, path } => write!(
+                f,
+                "image {image}: the Dockerfile `{path}` is not a tracked file of this repository"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn feature_or_runner(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BinNeedsFeatures {

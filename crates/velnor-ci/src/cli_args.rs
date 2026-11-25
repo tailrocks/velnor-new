@@ -227,6 +227,10 @@ pub enum ImageCommand {
     )]
     Verify(ImageVerifyArgs),
     #[command(
+        about = "Exit 1 when RUSTFLAGS, CARGO_ENCODED_RUSTFLAGS, CARGO_BUILD_RUSTFLAGS or CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS in the environment set target-cpu or target-feature (either spelling), because the published binary must run on any x86-64 CPU"
+    )]
+    CpuFlags,
+    #[command(
         about = "Refuse to push to a ghcr.io package that already exists as public, because GitHub cannot make a public package private again; a missing package is fine. Reads GITHUB_TOKEN, which needs packages: read"
     )]
     GhcrPreflight(ImageGhcrArgs),

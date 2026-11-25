@@ -23,6 +23,17 @@ pub(crate) fn selective(workflow: &ImageWorkflow<'_>) -> bool {
         .any(|build| build.image.pr_build == ImagePrBuild::Inputs)
 }
 
+pub(crate) fn failed(job: &str) -> String {
+    format!("needs.{job}.result == 'failure'")
+}
+
+pub(crate) fn fail_when(condition: &str, name: &str) -> RenderedStep {
+    RenderedStep {
+        condition: Some(expression(condition)),
+        ..command(name.to_owned(), "false".to_owned())
+    }
+}
+
 pub(crate) fn selected(image: &velnor_model::ImageConfig) -> Option<String> {
     (image.pr_build != ImagePrBuild::Off)
         .then(|| format!("needs.{CHANGES_JOB}.outputs.{} == 'true'", image.name))

@@ -5,7 +5,7 @@ use velnor_model::ImagePrBuild;
 
 use crate::image::{Events, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, job_id, labels, setup_buildx, staged};
-use crate::image_changes::{CHANGES_JOB, selected, selective};
+use crate::image_changes::{CHANGES_JOB, fail_when, failed, selected, selective};
 use crate::image_publish::{host_guard, restore_modes, sparse_checkout};
 use crate::image_stage::verify_step;
 use crate::install_steps::install_helper;
@@ -26,7 +26,16 @@ pub(crate) fn check_job(
     if image.pr_build == ImagePrBuild::Off {
         return None;
     }
-    let mut steps = host_guard();
+    let picked = selected(image).filter(|_| selective(workflow));
+    let failure = match &picked {
+        Some(_) => format!("{} || {}", failed(compile), failed(CHANGES_JOB)),
+        None => failed(compile),
+    };
+    let mut steps = vec![fail_when(
+        &failure,
+        "Fail because a job that this check needs failed",
+    )];
+    steps.extend(host_guard());
     steps.extend([
         sparse_checkout(image),
         install_helper(workflow.helper),
@@ -50,7 +59,6 @@ pub(crate) fn check_job(
             ..DOCKER_BUILD_PUSH.step(format!("Build the {} image without pushing", image.name))
         },
     ]);
-    let picked = selected(image).filter(|_| selective(workflow));
     Some(RenderedJob {
         id: job_id(image, "check"),
         needs: [compile.to_owned()]
@@ -58,8 +66,16 @@ pub(crate) fn check_job(
             .chain(picked.is_some().then(|| CHANGES_JOB.to_owned()))
             .collect(),
         condition: Some(expression(&match picked {
-            Some(picked) => format!("({}) && ({picked})", events.checked()),
-            None => events.checked(),
+            Some(picked) => format!(
+                "!cancelled() && ({}) && ({picked} || {} || {})",
+                events.checked(),
+                failed(CHANGES_JOB),
+                failed(compile)
+            ),
+            None => format!(
+                "!cancelled() && ({}) && needs.{compile}.result != 'skipped'",
+                events.checked()
+            ),
         })),
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),

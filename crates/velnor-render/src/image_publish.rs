@@ -223,8 +223,8 @@ pub(crate) fn host_guard() -> Vec<RenderedStep> {
 
 pub(crate) fn private_source_guard() -> Vec<RenderedStep> {
     guard(
-        "github.event.repository.private != true",
-        "The staged binaries contain private dependencies and the artifact of a public repository is downloadable by anyone who is signed in, so image builds with private_sources need a private repository",
+        "github.event.repository.visibility != 'private'",
+        "The staged binaries contain private dependencies and the artifact of a public or internal repository is downloadable by every signed-in user or enterprise member who can read it, so image builds with private_sources need a private repository",
         "Refuse to stage private-source binaries in a public repository",
     )
 }
