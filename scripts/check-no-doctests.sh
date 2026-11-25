@@ -21,6 +21,36 @@ for flags in "${RUSTDOCFLAGS:-}" "${CARGO_ENCODED_RUSTDOCFLAGS:-}"; do
   esac
 done
 
+dropped=()
+while IFS='=' read -r name _; do
+  case "$name" in
+    CARGO_BUILD_RUSTDOCFLAGS | CARGO_TARGET_*_RUSTDOCFLAGS) dropped+=("$name") ;;
+  esac
+done < <(env)
+dir="$PWD"
+while :; do
+  for config in "$dir/.cargo/config.toml" "$dir/.cargo/config"; do
+    if [ -f "$config" ] && grep -q rustdocflags "$config"; then dropped+=("$config"); fi
+  done
+  [ "$dir" = / ] && break
+  dir="$(dirname "$dir")"
+done
+for config in "${CARGO_HOME:-$HOME/.cargo}/config.toml" "${CARGO_HOME:-$HOME/.cargo}/config"; do
+  if [ -f "$config" ] && grep -q rustdocflags "$config"; then dropped+=("$config"); fi
+done
+if [ "${#dropped[@]}" -gt 0 ]; then
+  printf 'no-doctests: %s\n' "${dropped[@]}" >&2
+  echo "no-doctests: the sources above set rustdocflags, and the RUSTDOCFLAGS this check sets replaces them, so rustdoc would list different doctests than cargo test --doc runs; remove them and run again." >&2
+  exit 2
+fi
+
+encoded=()
+if [ -n "${CARGO_ENCODED_RUSTDOCFLAGS+set}" ]; then
+  separator=$'\x1f'
+  value="${CARGO_ENCODED_RUSTDOCFLAGS:+$CARGO_ENCODED_RUSTDOCFLAGS$separator}--test${separator}--test-args${separator}--list"
+  encoded=("CARGO_ENCODED_RUSTDOCFLAGS=$value")
+fi
+
 passes=(--all-features --no-default-features)
 metadata="$(cargo metadata --no-deps --format-version 1 ${locked[@]+"${locked[@]}"})"
 if printf '%s' "$metadata" | grep -Eq '"features":\{([^{}]*,)?"default":'; then
@@ -34,7 +64,7 @@ for features in "${passes[@]}"; do
     selection=("$features")
   fi
   status=0
-  listing="$(RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --test --test-args --list" cargo doc --workspace --no-deps --lib --bins --examples ${selection[@]+"${selection[@]}"} ${locked[@]+"${locked[@]}"} 2>"$diagnostics")" || status=$?
+  listing="$(env RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --test --test-args --list" ${encoded[@]+"${encoded[@]}"} cargo doc --workspace --no-deps --lib --bins --examples ${selection[@]+"${selection[@]}"} ${locked[@]+"${locked[@]}"} 2>"$diagnostics")" || status=$?
   if [ "$status" -ne 0 ]; then
     cat "$diagnostics" >&2
     printf '%s\n' "$listing" >&2
@@ -44,12 +74,13 @@ for features in "${passes[@]}"; do
   parsed="$(printf '%s\n' "$listing" | awk '
     { line[NR] = $0 }
     /^[0-9]+ tests?, [0-9]+ benchmarks$/ {
+      summaries++
       n = $1 + 0
       if (n == 0) next
       if (NR < n + 2 || line[NR - 1] != "") { bad = 1; next }
       for (i = NR - 1 - n; i < NR - 1; i++) print line[i]
     }
-    END { if (bad) exit 3 }
+    END { if (bad || !summaries) exit 3 }
   ')" || {
     printf '%s\n' "$listing" >&2
     echo "no-doctests: could not read rustdoc's listing with $features features." >&2
