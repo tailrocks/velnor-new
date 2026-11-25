@@ -64,6 +64,8 @@ check example_fence     fail 'pub fn f() {}\n' examples/e.rs '/// ```\n/// let x
 check not_feature_fence fail '#[cfg(not(feature = "gated"))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check default_only_fence fail '#[cfg(all(feature = "on", not(feature = "gated")))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check no_default_only_fence fail '#[cfg(not(feature = "on"))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
+check mixed_gated_without_on_fence fail '#[cfg(all(feature = "gated", not(feature = "on")))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
+check mixed_gated_with_on_fence fail '#[cfg(all(feature = "gated", feature = "on"))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check plain_prose       pass '//! inner prose\n/// plain prose\nfn f() {}\n'
 check text_fence        pass '/// ```text\n/// not rust\n/// ```\nfn f() {}\n'
 check prose_cont_line   pass '/// prose\n///     let x = 1;\nfn f() {}\n'
@@ -76,9 +78,12 @@ CARGO_ENCODED_RUSTDOCFLAGS='--cfg=zzz' check encoded_flags_fence fail '/// ```\n
 CARGO_ENCODED_RUSTDOCFLAGS='' check empty_encoded_flags_fence fail '/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 CARGO_BUILD_RUSTDOCFLAGS='--cfg=zzz' check build_env_flags broken 'pub fn f() {}\n'
 check config_flags broken 'pub fn f() {}\n' ../.cargo/config.toml '[build]\nrustdocflags = ["--cfg", "zzz"]\n'
+check escaped_key_config_flags broken 'pub fn f() {}\n' ../.cargo/config.toml '[build]\n"rustdoc\\u0066lags" = ["--cfg", "zzz"]\n'
+check target_table_config_flags broken 'pub fn f() {}\n' ../.cargo/config.toml '[target.x86_64-unknown-linux-gnu]\nrustdocflags = ["--cfg", "zzz"]\n[target.aarch64-apple-darwin]\nrustdocflags = ["--cfg", "zzz"]\n'
+check unrelated_config_key pass 'pub fn f() {}\n' ../.cargo/config.toml '[build]\njobs = 2\n'
 extra_manifest='\n[dependencies]\npm = { path = "../pm" }\n' check proc_macro_prints_doctest_line pass 'pub fn f() {}\npm::noisy!();\n' ../pm/Cargo.toml '[package]\nname = "pm"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\nproc-macro = true\ndoctest = false\n' ../pm/src/lib.rs 'use proc_macro::TokenStream;\n#[proc_macro]\npub fn noisy(_: TokenStream) -> TokenStream {\n    println!("fx/src/lib.rs - f (line 1): test");\n    TokenStream::new()\n}\n'
-passes=3 check three_passes_with_a_default_feature pass 'pub fn f() {}\n'
-default_feature='' passes=2 check two_passes_without_a_default_feature pass 'pub fn f() {}\n'
+passes=8 check eight_passes_with_a_default_feature pass 'pub fn f() {}\n'
+default_feature='' passes=4 check four_passes_without_a_default_feature pass 'pub fn f() {}\n'
 default_feature='' check no_default_feature_fence fail '#[cfg(feature = "on")]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 
 exit "$fails"
