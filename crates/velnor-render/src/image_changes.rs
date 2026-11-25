@@ -20,9 +20,12 @@ pub(crate) fn selective(workflow: &ImageWorkflow<'_>) -> bool {
     workflow
         .images
         .iter()
-        .filter(|build| build.image.pr_build != ImagePrBuild::Off)
-        .count()
-        >= 2
+        .any(|build| build.image.pr_build == ImagePrBuild::Inputs)
+}
+
+pub(crate) fn selected(image: &velnor_model::ImageConfig) -> Option<String> {
+    (image.pr_build != ImagePrBuild::Off)
+        .then(|| format!("needs.{CHANGES_JOB}.outputs.{} == 'true'", image.name))
 }
 
 pub(crate) fn changes_job(

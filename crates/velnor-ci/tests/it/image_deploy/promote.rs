@@ -4,8 +4,11 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+use serde_json::json;
 use velnor_ci::error::CiError;
-use velnor_ci::image_deploy::promote::{Promotion, Registry, is_missing, promote};
+use velnor_ci::image_deploy::promote::{Promotion, Registry, is_missing, live_tag_commit, promote};
+
+use crate::support::{FakeGitHub, repo};
 
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const OLD: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
@@ -59,13 +62,19 @@ impl Registry for Fake {
 }
 
 fn run(fake: &Fake, version: &str) -> Result<String, String> {
+    run_at(fake, version, COMMIT)
+}
+
+fn run_at(fake: &Fake, version: &str, live: &str) -> Result<String, String> {
     let images = [HUB.to_owned(), GHCR.to_owned()];
+    let live_commit = || Ok(live.to_owned());
     promote(
         fake,
         &Promotion {
             images: &images,
             version,
             commit: COMMIT,
+            live_commit: &live_commit,
         },
     )
     .map_err(|error| error.to_string())
@@ -121,12 +130,14 @@ fn an_unpublished_commit_and_malformed_requests_promote_nothing() {
         assert!(run(&fake, version).is_err(), "{version}");
     }
     let images = [HUB.to_owned(), HUB.to_owned()];
+    let live = || Ok(COMMIT.to_owned());
     let twice = promote(
         &fake,
         &Promotion {
             images: &images,
             version: "1.2.3",
             commit: COMMIT,
+            live_commit: &live,
         },
     );
     assert!(twice.is_err());
@@ -166,4 +177,39 @@ fn only_the_registrys_own_miss_signals_count_as_a_missing_tag() {
     ] {
         assert_eq!(is_missing(reference, stderr), missing, "{stderr}");
     }
+}
+
+#[test]
+fn a_release_tag_that_moved_to_another_commit_while_the_run_waited_tags_nothing() {
+    let fake = Fake::default().published();
+    let other = "89abcdef0123456789abcdef0123456789abcdef";
+    let message = run_at(&fake, "1.2.3", other).err().unwrap_or_default();
+    assert!(message.contains("moved while the run waited"), "{message}");
+    assert!(message.contains(other), "{message}");
+    assert!(fake.tagged.borrow().is_empty());
+}
+
+#[test]
+fn the_live_tag_commit_is_read_through_an_annotated_tag_and_refuses_anything_but_a_commit() {
+    let tag = "svc-v1.2.3";
+    let mut github = FakeGitHub::default();
+    github.respond(
+        format!("/repos/tailrocks/velnor-new/git/ref/tags/{tag}"),
+        &json!({"object": {"type": "tag", "sha": "aaaa"}}).to_string(),
+    );
+    github.respond(
+        "/repos/tailrocks/velnor-new/git/tags/aaaa".to_owned(),
+        &json!({"object": {"type": "commit", "sha": COMMIT}}).to_string(),
+    );
+    assert_eq!(
+        live_tag_commit(&github, &repo(), tag).ok().as_deref(),
+        Some(COMMIT)
+    );
+    let mut tree = FakeGitHub::default();
+    tree.respond(
+        format!("/repos/tailrocks/velnor-new/git/ref/tags/{tag}"),
+        &json!({"object": {"type": "tree", "sha": "bbbb"}}).to_string(),
+    );
+    assert!(live_tag_commit(&tree, &repo(), tag).is_err());
+    assert!(live_tag_commit(&FakeGitHub::default(), &repo(), tag).is_err());
 }

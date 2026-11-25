@@ -97,8 +97,9 @@ fn authorize(image: &ImageConfig) -> RenderedStep {
 
 pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
     let image = build.image;
-    let mut steps = vec![install_helper(workflow.helper), setup_buildx()];
-    steps.extend(crate::image_publish::host_guard(image));
+    let mut steps = vec![install_helper(workflow.helper)];
+    steps.extend(crate::image_publish::host_guard());
+    steps.push(setup_buildx());
     steps.extend(image.registries.iter().map(login));
     let mut images = String::new();
     for registry in &image.registries {
@@ -117,10 +118,22 @@ pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) 
                 "COMMIT".to_owned(),
                 Value::Expr("${{ github.sha }}".to_owned()),
             ),
+            (
+                "GITHUB_TOKEN".to_owned(),
+                Value::Expr("${{ github.token }}".to_owned()),
+            ),
+            (
+                "REPOSITORY".to_owned(),
+                Value::Expr("${{ github.repository }}".to_owned()),
+            ),
+            (
+                "REF_NAME".to_owned(),
+                Value::Expr("${{ github.ref_name }}".to_owned()),
+            ),
         ],
         ..command(
             "Promote the pushed digest unless the version already names another".to_owned(),
-            format!("velnor-ci image promote --version \"$VERSION\" --commit \"$COMMIT\"{images}"),
+            format!("velnor-ci image promote --version \"$VERSION\" --commit \"$COMMIT\" --repo \"$REPOSITORY\" --tag \"$REF_NAME\"{images}"),
         )
     });
     RenderedJob {

@@ -5,7 +5,8 @@ use velnor_model::ImagePrBuild;
 
 use crate::image::{Events, ImageBuild, ImageWorkflow};
 use crate::image_build::{artifact, job_id, labels, setup_buildx, staged};
-use crate::image_publish::{restore_modes, sparse_checkout};
+use crate::image_changes::{CHANGES_JOB, selected, selective};
+use crate::image_publish::{host_guard, restore_modes, sparse_checkout};
 use crate::pinned_actions::DOCKER_BUILD_PUSH;
 use crate::release_binaries::download_to;
 use crate::release_steps::{expression, permissions};
@@ -23,7 +24,8 @@ pub(crate) fn check_job(
     if image.pr_build == ImagePrBuild::Off {
         return None;
     }
-    let steps = vec![
+    let mut steps = host_guard();
+    steps.extend([
         sparse_checkout(image),
         download_to(artifact(image), &staged(image)),
         restore_modes(image),
@@ -43,11 +45,18 @@ pub(crate) fn check_job(
             ],
             ..DOCKER_BUILD_PUSH.step(format!("Build the {} image without pushing", image.name))
         },
-    ];
+    ]);
+    let picked = selected(image).filter(|_| selective(workflow));
     Some(RenderedJob {
         id: job_id(image, "check"),
-        needs: vec![compile.to_owned()],
-        condition: Some(expression(&events.checked())),
+        needs: [compile.to_owned()]
+            .into_iter()
+            .chain(picked.is_some().then(|| CHANGES_JOB.to_owned()))
+            .collect(),
+        condition: Some(expression(&match picked {
+            Some(picked) => format!("({}) && ({picked})", events.checked()),
+            None => events.checked(),
+        })),
         permissions: permissions(&[("contents", "read")]),
         runs_on: workflow.runner.to_string(),
         timeout_minutes: CHECK_TIMEOUT_MINUTES,

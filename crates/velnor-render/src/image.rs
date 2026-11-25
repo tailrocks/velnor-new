@@ -252,7 +252,7 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
         .filter(|build| build.image.pr_build != ImagePrBuild::Off)
         .collect();
     if !reaching.is_empty() {
-        let mut pull_request = vec![entry(
+        let pull_request = vec![entry(
             "types",
             names(
                 &[
@@ -265,12 +265,6 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
                 .map(str::to_owned),
             ),
         )];
-        if reaching
-            .iter()
-            .all(|build| build.image.pr_build == ImagePrBuild::Inputs)
-        {
-            pull_request.push(entry("paths", names(&pr_paths(&reaching))));
-        }
         events.push(entry("pull_request", Yaml::Map(pull_request)));
         events.push(entry(
             "merge_group",
@@ -299,13 +293,6 @@ fn triggers(workflow: &ImageWorkflow<'_>) -> Yaml {
     Yaml::Map(events)
 }
 
-fn pr_paths(builds: &[&ImageBuild<'_>]) -> Vec<String> {
-    let mut paths: Vec<String> = builds.iter().flat_map(|build| image_paths(build)).collect();
-    paths.sort();
-    paths.dedup();
-    paths
-}
-
 pub(crate) fn image_paths(build: &ImageBuild<'_>) -> Vec<String> {
     let image = build.image;
     let mut paths = vec![
@@ -322,7 +309,7 @@ pub(crate) fn image_paths(build: &ImageBuild<'_>) -> Vec<String> {
         image.dockerfile.clone(),
         format!("{}.dockerignore", image.dockerfile),
         if build.root == "." {
-            "**/*.rs".to_owned()
+            "**".to_owned()
         } else {
             format!("{}/**", build.root)
         },

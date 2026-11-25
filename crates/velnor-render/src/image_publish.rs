@@ -199,32 +199,39 @@ pub(crate) fn tip(id: &str, condition: Option<String>) -> RenderedStep {
     }
 }
 
-pub(crate) fn host_guard(image: &ImageConfig) -> Vec<RenderedStep> {
-    if !image
-        .registries
-        .iter()
-        .any(|registry| registry.host == ImageHost::Ghcr)
-    {
-        return Vec::new();
-    }
-    let condition = expression("github.server_url != 'https://github.com'");
+pub(crate) fn host_guard() -> Vec<RenderedStep> {
+    guard(
+        "github.server_url != 'https://github.com'",
+        "Image workflows run on github.com only: their artifact actions and ghcr.io do not work on a GitHub Enterprise Server or a custom domain",
+        "Refuse a GitHub host other than github.com",
+    )
+}
+
+pub(crate) fn private_source_guard() -> Vec<RenderedStep> {
+    guard(
+        "github.event.repository.private != true",
+        "The staged binaries contain private dependencies and the artifact of a public repository is downloadable by anyone who is signed in, so image builds with private_sources need a private repository",
+        "Refuse to stage private-source binaries in a public repository",
+    )
+}
+
+fn guard(when: &str, message: &str, name: &str) -> Vec<RenderedStep> {
+    let condition = expression(when);
     vec![
         RenderedStep {
             condition: Some(condition.clone()),
             ..command(
-                "Say that ghcr.io is for github.com only".to_owned(),
-                "echo \"::error title=Image::ghcr.io accepts only repositories on github.com, because a GitHub Enterprise Server or custom-domain instance publishes to its own containers registry\"".to_owned(),
+                format!("Say why: {name}"),
+                format!("echo \"::error title=Image::{message}\""),
             )
         },
         RenderedStep {
             condition: Some(condition),
-            ..command(
-                "Refuse ghcr.io outside github.com".to_owned(),
-                "false".to_owned(),
-            )
+            ..command(name.to_owned(), "false".to_owned())
         },
     ]
 }
+
 fn report(registry: &ImageRegistry) -> Vec<RenderedStep> {
     let reference = format!("{}:sha-${{{{ github.sha }}}}", registry.reference());
     let host = registry.host.name();
@@ -251,15 +258,15 @@ pub(crate) fn publish_job(
 ) -> RenderedJob {
     let image = build.image;
     let hub = private_hub(image);
-    let mut steps = vec![
+    let mut steps = host_guard();
+    steps.extend([
         sparse_checkout(image),
         install_helper(workflow.helper),
         download_to(artifact(image), &staged(image)),
-    ];
+    ]);
     steps.extend(hub.as_ref().map(preflight));
     steps.push(restore_modes(image));
     steps.push(setup_buildx());
-    steps.extend(host_guard(image));
     steps.extend(image.registries.iter().map(login));
     steps.push(push(image));
     for registry in &image.registries {

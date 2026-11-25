@@ -24,7 +24,7 @@ use crate::image_deploy::gate::{
     Clock, Request, Wait, exemptions_only, tip_only, wait_for_required,
 };
 use crate::image_deploy::hub::{HUB_URL, preflight};
-use crate::image_deploy::promote::{Promotion, promote};
+use crate::image_deploy::promote::{Promotion, live_tag_commit, promote};
 use crate::image_deploy::stage::{Glibc, Openssl, check};
 
 mod registry;
@@ -267,12 +267,16 @@ fn advance_branch(args: &ImageAdvanceArgs) -> Result<String, CiError> {
 }
 
 fn promote_release(args: &ImagePromoteArgs) -> Result<String, CiError> {
+    let repo = Repo::parse(&args.repo)?;
+    let github = http::HttpGitHub::new(api_url(), token()?, http::DEFAULT_TIMEOUT);
+    let live = || live_tag_commit(&github, &repo, &args.tag);
     promote(
         &registry::Docker,
         &Promotion {
             images: &args.images,
             version: &args.version,
             commit: &args.commit,
+            live_commit: &live,
         },
     )
 }

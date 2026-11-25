@@ -3,18 +3,74 @@
 
 use std::fmt::Write;
 
+use serde::Deserialize;
+
 use crate::error::CiError;
+use crate::github::{GitHub, Repo, parse};
 
 pub trait Registry {
     fn digest(&self, reference: &str) -> Result<Option<String>, CiError>;
     fn tag(&self, source: &str, target: &str) -> Result<(), CiError>;
 }
 
-#[derive(Debug)]
 pub struct Promotion<'a> {
     pub images: &'a [String],
     pub version: &'a str,
     pub commit: &'a str,
+    pub live_commit: &'a dyn Fn() -> Result<String, CiError>,
+}
+
+impl std::fmt::Debug for Promotion<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Promotion")
+            .field("images", &self.images)
+            .field("version", &self.version)
+            .field("commit", &self.commit)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Deserialize)]
+struct RefObject {
+    #[serde(rename = "type")]
+    kind: String,
+    sha: String,
+}
+
+#[derive(Deserialize)]
+struct RefAnswer {
+    object: RefObject,
+}
+
+#[derive(Deserialize)]
+struct TagAnswer {
+    object: RefObject,
+}
+
+pub fn live_tag_commit(github: &dyn GitHub, repo: &Repo, tag: &str) -> Result<String, CiError> {
+    let answer: RefAnswer = parse(
+        &github.get(&format!("/repos/{repo}/git/ref/tags/{tag}"))?,
+        "tag reference",
+    )?;
+    let mut object = answer.object;
+    for _ in 0..4 {
+        match object.kind.as_str() {
+            "commit" => return Ok(object.sha),
+            "tag" => {
+                let inner: TagAnswer = parse(
+                    &github.get(&format!("/repos/{repo}/git/tags/{}", object.sha))?,
+                    "tag object",
+                )?;
+                object = inner.object;
+            }
+            other => {
+                return Err(CiError::new(format!(
+                    "the tag {tag} names a {other}, not a commit"
+                )));
+            }
+        }
+    }
+    Err(CiError::new(format!("the tag {tag} is nested too deeply")))
 }
 
 #[must_use]
@@ -48,6 +104,7 @@ fn validate(promotion: &Promotion<'_>) -> Result<(), CiError> {
         images,
         version,
         commit,
+        ..
     } = promotion;
     let parts: Vec<&str> = version.split('.').collect();
     if parts.len() != 3 || !parts.iter().all(|part| number(part)) {
@@ -98,6 +155,13 @@ pub fn promote(registry: &dyn Registry, promotion: &Promotion<'_>) -> Result<Str
     let mut plans = Vec::new();
     for name in promotion.images {
         plans.push((name, plan(registry, name, promotion)?));
+    }
+    let live = (promotion.live_commit)()?;
+    if live != promotion.commit {
+        return Err(CiError::new(format!(
+            "the release tag now names commit {live} and not {}; it moved while the run waited, so nothing was tagged",
+            promotion.commit
+        )));
     }
     let mut report = String::new();
     for (name, plan) in plans {

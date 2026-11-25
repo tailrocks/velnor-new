@@ -83,8 +83,9 @@ fn advance_step(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> Rendere
 pub(crate) fn advance_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
     let image = build.image;
     let publish = job_id(image, "publish");
-    let mut steps = vec![install_helper(workflow.helper), setup_buildx()];
-    steps.extend(host_guard(image));
+    let mut steps = vec![install_helper(workflow.helper)];
+    steps.extend(host_guard());
+    steps.push(setup_buildx());
     steps.extend(image.registries.iter().map(login));
     steps.push(advance_step(workflow, build));
     steps.extend(withheld(workflow.branch));

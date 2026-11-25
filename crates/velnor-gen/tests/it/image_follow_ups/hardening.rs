@@ -195,7 +195,7 @@ fn only_the_cargo_config_that_cargo_reads_is_checked_in_each_directory() -> Test
 fn second_image(off: bool) -> String {
     let build = if off { "pr_build = \"off\"\n" } else { "" };
     format!(
-        "\n[[image]]\nname = \"other-svc\"\nbins = [\"plain-svc\"]\npublish_runner = \"ubuntu-26.04-scale-set-publish\"\n{build}\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"acme/other\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
+        "\n[[image]]\nname = \"other-svc\"\nbins = [\"plain-svc\"]\nstage = \"dist-other\"\npublish_runner = \"ubuntu-26.04-scale-set-publish\"\n{build}\n[[image.registry]]\nhost = \"docker.io\"\nrepository = \"acme/other\"\nusername = \"secrets.DOCKERHUB_USERNAME\"\ntoken = \"secrets.DOCKERHUB_TOKEN\"\n"
     )
 }
 
@@ -310,10 +310,62 @@ fn the_staged_artifact_is_uploaded_with_hidden_files_and_a_rust_source_change_bu
     let filtered = image(&edited("image-plain", |text| {
         text.replace("pr_build = \"always\"", "pr_build = \"inputs\"")
     })?)?;
-    let paths = filtered["on"]["pull_request"]["paths"].to_string();
-    assert!(paths.contains("**/*.rs"), "{paths}");
+    let select = step_named(&filtered["jobs"]["image-changes"], "Select the images")?;
+    let matches = text(&select["env"]["VELNOR_IMAGE_MATCHES"]);
+    assert!(
+        matches.lines().any(|line| line == "plain-svc=**"),
+        "{matches}"
+    );
     let nested = rendered("image-workspace")?;
-    let paths = nested["on"]["pull_request"]["paths"].to_string();
-    assert!(paths.contains("backend-rust/**"), "{paths}");
+    let select = step_named(&nested["jobs"]["image-changes"], "Select the images")?;
+    let matches = text(&select["env"]["VELNOR_IMAGE_MATCHES"]);
+    assert!(
+        matches
+            .lines()
+            .any(|line| line.ends_with("=backend-rust/**")),
+        "{matches}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_image_of_a_shared_compile_is_staged_and_checked_only_when_it_was_selected() -> TestResult {
+    let view = edited("image-plain", |text| {
+        text.replace("pr_build = \"always\"", "pr_build = \"inputs\"") + &second_image(false)
+    })?;
+    let workflow = image(&view)?;
+    let jobs_map = workflow["jobs"].as_object().ok_or("no jobs")?;
+    let shared: Vec<&String> = jobs_map
+        .keys()
+        .filter(|id| id.ends_with("-build"))
+        .collect();
+    assert_eq!(shared.len(), 1, "{shared:?}");
+    let build = &workflow["jobs"][shared[0].as_str()];
+    for image in ["plain-svc", "other-svc"] {
+        let wanted = format!("needs.image-changes.outputs.{image} == 'true'");
+        let staged: Vec<&Value> = steps(build)
+            .into_iter()
+            .filter(|step| {
+                step["name"]
+                    .as_str()
+                    .is_some_and(|name| name.contains(image) && !name.contains("target"))
+                    && step["if"]
+                        .as_str()
+                        .is_some_and(|text| text.contains(&wanted))
+            })
+            .collect();
+        assert!(
+            staged.len() >= 2,
+            "{image}: stage and upload are both conditional"
+        );
+        let check = &workflow["jobs"][format!("image-{image}-check").as_str()];
+        assert!(text(&check["if"]).contains(&wanted), "{image}");
+        assert!(
+            check["needs"]
+                .as_array()
+                .is_some_and(|needs| needs.iter().any(|need| need == "image-changes")),
+            "{image}"
+        );
+    }
     Ok(())
 }

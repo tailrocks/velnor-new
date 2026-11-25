@@ -12,9 +12,9 @@ use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirro
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
-use crate::image_changes::{CHANGES_JOB, selective};
+use crate::image_changes::{CHANGES_JOB, selected, selective};
 use crate::image_group::Compile;
-use crate::image_publish::{TIP_STEP, tip};
+use crate::image_publish::{TIP_STEP, host_guard, private_source_guard, tip};
 use crate::install_steps::{install_helper, install_tools};
 use crate::mbx_out_dirs::mbx_out_dirs_step;
 use crate::pinned_actions::DOCKER_SETUP_BUILDX;
@@ -164,7 +164,7 @@ pub(crate) fn build_job(
     } else if selective {
         let selected: Vec<String> = reaching
             .iter()
-            .map(|build| format!("needs.{CHANGES_JOB}.outputs.{} == 'true'", build.image.name))
+            .filter_map(|build| selected(build.image))
             .collect();
         format!(
             "({}) || (({}) && ({}))",
@@ -218,6 +218,10 @@ fn build_scopes(workflow: &ImageWorkflow<'_>) -> Vec<(&'static str, &'static str
 fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<RenderedStep> {
     let first = group.members[0];
     let mut steps = vec![checkout(), install_helper(workflow.helper), stands_down()];
+    steps.extend(host_guard());
+    if workflow.private.is_some() {
+        steps.extend(private_source_guard());
+    }
     match workflow.mbx {
         ImageMbx::Off => {}
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
@@ -267,8 +271,15 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
     let before_compile = steps.len();
     steps.push(compile(workflow, group));
     for build in &group.members {
-        steps.push(stage(build));
+        let picked = selected(build.image)
+            .filter(|_| selective(workflow))
+            .map(|text| expression(&text));
+        steps.push(RenderedStep {
+            condition: picked.clone(),
+            ..stage(build)
+        });
         let mut artifact_step = upload(artifact(build.image), staged(build.image));
+        artifact_step.condition = picked;
         for (name, value) in &mut artifact_step.with {
             if name == "retention-days" {
                 *value = Value::Int(ARTIFACT_RETENTION_DAYS);

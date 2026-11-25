@@ -83,14 +83,19 @@ fn a_rerun_pushes_again_so_that_a_missing_branch_tag_or_registry_is_repaired() -
 }
 
 #[test]
-fn the_pull_request_filter_matches_a_declared_input_file_and_the_dockerfile_specific_ignore_file()
+fn the_image_changes_job_selects_an_image_by_a_declared_input_file_and_the_dockerfile_specific_ignore_file()
 -> TestResult {
     let workflow = rendered("image-ghcr")?;
-    let paths = workflow["on"]["pull_request"]["paths"]
-        .as_array()
-        .ok_or("no paths")?;
-    for wanted in ["migrations", "migrations/**", "Dockerfile.dockerignore"] {
-        assert!(paths.iter().any(|path| path == wanted), "{wanted}");
+    let select = step_named(&workflow["jobs"]["image-changes"], "Select the images")?;
+    let matches = select["env"]["VELNOR_IMAGE_MATCHES"]
+        .as_str()
+        .ok_or("no matches")?;
+    for wanted in [
+        "cluster-svc=migrations",
+        "cluster-svc=migrations/**",
+        "cluster-svc=Dockerfile.dockerignore",
+    ] {
+        assert!(matches.lines().any(|line| line == wanted), "{wanted}");
     }
     Ok(())
 }
@@ -127,43 +132,100 @@ fn a_commit_that_is_no_longer_the_tip_says_so_and_never_moves_the_branch_tag() -
 }
 
 #[test]
-fn ghcr_is_refused_on_a_github_host_other_than_github_com() -> TestResult {
-    let both = rendered("image-ghcr")?;
-    for id in [
-        "image-cluster-svc-publish",
-        "image-cluster-svc-advance",
-        "image-cluster-svc-promote",
+fn every_image_job_that_moves_an_artifact_or_logs_in_refuses_a_github_host_other_than_github_com()
+-> TestResult {
+    for (name, ids) in [
+        (
+            "image-ghcr",
+            [
+                "image-cluster-svc-build",
+                "image-cluster-svc-check",
+                "image-cluster-svc-publish",
+                "image-cluster-svc-advance",
+                "image-cluster-svc-promote",
+            ],
+        ),
+        (
+            "image-plain",
+            [
+                "image-plain-svc-build",
+                "image-plain-svc-check",
+                "image-plain-svc-publish",
+                "image-plain-svc-advance",
+                "image-plain-svc-promote",
+            ],
+        ),
     ] {
-        let job = &both["jobs"][id];
-        let guard = step_named(job, "Refuse ghcr.io outside github.com")?;
-        assert!(
-            guard["if"]
-                .as_str()
-                .is_some_and(|text| text.contains("github.server_url != 'https://github.com'")),
-            "{id}"
-        );
-        let names: Vec<&str> = steps(job)
-            .iter()
-            .filter_map(|step| step["name"].as_str())
-            .collect();
-        let refuse = names
-            .iter()
-            .position(|text| text.starts_with("Refuse ghcr.io"))
-            .ok_or("no guard")?;
-        let login = names
-            .iter()
-            .position(|text| text.starts_with("Log in to"))
-            .ok_or("no login")?;
-        assert!(refuse < login, "{id}");
+        let workflow = rendered(name)?;
+        for id in ids {
+            let job = &workflow["jobs"][id];
+            let guard = step_named(job, "Refuse a GitHub host other than github.com")?;
+            assert!(
+                guard["if"].as_str().is_some_and(|text| {
+                    text.contains("github.server_url != 'https://github.com'")
+                }),
+                "{name} {id}"
+            );
+            let names: Vec<&str> = steps(job)
+                .iter()
+                .filter_map(|step| step["name"].as_str())
+                .collect();
+            let refuse = names
+                .iter()
+                .position(|text| text.starts_with("Refuse a GitHub host"))
+                .ok_or("no guard")?;
+            let first_use = steps(job)
+                .iter()
+                .position(|step| {
+                    step["uses"].as_str().is_some_and(|uses| {
+                        uses.starts_with("actions/upload-artifact")
+                            || uses.starts_with("actions/download-artifact")
+                            || uses.starts_with("docker/")
+                    })
+                })
+                .unwrap_or(usize::MAX);
+            assert!(refuse < first_use, "{name} {id}");
+        }
     }
+    Ok(())
+}
+
+#[test]
+fn private_source_binaries_are_never_staged_in_a_public_repository() -> TestResult {
+    let private = rendered("image-ghcr")?;
+    let build = &private["jobs"]["image-cluster-svc-build"];
+    let guard = step_named(build, "Refuse to stage private-source binaries")?;
+    assert!(
+        guard["if"]
+            .as_str()
+            .is_some_and(|text| text.contains("github.event.repository.private != true")),
+        "{guard}"
+    );
+    let names: Vec<&str> = steps(build)
+        .iter()
+        .filter_map(|step| step["name"].as_str())
+        .collect();
+    let refuse = names
+        .iter()
+        .position(|text| text.starts_with("Refuse to stage private-source"))
+        .ok_or("no guard")?;
+    let upload = names
+        .iter()
+        .position(|text| text.starts_with("Upload"))
+        .ok_or("no upload")?;
+    let fetch = names
+        .iter()
+        .position(|text| text.contains("private"))
+        .unwrap_or(usize::MAX);
+    assert!(refuse < upload && refuse <= fetch.max(refuse));
     let plain = rendered("image-plain")?;
     assert!(
-        steps(&plain["jobs"]["image-plain-svc-publish"])
+        steps(&plain["jobs"]["image-plain-svc-build"])
             .iter()
             .all(|step| !step["name"]
                 .as_str()
                 .unwrap_or("")
-                .starts_with("Refuse ghcr.io"))
+                .starts_with("Refuse to stage private-source"))
     );
     Ok(())
 }
@@ -188,7 +250,7 @@ fn the_pull_request_image_build_is_its_own_job_with_the_publish_jobs_sparse_chec
     let check = &workflow["jobs"]["image-cluster-svc-check"];
     assert_eq!(
         check["needs"],
-        serde_json::json!(["image-cluster-svc-build"])
+        serde_json::json!(["image-cluster-svc-build", "image-changes"])
     );
     assert!(
         check["if"]
@@ -376,16 +438,13 @@ fn a_superseded_commit_still_publishes_its_sha_image_so_that_its_release_tag_can
 }
 
 #[test]
-fn the_pull_request_trigger_follows_pr_build() -> TestResult {
+fn the_pull_request_trigger_follows_pr_build_and_never_filters_by_path_on_the_server() -> TestResult
+{
     let triggers = |view: &RepoView| -> Result<Value, Box<dyn std::error::Error>> {
         Ok(image(view)?["on"].clone())
     };
     let inputs = triggers(&sample("image-ghcr")?)?;
-    let paths = inputs["pull_request"]["paths"]
-        .as_array()
-        .ok_or("no paths")?;
-    assert!(paths.iter().any(|path| path == "migrations/**"));
-    assert!(paths.iter().any(|path| path == "Dockerfile"));
+    assert!(inputs["pull_request"].get("paths").is_none());
     let always = triggers(&sample("image-plain")?)?;
     assert!(always["pull_request"].get("paths").is_none());
     let off = triggers(&edited("image-plain", |text| {

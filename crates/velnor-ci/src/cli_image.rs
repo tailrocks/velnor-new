@@ -215,6 +215,13 @@ pub struct ImagePromoteArgs {
         help = "The full commit SHA whose sha-<commit> image is promoted"
     )]
     pub commit: String,
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(
+        long,
+        help = "The release tag, without refs/tags/; its live ref must still name --commit right before anything is tagged"
+    )]
+    pub tag: String,
 }
 
 #[derive(Debug, Args)]
