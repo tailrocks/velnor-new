@@ -145,7 +145,7 @@ pub(crate) fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .iter()
         .filter(|member| {
             member.targets.iter().any(|target| {
-                !target.requires_features()
+                !target.requires_features
                     && target.kinds.iter().any(|kind| {
                         matches!(
                             kind,

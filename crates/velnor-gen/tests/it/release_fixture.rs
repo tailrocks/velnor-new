@@ -104,6 +104,7 @@ pub(crate) fn release_view(
                 tests: false,
                 doctest: false,
                 source: None,
+                requires_features: false,
                 required_features: Vec::new(),
                 doc: true,
                 bench: true,

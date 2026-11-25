@@ -365,10 +365,11 @@ fn compiles(
 ) -> bool {
     member.targets.iter().any(|target| {
         (all_features
-            || target
-                .required_features
-                .iter()
-                .all(|feature| enabled.contains(feature)))
+            || (names_known(target)
+                && target
+                    .required_features
+                    .iter()
+                    .all(|feature| enabled.contains(&feature.name))))
             && (wanted.harnesses && target.tests
                 || wanted.kinds.iter().any(|(kind, name, gate)| {
                     target.kinds.contains(kind)
@@ -377,6 +378,12 @@ fn compiles(
                         && name.is_none_or(|name| named(name, target.name.as_str()))
                 }))
     })
+}
+
+/// A target the recorded file marks as gated without naming the features (an
+/// older pin) cannot be proven enabled.
+fn names_known(target: &Target) -> bool {
+    !target.requires_features || !target.required_features.is_empty()
 }
 
 fn flag(word: &str, names: &[&str]) -> bool {

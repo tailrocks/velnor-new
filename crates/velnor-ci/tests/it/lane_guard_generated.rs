@@ -39,6 +39,7 @@ fn view(helper: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {
             tests: true,
             doctest: false,
             source: None,
+            requires_features: false,
             required_features: Vec::new(),
             doc: true,
             bench: true,

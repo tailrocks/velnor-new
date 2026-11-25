@@ -83,13 +83,25 @@ pub struct Target {
     pub doc: bool,
     pub bench: bool,
     pub source: Option<RepoPath>,
-    pub required_features: Vec<String>,
+    pub requires_features: bool,
+    pub required_features: Vec<RequiredFeature>,
 }
 
-impl Target {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequiredFeature {
+    pub name: String,
+    pub enabled_by: Vec<String>,
+}
+
+impl RequiredFeature {
     #[must_use]
-    pub fn requires_features(&self) -> bool {
-        !self.required_features.is_empty()
+    pub fn enabled(&self, default_features: bool, features: &[String], package: &str) -> bool {
+        let prefix = format!("{package}/");
+        (default_features && self.enabled_by.iter().any(|feature| feature == "default"))
+            || features.iter().any(|feature| {
+                let feature = feature.strip_prefix(&prefix).unwrap_or(feature);
+                *feature == self.name || self.enabled_by.iter().any(|by| by == feature)
+            })
     }
 }
 

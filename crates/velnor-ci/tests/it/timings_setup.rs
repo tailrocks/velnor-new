@@ -27,6 +27,7 @@ fn view(timings: &str) -> RepoView {
             tests: true,
             doctest: false,
             source: None,
+            requires_features: false,
             required_features: Vec::new(),
             doc: true,
             bench: true,

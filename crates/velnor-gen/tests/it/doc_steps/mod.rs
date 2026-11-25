@@ -22,6 +22,7 @@ fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustM
             tests: true,
             doctest,
             source: Some(path(source)),
+            requires_features: false,
             required_features: Vec::new(),
             doc: true,
             bench: true,

@@ -50,16 +50,26 @@ struct Ruleset {
     rules: Vec<ApiRule>,
 }
 
+pub(super) struct CheckNames {
+    pub(super) names: BTreeSet<String>,
+    pub(super) unfinished: Option<String>,
+}
+
 pub(super) fn check_names(
     github: &dyn GitHub,
     repo: &Repo,
     sha: &str,
     exempt_sources: &[ApiRequiredCheck],
     current_run_id: Option<u64>,
-) -> Result<BTreeSet<String>, CiError> {
+    wait_for_unfinished: bool,
+) -> Result<CheckNames, CiError> {
     if exempt_sources.is_empty() {
-        return Ok(BTreeSet::new());
+        return Ok(CheckNames {
+            names: BTreeSet::new(),
+            unfinished: None,
+        });
     }
+    let mut unfinished = None;
     let current_suite = current_run_id
         .map(|id| {
             parse::<CurrentRun>(
@@ -101,10 +111,14 @@ pub(super) fn check_names(
                     .is_none_or(|app| app == -1 || app == suite.app.id)
             })
         {
-            return Err(CiError::new(format!(
+            let message = format!(
                 "unfinished check suite {} from App {} cannot prove a PR-only check absent",
                 suite.id, suite.app.id
-            )));
+            );
+            if !wait_for_unfinished {
+                return Err(CiError::new(message));
+            }
+            unfinished.get_or_insert(message);
         }
         if covered.contains(&suite.id) {
             continue;
@@ -121,7 +135,7 @@ pub(super) fn check_names(
                 .map(|run| run.name.to_lowercase()),
         );
     }
-    Ok(names)
+    Ok(CheckNames { names, unfinished })
 }
 
 fn matches_source(run: &CheckRun, sources: &[ApiRequiredCheck]) -> bool {

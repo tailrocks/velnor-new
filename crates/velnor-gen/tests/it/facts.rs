@@ -135,6 +135,7 @@ pub(crate) fn package(
                     tests: *tests,
                     doctest: true,
                     source: None,
+                    requires_features: false,
                     required_features: Vec::new(),
                     doc: true,
                     bench: true,

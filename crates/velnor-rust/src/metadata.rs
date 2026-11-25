@@ -107,7 +107,7 @@ pub fn reduce_metadata(
                 targets: package
                     .targets
                     .into_iter()
-                    .map(|target| target_of(repository, &benches, target))
+                    .map(|target| target_of(repository, &benches, target, &package.features))
                     .collect::<Result<_, _>>()?,
                 features: package.features,
             })
@@ -145,6 +145,7 @@ fn target_of(
     repository: &Path,
     benches: &Benches,
     target: RawTarget,
+    features: &BTreeMap<String, Vec<String>>,
 ) -> Result<Target, MetadataError> {
     let kinds: Vec<TargetKind> = target
         .kind
@@ -168,7 +169,8 @@ fn target_of(
         doctest: target.doctest,
         doc: target.doc,
         bench,
-        required_features: target.required_features,
+        requires_features: !target.required_features.is_empty(),
+        required_features: crate::required_features::resolve(features, &target.required_features),
         source: target
             .src_path
             .and_then(|path| match locate(repository, &path, "") {

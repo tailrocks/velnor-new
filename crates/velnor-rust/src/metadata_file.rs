@@ -6,8 +6,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use velnor_model::{
-    DependencyKind, PackageDependency, PackageName, RepoPath, RepoView, RustMetadata, RustPackage,
-    Target, TargetKind, TargetName,
+    DependencyKind, PackageDependency, PackageName, RepoPath, RepoView, RequiredFeature,
+    RustMetadata, RustPackage, Target, TargetKind, TargetName,
 };
 
 use crate::detect::metadata_roots;
@@ -113,13 +113,18 @@ struct Goal {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     bench: Option<bool>,
     source: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    requires_features: Option<bool>,
+    requires_features: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    required_features: Vec<String>,
+    required_features: Vec<Required>,
 }
 
-const UNNAMED_FEATURE: &str = "";
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Required {
+    name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    enabled_by: Vec<String>,
+}
 
 const KINDS: [(&str, TargetKind); 7] = [
     ("lib", TargetKind::Lib),
@@ -152,7 +157,9 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 }
 
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
-const TARGET_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 116);
+// helper-gate: first in tools-v0.1.116 via 3e88438447
+const REQUIRED_FEATURES_HELPER: (u64, u64, u64) = (0, 1, 116);
+const TARGET_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 117);
 
 pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
@@ -163,6 +170,7 @@ pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
 
 pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
     let records_target_dir = pin_at_least(view, TARGET_DIR_HELPER);
+    let records_required = pin_at_least(view, REQUIRED_FEATURES_HELPER);
     let records_target_fields = pin_at_least(view, TARGET_FIELDS_HELPER);
     let mut manifests = BTreeMap::new();
     let mut roots = BTreeMap::new();
@@ -188,7 +196,7 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
                 members: metadata
                     .members
                     .iter()
-                    .map(|package| member(package, records_target_fields))
+                    .map(|package| member(package, records_required, records_target_fields))
                     .collect(),
             },
         );
@@ -203,7 +211,7 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
     Ok(text)
 }
 
-fn member(package: &RustPackage, fields: bool) -> Member {
+fn member(package: &RustPackage, records_required: bool, fields: bool) -> Member {
     Member {
         name: package.name.to_string(),
         version: package.version.clone(),
@@ -237,9 +245,16 @@ fn member(package: &RustPackage, fields: bool) -> Member {
                 doc: fields.then_some(target.doc),
                 bench: fields.then_some(target.bench),
                 source: target.source.as_ref().map(ToString::to_string),
-                requires_features: (!fields).then_some(target.requires_features()),
-                required_features: if fields {
-                    target.required_features.clone()
+                requires_features: target.requires_features,
+                required_features: if records_required {
+                    target
+                        .required_features
+                        .iter()
+                        .map(|feature| Required {
+                            name: feature.name.clone(),
+                            enabled_by: feature.enabled_by.clone(),
+                        })
+                        .collect()
                 } else {
                     Vec::new()
                 },
@@ -347,11 +362,15 @@ fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
                     doc: goal.doc.unwrap_or(true),
                     bench: goal.bench.unwrap_or(true),
                     source: goal.source.as_deref().map(path_of).transpose()?,
-                    required_features: if goal.requires_features == Some(true) {
-                        vec![UNNAMED_FEATURE.to_owned()]
-                    } else {
-                        goal.required_features
-                    },
+                    requires_features: goal.requires_features,
+                    required_features: goal
+                        .required_features
+                        .into_iter()
+                        .map(|feature| RequiredFeature {
+                            name: feature.name,
+                            enabled_by: feature.enabled_by,
+                        })
+                        .collect(),
                 })
             })
             .collect::<Result<_, MetadataFileError>>()?,

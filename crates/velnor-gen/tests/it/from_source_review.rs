@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::Value;
-use velnor_model::{EventKind, RepoPath, Target, TargetKind};
+use velnor_model::{EventKind, RepoPath, RequiredFeature, Target, TargetKind};
 use velnor_rust::{LOCK_PATH, detect, lint_runs};
 
 use crate::facts::TestResult;
@@ -133,7 +133,13 @@ fn the_source_build_logs_cargo_fingerprints_when_cache_debug_is_on() -> TestResu
 fn from_source_refuses_a_velnor_gen_binary_that_needs_features() -> TestResult {
     let mut repo = locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?;
     let gated = Target {
-        required_features: vec!["f".to_owned()],
+        requires_features: true,
+        required_features: vec![RequiredFeature {
+            name: "f".to_owned(),
+            enabled_by: Vec::new(),
+        }],
+        doc: true,
+        bench: true,
         ..bin("velnor-gen")?
     };
     repo.rust_metadata

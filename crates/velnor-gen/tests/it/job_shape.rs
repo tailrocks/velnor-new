@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_gen::io::recording_of;
 use velnor_gen::{GenerateError, expected_with_notes, plan_generate};
 use velnor_model::{
-    CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
+    CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RequiredFeature, RustMember, Shape, StepKind, Target,
     TargetKind, TargetName, Timings, When,
 };
 use velnor_rust::{
@@ -66,6 +66,7 @@ pub(crate) fn target(kind: TargetKind) -> Target {
         tests: true,
         doctest: kind == TargetKind::Lib,
         source: None,
+        requires_features: false,
         required_features: Vec::new(),
         doc: true,
         bench: true,
@@ -139,7 +140,11 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         with_targets("tests-only", &[TargetKind::Test]),
         RustMember {
             targets: vec![Target {
-                required_features: vec!["f".to_owned()],
+                requires_features: true,
+                required_features: vec![RequiredFeature {
+                    name: "f".to_owned(),
+                    enabled_by: Vec::new(),
+                }],
                 ..target(TargetKind::Bin)
             }],
             ..member("gated", "crates/gated", &[])

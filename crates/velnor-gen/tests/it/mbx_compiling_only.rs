@@ -7,7 +7,7 @@ use crate::mbx_default::{NO_LAYOUT, OPTION, PIN, WRAPPER, pinned, with_mise};
 use crate::pipeline::workflow;
 use crate::yaml_tree::document;
 use serde_json::Value;
-use velnor_gen::expected_files;
+use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 
 const SHARED: &[u8] = b"shape = 'groups'\nmbx_shared_store = true\n";
@@ -35,6 +35,7 @@ fn repo(version: &str, library: bool) -> Result<RepoView, Box<dyn std::error::Er
             tests: false,
             doctest: false,
             source: None,
+            requires_features: false,
             required_features: Vec::new(),
             doc: true,
             bench: true,
@@ -199,7 +200,11 @@ fn every_sample_job_that_installs_tools_sets_the_mbx_cache_dir_at_0_1_112() -> T
         assert!(first.starts_with("version = "), "{first}");
         let relocked = format!("version = \"0.1.112\"\n{rest}");
         repo.files.insert(lock, relocked.into_bytes());
-        for (path, text) in expected_files(&repo)? {
+        let files = match expected_files(&repo) {
+            Err(GenerateError::ConfigKeyHelperTooOld { .. }) => continue,
+            other => other?,
+        };
+        for (path, text) in files {
             if !path.as_str().starts_with(".github/workflows/") {
                 continue;
             }

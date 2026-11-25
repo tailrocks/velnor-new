@@ -5,8 +5,8 @@ use std::error::Error;
 use std::path::Path;
 
 use velnor_model::{
-    DependencyKind, PackageDependency, PackageName, RepoPath, RepoView, RustMetadata, RustPackage,
-    Target, TargetKind, TargetName,
+    DependencyKind, PackageDependency, PackageName, RepoPath, RepoView, RequiredFeature,
+    RustMetadata, RustPackage, Target, TargetKind, TargetName,
 };
 use velnor_rust::{MetadataError, metadata_roots, reduce_metadata, wanted_files};
 
@@ -51,8 +51,12 @@ fn target(
         tests,
         doctest: true,
         source: source.map(path).transpose()?,
+        requires_features: name == "derive",
         required_features: if name == "derive" {
-            vec!["macros".to_owned()]
+            vec![RequiredFeature {
+                name: "macros".to_owned(),
+                enabled_by: vec!["default".to_owned(), "full".to_owned()],
+            }]
         } else {
             Vec::new()
         },
@@ -81,7 +85,8 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
           {"name": "derive", "kind": ["proc-macro"], "test": false, "required-features": ["macros"]},
           {"name": "build-script-build", "kind": ["custom-build"], "test": false},
           {"name": "smoke", "kind": ["test"], "src_path": "/elsewhere/smoke.rs", "test": true}
-        ]
+        ],
+        "features": {"default": ["full"], "full": ["macros"], "macros": [], "unrelated": ["serde/derive"]}
       }]
     }"#;
     let expected = RustMetadata {
@@ -216,7 +221,10 @@ fn cargo_metadata_carries_the_flags_and_feature_table_selection_needs() -> TestR
     let flags: Vec<(&str, bool, bool, Vec<String>)> = package
         .targets
         .iter()
-        .map(|t| (t.name.as_str(), t.doc, t.bench, t.required_features.clone()))
+        .map(|t| {
+            let names = t.required_features.iter().map(|f| f.name.clone());
+            (t.name.as_str(), t.doc, t.bench, names.collect())
+        })
         .collect();
     assert_eq!(
         flags,

@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_gen::io::recorded_files;
-use velnor_model::{RepoView, TargetKind};
+use velnor_model::{RepoView, RequiredFeature, TargetKind};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
 use crate::facts::{TestResult, package, path, repo};
@@ -55,8 +55,12 @@ fn view(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
         ],
     )?;
     for target in &mut a.targets {
-        target.required_features = if matches!(target.name.as_str(), "gated" | "defaulted") {
-            vec!["f".to_owned()]
+        target.requires_features = matches!(target.name.as_str(), "gated" | "defaulted");
+        target.required_features = if target.requires_features {
+            vec![RequiredFeature {
+                name: "f".to_owned(),
+                enabled_by: Vec::new(),
+            }]
         } else {
             Vec::new()
         };

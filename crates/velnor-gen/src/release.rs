@@ -114,7 +114,7 @@ fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
     for root in &facts.rust_roots {
         for member in &root.members {
             for target in &member.targets {
-                if target.kinds.contains(&TargetKind::Bin) && !target.requires_features() {
+                if target.kinds.contains(&TargetKind::Bin) && !target.requires_features {
                     for manifest in [&root.manifest, &member.manifest] {
                         found.insert((
                             manifest.to_string(),

@@ -36,6 +36,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
                 tests: true,
                 doctest: false,
                 source: None,
+                requires_features: false,
                 required_features: Vec::new(),
                 doc: true,
                 bench: true,
