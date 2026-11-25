@@ -93,6 +93,12 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         ),
         "{complaint}"
     );
+    assert!(
+        complaint.contains(
+            "run velnor-ci inputs build -- cargo clippy --workspace --all-targets, then velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it"
+        ),
+        "{complaint}"
+    );
 }
 
 #[test]

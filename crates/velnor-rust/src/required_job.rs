@@ -82,6 +82,8 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::LookupToolsOnNodeHit
         | When::PrimeToolsFromNetwork
         | When::SaveToolsOnDefaultBranch
+        | When::FullAuditOrPullRequest
+        | When::FullAuditOrPushOrPullRequest
         | When::SaveVerifiedTools(_) => None,
     };
     gate.into_iter().chain(when).chain(skip).collect()
