@@ -4,9 +4,7 @@
 use velnor_model::{HelperCommand, Step, StepKind};
 
 use super::RootJobs;
-use crate::audit_job::{
-    AuditLocation, audit_gate, audit_when, audits_before_saves, audits_per_root,
-};
+use crate::audit_job::{AuditLocation, audit_when, audits_before_saves, audits_per_root};
 use crate::plan::step;
 
 impl RootJobs<'_> {
@@ -27,7 +25,7 @@ impl RootJobs<'_> {
         };
         Some(Step {
             when,
-            gate: audit_gate(self.facts, self.lane),
+            gate: self.lane.steps(),
             ..step(kind)
         })
     }

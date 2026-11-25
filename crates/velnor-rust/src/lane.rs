@@ -73,7 +73,7 @@ impl Lane {
         }
     }
 
-    pub(crate) fn gate(&self, need: GateNeed) -> Gate {
+    fn gate(&self, need: GateNeed) -> Gate {
         Gate {
             slug: self.slug.clone(),
             need,

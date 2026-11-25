@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, RepoFacts, RootSlug,
-    StepKind,
+    CacheKey, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, StepKind,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
@@ -13,7 +12,7 @@ use crate::units::Unit;
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
 const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 102);
-const PULL_REQUEST_INPUTS_HELPER: (u64, u64, u64) = (0, 1, 116);
+const PULL_REQUEST_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 const AUDIT_BEFORE_SAVES_HELPER: (u64, u64, u64) = (0, 1, 116);
 
@@ -27,17 +26,12 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
 }
 
-pub(crate) fn audit_gate(facts: &RepoFacts, lane: &Lane) -> Option<Gate> {
-    let changed_inputs = audits_per_root(facts)
+pub(crate) fn audits_pull_requests(facts: &RepoFacts) -> bool {
+    audits_per_root(facts)
         && facts
             .helper
             .as_ref()
-            .is_some_and(|release| release.version().at_least(PULL_REQUEST_INPUTS_HELPER));
-    if changed_inputs {
-        Some(lane.gate(GateNeed::Inputs))
-    } else {
-        lane.steps()
-    }
+            .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
 }
 
 pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {
@@ -118,8 +112,10 @@ pub(crate) fn audit_when(facts: &RepoFacts) -> Option<velnor_model::When> {
             (OnMain::Affected, _) => Some(When::Scheduled),
         };
     }
-    Some(match facts.config.on_main {
-        OnMain::Everything => When::FullAuditOrPush,
-        OnMain::Affected => When::FullAudit,
+    Some(match (facts.config.on_main, audits_pull_requests(facts)) {
+        (OnMain::Everything, false) => When::FullAuditOrPush,
+        (OnMain::Everything, true) => When::FullAuditOrPushOrPullRequest,
+        (OnMain::Affected, false) => When::FullAudit,
+        (OnMain::Affected, true) => When::FullAuditOrPullRequest,
     })
 }

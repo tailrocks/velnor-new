@@ -204,8 +204,11 @@ pub(crate) fn condition(
             parts.extend(saved_after.is_empty().then(|| "success()".to_owned()));
             parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
-        When::FullAudit | When::FullAuditOrPush => {
-            parts.push(crate::audit_gate::events(when, gate, setup));
+        When::FullAudit
+        | When::FullAuditOrPush
+        | When::FullAuditOrPullRequest
+        | When::FullAuditOrPushOrPullRequest => {
+            parts.push(crate::audit_gate::events(when, setup));
         }
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
@@ -314,11 +317,6 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
 
 pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
-    let need = if gate.need == GateNeed::Inputs {
-        GateNeed::Selected
-    } else {
-        gate.need
-    };
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
         PlanFrom::Job(_) | PlanFrom::WorkJob(_) => Vec::new(),
@@ -332,7 +330,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     };
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
-    match need {
+    match gate.need {
         GateNeed::Selected if !gate.also.is_empty() => {
             let any = gate
                 .roots()
@@ -341,11 +339,11 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 .join(" || ");
             parts.push(format!("({any})"));
         }
-        GateNeed::Selected | GateNeed::Inputs | GateNeed::Doctests | GateNeed::Docs => {
+        GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
-            match need {
+            match gate.need {
                 GateNeed::Doctests | GateNeed::Docs => {
-                    parts.push(runs(need));
+                    parts.push(runs(gate.need));
                     parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
                 }
                 _ => {}
@@ -387,7 +385,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
         | GateNeed::PackageArgs
         | GateNeed::DoctestsKnown
         | GateNeed::TestsExpected => {
-            parts.push(format!("{} != ''", read(need)));
+            parts.push(format!("{} != ''", read(gate.need)));
         }
     }
     parts

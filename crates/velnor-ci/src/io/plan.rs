@@ -10,10 +10,10 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RootSlug, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    ANSIBLE_SLUG, ansible_runs, cargo_files, defer_post_merge_docs, detect, inputs_changed,
-    introduced, is_workflow_file, lint_runs, member_sources, optional_steps, plan_groups,
-    policy_runs, policy_unread, root_sources, select_event, selects_by_diff, tests_expected,
-    unknown_paths, unmatched_inputs, unread_packages,
+    ANSIBLE_SLUG, ansible_runs, cargo_files, defer_post_merge_docs, detect, introduced,
+    is_workflow_file, lint_runs, member_sources, optional_steps, plan_groups, policy_runs,
+    policy_unread, root_sources, select_event, selects_by_diff, tests_expected, unknown_paths,
+    unmatched_inputs, unread_packages,
 };
 
 use super::{
@@ -25,9 +25,8 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{
-    Steps, explain, group_explanation, group_outputs, input_warnings, inputs_output,
-    lint_explanation, lint_outputs, outputs, tests_outputs, warnings, weakened,
-    workspace_group_outputs,
+    Steps, explain, group_explanation, group_outputs, input_warnings, lint_explanation,
+    lint_outputs, outputs, tests_outputs, warnings, weakened, workspace_group_outputs,
 };
 use crate::summary::{group_summary, lint_summary, summary};
 
@@ -95,9 +94,6 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     } else {
         policy_runs(facts.policy, &changes.paths, everything, selected)
     };
-    let inputs = (matches!(kind, EventKind::PullRequest | EventKind::MergeGroup)
-        && changes.paths.is_empty())
-        || inputs_changed(&changes.paths);
     let expected: BTreeMap<RepoPath, bool> = facts
         .rust_roots
         .iter()
@@ -127,7 +123,6 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .map(|lint| lint.id.to_string())
         .collect();
     let outputs = outputs(&selections, &steps, policy)?
-        + &inputs_output(inputs)
         + &tests_outputs(&expected)
         + &lint_outputs(&lints)
         + &group_outputs(&groups)

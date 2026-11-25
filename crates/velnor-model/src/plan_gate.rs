@@ -40,10 +40,6 @@ impl Gate {
                 own(GateNeed::PackageArgs),
             ],
             GateNeed::Deny | GateNeed::Machete | GateNeed::Lint => vec![own(self.need)],
-            GateNeed::Inputs => vec![
-                own(GateNeed::Selected),
-                (RootSlug::from_static("inputs"), GateNeed::Inputs),
-            ],
             GateNeed::PackageArgs if self.unselected => {
                 vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
             }
@@ -78,16 +74,12 @@ pub enum GateNeed {
     TestsExpected,
     Group,
     Lint,
-    Inputs,
 }
 
 impl GateNeed {
     #[must_use]
     pub fn is_global(self) -> bool {
-        matches!(
-            self,
-            Self::Deny | Self::Machete | Self::Policy | Self::Inputs
-        )
+        matches!(self, Self::Deny | Self::Machete | Self::Policy)
     }
 
     #[must_use]
@@ -102,7 +94,6 @@ impl GateNeed {
             Self::Deny => "deny",
             Self::Machete => "machete",
             Self::Policy => "policy",
-            Self::Inputs => "inputs",
             Self::TestsExpected => "tests",
             Self::Group => "group",
             Self::Lint => return format!("lint_{slug}"),
