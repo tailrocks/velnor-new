@@ -20,19 +20,39 @@ pub fn lint_runs(
     changed: Option<&BTreeSet<RepoPath>>,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
+    base: &BTreeMap<RepoPath, String>,
 ) -> BTreeMap<RootSlug, bool> {
+    let tree = Tree {
+        tracked,
+        symlinks,
+        base,
+    };
     facts
         .config
         .lint
         .iter()
         .filter(|lint| lint.planned())
-        .map(|lint| {
-            (
-                lint.slug(),
-                runs(facts, lint, event, changed, tracked, symlinks),
-            )
-        })
+        .map(|lint| (lint.slug(), runs(facts, lint, event, changed, &tree)))
         .collect()
+}
+
+struct Tree<'a> {
+    tracked: &'a BTreeSet<RepoPath>,
+    symlinks: &'a BTreeSet<RepoPath>,
+    base: &'a BTreeMap<RepoPath, String>,
+}
+
+impl Tree<'_> {
+    fn edited(&self, path: &RepoPath) -> bool {
+        self.tracked.contains(path) && self.base.contains_key(path) && !self.symlinks.contains(path)
+    }
+}
+
+pub fn task_files<'a>(
+    facts: &'a RepoFacts,
+    changed: &'a BTreeSet<RepoPath>,
+) -> impl Iterator<Item = &'a RepoPath> {
+    changed.iter().filter(|path| names_a_lint_task(facts, path))
 }
 
 fn runs(
@@ -40,28 +60,27 @@ fn runs(
     lint: &LintJob,
     event: EventKind,
     changed: Option<&BTreeSet<RepoPath>>,
-    tracked: &BTreeSet<RepoPath>,
-    symlinks: &BTreeSet<RepoPath>,
+    tree: &Tree<'_>,
 ) -> bool {
     let Some(changed) =
         changed.filter(|changed| event == EventKind::PullRequest && !changed.is_empty())
     else {
         return true;
     };
-    triggered(facts, lint, changed, symlinks)
-        || (!lint.inputs.is_empty() && !has_tracked_input(lint, tracked, symlinks))
+    triggered(facts, lint, changed, tree)
+        || (!lint.inputs.is_empty() && !has_tracked_input(lint, tree.tracked, tree.symlinks))
 }
 
 fn triggered(
     facts: &RepoFacts,
     lint: &LintJob,
     changed: &BTreeSet<RepoPath>,
-    symlinks: &BTreeSet<RepoPath>,
+    tree: &Tree<'_>,
 ) -> bool {
-    symlinks
+    tree.symlinks
         .iter()
         .chain(changed)
-        .any(|path| reached(facts, lint, path))
+        .any(|path| reached(facts, lint, path, tree))
 }
 
 #[must_use]
@@ -71,13 +90,19 @@ pub fn unmatched_inputs(
     changed: Option<&BTreeSet<RepoPath>>,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
+    base: &BTreeMap<RepoPath, String>,
 ) -> Vec<(JobId, PathGlob)> {
     let changed = changed.filter(|_| event == EventKind::PullRequest);
+    let tree = Tree {
+        tracked,
+        symlinks,
+        base,
+    };
     let entries = facts
         .config
         .lint
         .iter()
-        .filter(|lint| !changed.is_some_and(|changed| triggered(facts, lint, changed, symlinks)))
+        .filter(|lint| !changed.is_some_and(|changed| triggered(facts, lint, changed, &tree)))
         .flat_map(|lint| {
             lint.inputs
                 .iter()
@@ -173,21 +198,25 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
 
 const GENERATOR_FOLDERS: [&str; 3] = [".github/", ".velnor/", "generator/"];
 
-fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath) -> bool {
+fn names_a_lint_task(facts: &RepoFacts, path: &RepoPath) -> bool {
+    task_names(path).iter().any(|name| {
+        facts
+            .config
+            .lint
+            .iter()
+            .any(|lint| matches!(&lint.kind, LintKind::MiseTask { task, .. } if task == name))
+    })
+}
+
+fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
     GENERATOR_FOLDERS
         .iter()
         .any(|folder| path.as_str().starts_with(folder))
-        || task_names(path).iter().any(|name| {
-            facts
-                .config
-                .lint
-                .iter()
-                .any(|lint| matches!(&lint.kind, LintKind::MiseTask { task, .. } if task == name))
-        })
+        || (names_a_lint_task(facts, path) && !tree.edited(path))
 }
 
-fn inert(facts: &RepoFacts, path: &RepoPath) -> bool {
-    !read_by_the_generator(facts, path)
+fn inert(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
+    !read_by_the_generator(facts, path, tree)
         && Path::new(path.as_str())
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
@@ -197,9 +226,9 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
     lint.inputs.iter().any(|glob| reaches(glob, path))
 }
 
-fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath) -> bool {
+fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath, tree: &Tree<'_>) -> bool {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
-        return from_source || !inert(facts, path);
+        return from_source || !inert(facts, path, tree);
     }
     declared(lint, path)
         || implicit(lint, path)

@@ -61,7 +61,7 @@ pub(crate) fn put(view: &mut RepoView, path: &str, bytes: &[u8]) -> Result<(), B
     Ok(())
 }
 
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible-tools:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible-tools/bin:$RUNNER_TEMP/ansible/bin\"";
 
 pub(crate) fn ansible_repository(
     playbook: &str,
@@ -317,25 +317,9 @@ fn an_extra_hashed_requirement_cannot_replace_the_imported_ansible_tools() -> Te
         .map(|(index, _)| index)
         .collect();
     assert_eq!(pip_at.len(), 2, "{steps:?}");
-    for index in &pip_at {
-        assert!(
-            steps[*index].contains("--target \"$RUNNER_TEMP/ansible\""),
-            "{}",
-            steps[*index]
-        );
-    }
-    let first = &steps[pip_at[0]];
-    assert!(
-        first.contains("-r ansible-configs/requirements.txt"),
-        "{first}"
-    );
-    assert!(first.contains("--require-hashes"), "{first}");
-    assert!(first.contains("--no-deps"), "{first}");
-    assert!(!first.contains("--upgrade"), "{first}");
-    assert!(!first.contains("PATH="), "{first}");
     let core_pin = format!("ansible-core==2.16.14 --hash=sha256:{core}");
     let lint_pin = format!("ansible-lint==24.2.0 --hash=sha256:{lint}");
-    let writer_at = steps
+    let tools_writer = steps
         .iter()
         .position(|run| {
             run.contains("RUNNER_TEMP")
@@ -344,28 +328,44 @@ fn an_extra_hashed_requirement_cannot_replace_the_imported_ansible_tools() -> Te
                 && run.contains(&lint_pin)
         })
         .ok_or("no tool-pin writer")?;
-    let writer = &steps[writer_at];
-    assert!(!writer.contains("aaa"), "{writer}");
-    assert!(!writer.contains(&extra), "{writer}");
+    let others_writer = steps
+        .iter()
+        .position(|run| run.contains("ansible-requirements.txt") && !run.contains("pip install"))
+        .ok_or("no writer of the other requirements")?;
+    for writer in [&steps[tools_writer], &steps[others_writer]] {
+        assert!(!writer.contains("aaa"), "{writer}");
+        assert!(!writer.contains(&extra), "{writer}");
+    }
+    let (others, tools) = (&steps[pip_at[0]], &steps[pip_at[1]]);
+    for install in [others, tools] {
+        assert!(install.contains("--require-hashes"), "{install}");
+        assert!(install.contains("--no-deps"), "{install}");
+        assert!(install.contains("--only-binary=:all:"), "{install}");
+        assert!(!install.contains("--upgrade"), "{install}");
+        assert!(!install.contains("PATH="), "{install}");
+        assert!(
+            !install.contains("-r ansible-configs/requirements.txt"),
+            "{install}"
+        );
+    }
+    assert!(
+        others.contains(
+            "--target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-requirements.txt\""
+        ),
+        "{others}"
+    );
+    assert!(
+        tools.contains(
+            "--target \"$RUNNER_TEMP/ansible-tools\" -r \"$RUNNER_TEMP/ansible-tools.txt\""
+        ),
+        "{tools}"
+    );
     let import_at = steps
         .iter()
         .position(|run| run.contains(PREFIX))
-        .ok_or("no step imports the Ansible target")?;
-    let second = &steps[pip_at[1]];
-    assert!(pip_at[0] < writer_at && writer_at < pip_at[1] && pip_at[1] < import_at);
-    assert!(second.contains("--upgrade"), "{second}");
-    assert!(second.contains("--require-hashes"), "{second}");
-    assert!(second.contains("--no-deps"), "{second}");
-    assert!(
-        second.contains("-r \"$RUNNER_TEMP/ansible-tools.txt\""),
-        "{second}"
-    );
-    assert!(!second.contains("PATH="), "{second}");
-    assert!(!second.contains("aaa"), "{second}");
-    assert!(
-        !second.contains("ansible-configs/requirements.txt"),
-        "{second}"
-    );
+        .ok_or("no step imports the Ansible targets")?;
+    assert!(tools_writer < pip_at[1] && others_writer < pip_at[0] && pip_at[1] < import_at);
+    assert!(pip_at[0] < import_at);
     Ok(())
 }
 

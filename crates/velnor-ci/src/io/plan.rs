@@ -12,8 +12,8 @@ use velnor_model::{
 use velnor_rust::{
     ANSIBLE_SLUG, ansible_runs, cargo_files, defer_post_merge_docs, detect, introduced,
     is_workflow_file, lint_runs, member_sources, optional_steps, plan_groups, policy_runs,
-    policy_unread, root_sources, select_event, selects_by_diff, tests_expected, unknown_paths,
-    unmatched_inputs, unread_packages,
+    policy_unread, root_sources, select_event, selects_by_diff, task_files, tests_expected,
+    unknown_paths, unmatched_inputs, unread_packages,
 };
 
 use super::{
@@ -111,6 +111,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         listed.then_some(&changes.paths),
         &checkout.view.tracked_paths,
         &checkout.view.symlinks,
+        &changes.base_files,
     );
     ansible_output(
         &checkout, &facts, kind, listed, &changes, &unknown, &mut lints,
@@ -149,6 +150,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
                 listed.then_some(&changes.paths),
                 &checkout.view.tracked_paths,
                 &checkout.view.symlinks,
+                &changes.base_files,
             ))
             + &weakened(&facts.weakenings, &new)
     } else {
@@ -294,6 +296,7 @@ fn event_changes(
         .into_iter()
         .filter(|path| paths.contains(path) && (is_lock(path) || roots.contains(path)))
         .chain(paths.iter().filter(|path| is_workflow_file(path)).cloned())
+        .chain(task_files(facts, &paths).cloned())
         .chain(
             facts
                 .weakenings

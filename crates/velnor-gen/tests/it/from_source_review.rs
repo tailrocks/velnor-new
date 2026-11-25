@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 use velnor_model::{EventKind, RepoPath, Target, TargetKind};
@@ -40,6 +40,7 @@ fn selected(config: &str, paths: &[&str]) -> Result<bool, Box<dyn std::error::Er
         Some(&changed),
         &BTreeSet::new(),
         &BTreeSet::new(),
+        &BTreeMap::new(),
     )
     .into_iter()
     .find(|(slug, _)| slug.as_str() == "generated_check")

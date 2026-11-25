@@ -9,19 +9,13 @@ use super::refuse;
 use crate::error::DetectError;
 
 const TOOLS: [&str; 2] = ["ansible-core", "ansible-lint"];
-const INSTALL: &str = "python3 -m pip install --upgrade --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-tools.txt\"";
 
 struct Pin {
     spec: String,
     hashes: Vec<String>,
 }
 
-pub(super) struct Reinstall {
-    pub(super) write: String,
-    pub(super) install: String,
-}
-
-pub(super) fn reinstall(bytes: &[u8], path: &RepoPath) -> Result<Reinstall, DetectError> {
+pub(super) fn tool_pins(bytes: &[u8], path: &RepoPath) -> Result<String, DetectError> {
     let pins = pins(bytes, path)?;
     let mut body = String::new();
     for name in TOOLS {
@@ -41,13 +35,10 @@ pub(super) fn reinstall(bytes: &[u8], path: &RepoPath) -> Result<Reinstall, Dete
         }
         body.push('\n');
     }
-    Ok(Reinstall {
-        write: format!(
-            "python3 -c 'open(__import__(\"os\").environ[\"RUNNER_TEMP\"] + \"/ansible-tools.txt\", \"w\").write(\"{}\")'",
-            python_text(&body),
-        ),
-        install: INSTALL.to_owned(),
-    })
+    Ok(format!(
+        "python3 -c 'open(__import__(\"os\").environ[\"RUNNER_TEMP\"] + \"/ansible-tools.txt\", \"w\").write(\"{}\")'",
+        python_text(&body),
+    ))
 }
 
 fn pins(bytes: &[u8], path: &RepoPath) -> Result<BTreeMap<String, Pin>, DetectError> {

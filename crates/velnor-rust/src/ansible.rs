@@ -19,11 +19,11 @@ pub use select::ansible_runs;
 pub(super) const LAYOUT: &str = "ansible-configs/";
 const REQUIREMENTS_TXT: RepoPath = RepoPath::from_static("ansible-configs/requirements.txt");
 const REQUIREMENTS_YAML: RepoPath = RepoPath::from_static("ansible-configs/requirements.yaml");
-const INSTALL: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r ansible-configs/requirements.txt";
-const REMOVE_TOOLS: &str =
-    "rm -rf \"$RUNNER_TEMP/ansible/ansible\" \"$RUNNER_TEMP/ansible/ansiblelint\"";
+const OTHER_PINS: &str = "python3 -c 'open(__import__(\"os\").environ[\"RUNNER_TEMP\"] + \"/ansible-requirements.txt\", \"w\").write(__import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-core==[^\\n]*\\n?\", \"\", __import__(\"re\").sub(r\"(?m)^[ \\t]*ansible-lint==[^\\n]*\\n?\", \"\", __import__(\"re\").sub(r\"\\\\[ \\t]*\\r?\\n\", \" \", open(\"ansible-configs/requirements.txt\").read()))))'";
+const INSTALL_OTHERS: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible\" -r \"$RUNNER_TEMP/ansible-requirements.txt\"";
+const INSTALL_TOOLS: &str = "python3 -m pip install --only-binary=:all: --require-hashes --no-deps --target \"$RUNNER_TEMP/ansible-tools\" -r \"$RUNNER_TEMP/ansible-tools.txt\"";
 const HOOKS: &str = "python3 -c '(lambda d: (d.mkdir(parents=True, exist_ok=True), (d/\"sitecustomize.py\").write_text(\"\"), (d/\"usercustomize.py\").write_text(\"\")))(__import__(\"pathlib\").Path(__import__(\"os\").environ[\"RUNNER_TEMP\"])/\"ansible-clean\")'";
-const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible/bin\"";
+const PREFIX: &str = "PYTHONPATH=\"$RUNNER_TEMP/ansible-clean:$RUNNER_TEMP/ansible-tools:$RUNNER_TEMP/ansible\" PATH=\"$PATH:$RUNNER_TEMP/ansible-tools/bin:$RUNNER_TEMP/ansible/bin\"";
 const RUN_LIMIT: usize = 2000;
 
 pub const ANSIBLE_SLUG: RootSlug = RootSlug::from_static("ansible");
@@ -52,17 +52,17 @@ pub fn attach_ansible(
     facts: &RepoFacts,
     plan: &mut WorkflowPlan,
 ) -> Result<(), DetectError> {
-    let Some((playbooks, reinstall)) = playbooks(view)? else {
+    let Some((playbooks, tool_pins)) = playbooks(view)? else {
         return Ok(());
     };
-    let mut ansible = ansible_job(facts, &playbooks, &reinstall);
+    let mut ansible = ansible_job(facts, &playbooks, &tool_pins);
     gate_ansible(facts, plan, &mut ansible)?;
     record_ansible(facts, plan, &ansible);
     place_ansible(plan, ansible);
     Ok(())
 }
 
-fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath], reinstall: &pins::Reinstall) -> Job {
+fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath], tool_pins: &str) -> Job {
     let mut ansible = job(facts, JobId::from_static("ansible"));
     ansible.pr = quick(facts);
     ansible.name = Some("Ansible".to_owned());
@@ -71,20 +71,20 @@ fn ansible_job(facts: &RepoFacts, playbooks: &[RepoPath], reinstall: &pins::Rein
         sparse: None,
     }));
     ansible.steps.push(step(StepKind::Ansible {
-        name: "Install Ansible".to_owned(),
-        run: INSTALL.to_owned(),
-    }));
-    ansible.steps.push(step(StepKind::Ansible {
         name: "Write Ansible tool pins".to_owned(),
-        run: reinstall.write.clone(),
+        run: tool_pins.to_owned(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
-        name: "Remove planted Ansible modules".to_owned(),
-        run: REMOVE_TOOLS.to_owned(),
+        name: "Write the other Ansible requirements".to_owned(),
+        run: OTHER_PINS.to_owned(),
+    }));
+    ansible.steps.push(step(StepKind::Ansible {
+        name: "Install Ansible requirements".to_owned(),
+        run: INSTALL_OTHERS.to_owned(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
         name: "Install ansible-core and ansible-lint".to_owned(),
-        run: reinstall.install.clone(),
+        run: INSTALL_TOOLS.to_owned(),
     }));
     ansible.steps.push(step(StepKind::Ansible {
         name: "Install empty Python site hooks".to_owned(),
@@ -225,7 +225,7 @@ fn place_ansible(plan: &mut WorkflowPlan, ansible: Job) {
     }
 }
 
-fn playbooks(view: &RepoView) -> Result<Option<(Vec<RepoPath>, pins::Reinstall)>, DetectError> {
+fn playbooks(view: &RepoView) -> Result<Option<(Vec<RepoPath>, String)>, DetectError> {
     let mut found = Vec::new();
     for path in &view.tracked_paths {
         let Some(name) = path.as_str().strip_prefix(LAYOUT) else {
@@ -252,11 +252,11 @@ fn playbooks(view: &RepoView) -> Result<Option<(Vec<RepoPath>, pins::Reinstall)>
         .files
         .get(&REQUIREMENTS_TXT)
         .ok_or_else(|| refuse(&REQUIREMENTS_TXT, "requirements.txt is missing"))?;
-    let reinstall = pins::reinstall(text, &REQUIREMENTS_TXT)?;
+    let tool_pins = pins::tool_pins(text, &REQUIREMENTS_TXT)?;
     if !view.files.contains_key(&REQUIREMENTS_YAML) {
         return Err(refuse(&REQUIREMENTS_YAML, "requirements.yaml is missing"));
     }
-    Ok(Some((found, reinstall)))
+    Ok(Some((found, tool_pins)))
 }
 
 fn is_play(bytes: &[u8]) -> bool {

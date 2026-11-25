@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{EventKind, RepoPath};
 use velnor_rust::{detect, lint_runs};
@@ -36,12 +36,17 @@ fn runs_of(
 ) -> Result<Vec<(String, bool)>, Box<dyn std::error::Error>> {
     let facts = detect(&repo(&["Cargo.toml"], DECLARED)?)?;
     let paths = paths.map(changed).transpose()?;
-    Ok(
-        lint_runs(&facts, event, paths.as_ref(), &tracked(), &BTreeSet::new())
-            .into_iter()
-            .map(|(slug, run)| (slug.to_string(), run))
-            .collect(),
+    Ok(lint_runs(
+        &facts,
+        event,
+        paths.as_ref(),
+        &tracked(),
+        &BTreeSet::new(),
+        &BTreeMap::new(),
     )
+    .into_iter()
+    .map(|(slug, run)| (slug.to_string(), run))
+    .collect())
 }
 
 fn hk(event: EventKind, paths: Option<&[&str]>) -> Result<bool, Box<dyn std::error::Error>> {
@@ -121,6 +126,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
             Some(&paths),
             &tracked(),
             &BTreeSet::new(),
+            &BTreeMap::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -143,6 +149,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
         Some(&paths),
         &tracked(),
         &BTreeSet::new(),
+        &BTreeMap::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
@@ -160,6 +167,7 @@ fn the_declared_config_and_probe_of_a_lint_count_as_its_inputs() -> TestResult {
             Some(&paths),
             &tracked(),
             &BTreeSet::new(),
+            &BTreeMap::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -183,6 +191,7 @@ fn a_tracked_symlink_that_an_input_or_implicit_file_reaches_runs_the_lint() -> T
             Some(&paths),
             &tracked(),
             &links,
+            &BTreeMap::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -220,6 +229,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
             Some(&paths),
             &tracked(),
             &BTreeSet::new(),
+            &BTreeMap::new(),
         );
         assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true], "{path}");
     }
@@ -230,6 +240,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
         Some(&paths),
         &tracked(),
         &BTreeSet::new(),
+        &BTreeMap::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
@@ -249,6 +260,7 @@ fn a_plain_path_input_covers_everything_below_it_and_a_dead_list_runs_the_lint()
                 Some(&paths),
                 tracked,
                 &BTreeSet::new(),
+                &BTreeMap::new(),
             );
             Ok(*runs.values().next().ok_or("no decision")?)
         };
@@ -270,6 +282,7 @@ fn a_file_named_like_the_prefix_of_a_trailing_glob_is_not_a_tracked_input() -> T
         Some(&paths),
         &changed(&["cfg", "src/lib.rs"])?,
         &BTreeSet::new(),
+        &BTreeMap::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true]);
     Ok(())
