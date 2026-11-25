@@ -1417,3 +1417,6 @@ pr:2860	sonnet-high	landing	f56b947 guard fix
 pr:2864	sonnet-high	review-merge	711692d; 2 threads open	
 pr:2865	sonnet-high	CHANGES	~15 cargo-semantics threads	
 owner-decision	user	2026-11-25	nothing local: push all; state via sanitized handoff branch handoff/goal-2026-11-25 + pinned issue	
+pr:2864	sonnet-med	landing	711692d threads resolved	
+pr:2865	sonnet-med	threads-done	d851f88 14 threads (9 fixed); NEEDS re-review	
+handoff	sonnet-med	PUSHED	handoff/goal-2026-11-25 (90 files, sanitized, guard pass); issue #2874 pinned; earlier commit 94fb367 verified 0 private-name/secret hits; salvage/handoff dup ref is a subset (kept)	4cce702

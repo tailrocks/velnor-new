@@ -37,3 +37,13 @@ ts	step	action	target	result	detail
 2026-11-25T09:22:47Z	1	guard	salvage/agent-a409ed0128db5161d	pass	guard_source=own
 2026-11-25T09:22:57Z	1	guard	salvage/agent-a446a65fef5a70f6d	fail	guard_source=main-copy
 2026-11-25T09:23:06Z	1	guard	salvage/agent-a44ccb89d4e435f1d	fail	guard_source=main-copy
+2026-11-25T09:23:15Z	1	guard	salvage/agent-a45b06a6897843776	fail	guard_source=main-copy
+2026-11-25T09:23:25Z	1	guard	salvage/agent-a4aa9f20d39ce203f	pass	guard_source=own
+2026-11-25T09:23:36Z	1	guard	salvage/agent-a4c4a19b3fcd19878	pass	guard_source=own
+2026-11-25T09:23:48Z	1	guard	salvage/agent-a5367fbf836d5b4e4	pass	guard_source=own
+2026-11-25T09:23:57Z	1	guard	salvage/agent-a54117788f9ae0793	pass	guard_source=own
+2026-11-25T09:24:07Z	1	guard	salvage/agent-a5c2d30101a456222	pass	guard_source=own
+2026-11-25T09:24:16Z	1	guard	salvage/agent-a5d584e1197051174	fail	guard_source=main-copy
+2026-11-25T09:24:26Z	1	guard	salvage/agent-a5ff57b1efd1ac568	pass	guard_source=own
+2026-11-25T09:24:35Z	1	guard	salvage/agent-a65c8e8048df0221c	pass	guard_source=own
+2026-11-25T09:24:44Z	1	guard	salvage/agent-a6715efda220aa1b9	pass	guard_source=own
