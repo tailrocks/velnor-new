@@ -199,10 +199,7 @@ fn requested(
             .and_then(|dependencies| dependencies.get(key))
     {
         features.extend(shared.get("features").map_or_else(Vec::new, strings));
-        defaults = shared
-            .get("default-features")
-            .and_then(Value::as_bool)
-            .or(defaults);
+        defaults = defaults.or_else(|| shared.get("default-features").and_then(Value::as_bool));
     }
     (features, defaults.unwrap_or(true))
 }

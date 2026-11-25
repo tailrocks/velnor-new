@@ -34,7 +34,7 @@ const MANIFESTS: &[(&str, &str)] = &[
     ),
     (
         "a/excluded/Cargo.toml",
-        "[workspace]\nmembers = [\"loop\"]\n\n[workspace.dependencies]\nz = { path = \"../../b/z\" }\nu = \"1\"\n",
+        "[workspace]\nmembers = [\"loop\"]\n\n[workspace.dependencies]\nz = { path = \"../../b/z\", default-features = false }\nu = \"1\"\n",
     ),
     (
         LOOP,
@@ -218,5 +218,25 @@ fn an_unowned_package_whose_edges_cannot_be_read_is_reached_by_every_change() ->
         unread_after(&facts, &["b/p/src/lib.rs"]),
         BTreeMap::from([(path(LEAF), Unread::Missing)])
     );
+    Ok(())
+}
+
+#[test]
+fn a_package_level_default_features_value_overrides_the_workspace_one() -> TestResult {
+    let manifest = |entry: &str| format!("[package]\nname = \"loop\"\n\n[dependencies]\n{entry}\n");
+    for (entry, expected) in [
+        ("z = { workspace = true }", false),
+        ("z = { workspace = true, default-features = true }", true),
+        ("z = { workspace = true, default-features = false }", false),
+    ] {
+        let facts = facts(LOOP, Some(&manifest(entry)))?;
+        let package = facts.unowned.get(&path(LOOP)).ok_or("no loop")?;
+        let edge = package
+            .dependencies
+            .iter()
+            .find(|edge| edge.name.as_str() == "z")
+            .ok_or("no z")?;
+        assert_eq!(edge.default_features, expected, "{entry}");
+    }
     Ok(())
 }

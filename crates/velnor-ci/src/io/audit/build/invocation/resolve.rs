@@ -36,7 +36,7 @@ struct State {
 pub(super) struct Resolver<'a, 'p> {
     members: &'a [RustMember],
     unowned: &'a BTreeMap<RepoPath, UnownedPackage>,
-    platform: &'p dyn Fn() -> Option<&'p Platform>,
+    platform: &'p dyn Fn(bool) -> Option<&'p Platform>,
     states: BTreeMap<&'a RepoPath, State>,
 }
 
@@ -47,7 +47,7 @@ fn script_of(member: &RustMember) -> bool {
         .any(|target| target.kinds.contains(&TargetKind::BuildScript))
 }
 
-fn tests_of(member: &RustMember) -> bool {
+pub(super) fn tests_of(member: &RustMember) -> bool {
     member.targets.iter().any(|target| {
         target.tests
             || target.kinds.iter().any(|kind| {
@@ -63,7 +63,7 @@ impl<'a, 'p> Resolver<'a, 'p> {
     pub(super) fn new(
         members: &'a [RustMember],
         unowned: &'a BTreeMap<RepoPath, UnownedPackage>,
-        platform: &'p dyn Fn() -> Option<&'p Platform>,
+        platform: &'p dyn Fn(bool) -> Option<&'p Platform>,
     ) -> Self {
         Self {
             members,
@@ -73,10 +73,10 @@ impl<'a, 'p> Resolver<'a, 'p> {
         }
     }
 
-    pub(super) fn mark(&mut self, member: &'a RustMember, dev: bool) {
+    pub(super) fn mark(&mut self, member: &'a RustMember, tested: bool) {
         let state = self.states.entry(&member.manifest).or_default();
         state.root = true;
-        state.tested = dev && tests_of(member);
+        state.tested = tested;
     }
 
     pub(super) fn start(&mut self, member: &'a RustMember, request: &Request<'_>) {
@@ -177,7 +177,9 @@ impl<'a, 'p> Resolver<'a, 'p> {
             DependencyKind::Normal => true,
         };
         kind && dependency.platform.as_deref().is_none_or(|predicate| {
-            (self.platform)().and_then(|platform| platform.active(predicate)) == Some(true)
+            (self.platform)(dependency.kind == DependencyKind::Build)
+                .and_then(|platform| platform.active(predicate))
+                == Some(true)
         })
     }
 

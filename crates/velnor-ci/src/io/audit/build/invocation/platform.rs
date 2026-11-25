@@ -4,6 +4,18 @@
 use std::path::Path;
 use std::process::Command;
 
+#[derive(Clone, Copy)]
+pub(in super::super) enum Which<'a> {
+    Host,
+    Target(Option<&'a str>),
+}
+
+pub(in super::super) enum Configured {
+    Absent,
+    Triple(String),
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in super::super) struct Platform {
     triple: String,
@@ -18,7 +30,23 @@ impl Platform {
         }
     }
 
-    pub(in super::super) fn probe(directory: &Path, target: Option<&str>) -> Option<Self> {
+    pub(in super::super) fn aimed(
+        repository: &Path,
+        location: &Path,
+        which: Which<'_>,
+    ) -> Option<Self> {
+        match which {
+            Which::Host => Self::probe(location, None),
+            Which::Target(Some(target)) => Self::probe(location, Some(target)),
+            Which::Target(None) => match configured_target(repository, location) {
+                Configured::Absent => Self::probe(location, None),
+                Configured::Triple(triple) => Self::probe(location, Some(&triple)),
+                Configured::Unknown => None,
+            },
+        }
+    }
+
+    fn probe(directory: &Path, target: Option<&str>) -> Option<Self> {
         let rustc = |arguments: &[&str]| {
             let output = Command::new("rustc")
                 .args(arguments)
@@ -145,25 +173,33 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub(in super::super) fn configured_target(repository: &Path, location: &Path) -> bool {
+fn configured_target(repository: &Path, location: &Path) -> Configured {
+    if let Some(triple) = std::env::var("CARGO_BUILD_TARGET")
+        .ok()
+        .filter(|t| !t.is_empty())
+    {
+        return Configured::Triple(triple);
+    }
     let home = std::env::var_os("CARGO_HOME").map(std::path::PathBuf::from);
-    std::env::var_os("CARGO_BUILD_TARGET").is_some()
-        || location
-            .ancestors()
-            .take_while(|directory| directory.starts_with(repository))
-            .map(|directory| directory.join(".cargo"))
-            .chain(home)
-            .any(|directory| {
-                ["config.toml", "config"].iter().any(|name| {
-                    std::fs::read_to_string(directory.join(name))
-                        .ok()
-                        .and_then(|text| text.parse::<toml::Table>().ok())
-                        .is_some_and(|table| {
-                            table
-                                .get("build")
-                                .and_then(|build| build.get("target"))
-                                .is_some()
-                        })
-                })
-            })
+    let directories = location
+        .ancestors()
+        .take_while(|directory| directory.starts_with(repository))
+        .map(|directory| directory.join(".cargo"))
+        .chain(home);
+    for directory in directories {
+        for name in ["config.toml", "config"] {
+            let Ok(text) = std::fs::read_to_string(directory.join(name)) else {
+                continue;
+            };
+            let Ok(table) = text.parse::<toml::Table>() else {
+                return Configured::Unknown;
+            };
+            match table.get("build").and_then(|build| build.get("target")) {
+                None => {}
+                Some(toml::Value::String(triple)) => return Configured::Triple(triple.clone()),
+                Some(_) => return Configured::Unknown,
+            }
+        }
+    }
+    Configured::Absent
 }

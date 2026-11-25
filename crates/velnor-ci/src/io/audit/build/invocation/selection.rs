@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use velnor_model::{RepoPath, RustMember, Target, TargetKind, UnownedPackage};
 
 use super::package_spec::{Spec, named, parse};
-use super::platform::Platform;
-use super::resolve::{Request, Resolver};
+use super::platform::{Platform, Which};
+use super::resolve::{Request, Resolver, tests_of};
 use super::{Invocation, subcommand};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ impl Invocation {
         members: &[RustMember],
         unowned: &BTreeMap<RepoPath, UnownedPackage>,
         repositories: &[&Path],
-        probe: &dyn Fn(Option<&str>) -> Option<Platform>,
+        probe: &dyn Fn(Which<'_>) -> Option<Platform>,
     ) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
@@ -63,8 +63,19 @@ impl Invocation {
         let defaults = !words.contains(&"--no-default-features");
         let features = feature_names(&words);
         let target = target_flag(&words);
-        let cell = OnceCell::new();
-        let platform = || cell.get_or_init(|| probe(target)).as_ref();
+        let host = OnceCell::new();
+        let aimed = OnceCell::new();
+        let platform = |build: bool| {
+            if build {
+                host.get_or_init(|| probe(Which::Host)).as_ref()
+            } else {
+                aimed.get_or_init(|| probe(Which::Target(target))).as_ref()
+            }
+        };
+        let explicit = dev
+            && words
+                .iter()
+                .any(|word| matches!(*word, "--lib" | "--bins") || flag(word, &["--bin"]));
         let wanted = wanted(arguments, &words);
         let workspace = words
             .iter()
@@ -94,7 +105,7 @@ impl Invocation {
         };
         let mut own = Resolver::new(members, unowned, &platform);
         for member in &candidates {
-            own.mark(member, dev);
+            own.mark(member, dev && (explicit || tests_of(member)));
         }
         for member in &candidates {
             own.start(member, &request);
@@ -112,7 +123,7 @@ impl Invocation {
             .collect();
         let mut built = Resolver::new(members, unowned, &platform);
         for member in &chosen {
-            built.mark(member, dev);
+            built.mark(member, dev && (explicit || tests_of(member)));
         }
         for member in &chosen {
             built.start(member, &request);
@@ -339,7 +350,7 @@ fn wanted<'a>(arguments: &[&str], words: &[&'a str]) -> Wanted<'a> {
                     [TargetKind::Test, TargetKind::Example].map(|kind| (kind, None, Gate::Open)),
                 );
             }
-            ["bench", ..] => kinds.push((TargetKind::Bench, None, Gate::Open)),
+            ["bench", ..] => kinds.push((TargetKind::Bench, None, Gate::Bench)),
             _ => {}
         }
     }

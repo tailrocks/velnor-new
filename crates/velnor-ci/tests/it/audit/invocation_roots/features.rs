@@ -289,3 +289,100 @@ fn a_feature_forwarded_through_a_renamed_or_weak_dependency_reaches_its_target()
         );
     }
 }
+
+fn bench_only(flag: bool) -> Repo {
+    let repo = repo_of(&[("benches/b.rs", "fn main() {}\n"), ("src/lib.rs", "")]);
+    app(
+        &repo,
+        &format!(
+            "[lib]\npath = \"src/lib.rs\"\ntest = false\nbench = false\ndoc = false\n\n[[bench]]\nname = \"b\"\nharness = false\nbench = {flag}\n"
+        ),
+    );
+    repo
+}
+
+#[test]
+fn a_default_bench_run_skips_a_benchmark_target_that_opts_out() {
+    for (flag, cargo, expected) in [
+        (false, &["bench", "-p", "app"][..], false),
+        (false, &["bench", "-p", "app", "--bench", "b"], true),
+        (true, &["bench", "-p", "app"], true),
+    ] {
+        assert_eq!(
+            selects(&bench_only(flag), "app", cargo),
+            expected,
+            "{flag} {cargo:?}"
+        );
+    }
+}
+
+fn untested_library_with_a_dev_dependency() -> Repo {
+    let repo = repo_of(&[("src/lib.rs", "")]);
+    library(&repo, "vendor/devtool", "devtool", "");
+    app(
+        &repo,
+        "\n[lib]\ntest = false\n\n[dev-dependencies]\ndevtool = { path = \"vendor/devtool\" }\n",
+    );
+    repo
+}
+
+#[test]
+fn an_explicit_library_test_compiles_the_dev_dependencies() {
+    for (cargo, expected) in [
+        (&["test", "-p", "app", "--lib"][..], true),
+        (&["test", "-p", "app"], false),
+        (&["build", "-p", "app"], false),
+    ] {
+        assert_eq!(
+            selects(&untested_library_with_a_dev_dependency(), "devtool", cargo),
+            expected,
+            "{cargo:?}"
+        );
+    }
+}
+
+#[test]
+fn a_configured_default_target_decides_the_platform_dependencies() {
+    for (package, expected) in [("windowsonly", true), ("unixonly", false)] {
+        let repo = platform_dependencies();
+        unit(
+            &repo,
+            ".cargo/config.toml",
+            "[build]\ntarget = \"x86_64-pc-windows-msvc\"\n",
+        );
+        unit(
+            &repo,
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.99.1\"\ntargets = [\"x86_64-pc-windows-msvc\"]\n",
+        );
+        repo.git(&["add", "--all"]);
+        assert_eq!(
+            selects(&repo, package, &["build", "-p", "app"]),
+            expected,
+            "{package}"
+        );
+    }
+}
+
+#[test]
+fn a_build_dependency_for_a_platform_follows_the_host_not_the_target() {
+    let build = || {
+        let repo = repo_of(&[("src/lib.rs", ""), ("build.rs", "fn main() {}\n")]);
+        library(&repo, "vendor/unix", "unixonly", "");
+        app(
+            &repo,
+            "build = \"build.rs\"\n\n[target.'cfg(unix)'.build-dependencies]\nunixonly = { path = \"vendor/unix\" }\n",
+        );
+        repo
+    };
+    for target in ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"] {
+        assert!(
+            selects(
+                &build(),
+                "unixonly",
+                &["build", "-p", "app", "--target", target]
+            ),
+            "{target}"
+        );
+    }
+}
