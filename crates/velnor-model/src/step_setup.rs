@@ -56,6 +56,7 @@ impl StepKind {
             | Self::InputsSave { .. }
             | Self::InputsRestore { .. }
             | Self::TestGroupsCheck(_)
+            | Self::PrivateRecheck(_)
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::AdvisoryFetch { .. }

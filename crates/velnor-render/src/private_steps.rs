@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    HelperRelease, PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind, TokenMint,
+    HelperRelease, PrivateSources, PrivateVerdict, Publication, RepoPath, RootSlug, Step, StepKind,
+    TokenMint, When,
 };
 
 use crate::gate::{ON_DEFAULT_BRANCH, SAVING_EVENTS, sources_step};
@@ -13,6 +14,8 @@ use crate::steps::RUN;
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
+pub(crate) const RECHECK_STEP: &str = "private_recheck";
+pub(crate) const RECHECK_SOURCES_STEP: &str = "private_recheck_sources";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
 // helper-gate: first in tools-v0.1.112 via 17c0699cb6
 const RELEASE_HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
@@ -30,6 +33,7 @@ pub(crate) fn token_allowed(check: &str) -> String {
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
         StepKind::RepositoryPrivacy => privacy(),
+        StepKind::PrivateRecheck(publication) => recheck(*publication),
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, mint, .. } => token(sources, *mint),
         StepKind::PrivateFetch {
@@ -50,11 +54,21 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     }
 }
 
+fn verdict(step: &Step) -> String {
+    let id = match (&step.kind, step.when) {
+        (StepKind::PrivateRecheck(_), _) => PRIVACY_STEP,
+        (_, When::SaveBase | When::SaveBaseDecided) => RECHECK_STEP,
+        (_, When::SaveSources) => RECHECK_SOURCES_STEP,
+        _ => PRIVACY_STEP,
+    };
+    format!("steps.{id}.outputs.private == 'true'")
+}
+
 pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
     if !step.private_repo {
         return Vec::new();
     }
-    let mut conditions = vec![PRIVATE_REPOSITORY.to_owned()];
+    let mut conditions = vec![verdict(step)];
     if matches!(step.kind, StepKind::CacheRestore(_)) {
         conditions.push(format!("({})", token_allowed(CHECK_STEP)));
     }
@@ -82,7 +96,7 @@ pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
         )),
         PrivateVerdict::Checked => env.push((
             "VELNOR_REPOSITORY_PRIVATE".to_owned(),
-            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}")),
+            Value::Expr(format!("${{{{ steps.{RECHECK_STEP}.outputs.private }}}}")),
         )),
     }
     if let Some(lane) = sources_restore {
@@ -117,6 +131,24 @@ fn privacy() -> RenderedStep {
         env: api_env(),
         run: Some("velnor-ci cache private-repo".to_owned()),
         ..RenderedStep::default()
+    }
+}
+
+fn recheck(publication: Publication) -> RenderedStep {
+    let (id, name) = match publication {
+        Publication::BuildDirectory => (
+            RECHECK_STEP,
+            "Check again that the repository is private before the build directory is saved",
+        ),
+        Publication::Sources => (
+            RECHECK_SOURCES_STEP,
+            "Check again that the repository is private before the sources are saved",
+        ),
+    };
+    RenderedStep {
+        id: Some(id.to_owned()),
+        name: name.to_owned(),
+        ..privacy()
     }
 }
 

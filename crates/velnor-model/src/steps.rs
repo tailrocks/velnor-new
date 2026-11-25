@@ -33,6 +33,12 @@ pub enum PrivateVerdict {
     Checked,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Publication {
+    BuildDirectory,
+    Sources,
+}
+
 pub const BUDGET_JOB: &str = "rust-budget";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,6 +125,7 @@ pub enum StepKind {
     TestGroupsCheck(Vec<GroupFilter>),
     CratesMirror(crate::repo::CratesMirror),
     RepositoryPrivacy,
+    PrivateRecheck(Publication),
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,
     },
@@ -262,6 +269,7 @@ impl StepKind {
             | Self::TestGroupsCheck(_)
             | Self::CratesMirror(_)
             | Self::RepositoryPrivacy
+            | Self::PrivateRecheck(_)
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }

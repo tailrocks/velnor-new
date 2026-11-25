@@ -364,6 +364,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::MbxOutDirs => crate::mbx_out_dirs::mbx_out_dirs_step(),
         StepKind::RepositoryPrivacy
+        | StepKind::PrivateRecheck(_)
         | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. }

@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, JobId,
-    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
-    RootSlug, RustRoot, Step, StepKind, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, Publication, RepoFacts,
+    RepoPath, RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::lane::Lane;
@@ -267,7 +267,16 @@ pub(crate) fn save_steps(
         host: Host,
         scope: base_scope(facts),
     };
-    let mut steps = vec![
+    let recheck = |publication, when| {
+        private_base(facts).then(|| Step {
+            when,
+            ..step(StepKind::PrivateRecheck(publication))
+        })
+    };
+    let mut steps: Vec<Step> = recheck(Publication::BuildDirectory, When::SaveBase)
+        .into_iter()
+        .collect();
+    steps.extend([
         Step {
             directory: unit.directory(),
             when: When::SaveBase,
@@ -303,9 +312,10 @@ pub(crate) fn save_steps(
             skip_when_cold: checks_saves(facts),
             ..step(StepKind::CacheSave(target))
         },
-    ];
+    ]);
     if sources {
         steps.extend(sources_fetches(facts, cache_root.slug()));
+        steps.extend(recheck(Publication::Sources, When::SaveSources));
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
