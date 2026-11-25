@@ -31,7 +31,7 @@ minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 "github:asamarts/alint" = "v0.23.0"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
 node = "26.13.1"
-# Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.
+# Python for the unittest lint (lint-hosted-phase-measurement): CI installs this pin.
 python = "3.15.2"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
@@ -86,13 +86,12 @@ done
 test "$CHECKED" -gt 0
 '''
 
-[tasks.lint-parity-verify-candidate]
-description = "Run the unit tests of the parity verifier and of the hosted-phase MBX summary parser"
+[tasks.lint-hosted-phase-measurement]
+description = "Run the unit tests of the hosted-phase measurement scripts"
 run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-python3 -m unittest scripts/test_parity_verify_candidate.py
 python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''

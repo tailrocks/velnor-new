@@ -125,6 +125,7 @@ fn with_lib(mut repo: RepoView, manifest: &str) -> Result<RepoView, Box<dyn std:
             doctest: false,
             source: None,
             requires_features: false,
+            required_features: Vec::new(),
         });
     }
     Ok(repo)
