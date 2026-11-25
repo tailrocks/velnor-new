@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod bins;
+mod cpu;
+mod inputs;
+mod runner;
+
 use std::collections::BTreeMap;
 
 use velnor_model::{
@@ -9,9 +14,9 @@ use velnor_model::{
 };
 use velnor_render::{IMAGE_WORKFLOW_PATH, ImageBuild, ImageMbx, ImageWorkflow, render_image};
 
-use crate::image_bins::{packages_of, root_directory, root_of};
-use crate::image_runner::check_runners;
 use crate::{GenerateError, ImageError};
+use bins::{packages_of, root_directory, root_of};
+use runner::check_runners;
 
 pub(crate) fn image_workflow(
     view: &RepoView,
@@ -50,14 +55,14 @@ pub(crate) fn image_workflow(
         check_registries(image, owner.as_deref())?;
         check_tools(facts, image)?;
         check_dockerfile(view, image)?;
-        crate::image_inputs::check(view, image)?;
+        inputs::check(view, image)?;
         check_stage(view, image)?;
         let root = root_of(facts, image)?;
         let packages = packages_of(image, root)?;
         check_openssl(view, image, root)?;
         check_sysroot(view, image)?;
         check_profile(view, image, root)?;
-        crate::image_cpu::check(view, image, root_directory(root))?;
+        cpu::check(view, image, root_directory(root))?;
         builds.push(ImageBuild {
             image,
             root: root_directory(root),

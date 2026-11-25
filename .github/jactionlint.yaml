@@ -8,3 +8,4 @@ self-hosted-runner:
   labels:
     - velnor
     - ubuntu-26.04-scale-set
+    - ubuntu-26.04-scale-set-publish
