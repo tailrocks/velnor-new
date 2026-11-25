@@ -55,7 +55,11 @@ fn view(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
         ],
     )?;
     for target in &mut a.targets {
-        target.requires_features = matches!(target.name.as_str(), "gated" | "defaulted");
+        target.required_features = if matches!(target.name.as_str(), "gated" | "defaulted") {
+            vec!["f".to_owned()]
+        } else {
+            Vec::new()
+        };
     }
     let mut view = repo(
         vec![("Cargo.toml", vec![a])],

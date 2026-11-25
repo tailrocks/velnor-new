@@ -48,6 +48,7 @@ pub struct RustPackage {
     pub manifest: RepoPath,
     pub dependencies: Vec<PackageDependency>,
     pub targets: Vec<Target>,
+    pub features: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +59,7 @@ pub struct PackageDependency {
     pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
+    pub default_features: bool,
     pub rename: Option<String>,
 }
 
@@ -69,13 +71,26 @@ pub enum DependencyKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "cargo metadata reports each target flag separately"
+)]
 pub struct Target {
     pub name: TargetName,
     pub kinds: Vec<TargetKind>,
     pub tests: bool,
     pub doctest: bool,
+    pub doc: bool,
+    pub bench: bool,
     pub source: Option<RepoPath>,
-    pub requires_features: bool,
+    pub required_features: Vec<String>,
+}
+
+impl Target {
+    #[must_use]
+    pub fn requires_features(&self) -> bool {
+        !self.required_features.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,6 +186,7 @@ pub struct Timings {
 pub struct UnownedPackage {
     pub name: PackageName,
     pub dependencies: Vec<MemberDependency>,
+    pub features: BTreeMap<String, Vec<String>>,
     pub unread: Option<Unread>,
 }
 
@@ -265,6 +281,7 @@ pub struct RustMember {
     pub directory: Option<RepoPath>,
     pub dependencies: Vec<MemberDependency>,
     pub targets: Vec<Target>,
+    pub features: BTreeMap<String, Vec<String>>,
     pub custom_harnesses: Vec<CustomHarness>,
 }
 
@@ -289,6 +306,8 @@ pub struct MemberDependency {
     pub kind: DependencyKind,
     pub platform: Option<String>,
     pub optional: bool,
+    pub features: Vec<String>,
+    pub default_features: bool,
     pub manifest: RepoPath,
 }
 

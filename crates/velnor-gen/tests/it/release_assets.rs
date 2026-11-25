@@ -263,7 +263,9 @@ fn the_prelude_precedes_clippy_doc_check_alone_the_tests_and_the_lane_steps() ->
             tests: false,
             doctest: false,
             source: None,
-            requires_features: false,
+            required_features: Vec::new(),
+            doc: true,
+            bench: true,
         });
         for job in jobs(&workflow(&repo)?)? {
             let steps = job["steps"].as_array().ok_or("steps")?;

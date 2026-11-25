@@ -17,6 +17,7 @@ fn uses(
 ) -> Result<RustPackage, Box<dyn std::error::Error>> {
     for name in names {
         package.dependencies.push(PackageDependency {
+            default_features: true,
             name: PackageName::new(*name)?,
             kind: DependencyKind::Normal,
             platform: None,

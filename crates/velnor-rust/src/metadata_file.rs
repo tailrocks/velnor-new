@@ -77,6 +77,8 @@ struct Member {
     manifest: String,
     dependencies: Vec<Edge>,
     targets: Vec<Goal>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    features: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,6 +89,8 @@ struct Edge {
     manifest: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     features: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    default_features: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -102,9 +106,18 @@ struct Goal {
     kinds: Vec<String>,
     tests: bool,
     doctest: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bench: Option<bool>,
     source: Option<String>,
-    requires_features: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    requires_features: Option<bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    required_features: Vec<String>,
 }
+
+const UNNAMED_FEATURE: &str = "";
 
 const KINDS: [(&str, TargetKind); 7] = [
     ("lib", TargetKind::Lib),
@@ -137,6 +150,7 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 }
 
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
+const TARGET_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 116);
 
 pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
@@ -147,6 +161,7 @@ pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
 
 pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
     let records_target_dir = pin_at_least(view, TARGET_DIR_HELPER);
+    let records_target_fields = pin_at_least(view, TARGET_FIELDS_HELPER);
     let mut manifests = BTreeMap::new();
     let mut roots = BTreeMap::new();
     for (workspace, metadata) in &view.rust_metadata {
@@ -168,7 +183,11 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
             workspace.to_string(),
             Root {
                 target_dir,
-                members: metadata.members.iter().map(member).collect(),
+                members: metadata
+                    .members
+                    .iter()
+                    .map(|package| member(package, records_target_fields))
+                    .collect(),
             },
         );
     }
@@ -182,7 +201,7 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
     Ok(text)
 }
 
-fn member(package: &RustPackage) -> Member {
+fn member(package: &RustPackage, fields: bool) -> Member {
     Member {
         name: package.name.to_string(),
         version: package.version.clone(),
@@ -195,6 +214,7 @@ fn member(package: &RustPackage) -> Member {
                 kind: dependency_name(dependency.kind).to_owned(),
                 manifest: dependency.manifest.as_ref().map(ToString::to_string),
                 features: dependency.features.clone(),
+                default_features: (fields && !dependency.default_features).then_some(false),
                 platform: dependency.platform.clone(),
                 optional: dependency.optional,
                 rename: dependency.rename.clone(),
@@ -212,10 +232,22 @@ fn member(package: &RustPackage) -> Member {
                     .collect(),
                 tests: target.tests,
                 doctest: target.doctest,
+                doc: fields.then_some(target.doc),
+                bench: fields.then_some(target.bench),
                 source: target.source.as_ref().map(ToString::to_string),
-                requires_features: target.requires_features,
+                requires_features: (!fields).then_some(target.requires_features()),
+                required_features: if fields {
+                    target.required_features.clone()
+                } else {
+                    Vec::new()
+                },
             })
             .collect(),
+        features: if fields {
+            package.features.clone()
+        } else {
+            BTreeMap::new()
+        },
     }
 }
 
@@ -335,6 +367,7 @@ fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
                     kind: choose(&DEPENDENCIES, &edge.kind)?,
                     manifest: edge.manifest.as_deref().map(path_of).transpose()?,
                     features: edge.features,
+                    default_features: edge.default_features.unwrap_or(true),
                     platform: edge.platform,
                     optional: edge.optional,
                     rename: edge.rename,
@@ -354,11 +387,18 @@ fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
                         .collect::<Result<_, _>>()?,
                     tests: goal.tests,
                     doctest: goal.doctest,
+                    doc: goal.doc.unwrap_or(true),
+                    bench: goal.bench.unwrap_or(true),
                     source: goal.source.as_deref().map(path_of).transpose()?,
-                    requires_features: goal.requires_features,
+                    required_features: if goal.requires_features == Some(true) {
+                        vec![UNNAMED_FEATURE.to_owned()]
+                    } else {
+                        goal.required_features
+                    },
                 })
             })
             .collect::<Result<_, MetadataFileError>>()?,
+        features: member.features,
     })
 }
 

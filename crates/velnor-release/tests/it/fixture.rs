@@ -84,6 +84,7 @@ pub(crate) fn metadata(workspaces: &[(&str, &[(&str, &str)])]) -> BTreeMap<RepoP
         manifest: RepoPath::new(*manifest).unwrap_or_else(|e| unreachable!("{e}")),
         dependencies: Vec::new(),
         targets: Vec::new(),
+        features: std::collections::BTreeMap::new(),
     };
     workspaces
         .iter()

@@ -25,6 +25,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
             .insert(manifest.sibling(&RepoPath::new("Cargo.lock")?));
         view.tracked_paths.insert(manifest.clone());
         let member = RustPackage {
+            features: std::collections::BTreeMap::new(),
             name: PackageName::new(format!("package-{index}"))?,
             version: Some("0.1.0".to_owned()),
             manifest: manifest.clone(),
@@ -35,7 +36,9 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
                 tests: true,
                 doctest: false,
                 source: None,
-                requires_features: false,
+                required_features: Vec::new(),
+                doc: true,
+                bench: true,
             }],
         };
         view.rust_metadata.insert(

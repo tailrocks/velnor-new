@@ -14,6 +14,7 @@ fn library(doctest: bool) -> RustMember {
 
 fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustMember {
     RustMember {
+        features: std::collections::BTreeMap::new(),
         version: None,
         targets: vec![Target {
             name: TargetName::new(name).unwrap_or_else(|e| unreachable!("{e}")),
@@ -21,7 +22,9 @@ fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustM
             tests: true,
             doctest,
             source: Some(path(source)),
-            requires_features: false,
+            required_features: Vec::new(),
+            doc: true,
+            bench: true,
         }],
         ..member(name, "a", &[])
     }
@@ -166,6 +169,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             "tools/Cargo.toml",
             vec![
                 RustMember {
+                    features: std::collections::BTreeMap::new(),
                     version: None,
                     targets: target_of("tool", TargetKind::Lib, true, "tools/tool/src/lib.txt")
                         .targets,

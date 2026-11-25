@@ -107,6 +107,7 @@ pub(crate) fn package(
     targets: &[(&str, TargetKind, bool)],
 ) -> Result<RustPackage, Box<dyn Error>> {
     Ok(RustPackage {
+        features: std::collections::BTreeMap::new(),
         name: PackageName::new(name)?,
         version: Some("0.1.0".to_owned()),
         manifest: path(manifest)?,
@@ -114,6 +115,7 @@ pub(crate) fn package(
             .iter()
             .map(|(name, kind, manifest)| {
                 Ok(PackageDependency {
+                    default_features: true,
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     platform: None,
@@ -133,7 +135,9 @@ pub(crate) fn package(
                     tests: *tests,
                     doctest: true,
                     source: None,
-                    requires_features: false,
+                    required_features: Vec::new(),
+                    doc: true,
+                    bench: true,
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
