@@ -11,7 +11,7 @@ use nix::unistd::Pid;
 use super::build_fixture::{PLANTED, Run, Source};
 use super::fixture::{LAYER, build, plain_layer, spec};
 
-const LEGACY_RECORD: &str = include_str!("../data/image_build_record.json");
+const GOLDEN_RECORD: &str = include_str!("../data/image_build_record.json");
 
 fn left_behind(source: &Source) -> Vec<String> {
     let mut names: Vec<String> = fs::read_dir(source.path("out"))
@@ -25,12 +25,12 @@ fn left_behind(source: &Source) -> Vec<String> {
 }
 
 #[test]
-fn writes_the_record_the_legacy_builder_writes_and_verify_candidate_accepts_it() {
-    let source = Source::new("legacy-bytes");
+fn writes_the_golden_record_and_verify_candidate_accepts_it() {
+    let source = Source::new("golden-bytes");
     let run = source.run(&[], &[]);
     assert!(run.ok, "{}", run.stderr);
     assert!(run.stdout.starts_with("PASS"), "{}", run.stdout);
-    let expected = LEGACY_RECORD.replace("{COMMIT}", &source.head());
+    let expected = GOLDEN_RECORD.replace("{COMMIT}", &source.head());
     assert_eq!(source.text("out/candidate.json"), expected);
     assert_eq!(
         fs::read(source.path("out/candidate.oci.tar")).unwrap_or_default(),

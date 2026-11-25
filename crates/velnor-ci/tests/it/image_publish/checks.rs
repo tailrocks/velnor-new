@@ -216,7 +216,7 @@ fn the_blobs_to_push_are_the_config_and_layers_once_each() {
 }
 
 #[test]
-fn the_publication_evidence_is_byte_identical_to_the_legacy_script_output() {
+fn the_publication_evidence_is_byte_identical_to_the_golden_evidence() {
     let record: Value = serde_json::from_str(&RECORD.replace("{COMMIT}", &"a".repeat(40)))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let Value::Object(fields) = &record else {
