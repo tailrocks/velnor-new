@@ -159,7 +159,9 @@ pub(crate) fn condition(
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
-            parts.extend((when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()));
+            parts.extend(
+                (when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()),
+            );
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());
@@ -202,11 +204,12 @@ pub(crate) fn condition(
             parts.extend(saved_after.is_empty().then(|| "success()".to_owned()));
             parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
-        When::FullAudit => {
-            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
-            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
-        },
-        When::FullAuditOrPush => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')".to_owned()),
+        When::FullAudit
+        | When::FullAuditOrPush
+        | When::FullAuditOrPullRequest
+        | When::FullAuditOrPushOrPullRequest => {
+            parts.push(crate::audit_gate::events(when, setup));
+        }
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());

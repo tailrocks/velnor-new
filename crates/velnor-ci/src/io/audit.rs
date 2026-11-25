@@ -6,6 +6,7 @@ mod freshness;
 mod groups;
 mod inventory;
 mod options;
+mod outside;
 mod record;
 mod selection;
 mod setup;
@@ -35,6 +36,8 @@ use crate::platform::Platforms;
 use groups::{audit_inheriting, group_dirs, shared_groups, workspaces};
 use record::modified;
 use selection::{selected, within};
+
+const REBUILD: &str = "velnor-ci inputs build -- cargo clippy --workspace --all-targets, then velnor-ci inputs build -- cargo build --workspace --all-targets";
 
 mod dep_info;
 
@@ -187,7 +190,7 @@ fn compare(
     .map(|(heading, entries)| format!("{heading}:\n{}", inputs_lock_text(&entries, identified)))
     .collect();
     Err(CiError::new(format!(
-        "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",
+        "{INPUTS_LOCK} is stale; run {REBUILD}, then velnor-ci inputs audit --write and commit it\n{}",
         sections.concat().trim_end()
     )))
 }

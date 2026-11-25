@@ -8,8 +8,8 @@ use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
 use velnor_rust::{Located, Owners, locate, resolve};
 
-use super::Audit;
 use super::inventory::unresolved;
+use super::{Audit, REBUILD};
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
 use crate::io::units::{UnitFile, Workspace, unit_files_apart};
@@ -179,7 +179,7 @@ pub(super) fn complete(
         return Ok(());
     }
     Err(CiError::new(format!(
-        "found no current dep-info {}; run this after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        "found no current dep-info {}; run this after {REBUILD} in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
         gaps.join("; ")
     )))
 }

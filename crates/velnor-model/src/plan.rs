@@ -201,6 +201,8 @@ pub enum When {
     FetchSources,
     FullAudit,
     FullAuditOrPush,
+    FullAuditOrPullRequest,
+    FullAuditOrPushOrPullRequest,
     PullRequest,
     SaveDelta,
     SaveDeltaDecided,

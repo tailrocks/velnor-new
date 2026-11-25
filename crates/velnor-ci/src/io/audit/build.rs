@@ -23,6 +23,7 @@ use super::groups::{
 };
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
+use super::outside::outside_selection;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
@@ -204,7 +205,7 @@ impl Builder<'_> {
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(Stop::Refused(failure::outside_selection(
+                    return Err(Stop::Refused(outside_selection(
                         &outside,
                         failure::earlier_failure(
                             &self.marker_directories(),
