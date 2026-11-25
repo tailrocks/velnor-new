@@ -1,0 +1,31 @@
+ts	step	action	target	result	detail
+2026-11-25T09:15:16Z	1	check-guard-location	private-names guard	blocked	no named private-names guard in .github/workflows, scripts, .alint*, .velnor; only match is a shell printf string in scripts/test-build-owned-archive-guard.sh
+2026-11-25T09:15:16Z	2-4	halt	all	not-run	stopped before unlock/push/delete: guard unavailable and origin is public
+2026-11-25T09:15:16Z	3	inventory	local-branches	read-only	contained_in_remote=452 not_contained=0; no deletes or pushes
+2026-11-25T09:17:18Z	1	guard	salvage/2701-mbx-total-bytes	fail	guard_source=main-copy
+2026-11-25T09:17:29Z	1	guard	salvage/2702-mbx-report-tests-wip	fail	guard_source=main-copy
+2026-11-25T09:17:40Z	1	guard	salvage/2703-mbx-comments	fail	guard_source=main-copy
+2026-11-25T09:17:50Z	1	guard	salvage/agent-a0023b6f3f38c8897	fail	guard_source=main-copy
+2026-11-25T09:18:02Z	1	guard	salvage/agent-a027769f49ed932ec	pass	guard_source=own
+2026-11-25T09:18:15Z	1	guard	salvage/agent-a04db9fb7aa64a27d	pass	guard_source=own
+2026-11-25T09:18:24Z	1	guard	salvage/agent-a05abaff3a02479b2	pass	guard_source=own
+2026-11-25T09:18:33Z	1	guard	salvage/agent-a086f75f21dd1c9fa	pass	guard_source=own
+2026-11-25T09:18:43Z	1	guard	salvage/agent-a0aa12b8913ad02ab	pass	guard_source=own
+2026-11-25T09:18:52Z	1	guard	salvage/agent-a0ae269b013942858	pass	guard_source=own
+2026-11-25T09:19:00Z	1	guard	salvage/agent-a0c54f9eff4a6291d	pass	guard_source=own
+2026-11-25T09:19:09Z	1	guard	salvage/agent-a0f2a89b90285f2f1	pass	guard_source=own
+2026-11-25T09:19:19Z	1	guard	salvage/agent-a0f99e7b8ae54eeff	pass	guard_source=own
+2026-11-25T09:19:28Z	1	guard	salvage/agent-a0fd5dc3372d075c3	pass	guard_source=own
+2026-11-25T09:19:37Z	1	guard	salvage/agent-a1551868d41a5d81a	pass	guard_source=own
+2026-11-25T09:19:46Z	1	guard	salvage/agent-a1a238d5f59538f0b	pass	guard_source=own
+2026-11-25T09:19:56Z	1	guard	salvage/agent-a1ace198c0325f934	pass	guard_source=own
+2026-11-25T09:20:05Z	1	guard	salvage/agent-a1b6ef92dfe9cf2bb	pass	guard_source=own
+2026-11-25T09:20:15Z	1	guard	salvage/agent-a1c66f7ee57211523	fail	guard_source=main-copy
+2026-11-25T09:20:29Z	1	guard	salvage/agent-a1fcddfccead96a54	fail	guard_source=main-copy
+2026-11-25T09:20:40Z	1	guard	salvage/agent-a22877b79e7b9d8a3	fail	guard_source=main-copy
+2026-11-25T09:20:50Z	1	guard	salvage/agent-a259a934325e9ff19	pass	guard_source=own
+2026-11-25T09:21:09Z	1	guard	salvage/agent-a26384d62c3f72a50	fail	guard_source=main-copy
+2026-11-25T09:21:20Z	1	guard	salvage/agent-a26d4fa18d1a015c8	pass	guard_source=own
+2026-11-25T09:21:30Z	1	guard	salvage/agent-a274d9ca795e1c522	pass	guard_source=own
+2026-11-25T09:21:40Z	1	guard	salvage/agent-a298fb2b63a8ff043	pass	guard_source=own
+2026-11-25T09:21:49Z	1	guard	salvage/agent-a2fefae4bd60c4aae	pass	guard_source=own
