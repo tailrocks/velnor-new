@@ -6,6 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use super::client::Client;
+use super::descendants;
 use super::output::{self, Staging};
 use super::process::{Runner, script_environment};
 use super::{DOCKERFILE_DIR, FileSource, docker, github_env, read_lock, scan_archive, source};
@@ -21,6 +22,7 @@ const CHECK_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
     refuse_secrets(std::env::vars_os().map(|(name, _)| name))?;
+    descendants::adopt()?;
     let runner = Runner::start()?;
     let root = fs::canonicalize(&args.root)
         .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
@@ -42,7 +44,9 @@ pub(in crate::io) fn build(args: &BuildArgs) -> Result<String, CiError> {
         .arg(root.join(DOCKERFILE_DIR).join("build-test.sh"))
         .current_dir(&root);
     script_environment(&mut check, &scratch.home());
-    runner.run(&mut check, CHECK_TIMEOUT)?;
+    let ran = runner.run(&mut check, CHECK_TIMEOUT);
+    descendants::reap()?;
+    ran?;
     drop(scratch);
     if source::identity(&runner, &root, &args.source_commit, github_sha)? != inputs {
         return Err(CiError::new(
