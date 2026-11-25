@@ -91,6 +91,12 @@ fn number(text: &str) -> bool {
     !text.is_empty() && text.len() <= 40 && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
+#[must_use]
+pub fn is_version(text: &str) -> bool {
+    let parts: Vec<&str> = text.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|part| number(part))
+}
+
 fn image(text: &str) -> bool {
     text.contains('/')
         && !text.starts_with(['/', '.', '-'])
@@ -106,8 +112,7 @@ fn validate(promotion: &Promotion<'_>) -> Result<(), CiError> {
         commit,
         ..
     } = promotion;
-    let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() != 3 || !parts.iter().all(|part| number(part)) {
+    if !is_version(version) {
         return Err(CiError::new(format!("`{version}` is not a version X.Y.Z")));
     }
     if commit.len() != 40

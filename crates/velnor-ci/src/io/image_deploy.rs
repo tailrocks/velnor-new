@@ -29,6 +29,7 @@ use crate::image_deploy::stage::{Glibc, Openssl, check};
 
 pub mod checks;
 mod registry;
+mod release_version;
 mod stage_dir;
 pub mod sysroot;
 
@@ -51,6 +52,7 @@ pub fn run(command: ImageCommand) -> Result<String, CiError> {
         ImageCommand::Preflight(args) => hub_preflight(&args),
         ImageCommand::Authorize(args) => authorize_release(&args),
         ImageCommand::Promote(args) => promote_release(&args),
+        ImageCommand::ReleaseVersion(args) => release_version::check_tag(&args),
         ImageCommand::Sysroot(args) => sysroot::unpack(&args),
     }
 }

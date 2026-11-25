@@ -9,6 +9,7 @@ mod hardening;
 mod links;
 mod metadata_names;
 mod pins;
+mod release_version;
 mod required;
 mod required_features;
 mod runners;

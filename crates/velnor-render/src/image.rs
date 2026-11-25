@@ -17,7 +17,7 @@ use crate::image_check::check_job;
 use crate::image_gate::{EXEMPTIONS_JOB, admin_token, exemptions_job, gate_job};
 use crate::image_group::compile_groups;
 use crate::image_publish::publish_job;
-use crate::image_release::{authority_job, promote_job};
+use crate::image_release::{authority_job, promote_job, version_job};
 use crate::release::HOSTED_RUNNER;
 use crate::release_steps::revoke_app_token;
 use crate::rules::{RenderedJob, RuleViolation, check_rules};
@@ -166,6 +166,7 @@ pub fn render_image(
             jobs.push(publish_job(workflow, build, &group.id(), &events));
             jobs.push(advance_job(workflow, build));
             jobs.push(authority_job(workflow, build, &events));
+            jobs.extend(version_job(workflow, build));
             jobs.push(promote_job(workflow, build));
         }
     }

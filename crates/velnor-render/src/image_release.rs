@@ -6,18 +6,22 @@ use std::fmt::Write;
 use velnor_model::ImageConfig;
 
 use crate::image::{Events, IMAGE_ENVIRONMENT, ImageBuild, ImageWorkflow};
-use crate::image_build::{job_id, setup_buildx};
+use crate::image_build::{checkout, job_id, setup_buildx};
 use crate::image_gate::{GATE_JOB, GateOptions, gate_scopes, gate_step};
 use crate::image_publish::{login, registry_scopes};
 use crate::install_steps::install_helper;
 use crate::release_binaries::command;
-use crate::release_steps::{expression, shell_word, variables};
+use crate::release_steps::{
+    NO_PROGRAM_VARIABLES, TOOLCHAIN, expression, permissions, shell_word, variables,
+};
 use crate::rules::{RenderedConcurrency, RenderedJob, RenderedStep, Value};
 
 const PROMOTE_TIMEOUT_MINUTES: u16 = 10;
 const AUTHORITY_WAIT_SECONDS: u32 = 1200;
 const AUTHORITY_WAIT_MINUTES: u16 = 30;
 const VERSION_STEP: &str = "version";
+const RELEASE_VERSION_HELPER: (u64, u64, u64) = (0, 1, 117);
+const VERSION_CHECK_TIMEOUT_MINUTES: u16 = 10;
 
 pub(crate) fn authority_job(
     workflow: &ImageWorkflow<'_>,
@@ -95,6 +99,81 @@ fn authorize(image: &ImageConfig) -> RenderedStep {
     }
 }
 
+fn checks_version(workflow: &ImageWorkflow<'_>) -> bool {
+    workflow.helper.version().at_least(RELEASE_VERSION_HELPER)
+}
+
+pub(crate) fn version_job(
+    workflow: &ImageWorkflow<'_>,
+    build: &ImageBuild<'_>,
+) -> Option<RenderedJob> {
+    if !checks_version(workflow) {
+        return None;
+    }
+    let image = build.image;
+    let mut run = format!(
+        "velnor-ci image release-version --version \"$VERSION\" --root {}",
+        shell_word(build.root)
+    );
+    for bin in &image.bins {
+        let _ = write!(run, " --bin={}", shell_word(bin));
+    }
+    if let Some(package) = &image.package {
+        let _ = write!(run, " --package={}", shell_word(package));
+    }
+    let mut env = vec![
+        (
+            "VERSION".to_owned(),
+            Value::Expr(format!(
+                "${{{{ needs.{}.outputs.version }}}}",
+                job_id(image, "authority")
+            )),
+        ),
+        (
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            Value::Text(TOOLCHAIN.to_owned()),
+        ),
+    ];
+    env.extend(
+        NO_PROGRAM_VARIABLES
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
+    );
+    let mut checkout = checkout();
+    "Check out the tagged commit".clone_into(&mut checkout.name);
+    checkout.with.splice(
+        0..0,
+        [(
+            "ref".to_owned(),
+            Value::Expr("${{ github.sha }}".to_owned()),
+        )],
+    );
+    Some(RenderedJob {
+        id: job_id(image, "version"),
+        needs: vec![job_id(image, "authority")],
+        permissions: permissions(&[("contents", "read")]),
+        runs_on: workflow.control_runner(),
+        timeout_minutes: VERSION_CHECK_TIMEOUT_MINUTES,
+        steps: vec![
+            checkout,
+            install_helper(workflow.helper),
+            command(
+                "Install the Rust toolchain".to_owned(),
+                format!("rustup toolchain install {TOOLCHAIN} --profile minimal --no-self-update"),
+            ),
+            RenderedStep {
+                env,
+                ..command(
+                    "Refuse a release tag whose version is not the version of the crate that builds the image"
+                        .to_owned(),
+                    run,
+                )
+            },
+        ],
+        ..RenderedJob::default()
+    })
+}
+
 pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) -> RenderedJob {
     let image = build.image;
     let mut steps = vec![install_helper(workflow.helper)];
@@ -142,7 +221,9 @@ pub(crate) fn promote_job(workflow: &ImageWorkflow<'_>, build: &ImageBuild<'_>) 
             cancel_in_progress: false,
         }),
         id: job_id(image, "promote"),
-        needs: vec![job_id(image, "authority")],
+        needs: std::iter::once(job_id(image, "authority"))
+            .chain(checks_version(workflow).then(|| job_id(image, "version")))
+            .collect(),
         environment: Some(IMAGE_ENVIRONMENT.to_owned()),
         permissions: registry_scopes(image),
         runs_on: workflow.publish_runner(build),

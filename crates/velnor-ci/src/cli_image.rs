@@ -218,6 +218,29 @@ pub struct ImagePromoteArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ImageReleaseVersionArgs {
+    #[arg(long, help = "The version X.Y.Z that the release tag names")]
+    pub version: String,
+    #[arg(
+        long = "bin",
+        required = true,
+        help = "A binary of the image; repeat for each"
+    )]
+    pub bins: Vec<String>,
+    #[arg(
+        long,
+        help = "The package that owns the binaries, when two packages of the workspace build one of the names"
+    )]
+    pub package: Option<String>,
+    #[arg(
+        long,
+        default_value = ".",
+        help = "The folder of the Cargo root of the tagged checkout"
+    )]
+    pub root: PathBuf,
+}
+
+#[derive(Debug, Args)]
 pub struct ImageAdvanceArgs {
     #[arg(long, help = "Repository as owner/name")]
     pub repo: String,

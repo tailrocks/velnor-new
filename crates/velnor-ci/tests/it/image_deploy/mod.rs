@@ -9,6 +9,7 @@ mod elf;
 mod ghcr;
 mod hub;
 mod promote;
+mod release_version;
 mod stage;
 mod sysroot;
 mod transport;

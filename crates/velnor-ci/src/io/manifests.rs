@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -40,14 +41,51 @@ struct Listed {
     version: String,
 }
 
-pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> {
-    let toolchain = std::env::var_os(TOOLCHAIN)
+pub(super) fn metadata_output(
+    repository: &Path,
+    manifest: &str,
+    toolchain: &OsStr,
+) -> Result<Vec<u8>, CiError> {
+    let mut command = Command::new("cargo");
+    command
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--offline",
+        ])
+        .arg("--manifest-path")
+        .arg(repository.join(manifest))
+        .current_dir(repository)
+        .env(TOOLCHAIN, toolchain);
+    for variable in PROGRAM_VARIABLES.iter().copied() {
+        command.env_remove(variable);
+    }
+    let output = command
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run cargo metadata for {manifest}: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "cargo metadata failed for {manifest}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(output.stdout)
+}
+
+pub(super) fn toolchain() -> Result<OsString, CiError> {
+    std::env::var_os(TOOLCHAIN)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
             CiError::new(format!(
                 "{TOOLCHAIN} is not set, so the checkout could pick the toolchain cargo metadata runs"
             ))
-        })?;
+        })
+}
+
+pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> {
+    let toolchain = toolchain()?;
     let repository = top
         .canonicalize()
         .map_err(|e| CiError::new(format!("cannot resolve the working folder: {e}")))?;
@@ -59,34 +97,10 @@ pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> 
         } else {
             format!("{root}/Cargo.toml")
         };
-        let mut command = Command::new("cargo");
-        command
-            .args([
-                "metadata",
-                "--format-version",
-                "1",
-                "--no-deps",
-                "--offline",
-            ])
-            .arg("--manifest-path")
-            .arg(repository.join(&manifest))
-            .current_dir(&repository)
-            .env(TOOLCHAIN, &toolchain);
-        for variable in PROGRAM_VARIABLES.iter().copied() {
-            command.env_remove(variable);
-        }
-        let output = command
-            .output()
-            .map_err(|e| CiError::new(format!("cannot run cargo metadata for {manifest}: {e}")))?;
-        if !output.status.success() {
-            return Err(CiError::new(format!(
-                "cargo metadata failed for {manifest}: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )));
-        }
-        let (workspace, packages) = reduce_metadata(&repository, &output.stdout)
+        let output = metadata_output(&repository, &manifest, &toolchain)?;
+        let (workspace, packages) = reduce_metadata(&repository, &output)
             .map_err(|e| CiError::new(format!("{manifest}: {e}")))?;
-        let listing: Listing = serde_json::from_slice(&output.stdout)
+        let listing: Listing = serde_json::from_slice(&output)
             .map_err(|e| CiError::new(format!("{manifest}: cargo metadata is not JSON: {e}")))?;
         for listed in listing.packages {
             versions.insert((workspace.to_string(), listed.name), listed.version);

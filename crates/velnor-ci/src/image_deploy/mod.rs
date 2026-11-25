@@ -11,4 +11,5 @@ pub mod ghcr;
 pub mod hub;
 pub mod lock;
 pub mod promote;
+pub mod release_version;
 pub mod stage;

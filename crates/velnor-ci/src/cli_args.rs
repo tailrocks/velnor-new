@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use crate::cli_image::{
     ImageAdvanceArgs, ImageAuthorizeArgs, ImageChangesArgs, ImageGateArgs, ImageGhcrArgs,
-    ImagePreflightArgs, ImagePromoteArgs, ImageStageArgs, ImageSysrootArgs, ImageVerifyArgs,
+    ImagePreflightArgs, ImagePromoteArgs, ImageReleaseVersionArgs, ImageStageArgs,
+    ImageSysrootArgs, ImageVerifyArgs,
 };
 use clap::{Args, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
@@ -250,6 +251,10 @@ pub enum ImageCommand {
         about = "Tag sha-<commit> as <version> in every --image, after checking all of them: exit 1 when sha-<commit> is missing or when <version> already names a different digest, and create nothing then. A version that already names the same digest is left alone. Uses the docker login of the job"
     )]
     Promote(ImagePromoteArgs),
+    #[command(
+        about = "Refuse a release tag whose version differs from the version of the package that builds the image: read the Cargo workspace of --root with cargo metadata --no-deps --offline, which runs no repository code, find the package that owns every --bin (the one named by --package when two packages build a name), and exit 1 naming both versions unless it is at --version. Needs RUSTUP_TOOLCHAIN. Reads no credential and touches no registry"
+    )]
+    ReleaseVersion(ImageReleaseVersionArgs),
     #[command(
         about = "Download the Debian packages named in the sysroot lock, check each sha256, unpack them with dpkg-deb into --out, keep only the shared OpenSSL libraries and the merged headers, and append X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR and X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR to $GITHUB_ENV"
     )]
