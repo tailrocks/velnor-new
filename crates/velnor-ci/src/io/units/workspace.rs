@@ -72,8 +72,11 @@ impl Roots {
     }
 }
 
-fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
-    inner.starts_with(outer).then_some(inner)
+fn inside(outer: &Path, inner: &Path) -> Option<PathBuf> {
+    physical(inner.to_path_buf())
+        .strip_prefix(physical(outer.to_path_buf()))
+        .ok()
+        .map(|relative| outer.join(relative))
 }
 
 struct Apart {
@@ -83,8 +86,8 @@ struct Apart {
 
 fn apart(target: &Path, build: &Path) -> Result<Apart, CiError> {
     let limit = directory_limit()?;
-    let in_target = scan(target, limit, inside(target, build))?;
-    let in_build = scan(build, limit, inside(build, target))?;
+    let in_target = scan(target, limit, inside(target, build).as_deref())?;
+    let in_build = scan(build, limit, inside(build, target).as_deref())?;
     let (target_built, build_built) = (in_target.built, in_build.built);
     let mut found = in_build.found;
     found.extend(
