@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod app_relay;
 mod artifact_steps;
 mod base_steps;
 mod budget_steps;
@@ -121,7 +122,9 @@ pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
         jobs: plan
             .jobs
             .iter()
-            .map(|job| rendered_job(job, plan))
+            .flat_map(|job| {
+                app_relay::split(rendered_job(job, plan), job_helper::release_of(job, plan))
+            })
             .collect(),
     }
 }

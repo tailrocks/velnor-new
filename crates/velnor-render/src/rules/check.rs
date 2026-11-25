@@ -36,7 +36,12 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
                 step: 0,
                 rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
             });
-            step_violations.chain(runner)
+            let key_job = crate::app_relay::isolates_key(job).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: 0,
+                rule: Rule::KeyJobRunsRepositoryCode,
+            });
+            step_violations.chain(runner).chain(key_job)
         })
         .collect();
     if violations.is_empty() {
@@ -61,8 +66,10 @@ fn holds_app_token(job: &RenderedJob) -> bool {
                     ["velnor-ci ", crate::helper_integrity::INVOCATION_PREFIX]
                         .iter()
                         .any(|prefix| {
-                            run.strip_prefix(prefix)
-                                .is_some_and(|command| command.starts_with("app-token "))
+                            run.strip_prefix(prefix).is_some_and(|command| {
+                                command.starts_with("app-token ")
+                                    && !command.starts_with("app-token request ")
+                            })
                         })
                 }))
     })

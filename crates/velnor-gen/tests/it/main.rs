@@ -3,6 +3,7 @@
 
 mod ansible_reinstall;
 mod app_key;
+mod app_relay;
 mod archive;
 mod auto_shape_note;
 mod base_cache_rules;
