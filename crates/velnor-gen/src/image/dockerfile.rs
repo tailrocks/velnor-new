@@ -192,7 +192,10 @@ pub(super) fn check(view: &RepoView, image: &ImageConfig) -> Result<(), ImageErr
         .and_then(|path| view.files.get(&path))
         .and_then(|bytes| std::str::from_utf8(bytes).ok())
     else {
-        return Ok(());
+        return Err(ImageError::DockerfileUnread {
+            image: image.name.clone(),
+            path: image.dockerfile.clone(),
+        });
     };
     let refuse = |line: &str, reference: String| ImageError::MutableBase {
         image: image.name.clone(),

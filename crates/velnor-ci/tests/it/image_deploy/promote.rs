@@ -213,3 +213,14 @@ fn the_live_tag_commit_is_read_through_an_annotated_tag_and_refuses_anything_but
     assert!(live_tag_commit(&tree, &repo(), tag).is_err());
     assert!(live_tag_commit(&FakeGitHub::default(), &repo(), tag).is_err());
 }
+
+#[test]
+fn registries_that_name_different_images_for_the_commit_tag_nothing() {
+    let fake = Fake::default()
+        .with(&format!("{HUB}:sha-{COMMIT}"), NEW)
+        .with(&format!("{GHCR}:sha-{COMMIT}"), OLD);
+    let message = run(&fake, "1.2.3").err().unwrap_or_default();
+    assert!(message.contains("different images"), "{message}");
+    assert!(message.contains(HUB) && message.contains(GHCR), "{message}");
+    assert!(fake.tagged.borrow().is_empty());
+}

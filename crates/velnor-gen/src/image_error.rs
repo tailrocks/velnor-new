@@ -92,6 +92,10 @@ pub enum ImageError {
         image: String,
         path: String,
     },
+    DockerfileUnread {
+        image: String,
+        path: String,
+    },
     MutableBase {
         image: String,
         path: String,
@@ -115,6 +119,7 @@ impl fmt::Display for ImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BranchReleaseVersion { .. }
+            | Self::DockerfileUnread { .. }
             | Self::MutableBase { .. }
             | Self::DockerfileSymlink { .. }
             | Self::CpuBaseline { .. }
@@ -215,6 +220,10 @@ impl ImageError {
             Self::CpuBaseline { image, path } => write!(
                 f,
                 "image {image}: `{path}` sets target-cpu or target-feature in rustflags, which would leak into the published linux/amd64 binary and can crash on another CPU; remove them from that file, or build the image with its own root that does not read it"
+            ),
+            Self::DockerfileUnread { image, path } => write!(
+                f,
+                "image {image}: the generator did not read `{path}`, so it cannot check that its base images are pinned; name the file Dockerfile, Dockerfile.<suffix> or <name>.Dockerfile, in UTF-8"
             ),
             Self::MutableBase {
                 image,

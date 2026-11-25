@@ -113,3 +113,17 @@ fn a_git_source_needs_a_full_commit_and_a_local_add_is_unaffected() -> TestResul
     }
     Ok(())
 }
+
+#[test]
+fn a_dockerfile_that_the_generator_could_not_read_is_refused_instead_of_trusted() -> TestResult {
+    let mut view = sample("image-plain")?;
+    view.files
+        .insert(RepoPath::new("Dockerfile")?, vec![0xff, 0xfe]);
+    assert!(matches!(
+        expected_files(&view),
+        Err(GenerateError::Image(ImageError::DockerfileUnread { .. }))
+    ));
+    view.files.remove(&RepoPath::new("Dockerfile")?);
+    assert!(expected_files(&view).is_err());
+    Ok(())
+}

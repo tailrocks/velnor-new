@@ -156,6 +156,25 @@ pub fn promote(registry: &dyn Registry, promotion: &Promotion<'_>) -> Result<Str
     for name in promotion.images {
         plans.push((name, plan(registry, name, promotion)?));
     }
+    let digests: Vec<&String> = plans
+        .iter()
+        .map(|(_, plan)| match plan {
+            Plan::Create { digest } | Plan::Present { digest } => digest,
+        })
+        .collect();
+    if digests.windows(2).any(|pair| pair[0] != pair[1]) {
+        let listed = plans
+            .iter()
+            .map(|(name, plan)| match plan {
+                Plan::Create { digest } | Plan::Present { digest } => format!("{name}: {digest}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(CiError::new(format!(
+            "the registries name different images for sha-{}: {listed}; a publish re-run changed one of them, so nothing was tagged; re-run the publish of that commit until both agree, or cut a new version",
+            promotion.commit
+        )));
+    }
     let live = (promotion.live_commit)()?;
     if live != promotion.commit {
         return Err(CiError::new(format!(

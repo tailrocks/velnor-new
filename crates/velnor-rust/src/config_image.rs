@@ -91,11 +91,7 @@ fn image(raw: RawImage) -> Result<ImageConfig, Reason> {
         features: features(&raw.features)?,
         default_features: raw.default_features.unwrap_or(true),
         profile: profile(raw.profile)?,
-        dockerfile: path(
-            raw.dockerfile.as_deref().unwrap_or("Dockerfile"),
-            false,
-            "image.dockerfile",
-        )?,
+        dockerfile: dockerfile(raw.dockerfile.as_deref())?,
         glibc: glibc(raw.glibc)?,
         openssl: openssl(raw.openssl.as_deref())?,
         pr_build: pr_build(raw.pr_build.as_deref())?,
@@ -261,6 +257,16 @@ fn path(text: &str, dot: bool, key: &'static str) -> Result<String, Reason> {
         Ok(text.to_owned())
     } else {
         Err(invalid(key, text))
+    }
+}
+
+fn dockerfile(text: Option<&str>) -> Result<String, Reason> {
+    let value = path(text.unwrap_or("Dockerfile"), false, "image.dockerfile")?;
+    let name = value.rsplit('/').next().unwrap_or_default();
+    if name == "Dockerfile" || name.starts_with("Dockerfile.") || name.ends_with(".Dockerfile") {
+        Ok(value)
+    } else {
+        Err(invalid("image.dockerfile", &value))
     }
 }
 
