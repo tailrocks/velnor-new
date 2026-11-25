@@ -15,7 +15,9 @@ mod package_spec;
 mod root;
 mod selection;
 pub(super) use alias::resolve;
-use derived::{build_of, refusal, run_program_arguments, runs_doctests, without_open};
+use derived::{
+    build_of, refusal, run_program_arguments, runs_doctests, without_command_scope, without_open,
+};
 pub(super) use root::{invoked_root, root_directory};
 pub(super) use selection::Selection;
 
@@ -317,19 +319,6 @@ impl Invocation {
         }
         Ok(())
     }
-}
-
-fn without_command_scope(globals: &[String]) -> Vec<String> {
-    let mut kept = Vec::new();
-    let mut words = globals.iter();
-    while let Some(word) = words.next() {
-        if word == "-C" || word == "--config" {
-            words.next();
-        } else if !word.starts_with("-C") && !word.starts_with("--config=") {
-            kept.push(word.clone());
-        }
-    }
-    kept
 }
 
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
