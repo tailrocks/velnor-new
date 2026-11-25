@@ -1,0 +1,4 @@
+backend-rust/Cargo.lock
+backend-rust/Cargo.toml
+backend-rust/crates/migrate/Cargo.toml
+backend-rust/crates/server/Cargo.toml
