@@ -95,6 +95,7 @@ pub enum ImageError {
     MutableBase {
         image: String,
         path: String,
+        line: String,
         reference: String,
     },
     DockerfileSymlink {
@@ -218,10 +219,11 @@ impl ImageError {
             Self::MutableBase {
                 image,
                 path,
+                line,
                 reference,
             } => write!(
                 f,
-                "image {image}: `{reference}` in {path} is not pinned by digest; the publish job builds again, so a moved tag would publish an image that no check saw. Write name@sha256:<64 hex digits> (a stage name, a stage number and scratch are fine)"
+                "image {image}: `{reference}` in `{line}` of {path} is not pinned; the publish job builds again, so a moved tag or URL would publish content that no check saw. Pin an image as name@sha256:<64 hex digits> (a stage name, a stage number and scratch are fine), an ADD of an http(s) URL with --checksum=sha256:<64 hex digits>, and an ADD of a git source with a #<40 hex digit commit> fragment"
             ),
             Self::DockerfileSymlink { image, path } => write!(
                 f,
