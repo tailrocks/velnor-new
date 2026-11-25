@@ -76,6 +76,25 @@ pub struct Target {
     pub doctest: bool,
     pub source: Option<RepoPath>,
     pub requires_features: bool,
+    pub required_features: Vec<RequiredFeature>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequiredFeature {
+    pub name: String,
+    pub enabled_by: Vec<String>,
+}
+
+impl RequiredFeature {
+    #[must_use]
+    pub fn enabled(&self, default_features: bool, features: &[String], package: &str) -> bool {
+        let prefix = format!("{package}/");
+        (default_features && self.enabled_by.iter().any(|feature| feature == "default"))
+            || features.iter().any(|feature| {
+                let feature = feature.strip_prefix(&prefix).unwrap_or(feature);
+                *feature == self.name || self.enabled_by.iter().any(|by| by == feature)
+            })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

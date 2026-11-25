@@ -12,6 +12,7 @@ mod cron;
 mod helper;
 mod hosted;
 mod ids;
+mod image;
 mod lint;
 mod mbx;
 mod mbx_config;
@@ -63,6 +64,10 @@ pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
+pub use image::{
+    ImageConfig, ImageCredential, ImageHost, ImageOpenssl, ImagePrBuild, ImageRegistry,
+    ImageVisibility,
+};
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{
@@ -84,9 +89,9 @@ pub use repo::{
     DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestLane,
-    TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RequiredFeature, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind,
+    TestLane, TestSetup, Timings, TokenMint, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
     UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};

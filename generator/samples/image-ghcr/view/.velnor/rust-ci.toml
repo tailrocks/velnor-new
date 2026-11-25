@@ -1,0 +1,28 @@
+runner = "ubuntu-26.04-scale-set"
+hosted = false
+fork_runner = "ubuntu-latest"
+mbx_shared_store = true
+
+[private_sources]
+app_id = "vars.VELNOR_DEPS_APP_ID"
+private_key = "secrets.VELNOR_DEPS_APP_PRIVATE_KEY"
+repositories = ["acme/shared-proto"]
+
+[[image]]
+name = "cluster-svc"
+bins = ["cluster-svc"]
+inputs = ["migrations"]
+pr_only_checks = ["DCO"]
+timeout_minutes = 60
+control_runner = "ubuntu-24.04"
+publish_runner = "ubuntu-26.04-scale-set-publish"
+
+[[image.registry]]
+host = "docker.io"
+repository = "acme/cluster-svc"
+username = "secrets.DOCKERHUB_USERNAME"
+token = "secrets.DOCKERHUB_TOKEN"
+
+[[image.registry]]
+host = "ghcr.io"
+repository = "acme/cluster-svc"

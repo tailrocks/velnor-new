@@ -28,6 +28,7 @@ fn lint_jobs() -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
                 doctest: false,
                 source: None,
                 requires_features: false,
+                required_features: Vec::new(),
             });
         }
     }
