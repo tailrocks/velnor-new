@@ -9,11 +9,11 @@ use velnor_ci::image_publish::checks::ci_path;
 use velnor_ci::io::{Run, Transport, publish_with};
 use zeroize::Zeroizing;
 
-use super::fixture::Candidate;
+use super::fixture::{ARTIFACTS, Candidate};
 use super::publish::{PASS, refused};
 use super::registry::{Fake, Flaws, TOKEN};
 
-fn gate(label: &str, change: impl Fn(&Candidate), message: &str) {
+pub(super) fn gate(label: &str, change: impl Fn(&Candidate), message: &str) {
     let candidate = Candidate::new(label);
     change(&candidate);
     let fake = Fake::default();
@@ -53,8 +53,7 @@ fn a_run_without_its_candidate_artifact_leaves_the_registry_untouched() {
     gate(
         "artifact",
         |c| {
-            let path = "repos/tailrocks/velnor-new/actions/runs/77/artifacts?per_page=100";
-            c.api(path, &json!({"artifacts": []}));
+            c.api(ARTIFACTS, &json!({"artifacts": []}));
         },
         "This workflow run must have one candidate artifact.",
     );
@@ -86,7 +85,7 @@ fn a_record_of_another_run_leaves_the_registry_untouched() {
             fs::write(c.path("out/candidate.json"), other.to_string())
                 .unwrap_or_else(|e| unreachable!("{e}"));
         },
-        "Candidate run identity is different from the publication run identity.",
+        "Candidate run identity is different from the producer run identity.",
     );
 }
 
@@ -189,7 +188,7 @@ fn a_blob_redirect_outside_the_download_host_is_refused() {
 }
 
 #[test]
-fn the_result_must_be_a_new_file_outside_the_source_tree() {
+fn the_result_must_be_a_new_file() {
     let candidate = Candidate::new("result-path");
     let fake = Fake::default();
     let gh = candidate.path("bin/gh");
@@ -210,12 +209,8 @@ fn the_result_must_be_a_new_file_outside_the_source_tree() {
         .map_err(|e| e.to_string())
     };
     assert_eq!(
-        run("root/publication.json").err().as_deref(),
-        Some("Candidate outputs must stay outside the source tree.")
-    );
-    assert_eq!(
         run("out/candidate.json").err().as_deref(),
-        Some("Result path must be new and outside the source tree.")
+        Some("Result path must be new.")
     );
     assert!(fake.seen().is_empty());
 }

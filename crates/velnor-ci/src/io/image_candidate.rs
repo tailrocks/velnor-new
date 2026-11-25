@@ -132,7 +132,7 @@ struct Checked {
     scan: archive::Scanned,
 }
 
-fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, CiError> {
+fn check_record(record: &Path, archive: &Path) -> Result<Checked, CiError> {
     let raw = read_record(record)?;
     let value = parse(&raw, "candidate record")?;
     validate(&value)?;
@@ -150,16 +150,21 @@ fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, 
     if value["oci"] != actual {
         return fail("OCI graph is not the same as the graph in its candidate record.");
     }
-    let root = fs::canonicalize(root)
-        .map_err(|error| CiError::new(format!("{}: {error}", root.display())))?;
-    if value["source"]["inputs"] != source_inputs(&root)? {
-        return fail("Build input bytes changed after candidate creation.");
-    }
     Ok(Checked {
         raw,
         record: value,
         scan,
     })
+}
+
+fn check_archive(record: &Path, archive: &Path, root: &Path) -> Result<Checked, CiError> {
+    let checked = check_record(record, archive)?;
+    let root = fs::canonicalize(root)
+        .map_err(|error| CiError::new(format!("{}: {error}", root.display())))?;
+    if checked.record["source"]["inputs"] != source_inputs(&root)? {
+        return fail("Build input bytes changed after candidate creation.");
+    }
+    Ok(checked)
 }
 
 fn check_builder(root: &Path, record: &Value) -> Result<(), CiError> {

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
+use velnor_ci::image_publish::checks::CiRun;
 use velnor_ci::image_publish::gate::{
     DEFAULT_EVENT, DEFAULT_WORKFLOW, Identity, Policy, identity, record_matches,
 };
@@ -13,6 +14,15 @@ pub(super) const SOURCE: &str = "1111111111111111111111111111111111111111";
 pub(super) fn policy() -> Policy {
     Policy::new(DEFAULT_WORKFLOW, DEFAULT_EVENT).unwrap_or_else(|e| unreachable!("{e}"))
 }
+
+pub(super) fn producer() -> Policy {
+    Policy::producer().unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(super) const CI: CiRun = CiRun {
+    run_id: 50,
+    run_attempt: 1,
+};
 
 pub(super) fn env() -> HashMap<String, String> {
     [
@@ -153,11 +163,11 @@ fn record(change: impl Fn(&mut Value)) -> Value {
         "workflow": {
             "repository": "tailrocks/velnor-new",
             "repository_id": 1_390_620_900_u64,
-            "event": "workflow_dispatch",
-            "workflow_ref": policy().workflow_ref(),
+            "event": "push",
+            "workflow_ref": producer().workflow_ref(),
             "authority_commit": SOURCE,
-            "run_id": 77,
-            "run_attempt": 2,
+            "run_id": 50,
+            "run_attempt": 1,
         },
     });
     change(&mut value);
@@ -165,13 +175,13 @@ fn record(change: impl Fn(&mut Value)) -> Value {
 }
 
 #[test]
-fn a_record_from_another_run_or_source_is_not_the_candidate_of_this_run() {
+fn a_record_from_another_run_or_source_is_not_the_candidate_of_the_producer_run() {
     let accepted = identity(&env(), &policy()).unwrap_or_else(|e| unreachable!("{e}"));
     let check = |value: &Value| {
         let Value::Object(map) = value else {
             unreachable!("record is an object")
         };
-        record_matches(map, &accepted, &policy()).map_err(|e| e.to_string())
+        record_matches(map, &accepted, &producer(), CI).map_err(|e| e.to_string())
     };
     assert_eq!(check(&record(|_| {})), Ok(()));
     let other_ref = record(|value| value["source"]["ref"] = json!("refs/heads/dev"));
@@ -180,15 +190,14 @@ fn a_record_from_another_run_or_source_is_not_the_candidate_of_this_run() {
         Err("Candidate source is not the current main source.".to_owned())
     );
     for change in [
-        |value: &mut Value| value["workflow"]["run_id"] = json!(78),
-        |value: &mut Value| value["workflow"]["event"] = json!("push"),
+        |value: &mut Value| value["workflow"]["run_id"] = json!(77),
+        |value: &mut Value| value["workflow"]["event"] = json!("workflow_dispatch"),
+        |value: &mut Value| value["workflow"]["workflow_ref"] = json!(policy().workflow_ref()),
         |value: &mut Value| value["workflow"]["repository_id"] = json!(5),
     ] {
         assert_eq!(
             check(&record(change)),
-            Err(
-                "Candidate run identity is different from the publication run identity.".to_owned()
-            )
+            Err("Candidate run identity is different from the producer run identity.".to_owned())
         );
     }
 }

@@ -203,7 +203,7 @@ pub enum ImageCommand {
     )]
     Build(BuildArgs),
     #[command(
-        about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; the checkout is at GITHUB_SHA, which is the tip of main; the candidate record and archive verify against --root; the run has one unexpired candidate artifact; the latest canonical ci.yml push run of the commit succeeded; and `gh attestation verify` passes for the archive and the record with the repository, workflow, ref and commit pinned. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
+        about = "Publish the job image candidate to ghcr.io/tailrocks/velnor-job by digest. It runs only for the publishing workflow on refs/heads/main and exits 1 before any registry request unless: GITHUB_* names this repository, ref, event, workflow and one commit; GITHUB_SHA is the tip of main; the latest canonical ci.yml push run of the commit succeeded; the candidate record and archive are self-consistent and the record names that run; that run has one unexpired candidate artifact; and `gh attestation verify` passes for the archive and the record with the repository, the ci.yml signer workflow, ref and commit pinned. It needs no source checkout. It then uploads each blob and the platform manifest, checks every object again by digest, and writes velnor.job-image-publication.v1 evidence as a new file. Needs GH_TOKEN, GITHUB_ACTOR and VELNOR_CANDIDATE_ARTIFACT_ID. Prints PASS on success"
     )]
     Publish(ImagePublishArgs),
 }
@@ -212,23 +212,20 @@ pub enum ImageCommand {
 pub struct ImagePublishArgs {
     #[arg(
         long,
-        default_value = ".",
-        help = "Source checkout; its HEAD must be GITHUB_SHA and its build inputs must hash to the record"
+        help = "The candidate OCI archive, downloaded from the producer run"
     )]
-    pub root: PathBuf,
-    #[arg(long, help = "The candidate OCI archive")]
     pub archive: PathBuf,
-    #[arg(long, help = "The candidate record JSON")]
-    pub record: PathBuf,
     #[arg(
         long,
-        help = "Where to write the publication evidence (a new file outside --root)"
+        help = "The candidate record JSON, downloaded from the producer run"
     )]
+    pub record: PathBuf,
+    #[arg(long, help = "Where to write the publication evidence (a new file)")]
     pub result: PathBuf,
     #[arg(
         long,
         default_value = crate::image_publish::gate::DEFAULT_WORKFLOW,
-        help = "The workflow file that may publish, as owner/repo/.github/workflows/<file>; GITHUB_WORKFLOW_REF must be this file at refs/heads/main"
+        help = "The workflow file that may publish, as owner/repo/.github/workflows/<file>; GITHUB_WORKFLOW_REF must be this file at refs/heads/main. The candidate comes from the ci.yml push run of the commit"
     )]
     pub workflow: String,
     #[arg(

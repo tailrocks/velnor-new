@@ -43,11 +43,15 @@ fn the_publishing_workflow_and_event_are_flags_and_a_pull_request_event_cannot_b
         "GITHUB_WORKFLOW_REF".to_owned(),
         format!("{release}@refs/heads/main"),
     );
+    let mut other = candidate.record.clone();
+    other["workflow"]["run_id"] = serde_json::json!(78);
+    std::fs::write(candidate.path("out/candidate.json"), other.to_string())
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let flags = ["--workflow", release, "--event", "push"];
     let (ok, _, stderr) = candidate.binary(&vars, &flags);
     assert!(!ok);
     assert!(
-        stderr.contains("Candidate run identity is different from the publication run identity."),
+        stderr.contains("Candidate run identity is different from the producer run identity."),
         "the gate accepted the flags and the record check ran: {stderr}"
     );
     assert!(

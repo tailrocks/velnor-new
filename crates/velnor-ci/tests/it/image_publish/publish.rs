@@ -140,7 +140,7 @@ fn an_attestation_for_another_commit_or_trigger_pushes_nothing() {
             "sourceRepositoryIdentifier": "1390620900",
             "githubWorkflowRepository": "tailrocks/velnor-new",
             "githubWorkflowSHA": candidate.head, "githubWorkflowRef": "refs/heads/main",
-            "githubWorkflowTrigger": "workflow_dispatch",
+            "githubWorkflowTrigger": "push",
             "sourceRepositoryRef": "refs/heads/main",
             "sourceRepositoryDigest": candidate.head}}}}]);
         cert[0]["verificationResult"]["signature"]["certificate"][field] = value;

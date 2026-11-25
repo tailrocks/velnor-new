@@ -10,7 +10,7 @@ use velnor_ci::image_publish::evidence::{Published, encode};
 use velnor_ci::image_publish::gate::identity;
 use velnor_ci::image_publish::plan::blobs;
 
-use super::gate::{SOURCE, env, policy};
+use super::gate::{CI, SOURCE, env, policy, producer};
 
 const EVIDENCE: &str = include_str!("../data/image_publication_evidence.json");
 const RECORD: &str = include_str!("../data/image_build_record.json");
@@ -98,16 +98,16 @@ fn only_a_canonical_ci_run_for_this_source_counts() {
 
 fn candidate_artifact() -> Value {
     json!({"artifacts": [
-        {"name": "velnor-job-image-candidate-1", "id": 5, "expired": false},
-        {"name": "velnor-job-image-candidate-2", "id": 99, "expired": false,
-         "workflow_run": {"id": 77, "head_sha": SOURCE, "head_branch": "main"}},
+        {"name": "velnor-job-image-candidate-2", "id": 5, "expired": false},
+        {"name": "velnor-job-image-candidate-1", "id": 99, "expired": false,
+         "workflow_run": {"id": 50, "head_sha": SOURCE, "head_branch": "main"}},
     ]})
 }
 
 #[test]
-fn exactly_one_unexpired_artifact_of_this_attempt_and_run_is_the_candidate() {
+fn exactly_one_unexpired_artifact_of_the_producer_attempt_and_run_is_the_candidate() {
     let this = identity(&env(), &policy()).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(artifact(&candidate_artifact(), &this).is_ok());
+    assert!(artifact(&candidate_artifact(), &this, CI).is_ok());
     for change in [
         |value: &mut Value| value["artifacts"][1]["id"] = json!(100),
         |value: &mut Value| value["artifacts"][1]["expired"] = json!(true),
@@ -117,7 +117,7 @@ fn exactly_one_unexpired_artifact_of_this_attempt_and_run_is_the_candidate() {
     ] {
         let mut listing = candidate_artifact();
         change(&mut listing);
-        assert!(artifact(&listing, &this).is_err());
+        assert!(artifact(&listing, &this, CI).is_err());
     }
     let mut twice = candidate_artifact();
     let copy = twice["artifacts"][1].clone();
@@ -125,8 +125,8 @@ fn exactly_one_unexpired_artifact_of_this_attempt_and_run_is_the_candidate() {
         .as_array_mut()
         .unwrap_or_else(|| unreachable!("array"))
         .push(copy);
-    assert!(artifact(&twice, &this).is_err());
-    assert!(artifact(&json!({"artifacts": []}), &this).is_err());
+    assert!(artifact(&twice, &this, CI).is_err());
+    assert!(artifact(&json!({"artifacts": []}), &this, CI).is_err());
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn certificate() -> Value {
         "githubWorkflowRepository": "tailrocks/velnor-new",
         "githubWorkflowSHA": SOURCE,
         "githubWorkflowRef": "refs/heads/main",
-        "githubWorkflowTrigger": "workflow_dispatch",
+        "githubWorkflowTrigger": "push",
         "sourceRepositoryRef": "refs/heads/main",
         "sourceRepositoryDigest": SOURCE,
     }}}}])
@@ -154,7 +154,7 @@ fn certificate() -> Value {
 
 #[test]
 fn an_attestation_certificate_must_name_this_repository_workflow_and_commit() {
-    assert!(attestation(&certificate(), SOURCE, &policy()).is_ok());
+    assert!(attestation(&certificate(), SOURCE, &producer()).is_ok());
     for (field, value) in [
         ("sourceRepositoryIdentifier", json!("5")),
         ("githubWorkflowRepository", json!("x/y")),
@@ -166,12 +166,12 @@ fn an_attestation_certificate_must_name_this_repository_workflow_and_commit() {
     ] {
         let mut bad = certificate();
         bad[0]["verificationResult"]["signature"]["certificate"][field] = value;
-        assert!(attestation(&bad, SOURCE, &policy()).is_err(), "{field}");
+        assert!(attestation(&bad, SOURCE, &producer()).is_err(), "{field}");
     }
-    assert!(attestation(&json!([]), SOURCE, &policy()).is_err());
-    assert!(attestation(&json!({}), SOURCE, &policy()).is_err());
-    assert!(attestation(&json!([{}]), SOURCE, &policy()).is_err());
-    let args = attestation_args("/work/a.tar", SOURCE, &policy());
+    assert!(attestation(&json!([]), SOURCE, &producer()).is_err());
+    assert!(attestation(&json!({}), SOURCE, &producer()).is_err());
+    assert!(attestation(&json!([{}]), SOURCE, &producer()).is_err());
+    let args = attestation_args("/work/a.tar", SOURCE, &producer());
     let at = |flag: &str| {
         args.iter()
             .position(|arg| arg == flag)
@@ -179,7 +179,7 @@ fn an_attestation_certificate_must_name_this_repository_workflow_and_commit() {
     };
     assert_eq!(
         at("--signer-workflow").as_deref(),
-        Some(policy().workflow())
+        Some(producer().workflow())
     );
     assert_eq!(at("--source-ref").as_deref(), Some("refs/heads/main"));
     assert_eq!(at("--signer-digest").as_deref(), Some(SOURCE));

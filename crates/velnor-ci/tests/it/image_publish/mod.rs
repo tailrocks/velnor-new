@@ -8,6 +8,7 @@ mod fixture;
 mod gate;
 mod gates;
 mod location;
+mod producer;
 mod publish;
 mod registry;
 mod transport;

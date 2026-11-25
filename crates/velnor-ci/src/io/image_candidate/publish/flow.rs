@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::super::process::Runner;
-use super::super::{Checked, FileSource, check_archive, check_builder, output, source};
+use super::super::{Checked, FileSource, check_record, output};
 use super::gh::Gh;
 use super::registry::{MAX_BODY, Registry, fail};
 use super::{Run, parallel};
@@ -31,7 +31,6 @@ use crate::image_publish::plan::{Blob, blobs};
 const PASS: &str = "PASS: Publication completed for the job image with its OCI digest. Package access is `NOT_RUN`.\n";
 
 struct Paths {
-    root: PathBuf,
     archive: PathBuf,
     record: PathBuf,
     result: PathBuf,
@@ -45,18 +44,15 @@ fn regular_input(path: &Path) -> Result<PathBuf, CiError> {
 }
 
 fn paths(args: &ImagePublishArgs) -> Result<Paths, CiError> {
-    let root = fs::canonicalize(&args.root)
-        .map_err(|error| CiError::new(format!("{}: {error}", args.root.display())))?;
     let requested = std::path::absolute(&args.result)
         .map_err(|error| CiError::new(format!("{}: {error}", args.result.display())))?;
-    let result = output::locate(&root, &requested)?;
+    let result = output::standalone(&requested)?;
     if fs::symlink_metadata(&result).is_ok() {
-        return fail("Result path must be new and outside the source tree.");
+        return fail("Result path must be new.");
     }
     Ok(Paths {
         archive: regular_input(&args.archive)?,
         record: regular_input(&args.record)?,
-        root,
         result,
     })
 }
@@ -108,50 +104,41 @@ fn recheck(registry: &Registry<'_>, planned: &[Blob]) -> Result<(), CiError> {
     })
 }
 
-fn identity_of(
-    args: &ImagePublishArgs,
-    run: &Run<'_>,
-) -> Result<(Policy, Identity, String), CiError> {
+fn identity_of(args: &ImagePublishArgs, run: &Run<'_>) -> Result<(Identity, String), CiError> {
     let policy = Policy::new(&args.workflow, &args.event)?;
     let current = identity(&run.vars, &policy)?;
     let actor = run.vars.get("GITHUB_ACTOR").filter(|name| !name.is_empty());
     match actor {
-        Some(name) if !run.token.is_empty() => Ok((policy, current, name.clone())),
+        Some(name) if !run.token.is_empty() => Ok((current, name.clone())),
         _ => fail("Required GitHub workflow identity is missing."),
     }
 }
 
 pub(super) fn publish(args: &ImagePublishArgs, run: &Run<'_>) -> Result<String, CiError> {
-    let (policy, identity, actor) = identity_of(args, run)?;
+    let (identity, actor) = identity_of(args, run)?;
+    let producer = Policy::producer()?;
     let runner = Runner::start()?;
     let paths = paths(args)?;
-    let head = source::git_line(&runner, &paths.root, &["rev-parse", "HEAD"])?;
-    if head != identity.source {
-        return fail(
-            "Git source commit is not the same as the commit identified by GitHub source SHA.",
-        );
-    }
     let gh = Gh {
         runner: &runner,
         program: run.gh,
     };
     repository(&gh.api(&repository_path())?)?;
     current_main(&gh, &identity)?;
-    let Checked { raw, record, scan } = check_archive(&paths.record, &paths.archive, &paths.root)?;
-    check_builder(&paths.root, &record)?;
+    let ci = gh.ci(&identity.source, run.pause)?;
+    let Checked { raw, record, scan } = check_record(&paths.record, &paths.archive)?;
     let Some(fields) = record.as_object() else {
         return fail("Candidate record has an incorrect format.");
     };
-    record_matches(fields, &identity, &policy)?;
-    artifact(&gh.api(&artifacts_path(&identity))?, &identity)?;
-    let ci = gh.ci(&identity.source, run.pause)?;
+    record_matches(fields, &identity, &producer, ci)?;
+    artifact(&gh.api(&artifacts_path(ci))?, &identity, ci)?;
     for path in [&paths.archive, &paths.record] {
         let verified = gh.attestation(&attestation_args(
             &path.to_string_lossy(),
             &identity.source,
-            &policy,
+            &producer,
         ))?;
-        attestation(&verified, &identity.source, &policy)?;
+        attestation(&verified, &identity.source, &producer)?;
     }
     current_main(&gh, &identity)?;
 

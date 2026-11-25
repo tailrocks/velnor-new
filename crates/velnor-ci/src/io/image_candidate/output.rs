@@ -60,16 +60,20 @@ fn lexical(path: &Path) -> PathBuf {
     })
 }
 
+pub(super) fn standalone(requested: &Path) -> Result<PathBuf, CiError> {
+    if symlinked(requested) {
+        return fail("Candidate output paths cannot use symlinks.");
+    }
+    Ok(lexical(&resolve(requested)))
+}
+
 pub(super) fn locate(root: &Path, raw: &Path) -> Result<PathBuf, CiError> {
     let requested = if raw.is_absolute() {
         raw.to_path_buf()
     } else {
         root.join(raw)
     };
-    if symlinked(&requested) {
-        return fail("Candidate output paths cannot use symlinks.");
-    }
-    let resolved = lexical(&resolve(&requested));
+    let resolved = standalone(&requested)?;
     if resolved.starts_with(root) {
         return fail("Candidate outputs must stay outside the source tree.");
     }

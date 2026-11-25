@@ -7,6 +7,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use super::checks::CiRun;
 use crate::error::CiError;
 use crate::image_candidate::json::is_hex;
 
@@ -15,6 +16,8 @@ pub const REPOSITORY_ID: u64 = 1_390_620_900;
 pub const MAIN_REF: &str = "refs/heads/main";
 pub const DEFAULT_WORKFLOW: &str = "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml";
 pub const DEFAULT_EVENT: &str = "workflow_dispatch";
+pub const PRODUCER_WORKFLOW: &str = "tailrocks/velnor-new/.github/workflows/ci.yml";
+pub const PRODUCER_EVENT: &str = "push";
 pub const REQUIRED: &[&str] = &[
     "GITHUB_REPOSITORY",
     "GITHUB_REPOSITORY_ID",
@@ -64,6 +67,10 @@ impl Policy {
             workflow: workflow.to_owned(),
             event: event.to_owned(),
         })
+    }
+
+    pub fn producer() -> Result<Self, CiError> {
+        Self::new(PRODUCER_WORKFLOW, PRODUCER_EVENT)
     }
 
     #[must_use]
@@ -146,7 +153,8 @@ pub fn identity<S: BuildHasher>(
 pub fn record_matches(
     record: &Map<String, Value>,
     identity: &Identity,
-    policy: &Policy,
+    producer: &Policy,
+    ci: CiRun,
 ) -> Result<(), CiError> {
     if record["source"]["commit"] != identity.source || record["source"]["ref"] != MAIN_REF {
         return fail("Candidate source is not the current main source.");
@@ -154,14 +162,14 @@ pub fn record_matches(
     let expected = json!({
         "repository": REPOSITORY,
         "repository_id": REPOSITORY_ID,
-        "event": policy.event(),
-        "workflow_ref": identity.workflow_ref,
+        "event": producer.event(),
+        "workflow_ref": producer.workflow_ref(),
         "authority_commit": identity.source,
-        "run_id": identity.run_id,
-        "run_attempt": identity.run_attempt,
+        "run_id": ci.run_id,
+        "run_attempt": ci.run_attempt,
     });
     if record["workflow"] != expected {
-        return fail("Candidate run identity is different from the publication run identity.");
+        return fail("Candidate run identity is different from the producer run identity.");
     }
     Ok(())
 }

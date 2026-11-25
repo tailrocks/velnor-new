@@ -13,16 +13,20 @@ use serde_json::{Value, json};
 use velnor_ci::cli::ImagePublishArgs;
 use velnor_ci::image_candidate::hashing::sha256_hex;
 use velnor_ci::image_candidate::record::INPUT_PATHS;
-use velnor_ci::image_publish::checks::{artifacts_path, ci_path, repository_path, tip_path};
-use velnor_ci::image_publish::gate::{DEFAULT_EVENT, DEFAULT_WORKFLOW, identity};
+use velnor_ci::image_publish::checks::{ci_path, repository_path, tip_path};
+use velnor_ci::image_publish::gate::{DEFAULT_EVENT, DEFAULT_WORKFLOW};
 use velnor_ci::io::{Run, Transport, publish_with};
 use zeroize::Zeroizing;
 
-use super::gate::{env as base_env, policy};
+use super::gate::env as base_env;
 use super::registry::{ACTOR, TOKEN};
 use crate::image_candidate::fixture::{LAYER, build, check_for, plain_layer, spec, tar};
 use crate::image_candidate::record::record;
 use crate::support::fresh_dir;
+
+pub(super) const PRODUCER_WORKFLOW: &str = "tailrocks/velnor-new/.github/workflows/ci.yml";
+pub(super) const ARTIFACTS: &str =
+    "repos/tailrocks/velnor-new/actions/runs/50/artifacts?per_page=100";
 
 const GH: &str = r#"#!/bin/sh
 FAKE='{FAKE}'
@@ -99,8 +103,8 @@ impl Candidate {
         value["build"]["arguments"] = json!([format!("VELNOR_SOURCE_SHA={head}")]);
         value["workflow"] = json!({
             "repository": "tailrocks/velnor-new", "repository_id": 1_390_620_900_u64,
-            "event": DEFAULT_EVENT, "workflow_ref": format!("{DEFAULT_WORKFLOW}@refs/heads/main"),
-            "authority_commit": head, "run_id": 77, "run_attempt": 2,
+            "event": "push", "workflow_ref": format!("{PRODUCER_WORKFLOW}@refs/heads/main"),
+            "authority_commit": head, "run_id": 50, "run_attempt": 1,
         });
         value["archive"] = json!({"sha256": sha256_hex(&archive), "size_bytes": archive.len()});
         value["oci"] = check_for(&archive, &head).unwrap_or_else(|e| unreachable!("{e}"));
@@ -124,17 +128,16 @@ impl Candidate {
     }
 
     fn defaults(&self) {
-        let this = identity(&self.env(), &policy()).unwrap_or_else(|e| unreachable!("{e}"));
         self.api(
             &repository_path(),
             &json!({"full_name": "tailrocks/velnor-new", "id": 1_390_620_900_u64}),
         );
         self.api(&tip_path(), &json!({"sha": self.head}));
         self.api(
-            &artifacts_path(&this),
-            &json!({"artifacts": [{"name": "velnor-job-image-candidate-2", "id": 99,
+            ARTIFACTS,
+            &json!({"artifacts": [{"name": "velnor-job-image-candidate-1", "id": 99,
                 "expired": false,
-                "workflow_run": {"id": 77, "head_sha": self.head, "head_branch": "main"}}]}),
+                "workflow_run": {"id": 50, "head_sha": self.head, "head_branch": "main"}}]}),
         );
         self.api(
             &ci_path(&self.head),
@@ -150,7 +153,7 @@ impl Candidate {
                 "sourceRepositoryIdentifier": "1390620900",
                 "githubWorkflowRepository": "tailrocks/velnor-new",
                 "githubWorkflowSHA": self.head, "githubWorkflowRef": "refs/heads/main",
-                "githubWorkflowTrigger": "workflow_dispatch",
+                "githubWorkflowTrigger": "push",
                 "sourceRepositoryRef": "refs/heads/main",
                 "sourceRepositoryDigest": self.head}}}}])
             .to_string(),
@@ -177,6 +180,10 @@ impl Candidate {
         fs::read_to_string(self.dir.join("gh.log")).unwrap_or_default()
     }
 
+    pub(super) fn drop_checkout(&self) {
+        fs::remove_dir_all(self.dir.join("root")).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
     pub(super) fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
     }
@@ -192,7 +199,6 @@ impl Candidate {
 
     pub(super) fn args(&self) -> ImagePublishArgs {
         ImagePublishArgs {
-            root: self.path("root"),
             archive: self.path("out/candidate.oci.tar"),
             record: self.path("out/candidate.json"),
             result: self.path("evidence/publication.json"),
@@ -244,9 +250,7 @@ impl Candidate {
         let args = self.args();
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .env_clear()
-            .args(["image", "publish", "--root"])
-            .arg(&args.root)
-            .arg("--archive")
+            .args(["image", "publish", "--archive"])
             .arg(&args.archive)
             .arg("--record")
             .arg(&args.record)

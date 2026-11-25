@@ -25,10 +25,10 @@ pub fn tip_path() -> String {
 }
 
 #[must_use]
-pub fn artifacts_path(identity: &Identity) -> String {
+pub fn artifacts_path(ci: CiRun) -> String {
     format!(
         "repos/{REPOSITORY}/actions/runs/{}/artifacts?per_page=100",
-        identity.run_id
+        ci.run_id
     )
 }
 
@@ -55,11 +55,11 @@ pub fn main_tip(value: &Value, source: &str) -> Result<(), CiError> {
     }
 }
 
-pub fn artifact(response: &Value, identity: &Identity) -> Result<(), CiError> {
+pub fn artifact(response: &Value, identity: &Identity, ci: CiRun) -> Result<(), CiError> {
     let Some(listed) = response["artifacts"].as_array() else {
         return fail("Candidate artifact response has an incorrect format.");
     };
-    let name = format!("{ARTIFACT_PREFIX}{}", identity.run_attempt);
+    let name = format!("{ARTIFACT_PREFIX}{}", ci.run_attempt);
     let mut matches = listed.iter().filter(|item| item["name"] == name);
     let (Some(found), None) = (matches.next(), matches.next()) else {
         return fail("This workflow run must have one candidate artifact.");
@@ -67,7 +67,7 @@ pub fn artifact(response: &Value, identity: &Identity) -> Result<(), CiError> {
     let run = &found["workflow_run"];
     if found["id"].as_u64() != Some(identity.artifact_id)
         || found["expired"] != Value::Bool(false)
-        || run["id"].as_u64() != Some(identity.run_id)
+        || run["id"].as_u64() != Some(ci.run_id)
         || run["head_sha"] != identity.source
         || run["head_branch"] != "main"
     {
