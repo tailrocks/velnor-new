@@ -54,6 +54,7 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
         BTreeSet::new(),
         BTreeSet::new(),
         false,
+        None,
     )?
     .0;
     assert!(view.files.contains_key(&manifest));
@@ -69,6 +70,7 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
         BTreeSet::new(),
         BTreeSet::new(),
         false,
+        None,
     );
     assert!(
         matches!(result, Err(IoError::NotRegular(ref path)) if *path == manifest),
@@ -95,6 +97,7 @@ fn an_unreadable_workspace_member_lock_fails_the_checkout() -> TestResult {
         BTreeSet::new(),
         BTreeSet::new(),
         false,
+        None,
     );
     let lock = RepoPath::new("app/Cargo.lock")?;
     assert!(
