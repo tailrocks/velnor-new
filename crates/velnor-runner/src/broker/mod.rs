@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod facts;
+mod git;
 mod mirror;
 pub(crate) mod proto;
 
 use std::path::PathBuf;
 
 pub(crate) use facts::TrustedFacts;
-pub(crate) use mirror::{GIT_ENV, git_args, mirror_path};
+pub(crate) use git::{GIT_ENV, git_args};
+pub(crate) use mirror::mirror_path;
 pub(crate) use proto::{Request, Response, Token};
 
 pub(crate) struct Broker {

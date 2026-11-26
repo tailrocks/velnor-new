@@ -298,3 +298,67 @@ fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_e
     drop(holder);
     Ok(())
 }
+
+fn alive(pid: &str) -> bool {
+    Command::new("kill")
+        .args(["-0", pid])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+#[test]
+fn a_cancelled_fetch_leaves_no_git_helper_behind() -> Result<()> {
+    let rig = Rig::new()?;
+    let exec_path = rig.root.join("exec-path");
+    let pid_file = rig.root.join("helper.pid");
+    std::fs::create_dir_all(&exec_path)?;
+    let helper = exec_path.join("git-remote-https");
+    std::fs::write(
+        &helper,
+        format!(
+            "#!/bin/sh\necho $$ > '{}'\nexec sleep 300\n",
+            pid_file.display()
+        ),
+    )?;
+    std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755))?;
+    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let job = rig.job(
+        "checkout_depth1",
+        &rig.head,
+        &format!("https://127.0.0.1:{closed}"),
+    )?;
+    let scratch = Scratch::new()?;
+    let exec_path_text = exec_path.to_string_lossy().into_owned();
+    let mut runner = rig.start_env(&job, &scratch, &[("GIT_EXEC_PATH", &exec_path_text)])?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let pid = loop {
+        if let Ok(text) = std::fs::read_to_string(&pid_file)
+            && !text.trim().is_empty()
+        {
+            break text.trim().to_owned();
+        }
+        if Instant::now() > deadline {
+            let _ = runner.kill();
+            bail!("the git helper never started");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let signalled = Command::new("kill")
+        .args(["-TERM", &runner.id().to_string()])
+        .status()?;
+    assert!(signalled.success());
+    let ran = finish(runner)?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while alive(&pid) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let survived = alive(&pid);
+    let _ = Command::new("kill").args(["-KILL", &pid]).status();
+    assert!(
+        !survived,
+        "the git helper {pid} outlived the cancelled fetch"
+    );
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    Ok(())
+}
