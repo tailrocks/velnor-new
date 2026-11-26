@@ -938,7 +938,7 @@ HOME before the workspace filter
 ([index.js:2207](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2207)), and a dangling
 symlink matched by a pattern failing the call, because the runner's
 `statSync` on each match throws
-([index.js:1558](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1558)). Three
+([index.js:1558](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1558)). Four
 behaviours differ on purpose:
 
 - **Outside-target symlinks are ignored.** The runner only checks that the
@@ -950,6 +950,14 @@ behaviours differ on purpose:
   every path whose real location leaves the canonical workspace. The search
   root itself is examined with `lstat` and never resolved, as in the runner
   ([index.js:1362](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1362)).
+- **Search roots are clamped to the workspace.** The runner walks every search
+  root a pattern yields, wherever it lies
+  ([index.js:1358](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1358)), and only afterwards drops matches outside the
+  workspace ([index.js:1554](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1554)), so `hashFiles('/')` or a bare `~`
+  traverses the whole file system or home directory. Velnor narrows a root that
+  contains the workspace to the workspace and skips a root outside it, as
+  `PatternSet::roots` in `crates/velnor-runner/src/expr/glob.rs` does. The digest is
+  the same, because outside matches never count, but the walk stays bounded.
 - **`--follow-symbolic-links` is rejected.** The runner accepts the option
   ([HashFilesFunction.cs:52](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Runner.Worker/Expressions/HashFilesFunction.cs#L52))
   and follows links

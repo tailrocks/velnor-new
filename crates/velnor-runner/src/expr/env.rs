@@ -99,6 +99,12 @@ pub struct ExprEnv {
     contexts: BTreeMap<RootContext, Value>,
 }
 
+/// Mirrors node's `os.homedir()`: a set `HOME` wins as is, even when empty, and
+/// only an unset one falls back to the passwd entry.
+pub(crate) fn home_dir(var: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    var.map(PathBuf::from).or_else(std::env::home_dir)
+}
+
 impl ExprEnv {
     #[must_use]
     pub fn new(workspace: PathBuf) -> Self {
@@ -108,7 +114,7 @@ impl ExprEnv {
             .collect();
         Self {
             workspace,
-            home: std::env::home_dir(),
+            home: home_dir(std::env::var_os("HOME")),
             status: JobStatus::Success,
             contexts,
         }
@@ -130,5 +136,17 @@ impl ParseEnvironment for ExprEnv {
 
     fn function(&self, name: &str) -> Option<Function> {
         Function::parse(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::home_dir;
+    use std::path::PathBuf;
+
+    #[test]
+    fn expr_home_keeps_a_set_variable_even_when_empty() {
+        assert_eq!(home_dir(Some("".into())), Some(PathBuf::new()));
+        assert_eq!(home_dir(Some("rel".into())), Some(PathBuf::from("rel")));
     }
 }

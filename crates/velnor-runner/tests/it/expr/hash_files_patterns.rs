@@ -306,3 +306,37 @@ fn expr_hash_files_tilde_needs_a_rooted_home() -> Result<()> {
     assert_eq!(text("hashFiles('~x')", &env)?, expected_digest(&[b"tilde"]));
     Ok(())
 }
+
+#[test]
+fn expr_hash_files_does_not_canonicalize_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    std::os::unix::fs::symlink(dir.path(), dir.path().join("link"))?;
+    let mut env = dir.env();
+    env.home = Some(dir.path().join("link"));
+    assert_eq!(text("hashFiles('~/ws/a.txt')", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_rejects_relative_home_whatever_the_cwd() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+    env.home = Some("src".into());
+    assert!(
+        error_text("hashFiles('~')", &env)?
+            .contains("Expected HOME directory to be a rooted path. Actual 'src'")
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_rejects_empty_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+    env.home = Some(String::new().into());
+    assert!(error_text("hashFiles('~')", &env)?.contains("Unable to determine HOME directory"));
+    Ok(())
+}

@@ -15,17 +15,15 @@ impl Drop for Restore<'_> {
     }
 }
 
-fn lock<'a>(path: &'a Path, test: &str) -> Result<Option<Restore<'a>>> {
+fn lock(path: &Path) -> Result<Restore<'_>> {
     let guard = Restore(path);
     fs::set_permissions(path, fs::Permissions::from_mode(0o000))?;
-    let still_readable = fs::read_dir(path).is_ok() || fs::File::open(path).is_ok();
-    if still_readable {
-        eprintln!(
-            "SKIPPED {test}: chmod 000 does not restrict this user (running as root?), so the \
-             unreadable-path assertions did not run"
-        );
-    }
-    Ok((!still_readable).then_some(guard))
+    assert!(
+        fs::read_dir(path).is_err() && fs::File::open(path).is_err(),
+        "chmod 000 does not restrict this user (running as root?), so the unreadable-path \
+         assertions cannot run; run the suite as an unprivileged user"
+    );
+    Ok(guard)
 }
 
 #[test]
@@ -80,13 +78,7 @@ fn expr_hash_files_reports_unreadable_directories_and_files() -> Result<()> {
     let workspace = dir.workspace()?;
 
     let locked = workspace.join("locked");
-    let Some(_directory) = lock(
-        &locked,
-        "expr_hash_files_reports_unreadable_directories_and_files",
-    )?
-    else {
-        return Ok(());
-    };
+    let _directory = lock(&locked)?;
     let message = error_text("hashFiles('**/*.txt')", &env)?;
     assert!(
         message.starts_with("hashFiles('**/*.txt') failed. Fail to hash files under directory '"),
@@ -95,13 +87,7 @@ fn expr_hash_files_reports_unreadable_directories_and_files() -> Result<()> {
     assert!(message.contains("locked"), "{message}");
 
     let sealed = workspace.join("sealed.md");
-    let Some(_file) = lock(
-        &sealed,
-        "expr_hash_files_reports_unreadable_directories_and_files",
-    )?
-    else {
-        return Ok(());
-    };
+    let _file = lock(&sealed)?;
     let message = error_text("hashFiles('*.md')", &env)?;
     assert!(message.contains("sealed.md"), "{message}");
     Ok(())
@@ -117,13 +103,7 @@ fn expr_hash_files_does_not_enter_directories_no_pattern_can_match() -> Result<(
     let workspace = dir.workspace()?;
 
     let target = workspace.join("target");
-    let Some(_target) = lock(
-        &target,
-        "expr_hash_files_does_not_enter_directories_no_pattern_can_match",
-    )?
-    else {
-        return Ok(());
-    };
+    let _target = lock(&target)?;
     assert_eq!(text("hashFiles('*.txt')", &env)?, expected_digest(&[b"a"]));
     assert_eq!(
         text("hashFiles('src/*.txt', '!target/**')", &env)?,

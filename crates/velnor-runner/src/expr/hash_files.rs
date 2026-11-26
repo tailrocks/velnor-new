@@ -38,9 +38,7 @@ pub(crate) fn hash_files(
         .flat_map(|argument| argument.split('\n'))
         .map(trim_line)
         .filter(|line| !line.is_empty() && !line.starts_with('#'));
-    let home = home.map(|home| fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf()));
-    let patterns =
-        PatternSet::new(&root, home.as_deref(), lines).map_err(|error| failure(&error))?;
+    let patterns = PatternSet::new(&root, home, lines).map_err(|error| failure(&error))?;
 
     let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
     let mut aggregate = Context::new(&SHA256);
