@@ -22,6 +22,7 @@ pub(crate) fn requested_by_siblings(
         return Vec::new();
     };
     let split_build = resolver_splits_build(view, workspace);
+    let root_only = plain_names_need_root_package(view, workspace);
     let manifests: BTreeMap<&RepoPath, toml::Table> = metadata
         .members
         .iter()
@@ -37,7 +38,12 @@ pub(crate) fn requested_by_siblings(
             let parsed = manifests.get(&member.manifest)?;
             Some((
                 &member.manifest,
-                workspace_requests(parsed, member.name.as_str(), workspace_features),
+                workspace_requests(
+                    parsed,
+                    member.name.as_str(),
+                    workspace_features,
+                    !root_only || member.manifest == *workspace,
+                ),
             ))
         })
         .collect();
@@ -94,7 +100,12 @@ pub(crate) fn requested_by_siblings(
         .collect()
 }
 
-fn workspace_requests(manifest: &toml::Table, package: &str, names: &[String]) -> BTreeSet<String> {
+fn workspace_requests(
+    manifest: &toml::Table,
+    package: &str,
+    names: &[String],
+    plain: bool,
+) -> BTreeSet<String> {
     let defined: BTreeSet<&str> = manifest
         .get("features")
         .and_then(toml::Value::as_table)
@@ -107,11 +118,20 @@ fn workspace_requests(manifest: &toml::Table, package: &str, names: &[String]) -
         .iter()
         .filter_map(|name| match name.split_once('/') {
             Some((owner, feature)) => (owner == package).then_some(feature),
-            None => Some(name.as_str()),
+            None => plain.then_some(name.as_str()),
         })
         .filter(|name| defined.contains(name) || implicit.contains(*name))
         .map(ToOwned::to_owned)
         .collect()
+}
+
+pub(crate) fn plain_names_need_root_package(view: &RepoView, workspace: &RepoPath) -> bool {
+    !resolver_splits_build(view, workspace)
+        && view
+            .files
+            .get(workspace)
+            .and_then(|bytes| table(bytes).ok())
+            .is_some_and(|manifest| manifest.contains_key("package"))
 }
 
 fn resolver_splits_build(view: &RepoView, workspace: &RepoPath) -> bool {

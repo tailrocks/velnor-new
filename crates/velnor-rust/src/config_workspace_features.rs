@@ -7,7 +7,8 @@ use velnor_model::{RepoView, RustCiConfig, RustMember, RustRoot};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
-use crate::harness::{dependency_specs, implicit_features};
+use crate::harness::{feature_dependency_specs, implicit_features};
+use crate::sibling_features::plain_names_need_root_package;
 use crate::toml_file::table;
 
 pub(crate) fn check(
@@ -54,9 +55,11 @@ pub(crate) fn check(
 
 fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
     let Some((package, feature)) = name.split_once('/') else {
+        let root_only = plain_names_need_root_package(view, &root.manifest);
         return root
             .members
             .iter()
+            .filter(|member| !root_only || member.manifest == root.manifest)
             .any(|member| defined_features(view, member).contains(name));
     };
     match root
@@ -69,7 +72,7 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
             .members
             .iter()
             .filter_map(|member| manifest(view, member))
-            .any(|manifest| dependency_specs(&manifest).any(|(key, _)| key == package)),
+            .any(|manifest| feature_dependency_specs(&manifest).any(|(key, _)| key == package)),
     }
 }
 

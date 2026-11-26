@@ -12,10 +12,13 @@ use crate::pipeline::{pin_helper, view, workflow};
 use crate::test_groups::{DATABASE, SHELL};
 use crate::yaml_tree::document;
 
-const FEATURES: &str = "workspace_features = ['local-mode']\n";
-const MANIFEST: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n";
+mod root;
 
-fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) const FEATURES: &str = "workspace_features = ['local-mode']\n";
+pub(crate) const MANIFEST: &[u8] =
+    b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n";
+
+pub(crate) fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
     for root in roots {
         repo.files.insert(RepoPath::new(*root)?, MANIFEST.to_vec());
@@ -201,7 +204,7 @@ fn with_manifest(name: &str, manifest: &str) -> Result<RepoView, Box<dyn Error>>
     Ok(repo)
 }
 
-fn refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
+pub(crate) fn refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
     match detect(repo) {
         Err(DetectError::Invalid {
             path,
@@ -252,6 +255,10 @@ fn a_package_feature_name_needs_a_member_that_defines_it_or_a_dependency_of_a_me
     for name in ["package-0/local-mode", "serde/derive"] {
         detect(&with_manifest(name, PACKAGE_AND_DEPENDENCY)?)?;
     }
+    let dev_only = "[package]\nname = \"package-0\"\n[dev-dependencies]\nserde = \"1\"\n[target.'cfg(unix)'.dev-dependencies]\nlibc = \"0.2\"\n";
+    for name in ["serde/derive", "libc/extra_traits"] {
+        detect(&with_manifest(name, dev_only)?)?;
+    }
     Ok(())
 }
 
@@ -276,7 +283,7 @@ fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResul
     Ok(())
 }
 
-const GATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"local-mode\"]\n";
+pub(crate) const GATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"local-mode\"]\n";
 
 fn gated_harness(config: &str) -> Result<String, Box<dyn Error>> {
     let mut repo = repository(&["Cargo.toml"], config)?;

@@ -168,7 +168,22 @@ pub(crate) fn enabled_features(manifest: &toml::Table, requested: &[String]) -> 
 pub(crate) fn dependency_specs(
     manifest: &toml::Table,
 ) -> impl Iterator<Item = (&String, &toml::Value)> {
-    const TABLES: &[&str] = &["dependencies", "build-dependencies"];
+    specs_in(manifest, &["dependencies", "build-dependencies"])
+}
+
+pub(crate) fn feature_dependency_specs(
+    manifest: &toml::Table,
+) -> impl Iterator<Item = (&String, &toml::Value)> {
+    specs_in(
+        manifest,
+        &["dependencies", "build-dependencies", "dev-dependencies"],
+    )
+}
+
+fn specs_in<'a>(
+    manifest: &'a toml::Table,
+    tables: &'a [&'a str],
+) -> impl Iterator<Item = (&'a String, &'a toml::Value)> {
     let targets = manifest
         .get("target")
         .and_then(toml::Value::as_table)
@@ -177,7 +192,7 @@ pub(crate) fn dependency_specs(
         .filter_map(toml::Value::as_table);
     std::iter::once(manifest)
         .chain(targets)
-        .flat_map(|scope| TABLES.iter().filter_map(|key| scope.get(*key)))
+        .flat_map(move |scope| tables.iter().filter_map(move |key| scope.get(*key)))
         .filter_map(toml::Value::as_table)
         .flat_map(toml::Table::iter)
 }
