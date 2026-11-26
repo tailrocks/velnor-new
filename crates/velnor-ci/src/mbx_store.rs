@@ -174,9 +174,6 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
     Err("cannot determine the current user")
 }
 
-/// The `MBX_SHIMS_DIR` line. mbx names its compiler shims in `HOST_CC` and `CC_*`,
-/// which build scripts declare with `rerun-if-env-changed`, so a restored target
-/// is fresh for cargo only when every event uses the same absolute shims path.
 pub fn shims_line(runner_temp: &Path) -> Result<String, CiError> {
     let shims = private_shims(runner_temp)
         .map_err(|reason| CiError::new(format!("MBX_SHIMS_DIR: {reason}")))?;
@@ -186,7 +183,6 @@ pub fn shims_line(runner_temp: &Path) -> Result<String, CiError> {
     ))
 }
 
-/// A runner that offers a shared store gets the same private shims on every event.
 pub fn env_lines(outcome: &Outcome, runner_temp: &Path) -> Result<String, CiError> {
     Ok(match outcome {
         Outcome::NotOffered => KEEP_OUT_DIR.to_owned(),

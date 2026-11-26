@@ -51,7 +51,6 @@ fn pr_and_push_share_build_env() {
         ),
     ] {
         let other = github_env(name, event, git_ref);
-        // Cargo and build scripts read these: `HOST_CC` and `CC_*` name the shims.
         for variable in ["MBX_SHIMS_DIR", "MBX_SHARE_OUT_DIR"] {
             assert!(push.contains_key(variable), "push sets {variable}");
             assert_eq!(
