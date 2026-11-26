@@ -63,16 +63,11 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
     let Some((package, feature)) = name.split_once('/') else {
         return confined().any(|member| defined_features(view, member).contains(name));
     };
-    match root
-        .members
-        .iter()
-        .find(|member| member.name.as_str() == package)
-    {
-        Some(member) => defined_features(view, member).contains(feature),
-        None => confined()
-            .filter_map(|member| manifest(view, member))
-            .any(|manifest| feature_dependency_specs(&manifest).any(|(key, _)| key == package)),
-    }
+    root.members.iter().any(|member| {
+        member.name.as_str() == package && defined_features(view, member).contains(feature)
+    }) || confined()
+        .filter_map(|member| manifest(view, member))
+        .any(|manifest| feature_dependency_specs(&manifest).any(|(key, _)| key == package))
 }
 
 fn manifest(view: &RepoView, member: &RustMember) -> Option<toml::Table> {

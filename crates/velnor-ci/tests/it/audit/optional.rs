@@ -187,3 +187,85 @@ fn a_target_the_workspace_features_enable_must_have_a_unit_before_the_inputs_loc
     assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
     assert!(lock.exists());
 }
+
+fn forwarding_repo(ci: &str) -> crate::io::Repo {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/Cargo.toml",
+        &format!(
+            "[package]\nname = \"app\"\nedition = \"2024\"\n\n[features]\nci = [\"{ci}\"]\n\n[dependencies]\nlib = {{ path = \"../lib\", optional = true }}\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"lib\"]\n"
+        ),
+    );
+    unit(
+        &repo,
+        "rust/lib/Cargo.toml",
+        "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[features]\ny = []\n\n[[bin]]\nname = \"lg\"\npath = \"src/lg.rs\"\nrequired-features = [\"y\"]\n",
+    );
+    unit(&repo, "rust/lib/src/lg.rs", "fn main() {}\n");
+    unit(
+        &repo,
+        ".velnor/rust-ci.toml",
+        "workspace_features = ['ci']\n",
+    );
+    repo.git(&["add", "--all"]);
+    own_units(&repo, "rust/target/debug", &[]);
+    repo
+}
+
+fn forwarded_units(repo: &crate::io::Repo, bins: &[&str]) {
+    for (hash, package, source, fingerprint) in [
+        (
+            "f00000000000000d",
+            "app",
+            "app/src/extra.rs",
+            "test-bin-extra",
+        ),
+        ("f00000000000000e", "app", "app/src/extra.rs", "bin-extra"),
+        ("f00000000000000f", "lib", "lib/src/lg.rs", "test-bin-lg"),
+        ("f000000000000010", "lib", "lib/src/lg.rs", "bin-lg"),
+    ] {
+        let name = fingerprint
+            .trim_start_matches("test-bin-")
+            .trim_start_matches("bin-");
+        if !bins.contains(&name) {
+            continue;
+        }
+        unit(
+            repo,
+            &format!("rust/target/debug/deps/{name}-{hash}.d"),
+            &format!("out.d: {source}\n"),
+        );
+        unit(
+            repo,
+            &format!("rust/target/debug/.fingerprint/{package}-{hash}/{fingerprint}"),
+            "",
+        );
+    }
+}
+
+#[test]
+fn a_dependency_feature_selector_of_a_workspace_feature_enables_the_optional_dependency_for_the_audit()
+ {
+    let repo = forwarding_repo("lib/y");
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    forwarded_units(&repo, &["lg"]);
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("target extra (rust/app/src/extra.rs"),
+        "{refused:?}"
+    );
+    assert!(!lock.exists());
+
+    forwarded_units(&repo, &["extra"]);
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}
+
+#[test]
+fn a_weak_dependency_feature_selector_requires_no_unit_while_the_dependency_is_inactive() {
+    let repo = forwarding_repo("lib?/y");
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage, TargetKind, TargetName};
 
-use crate::harness::{enabled_features, implicit_features};
+use crate::harness::{dependency_specs, enabled_features, implicit_features};
 use crate::toml_file::table;
 
 pub(crate) fn requested_by_siblings(
@@ -23,11 +23,6 @@ pub(crate) fn requested_by_siblings(
     };
     let split_build = resolver_splits_build(view, workspace);
     let root_only = plain_names_need_root_package(view, workspace);
-    let member_names: BTreeSet<&str> = metadata
-        .members
-        .iter()
-        .map(|member| member.name.as_str())
-        .collect();
     let manifests: BTreeMap<&RepoPath, toml::Table> = metadata
         .members
         .iter()
@@ -47,7 +42,6 @@ pub(crate) fn requested_by_siblings(
                     parsed,
                     member.name.as_str(),
                     workspace_features,
-                    &member_names,
                     !root_only || member.manifest == *workspace,
                 ),
             ))
@@ -114,7 +108,17 @@ pub(crate) fn gated_targets_built(
     if workspace_features.is_empty() {
         return Vec::new();
     }
-    let requested = requested_by_siblings(view, package, workspace_features);
+    let Some(manifest) = view
+        .files
+        .get(&package.manifest)
+        .and_then(|bytes| table(bytes).ok())
+    else {
+        return Vec::new();
+    };
+    let enabled = enabled_features(
+        &manifest,
+        &requested_by_siblings(view, package, workspace_features),
+    );
     package
         .targets
         .iter()
@@ -123,7 +127,7 @@ pub(crate) fn gated_targets_built(
                 && target
                     .required_features
                     .iter()
-                    .all(|required| required.enabled(true, &requested, package.name.as_str()))
+                    .all(|required| enabled.contains(&required.name))
         })
         .flat_map(|target| target.kinds.iter().map(|kind| (target.name.clone(), *kind)))
         .collect()
@@ -133,7 +137,6 @@ fn workspace_requests(
     manifest: &toml::Table,
     package: &str,
     names: &[String],
-    members: &BTreeSet<&str>,
     plain: bool,
 ) -> BTreeSet<String> {
     let defined: BTreeSet<&str> = manifest
@@ -146,11 +149,14 @@ fn workspace_requests(
     let implicit = implicit_features(manifest);
     names
         .iter()
-        .filter_map(|name| match name.split_once('/') {
-            Some((owner, feature)) if owner == package => Some(feature),
-            Some((owner, _)) => (plain && !members.contains(owner)).then_some(owner),
-            None => plain.then_some(name.as_str()),
+        .flat_map(|name| match name.split_once('/') {
+            Some((owner, feature)) => [
+                (owner == package).then_some(feature),
+                (plain && implicit.contains(owner)).then_some(owner),
+            ],
+            None => [plain.then_some(name.as_str()), None],
         })
+        .flatten()
         .filter(|name| defined.contains(name) || implicit.contains(*name))
         .map(ToOwned::to_owned)
         .collect()
@@ -245,7 +251,29 @@ fn forwarded_features(
         .flatten()
         .filter_map(toml::Value::as_str)
         .filter_map(|member| member.split_once('/'))
-        .filter(|(name, _)| keys.contains(name.trim_end_matches('?')))
+        .filter(|(name, _)| {
+            let key = name.trim_end_matches('?');
+            keys.contains(key) && (key == *name || activated(manifest, enabled, key))
+        })
         .map(|(_, feature)| feature.to_owned())
         .collect()
+}
+
+fn activated(manifest: &toml::Table, enabled: &BTreeSet<String>, key: &str) -> bool {
+    let optional = dependency_specs(manifest).any(|(name, spec)| {
+        name == key && spec.get("optional").and_then(toml::Value::as_bool) == Some(true)
+    });
+    let explicit = format!("dep:{key}");
+    !optional
+        || enabled.contains(key)
+        || manifest
+            .get("features")
+            .and_then(toml::Value::as_table)
+            .into_iter()
+            .flatten()
+            .filter(|(name, _)| enabled.contains(*name))
+            .filter_map(|(_, members)| members.as_array())
+            .flatten()
+            .filter_map(toml::Value::as_str)
+            .any(|member| member == explicit)
 }

@@ -133,3 +133,22 @@ fn a_dependency_selector_only_a_member_declares_is_refused_for_a_root_package_un
     }
     Ok(())
 }
+
+#[test]
+fn a_dependency_alias_named_like_a_member_is_accepted_when_the_dependency_alone_can_define_the_feature()
+-> TestResult {
+    let root = format!(
+        "{ROOT_WITHOUT_FEATURE}edition = \"2021\"\n[dependencies]\nmember = {{ package = \"serde\", version = \"1\", optional = true }}\n"
+    );
+    let aliased = root_and_member(&root, "workspace_features = ['member/derive']\n")?;
+    detect(&aliased)?;
+    let plain = root_and_member(
+        &format!("{ROOT_WITHOUT_FEATURE}edition = \"2021\"\n"),
+        "workspace_features = ['member/derive']\n",
+    )?;
+    assert_eq!(
+        refusal(&plain)?,
+        (".".to_owned(), "member/derive".to_owned())
+    );
+    Ok(())
+}
