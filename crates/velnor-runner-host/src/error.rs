@@ -101,8 +101,20 @@ pub enum RustRunnerFailure {
     #[error("another controller holds the host store")]
     HostStoreHeld,
 
-    #[error("this command is not available in rust-runner launch mode yet")]
-    CommandUnavailable,
+    #[error("the velnor machine does not exist")]
+    MachineMissing,
+
+    #[error("the controller heartbeat is missing, stale or for another config")]
+    HeartbeatNotFresh,
+
+    #[error("GitHub refused to delete the scale set")]
+    ScaleSetDeleteRefused,
+
+    #[error("GitHub did not complete the scale set teardown")]
+    GitHubRefused,
+
+    #[error("the deletion of the scale set is uncertain")]
+    ScaleSetDeleteUncertain,
 
     #[error("a blocking task of the rust-runner controller did not finish")]
     TaskFailed,

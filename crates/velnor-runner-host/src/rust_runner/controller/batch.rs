@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_github::{ParsedBatch, Poll, SourceMetadata};
 
-use super::admission::{Admission, JobExit};
+use super::admission::JobExit;
 use super::github::{self, Acquisition};
 use super::source::{LaunchGrant, Refusal};
 use super::{Event, Run, blocking};
@@ -119,7 +119,7 @@ impl Run<'_> {
             if self.taken.contains(&(connection, request_id)) {
                 continue;
             }
-            if !matches!(self.admission(), Admission::Open { free } if free > 0) {
+            if !self.admits(connection) {
                 self.defer(connection);
                 continue;
             }
@@ -192,7 +192,7 @@ impl Run<'_> {
         {
             live.remember_default_branch(grant.default_branch(), Instant::now());
         }
-        if !matches!(self.admission(), Admission::Open { free } if free > 0) {
+        if !self.admits(connection) {
             self.defer(connection);
             self.advance(connection);
             return;

@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use crate::error::HostError;
 
+mod census;
 mod controller;
+mod doctor;
 mod job;
 mod machine;
 mod orb;
@@ -16,14 +18,18 @@ mod paths;
 mod processes;
 mod store;
 mod sweep;
+mod teardown;
 
+pub use census::{wait_for_rust_runner_connection_drain, wait_for_rust_runner_drain};
 pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
+pub use doctor::run_rust_runner_doctor_probe;
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
 pub use store::HostHold;
+pub use teardown::detach_rust_runner_connection;
 
-pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
+pub(crate) use controller::{Handover, heartbeat_readiness, host_toml_sha256, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";

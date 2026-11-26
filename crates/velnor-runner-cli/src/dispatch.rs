@@ -7,9 +7,7 @@ use std::process::{Command as ProcessCommand, ExitCode};
 use std::time::Duration;
 
 use clap::Parser;
-use velnor_runner_host::{
-    HostError, LaunchMode, READINESS_BUDGET, Readiness, RustRunnerFailure, doctor_json, status_json,
-};
+use velnor_runner_host::{LaunchMode, READINESS_BUDGET, Readiness, doctor_json, status_json};
 
 use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
 use crate::state_directory::user_home;
@@ -25,6 +23,7 @@ mod disconnect;
 mod drain;
 mod journal_show;
 mod marker;
+mod rust_mode;
 
 use connect::{ConnectRequest, connect};
 use disconnect::disconnect;
@@ -55,10 +54,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
     };
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
-        Command::Doctor { probe: true } if in_rust_runner_mode(&state) => command_unavailable(),
+        Command::Doctor { probe: true } if in_rust_runner_mode(&state) => rust_mode::doctor(&state),
         Command::Doctor { probe } => print_doctor(&state, *probe),
         Command::Logs { follow } => logs(*follow),
-        Command::Drain { wait: true } if in_rust_runner_mode(&state) => command_unavailable(),
+        Command::Drain { wait: true } if in_rust_runner_mode(&state) => rust_mode::drain(&state),
         Command::Drain { wait } => drain(&state, *wait),
         Command::Resume => remove_flag(&state, "drain"),
         Command::Credential { action } => match action {
@@ -110,7 +109,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Service { action } => crate::service::service(*action, &state),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { .. } => ExitCode::from(1),
-        Command::Disconnect { .. } if in_rust_runner_mode(&state) => command_unavailable(),
+        Command::Disconnect {
+            connection_id,
+            wait,
+        } if in_rust_runner_mode(&state) => rust_mode::disconnect(&state, connection_id, *wait),
         Command::Disconnect {
             connection_id,
             wait,
@@ -126,14 +128,6 @@ fn in_rust_runner_mode(state: &Path) -> bool {
         Ok(Some(config)) => config.host.launch_mode == LaunchMode::RustRunner,
         Err(_) => true,
     }
-}
-
-fn command_unavailable() -> ExitCode {
-    eprintln!(
-        "{}",
-        HostError::RustRunner(RustRunnerFailure::CommandUnavailable)
-    );
-    ExitCode::from(1)
 }
 
 #[cfg(feature = "local-mode")]

@@ -108,7 +108,9 @@ pub use reconcile::{
 };
 pub use rust_runner::{
     ConnectionPats, HostHold, MachineProcess, ReservationId, RunningJob, RustRunnerExit,
-    RustRunnerLauncher, install_rust_runner_launcher, run_rust_runner_host,
+    RustRunnerLauncher, detach_rust_runner_connection, install_rust_runner_launcher,
+    run_rust_runner_doctor_probe, run_rust_runner_host, wait_for_rust_runner_connection_drain,
+    wait_for_rust_runner_drain,
 };
 pub use scale_set::{EnsureError, EnsuredSet, product_runner_groups};
 pub use stage::remove_recorded;

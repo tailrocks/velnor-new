@@ -26,6 +26,7 @@ mod github;
 mod jobs;
 mod owned;
 mod pats;
+mod publish;
 mod readiness;
 mod run_blocking;
 mod runner;
@@ -327,6 +328,7 @@ impl Run<'_> {
         } else {
             Phase::Ready
         });
+        self.publish_census();
         self.spawn_due_proofs();
         self.spawn_due_renewals();
         self.check_machine();

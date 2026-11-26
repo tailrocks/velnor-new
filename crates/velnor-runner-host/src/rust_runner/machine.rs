@@ -45,7 +45,7 @@ impl RustRunnerLauncher {
         Store::open(&self.host_store)?.runner_digest()
     }
 
-    fn machine_exists(&self) -> Result<bool, HostError> {
+    pub(super) fn machine_exists(&self) -> Result<bool, HostError> {
         let mut command = self.orb();
         command.args(["list", "-f", "json"]);
         let output = orb::run(command, self.deadline, true).map_err(failure)?;
@@ -80,7 +80,7 @@ impl RustRunnerLauncher {
         succeeds(command, self.deadline, RustRunnerFailure::MachineLink)
     }
 
-    fn require_runner_binary(&self) -> Result<(), HostError> {
+    pub(super) fn require_runner_binary(&self) -> Result<(), HostError> {
         let mut command = self.in_machine();
         command.args(["test", "-x", GUEST_RUNNER]);
         succeeds(command, self.deadline, RustRunnerFailure::BinaryMissing)

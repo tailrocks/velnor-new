@@ -80,6 +80,15 @@ impl Slots {
             .saturating_sub(u32::try_from(self.entries.len()).unwrap_or(u32::MAX))
     }
 
+    pub(super) fn held_by(&self, connection: usize) -> u32 {
+        let held = self
+            .entries
+            .values()
+            .filter(|slot| slot.connection == connection)
+            .count();
+        u32::try_from(held).unwrap_or(u32::MAX)
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
