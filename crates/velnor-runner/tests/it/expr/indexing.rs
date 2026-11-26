@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/tests.rs
 
-use crate::expr_support::{empty_env, env_with, eval, text, truthy};
+use crate::expr_support::{empty_env, env_with, error_text, eval, text, truthy};
 use anyhow::{Context, Result};
 use velnor_runner::context_value::ContextValue;
 use velnor_runner::expr::{RootContext, Value};
@@ -76,5 +76,19 @@ fn expr_context_values_convert_numbers_and_non_finite() -> Result<()> {
     assert!(truthy("inputs.flag", &env)?);
     assert!(!truthy("inputs.none", &env)?);
     assert!(truthy("inputs.count == '3'", &env)?);
+    Ok(())
+}
+
+#[test]
+fn expr_wildcard_projections_stop_at_the_memory_budget() -> Result<()> {
+    let list = |count: usize| format!(r#"{{"LIST":[{}0]}}"#, "1,".repeat(count));
+    let within = env_with(&[(RootContext::Env, &list(1_000_000))])?;
+    let beyond = env_with(&[(RootContext::Env, &list(1_400_000))])?;
+
+    assert!(truthy("env.LIST.* != null", &within)?);
+    assert!(
+        error_text("env.LIST.*", &beyond)?
+            .starts_with("The maximum allowed memory size was exceeded")
+    );
     Ok(())
 }

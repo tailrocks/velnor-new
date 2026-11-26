@@ -7,7 +7,7 @@ use super::error::ExprError;
 use super::eval::evaluate_node;
 use super::node::Node;
 use super::number::format_number;
-use super::value::Value;
+use super::value::{Value, ValueKind};
 use crate::context_value::write_json_string;
 
 pub(crate) fn evaluate_format(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
@@ -74,10 +74,13 @@ impl MemoryCounter {
             return Ok(());
         }
         let units = value.encode_utf16().count();
-        self.bytes = self
-            .bytes
-            .saturating_add(STRING_BASE_OVERHEAD)
-            .saturating_add(units.saturating_mul(BYTES_PER_UTF16_UNIT));
+        self.add_bytes(
+            STRING_BASE_OVERHEAD.saturating_add(units.saturating_mul(BYTES_PER_UTF16_UNIT)),
+        )
+    }
+
+    pub(crate) fn add_bytes(&mut self, bytes: usize) -> Result<(), ExprError> {
+        self.bytes = self.bytes.saturating_add(bytes);
         if self.bytes > MAX_MEMORY_BYTES {
             return Err(ExprError::evaluation(format!(
                 "The maximum allowed memory size was exceeded while evaluating the following expression: {}",
@@ -146,7 +149,7 @@ pub(crate) fn format_template(
     mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
 ) -> Result<String, ExprError> {
     let mut memory = MemoryCounter::new("format");
-    let mut cache: Vec<Option<String>> = vec![None; argument_count];
+    let mut cache: Vec<Option<(ValueKind, String)>> = vec![None; argument_count];
     let mut result = String::new();
 
     for segment in parse_template(format, argument_count)? {
@@ -156,17 +159,20 @@ pub(crate) fn format_template(
                 result.push_str(&text);
             }
             Segment::Argument { index, specifiers } => {
+                let slot = &mut cache[index];
+                if slot.is_none() {
+                    let value = resolve(index)?;
+                    *slot = Some((value.kind(), value.convert_to_string()));
+                }
+                let Some((kind, argument)) = slot.as_ref() else {
+                    continue;
+                };
                 if !specifiers.is_empty() {
                     return Err(ExprError::evaluation(format!(
                         "The format specifiers '{specifiers}' are not valid for objects of type '{}'",
-                        resolve(index)?.kind().as_str()
+                        kind.as_str()
                     )));
                 }
-                let slot = &mut cache[index];
-                if slot.is_none() {
-                    *slot = Some(resolve(index)?.convert_to_string());
-                }
-                let argument = slot.as_deref().unwrap_or_default();
                 memory.add(argument)?;
                 result.push_str(argument);
             }
