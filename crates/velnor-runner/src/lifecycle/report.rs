@@ -14,7 +14,8 @@ use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
 use uuid::Uuid;
 
 use super::acquire::JobConnection;
-use super::logs::{Event, iso_millis, log_line};
+use super::logs::{Event, LogFiles, iso_millis};
+use super::tail::StepState;
 use crate::exec::{JobRun, StepResult};
 use crate::job_message::AgentJobRequestMessage;
 use crate::protocol::{
@@ -40,14 +41,6 @@ pub(super) struct ReportSummary {
     pub(super) times: BTreeMap<u32, StepTimes>,
 }
 
-#[derive(Debug, Default)]
-struct StepState {
-    name: String,
-    log: Vec<String>,
-    live: Vec<String>,
-    taken: i64,
-}
-
 pub(super) struct Reporter {
     results: Option<TwirpResultsClient>,
     feed_client: Option<FeedStreamClient>,
@@ -57,8 +50,7 @@ pub(super) struct Reporter {
     step_ids: Vec<String>,
     steps: BTreeMap<u32, StepState>,
     times: BTreeMap<u32, StepTimes>,
-    job_log: Vec<u8>,
-    job_lines: i64,
+    files: LogFiles,
     change_order: i64,
     uploads: JoinSet<()>,
 }
@@ -84,7 +76,11 @@ fn conclusion(result: StepResult) -> StepConclusion {
 }
 
 impl Reporter {
-    pub(super) fn new(connection: &JobConnection, message: &AgentJobRequestMessage) -> Self {
+    pub(super) fn new(
+        connection: &JobConnection,
+        message: &AgentJobRequestMessage,
+        files: LogFiles,
+    ) -> Self {
         Self {
             results: connection.results.clone(),
             feed_client: connection.feed.clone(),
@@ -102,8 +98,7 @@ impl Reporter {
                 .collect(),
             steps: BTreeMap::new(),
             times: BTreeMap::new(),
-            job_log: Vec::new(),
-            job_lines: 0,
+            files,
             change_order: 0,
             uploads: JoinSet::new(),
         }
@@ -174,13 +169,8 @@ impl Reporter {
                     None,
                     None,
                 );
-                self.steps.insert(
-                    number,
-                    StepState {
-                        name,
-                        ..StepState::default()
-                    },
-                );
+                self.steps
+                    .insert(number, StepState::new(name, self.files.step_path(number)));
                 self.times.insert(
                     number,
                     StepTimes {
@@ -190,18 +180,8 @@ impl Reporter {
                 );
                 self.update_steps(vec![step]).await;
             }
-            Event::Line { number, text, at } => {
-                let stamped = log_line(at, &text);
-                self.job_log.extend_from_slice(stamped.as_bytes());
-                self.job_log.push(b'\n');
-                self.job_lines += 1;
-                if let Some(step) = self.steps.get_mut(&number) {
-                    step.log.push(stamped);
-                    step.live.push(text);
-                }
-            }
             Event::StepFinished { number, result, at } => {
-                self.flush_step(number).await;
+                self.flush_step(number, true).await;
                 self.finish_step(number, result, at).await;
             }
             Event::JobFinished(_) => {}
@@ -272,8 +252,12 @@ impl Reporter {
         let step_id = self.step_id(number);
         self.uploads.spawn(async move {
             best_effort("upload step log", UPLOAD_BUDGET, async move {
+                let content = tokio::fs::read_to_string(&state.path)
+                    .await
+                    .with_context(|| format!("read {}", state.path.display()))?;
+                let lines: Vec<String> = content.lines().map(ToOwned::to_owned).collect();
                 results
-                    .upload_step_log(&plan_id, &job_id, &step_id, &state.log)
+                    .upload_step_log(&plan_id, &job_id, &step_id, &lines)
                     .await
             })
             .await;
@@ -281,44 +265,47 @@ impl Reporter {
     }
 
     async fn flush_all(&mut self) {
-        let numbers: Vec<u32> = self
-            .steps
-            .iter()
-            .filter(|(_, state)| !state.live.is_empty())
-            .map(|(number, _)| *number)
-            .collect();
+        let numbers: Vec<u32> = self.steps.keys().copied().collect();
         for number in numbers {
-            self.flush_step(number).await;
+            self.flush_step(number, false).await;
         }
     }
 
-    async fn flush_step(&mut self, number: u32) {
-        let Some(state) = self.steps.get_mut(&number) else {
-            return;
-        };
-        if state.live.is_empty() {
+    async fn flush_step(&mut self, number: u32, drain: bool) {
+        if self.feed.is_none() {
             return;
         }
-        let lines = std::mem::take(&mut state.live);
-        let mut start = state.taken + 1;
-        state.taken += i64::try_from(lines.len()).unwrap_or(i64::MAX);
-        let Some(mut socket) = self.feed.take() else {
-            return;
-        };
         let step_id = self.step_id(number);
-        for batch in lines.chunks(FEED_BATCH_LINES) {
-            let sent = timeout(
-                UPDATE_BUDGET,
-                FeedStreamClient::send_log_lines(&mut socket, &step_id, batch.to_vec(), start),
-            )
-            .await;
-            if !matches!(sent, Ok(Ok(()))) {
-                eprintln!("warning: live feed stopped; step logs are still uploaded");
+        loop {
+            let Some(state) = self.steps.get_mut(&number) else {
+                return;
+            };
+            let lines = state.next_lines().await;
+            if lines.is_empty() {
                 return;
             }
-            start += i64::try_from(batch.len()).unwrap_or(i64::MAX);
+            let mut start = state.taken + 1;
+            state.taken += i64::try_from(lines.len()).unwrap_or(i64::MAX);
+            let Some(mut socket) = self.feed.take() else {
+                return;
+            };
+            for batch in lines.chunks(FEED_BATCH_LINES) {
+                let sent = timeout(
+                    UPDATE_BUDGET,
+                    FeedStreamClient::send_log_lines(&mut socket, &step_id, batch.to_vec(), start),
+                )
+                .await;
+                if !matches!(sent, Ok(Ok(()))) {
+                    eprintln!("warning: live feed stopped; step logs are still uploaded");
+                    return;
+                }
+                start += i64::try_from(batch.len()).unwrap_or(i64::MAX);
+            }
+            self.feed = Some(socket);
+            if !drain {
+                return;
+            }
         }
-        self.feed = Some(socket);
     }
 
     async fn finish(&mut self, run: &JobRun) {
@@ -376,10 +363,18 @@ impl Reporter {
 
     async fn close(mut self) -> ReportSummary {
         while self.uploads.join_next().await.is_some() {}
-        if let (Some(results), true) = (self.results.clone(), self.job_lines > 0) {
+        if let Some(results) = self.results.clone() {
             let (plan_id, job_id) = (self.plan_id.clone(), self.job_id.clone());
-            let (log, lines) = (std::mem::take(&mut self.job_log), self.job_lines);
+            let path = self.files.job_path();
             best_effort("upload job log", UPLOAD_BUDGET, async move {
+                let log = tokio::fs::read(&path)
+                    .await
+                    .with_context(|| format!("read {}", path.display()))?;
+                let lines = log.split(|byte| *byte == b'\n').count().saturating_sub(1);
+                if lines == 0 {
+                    return Ok(());
+                }
+                let lines = i64::try_from(lines).context("job log line count")?;
                 results.upload_job_log(&plan_id, &job_id, &log, lines).await
             })
             .await;

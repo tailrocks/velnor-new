@@ -1170,7 +1170,8 @@
               "kind": "normal",
               "manifest": null,
               "features": [
-                "formatting"
+                "formatting",
+                "parsing"
               ]
             },
             {
@@ -1209,6 +1210,11 @@
               "features": [
                 "v4"
               ]
+            },
+            {
+              "name": "rsa",
+              "kind": "dev",
+              "manifest": null
             },
             {
               "name": "sha2",
@@ -2239,7 +2245,7 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "b1f1d2a1c8fdb10f3a8cf23a759cb700b13da7aac3bbc929322025e387aa1d38",
+    "Cargo.toml": "516b5b131bb976a250c47db5e8a70eabb75d6f27bee16b2a784b0460373c8af8",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "e20fd11899c56a7977fe6b5561fd962f80dca5177971f73d02fce5643643b28a",
@@ -2256,7 +2262,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "3227d58c0fe692692fa50e197238efbf02ea14a515de7f96596994cafd1f16c8",
+    "crates/velnor-runner/Cargo.toml": "e96e0335ba85086bb73e60b411786386aea4423f51705fc8f7e30cbc27f9de7f",
     "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"

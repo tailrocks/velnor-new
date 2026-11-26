@@ -12,6 +12,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use velnor_runner::protocol::GitHubApiError;
 
+mod jit;
+pub(crate) mod mock_feed;
 pub(crate) mod mock_github;
 
 pub(crate) const TOKEN: &str = "test-token";

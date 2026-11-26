@@ -8,11 +8,9 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::BackgroundTask;
-use super::session::{Session, backoff};
+use super::session::{MessageKind, Session, backoff};
 use crate::exec::JobCancel;
 use crate::protocol::{RunnerStatus, TaskAgentMessage};
-
-const JOB_CANCELLATION: &str = "JobCancellation";
 
 pub(super) type CancelPollHandle = BackgroundTask;
 
@@ -24,7 +22,7 @@ struct JobCancelBody {
 }
 
 fn cancels_job(message: &TaskAgentMessage, job_id: &str) -> bool {
-    message.message_type == JOB_CANCELLATION
+    MessageKind::of(message) == MessageKind::JobCancellation
         && serde_json::from_str::<JobCancelBody>(&message.body)
             .is_ok_and(|body| body.job_id.eq_ignore_ascii_case(job_id))
 }

@@ -57,19 +57,24 @@ mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod lifecycle;
+mod lifecycle_cancel;
+mod lifecycle_logs;
+mod lifecycle_report;
+mod lifecycle_session;
+mod lifecycle_support;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;
 mod redaction;
 #[path = "exec_review.rs"]
 mod review;
+mod run_cli;
 #[path = "exec_semantics.rs"]
 mod semantics;
 #[path = "exec_shells.rs"]
 mod shells;
 #[path = "exec_stopped.rs"]
 mod stopped;
-mod run_cli;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

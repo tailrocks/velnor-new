@@ -20,6 +20,7 @@ const FORCED_EXIT: u8 = 130;
 const JOB_MESSAGE_TYPE: &str = "PipelineAgentJobRequest";
 const LIFECYCLE_ERROR: u8 = 1;
 const RENEW_INTERVAL: Duration = Duration::from_secs(60);
+const RENEW_LOCK_GRACE: Duration = Duration::from_secs(300);
 const CANCEL_POLL_ERROR_DELAY: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Parser)]
@@ -177,19 +178,24 @@ fn build_adapters() -> AdapterRegistry {
 }
 
 fn jit_value(raw: &str) -> Result<String> {
-    match raw.strip_prefix('@') {
-        Some(path) => std::fs::read_to_string(path)
-            .map(|text| text.trim().to_owned())
-            .with_context(|| format!("read {path}")),
-        None => Ok(raw.to_owned()),
+    let Some(path) = raw.strip_prefix('@') else {
+        return Ok(raw.to_owned());
+    };
+    let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
+    if let Err(error) = std::fs::remove_file(path) {
+        eprintln!("warning: remove the JIT file {path}: {error}");
     }
+    Ok(text.trim().to_owned())
 }
 
 async fn run_command(args: &RunArgs) -> Result<ExitCode> {
+    let shutdown = cancel_on_signal()?;
     let options = RunJitOptions {
         jit: jit_value(&args.jit)?,
         work_dir: args.work_dir.clone(),
+        shutdown,
         renew_interval: RENEW_INTERVAL,
+        renew_lock_grace: RENEW_LOCK_GRACE,
         cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
         adapters: build_adapters(),
     };

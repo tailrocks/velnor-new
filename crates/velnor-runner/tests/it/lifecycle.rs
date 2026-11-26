@@ -1,47 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
-use serde_json::Value;
-use velnor_runner::exec::{AdapterRegistry, JobResult};
-use velnor_runner::lifecycle::{LifecycleOutcome, RunJitOptions, run_jit};
+use velnor_runner::exec::JobResult;
+use velnor_runner::lifecycle::LifecycleOutcome;
 
-use super::exec_support::{Scratch, fixture_path};
+use super::lifecycle_support::{fixture_job, run};
 use super::support::mock_github::{
     Behavior, JOB_ID, JOB_LOG_BLOB, JOB_TOKEN, MockGithub, OAUTH_TOKEN, PLAN_ID,
-    RESULTS_STEPS_UPDATE, Renew, SESSION_ID, STEP_LOG_BLOB, SUMMARY_BLOB,
+    RESULTS_STEPS_UPDATE, SESSION_ID, STEP_LOG_BLOB, STEP_LOG_URL, SUMMARY_BLOB, step_id,
 };
-
-const RUN_BUDGET: Duration = Duration::from_secs(60);
-
-fn fixture_job(name: &str, script: Option<&str>) -> Result<Value> {
-    let mut text = std::fs::read_to_string(fixture_path(name)).context("read the fixture")?;
-    if let Some(script) = script {
-        text = text.replace("echo hello", script);
-    }
-    serde_json::from_str(&text).context("parse the fixture")
-}
-
-async fn run(mock: &MockGithub, renew_interval: Duration) -> Result<LifecycleOutcome> {
-    let scratch = Scratch::new()?;
-    let options = RunJitOptions {
-        jit: mock.jit().to_owned(),
-        work_dir: scratch.work_dir(),
-        renew_interval,
-        cancel_poll_error_delay: Duration::from_millis(50),
-        adapters: AdapterRegistry::empty(),
-    };
-    let outcome = tokio::time::timeout(RUN_BUDGET, run_jit(options))
-        .await
-        .context("run_jit finished in time")??;
-    assert!(
-        !scratch.work_dir().join("workspace").exists(),
-        "the workspace is removed after the job"
-    );
-    Ok(outcome)
-}
 
 #[tokio::test]
 async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
@@ -70,7 +40,8 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
     assert_eq!(steps.len(), 1);
     assert_eq!(steps[0]["name"], "Say hello");
     assert_eq!(steps[0]["number"], 1);
-    assert_eq!(steps[0]["external_id"], JOB_ID);
+    assert_eq!(steps[0]["external_id"], step_id(1));
+    assert_ne!(steps[0]["external_id"], JOB_ID);
     assert_eq!(steps[0]["conclusion"], "succeeded");
     assert_eq!(steps[0]["status"], "completed");
     let updates = mock.requests_to("POST", RESULTS_STEPS_UPDATE)?;
@@ -78,6 +49,7 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
         .iter()
         .map(|update| {
             let body = update.json()?;
+            assert_eq!(body["steps"][0]["external_id"], step_id(1));
             Ok((
                 body["change_order"].as_i64().context("change_order")?,
                 body["steps"][0]["status"].as_i64().context("status")?,
@@ -85,6 +57,10 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
         })
         .collect::<Result<_>>()?;
     assert_eq!(states, [(1, 3), (2, 6)]);
+    let step_log_url = mock.server.only_request("POST", STEP_LOG_URL)?.json()?;
+    assert_eq!(step_log_url["step_backend_id"], step_id(1));
+    assert_eq!(step_log_url["workflow_job_run_backend_id"], JOB_ID);
+    assert_eq!(step_log_url["workflow_run_backend_id"], PLAN_ID);
     let step_log = mock.requests_to("PUT", STEP_LOG_BLOB)?;
     assert_eq!(step_log.len(), 1);
     assert!(
@@ -94,7 +70,9 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
             .any(|line| line.ends_with("hello"))
     );
     assert!(
-        mock.requests_to("PUT", JOB_LOG_BLOB)?[0]
+        mock.requests_to("PUT", JOB_LOG_BLOB)?
+            .first()
+            .context("the job log was uploaded")?
             .text()
             .contains("hello")
     );
@@ -144,54 +122,23 @@ async fn lifecycle_renews_job_while_step_runs() -> Result<()> {
 }
 
 #[tokio::test]
-async fn lifecycle_reports_unsupported_job_as_failed_completion() -> Result<()> {
-    let mock =
-        MockGithub::start(fixture_job("unsupported-uses", None)?, Behavior::default()).await?;
+async fn lifecycle_renews_job_before_the_first_interval_passes() -> Result<()> {
+    let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
 
-    let outcome = run(&mock, Duration::from_millis(200)).await?;
+    run(&mock, Duration::from_secs(60)).await?;
 
-    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Failed));
-    assert_eq!(mock.complete_request()?["conclusion"], "failed");
-    let job_log = mock.requests_to("PUT", JOB_LOG_BLOB)?;
-    assert_eq!(job_log.len(), 1);
-    assert!(
-        job_log[0]
-            .text()
-            .contains("unsupported: uses actions/foo@v1")
+    let requests = mock.server.requests()?;
+    let complete_at = requests
+        .iter()
+        .position(|request| request.path == "/run/completejob")
+        .context("complete request")?;
+    let renewals = requests[..complete_at]
+        .iter()
+        .filter(|request| request.path == "/run/renewjob")
+        .count();
+    assert_eq!(
+        renewals, 1,
+        "one renew happens at once, before the interval"
     );
-    Ok(())
-}
-
-#[tokio::test]
-async fn lifecycle_cancel_message_cancels_running_step() -> Result<()> {
-    let behavior = Behavior {
-        cancel_after: Some(Duration::from_millis(300)),
-        ..Behavior::default()
-    };
-    let mock = MockGithub::start(fixture_job("cancel", None)?, behavior).await?;
-    let started = Instant::now();
-
-    let outcome = run(&mock, Duration::from_secs(60)).await?;
-
-    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
-    assert_eq!(mock.complete_request()?["conclusion"], "canceled");
-    assert!(started.elapsed() < Duration::from_secs(15));
-    Ok(())
-}
-
-#[tokio::test]
-async fn lifecycle_renew_404_cancels_job() -> Result<()> {
-    let behavior = Behavior {
-        renew: Renew::JobGone,
-        ..Behavior::default()
-    };
-    let mock = MockGithub::start(fixture_job("cancel", None)?, behavior).await?;
-    let started = Instant::now();
-
-    let outcome = run(&mock, Duration::from_millis(200)).await?;
-
-    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
-    assert_eq!(mock.complete_request()?["conclusion"], "canceled");
-    assert!(started.elapsed() < Duration::from_secs(15));
     Ok(())
 }
