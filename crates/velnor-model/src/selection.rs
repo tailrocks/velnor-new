@@ -117,6 +117,7 @@ pub enum SkipReason {
     NoFencedDocs,
     NoDocs,
     PostMergeOnly,
+    NoSelectedDocumented,
 }
 
 impl fmt::Display for SkipReason {
@@ -130,6 +131,7 @@ impl fmt::Display for SkipReason {
             Self::PostMergeOnly => {
                 "docs = \"post_merge\" in .velnor/rust-ci.toml runs it only after the merge"
             }
+            Self::NoSelectedDocumented => "no selected package has documented targets",
         })
     }
 }

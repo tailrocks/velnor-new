@@ -19,7 +19,7 @@ pub use crate::config_keys::KEYS;
 pub use crate::credentials::reject_release_credential_hooks;
 pub use crate::detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use crate::doc_steps::{member_sources, optional_steps, root_sources};
-pub use crate::docs_post_merge::defer_post_merge_docs;
+pub use crate::docs_post_merge::{defer_post_merge_docs, defer_unselected_docs};
 pub use crate::embedded::{is_plain_source, is_rust_source};
 pub use crate::error::{DetectError, Reason};
 pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};

@@ -88,6 +88,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "default_ignores", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.88 via 76a0485485
     gate(RustCi, "docs", (0, 1, 88)),
+    gate_value(RustCi, "docs", "selected", (0, 1, 117)),
     gate(RustCi, "exclude", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.109 via 579150def8
     gate(RustCi, "external_workflows", (0, 1, 109)),

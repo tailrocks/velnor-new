@@ -4,13 +4,15 @@
 use crate::facts::{TestResult, path};
 use crate::job_shape::with_targets;
 use crate::pipeline::{pin_helper, view, workflow};
-use crate::select::facts;
+use crate::select::{all, changed, facts, some};
 use velnor_gen::expected_with_notes;
 use velnor_model::{
-    CargoCommand, DocsRun, EventKind, OptionalSteps, PushAfterMergeGroup, RustCiConfig, SkipReason,
-    StepKind, StepNeed, TargetKind, When,
+    AllTrigger, CargoCommand, DocsRun, EventKind, OptionalSteps, PushAfterMergeGroup, RepoFacts,
+    RustCiConfig, RustSelection, SkipReason, StepKind, StepNeed, TargetKind, When,
 };
-use velnor_rust::{defer_post_merge_docs, plan};
+use velnor_rust::{
+    CONFIG_PATH, DetectError, Reason, defer_post_merge_docs, defer_unselected_docs, detect, plan,
+};
 
 const POST_MERGE: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 
@@ -248,5 +250,120 @@ fn a_build_phase_setup_still_runs_before_a_pre_merge_check_that_shares_its_job_w
         }
     }
     assert_ne!(checked, 0);
+    Ok(())
+}
+
+const BEFORE_MERGE: [EventKind; 2] = [EventKind::PullRequest, EventKind::MergeGroup];
+const AFTER_MERGE: [EventKind; 3] = [
+    EventKind::Push,
+    EventKind::Schedule,
+    EventKind::WorkflowDispatch,
+];
+
+fn selected_docs_facts() -> RepoFacts {
+    let members = vec![
+        with_targets("lib", &[TargetKind::Lib]),
+        with_targets("fixtures", &[TargetKind::Test, TargetKind::Example]),
+    ];
+    let mut repo = facts(vec![("Cargo.toml", members)]);
+    repo.config.docs_run = DocsRun::Selected;
+    repo
+}
+
+fn docs_after_deferring(
+    repo: &RepoFacts,
+    event: EventKind,
+    selection: &RustSelection,
+) -> Result<StepNeed, Box<dyn std::error::Error>> {
+    let root = repo.rust_roots.first().ok_or("no root")?.manifest.clone();
+    let run = OptionalSteps {
+        doctests: StepNeed::Skip(SkipReason::NoFencedDocs),
+        doctests_known: false,
+        docs: StepNeed::Run,
+    };
+    let steps = defer_unselected_docs(repo, event, &root, selection, run);
+    assert_eq!(steps.doctests, run.doctests, "{event:?}");
+    Ok(steps.docs)
+}
+
+#[test]
+fn selected_docs_skip_on_a_pull_request_that_selects_no_documented_package() -> TestResult {
+    let repo = selected_docs_facts();
+    let selection = some(&[("fixtures", changed("fixtures/tests/a.rs"))]);
+    for event in BEFORE_MERGE {
+        assert_eq!(
+            docs_after_deferring(&repo, event, &selection)?,
+            StepNeed::Skip(SkipReason::NoSelectedDocumented),
+            "{event:?}"
+        );
+    }
+    assert_eq!(
+        SkipReason::NoSelectedDocumented.to_string(),
+        "no selected package has documented targets"
+    );
+    Ok(())
+}
+
+#[test]
+fn selected_docs_run_on_a_pull_request_that_selects_a_documented_package() -> TestResult {
+    let repo = selected_docs_facts();
+    let selections = [
+        some(&[("lib", changed("lib/src/lib.rs"))]),
+        some(&[
+            ("fixtures", changed("fixtures/tests/a.rs")),
+            ("lib", changed("lib/src/lib.rs")),
+        ]),
+        all(AllTrigger::WorkspaceManifest),
+    ];
+    for event in BEFORE_MERGE {
+        for selection in &selections {
+            assert_eq!(
+                docs_after_deferring(&repo, event, selection)?,
+                StepNeed::Run,
+                "{event:?} {selection:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn selected_docs_always_run_on_push() -> TestResult {
+    let repo = selected_docs_facts();
+    let selection = some(&[("fixtures", changed("fixtures/tests/a.rs"))]);
+    for event in AFTER_MERGE {
+        assert_eq!(
+            docs_after_deferring(&repo, event, &selection)?,
+            StepNeed::Run,
+            "{event:?}"
+        );
+    }
+    let mut always = selected_docs_facts();
+    always.config.docs_run = DocsRun::Always;
+    for event in BEFORE_MERGE {
+        assert_eq!(
+            docs_after_deferring(&always, event, &selection)?,
+            StepNeed::Run,
+            "{event:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_unknown_docs_value_is_refused() -> TestResult {
+    for (key, value) in [("docs", "sometimes"), ("check_alone", "selected")] {
+        let config = format!("{key} = \"{value}\"\n");
+        let repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        match detect(&repo) {
+            Err(DetectError::Invalid {
+                path,
+                reason: Reason::InvalidValue { key: refused, .. },
+            }) => assert_eq!((path, refused), (CONFIG_PATH, key), "{key} = {value}"),
+            other => return Err(format!("{key} = {value}: {other:?}").into()),
+        }
+    }
+    let repo = view(&["Cargo.toml"], Some(b"docs = \"selected\"\n"))?;
+    assert_eq!(detect(&repo)?.config.docs_run, DocsRun::Selected);
     Ok(())
 }

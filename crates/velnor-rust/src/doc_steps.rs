@@ -190,7 +190,7 @@ pub fn optional_steps(
     }
 }
 
-fn documented(kind: TargetKind) -> bool {
+pub(crate) fn documented(kind: TargetKind) -> bool {
     matches!(
         kind,
         TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin

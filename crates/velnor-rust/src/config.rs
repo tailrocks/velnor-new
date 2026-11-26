@@ -9,7 +9,7 @@ use velnor_model::{
     RustCiConfig, SpeedBudget, TargetName,
 };
 
-use crate::config_events::{docs_run, on_main};
+use crate::config_events::{alone_run, docs_run, on_main};
 use crate::config_external;
 use crate::config_glob::unsupported_glob;
 use crate::config_keys::KEYS;
@@ -170,7 +170,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         hosted_runners: runners.hosted,
         trusted_runners: runners.trusted,
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
-        check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
+        check_alone_run: alone_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         public_sources: crate::config_public::optional(raw.public_sources).map_err(invalid)?,
         private_sources,
         release_assets,

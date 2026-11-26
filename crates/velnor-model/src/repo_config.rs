@@ -307,6 +307,7 @@ impl From<bool> for CacheDebug {
 pub enum DocsRun {
     Always,
     PostMerge,
+    Selected,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

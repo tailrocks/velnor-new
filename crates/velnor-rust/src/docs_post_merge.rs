@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::doc_steps::documented;
 use velnor_model::{
-    CargoCommand, DocsRun, EventKind, Job, OptionalSteps, RepoFacts, RustCiConfig, SkipReason,
-    StepKind, StepNeed, When,
+    CargoCommand, DocsRun, EventKind, Job, OptionalSteps, RepoFacts, RepoPath, RustCiConfig,
+    RustSelection, SkipReason, StepKind, StepNeed, When,
 };
 
 pub(crate) fn runs_after_merge(facts: &RepoFacts, kind: &StepKind) -> bool {
@@ -58,5 +59,43 @@ pub fn defer_post_merge_docs(
         }
     } else {
         steps
+    }
+}
+
+#[must_use]
+pub fn defer_unselected_docs(
+    facts: &RepoFacts,
+    event: EventKind,
+    root: &RepoPath,
+    selection: &RustSelection,
+    steps: OptionalSteps,
+) -> OptionalSteps {
+    let before_merge = matches!(event, EventKind::PullRequest | EventKind::MergeGroup);
+    if facts.config.docs_run != DocsRun::Selected || !before_merge || steps.docs != StepNeed::Run {
+        return steps;
+    }
+    let RustSelection::Some(selected) = selection else {
+        return steps;
+    };
+    let reaches_documented = facts
+        .rust_roots
+        .iter()
+        .filter(|candidate| &candidate.manifest == root)
+        .flat_map(|candidate| &candidate.members)
+        .filter(|member| selected.contains_key(&member.name))
+        .any(|member| {
+            member
+                .targets
+                .iter()
+                .flat_map(|target| &target.kinds)
+                .any(|kind| documented(*kind))
+        });
+    if reaches_documented {
+        steps
+    } else {
+        OptionalSteps {
+            docs: StepNeed::Skip(SkipReason::NoSelectedDocumented),
+            ..steps
+        }
     }
 }

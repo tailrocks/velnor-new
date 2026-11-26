@@ -4,10 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, GateNeed, JobId, OptionalSteps, PackageName, PathGlob, RepoPath, RootSlug,
-    RustSelection, StepNeed, Unread, Weakening, WorkspaceGroup, group_output_name,
+    AllTrigger, EventKind, GateNeed, JobId, OptionalSteps, PackageName, PathGlob, RepoFacts,
+    RepoPath, RootSlug, RustSelection, StepNeed, Unread, Weakening, WorkspaceGroup,
+    group_output_name,
 };
-use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
+use velnor_rust::{
+    CONFIG_PATH, GroupPlan, PolicyRuns, defer_post_merge_docs, defer_unselected_docs,
+};
 
 use crate::error::CiError;
 use crate::escape::{escape, inert};
@@ -15,6 +18,25 @@ use crate::escape::{escape, inert};
 const WORKSPACE: &str = "--workspace";
 
 pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
+
+#[must_use]
+pub fn deferred_docs(
+    facts: &RepoFacts,
+    kind: EventKind,
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    steps: Steps,
+) -> Steps {
+    steps
+        .into_iter()
+        .map(|(root, steps)| {
+            let steps = defer_post_merge_docs(&facts.config, kind, steps);
+            let steps = selections.get(&root).map_or(steps, |selection| {
+                defer_unselected_docs(facts, kind, &root, selection, steps)
+            });
+            (root, steps)
+        })
+        .collect()
+}
 
 pub fn outputs(
     selections: &BTreeMap<RepoPath, RustSelection>,

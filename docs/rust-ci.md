@@ -121,7 +121,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `pr_ci` | `"always"` | `always` or `label` |
 | `skip_draft_pull_requests` | `false` | draft pull requests run nothing |
 | `ci` | none | table; `skip_push_after_merge_group = true` skips checks and archived test jobs the merge queue already ran (needs `velnor-ci` 0.1.103) |
-| `docs` | `"always"` | `post_merge` runs `cargo doc` only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
+| `docs` | `"always"` | `post_merge` runs `cargo doc` only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run; `selected` runs it on a pull request or a merge queue run only when the plan selects a package with a lib, proc-macro or bin target, and on every `push`, `schedule` or `workflow_dispatch` run (needs `velnor-ci` 0.1.117 or later) |
 | `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |
 | `inputs`, `non_inputs`, `exclude` | none | map files to packages, map files to nothing, or leave Cargo manifests out |

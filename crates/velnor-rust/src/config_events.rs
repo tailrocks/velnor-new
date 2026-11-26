@@ -38,6 +38,13 @@ pub(crate) fn full_run(value: String) -> Result<FullRun, Reason> {
 
 pub(crate) fn docs_run(key: &'static str, configured: Option<&str>) -> Result<DocsRun, Reason> {
     match configured {
+        Some("selected") => Ok(DocsRun::Selected),
+        other => alone_run(key, other),
+    }
+}
+
+pub(crate) fn alone_run(key: &'static str, configured: Option<&str>) -> Result<DocsRun, Reason> {
+    match configured {
         None | Some("always") => Ok(DocsRun::Always),
         Some("post_merge") => Ok(DocsRun::PostMerge),
         Some(other) => Err(Reason::InvalidValue {
