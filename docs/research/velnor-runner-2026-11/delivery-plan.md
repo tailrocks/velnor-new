@@ -852,5 +852,6 @@ open duplicates (R12).
 - An unanswered owner question without a runnable default, and every owner step (the freeze, W6's two ruleset
   changes, the identities of D7, labels the agents cannot create, N08's goals text), is an `[OWNER]` issue with the
   label `owner-action`. The items that depend on it are blocked by it natively, and it closes only with the answer or
-  the read-back posted.
+  the read-back posted. When the answer keeps a default that blocks an item, that item stays blocked: its blocker stays
+  open until an answer under which its done condition can be met.
 - Dated measurements go in issues and PR descriptions; the evergreen design stays in `docs/` (Q10).

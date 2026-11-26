@@ -358,7 +358,7 @@ covers only the arms that ran.
 
 ## 11. What the owner decides
 
-The plan runs on a default for each question until you answer. The full sheet is
+The plan runs on a question's default until you answer, unless that default blocks an item: then the item waits for an answer under which it can be done. The full sheet is
 [owner-questions.md](owner-questions.md).
 
 | Id | Question | What it blocks |

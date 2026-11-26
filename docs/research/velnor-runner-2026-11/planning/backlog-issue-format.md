@@ -22,7 +22,8 @@ manager writes the files of a phase before that phase's issues are created; the 
 - **Owner gates block natively.** For each id in `gate` that has no runnable default for the item, and for each owner
   action, the script creates one `[OWNER]` issue and makes every such item blocked by it. The ready query then never
   returns a gated item. The `[OWNER]` issue closes only with the owner's answer, or the read-back of the action, posted
-  on it. A default is runnable for an item when the item's done condition can be met under that default, at most with
+  on it. When the answer keeps a default that blocks an item, that item stays blocked: its blocker stays open until an
+  answer under which its done condition can be met. A default is runnable for an item when the item's done condition can be met under that default, at most with
   a narrower claim that the item states. A runnable default creates no blocker: the item runs on the default. A
   default of `Parked`, `None`, or one that withholds what the done condition needs blocks exactly like a missing
   default. The table below decides every gate in the owner sheet for every item that names it in `gate`.

@@ -5,7 +5,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 **How to read it.**
 
 - **Needed by** names the delivery-plan item that waits for the answer (W0–W10 and N26 are phase 0).
-- The plan runs on each **default** until you answer. Where it says "no default", or where a default says it blocks an item (`Parked` blocks always), the work waits: the question becomes an `[OWNER]` issue that blocks those items.
+- The plan runs on each **default** until you answer. Where it says "no default", or where a default says it blocks an item (`Parked` blocks always), the work waits: the question becomes an `[OWNER]` issue that blocks those items. An answer that keeps a blocking default leaves those items blocked until an answer under which their done condition can be met.
 - Numbers keep their labels: (measured), (estimate) and (target). A measured number names its run.
 - Q ids are new. D ids are older questions that still stand, reworded where the ground moved.
 
