@@ -200,18 +200,20 @@ fn path_additions(computed: &str, current: &str, binary_dir: &str) -> Vec<String
         .collect()
 }
 
-async fn managed_paths(ctx: &mut StepContext<'_>, install: &Install) -> Option<Vec<String>> {
+async fn managed_paths(
+    ctx: &mut StepContext<'_>,
+    install: &Install,
+) -> Result<Option<Vec<String>>, ExecError> {
     let process_env = install.process_env(ctx);
-    let output = mise_capture(ctx, install, &["env", "--paths"], &process_env)
-        .await
-        .ok()?;
-    Some(
-        output
-            .lines()
-            .filter(|line| !line.is_empty())
-            .map(str::to_owned)
-            .collect(),
-    )
+    match mise_capture(ctx, install, &["env", "--paths"], &process_env).await {
+        Err(ExecError::Cancelled) => Err(ExecError::Cancelled),
+        output => Ok(output.ok().map(|text| {
+            text.lines()
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })),
+    }
 }
 
 struct Install {
@@ -290,7 +292,7 @@ async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), Exec
         ctx.add_mask(value);
     }
     let computed = mise_json(ctx, install, &["env", "--json"]).await?;
-    let managed = managed_paths(ctx, install).await;
+    let managed = managed_paths(ctx, install).await?;
     let github_path = ctx.env.get("GITHUB_PATH").cloned().unwrap_or_default();
     let github_env = ctx.env.get("GITHUB_ENV").cloned().unwrap_or_default();
     let mut paths = vec![install.dir.clone(), format!("{}/shims", install.data)];

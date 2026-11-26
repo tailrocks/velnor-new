@@ -24,6 +24,7 @@ case "$1" in
   env)
     case "$2" in
       --paths)
+        [ -z "$MISE_DOUBLE_HANG_PATHS" ] || { : > "$MISE_DOUBLE_HANG_PATHS"; exec sleep 30; }
         [ "${MISE_DOUBLE_NO_PATHS:-0}" = 0 ] || exit 2
         printf '%s\n' "$(dirname "$0")/tool-bin" ${MISE_DOUBLE_EXTRA_DIR:+"$MISE_DOUBLE_EXTRA_DIR"} ${MISE_DOUBLE_PROMOTE:+"$MISE_DOUBLE_PROMOTE"}
         ;;

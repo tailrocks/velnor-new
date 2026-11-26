@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use std::process::Command;
+use std::time::{Duration, Instant};
+
+use anyhow::{Context, Result, bail};
 
 use crate::mise_world::{
     SHA_PLACEHOLDER, VERSION, World, assert_failed, job_fixture, real_action, sha256_hex,
@@ -187,6 +190,36 @@ fn mise_action_publishes_cache_hit_false_when_caching_is_disabled() -> Result<()
     )?;
     let ran = world.run(&job, &[])?;
     assert!(ran.has_line("hit=false"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn mise_action_cancelled_during_the_path_probe_cancels_the_job() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let hung = world.temp().join("paths-hung");
+    let hung_text = hung.to_string_lossy().into_owned();
+    let job = world.only_first_step(&job_fixture("mise_action_ok"))?;
+    let runner = world.start(&job, &[("MISE_DOUBLE_HANG_PATHS", &hung_text)])?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !hung.exists() {
+        if Instant::now() > deadline {
+            bail!("the path probe never started");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let signalled = Command::new("kill")
+        .args(["-TERM", &runner.id().to_string()])
+        .status()
+        .context("run kill")?;
+    assert!(signalled.success());
+    let output = runner
+        .wait_with_output()
+        .context("wait for velnor-runner")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("job succeeded"), "{stdout}");
+    assert!(stdout.contains("cancelled"), "{stdout}");
     Ok(())
 }
 

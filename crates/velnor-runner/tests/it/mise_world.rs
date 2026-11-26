@@ -3,7 +3,7 @@
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
@@ -229,6 +229,19 @@ impl World {
         Ok(patched)
     }
 
+    pub(crate) fn only_first_step(&self, job: &Path) -> Result<PathBuf> {
+        let mut message: Value =
+            serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
+                .context("parse the job fixture")?;
+        message["Steps"]
+            .as_array_mut()
+            .context("the job steps")?
+            .truncate(1);
+        let patched = self.root.join("first-step.json");
+        std::fs::write(&patched, serde_json::to_vec(&message)?).context("write the job")?;
+        Ok(patched)
+    }
+
     pub(crate) fn with_final_script(&self, job: &Path, script: &str) -> Result<PathBuf> {
         let mut message: Value =
             serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
@@ -280,9 +293,8 @@ impl World {
         self.with_leading_script(job, &script)
     }
 
-    pub(crate) fn run(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Ran> {
-        let started = Instant::now();
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+    pub(crate) fn start(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
+        Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
             .arg("exec")
             .arg("--job")
             .arg(job)
@@ -295,7 +307,17 @@ impl World {
             .env_remove("MISE_TRUSTED_CONFIG_PATHS")
             .env_remove("MISE_YES")
             .envs(extra_env.iter().copied())
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("start velnor-runner exec")
+    }
+
+    pub(crate) fn run(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Ran> {
+        let started = Instant::now();
+        let output = self
+            .start(job, extra_env)?
+            .wait_with_output()
             .context("run velnor-runner exec")?;
         Ok(Ran {
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
