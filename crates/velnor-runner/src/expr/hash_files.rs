@@ -14,7 +14,11 @@ use std::path::Path;
 
 const READ_BUFFER_BYTES: usize = 64 * 1024;
 
-pub(crate) fn hash_files(workspace: &Path, args: &[Value]) -> Result<String, ExprError> {
+pub(crate) fn hash_files(
+    workspace: &Path,
+    home: Option<&Path>,
+    args: &[Value],
+) -> Result<String, ExprError> {
     let arguments: Vec<String> = args.iter().map(Value::convert_to_string).collect();
     if let Some(option) = arguments.first().filter(|first| first.starts_with("--")) {
         return Err(ExprError::evaluation(format!(
@@ -34,7 +38,9 @@ pub(crate) fn hash_files(workspace: &Path, args: &[Value]) -> Result<String, Exp
         .flat_map(|argument| argument.split('\n'))
         .map(trim_line)
         .filter(|line| !line.is_empty() && !line.starts_with('#'));
-    let patterns = PatternSet::new(&root, lines).map_err(|error| failure(&error))?;
+    let home = home.map(|home| fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf()));
+    let patterns =
+        PatternSet::new(&root, home.as_deref(), lines).map_err(|error| failure(&error))?;
 
     let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
     let mut aggregate = Context::new(&SHA256);

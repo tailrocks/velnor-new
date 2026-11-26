@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
-use super::pattern::{GlobError, Pattern, Seg, align};
+use super::pattern::{GlobError, Pattern, Seg, align, components_of};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 struct Entry {
     negate: bool,
@@ -19,33 +19,21 @@ pub(crate) struct PatternSet {
     entries: Vec<Entry>,
 }
 
-pub(crate) fn components_of(path: &Path) -> Vec<String> {
-    path.components()
-        .filter_map(|component| match component {
-            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
 impl PatternSet {
     pub(crate) fn new<'a>(
         workspace: &Path,
+        home: Option<&Path>,
         lines: impl Iterator<Item = &'a str>,
     ) -> Result<Self, GlobError> {
         let workspace = components_of(workspace);
         let mut entries = Vec::new();
         for line in lines {
-            let Some(pattern) = Pattern::parse(line, &workspace)? else {
-                continue;
-            };
+            let pattern = Pattern::parse(line, &workspace, home)?;
             if pattern.trailing || !matches!(pattern.segs.last(), Some(Seg::GlobStar)) {
-                let mut segs = pattern.segs.clone();
-                segs.push(Seg::GlobStar);
                 entries.push(Entry {
                     negate: pattern.negate,
                     files: true,
-                    segs,
+                    segs: pattern.implicit_descendants(),
                 });
             }
             entries.push(Entry {
@@ -189,15 +177,21 @@ impl Walk<'_> {
 
     fn start(&self, root: &[String]) -> Result<Option<Visit>, GlobError> {
         let relative = &root[self.patterns.workspace.len()..];
-        let path = relative
-            .iter()
-            .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
-        let Some(real) = skip_missing(fs::canonicalize(&path), &path)? else {
-            return Ok(None);
+        let path = match relative.split_last() {
+            None => self.workspace.to_path_buf(),
+            Some((name, parents)) => {
+                let parent = parents
+                    .iter()
+                    .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
+                let Some(real) = skip_missing(fs::canonicalize(&parent), &parent)? else {
+                    return Ok(None);
+                };
+                if !real.starts_with(self.workspace) {
+                    return Ok(None);
+                }
+                real.join(name)
+            }
         };
-        if !real.starts_with(self.workspace) {
-            return Ok(None);
-        }
         let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
             return Ok(None);
         };
@@ -220,9 +214,8 @@ impl Walk<'_> {
         if !visit.kind.is_symlink() {
             return Ok(None);
         }
-        let Some(real) = skip_missing(fs::canonicalize(&visit.path), &visit.path)? else {
-            return Ok(None);
-        };
+        let real =
+            fs::canonicalize(&visit.path).map_err(|error| GlobError::io(&visit.path, error))?;
         if !real.starts_with(self.workspace) {
             return Ok(None);
         }

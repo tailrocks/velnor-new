@@ -923,3 +923,39 @@ The runner's [hashFiles implementation](https://github.com/actions/runner/blob/3
 prints `result.digest('hex')`, which is lowercase hexadecimal. Cache maintenance
 classifies a tools anchor key only when its lock hash is lowercase, so a runner
 implementation that emitted another casing would leave its anchors unclassified.
+
+## `hashFiles` deviations from the runner
+
+Velnor's expression engine evaluates `hashFiles` itself, mirroring the pinned
+runner v2.338.2 [hashFiles implementation](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js)
+and its [HashFilesFunction](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Runner.Worker/Expressions/HashFilesFunction.cs).
+Pattern handling follows `@actions/glob`: trimming and `#` comment lines
+([index.js:1425](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1425)), implicit `/**`
+descendants that need at least one more segment
+([index.js:1350](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1350) and
+[index.js:2152](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2152)), `~` expanding to
+HOME before the workspace filter
+([index.js:2207](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2207)), and a dangling
+symlink matched by a pattern failing the call, because the runner's
+`statSync` on each match throws
+([index.js:1558](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1558)). Three
+behaviours differ on purpose:
+
+- **Outside-target symlinks are ignored.** The runner only checks that the
+  lexical path starts with the workspace
+  ([index.js:1554](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1554)) and then reads
+  through the link, so a symlinked file or a symlinked parent directory pulls
+  files from outside the workspace into the digest. Velnor resolves the parent
+  chain of each search root and the target of each matched symlink, and drops
+  every path whose real location leaves the canonical workspace. The search
+  root itself is examined with `lstat` and never resolved, as in the runner
+  ([index.js:1362](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1362)).
+- **`--follow-symbolic-links` is rejected.** The runner accepts the option
+  ([HashFilesFunction.cs:52](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Runner.Worker/Expressions/HashFilesFunction.cs#L52))
+  and follows links
+  ([index.js:1446](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1446)). Velnor never
+  follows symlinks and returns the runner's `Invalid glob option` error for it.
+- **Directory entries are visited in name order.** The runner takes the order of
+  `readdir` ([index.js:1405](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1405)),
+  which varies by file system. The digest depends on file order, so Velnor sorts
+  to keep it reproducible.

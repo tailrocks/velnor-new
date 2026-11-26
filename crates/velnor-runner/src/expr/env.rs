@@ -94,6 +94,7 @@ pub enum JobStatus {
 #[derive(Debug, Clone)]
 pub struct ExprEnv {
     pub workspace: PathBuf,
+    pub home: Option<PathBuf>,
     pub status: JobStatus,
     contexts: BTreeMap<RootContext, Value>,
 }
@@ -107,6 +108,7 @@ impl ExprEnv {
             .collect();
         Self {
             workspace,
+            home: std::env::home_dir(),
             status: JobStatus::Success,
             contexts,
         }
