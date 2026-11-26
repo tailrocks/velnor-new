@@ -45,9 +45,7 @@ async fn feed_stream_connects_over_websocket_when_given_an_http_url() -> Result<
         &mut socket,
         "step-1",
         vec!["a".to_owned(), "b".to_owned()],
-        Some(3),
-        None,
-        None,
+        3,
     )
     .await?;
 

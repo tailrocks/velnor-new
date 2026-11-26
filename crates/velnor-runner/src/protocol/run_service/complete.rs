@@ -13,7 +13,7 @@ use super::super::http::github_json_request;
 use super::super::timeline::{TaskResult, TimelineRecordState};
 use super::{REQUEST_TIMEOUT, RunServiceClient, is_run_service_job_not_found};
 
-const MAX_ATTEMPTS: u32 = 6;
+const MAX_ATTEMPTS: u32 = 5;
 const ACTION: &str = "complete run-service job";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +85,6 @@ pub struct RunServiceStepResult {
     pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
-    pub completed_log_lines: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<RunServiceAnnotation>,
 }

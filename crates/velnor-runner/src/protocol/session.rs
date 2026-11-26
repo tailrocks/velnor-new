@@ -17,12 +17,8 @@ pub struct TaskAgentSession {
     pub owner_name: String,
     #[serde(default)]
     pub agent: TaskAgentReference,
-    #[serde(default)]
-    pub use_fips_encryption: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub broker_session: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub encryption_key: Option<TaskAgentSessionKey>,
 }
 
 impl fmt::Debug for TaskAgentSession {
@@ -31,9 +27,7 @@ impl fmt::Debug for TaskAgentSession {
             .field("session_id", &self.session_id)
             .field("owner_name", &self.owner_name)
             .field("agent", &self.agent)
-            .field("use_fips_encryption", &self.use_fips_encryption)
             .field("broker_session", &self.broker_session)
-            .field("encryption_key", &self.encryption_key)
             .finish()
     }
 }
@@ -53,9 +47,7 @@ impl TaskAgentSession {
                 version: RUNNER_VERSION.to_owned(),
                 os_description: std::env::consts::OS.to_owned(),
             },
-            use_fips_encryption: false,
             broker_session: true,
-            encryption_key: None,
         }
     }
 }
@@ -71,21 +63,6 @@ pub struct TaskAgentReference {
     pub os_description: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct TaskAgentSessionKey {
-    pub encrypted: bool,
-    pub value: String,
-}
-
-impl fmt::Debug for TaskAgentSessionKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TaskAgentSessionKey")
-            .field("encrypted", &self.encrypted)
-            .field("value", &"<redacted>")
-            .finish()
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskAgentMessage {
@@ -93,8 +70,6 @@ pub struct TaskAgentMessage {
     pub message_id: i64,
     pub message_type: String,
     pub body: String,
-    #[serde(default, rename = "iv", skip_serializing_if = "Option::is_none")]
-    pub iv_base64: Option<String>,
 }
 
 impl fmt::Debug for TaskAgentMessage {
@@ -103,7 +78,6 @@ impl fmt::Debug for TaskAgentMessage {
             .field("message_id", &self.message_id)
             .field("message_type", &self.message_type)
             .field("body", &"<redacted>")
-            .field("iv_base64", &self.iv_base64)
             .finish()
     }
 }
