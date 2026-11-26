@@ -20,6 +20,7 @@ use crate::secret::Secret;
 
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
+const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 pub struct BrokerPoll {
@@ -120,7 +121,7 @@ impl BrokerClient {
         append_runner_query(&mut url, session_id, status)?;
         let body = json!({ "runnerRequestId": runner_request_id }).to_string();
         let (http_status, text) = self
-            .send(Method::POST, &url, Some(body), SESSION_TIMEOUT)
+            .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
             .await?;
         if !(200..300).contains(&http_status) {
             return Err(github_api_error_categorized(

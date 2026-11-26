@@ -55,5 +55,7 @@ async fn feed_stream_connects_over_websocket_when_given_an_http_url() -> Result<
     assert_eq!(received["count"], 2);
     assert_eq!(received["stepId"], "step-1");
     assert_eq!(received["startLine"], 3);
+    assert_eq!(received["value"], serde_json::json!(["a", "b"]));
+    assert!(received.get("lines").is_none());
     Ok(())
 }

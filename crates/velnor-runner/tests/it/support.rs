@@ -49,6 +49,7 @@ pub(crate) struct Reply {
     status: u16,
     content_type: &'static str,
     body: String,
+    stall: bool,
 }
 
 impl Reply {
@@ -61,6 +62,14 @@ impl Reply {
             status,
             content_type: "text/plain",
             body: body.to_owned(),
+            stall: false,
+        }
+    }
+
+    pub(crate) fn stall() -> Self {
+        Self {
+            stall: true,
+            ..Self::status(200)
         }
     }
 
@@ -69,6 +78,7 @@ impl Reply {
             status,
             content_type: "application/json",
             body: body.to_string(),
+            stall: false,
         }
     }
 }
@@ -189,6 +199,9 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             None => Reply::text(404, "no route"),
         }
     };
+    if reply.stall {
+        std::future::pending::<()>().await;
+    }
     let head = format!(
         "HTTP/1.1 {} Test\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,

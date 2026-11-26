@@ -61,6 +61,41 @@ async fn timeline_update_records_patches_records() -> Result<()> {
 }
 
 #[tokio::test]
+async fn timeline_round_trips_succeeded_with_issues() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = DistributedTaskClient::new(&format!("{}/vss", server.uri()), TOKEN)?;
+    let records_path = format!(
+        "/vss/{SCOPE}/_apis/distributedtask/hubs/Actions/plans/{PLAN}/timelines/{TIMELINE}/records"
+    );
+    let record = TimelineRecord::pending("step-1", TimelineRecordType::Task, "Run echo hello")
+        .completed("2026-11-27T00:00:05Z", TaskResult::SucceededWithIssues);
+    server.respond("PATCH", &records_path, |_| {
+        Reply::json(
+            200,
+            &json!({
+                "count": 1,
+                "value": [{
+                    "id": "step-1",
+                    "type": "Task",
+                    "name": "Run echo hello",
+                    "state": "completed",
+                    "result": "succeededWithIssues"
+                }]
+            }),
+        )
+    })?;
+
+    let updated = client
+        .update_timeline_records(SCOPE, "Actions", PLAN, TIMELINE, &[record])
+        .await?;
+
+    assert_eq!(updated[0].result, Some(TaskResult::SucceededWithIssues));
+    let body = server.only_request("PATCH", &records_path)?.json()?;
+    assert_eq!(body["value"][0]["result"], "succeededWithIssues");
+    Ok(())
+}
+
+#[tokio::test]
 async fn timeline_record_feed_posts_count_beside_lines() -> Result<()> {
     let server = TestServer::start().await?;
     let client = DistributedTaskClient::new(&format!("{}/vss", server.uri()), TOKEN)?;

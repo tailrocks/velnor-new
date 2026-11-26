@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::context_value::ContextValue;
-use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::job_message::{AgentJobRequestMessage, MaskType, template_token_context_value};
 
 const FIXTURE: &str = include_str!("../../fixtures/job-message-wire.json");
 
@@ -110,4 +110,59 @@ fn context_data_reads_non_integer_type_array_and_null_as_null() -> Result<()> {
 #[test]
 fn context_data_rejects_unknown_integer_type() {
     assert!(materialize_one(&json!({"t": 9})).is_err());
+}
+
+#[test]
+fn mask_hints_accept_numeric_and_named_types() -> Result<()> {
+    let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
+    wire["Mask"] = json!([
+        {"Type": 1, "Value": "first"},
+        {"type": 2, "value": "second"},
+        {"Type": "Variable", "Value": "third"},
+        {"Type": "regex", "Value": "fourth"},
+    ]);
+
+    let message = AgentJobRequestMessage::from_value(wire)?;
+
+    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            Some(MaskType::Variable),
+            Some(MaskType::Regex),
+            Some(MaskType::Variable),
+            Some(MaskType::Regex),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn mask_hint_with_unknown_type_is_rejected() -> Result<()> {
+    let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
+    wire["Mask"] = json!([{"Type": 3, "Value": "secret"}]);
+
+    assert!(AgentJobRequestMessage::from_value(wire).is_err());
+    Ok(())
+}
+
+#[test]
+fn insert_expression_reads_its_directive() -> Result<()> {
+    let insert = json!({"type": 4, "directive": "insert"});
+    assert_eq!(
+        template_token_context_value(&insert)?,
+        ContextValue::String("insert".to_owned())
+    );
+
+    let mapping = json!({
+        "type": 2,
+        "map": [{"key": insert, "value": {"type": 0, "lit": "payload"}}]
+    });
+    let expected = ContextValue::object(vec![(
+        "insert".to_owned(),
+        ContextValue::String("payload".to_owned()),
+    )])
+    .context("expected mapping")?;
+    assert_eq!(template_token_context_value(&mapping)?, expected);
+    Ok(())
 }

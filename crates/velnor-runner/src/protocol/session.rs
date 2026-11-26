@@ -19,6 +19,8 @@ pub struct TaskAgentSession {
     pub agent: TaskAgentReference,
     #[serde(default)]
     pub use_fips_encryption: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub broker_session: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encryption_key: Option<TaskAgentSessionKey>,
 }
@@ -30,6 +32,7 @@ impl fmt::Debug for TaskAgentSession {
             .field("owner_name", &self.owner_name)
             .field("agent", &self.agent)
             .field("use_fips_encryption", &self.use_fips_encryption)
+            .field("broker_session", &self.broker_session)
             .field("encryption_key", &self.encryption_key)
             .finish()
     }
@@ -51,6 +54,7 @@ impl TaskAgentSession {
                 os_description: std::env::consts::OS.to_owned(),
             },
             use_fips_encryption: false,
+            broker_session: true,
             encryption_key: None,
         }
     }

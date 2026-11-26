@@ -40,7 +40,8 @@ pub fn template_token_context_value(token: &Value) -> Result<ContextValue> {
         STRING => Ok(text_member(object, "lit")),
         SEQUENCE => sequence(object),
         MAPPING => mapping(object),
-        BASIC_EXPRESSION | INSERT_EXPRESSION => Ok(text_member(object, "expr")),
+        BASIC_EXPRESSION => Ok(text_member(object, "expr")),
+        INSERT_EXPRESSION => Ok(text_member(object, "directive")),
         BOOLEAN => match member(object, "bool") {
             None => Ok(ContextValue::Bool(false)),
             Some(Value::Bool(value)) => Ok(ContextValue::Bool(*value)),

@@ -16,7 +16,7 @@ use super::http::{
     validate_known_service_url,
 };
 use super::results_wire::{
-    Measure, MetadataRequest, MetadataResponse, ScopeRequest, SignedUrlResponse,
+    Acknowledgement, Measure, MetadataRequest, ScopeRequest, SignedUrlResponse,
     SoftSizeLimitExceeded,
 };
 use crate::secret::Secret;
@@ -67,6 +67,14 @@ pub struct TwirpStep {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
     pub conclusion: StepConclusion,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_background: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_control_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_control_step_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parallel_group_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -150,8 +158,8 @@ impl TwirpResultsClient {
         .context("serialize WorkflowStepsUpdate")?;
         let url = format!("{}/{STEPS_UPDATE}", self.results_service_url);
         retrying("WorkflowStepsUpdate", || async {
-            self.twirp_post(&url, &body, "WorkflowStepsUpdate").await?;
-            Ok(())
+            self.twirp_acknowledged(&url, &body, "WorkflowStepsUpdate")
+                .await
         })
         .await
     }
@@ -264,25 +272,28 @@ impl TwirpResultsClient {
                 .filter(|url| !url.is_empty())
                 .with_context(|| format!("{} returned an empty URL", kind.signed_url_method))?;
             put_blob(&blob_url, &content, kind.label).await?;
-            let metadata = self
-                .twirp_post(
-                    &self.receiver_url(kind.metadata_method),
-                    &metadata_body,
-                    kind.metadata_method,
-                )
-                .await?;
-            let metadata: MetadataResponse = serde_json::from_str(&metadata)
-                .with_context(|| format!("parse {}", kind.metadata_method))?;
-            if metadata.ok == Some(false) {
-                bail!("{} returned ok=false", kind.metadata_method);
-            }
-            Ok(())
+            self.twirp_acknowledged(
+                &self.receiver_url(kind.metadata_method),
+                &metadata_body,
+                kind.metadata_method,
+            )
+            .await
         })
         .await
     }
 
     fn receiver_url(&self, method: &str) -> String {
         format!("{}/{RECEIVER}/{method}", self.results_service_url)
+    }
+
+    async fn twirp_acknowledged(&self, url: &str, body: &str, method: &str) -> Result<()> {
+        let text = self.twirp_post(url, body, method).await?;
+        let acknowledgement: Acknowledgement =
+            serde_json::from_str(&text).with_context(|| format!("parse {method}"))?;
+        if !acknowledgement.ok {
+            bail!("{method} returned ok=false");
+        }
+        Ok(())
     }
 
     async fn twirp_post(&self, url: &str, body: &str, method: &str) -> Result<String> {
