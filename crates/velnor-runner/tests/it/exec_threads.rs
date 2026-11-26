@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -77,24 +77,45 @@ fn quoted_custom_shell_arguments_stay_one_argument() -> Result<()> {
 }
 
 #[test]
-fn github_action_and_the_event_file_are_fresh_for_each_step() -> Result<()> {
+fn github_action_is_the_step_name_and_the_event_file_is_fresh_for_each_step() -> Result<()> {
     let scratch = Scratch::new()?;
-    let mut message = job(vec![
-        run(
-            "first",
-            "echo \"action=$GITHUB_ACTION\"\necho mutated > \"$GITHUB_EVENT_PATH\"",
-        ),
-        step(
-            "second",
-            expression(
-                "format('echo \"action={0} env=$GITHUB_ACTION\"; cat \"$GITHUB_EVENT_PATH\"', github.action)",
+    let named = |step: Value, name: &str| {
+        with(
+            with(
+                with(step, "Name", json!(name)),
+                "ContextName",
+                json!("ctx-id"),
             ),
+            "DisplayNameToken",
+            literal("display-text"),
+        )
+    };
+    let mut message = job(vec![
+        named(
+            run(
+                "first",
+                "echo \"action=$GITHUB_ACTION\"\necho mutated > \"$GITHUB_EVENT_PATH\"",
+            ),
+            "first-name",
+        ),
+        named(
+            step(
+                "second",
+                expression(
+                    "format('echo \"action={0} env=$GITHUB_ACTION\"; cat \"$GITHUB_EVENT_PATH\"', github.action)",
+                ),
+            ),
+            "second-name",
         ),
     ]);
     message["ContextData"] = json!({"github": {"t": 2, "d": [{"k": "event", "v": {"t": 2, "d": [{"k": "x", "v": "1"}]}}]}});
     let ran = run_message(&scratch, &message)?;
-    assert!(ran.has_line("action=first"), "{}", ran.stdout);
-    assert!(ran.has_line("action=second env=second"), "{}", ran.stdout);
+    assert!(ran.has_line("action=first-name"), "{}", ran.stdout);
+    assert!(
+        ran.has_line("action=second-name env=second-name"),
+        "{}",
+        ran.stdout
+    );
     assert!(ran.has_line("{\"x\":\"1\"}"), "{}", ran.stdout);
     Ok(())
 }
@@ -120,6 +141,35 @@ async fn continue_on_error_sees_the_step_environment() -> Result<()> {
     assert_eq!(run.result, JobResult::Succeeded);
     assert_eq!(run.steps[0].outcome, StepResult::Failed);
     assert_eq!(run.steps[0].conclusion, StepResult::Succeeded);
+    Ok(())
+}
+
+#[tokio::test]
+async fn continue_on_error_sees_what_the_step_wrote_to_github_env() -> Result<()> {
+    let allowing = |context: &str| {
+        with(
+            run(context, "echo ALLOW=1 >> \"$GITHUB_ENV\"\nexit 1"),
+            "ContinueOnError",
+            expression("env.ALLOW == '1'"),
+        )
+    };
+    let overridden = with(
+        allowing("b"),
+        "Environment",
+        mapping(&[("ALLOW", literal("0"))]),
+    );
+    let (run, _) = execute(
+        &job(vec![allowing("a"), overridden]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    assert_eq!(run.result, JobResult::Succeeded);
+    for record in &run.steps {
+        assert_eq!(record.outcome, StepResult::Failed, "{}", record.name);
+        assert_eq!(record.conclusion, StepResult::Succeeded, "{}", record.name);
+    }
     Ok(())
 }
 
@@ -227,26 +277,61 @@ fn oidc_request_variables_reach_script_steps_and_stay_masked() -> Result<()> {
 }
 
 #[test]
-fn an_unbounded_step_summary_is_dropped_without_reading_it_whole() -> Result<()> {
+fn oidc_request_variables_are_absent_without_a_generate_id_token_url() -> Result<()> {
     let scratch = Scratch::new()?;
-    let message = job(vec![run("a", "ln -sf /dev/zero \"$GITHUB_STEP_SUMMARY\"")]);
-    let path = write_job(&scratch, &message)?;
-    let mut child = bounded(&scratch, &path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("start velnor-runner exec")?;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while child.try_wait()?.is_none() && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let finished_in_time = child.try_wait()?.is_some();
-    if !finished_in_time {
-        child.kill()?;
-    }
-    let output = child.wait_with_output()?;
-    assert!(finished_in_time, "the runner kept reading the summary");
-    assert_eq!(output.status.code(), Some(0));
+    let mut message = job(vec![run(
+        "a",
+        "echo \"url=${ACTIONS_ID_TOKEN_REQUEST_URL-unset}\"\necho \"token=${ACTIONS_ID_TOKEN_REQUEST_TOKEN-unset}\"",
+    )]);
+    message["Resources"] = json!({"Endpoints": [{
+        "Name": "SystemVssConnection",
+        "Url": "https://pipelines.example/",
+        "Data": {},
+        "Authorization": {"Scheme": "OAuth", "Parameters": {"AccessToken": "tok-oidc-9"}}
+    }]});
+    let ran = run_message(&scratch, &message)?;
+    assert!(ran.has_line("url=unset"), "{}", ran.stdout);
+    assert!(ran.has_line("token=unset"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_summary_that_reports_zero_length_is_skipped_without_an_annotation() -> Result<()> {
+    let (run, _) = execute(
+        &job(vec![run("a", "ln -sf /dev/zero \"$GITHUB_STEP_SUMMARY\"")]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    assert_eq!(run.result, JobResult::Succeeded);
+    assert!(run.annotations.is_empty(), "{:?}", run.annotations);
+    assert!(run.steps[0].summary_path.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_summary_over_the_limit_is_dropped_with_an_error_annotation() -> Result<()> {
+    let (run, _) = execute(
+        &job(vec![run(
+            "a",
+            "head -c 1100000 /dev/zero | tr '\\0' a > \"$GITHUB_STEP_SUMMARY\"",
+        )]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    let messages: Vec<&str> = run
+        .annotations
+        .iter()
+        .map(|annotation| annotation.message.as_str())
+        .collect();
+    assert_eq!(
+        messages,
+        ["Step summary exceeds the 1048576 byte limit and was dropped."]
+    );
+    assert!(run.steps[0].summary_path.is_none());
     Ok(())
 }
 

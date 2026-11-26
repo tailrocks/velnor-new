@@ -143,6 +143,50 @@ fn base64_shifted_forms_of_a_secret_are_masked() -> Result<()> {
 }
 
 #[test]
+fn every_encoder_form_of_a_secret_is_masked() -> Result<()> {
+    let secrets = [
+        ("BACKSLASH", "a\\b\"c-Value-9z"),
+        ("QUOTED", "\"quoted-secret-9\""),
+        ("AMPERSAND", "part1&+part2&part3"),
+    ];
+    let forms = [
+        "a\\\\b\\\"c-Value-9z",
+        "a\\b\\\"c-Value-9z",
+        "quoted-secret-9",
+        "part1&+",
+        "art2&part3",
+    ];
+    let script = forms
+        .iter()
+        .map(|form| format!("printf '%s\\n' '{form}'"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let scratch = Scratch::new()?;
+    let mut message = job(vec![run("s", &script)]);
+    let variables: serde_json::Map<String, serde_json::Value> = secrets
+        .iter()
+        .map(|(name, value)| {
+            (
+                (*name).to_owned(),
+                json!({"Value": value, "IsSecret": true}),
+            )
+        })
+        .collect();
+    message["Variables"] = serde_json::Value::Object(variables);
+    let ran = run_message(&scratch, &message)?;
+    for form in forms {
+        assert!(!ran.stdout.contains(form), "{form} leaked: {}", ran.stdout);
+    }
+    assert_eq!(
+        ran.stdout.lines().filter(|line| *line == "***").count(),
+        forms.len(),
+        "{}",
+        ran.stdout
+    );
+    Ok(())
+}
+
+#[test]
 fn regex_mask_hints_apply_as_regexes_and_other_hints_as_values() -> Result<()> {
     let scratch = Scratch::new()?;
     let mut message = job(vec![run(
