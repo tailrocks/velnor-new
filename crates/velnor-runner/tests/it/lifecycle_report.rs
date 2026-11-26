@@ -269,3 +269,51 @@ async fn lifecycle_sends_the_later_step_updates_in_order_when_the_first_one_neve
     );
     Ok(())
 }
+
+fn with_environment(mut job: Value, url: &Value) -> Value {
+    job["ActionsEnvironment"] = serde_json::json!({"Name": "production", "Url": url});
+    job
+}
+
+#[tokio::test]
+async fn lifecycle_sends_the_evaluated_environment_url_with_the_completion() -> Result<()> {
+    let url = serde_json::json!({
+        "type": 3,
+        "expr": "format('https://deploy.example/{0}', 'app')"
+    });
+    let job = with_environment(fixture_job("hello", None)?, &url);
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let complete = mock.complete_request()?;
+    assert_eq!(complete["environmentUrl"], "https://deploy.example/app");
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_leaves_out_an_environment_url_that_reveals_a_secret() -> Result<()> {
+    let url = serde_json::json!({
+        "type": 3,
+        "expr": "format('https://deploy.example/{0}', secrets.MY_SECRET)"
+    });
+    let mut job = with_environment(fixture_job("hello", None)?, &url);
+    job["Variables"] =
+        serde_json::json!({"MY_SECRET": {"Value": "s3cr3t-value", "IsSecret": true}});
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let complete = mock.complete_request()?;
+    assert!(complete.get("environmentUrl").is_none_or(Value::is_null));
+    let notes = array(&complete, "annotations")?;
+    assert!(
+        notes.iter().any(|note| note["message"]
+            .as_str()
+            .is_some_and(|text| text.contains("Skip setting environment url"))),
+        "{notes:?}"
+    );
+    Ok(())
+}

@@ -61,7 +61,7 @@ pub struct RunArgs {
         value_name = "VALUE",
         help = "The encoded_jit_config string, or @FILE to read it from a file"
     )]
-    pub jit: String,
+    pub jit: Secret<String>,
     #[arg(
         long,
         value_name = "DIR",
@@ -218,7 +218,7 @@ fn jit_value(raw: &str) -> Result<String> {
 }
 
 async fn run_command(args: &RunArgs) -> Result<ExitCode> {
-    let jit = Secret::new(jit_value(&args.jit)?);
+    let jit = Secret::new(jit_value(args.jit.expose())?);
     let os = RunnerOs::detect()?;
     let shutdown = cancel_on_signal()?;
     let options = RunJitOptions {

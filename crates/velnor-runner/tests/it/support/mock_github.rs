@@ -62,6 +62,7 @@ pub(crate) enum Cancel {
     After(Duration),
     AfterACancelOfAnotherJob(Duration),
     HostedShutdownAfter(Duration),
+    BusyPollFails(u16),
 }
 
 #[derive(Clone, Copy, Debug, Default)]

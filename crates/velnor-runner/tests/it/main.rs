@@ -123,6 +123,7 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod lifecycle;
+mod lifecycle_busy;
 mod lifecycle_cancel;
 mod lifecycle_logs;
 mod lifecycle_renew;

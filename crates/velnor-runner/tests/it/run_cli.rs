@@ -354,3 +354,20 @@ async fn run_cli_peak_memory_stays_below_the_ceiling_while_the_log_is_far_larger
     );
     Ok(())
 }
+
+#[test]
+fn run_args_debug_output_does_not_show_the_jit_value() -> Result<()> {
+    use clap::Parser;
+
+    let cli = velnor_runner::cli::Cli::try_parse_from([
+        "velnor-runner",
+        "run",
+        "--jit",
+        "encoded-jit-secret-value",
+    ])?;
+
+    let shown = format!("{cli:?}");
+
+    assert!(!shown.contains("encoded-jit-secret-value"), "{shown}");
+    Ok(())
+}

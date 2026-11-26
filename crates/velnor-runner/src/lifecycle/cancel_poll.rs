@@ -9,7 +9,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::BackgroundTask;
-use super::session::{MessageKind, Session, backoff};
+use super::session::{MessageKind, Session, retry_poll};
 use crate::exec::JobCancel;
 use crate::protocol::{RunnerStatus, TaskAgentMessage};
 
@@ -109,8 +109,11 @@ pub(super) fn spawn_cancel_poll(
                 Ok(None) => streak = 0,
                 Err(error) => {
                     streak += 1;
-                    eprintln!("warning: poll for job cancellation failed: {error:#}");
-                    tokio::time::sleep(backoff(error_delay, streak)).await;
+                    if let Err(lost) = retry_poll(error, streak, error_delay).await {
+                        eprintln!("error: {lost}; cancelling the job");
+                        cancel.cancel();
+                        return;
+                    }
                 }
             }
         }
