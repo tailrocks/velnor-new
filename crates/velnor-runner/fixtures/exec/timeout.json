@@ -1,0 +1,41 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Sleepy"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "sleep 30"
+            }
+          }
+        ]
+      },
+      "TimeoutInMinutes": {
+        "type": 6,
+        "num": 0.02
+      }
+    }
+  ]
+}

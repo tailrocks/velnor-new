@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "exec_cancel.rs"]
+mod cancel;
+#[path = "exec_cli.rs"]
+mod exec_cli;
+#[path = "exec_support.rs"]
+mod exec_support;
 #[path = "expr/functions.rs"]
 mod expr_functions;
 #[path = "expr/hash_files.rs"]
@@ -23,6 +29,8 @@ mod expr_support;
 mod expr_template;
 #[path = "expr/unsupported.rs"]
 mod expr_unsupported;
+#[path = "exec_extra.rs"]
+mod extra;
 mod job_message;
 mod protocol_broker;
 mod protocol_feed;

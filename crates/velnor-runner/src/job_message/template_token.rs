@@ -17,7 +17,7 @@ const BOOLEAN: i64 = 5;
 const NUMBER: i64 = 6;
 const NULL: i64 = 7;
 
-pub(super) fn token_literal(token: &Value) -> Option<&str> {
+pub(crate) fn token_literal(token: &Value) -> Option<&str> {
     match token {
         Value::String(text) => Some(text),
         Value::Object(object) => member(object, "lit")?.as_str(),

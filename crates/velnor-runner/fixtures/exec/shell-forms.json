@@ -1,0 +1,179 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Bare bash"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "echo bare"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "shell"
+            },
+            "value": {
+              "type": 0,
+              "lit": "bash"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Format shell"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "false\necho continued-after-false"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "shell"
+            },
+            "value": {
+              "type": 0,
+              "lit": "bash -p {0}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000003",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Default shell"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "false\necho default-shell-continues"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000004",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Pipefail"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "false | true\necho not-reached"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "shell"
+            },
+            "value": {
+              "type": 0,
+              "lit": "bash"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "Defaults": [
+    {
+      "type": 2,
+      "map": [
+        {
+          "key": {
+            "type": 0,
+            "lit": "run"
+          },
+          "value": {
+            "type": 2,
+            "map": [
+              {
+                "key": {
+                  "type": 0,
+                  "lit": "shell"
+                },
+                "value": {
+                  "type": 0,
+                  "lit": "bash -p {0}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

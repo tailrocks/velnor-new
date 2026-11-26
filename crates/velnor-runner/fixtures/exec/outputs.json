@@ -1,0 +1,80 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "a",
+      "ContextName": "a",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Produce"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "echo \"x=1\" >> \"$GITHUB_OUTPUT\""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Consume"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 3,
+              "expr": "format('echo got-{0}', steps.a.outputs.x)"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "JobOutputs": {
+    "type": 2,
+    "map": [
+      {
+        "key": {
+          "type": 0,
+          "lit": "out"
+        },
+        "value": {
+          "type": 3,
+          "expr": "steps.a.outputs.x"
+        }
+      }
+    ]
+  }
+}
