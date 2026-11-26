@@ -4,15 +4,13 @@
 
 use std::borrow::Cow;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use regex_automata::meta::Regex;
 
+use super::encode::ENCODERS;
 use super::{Annotation, ExecError};
 use crate::job_message::{AgentJobRequestMessage, MaskType};
 
 const MASK: &str = "***";
-const BASE64_SHIFTS: [usize; 3] = [0, 1, 2];
 
 #[derive(Debug, Default, Clone)]
 pub(super) struct Masker {
@@ -29,10 +27,8 @@ impl Masker {
         let forms: Vec<&str> = std::iter::once(value).chain(lines).collect();
         for form in forms {
             self.insert(form);
-            for shift in BASE64_SHIFTS {
-                let bytes = form.as_bytes();
-                let shifted = bytes.get(shift..).filter(|rest| !rest.is_empty());
-                self.insert(&STANDARD.encode(shifted.unwrap_or(bytes)));
+            for encode in ENCODERS {
+                self.insert(&encode(form));
             }
         }
     }

@@ -21,18 +21,71 @@ fn expand(spec: &str) -> &str {
     }
 }
 
+fn split(spec: &str) -> Vec<String> {
+    let mut arguments = Vec::new();
+    let mut current = String::new();
+    let mut started = false;
+    let mut quoted = false;
+    let mut chars = spec.chars().peekable();
+    while let Some(character) = chars.next() {
+        match character {
+            '\\' => {
+                let mut backslashes = 1;
+                while chars.next_if_eq(&'\\').is_some() {
+                    backslashes += 1;
+                }
+                started = true;
+                if chars.peek() == Some(&'"') {
+                    current.extend(std::iter::repeat_n('\\', backslashes / 2));
+                    if backslashes % 2 == 1 {
+                        current.push('"');
+                        chars.next();
+                    }
+                } else {
+                    current.extend(std::iter::repeat_n('\\', backslashes));
+                }
+            }
+            '"' => {
+                started = true;
+                if quoted && chars.next_if_eq(&'"').is_some() {
+                    current.push('"');
+                } else {
+                    quoted = !quoted;
+                }
+            }
+            ' ' | '\t' if !quoted => {
+                if std::mem::take(&mut started) {
+                    arguments.push(std::mem::take(&mut current));
+                }
+            }
+            other => {
+                started = true;
+                current.push(other);
+            }
+        }
+    }
+    if started {
+        arguments.push(current);
+    }
+    arguments
+}
+
 pub(super) fn is_supported(spec: &str) -> bool {
-    matches!(expand(spec).split_whitespace().next(), Some("bash" | "sh"))
+    matches!(
+        split(expand(spec)).first().map(String::as_str),
+        Some("bash" | "sh")
+    )
 }
 
 pub(super) fn command(spec: &str, script: &Path) -> Option<(String, Vec<String>)> {
     let script = script.to_string_lossy();
-    let mut tokens = expand(spec).split_whitespace();
-    let program = tokens.next()?.to_owned();
+    let expanded = expand(spec);
+    let mut tokens = split(expanded).into_iter();
+    let program = tokens.next()?;
     let mut args: Vec<String> = tokens
         .map(|token| token.replace(PLACEHOLDER, &script))
         .collect();
-    if !expand(spec).contains(PLACEHOLDER) {
+    if !expanded.contains(PLACEHOLDER) {
         args.push(script.into_owned());
     }
     Some((program, args))
