@@ -25,7 +25,8 @@ pub use http::{
     github_json_request,
 };
 pub use jit::{
-    DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings, decode_jit_config,
+    DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings, SessionRecovery,
+    decode_jit_config,
 };
 pub use oauth::{OAuthAccessToken, OAuthClient, OAuthJwtCredentials, OAuthRegistrationNotFound};
 pub use results::{BLOCK_BUDGET, StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};

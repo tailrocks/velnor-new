@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+use velnor_runner::protocol::SessionRecovery;
+
 use super::jit::jit_config;
 use super::mock_broker::{is_stale, mount_broker, mount_identity};
 use super::mock_feed::MockFeed;
@@ -19,6 +21,7 @@ pub(crate) const OAUTH_TOKEN: &str = "oauth-token-1";
 pub(crate) const STALE_OAUTH_TOKEN: &str = "oauth-token-stale";
 pub(crate) const JOB_TOKEN: &str = "job-token-1";
 pub(crate) const SESSION_ID: &str = "session-1";
+pub(crate) const RECREATED_SESSION_ID: &str = "session-2";
 pub(crate) const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
 pub(crate) const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
 pub(crate) const RESULTS_STEPS_UPDATE: &str =
@@ -63,6 +66,8 @@ pub(crate) enum Cancel {
     AfterACancelOfAnotherJob(Duration),
     HostedShutdownAfter(Duration),
     BusyPollFails(u16),
+    BusyPollRunnerGone,
+    BusyPollSessionExpiresOnce,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -88,6 +93,7 @@ pub(crate) enum SessionCreate {
     ConflictsFirst(usize),
     ConflictsAlways,
     UnavailableAlways,
+    UnavailableOnceCreated,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -122,6 +128,7 @@ pub(crate) struct Behavior {
     pub(crate) blob_delay: Duration,
     pub(crate) feed: bool,
     pub(crate) session: SessionCreate,
+    pub(crate) recovery: SessionRecovery,
     pub(crate) oauth: OAuthTokens,
     pub(crate) acquire_delay: Duration,
     pub(crate) status: StepStatus,
@@ -144,6 +151,7 @@ impl Default for Behavior {
             blob_delay: Duration::ZERO,
             feed: false,
             session: SessionCreate::Created,
+            recovery: SessionRecovery::Recreate,
             oauth: OAuthTokens::Fresh,
             acquire_delay: Duration::ZERO,
             status: StepStatus::Accepted,
@@ -192,7 +200,7 @@ impl MockGithub {
     pub(crate) async fn start(job: Value, behavior: Behavior) -> Result<Self> {
         let server = TestServer::start().await?;
         let base = server.uri();
-        let jit = jit_config(&base)?;
+        let jit = jit_config(&base, behavior.recovery)?;
         let feed = if behavior.feed {
             Some(MockFeed::start().await?)
         } else {

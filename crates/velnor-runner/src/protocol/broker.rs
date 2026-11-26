@@ -4,7 +4,6 @@
 
 use anyhow::{Context, Result};
 use reqwest::Method;
-use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
 use url::Url;
@@ -24,27 +23,11 @@ use velnor_model::RUNNER_PROTOCOL_VERSION;
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(5);
-const BROKER_ERROR_SOURCE: &str = "actions-broker-listener";
-const ACKNOWLEDGE_JOB_NOT_FOUND: &str = "AcknowledgeJobNotFound";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Acknowledgement {
     Accepted,
     JobNotFound,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BrokerError {
-    source: Option<String>,
-    error_kind: Option<String>,
-}
-
-fn is_job_not_found(body: &str) -> bool {
-    serde_json::from_str::<BrokerError>(body).is_ok_and(|error| {
-        error.source.as_deref() == Some(BROKER_ERROR_SOURCE)
-            && error.error_kind.as_deref() == Some(ACKNOWLEDGE_JOB_NOT_FOUND)
-    })
 }
 
 #[derive(Debug)]
@@ -118,11 +101,16 @@ impl BrokerClient {
         );
         let (http_status, text) = self.send(Method::GET, &url, None, POLL_TIMEOUT).await?;
         if !(200..300).contains(&http_status) {
+            let kind = broker_error_kind(&text, POLL_KINDS);
+            let category = kind.map(|kind| match kind {
+                ServiceErrorKind::RunnerSessionInvalid => BrokerErrorCategory::Expired,
+                _ => BrokerErrorCategory::Terminal,
+            });
             return Err(broker_api_error(
                 "get broker message",
                 http_status,
                 text.trim(),
-                None,
+                category,
                 POLL_KINDS,
             ));
         }
@@ -153,7 +141,9 @@ impl BrokerClient {
             .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
             .await?;
         if !(200..300).contains(&http_status) {
-            if is_job_not_found(&text) {
+            if broker_error_kind(&text, ACKNOWLEDGE_KINDS)
+                == Some(ServiceErrorKind::AcknowledgeJobNotFound)
+            {
                 return Ok(Acknowledgement::JobNotFound);
             }
             return Err(broker_api_error(

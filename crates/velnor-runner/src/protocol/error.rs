@@ -12,6 +12,7 @@ pub enum BrokerErrorCategory {
     Transient,
     Terminal,
     Conflict,
+    Expired,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

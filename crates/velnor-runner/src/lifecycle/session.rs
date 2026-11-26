@@ -14,7 +14,7 @@ use crate::exec::JobCancel;
 use crate::protocol::{
     Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
     OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerOs,
-    RunnerStatus, TaskAgentMessage, TaskAgentSession, broker_error_category,
+    RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, broker_error_category,
 };
 use crate::secret::Secret;
 
@@ -53,6 +53,7 @@ impl MessageKind {
 struct Auth {
     token: Secret<String>,
     broker: BrokerClient,
+    id: String,
 }
 
 #[derive(Debug)]
@@ -61,7 +62,9 @@ pub(super) struct Session {
     credentials: OAuthJwtCredentials,
     base_url: String,
     os: RunnerOs,
-    id: String,
+    template: TaskAgentSession,
+    retry_interval: Duration,
+    recovery: SessionRecovery,
     auth: Mutex<Auth>,
 }
 
@@ -114,7 +117,24 @@ fn is_auth_failure(error: &anyhow::Error) -> bool {
 }
 
 fn is_retriable(error: &anyhow::Error) -> bool {
+    if matches!(
+        broker_error_category(error),
+        Some(BrokerErrorCategory::Terminal | BrokerErrorCategory::Expired)
+    ) {
+        return false;
+    }
     api_status(error).is_none_or(|status| status >= 500 || matches!(status, 408 | 429))
+}
+
+fn is_session_expired(error: &anyhow::Error) -> bool {
+    broker_error_category(error) == Some(BrokerErrorCategory::Expired)
+}
+
+fn session_id(created: TaskAgentSession) -> anyhow::Result<String> {
+    created
+        .session_id
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| anyhow!("broker session has no sessionId"))
 }
 
 fn backoff(base: Duration, streak: u32) -> Duration {
@@ -153,26 +173,23 @@ impl Session {
         let broker =
             BrokerClient::new(&base_url, os, token.clone()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());
-        let created = create_session(
-            &broker,
-            TaskAgentSession::new(owner, agent_id, agent_name),
-            retry_interval,
-        )
-        .await
-        .map_err(LifecycleError::Session)?;
-        let id = created
-            .session_id
-            .filter(|id| !id.is_empty())
-            .ok_or_else(|| LifecycleError::Session(anyhow!("broker session has no sessionId")))?;
+        let template = TaskAgentSession::new(owner, agent_id, agent_name);
+        let created = create_session(&broker, template.clone(), retry_interval)
+            .await
+            .map_err(LifecycleError::Session)?;
+        let id = session_id(created).map_err(LifecycleError::Session)?;
         Ok(Self {
             oauth,
             credentials,
             base_url,
             os,
-            id,
+            template,
+            retry_interval,
+            recovery: config.settings.session_recovery,
             auth: Mutex::new(Auth {
                 token: Secret::new(token),
                 broker,
+                id,
             }),
         })
     }
@@ -199,10 +216,9 @@ impl Session {
             .await?
             .token;
         let broker = BrokerClient::new(&self.base_url, self.os, token.clone())?;
-        *self.auth() = Auth {
-            token: Secret::new(token),
-            broker,
-        };
+        let mut auth = self.auth();
+        auth.token = Secret::new(token);
+        auth.broker = broker;
         Ok(())
     }
 
@@ -226,19 +242,45 @@ impl Session {
         &self,
         status: RunnerStatus,
     ) -> anyhow::Result<Option<TaskAgentMessage>> {
-        let id = &self.id;
-        self.with_fresh_token(
-            |broker| async move { broker.get_runner_message(id, status, true).await },
-        )
-        .await
-        .map(|poll| poll.message)
+        loop {
+            let id = self.auth().id.clone();
+            let id = &id;
+            let polled = self
+                .with_fresh_token(|broker| async move {
+                    broker.get_runner_message(id, status, true).await
+                })
+                .await;
+            match polled {
+                Err(error)
+                    if self.recovery == SessionRecovery::Recreate && is_session_expired(&error) =>
+                {
+                    if let Err(failure) = self.recreate().await {
+                        return Err(error
+                            .context(format!("recreate the expired broker session: {failure:#}")));
+                    }
+                    eprintln!("warning: the broker session expired, recreated it");
+                }
+                other => return other.map(|poll| poll.message),
+            }
+        }
+    }
+
+    async fn recreate(&self) -> anyhow::Result<()> {
+        let created = self
+            .with_fresh_token(|broker| async move {
+                create_session(&broker, self.template.clone(), self.retry_interval).await
+            })
+            .await?;
+        self.auth().id = session_id(created)?;
+        Ok(())
     }
 
     pub(super) async fn acknowledge(
         &self,
         runner_request_id: &str,
     ) -> anyhow::Result<Acknowledgement> {
-        let id = &self.id;
+        let id = self.auth().id.clone();
+        let id = &id;
         self.with_fresh_token(|broker| async move {
             broker
                 .acknowledge_runner_request(id, runner_request_id, RunnerStatus::Busy)
@@ -294,7 +336,8 @@ impl Session {
     }
 
     pub(super) async fn close(&self) {
-        let id = &self.id;
+        let id = self.auth().id.clone();
+        let id = &id;
         let deleted = self
             .with_fresh_token(|broker| async move { broker.delete_session(id).await })
             .await;

@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::mock_github::{
     Acknowledge, Behavior, Cancel, JOB_ID, MessageTypes, OAUTH_TOKEN, OAuthTokens, OTHER_JOB_ID,
-    Online, SESSION_ID, STALE_OAUTH_TOKEN, SessionCreate,
+    Online, RECREATED_SESSION_ID, SESSION_ID, STALE_OAUTH_TOKEN, SessionCreate,
 };
 use super::{Reply, TestServer};
 
@@ -55,6 +55,28 @@ pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result
     })
 }
 
+fn broker_error(kind: &str, message: &str) -> Reply {
+    Reply::json(
+        404,
+        &json!({
+            "source": "actions-broker-listener",
+            "errorKind": kind,
+            "statusCode": 404,
+            "errorMessage": message,
+        }),
+    )
+}
+
+fn busy_failure(cancel: Cancel) -> Option<Reply> {
+    match cancel {
+        Cancel::BusyPollFails(status) => Some(Reply::status(status)),
+        Cancel::BusyPollRunnerGone => {
+            Some(broker_error("RunnerNotFound", "the runner was not found"))
+        }
+        _ => None,
+    }
+}
+
 fn mount_acknowledge(server: &TestServer, acknowledge: Acknowledge) -> Result<()> {
     server.respond("POST", "/broker/acknowledge", move |seen| {
         if is_stale(seen) {
@@ -62,24 +84,8 @@ fn mount_acknowledge(server: &TestServer, acknowledge: Acknowledge) -> Result<()
         }
         match acknowledge {
             Acknowledge::Accepted => Reply::status(200),
-            Acknowledge::JobGone => Reply::json(
-                404,
-                &json!({
-                    "source": "actions-broker-listener",
-                    "errorKind": "AcknowledgeJobNotFound",
-                    "statusCode": 404,
-                    "errorMessage": "the job was withdrawn",
-                }),
-            ),
-            Acknowledge::RunnerGone => Reply::json(
-                404,
-                &json!({
-                    "source": "actions-broker-listener",
-                    "errorKind": "RunnerNotFound",
-                    "statusCode": 404,
-                    "errorMessage": "the runner was not found",
-                }),
-            ),
+            Acknowledge::JobGone => broker_error("AcknowledgeJobNotFound", "the job was withdrawn"),
+            Acknowledge::RunnerGone => broker_error("RunnerNotFound", "the runner was not found"),
             Acknowledge::Unavailable => Reply::status(503),
         }
     })
@@ -87,6 +93,7 @@ fn mount_acknowledge(server: &TestServer, acknowledge: Acknowledge) -> Result<()
 
 fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
     let attempts = AtomicUsize::new(0);
+    let created = AtomicUsize::new(0);
     server.respond("POST", "/broker/session", move |_| {
         let attempt = attempts.fetch_add(1, Ordering::SeqCst);
         let conflict = || {
@@ -99,12 +106,20 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
             SessionCreate::ConflictsFirst(count) if attempt < count => return conflict(),
             SessionCreate::ConflictsAlways => return conflict(),
             SessionCreate::UnavailableAlways => return Reply::status(503),
-            SessionCreate::Created | SessionCreate::ConflictsFirst(_) => {}
+            SessionCreate::UnavailableOnceCreated if attempt > 0 => return Reply::status(503),
+            SessionCreate::Created
+            | SessionCreate::ConflictsFirst(_)
+            | SessionCreate::UnavailableOnceCreated => {}
         }
+        let created = if created.fetch_add(1, Ordering::SeqCst) == 0 {
+            SESSION_ID
+        } else {
+            RECREATED_SESSION_ID
+        };
         Reply::json(
             200,
             &json!({
-                "sessionId": SESSION_ID,
+                "sessionId": created,
                 "ownerName": "host (PID: 1)",
                 "agent": {"id": 42, "name": "velnor-test"},
             }),
@@ -147,15 +162,17 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
     );
     let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
     let (cancel_after, decoy_first, hosted_shutdown) = match behavior.cancel {
-        Cancel::Never | Cancel::BusyPollFails(_) => (None, false, false),
+        Cancel::Never
+        | Cancel::BusyPollFails(_)
+        | Cancel::BusyPollRunnerGone
+        | Cancel::BusyPollSessionExpiresOnce => (None, false, false),
         Cancel::After(after) => (Some(after), false, false),
         Cancel::AfterACancelOfAnotherJob(after) => (Some(after), true, false),
         Cancel::HostedShutdownAfter(after) => (Some(after), false, true),
     };
-    let busy_failure = match behavior.cancel {
-        Cancel::BusyPollFails(status) => Some(status),
-        _ => None,
-    };
+    let busy_failure = busy_failure(behavior.cancel);
+    let session_invalid = broker_error("RunnerSessionInvalid", "the session is no longer valid");
+    let expires_session = matches!(behavior.cancel, Cancel::BusyPollSessionExpiresOnce);
     let online = behavior.online;
     let refresh = message(&kind("ForceTokenRefresh"), &json!({}));
     let refresh_pending = AtomicBool::new(matches!(online, Online::ForceTokenRefreshThenJob));
@@ -175,8 +192,11 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
             Some("Online") => Reply::json(200, &request),
             Some("Busy") => {
                 let number = busy_polls.fetch_add(1, Ordering::SeqCst);
-                if let Some(status) = busy_failure {
-                    return Reply::status(status);
+                if let Some(failure) = &busy_failure {
+                    return failure.clone();
+                }
+                if expires_session && seen.query("sessionId") == Some(SESSION_ID) {
+                    return session_invalid.clone();
                 }
                 match cancel_after {
                     _ if decoy_first && number == 0 => Reply::json(200, &decoy),
