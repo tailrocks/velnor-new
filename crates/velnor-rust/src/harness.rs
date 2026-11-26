@@ -161,7 +161,9 @@ pub(crate) fn enabled_features(manifest: &toml::Table, requested: &[String]) -> 
     enabled
 }
 
-pub(crate) fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
+pub(crate) fn dependency_specs(
+    manifest: &toml::Table,
+) -> impl Iterator<Item = (&String, &toml::Value)> {
     const TABLES: &[&str] = &["dependencies", "build-dependencies"];
     let targets = manifest
         .get("target")
@@ -169,11 +171,15 @@ pub(crate) fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
         .into_iter()
         .flat_map(toml::Table::values)
         .filter_map(toml::Value::as_table);
-    let optional: BTreeSet<String> = std::iter::once(manifest)
+    std::iter::once(manifest)
         .chain(targets)
         .flat_map(|scope| TABLES.iter().filter_map(|key| scope.get(*key)))
         .filter_map(toml::Value::as_table)
         .flat_map(toml::Table::iter)
+}
+
+pub(crate) fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
+    let optional: BTreeSet<String> = dependency_specs(manifest)
         .filter(|(_, spec)| spec.get("optional").and_then(toml::Value::as_bool) == Some(true))
         .map(|(name, _)| name.clone())
         .collect();

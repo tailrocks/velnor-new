@@ -7,28 +7,35 @@ use velnor_model::{RepoView, RustCiConfig, RustMember, RustRoot};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
-use crate::harness::implicit_features;
+use crate::harness::{dependency_specs, implicit_features};
 use crate::toml_file::table;
 
-/// Refuses a `workspace_features` name that no package of some root defines: cargo fails the
-/// workspace-wide command of that root with it, so the repository would only learn at run time.
-/// A name with a slash (`package/feature`, `dependency/feature`) is passed to cargo as written.
 pub(crate) fn check(
     view: &RepoView,
     config: &RustCiConfig,
     rust_roots: &[RustRoot],
 ) -> Result<(), DetectError> {
+    let workspace = &config.workspace_features.names;
+    if let Some(lane) = config.test_lanes.iter().find(|lane| {
+        let features = &lane.features;
+        !features.names.is_empty()
+            && !features.all
+            && !features.no_default
+            && features.names.iter().all(|name| workspace.contains(name))
+    }) {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::TestLaneDuplicatesWorkspaceFeatures {
+                features: lane.features.names.join(","),
+            },
+        ));
+    }
     for root in rust_roots {
-        let defined: BTreeSet<String> = root
-            .members
-            .iter()
-            .flat_map(|member| defined_features(view, member))
-            .collect();
         let missing = config
             .workspace_features
             .names
             .iter()
-            .find(|name| !name.contains('/') && !defined.contains(*name));
+            .find(|name| !root_accepts(view, root, name));
         if let Some(feature) = missing {
             return Err(DetectError::invalid(
                 &CONFIG_PATH,
@@ -45,12 +52,35 @@ pub(crate) fn check(
     Ok(())
 }
 
-fn defined_features(view: &RepoView, member: &RustMember) -> BTreeSet<String> {
-    let Some(manifest) = view
-        .files
+fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
+    let Some((package, feature)) = name.split_once('/') else {
+        return root
+            .members
+            .iter()
+            .any(|member| defined_features(view, member).contains(name));
+    };
+    match root
+        .members
+        .iter()
+        .find(|member| member.name.as_str() == package)
+    {
+        Some(member) => defined_features(view, member).contains(feature),
+        None => root
+            .members
+            .iter()
+            .filter_map(|member| manifest(view, member))
+            .any(|manifest| dependency_specs(&manifest).any(|(key, _)| key == package)),
+    }
+}
+
+fn manifest(view: &RepoView, member: &RustMember) -> Option<toml::Table> {
+    view.files
         .get(&member.manifest)
         .and_then(|bytes| table(bytes).ok())
-    else {
+}
+
+fn defined_features(view: &RepoView, member: &RustMember) -> BTreeSet<String> {
+    let Some(manifest) = manifest(view, member) else {
         return BTreeSet::new();
     };
     manifest

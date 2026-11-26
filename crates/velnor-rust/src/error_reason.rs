@@ -201,7 +201,8 @@ impl fmt::Display for Reason {
             | Self::TestLaneWithoutNextest(_)
             | Self::UnknownTestLanePackage(_)
             | Self::TestLaneFeatureConflict { .. }
-            | Self::UnknownWorkspaceFeature { .. } => self.fmt_test_lane(f),
+            | Self::UnknownWorkspaceFeature { .. }
+            | Self::TestLaneDuplicatesWorkspaceFeatures { .. } => self.fmt_test_lane(f),
             Self::UnknownRootTimeoutRoot(root) => unknown_root(f, "root_timeouts", root),
             Self::UnknownCheckConfigurationsRoot(root) => {
                 unknown_root(f, "check_configurations", root)

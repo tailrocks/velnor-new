@@ -15,7 +15,6 @@ use crate::yaml_tree::document;
 const FEATURES: &str = "workspace_features = ['local-mode']\n";
 const MANIFEST: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n";
 
-/// A repository whose packages define `local-mode` and whose library has doctests.
 fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
     for root in roots {
@@ -37,7 +36,6 @@ fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn Error>> 
     Ok(repo)
 }
 
-/// The `run` of every step of the generated workflow, by step name, in order.
 fn runs(config: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     let text = workflow(&repository(&["Cargo.toml"], config)?)?;
     let jobs = document(&text)?["jobs"].clone();
@@ -55,9 +53,6 @@ fn runs(config: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
         .collect())
 }
 
-/// The same, planned straight from the detected facts at the helper `pin`. It skips the key gate
-/// on purpose: the shapes with a `--no-run` build and a separate audit job exist only on helpers
-/// older than the one the key needs, and the plan must still put the features on them.
 fn planned(
     roots: &[&str],
     config: &str,
@@ -193,6 +188,19 @@ fn an_unknown_or_invalid_workspace_feature_name_is_refused() -> TestResult {
     Ok(())
 }
 
+const PACKAGE_AND_DEPENDENCY: &str =
+    "[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[dependencies]\nserde = \"1\"\n";
+
+fn with_manifest(name: &str, manifest: &str) -> Result<RepoView, Box<dyn Error>> {
+    let mut repo = repository(
+        &["Cargo.toml"],
+        &format!("workspace_features = ['{name}']\n"),
+    )?;
+    repo.files
+        .insert(RepoPath::new("Cargo.toml")?, manifest.as_bytes().to_vec());
+    Ok(repo)
+}
+
 fn refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
     match detect(repo) {
         Err(DetectError::Invalid {
@@ -225,16 +233,45 @@ fn a_root_with_no_package_that_defines_a_workspace_feature_is_refused_at_generat
 }
 
 #[test]
-fn a_feature_an_optional_dependency_defines_or_one_with_a_slash_is_accepted() -> TestResult {
-    let mut repo = repository(
-        &["Cargo.toml"],
-        "workspace_features = ['serde', 'dep/derive']\n",
+fn a_feature_an_optional_dependency_defines_is_accepted() -> TestResult {
+    let repo = with_manifest(
+        "serde",
+        "[package]\nname = \"package-0\"\n[dependencies]\nserde = { version = \"1\", optional = true }\n",
     )?;
-    repo.files.insert(
-        RepoPath::new("Cargo.toml")?,
-        b"[package]\nname = \"package-0\"\n[dependencies]\nserde = { version = \"1\", optional = true }\n"
-            .to_vec(),
-    );
     detect(&repo)?;
+    Ok(())
+}
+
+#[test]
+fn a_package_feature_name_needs_a_member_that_defines_it_or_a_dependency_of_a_member() -> TestResult
+{
+    for name in ["package-0/local-modee", "ghost/local-mode"] {
+        let repo = with_manifest(name, PACKAGE_AND_DEPENDENCY)?;
+        assert_eq!(refusal(&repo)?, (".".to_owned(), name.to_owned()), "{name}");
+    }
+    for name in ["package-0/local-mode", "serde/derive"] {
+        detect(&with_manifest(name, PACKAGE_AND_DEPENDENCY)?)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResult {
+    let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n";
+    let repo = repository(&["Cargo.toml"], &format!("{FEATURES}{lane}"))?;
+    match detect(&repo) {
+        Err(DetectError::Invalid {
+            reason: Reason::TestLaneDuplicatesWorkspaceFeatures { features },
+            ..
+        }) => assert_eq!(features, "local-mode"),
+        other => return Err(format!("{other:?}").into()),
+    }
+    let with_extra = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode', 'extra']\n";
+    detect(&repository(
+        &["Cargo.toml"],
+        &format!("{FEATURES}{with_extra}"),
+    )?)?;
+    let alone_lane = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n";
+    detect(&repository(&["Cargo.toml"], alone_lane)?)?;
     Ok(())
 }

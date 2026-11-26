@@ -92,6 +92,9 @@ pub enum Reason {
         root: String,
         feature: String,
     },
+    TestLaneDuplicatesWorkspaceFeatures {
+        features: String,
+    },
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {

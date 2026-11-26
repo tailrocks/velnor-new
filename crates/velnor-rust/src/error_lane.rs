@@ -26,7 +26,11 @@ impl Reason {
             ),
             Self::UnknownWorkspaceFeature { root, feature } => write!(
                 f,
-                "workspace_features names {feature}, which no package of the root {root} defines, so cargo would refuse every workspace-wide command of that root; remove it, or name a feature that a package of the root defines (a name with a slash, package/feature, is not checked)"
+                "workspace_features names {feature}, which no package of the root {root} defines, so cargo would refuse every workspace-wide command of that root; remove it, or name a feature that a package of the root defines (a name with a slash, package/feature, needs a package of the root named package that defines feature, or a dependency named package in the manifest of one of its packages)"
+            ),
+            Self::TestLaneDuplicatesWorkspaceFeatures { features } => write!(
+                f,
+                "a test_lane builds with {features}, which workspace_features already turns on for the whole workspace, so the lane would compile the workspace a second time and run tests the main Test already runs; delete the lane"
             ),
             _ => Ok(()),
         }

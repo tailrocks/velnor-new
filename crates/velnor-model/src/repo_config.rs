@@ -61,8 +61,6 @@ pub struct RustCiConfig {
     pub test_setup: Vec<TestSetup>,
     pub check_configurations: Vec<crate::CheckConfigurations>,
     pub test_lanes: Vec<TestLane>,
-    /// The features every workspace-wide lint, doc and test command builds with; empty builds
-    /// with the default features.
     pub workspace_features: LaneFeatures,
     pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
