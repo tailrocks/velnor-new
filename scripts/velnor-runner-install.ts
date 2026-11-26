@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import { chmod, mkdir, readdir, rename, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
+
+class InstallError extends Error {}
 
 const MACHINE = "velnor";
-const HOST_STORE = "/Users/Shared/velnor";
+const HOST_STORE = hostStore(process.env.VELNOR_HOST_STORE);
 const HOST_BIN = join(HOST_STORE, "bin");
 const DESTINATION = join(HOST_BIN, "velnor-runner");
 const GUEST_STORE = "/var/lib/velnor";
@@ -15,9 +17,17 @@ const APT_PACKAGES = "build-essential curl ca-certificates pkg-config libssl-dev
 const TEMP_PREFIX = ".velnor-runner.tmp-";
 const REPOSITORY = resolve(import.meta.dir, "..");
 
-type Orb = { readonly args: readonly string[]; readonly stdin?: string };
+function hostStore(override: string | undefined): string {
+  if (override === undefined) {
+    return "/Users/Shared/velnor";
+  }
+  if (!isAbsolute(override)) {
+    throw new InstallError(`VELNOR_HOST_STORE must be an absolute path, got '${override}'`);
+  }
+  return override;
+}
 
-class InstallError extends Error {}
+type Orb = { readonly args: readonly string[]; readonly stdin?: string };
 
 async function orb({ args, stdin }: Orb): Promise<string> {
   const child = Bun.spawn(["orb", ...args], {

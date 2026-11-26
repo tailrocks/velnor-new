@@ -143,6 +143,7 @@ python3 scripts/test_mise_binary_digests.py
 python3 scripts/test_mise_binary_digests_entry.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
+bun test ./scripts/velnor-runner-install.test.ts
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
 printf "maintenance-phase: velnor-archive-guard\n"
