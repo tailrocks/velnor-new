@@ -4,8 +4,10 @@
 use super::eval::from_context_value;
 use super::value::{ObjectValue, Value};
 use crate::context_value::ContextValue;
+use crate::secret::Secret;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RootContext {
@@ -91,12 +93,15 @@ pub enum JobStatus {
     Cancelled,
 }
 
+const HASH_FILES_TIMEOUT: Duration = Duration::from_secs(120);
+
 #[derive(Debug, Clone)]
 pub struct ExprEnv {
     pub workspace: PathBuf,
     pub home: Option<PathBuf>,
     pub status: JobStatus,
-    contexts: BTreeMap<RootContext, Value>,
+    pub hash_files_timeout: Duration,
+    contexts: Secret<BTreeMap<RootContext, Value>>,
 }
 
 impl ExprEnv {
@@ -107,24 +112,33 @@ impl ExprEnv {
 
     #[must_use]
     pub fn with_home_var(workspace: PathBuf, home_var: Option<std::ffi::OsString>) -> Self {
-        let contexts = RootContext::ALL
-            .iter()
-            .map(|(_, root)| (*root, Value::Object(ObjectValue::new(Vec::new()))))
-            .collect();
+        let contexts = Secret::new(
+            RootContext::ALL
+                .iter()
+                .map(|(_, root)| (*root, Value::Object(ObjectValue::new(Vec::new()))))
+                .collect(),
+        );
         Self {
             workspace,
             home: home_var.map(PathBuf::from).or_else(std::env::home_dir),
             status: JobStatus::Success,
+            hash_files_timeout: HASH_FILES_TIMEOUT,
             contexts,
         }
     }
 
     pub fn set_context(&mut self, root: RootContext, value: &ContextValue) {
-        self.contexts.insert(root, from_context_value(value));
+        let mut contexts = std::mem::take(&mut self.contexts).into_inner();
+        contexts.insert(root, from_context_value(value));
+        self.contexts = Secret::new(contexts);
     }
 
     pub(crate) fn context(&self, root: RootContext) -> Value {
-        self.contexts.get(&root).cloned().unwrap_or(Value::Null)
+        self.contexts
+            .expose()
+            .get(&root)
+            .cloned()
+            .unwrap_or(Value::Null)
     }
 }
 

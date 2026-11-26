@@ -20,6 +20,8 @@ pub(crate) enum GlobError {
     NoHome,
     #[error("Expected HOME directory to be a rooted path. Actual '{0}'")]
     HomeNotRooted(String),
+    #[error("the walk ran past its deadline")]
+    TimedOut,
     #[error("{path}: {source}")]
     Io { path: String, source: io::Error },
 }

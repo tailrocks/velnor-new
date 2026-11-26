@@ -9,6 +9,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 use url::Url;
 use velnor_runner::context_value::ContextValue;
+use velnor_runner::expr::{ExprEnv, RootContext, evaluate_expression};
 use velnor_runner::job_message::{AgentJobRequestMessage, ContainerResource};
 use velnor_runner::protocol::{
     BrokerClient, DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings,
@@ -100,6 +101,26 @@ fn materialized_context_values_debug_output_contains_no_secret_value() -> Result
         format!("{ordered:#?}"),
     ] {
         assert_no_secret("materialized context values", &format);
+    }
+    Ok(())
+}
+
+#[test]
+fn expression_environment_debug_output_contains_no_context_value() -> Result<()> {
+    let message = AgentJobRequestMessage::parse_json(FIXTURE).context("parse fixture")?;
+    let values = message.materialize_context_values()?;
+    let mut env = ExprEnv::new(std::path::PathBuf::from("/workspace"));
+    env.set_context(
+        RootContext::Github,
+        values.expose().get("github").context("github context")?,
+    );
+    env.set_context(
+        RootContext::Secrets,
+        values.expose().get("secrets").context("secrets context")?,
+    );
+    assert!(evaluate_expression("github.token", &env)?.is_truthy());
+    for format in [format!("{env:?}"), format!("{env:#?}")] {
+        assert_no_secret("ExprEnv", &format);
     }
     Ok(())
 }

@@ -4,6 +4,7 @@
 
 use crate::expr_support::{empty_env, env_with, error_text, text, truthy};
 use anyhow::Result;
+use std::time::{Duration, Instant};
 use velnor_runner::expr::RootContext;
 
 #[test]
@@ -95,5 +96,67 @@ fn expr_from_json_accepts_only_a_string_literal() -> Result<()> {
     );
     assert!(error_text("fromJSON('a', 'b')", &env)?.contains("Too many parameters"));
     assert!(error_text("fromJSON('{')", &env)?.contains("Error parsing fromJson"));
+    Ok(())
+}
+
+#[test]
+fn expr_contains_scans_long_values_in_linear_time() -> Result<()> {
+    let haystack = "a".repeat(400_000);
+    let needle = format!("{}b", "a".repeat(200_000));
+    let env = env_with(&[(
+        RootContext::Env,
+        &format!(
+            r#"{{"HAYSTACK":"{haystack}","NEEDLE":"{needle}","UPPER":"{}"}}"#,
+            "A".repeat(100_000)
+        ),
+    )])?;
+
+    let started = Instant::now();
+    assert!(!truthy("contains(env.HAYSTACK, env.NEEDLE)", &env)?);
+    assert!(truthy("contains(env.HAYSTACK, env.UPPER)", &env)?);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    Ok(())
+}
+
+#[test]
+fn expr_format_stops_at_the_memory_budget() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        &format!(r#"{{"PAYLOAD":"{}"}}"#, "x".repeat(100_000)),
+    )])?;
+
+    assert_eq!(
+        text(
+            &format!("format('{}', env.PAYLOAD)", "{0}".repeat(20)),
+            &env
+        )?
+        .len(),
+        2_000_000
+    );
+    assert!(
+        error_text(
+            &format!("format('{}', env.PAYLOAD)", "{0}".repeat(4_000)),
+            &env
+        )?
+        .starts_with("The maximum allowed memory size was exceeded")
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_format_validates_the_format_string_before_resolving_arguments() -> Result<()> {
+    let env = empty_env();
+
+    assert_eq!(
+        error_text("format('{0}{', hashFiles('**'))", &env)?,
+        "Invalid format string: {0}{"
+    );
+    assert_eq!(
+        error_text("format('{0:x}{', hashFiles('**'))", &env)?,
+        "Invalid format string: {0:x}{"
+    );
+    assert!(
+        error_text("format('{0}', hashFiles('**'))", &env)?.starts_with("hashFiles('**') failed")
+    );
     Ok(())
 }

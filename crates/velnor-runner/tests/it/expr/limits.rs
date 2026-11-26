@@ -46,3 +46,17 @@ fn expr_nesting_limit_is_fifty_levels() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn expr_length_limit_counts_utf16_code_units() -> Result<()> {
+    let env = empty_env();
+    let emoji = "\u{1F600}".repeat(10_499);
+
+    assert!(truthy(&format!("'{emoji}'"), &env)?);
+    assert_eq!(
+        error_text(&format!("'{emoji}x'"), &env)?,
+        "Exceeded max expression length 21000"
+    );
+    assert!(truthy(&format!("'{}'", "x".repeat(20_998)), &env)?);
+    Ok(())
+}

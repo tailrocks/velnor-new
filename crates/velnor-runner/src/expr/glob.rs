@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 struct Entry {
     negate: bool,
@@ -99,10 +100,11 @@ impl PatternSet {
         roots
     }
 
-    pub(crate) fn walk<'a>(&'a self, workspace: &'a Path) -> Walk<'a> {
+    pub(crate) fn walk<'a>(&'a self, workspace: &'a Path, deadline: Instant) -> Walk<'a> {
         Walk {
             patterns: self,
             workspace,
+            deadline,
             roots: self.roots().into_iter(),
             stack: Vec::new(),
         }
@@ -120,6 +122,7 @@ struct Visit {
 pub(crate) struct Walk<'a> {
     patterns: &'a PatternSet,
     workspace: &'a Path,
+    deadline: Instant,
     roots: std::vec::IntoIter<Vec<String>>,
     stack: Vec<Visit>,
 }
@@ -137,6 +140,9 @@ impl Iterator for Walk<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if Instant::now() >= self.deadline {
+                return Some(Err(GlobError::TimedOut));
+            }
             let visit = match self.next_visit()? {
                 Ok(visit) => visit,
                 Err(error) => return Some(Err(error)),

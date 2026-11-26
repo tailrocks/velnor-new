@@ -334,6 +334,10 @@ pub fn ordinal_ignore_case_cmp(left: &str, right: &str) -> Ordering {
         .cmp(right.chars().map(simple_ordinal_uppercase))
 }
 
+pub(crate) fn ordinal_ignore_case_fold(value: &str) -> String {
+    value.chars().map(simple_ordinal_uppercase).collect()
+}
+
 fn simple_ordinal_uppercase(character: char) -> char {
     if matches!(character, '\u{0131}' | '\u{017f}') {
         return character;

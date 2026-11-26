@@ -3,7 +3,9 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/value.rs
 
 use super::number::{format_number, parse_number};
-use crate::context_value::{ordinal_ignore_case_cmp, ordinal_ignore_case_eq};
+use crate::context_value::{
+    ordinal_ignore_case_cmp, ordinal_ignore_case_eq, ordinal_ignore_case_fold,
+};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -262,9 +264,5 @@ pub(crate) fn ordinal_ignore_case_starts_with(value: &str, prefix: &str) -> bool
 }
 
 pub(crate) fn ordinal_ignore_case_contains(value: &str, needle: &str) -> bool {
-    value
-        .char_indices()
-        .map(|(index, _)| index)
-        .chain(std::iter::once(value.len()))
-        .any(|index| ordinal_ignore_case_starts_with(&value[index..], needle))
+    ordinal_ignore_case_fold(value).contains(&ordinal_ignore_case_fold(needle))
 }

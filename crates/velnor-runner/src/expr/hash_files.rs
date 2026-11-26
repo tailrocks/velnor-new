@@ -4,6 +4,7 @@
 
 use super::error::ExprError;
 use super::glob::PatternSet;
+use super::pattern::GlobError;
 use super::pattern::trim_line;
 use super::value::Value;
 use ring::digest::{Context, Digest, SHA256};
@@ -11,6 +12,7 @@ use std::fmt::{Display, Write as _};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 const READ_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -18,18 +20,26 @@ pub(crate) fn hash_files(
     workspace: &Path,
     home: Option<&Path>,
     args: &[Value],
+    timeout: Duration,
 ) -> Result<String, ExprError> {
+    let deadline = Instant::now() + timeout;
     let arguments: Vec<String> = args.iter().map(Value::convert_to_string).collect();
     if let Some(option) = arguments.first().filter(|first| first.starts_with("--")) {
         return Err(ExprError::evaluation(format!(
             "Invalid glob option {option}"
         )));
     }
+    let escaped = arguments.join(", ").replace('\'', "''");
     let failure = |detail: &dyn Display| {
         ExprError::evaluation(format!(
-            "hashFiles('{}') failed. Fail to hash files under directory '{}'. {detail}",
-            arguments.join(", ").replace('\'', "''"),
+            "hashFiles('{escaped}') failed. Fail to hash files under directory '{}'. {detail}",
             workspace.display()
+        ))
+    };
+    let timed_out = || {
+        ExprError::evaluation(format!(
+            "hashFiles('{escaped}') couldn't finish within {} seconds.",
+            timeout.as_secs()
         ))
     };
     let root = fs::canonicalize(workspace).map_err(|error| failure(&error))?;
@@ -43,13 +53,18 @@ pub(crate) fn hash_files(
     let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
     let mut aggregate = Context::new(&SHA256);
     let mut count = 0_usize;
-    for found in patterns.walk(&root) {
-        let path = found.map_err(|error| failure(&error))?;
-        match file_digest(&path, &mut buffer) {
-            Ok(digest) => {
+    for found in patterns.walk(&root, deadline) {
+        let path = match found {
+            Ok(path) => path,
+            Err(GlobError::TimedOut) => return Err(timed_out()),
+            Err(error) => return Err(failure(&error)),
+        };
+        match file_digest(&path, &mut buffer, deadline) {
+            Ok(Some(digest)) => {
                 aggregate.update(digest.as_ref());
                 count += 1;
             }
+            Ok(None) => return Err(timed_out()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(failure(&format!("{}: {error}", path.display()))),
         }
@@ -60,13 +75,16 @@ pub(crate) fn hash_files(
     Ok(hex_digest(aggregate.finish().as_ref()))
 }
 
-fn file_digest(path: &Path, buffer: &mut [u8]) -> io::Result<Digest> {
+fn file_digest(path: &Path, buffer: &mut [u8], deadline: Instant) -> io::Result<Option<Digest>> {
     let mut file = File::open(path)?;
     let mut context = Context::new(&SHA256);
     loop {
+        if Instant::now() >= deadline {
+            return Ok(None);
+        }
         let read = file.read(buffer)?;
         if read == 0 {
-            return Ok(context.finish());
+            return Ok(Some(context.finish()));
         }
         context.update(&buffer[..read]);
     }

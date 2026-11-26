@@ -54,14 +54,47 @@ fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Opt
     })
 }
 
-pub(crate) fn format_template(
-    format: &str,
-    argument_count: usize,
-    mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
-) -> Result<String, ExprError> {
+const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
+const STRING_BASE_OVERHEAD: usize = 26;
+const BYTES_PER_UTF16_UNIT: usize = 2;
+
+struct MemoryCounter {
+    function: &'static str,
+    bytes: usize,
+}
+
+impl MemoryCounter {
+    fn new(function: &'static str) -> Self {
+        Self { function, bytes: 0 }
+    }
+
+    fn add(&mut self, value: &str) -> Result<(), ExprError> {
+        if value.is_empty() {
+            return Ok(());
+        }
+        let units = value.encode_utf16().count();
+        self.bytes = self
+            .bytes
+            .saturating_add(STRING_BASE_OVERHEAD)
+            .saturating_add(units.saturating_mul(BYTES_PER_UTF16_UNIT));
+        if self.bytes > MAX_MEMORY_BYTES {
+            return Err(ExprError::evaluation(format!(
+                "The maximum allowed memory size was exceeded while evaluating the following expression: {}",
+                self.function
+            )));
+        }
+        Ok(())
+    }
+}
+
+enum Segment {
+    Text(String),
+    Argument { index: usize, specifiers: String },
+}
+
+fn parse_template(format: &str, argument_count: usize) -> Result<Vec<Segment>, ExprError> {
     let chars: Vec<char> = format.chars().collect();
-    let mut cache: Vec<Option<String>> = vec![None; argument_count];
-    let mut result = String::new();
+    let mut segments = Vec::new();
     let mut index = 0usize;
     let invalid = || ExprError::evaluation(format!("Invalid format string: {format}"));
 
@@ -72,7 +105,7 @@ pub(crate) fn format_template(
         match (lbrace, rbrace) {
             (Some(lbrace), rbrace) if rbrace.is_none_or(|rbrace| rbrace > lbrace) => {
                 if char_at(&chars, lbrace + 1) == '{' {
-                    result.extend(&chars[index..=lbrace]);
+                    segments.push(Segment::Text(chars[index..=lbrace].iter().collect()));
                     index = lbrace + 2;
                     continue;
                 }
@@ -82,31 +115,59 @@ pub(crate) fn format_template(
                         "The following format string references more arguments than were supplied: {format}"
                     )));
                 }
-                if !placeholder.specifiers.is_empty() {
-                    return Err(ExprError::evaluation(format!(
-                        "The format specifiers '{}' are not valid for objects of type '{}'",
-                        placeholder.specifiers,
-                        resolve(placeholder.arg_index)?.kind().as_str()
-                    )));
-                }
-                result.extend(&chars[index..lbrace]);
-                let slot = &mut cache[placeholder.arg_index];
-                if slot.is_none() {
-                    *slot = Some(resolve(placeholder.arg_index)?.convert_to_string());
-                }
-                result.push_str(slot.as_deref().unwrap_or_default());
+                segments.push(Segment::Text(chars[index..lbrace].iter().collect()));
+                segments.push(Segment::Argument {
+                    index: placeholder.arg_index,
+                    specifiers: placeholder.specifiers,
+                });
                 index = placeholder.rbrace + 1;
             }
             (_, Some(rbrace)) => {
                 if char_at(&chars, rbrace + 1) != '}' {
                     return Err(invalid());
                 }
-                result.extend(&chars[index..=rbrace]);
+                segments.push(Segment::Text(chars[index..=rbrace].iter().collect()));
                 index = rbrace + 2;
             }
             _ => {
-                result.extend(&chars[index..]);
+                segments.push(Segment::Text(chars[index..].iter().collect()));
                 break;
+            }
+        }
+    }
+
+    Ok(segments)
+}
+
+pub(crate) fn format_template(
+    format: &str,
+    argument_count: usize,
+    mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
+) -> Result<String, ExprError> {
+    let mut memory = MemoryCounter::new("format");
+    let mut cache: Vec<Option<String>> = vec![None; argument_count];
+    let mut result = String::new();
+
+    for segment in parse_template(format, argument_count)? {
+        match segment {
+            Segment::Text(text) => {
+                memory.add(&text)?;
+                result.push_str(&text);
+            }
+            Segment::Argument { index, specifiers } => {
+                if !specifiers.is_empty() {
+                    return Err(ExprError::evaluation(format!(
+                        "The format specifiers '{specifiers}' are not valid for objects of type '{}'",
+                        resolve(index)?.kind().as_str()
+                    )));
+                }
+                let slot = &mut cache[index];
+                if slot.is_none() {
+                    *slot = Some(resolve(index)?.convert_to_string());
+                }
+                let argument = slot.as_deref().unwrap_or_default();
+                memory.add(argument)?;
+                result.push_str(argument);
             }
         }
     }

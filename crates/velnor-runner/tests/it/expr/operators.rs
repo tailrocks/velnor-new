@@ -172,3 +172,21 @@ fn expr_malformed_expressions_are_parse_errors() -> Result<()> {
     assert!(matches!(eval("   ", &env)?, Value::Null));
     Ok(())
 }
+
+#[test]
+fn expr_hex_and_octal_literals_use_signed_32_bit_semantics() -> Result<()> {
+    let env = empty_env();
+
+    assert!(truthy("0xFFFFFFFF == -1", &env)?);
+    assert_eq!(text("0x80000000", &env)?, "-2147483648");
+    assert_eq!(text("0x7FFFFFFF", &env)?, "2147483647");
+    assert_eq!(text("0o37777777777", &env)?, "-1");
+    assert!(truthy("'0xFFFFFFFF' == -1", &env)?);
+    for expression in ["0x100000000", "0o40000000000"] {
+        assert!(
+            error_text(expression, &env)?.starts_with("Unexpected symbol"),
+            "{expression}"
+        );
+    }
+    Ok(())
+}
