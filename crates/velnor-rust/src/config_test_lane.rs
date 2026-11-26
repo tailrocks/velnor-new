@@ -268,7 +268,7 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
-            packages: lint_packages(peers, &normalized),
+            packages: lint_packages(peers, &normalized, root),
             features: features(),
         });
     }
@@ -310,9 +310,11 @@ pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
     Ok(())
 }
 
-/// A lint shared by several lanes runs when any of them is selected, and
-/// always when one of them has no package list.
-fn lint_packages(peers: &[&TestLane], normalized: &LaneFeatures) -> Vec<PackageName> {
+fn lint_packages(
+    peers: &[&TestLane],
+    normalized: &LaneFeatures,
+    root: &RustRoot,
+) -> Vec<PackageName> {
     let sharing = peers
         .iter()
         .filter(|lane| lane.lint && lane.features.normalized() == *normalized);
@@ -323,5 +325,26 @@ fn lint_packages(peers: &[&TestLane], normalized: &LaneFeatures) -> Vec<PackageN
         }
         packages.extend(lane.packages.iter().cloned());
     }
-    packages.into_iter().collect()
+    with_dependents(root, packages).into_iter().collect()
+}
+
+fn with_dependents(root: &RustRoot, mut packages: BTreeSet<PackageName>) -> BTreeSet<PackageName> {
+    loop {
+        let before = packages.len();
+        let dependents: Vec<PackageName> = root
+            .members
+            .iter()
+            .filter(|member| {
+                member
+                    .dependencies
+                    .iter()
+                    .any(|dependency| packages.contains(&dependency.name))
+            })
+            .map(|member| member.name.clone())
+            .collect();
+        packages.extend(dependents);
+        if packages.len() == before {
+            return packages;
+        }
+    }
 }

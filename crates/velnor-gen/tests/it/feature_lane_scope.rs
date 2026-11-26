@@ -160,3 +160,44 @@ fn a_lint_shared_with_a_lane_that_has_no_package_list_is_not_scoped() -> TestRes
     assert!(!lint_condition(&config)?.contains("package_args"));
     Ok(())
 }
+
+#[test]
+fn a_lane_lint_also_runs_when_only_a_dependent_of_a_lane_package_is_selected() -> TestResult {
+    use velnor_model::{DependencyKind, PackageDependency, PackageName, RepoPath, RustPackage};
+    let mut repo = crate::feature_lanes::lane_view("0.1.93", &format!("{LANE}lint = true\n"))?;
+    let root = RepoPath::new("Cargo.toml")?;
+    let manifest = RepoPath::new("dependent/Cargo.toml")?;
+    repo.tracked_paths.insert(manifest.clone());
+    let dependent = RustPackage {
+        name: PackageName::new("dependent")?,
+        version: Some("0.1.0".to_owned()),
+        manifest,
+        dependencies: vec![PackageDependency {
+            name: PackageName::new("package-0")?,
+            kind: DependencyKind::Normal,
+            platform: None,
+            optional: false,
+            manifest: Some(root.clone()),
+            features: Vec::new(),
+            rename: None,
+        }],
+        targets: Vec::new(),
+    };
+    repo.rust_metadata
+        .get_mut(&root)
+        .ok_or("no root metadata")?
+        .members
+        .push(dependent);
+    let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
+    let lint = jobs
+        .as_object()
+        .into_iter()
+        .flatten()
+        .flat_map(|(_, job)| job["steps"].as_array().cloned().unwrap_or_default())
+        .find(|step| step["name"] == LINT_STEP)
+        .ok_or("no lint step")?;
+    let condition = text(&lint, "if")?;
+    assert!(condition.contains(&package("package-0")), "{condition}");
+    assert!(condition.contains(&package("dependent")), "{condition}");
+    Ok(())
+}
