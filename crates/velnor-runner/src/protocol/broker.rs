@@ -56,14 +56,16 @@ pub struct BrokerPoll {
 #[derive(Debug, Clone)]
 pub struct BrokerClient {
     base_url: Url,
+    os: RunnerOs,
     bearer_token: Secret<String>,
 }
 
 impl BrokerClient {
-    pub fn new(server_url_v2: &str, bearer_token: impl Into<String>) -> Result<Self> {
+    pub fn new(server_url_v2: &str, os: RunnerOs, bearer_token: impl Into<String>) -> Result<Self> {
         let url = validate_authenticated_url(server_url_v2)?;
         Ok(Self {
             base_url: slash_url(&url),
+            os,
             bearer_token: Secret::new(bearer_token.into()),
         })
     }
@@ -109,7 +111,7 @@ impl BrokerClient {
         disable_update: bool,
     ) -> Result<BrokerPoll> {
         let mut url = self.endpoint("message")?;
-        append_runner_query(&mut url, session_id, status)?;
+        append_runner_query(&mut url, self.os, session_id, status)?;
         url.query_pairs_mut().append_pair(
             "disableUpdate",
             if disable_update { "true" } else { "false" },
@@ -145,7 +147,7 @@ impl BrokerClient {
         status: RunnerStatus,
     ) -> Result<Acknowledgement> {
         let mut url = self.endpoint("acknowledge")?;
-        append_runner_query(&mut url, session_id, status)?;
+        append_runner_query(&mut url, self.os, session_id, status)?;
         let body = json!({ "runnerRequestId": runner_request_id }).to_string();
         let (http_status, text) = self
             .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
@@ -225,12 +227,17 @@ fn session_error_category(status: u16) -> BrokerErrorCategory {
     }
 }
 
-fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) -> Result<()> {
+fn append_runner_query(
+    url: &mut Url,
+    os: RunnerOs,
+    session_id: &str,
+    status: RunnerStatus,
+) -> Result<()> {
     url.query_pairs_mut()
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
         .append_pair("runnerVersion", RUNNER_PROTOCOL_VERSION)
-        .append_pair("os", RunnerOs::detect()?.as_str())
+        .append_pair("os", os.as_str())
         .append_pair("architecture", runner_architecture()?);
     Ok(())
 }

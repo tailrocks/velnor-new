@@ -9,8 +9,8 @@ use serde_json::json;
 use velnor_model::RUNNER_PROTOCOL_VERSION;
 use velnor_runner::protocol::{
     AcquireJobOutcome, BrokerClient, BrokerErrorCategory, BrokerPoll, RUNNER_JOB_REQUEST,
-    RunServiceClient, RunnerStatus, ServiceErrorKind, TaskAgentMessage, TaskAgentSession,
-    broker_error_category, service_error_kind,
+    RetryDelays, RunServiceClient, RunnerOs, RunnerStatus, ServiceErrorKind, TaskAgentMessage,
+    TaskAgentSession, acquire_job, broker_error_category, service_error_kind,
 };
 
 use super::support::{
@@ -119,7 +119,11 @@ fn assert_recorded_bodies(server: &TestServer) -> Result<()> {
 #[tokio::test]
 async fn broker_run_service_happy_path_acquires_and_completes_job() -> Result<()> {
     let server = TestServer::start().await?;
-    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    let broker = BrokerClient::new(
+        &format!("{}/broker", server.uri()),
+        RunnerOs::detect()?,
+        TOKEN,
+    )?;
     let run_service = RunServiceClient::new(TOKEN)?;
     let run_service_url = format!("{}/run/jobs/123", server.uri());
     mount_broker_routes(&server, &run_service_url)?;
@@ -171,7 +175,11 @@ async fn broker_run_service_happy_path_acquires_and_completes_job() -> Result<()
 #[tokio::test]
 async fn broker_poll_auth_failure_is_error_not_idle() -> Result<()> {
     let server = TestServer::start().await?;
-    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    let broker = BrokerClient::new(
+        &format!("{}/broker", server.uri()),
+        RunnerOs::detect()?,
+        TOKEN,
+    )?;
 
     for status in [401, 403] {
         server.reset()?;
@@ -190,9 +198,40 @@ async fn broker_poll_auth_failure_is_error_not_idle() -> Result<()> {
 }
 
 #[tokio::test]
+async fn broker_poll_and_acknowledge_send_the_injected_os() -> Result<()> {
+    let server = TestServer::start().await?;
+    let injected = if cfg!(target_os = "linux") {
+        RunnerOs::MacOs
+    } else {
+        RunnerOs::Linux
+    };
+    assert_ne!(injected.as_str(), UPSTREAM_OS);
+    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), injected, TOKEN)?;
+    server.respond("GET", "/broker/message", |_| Reply::status(204))?;
+    server.respond("POST", "/broker/acknowledge", |_| Reply::status(200))?;
+
+    broker
+        .get_runner_message("session-1", RunnerStatus::Online, true)
+        .await?;
+    broker
+        .acknowledge_runner_request("session-1", "request-1", RunnerStatus::Busy)
+        .await?;
+
+    let poll = server.only_request("GET", "/broker/message")?;
+    let acknowledge = server.only_request("POST", "/broker/acknowledge")?;
+    assert_eq!(poll.query("os"), Some(injected.as_str()));
+    assert_eq!(acknowledge.query("os"), Some(injected.as_str()));
+    Ok(())
+}
+
+#[tokio::test]
 async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
     let server = TestServer::start().await?;
-    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    let broker = BrokerClient::new(
+        &format!("{}/broker", server.uri()),
+        RunnerOs::detect()?,
+        TOKEN,
+    )?;
     server.respond("POST", "/broker/acknowledge", |_| Reply::stall())?;
 
     let started = Instant::now();

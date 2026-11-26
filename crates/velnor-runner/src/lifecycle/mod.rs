@@ -107,7 +107,7 @@ pub async fn run_jit(options: RunJitOptions) -> Result<LifecycleOutcome, Lifecyc
     let opened = tokio::select! {
         biased;
         () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
-        opened = Session::open(&config, options.session_retry_interval) => opened?,
+        opened = Session::open(&config, options.os, options.session_retry_interval) => opened?,
     };
     let session = Arc::new(opened);
     let outcome = serve(&options, &agent_name, &session).await;
@@ -127,9 +127,6 @@ async fn serve(
         Assignment::Job(request) => request,
         Assignment::Shutdown => return Ok(LifecycleOutcome::NoJob),
     };
-    if options.shutdown.is_cancelled() {
-        return Ok(LifecycleOutcome::NoJob);
-    }
     let root =
         std::path::absolute(&options.work_dir).map_err(|source| LifecycleError::WorkDir {
             path: options.work_dir.clone(),
@@ -141,7 +138,12 @@ async fn serve(
         runner_name: agent_name.to_owned(),
         os: options.os,
     };
-    let outcome = match prepare_work_dirs(&run_options).await {
+    let prepared = tokio::select! {
+        biased;
+        () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
+        prepared = prepare_work_dirs(&run_options) => prepared,
+    };
+    let outcome = match prepared {
         Ok(()) => acquire_and_run(options, session, &run_options, &request).await,
         Err(error) => Err(error),
     };
@@ -169,7 +171,10 @@ async fn acquire_and_run(
             Ok(Finish::Ran(run, report)) => {
                 (complete::build(&message, &run, &report), Ok(run.result))
             }
-            Ok(Finish::Abandoned) => (complete::abandoned(&message), Ok(JobResult::Cancelled)),
+            Ok(Finish::Abandoned(report)) => (
+                complete::abandoned(&message, &report),
+                Ok(JobResult::Cancelled),
+            ),
             Ok(Finish::NotStarted) => (complete::not_started(&message), Ok(JobResult::Cancelled)),
             Err(error) => (complete::forced_failure(&message, &error), Err(error)),
         };
@@ -215,7 +220,7 @@ async fn prepare_work_dirs(options: &RunOptions) -> Result<(), LifecycleError> {
 
 enum Finish {
     Ran(JobRun, ReportSummary),
-    Abandoned,
+    Abandoned(ReportSummary),
     NotStarted,
 }
 
@@ -281,6 +286,6 @@ async fn run_and_report(
     let report = reporter.await.unwrap_or_default();
     Ok(match run {
         Some(run) => Finish::Ran(run, report),
-        None => Finish::Abandoned,
+        None => Finish::Abandoned(report),
     })
 }

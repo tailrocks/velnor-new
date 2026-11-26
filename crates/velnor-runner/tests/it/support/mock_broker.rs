@@ -110,7 +110,9 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
             }),
         )
     })?;
-    server.respond("DELETE", "/broker/session", |_| Reply::status(204))
+    server.respond("DELETE", "/broker/session", |seen| {
+        Reply::status(if is_stale(seen) { 401 } else { 204 })
+    })
 }
 
 pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<()> {

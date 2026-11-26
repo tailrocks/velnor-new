@@ -106,10 +106,7 @@ pub(super) fn build(
         .map(annotation)
         .collect();
     if report.logs_dropped {
-        annotations.push(annotation(&Annotation::new(
-            AnnotationLevel::Warning,
-            LOGS_DROPPED.to_owned(),
-        )));
+        annotations.push(logs_dropped_warning());
     }
     RunServiceCompleteJob {
         plan_id: message.plan.plan_id.clone(),
@@ -127,6 +124,13 @@ pub(super) fn build(
         billing_owner_id: message.billing_owner_id.clone(),
         infrastructure_failure_category: None,
     }
+}
+
+fn logs_dropped_warning() -> RunServiceAnnotation {
+    annotation(&Annotation::new(
+        AnnotationLevel::Warning,
+        LOGS_DROPPED.to_owned(),
+    ))
 }
 
 fn forced(
@@ -170,13 +174,20 @@ pub(super) fn not_started(message: &AgentJobRequestMessage) -> RunServiceComplet
     )
 }
 
-pub(super) fn abandoned(message: &AgentJobRequestMessage) -> RunServiceCompleteJob {
-    forced(
+pub(super) fn abandoned(
+    message: &AgentJobRequestMessage,
+    report: &ReportSummary,
+) -> RunServiceCompleteJob {
+    let mut completion = forced(
         message,
         TaskResult::Canceled,
         AnnotationLevel::Warning,
         "The job did not stop within its cancellation timeout; the runner stopped it.".to_owned(),
-    )
+    );
+    if report.logs_dropped {
+        completion.annotations.push(logs_dropped_warning());
+    }
+    completion
 }
 
 pub(super) async fn send(

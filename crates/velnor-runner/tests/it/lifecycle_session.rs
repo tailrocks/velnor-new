@@ -358,6 +358,12 @@ async fn lifecycle_acquires_and_runs_the_job_as_the_injected_os() -> Result<()> 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
     let acquire = mock.server.only_request("POST", "/run/acquirejob")?;
     assert_eq!(acquire.json()?["runnerOS"], "macOS");
+    for poll in mock.requests_to("GET", "/broker/message")? {
+        assert_eq!(poll.query("os"), Some("macOS"));
+    }
+    for acknowledge in mock.requests_to("POST", "/broker/acknowledge")? {
+        assert_eq!(acknowledge.query("os"), Some("macOS"));
+    }
     let complete = mock.complete_request()?;
     assert_eq!(
         complete["stepResults"][0]["annotations"][0]["message"],

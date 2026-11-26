@@ -217,10 +217,11 @@ fn jit_value(raw: &str) -> Result<String> {
 }
 
 async fn run_command(args: &RunArgs) -> Result<ExitCode> {
+    let jit = Secret::new(jit_value(&args.jit)?);
     let os = RunnerOs::detect()?;
     let shutdown = cancel_on_signal()?;
     let options = RunJitOptions {
-        jit: Secret::new(jit_value(&args.jit)?),
+        jit,
         work_dir: args.work_dir.clone(),
         shutdown,
         renew_interval: RENEW_INTERVAL,

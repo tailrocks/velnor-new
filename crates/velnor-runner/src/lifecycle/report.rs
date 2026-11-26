@@ -277,36 +277,33 @@ impl Reporter {
             return;
         }
         let step_id = self.step_id(number);
-        loop {
-            let Some(state) = self.steps.get_mut(&number) else {
-                return;
-            };
-            let lines = state.next_lines().await;
-            if lines.is_empty() {
-                return;
-            }
-            let mut start = state.taken + 1;
-            state.taken += i64::try_from(lines.len()).unwrap_or(i64::MAX);
-            let Some(mut socket) = self.feed.take() else {
-                return;
-            };
-            for batch in lines.chunks(FEED_BATCH_LINES) {
-                let sent = timeout(
-                    self.budget,
-                    FeedStreamClient::send_log_lines(&mut socket, &step_id, batch.to_vec(), start),
-                )
-                .await;
-                if !matches!(sent, Ok(Ok(()))) {
-                    eprintln!("warning: live feed stopped; step logs are still uploaded");
-                    return;
-                }
-                start += i64::try_from(batch.len()).unwrap_or(i64::MAX);
-            }
-            self.feed = Some(socket);
-            if !drain {
-                return;
-            }
+        let Some(state) = self.steps.get_mut(&number) else {
+            return;
+        };
+        let (mut start, lines) = if drain {
+            state.final_feed_lines().await
+        } else {
+            state.next_feed_lines().await
+        };
+        if lines.is_empty() {
+            return;
         }
+        let Some(mut socket) = self.feed.take() else {
+            return;
+        };
+        for batch in lines.chunks(FEED_BATCH_LINES) {
+            let sent = timeout(
+                self.budget,
+                FeedStreamClient::send_log_lines(&mut socket, &step_id, batch.to_vec(), start),
+            )
+            .await;
+            if !matches!(sent, Ok(Ok(()))) {
+                eprintln!("warning: live feed stopped; step logs are still uploaded");
+                return;
+            }
+            start += i64::try_from(batch.len()).unwrap_or(i64::MAX);
+        }
+        self.feed = Some(socket);
     }
 
     async fn finish(&mut self, run: &JobRun) {
