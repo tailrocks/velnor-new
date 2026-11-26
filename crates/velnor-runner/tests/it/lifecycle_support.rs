@@ -61,6 +61,7 @@ pub(crate) struct Settings {
     pub(crate) cancel_timeout_floor: Duration,
     pub(crate) upload_block_budget: Duration,
     pub(crate) session_retry_interval: Duration,
+    pub(crate) poll_error_delay: Duration,
     pub(crate) report_budget: Duration,
     pub(crate) upload_drain_budget: Duration,
     pub(crate) feed_flush_interval: Duration,
@@ -77,6 +78,7 @@ impl Settings {
             cancel_timeout_floor: Duration::from_secs(60),
             upload_block_budget: Duration::from_secs(60),
             session_retry_interval: Duration::from_millis(50),
+            poll_error_delay: Duration::from_millis(50),
             report_budget: Duration::from_secs(10),
             upload_drain_budget: Duration::from_secs(600),
             feed_flush_interval: Duration::from_millis(250),
@@ -103,6 +105,11 @@ impl Settings {
 
     pub(crate) fn retrying_sessions_every(mut self, interval: Duration) -> Self {
         self.session_retry_interval = interval;
+        self
+    }
+
+    pub(crate) fn retrying_polls_every(mut self, delay: Duration) -> Self {
+        self.poll_error_delay = delay;
         self
     }
 
@@ -151,7 +158,7 @@ pub(crate) async fn run_in(
         renew_lock_grace: settings.renew_lock_grace,
         cancel_timeout_floor: settings.cancel_timeout_floor,
         upload_block_budget: settings.upload_block_budget,
-        cancel_poll_error_delay: Duration::from_millis(50),
+        cancel_poll_error_delay: settings.poll_error_delay,
         session_retry_interval: settings.session_retry_interval,
         report_budget: settings.report_budget,
         upload_drain_budget: settings.upload_drain_budget,

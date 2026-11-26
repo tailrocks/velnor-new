@@ -20,6 +20,7 @@ async fn lost_poll_cancels_the_job(behavior: Behavior) -> Result<MockGithub> {
         &mock,
         Settings::new()
             .renewing_every(Duration::from_secs(60))
+            .retrying_polls_every(Duration::from_millis(1))
             .within(CANCEL_BUDGET),
     )
     .await?;
@@ -27,6 +28,14 @@ async fn lost_poll_cancels_the_job(behavior: Behavior) -> Result<MockGithub> {
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
     assert_eq!(mock.complete_request()?["conclusion"], "canceled");
     Ok(mock)
+}
+
+fn busy_polls(mock: &MockGithub) -> Result<usize> {
+    Ok(mock
+        .requests_to("GET", "/broker/message")?
+        .iter()
+        .filter(|poll| poll.query("status") == Some("Busy"))
+        .count())
 }
 
 #[tokio::test]
@@ -40,13 +49,24 @@ async fn lifecycle_cancels_the_job_when_the_busy_poll_finds_the_runner_gone() ->
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_when_the_busy_poll_stays_forbidden_after_a_token_refresh()
--> Result<()> {
-    lost_poll_cancels_the_job(Behavior {
+async fn lifecycle_cancels_the_job_after_ten_busy_polls_in_a_row_stay_forbidden() -> Result<()> {
+    let mock = lost_poll_cancels_the_job(Behavior {
         cancel: Cancel::BusyPollFails(403),
         ..Behavior::default()
     })
     .await?;
+    assert_eq!(busy_polls(&mock)?, 20);
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_retries_a_busy_poll_that_answers_404_until_the_tenth_error() -> Result<()> {
+    let mock = lost_poll_cancels_the_job(Behavior {
+        cancel: Cancel::BusyPollFails(404),
+        ..Behavior::default()
+    })
+    .await?;
+    assert_eq!(busy_polls(&mock)?, 10);
     Ok(())
 }
 
