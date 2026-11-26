@@ -215,7 +215,6 @@ runs:
             failures=
             host="${RELEASES#*://}"
             host="${host%%/*}"
-            host="${host##*@}"
             for tag in "tools-v$VERSION" "rust-ci-v$VERSION"; do
               echo "Downloading $RELEASES/$tag/$archive"
               rc=0

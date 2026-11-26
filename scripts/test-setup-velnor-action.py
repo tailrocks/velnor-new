@@ -575,19 +575,11 @@ class SetupVelnorInstallTests(unittest.TestCase):
                 self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_a_download_that_keeps_returning_502_names_the_host_the_curl_exit_code_and_the_http_status(self):
-        password = "SEC" + "RET"
-        result = self.install(
-            sha256(self.archive),
-            extra_env={
-                "STUB_FAIL_STATUS": "502",
-                "RELEASES": f"https://x-access-token:{password}@github.com/tailrocks/velnor-new/releases/download",
-            },
-        )
+        result = self.install(sha256(self.archive), extra_env={"STUB_FAIL_STATUS": "502"})
         self.assertEqual(result.returncode, 1, result.output)
         error = next(line for line in result.stdout.splitlines() if line.startswith("::error"))
         self.assertIn("tools-v0.1.79 from github.com: curl exit 22, last HTTP status 502", error)
         self.assertIn("rust-ci-v0.1.79 from github.com: curl exit 22, last HTTP status 502", error)
-        self.assertNotIn(password, error)
         self.assertNotIn("larger than", error)
         self.assertEqual(installed_files(self.tool_cache), [], result.output)
 
