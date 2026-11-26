@@ -7,23 +7,40 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use velnor_runner::expr::{ExprEnv, ExprError, evaluate_condition, evaluate_template};
 
-const OUT_OF_SCOPE: [(&str, &[&str]); 3] = [
+const MATRIX: &str = "unsupported expression context matrix";
+
+const OUT_OF_SCOPE: [(&str, &str); 3] = [
     (
         "generator/samples/declared-workflows/expected/.github/workflows/build-assets.yml",
-        &[
-            "unsupported expression context matrix",
-            "unsupported expression context jobs",
-        ],
+        MATRIX,
     ),
     (
         "generator/samples/declared-workflows/expected/.github/workflows/tools-build.yml",
-        &["unsupported expression context matrix"],
+        MATRIX,
     ),
     (
         "generator/samples/reusable-workflows/expected/.github/workflows/native-checks.yml",
-        &["unsupported expression context matrix"],
+        MATRIX,
     ),
 ];
+
+const SERVICE_JOB_KEYS: [&str; 13] = [
+    "runs-on",
+    "if",
+    "name",
+    "needs",
+    "strategy",
+    "concurrency",
+    "timeout-minutes",
+    "continue-on-error",
+    "permissions",
+    "uses",
+    "with",
+    "secrets",
+    "environment",
+];
+
+const SERVICE_ROOT_KEYS: [&str; 5] = ["on", "name", "run-name", "concurrency", "permissions"];
 
 const COVERED: [&str; 4] = ["endsWith(", "vars.", "failure()", "VELNOR_CACHE_DEBUG"];
 
@@ -58,7 +75,11 @@ fn workflow_files(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn collect(value: &serde_json::Value, path: &[&str], sources: &mut BTreeSet<(bool, String)>) {
     match value {
-        serde_json::Value::String(_) if matches!(path, ["jobs", _, "if"]) => {}
+        _ if path
+            .first()
+            .is_some_and(|key| SERVICE_ROOT_KEYS.contains(key)) => {}
+        _ if matches!(path, ["jobs", _, key, ..] if SERVICE_JOB_KEYS.contains(key))
+            && !matches!(path, ["jobs", _, "environment", "url"]) => {}
         serde_json::Value::String(text) if text.contains("${{") => {
             sources.insert((false, text.clone()));
         }
@@ -109,9 +130,9 @@ fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
         collect(&document, &[], &mut sources);
         for (is_condition, source) in sources {
             if let Some(error) = parse_error(is_condition, &source, &env) {
-                let known = OUT_OF_SCOPE.iter().position(|(file, messages)| {
-                    relative == *file && messages.iter().any(|message| error.contains(message))
-                });
+                let known = OUT_OF_SCOPE
+                    .iter()
+                    .position(|(file, message)| relative == *file && error.contains(message));
                 match known {
                     Some(index) => {
                         known_hit.insert(index);
