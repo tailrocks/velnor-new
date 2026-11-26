@@ -162,7 +162,6 @@ impl BrokerClient {
     }
 }
 
-/// Kinds upstream types on the poll endpoint (`BrokerHttpClient.cs` lines 116-133).
 const POLL_KINDS: &[ServiceErrorKind] = &[
     ServiceErrorKind::RunnerNotFound,
     ServiceErrorKind::RunnerVersionTooOld,
@@ -170,7 +169,6 @@ const POLL_KINDS: &[ServiceErrorKind] = &[
     ServiceErrorKind::RunnerSessionInvalid,
 ];
 
-/// Kinds upstream types on the acknowledge endpoint (`BrokerHttpClient.cs` lines 274-279).
 const ACKNOWLEDGE_KINDS: &[ServiceErrorKind] = &[
     ServiceErrorKind::AcknowledgeJobNotFound,
     ServiceErrorKind::RunnerNotFound,

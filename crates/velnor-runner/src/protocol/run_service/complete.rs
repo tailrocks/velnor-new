@@ -116,8 +116,6 @@ pub enum RunServiceAnnotationLevel {
 }
 
 impl RunServiceClient {
-    /// A typed 404 fails with `ServiceErrorKind::JobNotFound`, as upstream
-    /// records `TaskOrchestrationJobNotFoundException` and fails the job.
     pub async fn complete_job(
         &self,
         run_service_url: &str,

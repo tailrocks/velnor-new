@@ -153,6 +153,10 @@ fn mask_hints_with_unknown_integer_or_missing_types_are_kept_for_the_worker_to_s
         {"Type": 3, "Value": "integer"},
         {"Type": 0, "Value": "zero"},
         {"Type": "7", "Value": "numeric string"},
+        {"Type": "Variable, Regex", "Value": "joined"},
+        {"Type": " Regex ,Regex", "Value": "repeated"},
+        {"Type": "Variable,1", "Value": "mixed"},
+        {"Type": "-1", "Value": "negative"},
         {"Value": "absent"},
         {"Type": 1, "Value": "kept"},
     ]);
@@ -166,12 +170,16 @@ fn mask_hints_with_unknown_integer_or_missing_types_are_kept_for_the_worker_to_s
             unsupported("3"),
             unsupported("0"),
             unsupported("7"),
+            unsupported("3"),
+            MaskKind::Regex,
+            MaskKind::Variable,
+            unsupported("-1"),
             unsupported("0"),
             MaskKind::Variable,
         ]
     );
     assert_eq!(
-        message.mask[4]
+        message.mask[8]
             .value
             .as_ref()
             .map(|value| value.expose().as_str()),
@@ -190,6 +198,12 @@ fn mask_hints_with_a_malformed_type_fail_the_job_message() -> Result<()> {
         json!(true),
         json!({"a": 1}),
         json!([1]),
+        json!(2_147_483_648_i64),
+        json!("2147483648"),
+        json!("Variable,2147483648"),
+        json!("Variable,Bogus"),
+        json!(""),
+        json!("Variable,"),
     ] {
         let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
         wire["Mask"] = json!([{"Type": bad, "Value": "secret"}]);

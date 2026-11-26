@@ -76,7 +76,7 @@ upstream mechanism the code copies.
 | A run-service error is typed only when its body has `source` equal to `actions-run-service`. The body `statusCode`, not the HTTP status, decides. A completion that gets a typed 404 fails as job not found, as upstream records the job-not-found exception and fails. A 404 with another or no `source` is an ordinary retried error. | `src/Sdk/RSWebApi/RunServiceHttpClient.cs` lines 100-112, 165-172, 212-219, 237-256 |
 | A broker error is typed only when its body has `source` equal to `actions-broker-listener`. Poll types `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned` and `RunnerSessionInvalid`. Acknowledge types `AcknowledgeJobNotFound` and `RunnerNotFound`. Every other broker error is untyped. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
 | Session creation maps 403 to access denied and 409 to a session conflict, and does not retry. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 157-167 |
-| The worker applies only Regex mask hints. It logs and skips every other type, including Variable, and the job still runs. A `type` that is not an integer, a numeric string or a known name fails the job message. | `src/Runner.Worker/Worker.cs` lines 176-190 |
+| The worker applies only Regex mask hints. It logs and skips every other type, including Variable, and the job still runs. A `type` that is not an integer, a numeric string or a known name fails the job message. | `src/Runner.Worker/Worker.cs` lines 176-190; `src/Sdk/Common/Common/VssJsonMediaTypeFormatter.cs` line 87 with Newtonsoft `StringEnumConverter` and `EnumUtils` |
 
 Deliberate deviations:
 
@@ -85,12 +85,18 @@ Deliberate deviations:
   that consumes the job message writes the "Unsupported mask type" line and
   skips the hint.
 - A mask `type` that is a float, boolean, null, object, array or an unknown
-  name fails the job message, as upstream's string-enum converter does. An
-  unknown integer or numeric string parses to `MaskKind::Unsupported`, and a
-  missing `type` parses to `Unsupported("0")`, the enum default. The names
-  Variable and Regex match case-insensitively.
-- The worker masks Variable hints. Upstream skips every type except Regex.
-  Over-masking is safe, so Velnor keeps it.
+  name fails the job message, as upstream's string-enum converter does
+  (Newtonsoft `StringEnumConverter` and `EnumUtils`, reached through
+  `VssJsonMediaTypeFormatter.cs` line 87). A numeric string parses as an
+  `i32`, and a comma-joined list of names or numbers ORs its tokens after
+  trimming whitespace, so `Variable, Regex` becomes 3 and parses to
+  `MaskKind::Unsupported("3")`. An integer or token outside `i32` fails the
+  job message, a deviation from .NET, which widens the token. An unknown
+  integer parses to `MaskKind::Unsupported`, and a missing `type` parses to
+  `Unsupported("0")`, the enum default. The names Variable and Regex match
+  case-insensitively.
+- The parser maps `Variable` to `MaskKind::Variable`. The consumer decides
+  what to do with it.
 - A completion treats the first HTTP 401 as fatal. Upstream's HTTP handler
   first invalidates the token and repeats the request with a fresh one, and
   raises the unauthorized exception only when that fails

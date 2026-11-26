@@ -294,7 +294,6 @@ type RefusalCase = (
     Option<ServiceErrorKind>,
 );
 
-/// (name, status, body, kind typed on poll, kind typed on acknowledge)
 fn refusal_cases() -> Vec<RefusalCase> {
     vec![
         (
