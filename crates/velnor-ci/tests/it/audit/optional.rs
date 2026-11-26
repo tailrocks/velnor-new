@@ -198,7 +198,7 @@ fn app_and_lib(app: &str, config: &str) -> crate::io::Repo {
     unit(
         &repo,
         "rust/lib/Cargo.toml",
-        "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[features]\ny = []\n\n[[bin]]\nname = \"lg\"\npath = \"src/lg.rs\"\nrequired-features = [\"y\"]\n",
+        "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[features]\nx = []\ny = []\n\n[[bin]]\nname = \"lg\"\npath = \"src/lg.rs\"\nrequired-features = [\"y\"]\n",
     );
     unit(&repo, "rust/lib/src/lg.rs", "fn main() {}\n");
     unit(&repo, ".velnor/rust-ci.toml", config);
@@ -313,4 +313,17 @@ fn a_workspace_feature_selector_activates_an_optional_dependency_whose_implicit_
     forwarded_units(&repo, &["lg"]);
     let accepted = audit(&repo, &["--write"]);
     assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}
+
+#[test]
+fn a_selector_does_not_forward_through_a_platform_dependency_or_a_second_alias_of_the_same_package()
+{
+    for app in [
+        "[target.'cfg(windows)'.dependencies]\nalias = { package = \"lib\", path = \"../lib\", optional = true }\n",
+        "[dependencies]\nalias = { package = \"lib\", path = \"../lib\", optional = true }\nother = { package = \"lib\", path = \"../lib\", optional = true, features = [\"y\"] }\n",
+    ] {
+        let repo = app_and_lib(app, "workspace_features = ['alias/x']\n");
+        let accepted = audit(&repo, &["--write"]);
+        assert_eq!(accepted.status.code(), Some(0), "{app}: {accepted:?}");
+    }
 }

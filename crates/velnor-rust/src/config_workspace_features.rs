@@ -63,17 +63,12 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
     let Some((package, feature)) = name.split_once('/') else {
         return confined().any(|member| defined_features(view, member).contains(name));
     };
-    let aliased: Vec<String> = confined()
-        .filter_map(|member| manifest(view, member))
-        .flat_map(|manifest| {
+    let aliased: Vec<Option<String>> = confined()
+        .filter_map(|member| Some((member, manifest(view, member)?)))
+        .flat_map(|(member, manifest)| {
             feature_dependency_specs(&manifest)
                 .filter(|(key, _)| *key == package)
-                .map(|(_, spec)| {
-                    spec.get("package")
-                        .and_then(toml::Value::as_str)
-                        .unwrap_or(package)
-                        .to_owned()
-                })
+                .map(|(_, spec)| dependency_directory(view, root, member, spec, package))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -82,11 +77,13 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
             member.name.as_str() == package && defined_features(view, member).contains(feature)
         });
     }
-    aliased.iter().all(|target| {
-        root.members
-            .iter()
-            .find(|member| member.name.as_str() == target)
-            .is_none_or(|member| defined_features(view, member).contains(feature))
+    aliased.iter().all(|directory| {
+        directory.as_ref().is_none_or(|directory| {
+            root.members
+                .iter()
+                .find(|member| member_directory(member) == *directory)
+                .is_none_or(|member| defined_features(view, member).contains(feature))
+        })
     })
 }
 
@@ -108,4 +105,53 @@ fn defined_features(view: &RepoView, member: &RustMember) -> BTreeSet<String> {
         .cloned()
         .chain(implicit_features(&manifest))
         .collect()
+}
+
+fn member_directory(member: &RustMember) -> String {
+    member
+        .directory
+        .as_ref()
+        .map_or_else(String::new, ToString::to_string)
+}
+
+fn dependency_directory(
+    view: &RepoView,
+    root: &RustRoot,
+    member: &RustMember,
+    spec: &toml::Value,
+    key: &str,
+) -> Option<String> {
+    let inherited = spec.get("workspace").and_then(toml::Value::as_bool) == Some(true);
+    let (path, base) = if inherited {
+        let shared = view
+            .files
+            .get(&root.manifest)
+            .and_then(|bytes| table(bytes).ok())?;
+        let path = shared
+            .get("workspace")?
+            .get("dependencies")?
+            .get(key)?
+            .get("path")?
+            .as_str()?
+            .to_owned();
+        (path, root.manifest.parent())
+    } else {
+        (
+            spec.get("path")?.as_str()?.to_owned(),
+            member.manifest.parent(),
+        )
+    };
+    let mut parts: Vec<String> = base.map_or_else(Vec::new, |base| {
+        base.as_str().split('/').map(ToOwned::to_owned).collect()
+    });
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            other => parts.push(other.to_owned()),
+        }
+    }
+    Some(parts.join("/"))
 }

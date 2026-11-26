@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    DependencyKind, RepoPath, RepoView, RustPackage, Target, TargetKind, TargetName,
+    DependencyKind, PackageDependency, RepoPath, RepoView, RustPackage, Target, TargetKind,
+    TargetName,
 };
 
 use crate::harness::{dependency_specs, enabled_features, implicit_features};
@@ -77,25 +78,15 @@ pub(crate) fn requested_by_siblings(
                 }
                 let mut wanted = dependency.features.clone();
                 if let (Some(parsed), Some(enabled)) = (own, &enabled) {
-                    let mut keys =
-                        dependency_keys(parsed, dependency.name.as_str(), dependency.kind);
-                    keys.extend(dependency.rename.clone());
-                    if keys.is_empty() {
-                        keys.insert(dependency.name.to_string());
-                    }
-                    let direct = if !root_only || member.manifest == *workspace {
-                        workspace_forwards(workspace_features, &keys)
-                    } else {
-                        Vec::new()
-                    };
-                    if dependency.optional
-                        && direct.is_empty()
-                        && !keys.iter().any(|key| activated(parsed, enabled, key))
-                    {
+                    let Some(more) = edge_requests(
+                        parsed,
+                        enabled,
+                        dependency,
+                        (!root_only || member.manifest == *workspace).then_some(workspace_features),
+                    ) else {
                         continue;
-                    }
-                    wanted.extend(forwarded_features(parsed, enabled, &keys));
-                    wanted.extend(direct);
+                    };
+                    wanted.extend(more);
                 }
                 let slot = requested.entry(target).or_default();
                 for feature in wanted {
@@ -251,6 +242,33 @@ fn dependency_keys(
         })
         .map(|(key, _)| key.clone())
         .collect()
+}
+
+fn edge_requests(
+    parsed: &toml::Table,
+    enabled: &BTreeSet<String>,
+    dependency: &PackageDependency,
+    workspace_features: Option<&[String]>,
+) -> Option<Vec<String>> {
+    let mut keys = dependency.rename.as_ref().map_or_else(
+        || dependency_keys(parsed, dependency.name.as_str(), dependency.kind),
+        |rename| BTreeSet::from([rename.clone()]),
+    );
+    if keys.is_empty() {
+        keys.insert(dependency.name.to_string());
+    }
+    let direct = workspace_features
+        .filter(|_| dependency.platform.is_none())
+        .map_or_else(Vec::new, |names| workspace_forwards(names, &keys));
+    if dependency.optional
+        && direct.is_empty()
+        && !keys.iter().any(|key| activated(parsed, enabled, key))
+    {
+        return None;
+    }
+    let mut wanted = forwarded_features(parsed, enabled, &keys);
+    wanted.extend(direct);
+    Some(wanted)
 }
 
 fn workspace_forwards(names: &[String], keys: &BTreeSet<String>) -> Vec<String> {

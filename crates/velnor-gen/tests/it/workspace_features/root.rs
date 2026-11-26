@@ -172,3 +172,15 @@ fn a_member_name_does_not_excuse_a_dependency_alias_of_that_name_that_lacks_the_
     )?)?;
     Ok(())
 }
+
+#[test]
+fn an_external_dependency_that_shares_a_member_name_is_not_read_as_that_member() -> TestResult {
+    let root = format!(
+        "{ROOT_WITHOUT_FEATURE}edition = \"2021\"\n[dependencies]\nmember = {{ version = \"1\" }}\n"
+    );
+    detect(&root_and_member(
+        &root,
+        "workspace_features = ['member/derive']\n",
+    )?)?;
+    Ok(())
+}
