@@ -77,13 +77,16 @@ async fn read_text(path: &Path, kind: Kind) -> Result<String, ExecError> {
     let read = read_bounded(path, kind).await;
     let _ = tokio::fs::remove_file(path).await;
     match read {
-        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes);
+            Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned())
+        }
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
         Err(source) => Err(ExecError::io(format!("read {}", path.display()), source)),
     }
 }
 
-fn failure(context: &str, error: &ExecError) -> [String; 2] {
+pub(super) fn failure(context: &str, error: &ExecError) -> [String; 2] {
     [
         format!("Unable to process file command '{context}' successfully."),
         error.to_string(),

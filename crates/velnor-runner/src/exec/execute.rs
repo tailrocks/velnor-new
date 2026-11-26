@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use super::adapter::{AdapterCall, invoke};
 use super::contexts::set_output;
-use super::env_files::{Collected, FileCommands, save_summary};
+use super::env_files::{Collected, FileCommands, failure, save_summary};
 use super::job::Job;
 use super::output::Output;
 use super::preflight::reference;
@@ -134,10 +134,18 @@ impl Job<'_> {
     ) -> Result<Executed, ExecError> {
         let mut result = result;
         let command_failed = out.issues.take_command_failure();
-        if (command_failed || !collected.failures.is_empty()) && result == StepResult::Succeeded {
+        let mut failures = collected.failures;
+        let summary = match save_summary(&self.options.temp, &collected.summary, out).await {
+            Ok(summary) => summary,
+            Err(error) => {
+                failures.extend(failure("step_summary", &error));
+                None
+            }
+        };
+        if (command_failed || !failures.is_empty()) && result == StepResult::Succeeded {
             result = StepResult::Failed;
         }
-        for failure in &collected.failures {
+        for failure in &failures {
             out.message(failure);
             out.annotate(AnnotationLevel::Error, failure.clone());
         }
@@ -158,7 +166,6 @@ impl Job<'_> {
         for (name, value) in &collected.outputs {
             set_output(&mut outputs, name, value);
         }
-        let summary = save_summary(&self.options.temp, &collected.summary, out).await?;
         Ok(Executed {
             result,
             outputs,

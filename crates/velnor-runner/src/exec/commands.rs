@@ -182,7 +182,7 @@ fn validate_range(properties: &mut BTreeMap<String, String>) {
 }
 
 fn number(properties: &BTreeMap<String, String>, key: &str) -> Option<u32> {
-    properties.get(key)?.parse().ok()
+    properties.get(key)?.trim().parse().ok()
 }
 
 fn text(properties: &BTreeMap<String, String>, key: &str) -> Option<String> {
@@ -229,7 +229,7 @@ fn stop(token: &str, out: &mut Output<'_>) {
         out.issues.fail_command();
         return;
     }
-    if token.chars().count() > 6 {
+    if token.encode_utf16().count() > 6 {
         out.masker.add(token);
     }
     out.issues.stop(fold(token));
