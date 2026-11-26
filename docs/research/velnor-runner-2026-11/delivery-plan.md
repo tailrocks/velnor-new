@@ -474,7 +474,7 @@ there is no separate Cargo root.
 
 | ID | Item and files | Done when (state on main) | h | Implement | Review | Needs | Gate |
 |---|---|---|---|---|---|---|---|
-| O01 | **GitHub Official executor.** Extend the existing wrapper for acquired jobs on both backends; bump `.velnor/runner.lock` from 2.338.0 | A real job completes on each backend; lease faults never double-report | 11 | Opus high | Opus high | RV05, P02 | Q1 |
+| O01 | **GitHub Official executor.** Extend the existing wrapper for acquired jobs on both backends; bump `.velnor/runner.lock` from 2.338.0 | A real job completes on each backend; lease faults never double-report | 11 | Opus high | Opus high | RV05, P02, P03, P04 | Q1 |
 | O02 | **Reference role isolation.** Reference runs write no verdict, cache entry or release | A test proves it on both backends | 4 | Sonnet high | Opus high | O01 | Q1 |
 | O03 | **Official obligation mode.** A synthetic job message from the released command | Its conformance cases pass; until then the planner refuses Official for obligations | 14 | Opus high | Opus high | O01, V02 | Q1 |
 | O04 | **Paired speed per job type** on the same backend, store and generation | A per-type table of measured numbers | 4 | Sonnet medium | Sonnet low | O01, H03 | Q1 |
@@ -489,7 +489,7 @@ there is no separate Cargo root.
 | X14 | **Journal and faults.** Append-only job journal with fault points | A kill at every boundary never double-reports | 8 | Opus high | Opus high | N28 | Q1 |
 | X15 | **Executor image and deploy.** Built on main, digest-pinned, attested | One real job green on the production label | 4 | Sonnet medium | Opus medium | N139, N11 | Q1, D8 |
 | X16 | **velnor-dispatch.** Session client, scaling over the platform trait, placement before acquire | Start 2 s or less at P90; 0 lost jobs under faults | 14 | Opus high | Opus high | X15, P04 | Q1, Q9 |
-| X17 | **Legacy-incident suite** on both backends | Each case fails on a planted reintroduction | 6 | Sonnet medium | Sonnet low | X16 | Q1 |
+| X17 | **Legacy-incident suite** on both backends | Each case fails on a planted reintroduction | 6 | Sonnet medium | Sonnet low | X16, P03 | Q1 |
 
 **A: actions**
 
@@ -686,6 +686,7 @@ flowchart TB
     P02 --> N28 --> X14 --> X15 --> X16 --> G01
     N28 --> A01 & A02 & A03 & A04 & A05 --> N139 --> X15
     RV05 --> O01 --> H01 --> H03 --> G01
+    P03 & P04 --> O01
     N26 --> L02 --> L03 --> L06 --> L07 --> L08
     D8((D8)) --> N11 --> C01 & S01 & ST04
     V01 --> V02 --> V07 --> V08 --> N18
