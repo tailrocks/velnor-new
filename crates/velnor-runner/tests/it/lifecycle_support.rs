@@ -63,6 +63,7 @@ pub(crate) struct Settings {
     pub(crate) session_retry_interval: Duration,
     pub(crate) report_budget: Duration,
     pub(crate) upload_drain_budget: Duration,
+    pub(crate) feed_flush_interval: Duration,
     pub(crate) os: RunnerOs,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
@@ -78,6 +79,7 @@ impl Settings {
             session_retry_interval: Duration::from_millis(50),
             report_budget: Duration::from_secs(10),
             upload_drain_budget: Duration::from_secs(600),
+            feed_flush_interval: Duration::from_millis(250),
             os: RunnerOs::Linux,
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
@@ -124,6 +126,11 @@ impl Settings {
         self
     }
 
+    pub(crate) fn flushing_the_feed_every(mut self, interval: Duration) -> Self {
+        self.feed_flush_interval = interval;
+        self
+    }
+
     pub(crate) fn within(mut self, budget: Duration) -> Self {
         self.budget = budget;
         self
@@ -148,6 +155,7 @@ pub(crate) async fn run_in(
         session_retry_interval: settings.session_retry_interval,
         report_budget: settings.report_budget,
         upload_drain_budget: settings.upload_drain_budget,
+        feed_flush_interval: settings.feed_flush_interval,
         retry_delays: RetryDelays::IMMEDIATE,
         os: settings.os,
         adapters: AdapterRegistry::empty(),
