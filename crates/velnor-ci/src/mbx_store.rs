@@ -21,7 +21,6 @@ pub struct Inputs<'a> {
     pub ref_protected: bool,
     pub default_branch: Option<&'a str>,
     pub shared_dir: Option<&'a str>,
-    pub runner_temp: &'a Path,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +28,7 @@ pub enum Outcome {
     NotOffered,
     Untrusted,
     Rejected(&'static str),
-    Shared { dir: PathBuf, shims: PathBuf },
+    Shared { dir: PathBuf },
 }
 
 #[must_use]
@@ -62,10 +61,7 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     }
     match validated(Path::new(dir)) {
         Err(reason) => Outcome::Rejected(reason),
-        Ok(dir) => match private_shims(inputs.runner_temp) {
-            Ok(shims) => Outcome::Shared { dir, shims },
-            Err(reason) => Outcome::Rejected(reason),
-        },
+        Ok(dir) => Outcome::Shared { dir },
     }
 }
 
@@ -178,14 +174,26 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
     Err("cannot determine the current user")
 }
 
-pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
+pub fn shims_line(runner_temp: &Path) -> Result<String, CiError> {
+    let shims = private_shims(runner_temp)
+        .map_err(|reason| CiError::new(format!("MBX_SHIMS_DIR: {reason}")))?;
+    Ok(format!(
+        "MBX_SHIMS_DIR={}\n",
+        file_value(&shims.display().to_string())?
+    ))
+}
+
+pub fn env_lines(outcome: &Outcome, runner_temp: &Path) -> Result<String, CiError> {
     Ok(match outcome {
-        Outcome::Shared { dir, shims } => format!(
-            "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n{KEEP_OUT_DIR}",
+        Outcome::NotOffered => KEEP_OUT_DIR.to_owned(),
+        Outcome::Shared { dir } => format!(
+            "MBX_CACHE_DIR={}\n{}{KEEP_OUT_DIR}",
             file_value(&dir.display().to_string())?,
-            file_value(&shims.display().to_string())?
+            shims_line(runner_temp)?
         ),
-        _ => KEEP_OUT_DIR.to_owned(),
+        Outcome::Untrusted | Outcome::Rejected(_) => {
+            format!("{}{KEEP_OUT_DIR}", shims_line(runner_temp)?)
+        }
     })
 }
 
@@ -200,7 +208,7 @@ pub fn message(outcome: &Outcome) -> String {
         Outcome::Rejected(reason) => {
             format!("::warning::{SHARED_DIR_ENV} ignored ({reason}); MBX uses its per-job store\n")
         }
-        Outcome::Shared { dir, .. } => {
+        Outcome::Shared { dir } => {
             format!("velnor: MBX uses the shared store {}\n", dir.display())
         }
     }
@@ -224,9 +232,8 @@ pub fn setup() -> Result<String, CiError> {
         ref_protected: var("GITHUB_REF_PROTECTED").as_deref() == Some("true"),
         default_branch: default_branch.as_deref(),
         shared_dir: shared.as_deref(),
-        runner_temp: &runner_temp,
     });
-    let lines = env_lines(&outcome)?;
+    let lines = env_lines(&outcome, &runner_temp)?;
     let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
     fs::OpenOptions::new()
         .append(true)
