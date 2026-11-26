@@ -58,17 +58,17 @@ const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
 const STRING_BASE_OVERHEAD: usize = 26;
 const BYTES_PER_UTF16_UNIT: usize = 2;
 
-struct MemoryCounter {
+pub(crate) struct MemoryCounter {
     function: &'static str,
     bytes: usize,
 }
 
 impl MemoryCounter {
-    fn new(function: &'static str) -> Self {
+    pub(crate) fn new(function: &'static str) -> Self {
         Self { function, bytes: 0 }
     }
 
-    fn add(&mut self, value: &str) -> Result<(), ExprError> {
+    pub(crate) fn add(&mut self, value: &str) -> Result<(), ExprError> {
         if value.is_empty() {
             return Ok(());
         }

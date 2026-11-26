@@ -62,3 +62,25 @@ fn expr_template_reports_unclosed_and_invalid_expressions() {
         Err("unsupported expression context vars".to_string())
     );
 }
+
+#[test]
+fn expr_template_stops_at_the_memory_budget() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        &format!(r#"{{"PAYLOAD":"{}"}}"#, "x".repeat(100_000)),
+    )])?;
+
+    assert_eq!(
+        evaluate_template(&"${{ env.PAYLOAD }}".repeat(20), &env)?.len(),
+        2_000_000
+    );
+    let exceeded = evaluate_template(&"${{ env.PAYLOAD }}".repeat(1_000), &env)
+        .map_err(|error| error.to_string());
+    assert!(
+        exceeded.as_ref().err().is_some_and(
+            |message| message.starts_with("The maximum allowed memory size was exceeded")
+        ),
+        "{exceeded:?}"
+    );
+    Ok(())
+}

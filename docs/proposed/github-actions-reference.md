@@ -938,7 +938,7 @@ HOME before the workspace filter
 ([index.js:2207](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2207)), and a dangling
 symlink matched by a pattern failing the call, because the runner's
 `statSync` on each match throws
-([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)). Five
+([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)). Six
 behaviours differ on purpose:
 
 - **Outside-target symlinks are ignored.** The runner only checks that the
@@ -968,6 +968,15 @@ behaviours differ on purpose:
   `readdir` ([index.js:1405](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1405)),
   which varies by file system. The digest depends on file order, so Velnor sorts
   to keep it reproducible.
+- **`?` and character classes match the UTF-8 bytes of a non-ASCII name.**
+  `globset` compiles `?` and `[...]` to a byte matcher, so `?` matches one byte
+  and a class that holds a non-ASCII character matches nothing, where the
+  runner's minimatch matches UTF-16 code units: `hashFiles('?')` misses a file
+  named `é` that the runner hashes, and `hashFiles('??')` hashes `é` where the
+  runner hashes a name of two code units such as an emoji. Literal non-ASCII
+  names and `*` agree with the runner. No `hashFiles` pattern of
+  velnor-new's workflows or of the generator's output contains a non-ASCII
+  character, so a second, UTF-16 matcher is not worth carrying.
 - **A `HOME` with `.` or `..` segments is rejected for every `~` pattern.**
   Velnor rejects such a `HOME` for every pattern that starts with `~`. The runner
   rejects it with `Relative pathing '.' and '..' is not allowed` only for

@@ -225,21 +225,20 @@ impl Walk<'_> {
         if !real.starts_with(self.workspace) {
             return Ok(None);
         }
-        let metadata = skip_missing(fs::metadata(&real), &real)?;
-        Ok(metadata.filter(fs::Metadata::is_file).map(|_| real))
+        let metadata = fs::metadata(&real).map_err(|error| GlobError::io(&real, error))?;
+        Ok(metadata.is_file().then_some(real))
     }
 
     fn push_children(&mut self, parent: &Visit) -> Result<(), GlobError> {
-        let Some(reader) = skip_missing(fs::read_dir(&parent.path), &parent.path)? else {
-            return Ok(());
-        };
+        let reader =
+            fs::read_dir(&parent.path).map_err(|error| GlobError::io(&parent.path, error))?;
         let mut children = Vec::new();
         for item in reader {
             let item = item.map_err(|error| GlobError::io(&parent.path, error))?;
-            let path = item.path();
-            if let Some(kind) = skip_missing(item.file_type(), &path)? {
-                children.push((item.file_name(), kind));
-            }
+            let kind = item
+                .file_type()
+                .map_err(|error| GlobError::io(&item.path(), error))?;
+            children.push((item.file_name(), kind));
         }
         children.sort_unstable_by(|left, right| right.0.cmp(&left.0));
         for (name, kind) in children {

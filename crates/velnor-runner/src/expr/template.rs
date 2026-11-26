@@ -5,6 +5,7 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_expression;
+use super::format::MemoryCounter;
 
 const OPEN: &str = "${{";
 const CLOSE: &str = "}}";
@@ -26,8 +27,10 @@ fn find_close(source: &str) -> Option<usize> {
 
 pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprError> {
     let mut rendered = String::with_capacity(source.len());
+    let mut memory = MemoryCounter::new("format");
     let mut rest = source;
     while let Some(start) = rest.find(OPEN) {
+        memory.add(&rest[..start])?;
         rendered.push_str(&rest[..start]);
         let expression = &rest[start + OPEN.len()..];
         let Some(end) = find_close(expression) else {
@@ -35,9 +38,12 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
                 "The expression is not closed. An unescaped {OPEN} sequence was found, but the closing {CLOSE} sequence was not found."
             )));
         };
-        rendered.push_str(&evaluate_expression(expression[..end].trim(), env)?.convert_to_string());
+        let value = evaluate_expression(expression[..end].trim(), env)?.convert_to_string();
+        memory.add(&value)?;
+        rendered.push_str(&value);
         rest = &expression[end + CLOSE.len()..];
     }
+    memory.add(rest)?;
     rendered.push_str(rest);
     Ok(rendered)
 }

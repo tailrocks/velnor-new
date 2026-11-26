@@ -65,7 +65,6 @@ pub(crate) fn hash_files(
                 count += 1;
             }
             Ok(None) => return Err(timed_out()),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(failure(&format!("{}: {error}", path.display()))),
         }
     }

@@ -361,3 +361,21 @@ fn expr_hash_files_rejects_dotted_home() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn expr_hash_files_trims_only_javascript_whitespace() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/lock", "plain")?;
+    dir.write("ws/\u{85}lock", "next-line")?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('\u{85}lock')", &env)?,
+        expected_digest(&[b"next-line"])
+    );
+    assert_eq!(
+        text("hashFiles('\u{a0}lock\u{feff}')", &env)?,
+        expected_digest(&[b"plain"])
+    );
+    Ok(())
+}

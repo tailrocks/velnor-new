@@ -206,7 +206,7 @@ fn skip_globstars(segs: &[Seg], live: &mut [bool]) {
 }
 
 fn is_space(character: char) -> bool {
-    character.is_whitespace() || character == '\u{feff}'
+    (character.is_whitespace() && character != '\u{85}') || character == '\u{feff}'
 }
 
 pub(crate) fn trim_line(line: &str) -> &str {
