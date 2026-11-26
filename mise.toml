@@ -96,6 +96,10 @@ python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''
 
+[tasks."velnor-runner:install"]
+description = "Build velnor-runner in the OrbStack machine velnor and atomically install it into /Users/Shared/velnor/bin"
+run = "bun scripts/velnor-runner-install.ts"
+
 [tasks.validate-hk]
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"
