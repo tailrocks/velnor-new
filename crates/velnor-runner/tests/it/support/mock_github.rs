@@ -23,6 +23,7 @@ pub(crate) const RESULTS_STEPS_UPDATE: &str =
     "/results/twirp/github.actions.results.api.v1.WorkflowStepUpdateService/WorkflowStepsUpdate";
 pub(crate) const STEP_LOG_BLOB: &str = "/blob/step-log";
 pub(crate) const JOB_LOG_BLOB: &str = "/blob/job-log";
+pub(crate) const SUMMARY_BLOB: &str = "/blob/summary";
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum Renew {
@@ -134,9 +135,14 @@ fn job_message(base: &str, mut job: Value) -> Result<Value> {
     let object = job.as_object_mut().context("job message is an object")?;
     object.insert("Plan".to_owned(), json!({"PlanId": PLAN_ID}));
     object.insert("BillingOwnerId".to_owned(), json!("owner-1"));
-    object.insert(
-        "Variables".to_owned(),
-        json!({"system.github.results_endpoint": {"Value": format!("{base}/results")}}),
+    let variables = object
+        .entry("Variables")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .context("job variables are an object")?;
+    variables.insert(
+        "system.github.results_endpoint".to_owned(),
+        json!({"Value": format!("{base}/results")}),
     );
     object.insert(
         "Resources".to_owned(),
@@ -254,7 +260,18 @@ fn mount_results(server: &TestServer, base: &str) -> Result<()> {
         })?;
         server.respond("PUT", blob, |_| Reply::status(201))?;
     }
-    for method in ["CreateStepLogsMetadata", "CreateJobLogsMetadata"] {
+    let summary_url = format!("{base}{SUMMARY_BLOB}");
+    server.respond(
+        "POST",
+        &format!("{receiver}/GetStepSummarySignedBlobURL"),
+        move |_| Reply::json(200, &json!({"summary_url": summary_url})),
+    )?;
+    server.respond("PUT", SUMMARY_BLOB, |_| Reply::status(201))?;
+    for method in [
+        "CreateStepLogsMetadata",
+        "CreateJobLogsMetadata",
+        "CreateStepSummaryMetadata",
+    ] {
         server.respond("POST", &format!("{receiver}/{method}"), |_| {
             Reply::json(200, &json!({"ok": true}))
         })?;
