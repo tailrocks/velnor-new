@@ -132,7 +132,8 @@ pub struct Step {
     pub directory: Option<RepoPath>,
     pub manifest: Option<RepoPath>,
     /// The cargo features the step builds with. Set only on the commands that
-    /// `CargoCommand::takes_workspace_features` names.
+    /// `CargoCommand::takes_workspace_features` names and on `TestGroupsCheck`, which lists the
+    /// tests of the build the archive holds.
     pub features: LaneFeatures,
     pub target_dir: Option<RepoPath>,
     pub when: When,

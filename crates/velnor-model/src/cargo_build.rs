@@ -31,9 +31,9 @@ impl CargoCommand {
         }
     }
 
-    /// Whether the command builds the whole workspace for the lint, the docs or the tests, so the
-    /// repository's `workspace_features` apply to it. The per-package checks, the feature lanes
-    /// and the policy commands never take them.
+    /// Whether the command builds the whole workspace for the lint, the docs, the tests or the
+    /// audit, so the repository's `workspace_features` apply to it and nothing compiles twice. The
+    /// per-package checks, the feature lanes and the policy commands never take them.
     #[must_use]
     pub const fn takes_workspace_features(&self) -> bool {
         match self {
@@ -41,9 +41,10 @@ impl CargoCommand {
             | Self::Doc
             | Self::NextestBuild
             | Self::NextestArchive { .. }
-            | Self::NextestRun { .. } => true,
+            | Self::NextestRun { .. }
+            | Self::Doctest
+            | Self::BuildAll => true,
             Self::BuildBinary { .. }
-            | Self::BuildAll
             | Self::FmtCheck
             | Self::CheckAlone { .. }
             | Self::NextestFeatures { .. }
@@ -52,7 +53,6 @@ impl CargoCommand {
             | Self::LaneGuard { .. }
             | Self::NextestRunArchive { .. }
             | Self::TestTarget { .. }
-            | Self::Doctest
             | Self::Deny { .. }
             | Self::Machete => false,
         }

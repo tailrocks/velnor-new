@@ -464,7 +464,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 
 ## Workspace features
 
-A repository whose workspace-wide lint, docs and tests should build with a Cargo feature on lists it once, at the top of the file. The clippy, rustdoc and nextest commands of every Rust root then build the workspace with those features, so the workspace is compiled once instead of once with the default features and again for a `[[test_lane]]`.
+A repository whose workspace-wide lint, docs and tests should build with a Cargo feature on lists it once, at the top of the file. The clippy, rustdoc, nextest and doctest commands of every Rust root then build the workspace with those features, so the workspace is compiled once instead of once with the default features and again for a `[[test_lane]]`.
 
 ```toml
 workspace_features = ["local-mode"]
@@ -472,7 +472,9 @@ workspace_features = ["local-mode"]
 
 `workspace_features` is a list of distinct feature names, and each name uses letters, digits and `_-+./`, as in `[[test_lane]]`. The key is optional; without it, or with an empty list, the commands build with the default features.
 
-Each affected command gains `--features 'local-mode'` and keeps its name: the `Lint`, `Documentation` and `Test` steps (and the `Build tests` step and the nextest archive when the shape has them). Their ids, gates and filters do not change. The per-package `Check <package> alone` steps, the doctests and the feature lanes never take the key, so the feature-off build stays compiled by the alone checks. Because a feature that no package of a root has makes cargo fail that root's commands, the key suits a repository whose roots all have the feature.
+Each affected command gains `--features 'local-mode'` and keeps its name: the `Lint`, `Documentation`, `Test` and `Doctests` steps, the `Build tests` step and the nextest archive when the shape has them, and the `Build every target` step of the inputs audit (including the one that runs before the doctests). A root with two or more `[[test_groups]]` also passes the features to `velnor-ci test-groups check` as `--features`, so its `cargo nextest list` calls reuse the build the archive holds and list the tests the archive holds. Their ids, gates and filters do not change. The per-package `Check <package> alone` steps and the feature lanes never take the key, so the feature-off build stays compiled by the alone checks; the group jobs run from the archive and build nothing.
+
+A feature that no package of a root has makes cargo fail that root's commands, so `velnor-gen generate` refuses the key when a root has no package that defines a listed feature (a `[features]` entry or an optional dependency) and names the root and the feature. A name with a slash, `package/feature` or `dependency/feature`, is passed to cargo as written and is not checked.
 
 The key needs velnor-ci 0.1.117 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know; `velnor-gen generate` refuses an older pin when the key is written, and `velnor-gen pin-helper 0.1.117` fixes it.
 

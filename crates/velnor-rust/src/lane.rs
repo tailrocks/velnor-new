@@ -130,7 +130,12 @@ impl Lane {
         self.plan.is_some().then(|| self.gate(GateNeed::Selected))
     }
 
-    pub(crate) fn cargo(&self, command: CargoCommand, root: Option<&RustRoot>) -> Step {
+    pub(crate) fn cargo(
+        &self,
+        facts: &RepoFacts,
+        command: CargoCommand,
+        root: Option<&RustRoot>,
+    ) -> Step {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
             CargoCommand::Doc | CargoCommand::DocFeatures { .. } => Some(self.gate(GateNeed::Docs)),
@@ -152,6 +157,11 @@ impl Lane {
             slug: self.slug.clone(),
             from: self.from(),
         });
+        let features = if command.takes_workspace_features() {
+            facts.config.workspace_features.clone()
+        } else {
+            LaneFeatures::default()
+        };
         Step {
             gate,
             reads,
@@ -161,7 +171,7 @@ impl Lane {
                 .map(|root| root.target_dir.clone()),
             kind: StepKind::Cargo(command),
             manifest: None,
-            features: LaneFeatures::default(),
+            features,
             when: When::NotCancelled,
             skip_after_merge_group: None,
             skip_when_cold: false,
@@ -295,6 +305,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     if facts.policy.deny {
         steps.extend(facts.rust_roots.iter().map(|root| {
             lane.cargo(
+                facts,
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
                     config: facts.deny_configs.get(&root.manifest).cloned(),
@@ -309,7 +320,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         }));
     }
     if facts.policy.machete {
-        steps.push(lane.cargo(CargoCommand::Machete, None));
+        steps.push(lane.cargo(facts, CargoCommand::Machete, None));
     }
     Job {
         needs: lane.plan.clone().into_iter().collect(),

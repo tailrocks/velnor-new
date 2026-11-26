@@ -317,7 +317,7 @@ pub struct ArtifactsStageArgs {
 #[derive(Debug, Subcommand)]
 pub enum TestGroupsCommand {
     #[command(
-        about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged, so the filter means what the group job runs; ignored tests are exempt, and a listing error fails the check"
+        about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged and with the --features the build used, so the filter means what the group job runs and the listing reuses that build; ignored tests are exempt, and a listing error fails the check"
     )]
     Check(TestGroupsCheckArgs),
 }
@@ -332,6 +332,12 @@ pub struct TestGroupsCheckArgs {
         help = "A group's name, an equals sign and its nextest filter; repeat for each group"
     )]
     pub groups: Vec<GroupFilter>,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the build of the tests used; every listing passes them to cargo-nextest"
+    )]
+    pub features: Option<String>,
 }
 
 #[derive(Debug, Clone)]

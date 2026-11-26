@@ -108,6 +108,7 @@ impl RootJobs<'_> {
     fn overlap_check(&self, groups: &[&TestGroup]) -> Option<Step> {
         (groups.len() > 1).then(|| Step {
             directory: self.member().root.manifest.parent(),
+            features: self.facts.config.workspace_features.clone(),
             ..self.gated(StepKind::TestGroupsCheck(
                 groups
                     .iter()

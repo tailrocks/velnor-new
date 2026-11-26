@@ -41,6 +41,14 @@ impl ArtifactFormat {
         }
     }
 
+    fn flags(self, workspace: &LaneFeatures) -> (String, String) {
+        let flags = lane_flags(workspace);
+        (
+            format!("{}{flags}", self.cargo()),
+            format!("{}{flags}", self.nextest()),
+        )
+    }
+
     const fn nextest(self) -> &'static str {
         match self {
             Self::Disabled | Self::CargoOnly => "",
@@ -119,10 +127,8 @@ fn cargo_command(
     manifest: Option<&RepoPath>,
     workspace: &LaneFeatures,
 ) -> (String, String, Vec<(String, Value)>) {
-    let flags = lane_flags(workspace);
-    let cargo = artifacts.cargo();
-    let nextest = artifacts.nextest();
-    let (built_cargo, built_nextest) = (format!("{cargo}{flags}"), format!("{nextest}{flags}"));
+    let (cargo, nextest) = artifacts.flags(workspace);
+    let (cargo, nextest) = (cargo.as_str(), nextest.as_str());
     let path = manifest_flag(manifest);
     match command {
         CargoCommand::FmtCheck => (
@@ -130,13 +136,13 @@ fn cargo_command(
             format!("cargo-fmt{path} --all --check"),
             vec![],
         ),
-        CargoCommand::Clippy { extra } => clippy(&built_cargo, extra, &path),
+        CargoCommand::Clippy { extra } => clippy(cargo, extra, &path),
         CargoCommand::ClippyFeatures { features } => {
             crate::cargo_features::clippy_features(cargo, features)
         }
-        CargoCommand::NextestBuild => nextest_build(&built_nextest, &path),
+        CargoCommand::NextestBuild => nextest_build(nextest, &path),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
-            &format!("--workspace --locked{built_nextest}"),
+            &format!("--workspace --locked{nextest}"),
             filter,
             *ci_profile,
             NO_TESTS_PASS,
@@ -175,7 +181,7 @@ fn cargo_command(
             no_tests.flag(),
             &path,
         ),
-        CargoCommand::NextestArchive { file } => nextest_archive(&built_nextest, file, &path),
+        CargoCommand::NextestArchive { file } => nextest_archive(nextest, file, &path),
         CargoCommand::TestTarget {
             package,
             target,
@@ -190,7 +196,7 @@ fn cargo_command(
         CargoCommand::Doc => (
             "Documentation".into(),
             format!(
-                "cargo doc{path} --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'{built_cargo}"
+                "cargo doc{path} --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'{cargo}"
             ),
             vec![],
         ),

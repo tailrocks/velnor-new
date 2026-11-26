@@ -45,6 +45,7 @@ mod config_test_groups;
 mod config_test_lane;
 mod config_test_setup;
 mod config_trusted;
+mod config_workspace_features;
 mod credentials;
 mod delta_cache;
 mod detect;

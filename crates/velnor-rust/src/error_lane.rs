@@ -24,6 +24,10 @@ impl Reason {
                 f,
                 "test_lane sets {first} together with {second}, which select features in conflicting ways; keep one of them: all_features selects every feature and no_default_features drops the default ones, so the two cannot be combined with each other or with a features list"
             ),
+            Self::UnknownWorkspaceFeature { root, feature } => write!(
+                f,
+                "workspace_features names {feature}, which no package of the root {root} defines, so cargo would refuse every workspace-wide command of that root; remove it, or name a feature that a package of the root defines (a name with a slash, package/feature, is not checked)"
+            ),
             _ => Ok(()),
         }
     }
