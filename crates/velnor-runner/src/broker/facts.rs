@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
 use std::num::NonZeroU64;
 
 use serde::{Deserialize, Serialize};
@@ -194,6 +195,7 @@ fn id(github: &ContextValue, path: &[&str]) -> Option<u64> {
 
 fn pull_request_head(
     github: &ContextValue,
+    repository_id: NonZeroU64,
     repository: &RepoName,
 ) -> Result<PullRequestHead, FactsError> {
     let Some(name) = text(
@@ -203,11 +205,9 @@ fn pull_request_head(
         return Ok(PullRequestHead::Fork);
     };
     let name = RepoName::try_from(name.to_owned())?;
-    let head_id = id(github, &["event", "pull_request", "head", "repo", "id"]);
-    let base_id = id(github, &["repository_id"]);
-    let same = match (head_id, base_id) {
-        (Some(head), Some(base)) => head == base,
-        _ => name.as_str().eq_ignore_ascii_case(repository.as_str()),
+    let same = match id(github, &["event", "pull_request", "head", "repo", "id"]) {
+        Some(head) => head == repository_id.get(),
+        None => name.as_str().eq_ignore_ascii_case(repository.as_str()),
     };
     Ok(if same {
         PullRequestHead::SameRepository
@@ -220,8 +220,17 @@ fn required<'a>(github: &'a ContextValue, field: &'static str) -> Result<&'a str
     text(github, &[field]).ok_or(FactsError::Missing { field })
 }
 
-fn event_of(github: &ContextValue, repository: &RepoName) -> Result<TrustedEvent, FactsError> {
-    let git_ref = required(github, "ref")?;
+fn event_of(
+    github: &ContextValue,
+    repository_id: NonZeroU64,
+    repository: &RepoName,
+) -> Result<TrustedEvent, FactsError> {
+    let raw = required(github, "ref")?;
+    let git_ref = if raw.is_empty() || raw.starts_with("refs/") {
+        Cow::Borrowed(raw)
+    } else {
+        Cow::Owned(format!("refs/heads/{raw}"))
+    };
     let pull = git_ref
         .strip_prefix("refs/pull/")
         .and_then(|rest| rest.strip_suffix("/merge"))
@@ -230,7 +239,7 @@ fn event_of(github: &ContextValue, repository: &RepoName) -> Result<TrustedEvent
         return Ok(TrustedEvent::PullRequest {
             number,
             base_branch: text(github, &["base_ref"]).unwrap_or_default().to_owned(),
-            head: pull_request_head(github, repository)?,
+            head: pull_request_head(github, repository_id, repository)?,
         });
     }
     if let Some(name) = git_ref.strip_prefix("refs/tags/") {
@@ -247,7 +256,7 @@ fn event_of(github: &ContextValue, repository: &RepoName) -> Result<TrustedEvent
         }),
         None => Err(FactsError::Invalid {
             field: "ref",
-            value: git_ref.to_owned(),
+            value: git_ref.into_owned(),
         }),
     }
 }
@@ -269,13 +278,14 @@ impl TrustedFacts {
             field: "github context",
         })?;
         let repository = RepoName::try_from(required(github, "repository")?.to_owned())?;
-        let event = event_of(github, &repository)?;
+        let repository_id = id(github, &["repository_id"])
+            .and_then(NonZeroU64::new)
+            .ok_or(FactsError::Missing {
+                field: "repository_id",
+            })?;
+        let event = event_of(github, repository_id, &repository)?;
         Ok(Self {
-            repository_id: id(github, &["repository_id"])
-                .and_then(NonZeroU64::new)
-                .ok_or(FactsError::Missing {
-                    field: "repository_id",
-                })?,
+            repository_id,
             server_url: ServerUrl::try_from(required(github, "server_url")?.to_owned())?,
             default_branch: text(github, &["event", "repository", "default_branch"])
                 .unwrap_or_default()
@@ -308,11 +318,14 @@ impl TrustedFacts {
         matches!(
             (self.event_name.as_str(), &self.event),
             (
-                "push",
-                TrustedEvent::Branch { .. } | TrustedEvent::Tag { .. }
+                "push" | "schedule" | "workflow_dispatch" | "repository_dispatch" | "release",
+                TrustedEvent::Branch { .. } | TrustedEvent::Tag { .. },
             ) | (
-                "workflow_dispatch" | "schedule",
-                TrustedEvent::Branch { .. }
+                "pull_request",
+                TrustedEvent::PullRequest {
+                    head: PullRequestHead::SameRepository,
+                    ..
+                },
             )
         )
     }
@@ -328,10 +341,10 @@ impl TrustedFacts {
 
     pub(crate) fn sha_refspec(&self) -> Option<String> {
         match &self.event {
-            TrustedEvent::Branch { branch: name }
-            | TrustedEvent::MergeGroup { queue_branch: name } => {
-                Some(format!("+{}:refs/velnor/heads/{name}", self.sha.as_str()))
-            }
+            TrustedEvent::Branch { .. } | TrustedEvent::MergeGroup { .. } => Some(format!(
+                "+{sha}:refs/velnor/sha/{sha}",
+                sha = self.sha.as_str()
+            )),
             TrustedEvent::Tag { .. } | TrustedEvent::PullRequest { .. } => None,
         }
     }

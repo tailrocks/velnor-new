@@ -300,11 +300,23 @@ fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_e
 }
 
 fn alive(pid: &str) -> bool {
-    Command::new("kill")
-        .args(["-0", pid])
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+    Command::new("ps")
+        .args(["-o", "stat=", "-p", pid])
+        .output()
+        .is_ok_and(|output| {
+            let state = String::from_utf8_lossy(&output.stdout);
+            !state.trim().is_empty() && !state.trim().starts_with('Z')
+        })
+}
+
+#[test]
+fn a_mirror_fetch_starts_no_background_maintenance() -> Result<()> {
+    let rig = Rig::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(rig.fetches() >= 1, "the mirror was not fetched");
+    assert_eq!(rig.commands("maintenance"), 0);
+    Ok(())
 }
 
 #[test]

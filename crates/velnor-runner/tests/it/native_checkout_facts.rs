@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::exec_support::Scratch;
+use crate::exec_support::{Ran, Scratch};
 use crate::native_checkout::{Rig, commit, finish, git};
 
 fn trusted_facts(
@@ -27,14 +27,17 @@ fn trusted_facts(
     Ok(path)
 }
 
-fn checkout_trusted(rig: &Rig, facts: &Path) -> Result<(Option<i32>, String)> {
+fn checkout_ran(rig: &Rig, facts: &Path) -> Result<(Ran, String)> {
     let job = rig.job("checkout_depth1", "a", &rig.server_url())?;
     let scratch = Scratch::new()?;
     let ran = finish(rig.start_trusted(&job, facts, &scratch)?)?;
-    Ok((
-        ran.code,
-        git(&scratch.workspace(), &["rev-parse", "HEAD"]).unwrap_or_default(),
-    ))
+    let head = git(&scratch.workspace(), &["rev-parse", "HEAD"]).unwrap_or_default();
+    Ok((ran, head))
+}
+
+fn checkout_trusted(rig: &Rig, facts: &Path) -> Result<(Option<i32>, String)> {
+    let (ran, head) = checkout_ran(rig, facts)?;
+    Ok((ran.code, head))
 }
 
 #[test]
@@ -54,7 +57,13 @@ fn a_recreated_repository_does_not_see_the_old_mirror() -> Result<()> {
     commit(&work, "recreated")?;
     git(&work, &["push", "-q", &upstream.to_string_lossy(), "main"])?;
     assert_eq!(checkout_trusted(&rig, &old)?, (Some(0), rig.head.clone()));
-    assert_eq!(checkout_trusted(&rig, &new)?, (Some(1), String::new()));
+    let (ran, head) = checkout_ran(&rig, &new)?;
+    assert_eq!((ran.code, head.as_str()), (Some(1), ""));
+    assert!(
+        ran.stdout.contains(&format!("not our ref {}", rig.head)),
+        "{}",
+        ran.stdout
+    );
     assert!(rig.mirror_of(1).is_dir() && rig.mirror_of(2).is_dir());
     Ok(())
 }
@@ -157,5 +166,80 @@ fn a_job_without_a_usable_repository_id_creates_no_mirror() -> Result<()> {
         assert!(ran.stdout.contains("repository_id"), "{}", ran.stdout);
         assert!(!rig.store().join("git").exists());
     }
+    Ok(())
+}
+
+#[test]
+fn checkout_declares_the_commit_and_ref_outputs() -> Result<()> {
+    let rig = Rig::new()?;
+    let upstream = rig.root.join("up/tailrocks/velnor-new.git");
+    git(&rig.root.join("work"), &["tag", "v1", &rig.head])?;
+    git(
+        &rig.root.join("work"),
+        &["push", "-q", &upstream.to_string_lossy(), "refs/tags/v1"],
+    )?;
+    let queue = "refs/heads/gh-readonly-queue/main/pr-1";
+    let branch = "refs/heads/main";
+    let pull = "refs/pull/7/merge";
+    for (fixture, sha, from, git_ref) in [
+        ("checkout_outputs", &rig.head, branch, branch),
+        ("checkout_outputs", &rig.head, branch, "refs/tags/v1"),
+        ("checkout_outputs", &rig.head, branch, queue),
+        ("checkout_pull_request_outputs", &rig.merge, pull, pull),
+    ] {
+        let job = rig.job_edit(fixture, sha, &rig.server_url(), &[(from, git_ref)])?;
+        let scratch = Scratch::new()?;
+        let ran = finish(rig.start(&job, &scratch)?)?;
+        assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+        assert!(
+            ran.has_line(&format!("outputs commit={sha} ref={git_ref}")),
+            "{}",
+            ran.stdout
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn branches_named_x_and_x_slash_y_both_fetch_their_commit_by_sha() -> Result<()> {
+    let rig = Rig::new()?;
+    let work = rig.root.join("work");
+    let upstream = rig.root.join("up/tailrocks/velnor-new.git");
+    let target = upstream.to_string_lossy().into_owned();
+    git(
+        &upstream,
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    )?;
+    git(&work, &["checkout", "-q", "--detach"])?;
+    let mut forced = Vec::new();
+    for name in ["forced-first", "forced-second"] {
+        let sha = commit(&work, name)?;
+        git(
+            &work,
+            &["push", "-q", &target, &format!("{sha}:refs/heads/queue")],
+        )?;
+        git(&work, &["push", "-q", &target, ":refs/heads/queue"])?;
+        forced.push(sha);
+    }
+    git(&work, &["checkout", "-q", "main"])?;
+    for (sha, branch) in forced.iter().zip(["X", "X/Y"]) {
+        let event = format!(r#"{{"kind": "branch", "branch": "{branch}"}}"#);
+        let facts = trusted_facts(&rig, 8, sha, &event)?;
+        assert_eq!(
+            checkout_trusted(&rig, &facts)?,
+            (Some(0), sha.clone()),
+            "{branch}"
+        );
+    }
+    let refs = git(
+        &rig.mirror_of(8),
+        &["for-each-ref", "--format=%(refname)", "refs/velnor"],
+    )?;
+    let mut expected: Vec<String> = forced
+        .iter()
+        .map(|sha| format!("refs/velnor/sha/{sha}"))
+        .collect();
+    expected.sort();
+    assert_eq!(refs.lines().collect::<Vec<_>>(), expected);
     Ok(())
 }

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
-use tokio::process::Command;
+use tokio::io::AsyncReadExt;
+use tokio::process::{Child, Command};
 use url::Url;
 
 pub(crate) const GIT_ENV: [(&str, &str); 3] = [
@@ -52,16 +53,52 @@ pub(super) fn auth_env(url: &Url, token: Option<&str>) -> Vec<(String, String)> 
     env
 }
 
-struct GroupReaper(Option<Pid>);
+struct Leader {
+    child: Child,
+    group: Pid,
+    reaped: bool,
+}
 
-impl Drop for GroupReaper {
-    fn drop(&mut self) {
-        let Some(pid) = self.0 else {
-            return;
-        };
-        let _ = kill_process_group(pid, Signal::KILL);
+impl Leader {
+    fn spawn(args: &[String], env: &[(String, String)]) -> Result<Self> {
+        let child = Command::new("git")
+            .args(args)
+            .envs(GIT_ENV)
+            .env("HOME", "/dev/null")
+            .envs(env.iter().map(|(name, value)| (name, value)))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .process_group(0)
+            .spawn()
+            .context("start git")?;
+        let group = child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .and_then(Pid::from_raw)
+            .context("git has no process id")?;
+        Ok(Self {
+            child,
+            group,
+            reaped: false,
+        })
+    }
+
+    async fn finish(&mut self) -> Result<(ExitStatus, String)> {
+        let mut stderr = self.child.stderr.take().context("git has no stderr")?;
+        let mut text = Vec::new();
+        let (read, status) = tokio::join!(stderr.read_to_end(&mut text), self.child.wait());
+        let status = status.context("wait for git")?;
+        self.reaped = true;
+        read.context("read git stderr")?;
+        Ok((status, String::from_utf8_lossy(&text).trim().to_owned()))
+    }
+
+    fn kill_group_and_reap(&mut self) {
+        let _ = kill_process_group(self.group, Signal::KILL);
         for _ in 0..200 {
-            if test_kill_process_group(pid).is_err() {
+            let reaped = !matches!(self.child.try_wait(), Ok(None));
+            if reaped && test_kill_process_group(self.group).is_err() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(5));
@@ -69,29 +106,19 @@ impl Drop for GroupReaper {
     }
 }
 
+impl Drop for Leader {
+    fn drop(&mut self) {
+        if !self.reaped {
+            tokio::task::block_in_place(|| self.kill_group_and_reap());
+        }
+    }
+}
+
 pub(super) async fn git(args: &[String], env: &[(String, String)]) -> Result<()> {
-    let child = Command::new("git")
-        .args(args)
-        .envs(GIT_ENV)
-        .env("HOME", "/dev/null")
-        .envs(env.iter().map(|(name, value)| (name, value)))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .kill_on_drop(true)
-        .spawn()
-        .context("start git")?;
-    let _reaper = GroupReaper(
-        child
-            .id()
-            .and_then(|id| i32::try_from(id).ok())
-            .and_then(Pid::from_raw),
-    );
-    let output = child.wait_with_output().await.context("wait for git")?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("git {}: {}", args.join(" "), stderr.trim());
+    let mut leader = Leader::spawn(args, env)?;
+    let (status, stderr) = leader.finish().await?;
+    if !status.success() {
+        bail!("git {}: {stderr}", args.join(" "));
     }
     Ok(())
 }

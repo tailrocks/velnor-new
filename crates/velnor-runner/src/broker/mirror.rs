@@ -297,6 +297,7 @@ async fn fetch_refs(
             "-c",
             "gc.auto=0",
             "fetch",
+            "--no-auto-maintenance",
             "--prune",
             "--no-tags",
             "--quiet",

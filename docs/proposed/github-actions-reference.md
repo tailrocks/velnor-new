@@ -1228,16 +1228,58 @@ host's verified source, never from the job: `event_name` is a required field of
 the `--trusted` file, and `exec` without that file reads it from the job
 message's `github.event_name`.
 
-- **Allowed:** `push` on a branch or a tag, and `workflow_dispatch` or
-  `schedule` on a branch.
-- **Denied:** every other event, `pull_request`, `pull_request_target`,
-  `workflow_run`, `repository_dispatch` and `merge_group` included, and a
-  `workflow_dispatch` or `schedule` run on a tag or a pull request ref. Any
-  new event name is denied until it is added here.
-- **Why `pull_request_target` and `workflow_run` are denied:** they run on
-  `refs/heads/<default branch>`, so the ref alone would classify them as a
-  branch run and let them write the default-branch scope.
-- **Difference from actions/cache:** the toolkit (`toolkit/packages/cache`)
-  saves for any event and relies on the service to scope an entry to the ref,
-  so a pull request writes only its own `refs/pull/<N>/merge` scope. Velnor
-  keeps one store per host and trusts no ref, so its rule is stricter by design.
+- **Allowed:** `push`, `schedule`, `workflow_dispatch`, `repository_dispatch`
+  and `release` on a branch or a tag, and a `pull_request` whose head is the
+  base repository. Each writes the scope of its own ref.
+- **Denied:** a fork `pull_request` (or one whose head repository is gone),
+  `pull_request_target`, `issue_comment`, `workflow_run`, `merge_group`, a
+  `push` to a merge-queue branch (`gh-readonly-queue/*`), a `push` or other
+  event on a pull request ref, and every event name not listed above, such as
+  `delete`, `registry_package` and `page_build`. Any new event name is denied
+  until it is added here.
+- **Why the ref alone is not enough:** `pull_request_target`, `issue_comment`
+  and `workflow_run` run on `refs/heads/<default branch>`, so the ref would
+  classify them as a branch run and let them write the default-branch scope.
+  The event name decides, and the ref must agree with it.
+- **Unqualified refs:** a merged-pull-request `closed` event carries a ref such
+  as `main`. The runner qualifies it to `refs/heads/main`, as
+  [actions/checkout](https://github.com/actions/checkout/blob/v6.0.2/src/input-helper.ts#L66-L70)
+  does. The event name is still `pull_request`, so the run is denied.
+
+### Difference from actions/cache
+
+The toolkit holds no event list. `@actions/cache` asks the cache service for a
+reservation and treats the answer as the policy
+([`cache.ts`](https://github.com/actions/toolkit/blob/main/packages/cache/src/cache.ts),
+[`RELEASES.md`](https://github.com/actions/toolkit/blob/main/packages/cache/RELEASES.md)):
+
+- Since 6.1.0 a reservation refused with the `cache write denied:` prefix
+  becomes a `CacheWriteDeniedError`, logged as a warning, and the job continues.
+- Since 6.2.0 a download refused with `cache read denied:` is a warning too,
+  and the `ACTIONS_CACHE_MODE` variable is honored: a restore is skipped for
+  `none` and `write-only`, a save is skipped for `none` and `read`.
+
+The service decides what a run may do:
+
+- Since [2026-06-26](https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/)
+  it issues a read-only cache token when the event is untrusted (someone other
+  than a collaborator can trigger it) and the scope comes from the shared
+  default-branch SHA: `pull_request_target`, `issue_comment` and a fork
+  `workflow_run` cascade. `push`, `schedule`, `workflow_dispatch`,
+  `repository_dispatch`, `delete`, `registry_package` and `page_build` keep
+  read-write access, and so does any trigger with a non-default-branch scope,
+  such as `pull_request` and `release`.
+- Since [2026-09-10](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode/)
+  a workflow or a job can set `cache-mode` to `read`, `write`, `write-only` or
+  `none`. The service enforces it, a called workflow cannot exceed its caller,
+  and an explicit `write` on a low-trust event overrides the read-only default
+  with a warning annotation.
+
+`TrustedFacts::may_write_stores` is the host-side counterpart for the runner's
+own stores. It follows the same split, with three deliberate differences:
+`merge_group` and a push to a merge-queue branch are denied (the service lists
+neither, so Velnor fails closed), a fork `pull_request` is denied although the
+service gives it a scope of its own, and `delete`, `registry_package` and
+`page_build` are denied until someone needs them. The predicate does not read
+`cache-mode`: it is evaluated first, from the host's facts, and a workflow
+setting cannot widen it.

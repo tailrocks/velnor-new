@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 
-use super::{PullRequestHead, TrustedEvent, TrustedFacts};
+use super::{FactsError, PullRequestHead, TrustedEvent, TrustedFacts};
 use crate::job_message::AgentJobRequestMessage;
 
 const FIXTURE: &str = include_str!("../../../fixtures/exec/checkout_pull_request.json");
@@ -21,16 +21,49 @@ fn object(entries: &[Value]) -> Value {
     json!({"t": 2, "d": entries})
 }
 
-fn pull_request_head(
-    base_id: Option<&str>,
-    head_repo: Option<(&str, Option<u64>)>,
-) -> Result<PullRequestHead> {
-    let sha = "0123456789012345678901234567890123456789";
-    let mut job: Value = serde_json::from_str(
+const SHA: &str = "0123456789012345678901234567890123456789";
+const BASE: &str = "tailrocks/velnor-new";
+const SAME: Option<(&str, Option<u64>)> = Some((BASE, Some(1)));
+const FORK: Option<(&str, Option<u64>)> = Some(("someone/velnor-new", Some(2)));
+
+fn job() -> Result<Value> {
+    Ok(serde_json::from_str(
         &FIXTURE
-            .replace("@SHA@", sha)
+            .replace("@SHA@", SHA)
             .replace("@SERVER_URL@", "https://github.com"),
-    )?;
+    )?)
+}
+
+fn github(job: &mut Value) -> Result<&mut Vec<Value>> {
+    job["ContextData"]["github"]["d"]
+        .as_array_mut()
+        .context("github context entries")
+}
+
+fn parse(job: &Value) -> Result<TrustedFacts, FactsError> {
+    let message = AgentJobRequestMessage::parse_json(&job.to_string()).map_err(|error| {
+        FactsError::Invalid {
+            field: "job",
+            value: format!("{error:#}"),
+        }
+    })?;
+    TrustedFacts::from_job_message(&message)
+}
+
+fn facts_for(
+    event_name: &str,
+    git_ref: &str,
+    head_repo: Option<(&str, Option<u64>)>,
+) -> Result<TrustedFacts> {
+    let mut job = job()?;
+    let github = github(&mut job)?;
+    for entry in github.iter_mut() {
+        match entry["k"].as_str() {
+            Some("event_name") => entry["v"] = string(event_name),
+            Some("ref") => entry["v"] = string(git_ref),
+            _ => {}
+        }
+    }
     let mut head = vec![entry("ref", &string("topic"))];
     if let Some((name, id)) = head_repo {
         let mut repo = vec![entry("full_name", &string(name))];
@@ -43,67 +76,70 @@ fn pull_request_head(
         "pull_request",
         &object(&[entry("head", &object(&head))]),
     )]);
-    let github = job["ContextData"]["github"]["d"]
-        .as_array_mut()
-        .context("github context entries")?;
     github.push(entry("event", &event));
-    if let Some(base_id) = base_id {
-        github.retain(|item| item["k"] != "repository_id");
-        github.push(entry("repository_id", &string(base_id)));
-    }
-    let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-    match TrustedFacts::from_job_message(&message)?.event {
+    Ok(parse(&job)?)
+}
+
+fn pull_request_head(head_repo: Option<(&str, Option<u64>)>) -> Result<PullRequestHead> {
+    match facts_for("pull_request", "refs/pull/7/merge", head_repo)?.event {
         TrustedEvent::PullRequest { head, .. } => Ok(head),
         other => anyhow::bail!("not a pull request event: {other:?}"),
     }
 }
 
-fn facts_for(event_name: &str, git_ref: &str) -> Result<TrustedFacts> {
-    let mut job: Value = serde_json::from_str(
-        &FIXTURE
-            .replace("@SHA@", "0123456789012345678901234567890123456789")
-            .replace("@SERVER_URL@", "https://github.com"),
-    )?;
-    let github = job["ContextData"]["github"]["d"]
-        .as_array_mut()
-        .context("github context entries")?;
-    for entry in github.iter_mut() {
-        match entry["k"].as_str() {
-            Some("event_name") => entry["v"] = string(event_name),
-            Some("ref") => entry["v"] = string(git_ref),
-            _ => {}
-        }
-    }
-    let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-    Ok(TrustedFacts::from_job_message(&message)?)
-}
-
 #[test]
-fn only_a_push_or_a_scheduled_or_dispatched_branch_run_may_write_stores() -> Result<()> {
+fn only_events_that_write_their_own_scope_may_write_stores() -> Result<()> {
+    let queue = "refs/heads/gh-readonly-queue/main/pr-1";
     let cases = [
-        ("push", "refs/heads/main", true),
-        ("push", "refs/tags/v1", true),
-        ("workflow_dispatch", "refs/heads/main", true),
-        ("schedule", "refs/heads/main", true),
-        ("workflow_dispatch", "refs/tags/v1", false),
-        ("pull_request_target", "refs/heads/main", false),
-        ("workflow_run", "refs/heads/main", false),
-        ("repository_dispatch", "refs/heads/main", false),
-        ("pull_request", "refs/pull/7/merge", false),
-        (
-            "merge_group",
-            "refs/heads/gh-readonly-queue/main/pr-1",
-            false,
-        ),
-        ("push", "refs/pull/7/merge", false),
+        ("push", "refs/heads/main", None, true),
+        ("push", "refs/tags/v1", None, true),
+        ("push", queue, None, false),
+        ("push", "refs/pull/7/merge", SAME, false),
+        ("schedule", "refs/heads/main", None, true),
+        ("workflow_dispatch", "refs/heads/main", None, true),
+        ("workflow_dispatch", "refs/tags/v1", None, true),
+        ("repository_dispatch", "refs/heads/main", None, true),
+        ("release", "refs/tags/v1", None, true),
+        ("pull_request", "refs/pull/7/merge", SAME, true),
+        ("pull_request", "refs/pull/7/merge", FORK, false),
+        ("pull_request", "refs/pull/7/merge", None, false),
+        ("pull_request", "main", SAME, false),
+        ("pull_request_target", "refs/heads/main", None, false),
+        ("pull_request_target", "refs/pull/7/merge", SAME, false),
+        ("issue_comment", "refs/heads/main", None, false),
+        ("workflow_run", "refs/heads/main", None, false),
+        ("merge_group", queue, None, false),
+        ("delete", "refs/heads/main", None, false),
     ];
-    for (event_name, git_ref, expected) in cases {
-        let facts = facts_for(event_name, git_ref)?;
+    for (event_name, git_ref, head, expected) in cases {
+        let facts = facts_for(event_name, git_ref, head)?;
         assert_eq!(facts.event_name, event_name);
         assert_eq!(
             facts.may_write_stores(),
             expected,
-            "{event_name} on {git_ref}"
+            "{event_name} on {git_ref} with head {head:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_unqualified_ref_is_a_branch_as_actions_checkout_reads_it() -> Result<()> {
+    let facts = facts_for("pull_request", "main", SAME)?;
+    assert_eq!(
+        facts.event,
+        TrustedEvent::Branch {
+            branch: "main".to_owned()
+        }
+    );
+    assert_eq!(facts.git_ref(), "refs/heads/main");
+    for git_ref in ["", "refs/other/x", "refs/heads"] {
+        assert!(
+            matches!(
+                facts_for("push", git_ref, None),
+                Err(error) if error.to_string().contains("ref")
+            ),
+            "{git_ref:?}"
         );
     }
     Ok(())
@@ -112,38 +148,27 @@ fn only_a_push_or_a_scheduled_or_dispatched_branch_run_may_write_stores() -> Res
 #[test]
 fn a_missing_or_zero_repository_id_has_no_facts() -> Result<()> {
     for id in [None, Some("0"), Some("x")] {
-        let mut job: Value = serde_json::from_str(
-            &FIXTURE
-                .replace("@SHA@", "0123456789012345678901234567890123456789")
-                .replace("@SERVER_URL@", "https://github.com"),
-        )?;
-        let github = job["ContextData"]["github"]["d"]
-            .as_array_mut()
-            .context("github context entries")?;
+        let mut job = job()?;
+        let github = github(&mut job)?;
         github.retain(|entry| entry["k"] != "repository_id");
         if let Some(id) = id {
             github.push(entry("repository_id", &string(id)));
         }
-        let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-        assert!(TrustedFacts::from_job_message(&message).is_err(), "{id:?}");
+        assert!(
+            matches!(
+                parse(&job),
+                Err(FactsError::Missing {
+                    field: "repository_id"
+                })
+            ),
+            "{id:?}"
+        );
     }
-    let mut job: Value = serde_json::from_str(
-        &FIXTURE
-            .replace("@SHA@", "0123456789012345678901234567890123456789")
-            .replace("@SERVER_URL@", "https://github.com"),
-    )?;
-    let github = job["ContextData"]["github"]["d"]
-        .as_array_mut()
-        .context("github context entries")?;
+    let mut job = job()?;
+    let github = github(&mut job)?;
     github.retain(|entry| entry["k"] != "repository_id");
     github.push(entry("repository_id", &json!({"t": 4, "n": 42})));
-    let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-    assert_eq!(
-        TrustedFacts::from_job_message(&message)?
-            .repository_id
-            .get(),
-        42
-    );
+    assert_eq!(parse(&job)?.repository_id.get(), 42);
     let facts = br#"{"repository_id": 0, "repository": "a/b", "server_url": "https://github.com",
 "default_branch": "main", "sha": "0123456789012345678901234567890123456789", "run_id": 1,
 "run_attempt": 1, "event_name": "push", "event": {"kind": "branch", "branch": "main"}}"#;
@@ -153,45 +178,31 @@ fn a_missing_or_zero_repository_id_has_no_facts() -> Result<()> {
 
 #[test]
 fn a_job_message_without_an_event_name_has_no_facts() -> Result<()> {
-    let mut job: Value = serde_json::from_str(
-        &FIXTURE
-            .replace("@SHA@", "0123456789012345678901234567890123456789")
-            .replace("@SERVER_URL@", "https://github.com"),
-    )?;
-    let github = job["ContextData"]["github"]["d"]
-        .as_array_mut()
-        .context("github context entries")?;
-    github.retain(|entry| entry["k"] != "event_name");
-    let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-    assert!(TrustedFacts::from_job_message(&message).is_err());
+    let mut job = job()?;
+    github(&mut job)?.retain(|entry| entry["k"] != "event_name");
+    assert!(matches!(
+        parse(&job),
+        Err(FactsError::Missing {
+            field: "event_name"
+        })
+    ));
     Ok(())
 }
 
 #[test]
 fn a_pull_request_head_is_the_base_repository_only_when_the_message_proves_it() -> Result<()> {
     use PullRequestHead::{Fork, SameRepository};
-    let base = "tailrocks/velnor-new";
     let cases = [
-        (None, None, Fork),
-        (Some("1"), None, Fork),
-        (None, Some((base, None)), SameRepository),
-        (None, Some(("Tailrocks/Velnor-New", None)), SameRepository),
-        (None, Some(("someone/velnor-new", None)), Fork),
-        (Some("1"), Some((base, Some(1))), SameRepository),
-        (Some("1"), Some((base, Some(2))), Fork),
-        (
-            Some("1"),
-            Some(("someone/renamed", Some(1))),
-            SameRepository,
-        ),
-        (Some("1"), Some((base, None)), SameRepository),
+        (None, Fork),
+        (Some((BASE, None)), SameRepository),
+        (Some(("Tailrocks/Velnor-New", None)), SameRepository),
+        (Some(("someone/velnor-new", None)), Fork),
+        (Some((BASE, Some(1))), SameRepository),
+        (Some((BASE, Some(2))), Fork),
+        (Some(("someone/renamed", Some(1))), SameRepository),
     ];
-    for (base_id, head, expected) in cases {
-        assert_eq!(
-            pull_request_head(base_id, head)?,
-            expected,
-            "base id {base_id:?}, head {head:?}"
-        );
+    for (head, expected) in cases {
+        assert_eq!(pull_request_head(head)?, expected, "head {head:?}");
     }
     Ok(())
 }
