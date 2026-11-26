@@ -135,6 +135,12 @@ fn an_inactive_optional_path_dependency_without_artifacts_is_accepted() {
 
 fn gated_extra_repo(config: &str) -> crate::io::Repo {
     let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/Cargo.toml",
+        "[package]\nname = \"app\"\nedition = \"2024\"\n\n[features]\nextra = []\nother = []\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"extra\"]\n\n[[example]]\nname = \"extra\"\npath = \"examples/extra.rs\"\nrequired-features = [\"other\"]\n",
+    );
+    unit(&repo, "rust/app/examples/extra.rs", "fn main() {}\n");
     unit(&repo, ".velnor/rust-ci.toml", config);
     repo.git(&["add", "--all"]);
     own_units(&repo, "rust/target/debug", &[]);

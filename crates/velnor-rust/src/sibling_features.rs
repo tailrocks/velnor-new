@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage, TargetName};
+use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage, TargetKind, TargetName};
 
 use crate::harness::{enabled_features, implicit_features};
 use crate::toml_file::table;
@@ -110,7 +110,7 @@ pub(crate) fn gated_targets_built(
     view: &RepoView,
     package: &RustPackage,
     workspace_features: &[String],
-) -> Vec<TargetName> {
+) -> Vec<(TargetName, TargetKind)> {
     if workspace_features.is_empty() {
         return Vec::new();
     }
@@ -125,7 +125,7 @@ pub(crate) fn gated_targets_built(
                     .iter()
                     .all(|required| required.enabled(true, &requested, package.name.as_str()))
         })
-        .map(|target| target.name.clone())
+        .flat_map(|target| target.kinds.iter().map(|kind| (target.name.clone(), *kind)))
         .collect()
 }
 

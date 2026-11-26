@@ -50,7 +50,12 @@ pub(crate) fn groups<'f>(
                 .targets
                 .iter()
                 .filter(|target| {
-                    !target.requires_features || member.gated_targets_built.contains(&target.name)
+                    !target.requires_features
+                        || target.kinds.iter().any(|kind| {
+                            member
+                                .gated_targets_built
+                                .contains(&(target.name.clone(), *kind))
+                        })
                 })
                 .filter_map(move |target| {
                     let source = target.source.as_ref()?;
