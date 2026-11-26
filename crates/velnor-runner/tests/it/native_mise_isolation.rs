@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{Context, Result};
 
-use crate::mise_double::{cancel_during_paths, git_bytes, prepared, private_dirs};
+use crate::mise_double::{cancel_during_paths, each_row, git_bytes, prepared, private_dirs};
 use crate::mise_world::{CONFIG, World, git, job_fixture};
 
 const CALLS: [&str; 5] = [
@@ -109,7 +109,7 @@ fn mise_runs_with_exactly_the_velnor_environment() -> Result<()> {
 
 #[test]
 fn mise_runs_in_a_private_copy_of_the_accepted_config() -> Result<()> {
-    for linked in [false, true] {
+    each_row(&[false, true], |linked| {
         let mut world = World::new()?;
         if linked {
             world.symlinked_temp()?;
@@ -170,8 +170,8 @@ fn mise_runs_in_a_private_copy_of_the_accepted_config() -> Result<()> {
                 "{label}"
             );
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 #[test]
@@ -223,31 +223,34 @@ fn run_row(world: &World, row: &str) -> Result<String> {
 
 #[test]
 fn mise_action_removes_the_private_dir() -> Result<()> {
-    for row in ["success", "install failure", "last check failure", "cancel"] {
-        let world = prepared()?;
-        let stdout = run_row(&world, row)?;
-        let calls = world.calls();
-        assert!(
-            calls
-                .first()
-                .is_some_and(|call| call.rootmode.starts_with("drwx")),
-            "{row}: {stdout}"
-        );
-        let root = calls[0].root();
-        assert!(!root.exists(), "{row}: {} survived", root.display());
-        assert_eq!(private_dirs(&world)?, Vec::<String>::new(), "{row}");
-        assert_eq!(
-            stdout.contains("job succeeded"),
-            row == "success",
-            "{row}\n{stdout}"
-        );
-        assert_eq!(
-            stdout.lines().any(|line| line == "job cancelled"),
-            row == "cancel",
-            "{row}\n{stdout}"
-        );
-    }
-    Ok(())
+    each_row(
+        &["success", "install failure", "last check failure", "cancel"],
+        |row| {
+            let world = prepared()?;
+            let stdout = run_row(&world, row)?;
+            let calls = world.calls();
+            assert!(
+                calls
+                    .first()
+                    .is_some_and(|call| call.rootmode.starts_with("drwx")),
+                "{row}: {stdout}"
+            );
+            let root = calls[0].root();
+            assert!(!root.exists(), "{row}: {} survived", root.display());
+            assert_eq!(private_dirs(&world)?, Vec::<String>::new(), "{row}");
+            assert_eq!(
+                stdout.contains("job succeeded"),
+                row == "success",
+                "{row}\n{stdout}"
+            );
+            assert_eq!(
+                stdout.lines().any(|line| line == "job cancelled"),
+                row == "cancel",
+                "{row}\n{stdout}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]

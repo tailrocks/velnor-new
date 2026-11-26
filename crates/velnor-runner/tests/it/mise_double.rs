@@ -157,3 +157,26 @@ pub(crate) fn cancel_during_paths(world: &World) -> Result<String> {
         .context("wait for velnor-runner")?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
+
+pub(crate) fn each_row<T: Copy + std::fmt::Debug>(
+    rows: &[T],
+    check: impl Fn(T) -> Result<()>,
+) -> Result<()> {
+    let mut failed = Vec::new();
+    for row in rows {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(*row))) {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => failed.push(format!("row {row:?}: {error:#}")),
+            Err(panic) => {
+                let message = panic
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| panic.downcast_ref::<&str>().copied())
+                    .unwrap_or("panicked");
+                failed.push(format!("row {row:?}: {message}"));
+            }
+        }
+    }
+    ensure!(failed.is_empty(), "{}", failed.join("\n"));
+    Ok(())
+}
