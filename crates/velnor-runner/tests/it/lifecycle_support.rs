@@ -61,6 +61,7 @@ pub(crate) struct Settings {
     pub(crate) upload_block_budget: Duration,
     pub(crate) session_retry_interval: Duration,
     pub(crate) report_budget: Duration,
+    pub(crate) upload_drain_budget: Duration,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
 }
@@ -74,6 +75,7 @@ impl Settings {
             upload_block_budget: Duration::from_secs(60),
             session_retry_interval: Duration::from_millis(50),
             report_budget: Duration::from_secs(10),
+            upload_drain_budget: Duration::from_secs(600),
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
         }
@@ -104,6 +106,11 @@ impl Settings {
         self
     }
 
+    pub(crate) fn draining_uploads_within(mut self, budget: Duration) -> Self {
+        self.upload_drain_budget = budget;
+        self
+    }
+
     pub(crate) fn within(mut self, budget: Duration) -> Self {
         self.budget = budget;
         self
@@ -127,6 +134,7 @@ pub(crate) async fn run_in(
         cancel_poll_error_delay: Duration::from_millis(50),
         session_retry_interval: settings.session_retry_interval,
         report_budget: settings.report_budget,
+        upload_drain_budget: settings.upload_drain_budget,
         adapters: AdapterRegistry::empty(),
     };
     tokio::time::timeout(budget, run_jit(options))

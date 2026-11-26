@@ -44,6 +44,7 @@ pub struct RunJitOptions {
     pub cancel_poll_error_delay: Duration,
     pub session_retry_interval: Duration,
     pub report_budget: Duration,
+    pub upload_drain_budget: Duration,
     pub adapters: AdapterRegistry,
 }
 
@@ -258,7 +259,14 @@ async fn run_and_report(
             .map_err(LifecycleError::Renew)?,
     }
     let (mut sink, events) = GithubSink::channel(&files)?;
-    let reporter = Reporter::new(connection, message, files, options.report_budget).spawn(events);
+    let reporter = Reporter::new(
+        connection,
+        message,
+        files,
+        options.report_budget,
+        options.upload_drain_budget,
+    )
+    .spawn(events);
     let run = tokio::select! {
         run = run_job(message, run_options, &options.adapters, &mut sink, cancel.clone()) => Some(run),
         () = cancel_deadline(&cancel, &grace) => None,

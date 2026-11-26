@@ -29,6 +29,7 @@ const CANCEL_TIMEOUT_FLOOR: Duration = Duration::from_secs(60);
 const CANCEL_POLL_ERROR_DELAY: Duration = Duration::from_secs(2);
 const SESSION_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 const REPORT_BUDGET: Duration = Duration::from_secs(10);
+const UPLOAD_DRAIN_BUDGET: Duration = Duration::from_secs(600);
 
 #[derive(Debug, Parser)]
 #[command(
@@ -227,6 +228,7 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
         cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
         session_retry_interval: SESSION_RETRY_INTERVAL,
         report_budget: REPORT_BUDGET,
+        upload_drain_budget: UPLOAD_DRAIN_BUDGET,
         adapters: build_adapters(),
     };
     Ok(match run_jit(options).await {

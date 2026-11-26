@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use super::acquire::JobConnection;
 use super::logs::{Event, LogFiles, iso_millis};
-use super::status::StatusQueue;
+use super::status::{StatusQueue, conclusion};
 use super::tail::StepState;
 use crate::exec::{JobRun, StepResult};
 use crate::job_message::AgentJobRequestMessage;
@@ -54,6 +54,7 @@ pub(super) struct Reporter {
     times: BTreeMap<u32, StepTimes>,
     files: LogFiles,
     budget: Duration,
+    drain_budget: Duration,
     status: Option<StatusQueue>,
     upload_slots: Arc<Semaphore>,
     uploads: JoinSet<()>,
@@ -68,21 +69,13 @@ where
     }
 }
 
-fn conclusion(result: StepResult) -> StepConclusion {
-    match result {
-        StepResult::Succeeded => StepConclusion::Success,
-        StepResult::Failed => StepConclusion::Failure,
-        StepResult::Skipped => StepConclusion::Skipped,
-        StepResult::Cancelled => StepConclusion::Cancelled,
-    }
-}
-
 impl Reporter {
     pub(super) fn new(
         connection: &JobConnection,
         message: &AgentJobRequestMessage,
         files: LogFiles,
         budget: Duration,
+        drain_budget: Duration,
     ) -> Self {
         let plan_id = message.plan.plan_id.clone();
         let job_id = message.job_id.clone();
@@ -108,6 +101,7 @@ impl Reporter {
             times: BTreeMap::new(),
             files,
             budget,
+            drain_budget,
             upload_slots: Arc::new(Semaphore::new(UPLOAD_SLOTS)),
             uploads: JoinSet::new(),
         }
@@ -361,7 +355,7 @@ impl Reporter {
         });
     }
 
-    async fn close(mut self) -> ReportSummary {
+    async fn drain_uploads(&mut self) {
         while self.uploads.join_next().await.is_some() {}
         if let Some(results) = self.results.clone() {
             let (plan_id, job_id) = (self.plan_id.clone(), self.job_id.clone());
@@ -377,6 +371,16 @@ impl Reporter {
                 results.upload_job_log(&plan_id, &job_id, &path).await
             })
             .await;
+        }
+    }
+
+    async fn close(mut self) -> ReportSummary {
+        if timeout(self.drain_budget, self.drain_uploads())
+            .await
+            .is_err()
+        {
+            eprintln!("warning: log uploads were not finished in time and are dropped");
+            self.uploads.abort_all();
         }
         if let Some(mut socket) = self.feed.take() {
             let _ = timeout(CONNECT_BUDGET, socket.close(None)).await;

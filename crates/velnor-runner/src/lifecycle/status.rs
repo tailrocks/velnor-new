@@ -8,7 +8,8 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use crate::protocol::{TwirpResultsClient, TwirpStep};
+use crate::exec::StepResult;
+use crate::protocol::{StepConclusion, TwirpResultsClient, TwirpStep};
 
 pub(super) struct StatusQueue {
     updates: UnboundedSender<Vec<TwirpStep>>,
@@ -58,5 +59,14 @@ impl StatusQueue {
             task.abort();
             eprintln!("warning: step status updates were not delivered in time and are dropped");
         }
+    }
+}
+
+pub(super) fn conclusion(result: StepResult) -> StepConclusion {
+    match result {
+        StepResult::Succeeded => StepConclusion::Success,
+        StepResult::Failed => StepConclusion::Failure,
+        StepResult::Skipped => StepConclusion::Skipped,
+        StepResult::Cancelled => StepConclusion::Cancelled,
     }
 }
