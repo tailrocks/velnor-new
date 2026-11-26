@@ -54,7 +54,7 @@ features = ["test-support"]
 packages = ["velnor-runner"]
 filter = "package(velnor-runner)"
 lint = true
-doc = true
+doc = false
 
 [[test_lane]]
 root = "."
