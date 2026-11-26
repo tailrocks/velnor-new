@@ -26,6 +26,11 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let child = std::fs::read_to_string(world.seen.join(format!("{name}.child")))?
         .trim()
         .to_owned();
+    world.wait_for_event("the deferred message of offer 2", 30, |events| {
+        events
+            .iter()
+            .any(|event| event.label == "poll" && event.field("returned") == "52")
+    });
     let before = world.events().last().map_or(0, |event| event.seq);
     let stopped = Instant::now();
     world.stop()?;
