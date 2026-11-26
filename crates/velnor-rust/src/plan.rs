@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Gate, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
+    LaneFeatures, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, TargetName,
     Toolchain, When, WorkflowPlan,
 };
@@ -363,6 +363,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         manifest: None,
+        features: LaneFeatures::default(),
         target_dir: None,
         when: When::Success,
         skip_after_merge_group: None,

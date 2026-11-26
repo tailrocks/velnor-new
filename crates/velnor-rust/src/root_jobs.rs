@@ -7,7 +7,8 @@ mod lanes;
 mod timeouts;
 
 use velnor_model::{
-    CargoCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step, StepKind, When,
+    CargoCommand, Job, JobId, LaneFeatures, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
+    StepKind, When,
 };
 
 use crate::audit_job::{AuditLocation, audits_per_root};
@@ -115,7 +116,13 @@ impl RootJobs<'_> {
                     }
                     _ => None,
                 };
+                let features = if command.takes_workspace_features() {
+                    self.facts.config.workspace_features.clone()
+                } else {
+                    LaneFeatures::default()
+                };
                 let mut step = member.lane.cargo(command, Some(&member.root));
+                step.features = features;
                 if self.unit.grouped {
                     step.directory = None;
                     step.manifest = Some(member.root.manifest.clone());

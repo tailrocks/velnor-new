@@ -140,6 +140,7 @@ pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<Re
         StepKind::Cargo(CargoCommand::Doctest) if audit => vec![cargo_step(
             &CargoCommand::BuildAll,
             step.manifest.as_ref(),
+            &step.features,
             true,
             lane,
             None,

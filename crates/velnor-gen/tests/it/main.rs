@@ -396,5 +396,6 @@ mod wiring;
 mod workflow_env;
 mod workflow_size_0110;
 mod workflow_size_report;
+mod workspace_features;
 mod workspace_groups;
 mod yaml_tree;

@@ -9,8 +9,9 @@ use std::process::Command;
 use clap::Parser;
 use velnor_ci::cli::{Cli, Command as CiCommand, SourcesCommand};
 use velnor_model::{
-    BuildRecord, Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug,
-    RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, Concurrency, Job, JobId, LaneFeatures, Permissions, PrRun, PullRequestType,
+    RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -70,6 +71,7 @@ pub(crate) fn plan(
                 },
                 directory: None,
                 manifest: None,
+                features: LaneFeatures::default(),
                 target_dir: None,
                 when: When::FetchSources,
                 pr: PrRun::Always,

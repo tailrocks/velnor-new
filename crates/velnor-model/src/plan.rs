@@ -131,6 +131,9 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub manifest: Option<RepoPath>,
+    /// The cargo features the step builds with. Set only on the commands that
+    /// `CargoCommand::takes_workspace_features` names.
+    pub features: LaneFeatures,
     pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,

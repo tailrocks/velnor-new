@@ -339,6 +339,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
+            &step.features,
             audit,
             lane,
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),

@@ -161,6 +161,7 @@ impl Lane {
                 .map(|root| root.target_dir.clone()),
             kind: StepKind::Cargo(command),
             manifest: None,
+            features: LaneFeatures::default(),
             when: When::NotCancelled,
             skip_after_merge_group: None,
             skip_when_cold: false,

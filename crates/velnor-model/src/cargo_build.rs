@@ -31,6 +31,33 @@ impl CargoCommand {
         }
     }
 
+    /// Whether the command builds the whole workspace for the lint, the docs or the tests, so the
+    /// repository's `workspace_features` apply to it. The per-package checks, the feature lanes
+    /// and the policy commands never take them.
+    #[must_use]
+    pub const fn takes_workspace_features(&self) -> bool {
+        match self {
+            Self::Clippy { .. }
+            | Self::Doc
+            | Self::NextestBuild
+            | Self::NextestArchive { .. }
+            | Self::NextestRun { .. } => true,
+            Self::BuildBinary { .. }
+            | Self::BuildAll
+            | Self::FmtCheck
+            | Self::CheckAlone { .. }
+            | Self::NextestFeatures { .. }
+            | Self::ClippyFeatures { .. }
+            | Self::DocFeatures { .. }
+            | Self::LaneGuard { .. }
+            | Self::NextestRunArchive { .. }
+            | Self::TestTarget { .. }
+            | Self::Doctest
+            | Self::Deny { .. }
+            | Self::Machete => false,
+        }
+    }
+
     #[must_use]
     pub const fn is_compile_check(&self) -> bool {
         match self {
