@@ -141,6 +141,7 @@ impl Lane {
                 Some(self.package_gate(vec![package.clone()]))
             }
             CargoCommand::NextestFeatures { ref packages, .. }
+            | CargoCommand::ClippyFeatures { ref packages, .. }
             | CargoCommand::LaneGuard { ref packages, .. }
                 if !packages.is_empty() =>
             {

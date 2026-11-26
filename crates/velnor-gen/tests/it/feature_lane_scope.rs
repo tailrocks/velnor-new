@@ -123,3 +123,40 @@ fn lane_packages_must_be_given_with_a_filter_and_be_packages_of_the_root() -> Te
     }
     Ok(())
 }
+
+const LINT_STEP: &str = "Lint (features: local-mode)";
+
+fn lint_condition(config: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let steps = lane_steps(config)?;
+    let lint = steps
+        .iter()
+        .find(|step| step["name"] == LINT_STEP)
+        .ok_or("no lint step")?;
+    Ok(text(lint, "if")?.to_owned())
+}
+
+#[test]
+fn a_lane_lint_runs_only_when_the_lane_packages_are_selected() -> TestResult {
+    let condition = lint_condition(&format!("{LANE}lint = true\n"))?;
+    let wanted = [package("package-0"), WORKSPACE.to_owned()];
+    assert!(
+        condition.contains(&format!("({})", wanted.join(" || "))),
+        "{condition}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_lane_lint_without_a_package_list_runs_whenever_the_root_is_selected() -> TestResult {
+    let config = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\n";
+    assert!(!lint_condition(config)?.contains("package_args"));
+    Ok(())
+}
+
+#[test]
+fn a_lint_shared_with_a_lane_that_has_no_package_list_is_not_scoped() -> TestResult {
+    let unscoped = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\n";
+    let config = format!("{LANE}lint = true\n{unscoped}");
+    assert!(!lint_condition(&config)?.contains("package_args"));
+    Ok(())
+}

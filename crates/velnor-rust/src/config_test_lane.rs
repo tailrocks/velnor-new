@@ -182,8 +182,10 @@ pub(crate) fn commands(
 ) -> Vec<CargoCommand> {
     let mut linted = BTreeSet::new();
     let mut documented = BTreeSet::new();
-    lanes_of(config, root, LaneJob::Inline)
-        .flat_map(|lane| lane_commands(lane, root, direct, &mut linted, &mut documented))
+    let lanes: Vec<&TestLane> = lanes_of(config, root, LaneJob::Inline).collect();
+    lanes
+        .iter()
+        .flat_map(|lane| lane_commands(lane, &lanes, root, direct, &mut linted, &mut documented))
         .collect()
 }
 
@@ -204,6 +206,7 @@ pub(crate) fn parallel(
             timeout_minutes: lane.timeout_minutes,
             commands: lane_commands(
                 lane,
+                &[lane],
                 root,
                 direct,
                 &mut BTreeSet::new(),
@@ -233,6 +236,7 @@ fn lanes_of<'a>(
 
 fn lane_commands(
     lane: &TestLane,
+    peers: &[&TestLane],
     root: &RustRoot,
     direct: &[String],
     linted: &mut BTreeSet<LaneFeatures>,
@@ -264,6 +268,7 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
+            packages: lint_packages(peers, &normalized),
             features: features(),
         });
     }
@@ -303,4 +308,20 @@ pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
         return Err(DetectError::invalid(&CONFIG_PATH, reason));
     }
     Ok(())
+}
+
+/// A lint shared by several lanes runs when any of them is selected, and
+/// always when one of them has no package list.
+fn lint_packages(peers: &[&TestLane], normalized: &LaneFeatures) -> Vec<PackageName> {
+    let sharing = peers
+        .iter()
+        .filter(|lane| lane.lint && lane.features.normalized() == *normalized);
+    let mut packages = BTreeSet::new();
+    for lane in sharing {
+        if lane.packages.is_empty() {
+            return Vec::new();
+        }
+        packages.extend(lane.packages.iter().cloned());
+    }
+    packages.into_iter().collect()
 }
