@@ -4,8 +4,10 @@
 use velnor_model::{DependencyKind, RepoView, TargetKind};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
+mod selectors;
+
 use crate::facts::{TestResult, package, repo};
-use crate::pipeline::workflow;
+use crate::pipeline::{pin_helper, workflow};
 
 const NEXTEST_MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 

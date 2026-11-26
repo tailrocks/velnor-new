@@ -351,3 +351,28 @@ fn a_dependency_selector_on_an_optional_renamed_dependency_gates_a_harness_false
     assert_eq!(direct(FEATURES)?, 0);
     Ok(())
 }
+
+#[test]
+fn the_overlap_check_leaves_out_the_direct_harness_binaries_the_group_runs_leave_out() -> TestResult
+{
+    let groups = format!("{DATABASE}\n{SHELL}");
+    let listed = |config: &str| -> Result<Vec<String>, Box<dyn Error>> {
+        Ok(gated_harness(config)?
+            .lines()
+            .filter(|line| line.contains("test-groups check --"))
+            .map(str::to_owned)
+            .collect())
+    };
+    let featured = listed(&format!("{FEATURES}{groups}"))?;
+    assert_eq!(featured.len(), 1, "{featured:?}");
+    assert!(
+        featured[0].contains("- binary_id(=package-0::gate)"),
+        "{featured:?}"
+    );
+    let plain = listed(&groups)?;
+    assert!(
+        plain.iter().all(|line| !line.contains("binary_id")),
+        "{plain:?}"
+    );
+    Ok(())
+}

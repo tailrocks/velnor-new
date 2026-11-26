@@ -12,7 +12,6 @@ use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
-use crate::sibling_features::gated_targets_built;
 use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
@@ -357,7 +356,6 @@ fn member(
             .collect(),
         targets: package.targets.clone(),
         custom_harnesses: custom_harnesses(view, package, workspace_features)?,
-        gated_targets_built: gated_targets_built(view, package, workspace_features),
     })
 }
 

@@ -3,10 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{
-    DependencyKind, PackageDependency, RepoPath, RepoView, RustPackage, Target, TargetKind,
-    TargetName,
-};
+use velnor_model::{DependencyKind, PackageDependency, RepoPath, RepoView, RustPackage};
 
 use crate::harness::{dependency_specs, enabled_features, implicit_features};
 use crate::toml_file::table;
@@ -102,42 +99,6 @@ pub(crate) fn requested_by_siblings(
         .remove(&package.manifest)
         .unwrap_or_default()
         .into_iter()
-        .collect()
-}
-
-pub(crate) fn gated_targets_built(
-    view: &RepoView,
-    package: &RustPackage,
-    workspace_features: &[String],
-) -> Vec<(TargetName, TargetKind)> {
-    if workspace_features.is_empty() {
-        return Vec::new();
-    }
-    let Some(manifest) = view
-        .files
-        .get(&package.manifest)
-        .and_then(|bytes| table(bytes).ok())
-    else {
-        return Vec::new();
-    };
-    let closure = |names: &[String]| {
-        enabled_features(&manifest, &requested_by_siblings(view, package, names))
-    };
-    let enabled = closure(workspace_features);
-    let before = closure(&[]);
-    let built = |features: &BTreeSet<String>, target: &Target| {
-        target
-            .required_features
-            .iter()
-            .all(|required| features.contains(&required.name))
-    };
-    package
-        .targets
-        .iter()
-        .filter(|target| {
-            target.requires_features && built(&enabled, target) && !built(&before, target)
-        })
-        .flat_map(|target| target.kinds.iter().map(|kind| (target.name.clone(), *kind)))
         .collect()
 }
 
@@ -257,9 +218,7 @@ fn edge_requests(
     if keys.is_empty() {
         keys.insert(dependency.name.to_string());
     }
-    let direct = workspace_features
-        .filter(|_| dependency.platform.is_none())
-        .map_or_else(Vec::new, |names| workspace_forwards(names, &keys));
+    let direct = workspace_features.map_or_else(Vec::new, |names| workspace_forwards(names, &keys));
     if dependency.optional
         && direct.is_empty()
         && !keys.iter().any(|key| activated(parsed, enabled, key))
