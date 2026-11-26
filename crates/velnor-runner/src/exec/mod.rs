@@ -149,6 +149,8 @@ pub enum ExecError {
     Unsupported(String),
     #[error("{0}")]
     Invalid(String),
+    #[error("the step was cancelled")]
+    Cancelled,
 }
 
 impl ExecError {

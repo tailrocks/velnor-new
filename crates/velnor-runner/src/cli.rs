@@ -88,12 +88,14 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
 fn cancel_on_signal() -> Result<JobCancel> {
     let mut terminate = signal(SignalKind::terminate()).context("listen for SIGTERM")?;
     let mut interrupt = signal(SignalKind::interrupt()).context("listen for SIGINT")?;
+    let mut hangup = signal(SignalKind::hangup()).context("listen for SIGHUP")?;
     let cancel = JobCancel::new();
     let trigger = cancel.clone();
     tokio::spawn(async move {
         tokio::select! {
             _ = terminate.recv() => {}
             _ = interrupt.recv() => {}
+            _ = hangup.recv() => {}
         }
         trigger.cancel();
     });

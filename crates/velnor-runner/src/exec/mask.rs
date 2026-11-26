@@ -8,6 +8,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use regex_automata::meta::Regex;
 
+use super::{Annotation, ExecError};
 use crate::job_message::{AgentJobRequestMessage, MaskType};
 
 const MASK: &str = "***";
@@ -36,11 +37,13 @@ impl Masker {
         }
     }
 
-    pub(super) fn add_pattern(&mut self, pattern: &str) {
+    pub(super) fn add_pattern(&mut self, pattern: &str) -> bool {
+        let Ok(regex) = Regex::new(pattern) else {
+            return false;
+        };
         self.add(pattern);
-        if let Ok(regex) = Regex::new(pattern) {
-            self.patterns.push(regex);
-        }
+        self.patterns.push(regex);
+        true
     }
 
     pub(super) fn add_access_token(&mut self, token: &str) {
@@ -93,15 +96,27 @@ fn replace_matches<'a>(text: Cow<'a, str>, regex: &Regex) -> Cow<'a, str> {
     Cow::Owned(replaced)
 }
 
-pub(super) fn for_job(message: &AgentJobRequestMessage) -> Masker {
-    let mut masker = Masker::default();
-    for hint in &message.mask {
-        let Some(value) = hint.value.as_ref().map(|value| value.expose().as_str()) else {
-            continue;
+pub(super) fn mask_annotation(masker: &Masker, annotation: &mut Annotation) {
+    for text in [&mut annotation.message]
+        .into_iter()
+        .chain(annotation.title.as_mut())
+        .chain(annotation.file.as_mut())
+    {
+        if let Cow::Owned(masked) = masker.mask(text) {
+            *text = masked;
+        }
+    }
+}
+
+pub(super) fn load(masker: &mut Masker, message: &AgentJobRequestMessage) -> Result<(), ExecError> {
+    let hints =
+        || {
+            message.mask.iter().enumerate().filter_map(|(index, hint)| {
+                Some((index, hint, hint.value.as_ref()?.expose().as_str()))
+            })
         };
-        if hint.kind == Some(MaskType::Regex) {
-            masker.add_pattern(value);
-        } else {
+    for (_, hint, value) in hints() {
+        if hint.kind != Some(MaskType::Regex) {
             masker.add(value);
         }
     }
@@ -132,5 +147,13 @@ pub(super) fn for_job(message: &AgentJobRequestMessage) -> Masker {
     for value in parameters {
         masker.add(value.expose());
     }
-    masker
+    for (index, hint, value) in hints() {
+        if hint.kind == Some(MaskType::Regex) && !masker.add_pattern(value) {
+            return Err(ExecError::Invalid(format!(
+                "mask hint {} is not a valid regular expression",
+                index + 1
+            )));
+        }
+    }
+    Ok(())
 }

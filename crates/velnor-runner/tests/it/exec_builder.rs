@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use rustix::process::{Pid, Signal, kill_process, test_kill_process};
 use serde_json::{Value, json};
+use velnor_runner::exec::{JobRun, LogSink, StepResult};
 
 use crate::exec_support::{Ran, Scratch};
 
@@ -135,3 +136,20 @@ pub(crate) const BACKGROUND_SLEEP: &str =
     "sleep 4242 >/dev/null 2>&1 &\necho $! > \"$RUNNER_TEMP/bg.pid\"\nwait";
 
 pub(crate) const BACKGROUND_STATE: &str = "pid=$(cat \"$RUNNER_TEMP/bg.pid\")\nfor _ in $(seq 50); do\n  kill -0 \"$pid\" 2>/dev/null || { echo bg-dead; exit 0; }\n  sleep 0.1\ndone\necho bg-alive";
+
+#[derive(Default)]
+pub(crate) struct Recorder {
+    pub(crate) lines: Vec<String>,
+}
+
+impl LogSink for Recorder {
+    fn step_started(&mut self, _number: u32, _name: &str) {}
+
+    fn line(&mut self, _number: u32, text: &str) {
+        self.lines.push(text.to_owned());
+    }
+
+    fn step_finished(&mut self, _number: u32, _result: StepResult) {}
+
+    fn job_finished(&mut self, _run: &JobRun) {}
+}
