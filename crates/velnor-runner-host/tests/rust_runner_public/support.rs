@@ -27,6 +27,9 @@ impl Fixture {
         std::fs::create_dir_all(store.join("bin"))?;
         std::fs::copy(FAKE_ORB, root.join("orb"))?;
         std::fs::write(root.join("list.json"), machines)?;
+        for private in [store.clone(), store.join("bin")] {
+            std::fs::set_permissions(private, std::fs::Permissions::from_mode(0o700))?;
+        }
         let binary = store.join("bin/velnor-runner");
         std::fs::write(&binary, "")?;
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))?;
@@ -41,12 +44,13 @@ impl Fixture {
 
     pub(super) fn configure(&self, extra: &str) -> Result<(), Box<dyn Error>> {
         let env = format!(
-            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\n{extra}",
+            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_TEST_PID={pid}\n{extra}",
             log = self.root.join("orb.log").display(),
             list = self.root.join("list.json").display(),
             store = self.store.display(),
             seen = self.root.join("seen").display(),
             ps = self.root.join("ps.table").display(),
+            pid = std::process::id(),
         );
         std::fs::write(self.root.join("fake_orb.env"), env)?;
         Ok(())

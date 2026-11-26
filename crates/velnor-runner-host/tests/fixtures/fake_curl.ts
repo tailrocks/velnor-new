@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
-import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -14,6 +13,7 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
+import { type Offer, pullJson, repository as repositoryJson, runJson, treeId, trees } from "./fake_github_shapes.ts";
 
 interface Config {
   owner: string;
@@ -26,25 +26,6 @@ interface Config {
   admin_url: string;
   store: string;
   ps_table: string;
-}
-interface Pull {
-  number: number;
-  base_sha: string;
-  head_sha: string;
-  base_ref: string;
-  head_ref: string;
-  merge_parents?: string[];
-}
-interface Offer {
-  request_id: number;
-  event: "push" | "pull_request";
-  run_id: number;
-  ref: string;
-  branch: string;
-  sha: string;
-  workflow_content: string;
-  pr?: Pull;
-  acquire_returns?: "none";
 }
 interface Message {
   id: number;
@@ -160,92 +141,27 @@ function mutate<T>(work: (state: State) => T): T {
   });
 }
 
-function sha(text: string): string {
-  return createHash("sha1").update(text).digest("hex");
-}
-
-function repo(): object {
-  return {
-    id: config.repository_id,
-    name: config.repo,
-    full_name: repository,
-    owner: { login: config.owner },
-    private: true,
-    default_branch: "main",
-  };
-}
-
-function runJson(offer: Offer): object {
-  const pull = offer.pr;
-  const short = { id: config.repository_id, name: config.repo };
-  return {
-    id: offer.run_id,
-    event: offer.event,
-    path: ".github/workflows/ci.yml",
-    head_branch: pull ? pull.head_ref : offer.branch,
-    head_sha: pull ? pull.head_sha : offer.sha,
-    workflow_id: 7,
-    run_attempt: 1,
-    repository: repo(),
-    head_repository: pull ? repo() : undefined,
-    pull_requests: pull
-      ? [
-          {
-            number: pull.number,
-            head: { ref: pull.head_ref, sha: pull.head_sha, repo: short },
-            base: { ref: pull.base_ref, sha: pull.base_sha, repo: short },
-          },
-        ]
-      : [],
-    referenced_workflows: [],
-  };
-}
-
-function pullJson(pull: Pull, offer: Offer): object {
-  return {
-    number: pull.number,
-    state: "open",
-    merged: false,
-    head: { ref: pull.head_ref, sha: pull.head_sha, repo: repo() },
-    base: { ref: pull.base_ref, sha: pull.base_sha, repo: repo() },
-    merge_commit_sha: offer.sha,
-  };
-}
-
-function trees(offer: Offer): Record<string, object> {
-  const content = Buffer.from(offer.workflow_content);
-  const blob = createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
-  const [top, dot, flows] = [sha(`root:${offer.sha}`), sha(`gh:${offer.sha}`), sha(`wf:${offer.sha}`)];
-  const entry = (path: string, mode: string, type: string, id: string, size?: number) => ({ path, mode, type, sha: id, size });
-  return {
-    [top]: { sha: top, truncated: false, tree: [entry(".github", "040000", "tree", dot)] },
-    [dot]: { sha: dot, truncated: false, tree: [entry("workflows", "040000", "tree", flows)] },
-    [flows]: { sha: flows, truncated: false, tree: [entry("ci.yml", "100644", "blob", blob, content.length)] },
-    [blob]: { sha: blob, encoding: "base64", size: content.length, content: content.toString("base64") },
-  };
-}
-
 function api(path: string): never {
   const base = `/repos/${repository}`;
   if (method === "POST" && path === `${base}/actions/runners/registration-token`) reply(201, { token: "registration-token" });
   if (method === "POST" && path === "/actions/runner-registration") reply(200, { url: config.admin_url, token: "admin-token" });
-  if (method === "GET" && path === base) reply(200, repo());
+  if (method === "GET" && path === base) reply(200, repositoryJson(config));
   const run = /^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/.exec(path);
   if (method === "GET" && run?.[1]) {
     const offer = offers().find((candidate) => candidate.run_id === Number(run[1]));
-    if (offer) reply(200, runJson(offer));
+    if (offer) reply(200, runJson(config, offer));
   }
   const pull = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)$/.exec(path);
   if (method === "GET" && pull?.[1]) {
     const offer = offers().find((candidate) => candidate.pr?.number === Number(pull[1]));
-    if (offer?.pr) reply(200, pullJson(offer.pr, offer));
+    if (offer?.pr) reply(200, pullJson(config, offer.pr, offer));
   }
   const commit = /^\/repos\/[^/]+\/[^/]+\/git\/commits\/([0-9a-f]{40})$/.exec(path);
   if (method === "GET" && commit?.[1]) {
     const offer = offers().find((candidate) => candidate.sha === commit[1]);
     if (offer) {
       const parents = offer.pr ? (offer.pr.merge_parents ?? [offer.pr.base_sha, offer.pr.head_sha]) : [];
-      reply(200, { sha: offer.sha, message: "commit", tree: { sha: sha(`root:${offer.sha}`) }, parents: parents.map((parent) => ({ sha: parent })) });
+      reply(200, { sha: offer.sha, message: "commit", tree: { sha: treeId(offer, "root") }, parents: parents.map((parent) => ({ sha: parent })) });
     }
   }
   const object = /^\/repos\/[^/]+\/[^/]+\/git\/(?:trees|blobs)\/([0-9a-f]{40})$/.exec(path);

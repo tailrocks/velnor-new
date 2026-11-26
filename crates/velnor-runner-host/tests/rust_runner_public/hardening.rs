@@ -92,7 +92,7 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
     wait_for(&fixture.seen("42.jit.pid")).await?;
     held.stop().await?;
     std::fs::write(fixture.root.join("ps.table"), "4242 sleep 600\n")?;
-    assert_eq!(launcher.list_processes()?.len(), 1);
+    assert_eq!(launcher.list_processes()?.len(), 2);
     launcher.kill_processes(&[4242])?;
 
     let log = fixture.log()?;
@@ -167,13 +167,14 @@ fn rust_runner_jit_directory_is_private() -> Result<(), Box<dyn Error>> {
         rerun(TEST, "umask 0;", &[])?;
         return Ok(());
     }
-    let fresh = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    let fresh = Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     fresh.launcher().ensure_machine()?;
     assert_eq!(mode_of(&fresh.store.join("jit"))?, 0o700);
     assert!(fresh.store.join("work").is_dir());
 
     for mode in [0o755, 0o750, 0o710, 0o770, 0o701, 0o777] {
-        let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+        let fixture =
+            Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
         std::fs::create_dir_all(fixture.store.join("jit"))?;
         std::fs::set_permissions(
             fixture.store.join("jit"),

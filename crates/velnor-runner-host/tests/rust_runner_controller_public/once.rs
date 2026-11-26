@@ -57,7 +57,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
     let name = jit_name(first);
     wait_for("the runner pid", 20, || world.pid_of(&name).is_some());
     let acquire = world.gh("acquire")[0].clone();
-    world.wait_for_event(
+    world.wait_for_event_unless(
         "two polls and a redelivery while the slot is held",
         40,
         |events| {
@@ -69,6 +69,10 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
                 && polls
                     .iter()
                     .any(|poll| poll.field("last") == "none" && poll.field("returned") == "11")
+        },
+        |_| {
+            (acquire_ids(world).len() > 1)
+                .then(|| "offer 2 was acquired while the only slot was held".to_owned())
         },
     );
     assert_eq!(acquire.field("ids"), "1");
@@ -104,7 +108,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
 }
 
 fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
-    world.wait_for_event(
+    world.wait_for_event_unless(
         "the first runner removal and the second acquire",
         60,
         |events| {
@@ -114,6 +118,17 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
                 .count()
                 >= 2
                 && events.iter().any(|event| event.label == "message.delete")
+        },
+        |_| {
+            let mut ids = acquire_ids(world);
+            ids.sort();
+            ids.dedup();
+            (ids.len() != acquire_ids(world).len()).then(|| {
+                format!(
+                    "a runner request was acquired twice: {:?}",
+                    acquire_ids(world)
+                )
+            })
         },
     );
     let events = world.events();

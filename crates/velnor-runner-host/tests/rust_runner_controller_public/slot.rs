@@ -53,6 +53,15 @@ pub(super) fn run(test: &str) -> TestResult<()> {
                 && event.field("status") == "204"
         })
     });
+    let events = world.events();
+    let acquire = acquire_with_ids(&events, "4").ok_or("no acquire for D")?;
+    let state = snapshot(&world, &acquire);
+    assert!(
+        !state.runners.contains(&runner_name(3))
+            && !state.work.contains(&"3".to_owned())
+            && !state.jit.contains(&"3.jit".to_owned()),
+        "{state:?}"
+    );
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Shutdown)");
     assert_clean(&world, "1");
@@ -65,26 +74,39 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     Ok(())
 }
 
-fn assert_held(world: &World, job: &str, allowed_deletes: &[&str]) {
+fn assert_held(world: &World, job: &str, allowed_deletes: &[&str], acquired: &[&str]) {
     assert_eq!(
         controller_readiness(&world.state),
         Readiness::Ready,
         "{job}"
     );
-    let acquires = world.gh("acquire").len();
-    let deleted = deleted_messages(world);
-    for id in deleted {
+    let marker = world.events().last().map_or(0, |event| event.seq);
+    world.wait_for_event_unless(
+        "two polls while the slot is held",
+        30,
+        |events| {
+            events
+                .iter()
+                .filter(|event| event.label == "poll" && event.seq > marker)
+                .count()
+                >= 2
+        },
+        |_| {
+            (acquire_ids(world) != acquired).then(|| {
+                format!(
+                    "{job}: a new acquire during the hold: {:?}",
+                    acquire_ids(world)
+                )
+            })
+        },
+    );
+    for id in deleted_messages(world) {
         assert!(
             allowed_deletes.contains(&id.as_str()),
             "{job}: queued message {id} deleted"
         );
     }
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    assert_eq!(
-        world.gh("acquire").len(),
-        acquires,
-        "{job}: a new acquire during the hold"
-    );
+    assert_eq!(acquire_ids(world), acquired, "{job}");
 }
 
 fn held_by_processes(world: &World) -> TestResult<()> {
@@ -109,7 +131,7 @@ fn held_by_processes(world: &World) -> TestResult<()> {
                 && after.iter().any(|event| event.is_orb("kill -9 7001"))
         },
     );
-    assert_held(world, "job A", &["31"]);
+    assert_held(world, "job A", &["31"], &["1"]);
     Ok(())
 }
 
@@ -169,7 +191,7 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
             .count()
             >= 4
     });
-    assert_held(world, "job B", &["31", "32"]);
+    assert_held(world, "job B", &["31", "32"], &["1", "2"]);
     Ok(())
 }
 
@@ -195,7 +217,7 @@ fn held_by_the_files(world: &World) -> TestResult<()> {
     wait_for("the work dir of C", 20, || locked.exists());
     heartbeat_advances(world, 4);
     assert!(orb_calls_after(world, acquire.seq, "ps -eo").len() > before);
-    assert_held(world, "job C", &["31", "32", "33"]);
+    assert_held(world, "job C", &["31", "32", "33"], &["1", "2", "3"]);
     world.configure_orb("")?;
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700))?;
     Ok(())
