@@ -4,7 +4,7 @@ G1	1	V	13	83	exec:sonnet effort:high ×4; exec:opus effort:high ×4; exec:sonnet
 G2	1	L H	2	12	exec:sonnet effort:high ×1; exec:sonnet effort:medium ×1	sonnet-5.5 low ×2	D7
 G3	1	DG AN B	8	52	exec:sonnet effort:medium ×3; exec:sonnet effort:high ×2; exec:opus effort:medium ×1; exec:opus effort:high ×1; exec:haiku effort:medium ×1	sonnet-5.5 low ×5; opus-5.5 low ×1; opus-5.5 high ×1; haiku-5.5 low ×1	Q10
 G4	1	R A T BM	13	98	exec:sonnet effort:medium ×5; exec:opus effort:high ×3; exec:sonnet effort:high ×3; exec:haiku effort:medium ×1; exec:opus effort:medium ×1	sonnet-5.5 low ×7; opus-5.5 high ×5; haiku-5.5 low ×1	Q5 Q8 Q9 Q15 Q17
-G5	2	G RV P O X A	35	241	exec:opus effort:high ×13; exec:sonnet effort:medium ×11; exec:sonnet effort:high ×9; exec:opus effort:medium ×1; exec:haiku effort:medium ×1	opus-5.5 high ×20; sonnet-5.5 low ×13; sonnet-5.5 medium ×1; opus-5.5 medium ×1	Q1 Q5 Q7 Q9 Q14 D8
+G5	2	G RV P O X A	36	241	exec:opus effort:high ×14; exec:sonnet effort:medium ×11; exec:sonnet effort:high ×9; exec:opus effort:medium ×1; exec:haiku effort:medium ×1	opus-5.5 high ×21; sonnet-5.5 low ×13; sonnet-5.5 medium ×1; opus-5.5 medium ×1	Q1 Q5 Q7 Q9 Q14 D8
 G6	2	H	8	54	exec:sonnet effort:high ×4; exec:sonnet effort:medium ×2; exec:opus effort:high ×1; exec:haiku effort:medium ×1	sonnet-5.5 low ×5; opus-5.5 high ×1; opus-5.5 medium ×1; haiku-5.5 low ×1	Q1
 G7	2	L	7	39	exec:opus effort:high ×4; exec:sonnet effort:high ×2; exec:sonnet effort:medium ×1	opus-5.5 high ×4; fable† ×1; sonnet-5.5 low ×1; opus-5.5 medium ×1	Q12 Q16 D7
 G8	2	V C	18	151	exec:opus effort:high ×10; exec:sonnet effort:medium ×5; exec:sonnet effort:high ×3	opus-5.5 high ×7; sonnet-5.5 low ×7; fable† ×3; opus-5.5 medium ×1	Q1 Q8 Q19 D8

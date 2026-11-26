@@ -16,10 +16,10 @@ full Actions protocol.
 
 ## 1. Summary
 
-- **167 items, 1284 agent-hours of building, 1450.5 with review** (section 9). Phase 0 is 12 items and 94 h.
-  Phase 1 is 36 items and 245 h. Phases 2 and 3 (94 + 25 items) are gated on owner answers.
+- **168 items, 1284 agent-hours of building, 1452.0 with review** (section 9). Phase 0 is 12 items and 94 h.
+  Phase 1 is 36 items and 245 h. Phases 2 and 3 (95 + 25 items) are gated on owner answers.
 - **Of the old plan's 174 items:** 8 are done on main, 10 are removed, 12 are folded into phase 0, and 144 survive
-  with new file targets. 12 new N-items come from the audit and the rulings, and phase 0 adds W0–W10.
+  with new file targets. 13 new N-items come from the audit and the rulings, and phase 0 adds W0–W10.
 - **Main is red.** The newest completed push runs fail in `velnor-ci plan` on stale recorded metadata (runs
   44599278133 and 44599906946), with helper 0.1.98 pinned. Earlier reds were lint failures and helper skew (W1).
 - **A change can still merge without tests.** PR #1799 merged on the green `Required` of a draft run (W0).
@@ -34,7 +34,8 @@ full Actions protocol.
 ## 2. How to read an item
 
 - **IDs.** W0–W10 are phase 0, with N26. Old IDs (V01, R04, …) keep their number with a rewritten scope. N-IDs are
-  new; N01–N24 are the audit's numbers, N25–N28 come from the rulings. An ID is never reused.
+  new; N01–N24 are the audit's numbers, N25–N28 come from the rulings, and N139 splits full-job parity
+  out of N28 (N29–N138 name other things elsewhere in `docs/`). An ID is never reused.
 - **Size.** Agent-hours of building, without review. An item over 8 h has sub-issues of at most 8 h each, written
   before its issue is created. Phase 0's are in section 4; the manager writes the others with their phase's issue
   files. The parent item has no PR of its own and closes when its sub-issues close.
@@ -484,9 +485,9 @@ there is no separate Cargo root.
 |---|---|---|---|---|---|---|---|
 | X01 | **Executor crates and port checker.** Crates under `crates/velnor-*` in the one workspace (no separate root); a function-hash provenance checker for ports | The checker fails on one changed token | 4 | Sonnet medium | Sonnet low | N08, N16 | Q1 |
 | N20 | **One action set.** The native set is `ALLOWED_ACTIONS` in `crates/velnor-render/src/rules.rs` (16 pinned actions); the design's list is corrected to match | A test fails if the two lists differ | 2 | Sonnet medium | Sonnet low | — | Q14 |
-| N28 | **Velnor Native runs the velnor-render dialect (R6).** velnor-gen emits an execution manifest; Native runs one-command `run:` steps, the fixed expression set and `Step.after` edges for concurrent steps (R13) | `rust-ci.yml`'s jobs give the same results under Native and Official on velnor-lab | 24 | Opus high | Opus high | X01, P02, N20 | Q1, Q14 |
+| N28 | **Velnor Native runs the velnor-render dialect (R6).** velnor-gen emits an execution manifest; Native runs one-command `run:` steps, the fixed expression set and `Step.after` edges for concurrent steps (R13). The pinned actions are A01–A05, and whole `rust-ci.yml` jobs are N139 | A velnor-lab job with no `uses:` step, made of `rust-ci.yml`'s `run:` steps, expressions and concurrent steps, gives the same results under Native and Official | 16 | Opus high | Opus high | X01, P02, N20 | Q1, Q14 |
 | X14 | **Journal and faults.** Append-only job journal with fault points | A kill at every boundary never double-reports | 8 | Opus high | Opus high | N28 | Q1 |
-| X15 | **Executor image and deploy.** Built on main, digest-pinned, attested | One real job green on the production label | 4 | Sonnet medium | Opus medium | N28, N11 | Q1, D8 |
+| X15 | **Executor image and deploy.** Built on main, digest-pinned, attested | One real job green on the production label | 4 | Sonnet medium | Opus medium | N139, N11 | Q1, D8 |
 | X16 | **velnor-dispatch.** Session client, scaling over the platform trait, placement before acquire | Start 2 s or less at P90; 0 lost jobs under faults | 14 | Opus high | Opus high | X15, P04 | Q1, Q9 |
 | X17 | **Legacy-incident suite** on both backends | Each case fails on a planted reintroduction | 6 | Sonnet medium | Sonnet low | X16 | Q1 |
 
@@ -499,6 +500,7 @@ there is no separate Cargo root.
 | A03 | **Cache as a native step** over the cache index | Hit and miss equal to the action on 20 keys and every restore-key order | 8 | Sonnet high | Opus high | N28, ST03 | Q14 |
 | A04 | **mise-action as a native step** over the read-only tool store | Same `PATH`, env and outputs | 4 | Sonnet medium | Sonnet low | N28, C01 | Q14 |
 | A05 | **mr-boxington, alint and setup-velnor as native steps** | Same output as the actions | 6 | Sonnet medium | Sonnet low | N28, C01 | Q14 |
+| N139 | **Full-job parity.** Every `rust-ci.yml` job runs on Native with its pinned actions as A01–A05's native steps, paired with Official; each difference is fixed in N28's runner or in the native step that causes it | Every `rust-ci.yml` job gives the same results under Native and Official on velnor-lab | 8 | Opus high | Opus high | N28, A01, A02, A03, A04, A05 | Q1, Q14 |
 | A06 | **Attest.** Signing on Velnor; today verification denies self-hosted runners (`crates/velnor-render/src/release_attest.rs`) | `gh attestation verify` passes under the policy Q5 picks | 6 | Opus high | Opus high | N28 | Q5 |
 
 **H: conformance harness and canaries**
@@ -682,6 +684,7 @@ flowchart TB
     Q1((Q1)) --> N08 --> RV01 & RV02 & RV05
     RV02 --> P01 --> P02 --> P03 & P04
     P02 --> N28 --> X14 --> X15 --> X16 --> G01
+    N28 --> A01 & A02 & A03 & A04 & A05 --> N139 --> X15
     RV05 --> O01 --> H01 --> H03 --> G01
     N26 --> L02 --> L03 --> L06 --> L07 --> L08
     D8((D8)) --> N11 --> C01 & S01 & ST04
@@ -705,12 +708,12 @@ tables above, so they cannot drift from them.
 |---|---|---|---|---|---|---|
 | 0: correctness (W0–W10, N26) | 12 | 12 absorbed | 12 (W0–W10, N26) | 94 | 17.5 | 111.5 |
 | 1: reuse on velnor-gen | 36 | 30 | 6 | 245 | 31.0 | 276.0 |
-| 2: runner, Native, platform, storage, App (gated) | 94 | 89 | 5 | 737 | 94.5 | 831.5 |
+| 2: runner, Native, platform, storage, App (gated) | 95 | 89 | 6 | 737 | 96.0 | 833.0 |
 | 3: proof and the full protocol (gated) | 25 | 25 | 0 | 208 | 23.5 | 231.5 |
-| **All** | **167** | | | **1284** | **166.5** | **1450.5** |
+| **All** | **168** | | | **1284** | **168.0** | **1452.0** |
 
 Review hours count 0.5 h for a low-effort review, 1 h for medium and 1.5 h for high. The ten Fable† reviews count as
-Opus 5.5 high; if the owner answers Q11 with (a), each takes 2 h and the review total is 171.5 h.
+Opus 5.5 high; if the owner answers Q11 with (a), each takes 2 h and the review total is 173.0 h.
 
 **Items and hours per stream in phases 1–3** (phase 0 is in the first row above):
 
@@ -723,14 +726,14 @@ Opus 5.5 high; if the owner answers Q11 with (a), each takes 2 h and the review 
 | AN | 3 / 28 | 11 / 134 | — |
 | B | 2 / 6 | — | — |
 | R | 5 / 39 | 1 / 6 | — |
-| A | 1 / 3 | 6 / 38 | — |
+| A | 1 / 3 | 7 / 46 | — |
 | T | 3 / 26 | — | — |
 | BM | 4 / 30 | — | 12 / 102 |
 | G | — | 5 / 18 | — |
 | RV | — | 4 / 18 | — |
 | P | — | 9 / 72 | — |
 | O | — | 4 / 33 | — |
-| X | — | 7 / 62 | 12 / 98 |
+| X | — | 7 / 54 | 12 / 98 |
 | C | — | 13 / 87 | — |
 | ST | — | 7 / 62 | — |
 | S | — | 3 / 16 | — |
@@ -742,7 +745,7 @@ Opus 5.5 high; if the owner answers Q11 with (a), each takes 2 h and the review 
 |---|---|---|
 | Haiku 5.5 (`exec:haiku`) | 7 | 25 |
 | Sonnet 5.5 (`exec:sonnet`) | 96 | 585 |
-| Opus 5.5 (`exec:opus`) | 64 | 674 |
+| Opus 5.5 (`exec:opus`) | 65 | 674 |
 
 The ten Fable† reviews are W2, W10, N26, V01, V04, DG03, L03, V07, V08 and C05.
 
