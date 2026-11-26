@@ -26,9 +26,10 @@ fn git_init(dir: &Path, args: &[&str]) -> Result<()> {
 fn attack(plant: impl FnOnce(&Plant) -> Result<()>) -> Result<()> {
     let rig = Rig::new()?;
     let sink = TlsSink::start(&rig.root)?;
-    let mirror = rig
-        .store()
-        .join(format!("git/{HOST}+{}/tailrocks/velnor-new.git", sink.port));
+    let mirror = rig.store().join(format!(
+        "git/{HOST}+{}/tailrocks/velnor-new/0.git",
+        sink.port
+    ));
     git_init(&mirror, &["--bare"])?;
     let hostile = rig.root.join("hostile.git");
     git_init(&hostile, &["--bare"])?;

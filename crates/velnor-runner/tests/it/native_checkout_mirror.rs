@@ -242,7 +242,7 @@ fn checkout_fetch_uses_trusted_facts() -> Result<()> {
         rig.merge
     );
     let refs = git(
-        &rig.mirror(),
+        &rig.mirror_of(1),
         &["for-each-ref", "--format=%(refname)", "refs/pull"],
     )?;
     assert_eq!(refs, "refs/pull/7/merge");
@@ -250,11 +250,12 @@ fn checkout_fetch_uses_trusted_facts() -> Result<()> {
 }
 
 #[test]
-fn sigterm_while_another_process_holds_the_mirror_lock_exits_cancelled() -> Result<()> {
+fn a_hangup_interrupt_or_terminate_while_another_process_holds_the_mirror_lock_exits_cancelled()
+-> Result<()> {
     let rig = Rig::new()?;
-    let lock_path = rig
-        .root
-        .join("store/git/_local/tailrocks/velnor-new.git.lock");
+    let mut lock_path = rig.mirror().into_os_string();
+    lock_path.push(".lock");
+    let lock_path = std::path::PathBuf::from(lock_path);
     std::fs::create_dir_all(lock_path.parent().context("lock parent")?)?;
     let holder = std::fs::OpenOptions::new()
         .create(true)
@@ -262,30 +263,117 @@ fn sigterm_while_another_process_holds_the_mirror_lock_exits_cancelled() -> Resu
         .write(true)
         .open(&lock_path)?;
     holder.lock()?;
-    let scratch = Scratch::new()?;
-    let mut runner = rig.start(
-        &rig.job("checkout_depth1", &rig.head, &rig.server_url())?,
-        &scratch,
-    )?;
-    std::thread::sleep(Duration::from_secs(1));
-    assert!(runner.try_wait()?.is_none(), "the runner did not wait");
-    let signalled = Command::new("kill")
-        .args(["-TERM", &runner.id().to_string()])
-        .status()
-        .context("run kill")?;
-    assert!(signalled.success());
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while runner.try_wait()?.is_none() {
-        if Instant::now() > deadline {
-            let _ = runner.kill();
-            let _ = runner.wait();
-            bail!("the runner did not exit while the mirror lock was held");
+    for signal in ["-TERM", "-INT", "-HUP"] {
+        let scratch = Scratch::new()?;
+        let mut runner = rig.start(
+            &rig.job("checkout_depth1", &rig.head, &rig.server_url())?,
+            &scratch,
+        )?;
+        std::thread::sleep(Duration::from_secs(1));
+        assert!(runner.try_wait()?.is_none(), "the runner did not wait");
+        let signalled = Command::new("kill")
+            .args([signal, &runner.id().to_string()])
+            .status()
+            .context("run kill")?;
+        assert!(signalled.success());
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while runner.try_wait()?.is_none() {
+            if Instant::now() > deadline {
+                let _ = runner.kill();
+                let _ = runner.wait();
+                bail!("the runner did not exit on {signal} while the mirror lock was held");
+            }
+            std::thread::sleep(Duration::from_millis(50));
         }
-        std::thread::sleep(Duration::from_millis(50));
+        let ran = finish(runner)?;
+        assert_eq!(
+            ran.code,
+            Some(1),
+            "{signal}: {}\n{}",
+            ran.stdout,
+            ran.stderr
+        );
+        assert!(ran.stdout.contains("cancelled"), "{signal}: {}", ran.stdout);
     }
-    let ran = finish(runner)?;
-    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
-    assert!(ran.stdout.contains("cancelled"), "{}", ran.stdout);
     drop(holder);
+    Ok(())
+}
+
+fn trusted_facts(
+    rig: &Rig,
+    repository_id: u64,
+    sha: &str,
+    event: &str,
+) -> Result<std::path::PathBuf> {
+    let path = rig.root.join(format!("trusted-{repository_id}-{sha}.json"));
+    std::fs::write(
+        &path,
+        format!(
+            r#"{{"repository_id": {repository_id}, "repository": "tailrocks/velnor-new",
+"server_url": "{}", "default_branch": "main", "sha": "{sha}", "run_id": 1,
+"run_attempt": 1, "event": {event}}}"#,
+            rig.server_url()
+        ),
+    )?;
+    Ok(path)
+}
+
+fn checkout_trusted(rig: &Rig, facts: &Path) -> Result<(Option<i32>, String)> {
+    let job = rig.job("checkout_depth1", "a", &rig.server_url())?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start_trusted(&job, facts, &scratch)?)?;
+    Ok((
+        ran.code,
+        git(&scratch.workspace(), &["rev-parse", "HEAD"]).unwrap_or_default(),
+    ))
+}
+
+#[test]
+fn a_recreated_repository_does_not_see_the_old_mirror() -> Result<()> {
+    let rig = Rig::new()?;
+    let branch = r#"{"kind": "branch", "branch": "main"}"#;
+    let old = trusted_facts(&rig, 1, &rig.head, branch)?;
+    let new = trusted_facts(&rig, 2, &rig.head, branch)?;
+    assert_eq!(checkout_trusted(&rig, &old)?, (Some(0), rig.head.clone()));
+    let upstream = rig.root.join("up/tailrocks/velnor-new.git");
+    std::fs::remove_dir_all(&upstream)?;
+    std::fs::create_dir_all(&upstream)?;
+    git(&upstream, &["init", "-q", "--bare"])?;
+    let work = rig.root.join("recreated");
+    std::fs::create_dir_all(&work)?;
+    git(&work, &["init", "-q", "-b", "main"])?;
+    commit(&work, "recreated")?;
+    git(&work, &["push", "-q", &upstream.to_string_lossy(), "main"])?;
+    assert_eq!(checkout_trusted(&rig, &old)?, (Some(0), rig.head.clone()));
+    assert_eq!(checkout_trusted(&rig, &new)?, (Some(1), String::new()));
+    assert!(rig.mirror_of(1).is_dir() && rig.mirror_of(2).is_dir());
+    Ok(())
+}
+
+#[test]
+fn a_tag_job_fetches_its_tag_when_no_branch_reaches_the_commit() -> Result<()> {
+    let rig = Rig::new()?;
+    let work = rig.root.join("work");
+    let upstream = rig
+        .root
+        .join("up/tailrocks/velnor-new.git")
+        .to_string_lossy()
+        .into_owned();
+    git(&work, &["checkout", "-q", "--detach"])?;
+    let tagged = commit(&work, "tagged")?;
+    git(&work, &["tag", "v1"])?;
+    git(&work, &["tag", "v2", &rig.head])?;
+    git(
+        &work,
+        &["push", "-q", &upstream, "refs/tags/v1", "refs/tags/v2"],
+    )?;
+    git(&work, &["checkout", "-q", "main"])?;
+    let facts = trusted_facts(&rig, 5, &tagged, r#"{"kind": "tag", "name": "v1"}"#)?;
+    assert_eq!(checkout_trusted(&rig, &facts)?, (Some(0), tagged));
+    let tags = git(
+        &rig.mirror_of(5),
+        &["for-each-ref", "--format=%(refname)", "refs/tags"],
+    )?;
+    assert_eq!(tags, "refs/tags/v1");
     Ok(())
 }

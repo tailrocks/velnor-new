@@ -95,7 +95,13 @@ impl Rig {
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
-        self.store().join("git/_local/tailrocks/velnor-new.git")
+        self.mirror_of(0)
+    }
+
+    pub(crate) fn mirror_of(&self, repository_id: u64) -> PathBuf {
+        self.store().join(format!(
+            "git/_local/tailrocks/velnor-new/{repository_id}.git"
+        ))
     }
 
     pub(crate) fn trace(&self) -> PathBuf {

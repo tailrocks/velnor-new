@@ -291,8 +291,12 @@ impl TrustedFacts {
 
     pub(crate) fn refspecs(&self) -> Vec<String> {
         let mut specs = vec!["+refs/heads/*:refs/heads/*".to_owned()];
-        if let TrustedEvent::PullRequest { number, .. } = &self.event {
-            specs.push(format!("+{}:refs/pull/{number}/merge", self.sha.as_str()));
+        match &self.event {
+            TrustedEvent::PullRequest { number, .. } => {
+                specs.push(format!("+{}:refs/pull/{number}/merge", self.sha.as_str()));
+            }
+            TrustedEvent::Tag { name } => specs.push(format!("+refs/tags/{name}:refs/tags/{name}")),
+            TrustedEvent::Branch { .. } | TrustedEvent::MergeGroup { .. } => {}
         }
         specs
     }

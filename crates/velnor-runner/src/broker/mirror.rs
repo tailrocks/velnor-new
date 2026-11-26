@@ -64,7 +64,7 @@ pub(crate) fn mirror_path(root: &Path, facts: &TrustedFacts) -> Result<PathBuf> 
     for part in [host.as_str(), owner, name] {
         path.push(part.to_ascii_lowercase());
     }
-    path.as_mut_os_string().push(".git");
+    path.push(format!("{}.git", facts.repository_id));
     Ok(path)
 }
 
