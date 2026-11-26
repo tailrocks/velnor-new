@@ -19,7 +19,8 @@ full Actions protocol.
 - **168 items, 1284 agent-hours of building, 1452.0 with review** (section 9). Phase 0 is 12 items and 94 h.
   Phase 1 is 36 items and 245 h. Phases 2 and 3 (95 + 25 items) are gated on owner answers.
 - **Of the old plan's 174 items:** 8 are done on main, 10 are removed, 12 are folded into phase 0, and 144 survive
-  with new file targets. 13 new N-items come from the audit and the rulings, and phase 0 adds W0–W10.
+  with new file targets. 12 new N-items come from the audit and the rulings, N139 splits full-job parity out of N28,
+  and phase 0 adds W0–W10.
 - **Main is red.** The newest completed push runs fail in `velnor-ci plan` on stale recorded metadata (runs
   44599278133 and 44599906946), with helper 0.1.98 pinned. Earlier reds were lint failures and helper skew (W1).
 - **A change can still merge without tests.** PR #1799 merged on the green `Required` of a draft run (W0).
