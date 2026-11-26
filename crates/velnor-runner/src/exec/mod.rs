@@ -36,12 +36,14 @@ pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
 
 use crate::expr::ExprError;
+use crate::protocol::RunnerOs;
 
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub workspace: PathBuf,
     pub temp: PathBuf,
     pub runner_name: String,
+    pub os: RunnerOs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

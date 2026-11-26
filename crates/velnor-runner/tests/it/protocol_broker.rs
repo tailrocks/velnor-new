@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use velnor_runner::protocol::{
     AcquireJobOutcome, AcquireJobSkipReason, BrokerClient, BrokerErrorCategory, BrokerPoll,
     RUNNER_JOB_REQUEST, RUNNER_VERSION, RetryDelays, RunServiceClient, RunServiceCompleteJob,
-    RunnerStatus, TaskAgentMessage, TaskAgentSession, TaskResult,
+    RunnerStatus, TaskAgentMessage, TaskAgentSession, TaskResult, acquire_job,
 };
 
 use super::support::{
@@ -148,9 +148,15 @@ async fn broker_run_service_happy_path_acquires_and_completes_job() -> Result<()
     assert_eq!(message.message_id, 99);
     assert_eq!(message.message_type, RUNNER_JOB_REQUEST);
 
-    let acquired = run_service
-        .acquire_job(&run_service_url, "broker-message", "Linux", Some("42"))
-        .await?;
+    let acquired = acquire_job(
+        RetryDelays::IMMEDIATE,
+        &run_service_url,
+        "broker-message",
+        "Linux",
+        Some("42"),
+        fresh_token,
+    )
+    .await?;
     let AcquireJobOutcome::Acquired(job) = acquired else {
         bail!("expected acquired job");
     };
@@ -208,7 +214,6 @@ async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
 #[tokio::test]
 async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
     let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?;
     let run_service_url = format!("{}/run/jobs/123", server.uri());
 
     for (status, reason, expected_category) in [
@@ -239,14 +244,15 @@ async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
             Reply::json(status.as_u16(), &reply_body)
         })?;
 
-        let outcome = run_service
-            .acquire_job(
-                &run_service_url,
-                "broker-message",
-                std::env::consts::OS,
-                None,
-            )
-            .await?;
+        let outcome = acquire_job(
+            RetryDelays::IMMEDIATE,
+            &run_service_url,
+            "broker-message",
+            std::env::consts::OS,
+            None,
+            fresh_token,
+        )
+        .await?;
         let AcquireJobOutcome::Skipped {
             status: actual,
             body,
@@ -332,6 +338,10 @@ fn job_message(run_service_url: &str) -> TaskAgentMessage {
         })
         .to_string(),
     }
+}
+
+async fn fresh_token() -> Result<String> {
+    Ok(TOKEN.to_owned())
 }
 
 fn complete_job() -> RunServiceCompleteJob {

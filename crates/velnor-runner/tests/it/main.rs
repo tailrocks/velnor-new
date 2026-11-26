@@ -63,6 +63,7 @@ mod lifecycle_renew;
 mod lifecycle_report;
 mod lifecycle_session;
 mod lifecycle_support;
+mod lifecycle_token;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;

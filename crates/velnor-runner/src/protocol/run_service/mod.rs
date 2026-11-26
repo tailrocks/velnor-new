@@ -17,7 +17,7 @@ mod renew;
 
 pub use acquire::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
-    is_transient_acquire_error,
+    acquire_job, is_transient_acquire_error,
 };
 pub use complete::{
     CompletionAcknowledgement, RunServiceAnnotation, RunServiceAnnotationLevel,

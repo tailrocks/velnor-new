@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome, RunJitOptions, run_jit};
+use velnor_runner::protocol::{RetryDelays, RunnerOs};
 use velnor_runner::secret::Secret;
 
 use super::exec_support::{Scratch, fixture_path};
@@ -62,6 +63,7 @@ pub(crate) struct Settings {
     pub(crate) session_retry_interval: Duration,
     pub(crate) report_budget: Duration,
     pub(crate) upload_drain_budget: Duration,
+    pub(crate) os: RunnerOs,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
 }
@@ -76,6 +78,7 @@ impl Settings {
             session_retry_interval: Duration::from_millis(50),
             report_budget: Duration::from_secs(10),
             upload_drain_budget: Duration::from_secs(600),
+            os: RunnerOs::Linux,
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
         }
@@ -88,6 +91,16 @@ impl Settings {
 
     pub(crate) fn giving_up_after(mut self, grace: Duration) -> Self {
         self.renew_lock_grace = grace;
+        self
+    }
+
+    pub(crate) fn on(mut self, os: RunnerOs) -> Self {
+        self.os = os;
+        self
+    }
+
+    pub(crate) fn retrying_sessions_every(mut self, interval: Duration) -> Self {
+        self.session_retry_interval = interval;
         self
     }
 
@@ -135,6 +148,8 @@ pub(crate) async fn run_in(
         session_retry_interval: settings.session_retry_interval,
         report_budget: settings.report_budget,
         upload_drain_budget: settings.upload_drain_budget,
+        retry_delays: RetryDelays::IMMEDIATE,
+        os: settings.os,
         adapters: AdapterRegistry::empty(),
     };
     tokio::time::timeout(budget, run_jit(options))

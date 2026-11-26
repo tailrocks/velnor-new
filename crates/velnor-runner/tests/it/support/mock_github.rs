@@ -50,7 +50,8 @@ pub(crate) enum Renew {
 pub(crate) enum Online {
     #[default]
     Job,
-    JobAfterOneUnauthorized,
+    JobForFreshTokenOnly,
+    ForceTokenRefreshThenJob,
     Idle,
 }
 
@@ -68,6 +69,7 @@ pub(crate) enum OAuthTokens {
     #[default]
     Fresh,
     StaleFirst,
+    UnavailableAfterSignIn(usize),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -75,6 +77,7 @@ pub(crate) enum StepStatus {
     #[default]
     Accepted,
     Stalls,
+    StallsFirst,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -83,6 +86,7 @@ pub(crate) enum SessionCreate {
     Created,
     ConflictsFirst(usize),
     ConflictsAlways,
+    UnavailableAlways,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

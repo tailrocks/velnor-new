@@ -13,7 +13,7 @@ use super::error::{
     BrokerErrorCategory, github_api_error, github_api_error_categorized, is_retriable_status,
 };
 use super::http::{
-    RUNNER_VERSION, github_json_request, runner_architecture, runner_os, slash_url,
+    RUNNER_VERSION, RunnerOs, github_json_request, runner_architecture, slash_url,
     validate_authenticated_url,
 };
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
@@ -197,7 +197,7 @@ fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) ->
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
         .append_pair("runnerVersion", RUNNER_VERSION)
-        .append_pair("os", runner_os()?)
+        .append_pair("os", RunnerOs::detect()?.as_str())
         .append_pair("architecture", runner_architecture()?);
     Ok(())
 }

@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use uuid::Uuid;
 use velnor_runner::exec::RunOptions;
 use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::protocol::RunnerOs;
 
 pub(crate) struct Scratch {
     root: PathBuf,
@@ -40,6 +41,7 @@ impl Scratch {
             workspace: self.workspace(),
             temp: self.root.join("temp"),
             runner_name: "exec-test".to_owned(),
+            os: RunnerOs::Linux,
         }
     }
 }

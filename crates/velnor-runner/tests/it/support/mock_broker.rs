@@ -37,8 +37,12 @@ pub(super) fn is_stale(request: &super::RecordedRequest) -> bool {
 pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result<()> {
     let exchanges = AtomicUsize::new(0);
     server.respond("POST", "/oauth/token", move |_| {
-        let stale = matches!(tokens, OAuthTokens::StaleFirst)
-            && exchanges.fetch_add(1, Ordering::SeqCst) == 0;
+        let number = exchanges.fetch_add(1, Ordering::SeqCst);
+        if matches!(tokens, OAuthTokens::UnavailableAfterSignIn(count) if (1..=count).contains(&number))
+        {
+            return Reply::status(503);
+        }
+        let stale = matches!(tokens, OAuthTokens::StaleFirst) && number == 0;
         let token = if stale {
             STALE_OAUTH_TOKEN
         } else {
@@ -85,16 +89,17 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
     let attempts = AtomicUsize::new(0);
     server.respond("POST", "/broker/session", move |_| {
         let attempt = attempts.fetch_add(1, Ordering::SeqCst);
-        let conflict = match create {
-            SessionCreate::Created => false,
-            SessionCreate::ConflictsFirst(count) => attempt < count,
-            SessionCreate::ConflictsAlways => true,
-        };
-        if conflict {
-            return Reply::json(
+        let conflict = || {
+            Reply::json(
                 409,
                 &json!({"message": "A session for this runner already exists."}),
-            );
+            )
+        };
+        match create {
+            SessionCreate::ConflictsFirst(count) if attempt < count => return conflict(),
+            SessionCreate::ConflictsAlways => return conflict(),
+            SessionCreate::UnavailableAlways => return Reply::status(503),
+            SessionCreate::Created | SessionCreate::ConflictsFirst(_) => {}
         }
         Reply::json(
             200,
@@ -146,12 +151,18 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
         Cancel::HostedShutdownAfter(after) => (Some(after), false, true),
     };
     let online = behavior.online;
-    let unauthorized = AtomicBool::new(matches!(online, Online::JobAfterOneUnauthorized));
+    let refresh = message(&kind("ForceTokenRefresh"), &json!({}));
+    let refresh_pending = AtomicBool::new(matches!(online, Online::ForceTokenRefreshThenJob));
     let delivered = AtomicBool::new(false);
     let busy_polls = Arc::new(AtomicUsize::new(0));
     server.respond("GET", "/broker/message", move |seen| {
         match seen.query("status") {
-            Some("Online") if unauthorized.swap(false, Ordering::SeqCst) => Reply::status(401),
+            Some("Online") if matches!(online, Online::JobForFreshTokenOnly) && is_stale(seen) => {
+                Reply::status(401)
+            }
+            Some("Online") if refresh_pending.swap(false, Ordering::SeqCst) => {
+                Reply::json(200, &refresh)
+            }
             Some("Online") if matches!(online, Online::Idle) => {
                 Reply::status(204).after(POLL_STALL)
             }

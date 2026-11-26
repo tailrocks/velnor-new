@@ -18,7 +18,7 @@ use crate::protocol::{
 use crate::secret::Secret;
 
 const TRANSIENT_SESSION_ATTEMPTS: u32 = 3;
-const SESSION_CONFLICT_WINDOW: Duration = Duration::from_secs(240);
+const SESSION_CONFLICT_ATTEMPTS: u32 = 8;
 const MAX_CONSECUTIVE_POLL_ERRORS: u32 = 10;
 const MAX_POLL_ERROR_DELAY: Duration = Duration::from_secs(60);
 const JOB_CANCELLATION: &str = "JobCancellation";
@@ -257,11 +257,7 @@ impl Session {
                 Ok(message) => message,
                 Err(error) => {
                     streak += 1;
-                    if !is_retriable(&error) || streak >= MAX_CONSECUTIVE_POLL_ERRORS {
-                        return Err(LifecycleError::Poll(error));
-                    }
-                    eprintln!("warning: poll for a job failed, retrying: {error:#}");
-                    tokio::time::sleep(backoff(error_delay, streak)).await;
+                    retry_poll(error, streak, error_delay).await?;
                     continue;
                 }
             };
@@ -278,7 +274,10 @@ impl Session {
                 }
                 MessageKind::HostedRunnerShutdown => return Ok(Assignment::Shutdown),
                 MessageKind::ForceTokenRefresh => {
-                    self.refresh().await.map_err(LifecycleError::Poll)?;
+                    if let Err(error) = self.refresh().await {
+                        streak += 1;
+                        retry_poll(error, streak, error_delay).await?;
+                    }
                 }
                 MessageKind::JobCancellation | MessageKind::Other => {}
             }
@@ -291,6 +290,19 @@ impl Session {
             eprintln!("warning: delete broker session: {error:#}");
         }
     }
+}
+
+async fn retry_poll(
+    error: anyhow::Error,
+    streak: u32,
+    error_delay: Duration,
+) -> Result<(), LifecycleError> {
+    if !is_retriable(&error) || streak >= MAX_CONSECUTIVE_POLL_ERRORS {
+        return Err(LifecycleError::Poll(error));
+    }
+    eprintln!("warning: waiting for a job failed, retrying: {error:#}");
+    tokio::time::sleep(backoff(error_delay, streak)).await;
+    Ok(())
 }
 
 async fn create_session(
@@ -312,7 +324,7 @@ async fn create_session(
             }
             Some(BrokerErrorCategory::Conflict) => {
                 conflicts += 1;
-                interval.saturating_mul(conflicts) < SESSION_CONFLICT_WINDOW
+                conflicts < SESSION_CONFLICT_ATTEMPTS
             }
             _ => false,
         };

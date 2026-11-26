@@ -35,7 +35,7 @@ fn assert_forced_failure(mock: &MockGithub, status: &str) -> Result<()> {
     Ok(())
 }
 
-async fn first_renew_ends_with(renew: Renew, status: &str) -> Result<()> {
+async fn first_renew_ends_with(renew: Renew, status: &str) -> Result<MockGithub> {
     let behavior = Behavior {
         renew,
         ..Behavior::default()
@@ -56,17 +56,27 @@ async fn first_renew_ends_with(renew: Renew, status: &str) -> Result<()> {
         matches!(outcome, Err(LifecycleError::Renew(_))),
         "{outcome:?}"
     );
-    assert_forced_failure(&mock, status)
+    assert_forced_failure(&mock, status)?;
+    Ok(mock)
 }
 
 #[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_finds_it_gone() -> Result<()> {
-    first_renew_ends_with(Renew::JobGone, "status=404").await
+    let mock = first_renew_ends_with(Renew::JobGone, "status=404").await?;
+
+    assert_eq!(mock.requests_to("POST", "/run/renewjob")?.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_never_succeeds() -> Result<()> {
-    first_renew_ends_with(Renew::ServerError, "status=500").await
+    let mock = first_renew_ends_with(Renew::ServerError, "status=500").await?;
+
+    assert!(
+        mock.requests_to("POST", "/run/renewjob")?.len() > 1,
+        "the first renew was retried before it gave up"
+    );
+    Ok(())
 }
 
 #[tokio::test]

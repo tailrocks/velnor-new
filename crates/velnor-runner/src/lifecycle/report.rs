@@ -41,6 +41,7 @@ pub(super) struct StepTimes {
 #[derive(Debug, Default)]
 pub(super) struct ReportSummary {
     pub(super) times: BTreeMap<u32, StepTimes>,
+    pub(super) logs_dropped: bool,
 }
 
 pub(super) struct Reporter {
@@ -375,10 +376,10 @@ impl Reporter {
     }
 
     async fn close(mut self) -> ReportSummary {
-        if timeout(self.drain_budget, self.drain_uploads())
+        let logs_dropped = timeout(self.drain_budget, self.drain_uploads())
             .await
-            .is_err()
-        {
+            .is_err();
+        if logs_dropped {
             eprintln!("warning: log uploads were not finished in time and are dropped");
             self.uploads.abort_all();
         }
@@ -388,6 +389,9 @@ impl Reporter {
         if let Some(status) = self.status.take() {
             status.finish().await;
         }
-        ReportSummary { times: self.times }
+        ReportSummary {
+            times: self.times,
+            logs_dropped,
+        }
     }
 }
