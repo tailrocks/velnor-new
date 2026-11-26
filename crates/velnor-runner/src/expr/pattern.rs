@@ -4,7 +4,7 @@
 
 use globset::{GlobBuilder, GlobMatcher};
 use std::io;
-use std::path::Path;
+use std::path::{Component, Path};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum GlobError {
@@ -14,6 +14,10 @@ pub(crate) enum GlobError {
     RelativePathing(String),
     #[error("Invalid pattern '{0}'")]
     InvalidPattern(String),
+    #[error("Unable to determine HOME directory")]
+    NoHome,
+    #[error("Expected HOME directory to be a rooted path. Actual '{0}'")]
+    HomeNotRooted(String),
     #[error("{path}: {source}")]
     Io { path: String, source: io::Error },
 }
@@ -27,9 +31,19 @@ impl GlobError {
     }
 }
 
+pub(crate) fn components_of(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum Seg {
     GlobStar,
+    Any,
     Literal(String),
     Glob {
         matcher: GlobMatcher,
@@ -40,7 +54,7 @@ pub(crate) enum Seg {
 impl Seg {
     pub(crate) fn is_match(&self, name: &str) -> bool {
         match self {
-            Seg::GlobStar => true,
+            Seg::GlobStar | Seg::Any => true,
             Seg::Literal(literal) => literal == name,
             Seg::Glob { matcher, .. } => matcher.is_match(name),
         }
@@ -48,7 +62,7 @@ impl Seg {
 
     pub(crate) fn literal(&self) -> Option<&str> {
         match self {
-            Seg::GlobStar => None,
+            Seg::GlobStar | Seg::Any => None,
             Seg::Literal(literal) => Some(literal),
             Seg::Glob { literal, .. } => literal.as_deref(),
         }
@@ -78,7 +92,11 @@ pub(crate) struct Pattern {
 }
 
 impl Pattern {
-    pub(crate) fn parse(line: &str, workspace: &[String]) -> Result<Option<Self>, GlobError> {
+    pub(crate) fn parse(
+        line: &str,
+        workspace: &[String],
+        home: Option<&Path>,
+    ) -> Result<Self, GlobError> {
         let (negate, text) = strip_negation(line);
         if text.is_empty() {
             return Err(GlobError::EmptyPattern);
@@ -100,11 +118,10 @@ impl Pattern {
             return Err(GlobError::RelativePathing(text.to_owned()));
         }
         let first = parts.first().copied();
-        if !rooted && first == Some("~") {
-            return Ok(None);
-        }
         let (mut segs, rest): (Vec<Seg>, &[&str]) = if rooted {
             (Vec::new(), &parts[..])
+        } else if first == Some("~") {
+            (home_segments(home)?, &parts[1..])
         } else {
             let anchored = workspace.iter().cloned().map(Seg::Literal).collect();
             (anchored, &parts[usize::from(first == Some("."))..])
@@ -112,12 +129,28 @@ impl Pattern {
         for part in rest {
             segs.push(Seg::compile(part)?);
         }
-        Ok(Some(Self {
+        Ok(Self {
             negate,
             trailing,
             segs,
-        }))
+        })
     }
+
+    pub(crate) fn implicit_descendants(&self) -> Vec<Seg> {
+        let mut segs = self.segs.clone();
+        segs.extend([Seg::Any, Seg::GlobStar]);
+        segs
+    }
+}
+
+fn home_segments(home: Option<&Path>) -> Result<Vec<Seg>, GlobError> {
+    let home = home
+        .filter(|home| !home.as_os_str().is_empty())
+        .ok_or(GlobError::NoHome)?;
+    if !home.is_absolute() {
+        return Err(GlobError::HomeNotRooted(home.display().to_string()));
+    }
+    Ok(components_of(home).into_iter().map(Seg::Literal).collect())
 }
 
 pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {

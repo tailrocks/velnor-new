@@ -15,10 +15,16 @@ impl Drop for Restore<'_> {
     }
 }
 
-fn lock(path: &Path) -> Result<Option<Restore<'_>>> {
+fn lock<'a>(path: &'a Path, test: &str) -> Result<Option<Restore<'a>>> {
     let guard = Restore(path);
     fs::set_permissions(path, fs::Permissions::from_mode(0o000))?;
     let still_readable = fs::read_dir(path).is_ok() || fs::File::open(path).is_ok();
+    if still_readable {
+        eprintln!(
+            "SKIPPED {test}: chmod 000 does not restrict this user (running as root?), so the \
+             unreadable-path assertions did not run"
+        );
+    }
     Ok((!still_readable).then_some(guard))
 }
 
@@ -50,7 +56,6 @@ fn expr_hash_files_reads_file_symlinks_that_stay_inside_the_workspace() -> Resul
     dir.write("ws/a.txt", "a")?;
     dir.symlink("ws/alias.txt", &dir.workspace()?.join("real/x.txt"))?;
     dir.symlink("ws/dirlink", &dir.workspace()?.join("real"))?;
-    dir.symlink("ws/dangling.txt", &dir.workspace()?.join("missing.txt"))?;
     let env = dir.env();
 
     assert_eq!(
@@ -75,7 +80,11 @@ fn expr_hash_files_reports_unreadable_directories_and_files() -> Result<()> {
     let workspace = dir.workspace()?;
 
     let locked = workspace.join("locked");
-    let Some(_directory) = lock(&locked)? else {
+    let Some(_directory) = lock(
+        &locked,
+        "expr_hash_files_reports_unreadable_directories_and_files",
+    )?
+    else {
         return Ok(());
     };
     let message = error_text("hashFiles('**/*.txt')", &env)?;
@@ -86,7 +95,11 @@ fn expr_hash_files_reports_unreadable_directories_and_files() -> Result<()> {
     assert!(message.contains("locked"), "{message}");
 
     let sealed = workspace.join("sealed.md");
-    let Some(_file) = lock(&sealed)? else {
+    let Some(_file) = lock(
+        &sealed,
+        "expr_hash_files_reports_unreadable_directories_and_files",
+    )?
+    else {
         return Ok(());
     };
     let message = error_text("hashFiles('*.md')", &env)?;
@@ -104,7 +117,11 @@ fn expr_hash_files_does_not_enter_directories_no_pattern_can_match() -> Result<(
     let workspace = dir.workspace()?;
 
     let target = workspace.join("target");
-    let Some(_target) = lock(&target)? else {
+    let Some(_target) = lock(
+        &target,
+        "expr_hash_files_does_not_enter_directories_no_pattern_can_match",
+    )?
+    else {
         return Ok(());
     };
     assert_eq!(text("hashFiles('*.txt')", &env)?, expected_digest(&[b"a"]));
@@ -135,5 +152,78 @@ fn expr_hash_files_walks_many_siblings_and_deep_trees() -> Result<()> {
         text("hashFiles('many/*.txt')", &env)?,
         expected_digest(&many)
     );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_ignores_search_roots_reached_through_an_outside_symlinked_parent() -> Result<()>
+{
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("outside/sub/secret.txt", "secret")?;
+    dir.symlink("ws/linkdir", &dir.path().join("outside"))?;
+    let env = dir.env();
+
+    assert_eq!(text("hashFiles('linkdir/sub/*.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir/sub/secret.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir/sub')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('a.txt', 'linkdir/sub/*.txt')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reads_search_roots_reached_through_an_inside_symlinked_parent() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/real/sub/y.txt", "y")?;
+    dir.symlink("ws/alias", &dir.workspace()?.join("real"))?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('alias/sub/*.txt')", &env)?,
+        expected_digest(&[b"y"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_looks_at_a_symlinked_search_root_without_resolving_it() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.symlink("ws/loop", Path::new("loop"))?;
+    let env = dir.env();
+
+    assert_eq!(text("hashFiles('loop/*.txt')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('a.txt', 'loop/**/*.txt')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    let message = error_text("hashFiles('loop')", &env)?;
+    assert!(
+        message.starts_with("hashFiles('loop') failed."),
+        "{message}"
+    );
+    assert!(message.contains("loop"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_errors_on_a_dangling_symlink_it_would_hash() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.symlink("ws/dangling.txt", &dir.workspace()?.join("missing.txt"))?;
+    let env = dir.env();
+
+    for pattern in ["*.txt", "dangling.txt", "dangling.txt/**", "**"] {
+        let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+        assert!(
+            message.starts_with(&format!("hashFiles('{pattern}') failed.")),
+            "{message}"
+        );
+        assert!(message.contains("dangling.txt"), "{message}");
+    }
+    assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
     Ok(())
 }

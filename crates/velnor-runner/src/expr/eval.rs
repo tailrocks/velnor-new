@@ -100,7 +100,7 @@ fn evaluate_function(function: Function, args: &[Node], env: &ExprEnv) -> Result
                 .iter()
                 .map(|arg| evaluate_node(arg, env))
                 .collect::<Result<Vec<_>, _>>()?;
-            hash_files(&env.workspace, &values).map(Value::String)
+            hash_files(&env.workspace, env.home.as_deref(), &values).map(Value::String)
         }
         Function::Success => Ok(Value::Boolean(env.status == JobStatus::Success)),
         Function::Always => Ok(Value::Boolean(true)),

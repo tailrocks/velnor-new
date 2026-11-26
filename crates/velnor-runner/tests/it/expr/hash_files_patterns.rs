@@ -233,3 +233,76 @@ fn expr_hash_files_negated_patterns_do_not_reorder_search_roots() -> Result<()> 
     );
     Ok(())
 }
+
+#[test]
+fn expr_hash_files_trailing_slash_needs_a_descendant_segment() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/d/b.txt", "b")?;
+    dir.write("ws/sub/x/y.txt", "y")?;
+    dir.write("ws/sub/z.txt", "z")?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('*/')", &env)?,
+        expected_digest(&[b"b", b"y", b"z"])
+    );
+    assert_ne!(
+        text("hashFiles('*/')", &env)?,
+        text("hashFiles('*')", &env)?
+    );
+    assert_eq!(text("hashFiles('sub/*/')", &env)?, expected_digest(&[b"y"]));
+    assert_eq!(text("hashFiles('a.txt/')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('**', '!*/')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_expands_tilde_to_home_before_clamping_to_the_workspace() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/sub/b.txt", "b")?;
+    dir.write("ws/~x", "tilde")?;
+    dir.write("other/c.txt", "c")?;
+    let mut env = dir.env();
+    env.home = Some(fs::canonicalize(dir.path())?);
+
+    assert_eq!(
+        text("hashFiles('~/ws/a.txt')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    assert_eq!(
+        text("hashFiles('~/ws/**/*.txt')", &env)?,
+        expected_digest(&[b"a", b"b"])
+    );
+    assert_eq!(text("hashFiles('~/other/c.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('~/a.txt')", &env)?, "");
+    let everything = expected_digest(&[b"a", b"b", b"tilde"]);
+    assert_eq!(text("hashFiles('~')", &env)?, everything);
+    assert_eq!(text("hashFiles('~/')", &env)?, everything);
+    assert_eq!(text("hashFiles('~x')", &env)?, expected_digest(&[b"tilde"]));
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_tilde_needs_a_rooted_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/~x", "tilde")?;
+    let mut env = dir.env();
+
+    env.home = None;
+    assert!(
+        error_text("hashFiles('~/a.txt')", &env)?.contains("Unable to determine HOME directory")
+    );
+    env.home = Some("relative/home".into());
+    assert!(
+        error_text("hashFiles('~')", &env)?
+            .contains("Expected HOME directory to be a rooted path. Actual 'relative/home'")
+    );
+    assert_eq!(text("hashFiles('~x')", &env)?, expected_digest(&[b"tilde"]));
+    Ok(())
+}
