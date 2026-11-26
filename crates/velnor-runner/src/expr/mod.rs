@@ -41,3 +41,4 @@ pub fn segment_matches(pattern: &str, name: &str) -> Result<bool, String> {
         .and_then(|segment| segment.is_match(name))
         .map_err(|error| error.to_string())
 }
+pub(crate) use hash_files::hex_digest;

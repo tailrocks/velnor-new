@@ -3,7 +3,11 @@
 
 mod cache;
 mod checkout;
+mod composite;
 mod depth;
+mod git;
+mod mise;
+mod mise_lock;
 mod umask;
 
 pub(crate) use umask::Umask;
@@ -14,6 +18,12 @@ use crate::exec::AdapterRegistry;
 pub(crate) fn registry(store: StoreWriter, umask: Umask) -> AdapterRegistry {
     let store = std::sync::Arc::new(store);
     let mut registry = AdapterRegistry::empty();
+    mise::register(
+        &mut registry,
+        composite::SetupVelnor {
+            facts: store.facts().cloned(),
+        },
+    );
     registry.register(Box::new(checkout::Checkout {
         store: store.clone(),
     }));

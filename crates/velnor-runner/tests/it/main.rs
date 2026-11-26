@@ -13,6 +13,8 @@ mod defaults;
 mod drain;
 #[path = "exec_builder.rs"]
 mod exec_builder;
+#[path = "exec_capture.rs"]
+mod exec_capture;
 #[path = "exec_cli.rs"]
 mod exec_cli;
 #[path = "exec_declared_inputs.rs"]
@@ -100,6 +102,7 @@ mod native_cache_modes;
 mod native_cache_readers;
 mod native_cache_support;
 mod native_cache_tar;
+mod mise_world;
 mod native_checkout;
 mod native_checkout_attack;
 mod native_checkout_cancel;
@@ -135,6 +138,9 @@ mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod protocol_acquire_renew;
+mod native_mise;
+mod native_mise_policy;
+mod native_setup_velnor;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;

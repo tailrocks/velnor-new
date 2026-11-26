@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+printf 'argv=%s data=%s cache=%s auto=%s trusted=%s yes=%s\n' "$*" "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_AUTO_INSTALL" "$MISE_TRUSTED_CONFIG_PATHS" "$MISE_YES" >> "${MISE_DOUBLE_LOG:-/dev/null}"
+case "$1" in
+  install)
+    if [ "${MISE_DOUBLE_INSTALL_EXIT:-0}" != 0 ]; then
+      echo "mise ERROR: tool is missing" >&2
+      exit "$MISE_DOUBLE_INSTALL_EXIT"
+    fi
+    ;;
+  config)
+    parent=$(cd "$PWD/.." && pwd)
+    printf '['
+    separator=''
+    for path in "$PWD/mise.toml" "$PWD/.mise.toml" "$PWD/mise/config.toml" "$PWD/.mise/config.toml" "$PWD/.config/mise.toml" "$PWD/.config/mise/config.toml" "$PWD/mise.local.toml" "$PWD/.mise.local.toml" "$PWD/.tool-versions" "$PWD/mise/conf.d"/*.toml "$PWD/.mise/conf.d"/*.toml "$PWD/.config/mise/conf.d"/*.toml "$parent/mise.toml" ${MISE_ENV:+"$PWD/mise.$MISE_ENV.toml"}; do
+      [ -f "$path" ] || continue
+      printf '%s{"path":"%s","tools":[],"override":false}' "$separator" "$path"
+      separator=','
+    done
+    printf ']\n'
+    ;;
+  env)
+    case "$2" in
+      --redacted) printf '{"SECRET":"%s"}\n' "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
+      *) printf '{"PATH":"%s/tool-bin:%s","FOO":"bar","SECRET":"%s"}\n' "$(dirname "$0")" "$PATH" "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
+    esac
+    ;;
+esac
