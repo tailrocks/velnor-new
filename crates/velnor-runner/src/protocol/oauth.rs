@@ -113,6 +113,17 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
     }
     let response: OAuthTokenResponse =
         serde_json::from_str(body.trim()).context("parse OAuth token response")?;
+    let token = response.access_token.filter(|value| !value.is_empty());
+    if let (200, Some(token)) = (status, token) {
+        return Ok(OAuthAccessToken {
+            token,
+            expires_in: response
+                .expires_in
+                .and_then(|seconds| u64::try_from(seconds).ok())
+                .filter(|seconds| *seconds > 0)
+                .map(Duration::from_secs),
+        });
+    }
     if let Some(error) = response.error {
         let description = response.error_description.unwrap_or_default();
         if error.eq_ignore_ascii_case("invalid_client") {
@@ -123,18 +134,7 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
     if status != 200 {
         bail!("OAuth token request failed: HTTP status {status}");
     }
-    let token = response
-        .access_token
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("OAuth token response missing access_token"))?;
-    Ok(OAuthAccessToken {
-        token,
-        expires_in: response
-            .expires_in
-            .and_then(|seconds| u64::try_from(seconds).ok())
-            .filter(|seconds| *seconds > 0)
-            .map(Duration::from_secs),
-    })
+    bail!("OAuth token response missing access_token")
 }
 
 pub fn build_client_assertion(credentials: &OAuthJwtCredentials) -> Result<String> {

@@ -311,10 +311,11 @@ async fn complete_job_serializes_annotation_coordinates_in_camel_case() -> Resul
         scripted(vec![Scripted::Text(204, "")]),
     )?;
     let mut completion = complete_job();
-    completion.annotations = vec![velnor_runner::protocol::RunServiceAnnotation {
+    let annotation = velnor_runner::protocol::RunServiceAnnotation {
         level: velnor_runner::protocol::RunServiceAnnotationLevel::Failure,
         message: "boom".to_owned(),
         title: None,
+        raw_details: Some("stack trace".to_owned()),
         path: Some("a.yml".to_owned()),
         start_line: Some(1),
         end_line: Some(2),
@@ -322,7 +323,14 @@ async fn complete_job_serializes_annotation_coordinates_in_camel_case() -> Resul
         end_column: Some(4),
         step_number: Some(5),
         is_infrastructure_issue: true,
-    }];
+    };
+    completion.annotations = vec![
+        annotation.clone(),
+        velnor_runner::protocol::RunServiceAnnotation {
+            raw_details: None,
+            ..annotation
+        },
+    ];
 
     immediate_run_service()?
         .complete_job(&run_service_url(&server), &completion)
@@ -340,5 +348,7 @@ async fn complete_job_serializes_annotation_coordinates_in_camel_case() -> Resul
         assert_eq!(annotation[name], value, "{name}");
     }
     assert_eq!(annotation["isInfrastructureIssue"], true);
+    assert_eq!(annotation["rawDetails"], "stack trace");
+    assert!(body["annotations"][1].get("rawDetails").is_none());
     Ok(())
 }

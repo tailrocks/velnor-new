@@ -148,16 +148,35 @@ fn is_json_body(response: &GithubHttpResponse) -> bool {
         && media_type.is_some_and(|value| value.eq_ignore_ascii_case("application/json"))
 }
 
-fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, serde_json::Error> {
+fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, String> {
     if !is_json_body(response) || response.body.expose().trim().is_empty() {
-        return Err(serde::de::Error::custom("response carries no JSON body"));
+        return Err("response carries no JSON body".to_owned());
     }
-    let raw: Value = serde_json::from_str(response.body.expose())?;
+    let raw: Value = serde_json::from_str(response.body.expose())
+        .map_err(|error| describe_parse_error(&error, None))?;
     if !raw.is_object() {
-        return Err(serde::de::Error::custom("response is not a JSON object"));
+        return Err("response is not a JSON object".to_owned());
     }
-    let message = serde_json::from_str::<AgentJobRequestMessage>(response.body.expose())?;
+    let mut deserializer = serde_json::Deserializer::from_str(response.body.expose());
+    let message: AgentJobRequestMessage = serde_path_to_error::deserialize(&mut deserializer)
+        .map_err(|error| describe_parse_error(error.inner(), Some(error.path())))?;
     Ok(acquired(Secret::new(raw), message))
+}
+
+fn describe_parse_error(
+    error: &serde_json::Error,
+    path: Option<&serde_path_to_error::Path>,
+) -> String {
+    let location = format!(
+        "{:?} error at line {} column {}",
+        error.classify(),
+        error.line(),
+        error.column()
+    );
+    match path {
+        Some(path) => format!("{location}, path {path}"),
+        None => location,
+    }
 }
 
 fn acquired(raw: Secret<Value>, message: AgentJobRequestMessage) -> AcquireJobOutcome {

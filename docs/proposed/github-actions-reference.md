@@ -117,13 +117,39 @@ Deliberate deviations:
   `src/Runner.Common/RunServer.cs` lines 63-71; `src/Runner.Common/RunnerService.cs`
   lines 71-110; `src/Runner.Listener/JobDispatcher.cs` lines 89-91).
 - An OAuth token exchange yields a token only for HTTP 200. Upstream treats a
-  200, or a 400 with a JSON body, as a valid response and issues a token
-  whenever `access_token` is non-empty, so a 400 that carries an access token
-  succeeds there. Velnor refuses that response, and refuses a 201 and every
-  other 2xx (`src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenHttpClient.cs` lines
-  99-102, `IsValidTokenResponse`; `src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenProvider.cs`
+  200, or a 400 with a JSON body, as a valid response and checks `access_token`
+  first: a non-empty `access_token` issues a token even when the same response
+  carries `error`, and only an empty one falls through to the `error` branch.
+  Velnor does the same for a 200, so a 200 with both `access_token` and `error`
+  yields the token. It refuses a 400 that carries an access token, and refuses
+  a 201 and every other 2xx (`src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenHttpClient.cs`
+  lines 99-102, `IsValidTokenResponse`; `src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenProvider.cs`
   lines 138-170, `OnGetTokenAsync`). A 400 carrying `error` still maps to the
   token error, and `invalid_client` still means the registration is gone.
+- The acquire typed-parse error names the failure category, the line and the
+  column, and the JSON path of the field. It never repeats the offending value,
+  because serde's own message quotes it and the body can carry a secret.
+- The run-service, Distributed Task, feed and results clients accept only an
+  HTTPS URL on `*.actions.githubusercontent.com` with no port, query or
+  fragment. GitHub Enterprise Server hands the runner
+  `https://[hostname]/_services/pipelines/` endpoints (`docs/checks/actions.md`)
+  and runs jobs through the Distributed Task job server, not the run service
+  (`src/Runner.Worker/JobRunner.cs` lines 66-107). `velnor-runner` runs this
+  repository's jobs on github.com (`docs/goals.md`), so those endpoints are
+  refused by design.
+- `TimelineRecord` carries the record state and the three issue counters, not
+  `Issues` or `Variables`. Upstream sends those two collections only through
+  the Distributed Task job server, and skips that update for a run-service job
+  (`src/Runner.Worker/JobRunner.cs` lines 66-85 start the queue with
+  `resultsServiceOnly: true`; `src/Runner.Common/JobServerQueue.cs` lines
+  696-698 guard `UpdateTimelineRecordsAsync` with `!_resultsServiceOnly`). A
+  run-service job reports annotations, with `rawDetails`, and outputs in
+  `completejob` (`src/Runner.Worker/JobRunner.cs` line 332).
+- `AgentJobRequestMessage.variables` is a case-sensitive map. Upstream's wire
+  message also deserializes into a plain dictionary; the case-insensitive
+  store is `Runner.Worker.Variables`, a `ConcurrentDictionary` with
+  `StringComparer.OrdinalIgnoreCase` (`src/Runner.Worker/Variables.cs` line
+  17). The step executor that builds that store owns the case folding.
 - Step-update and blob uploads to the results service make 3 attempts with a
   200 ms step between them. This is Velnor's policy; it is not copied from
   upstream.

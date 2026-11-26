@@ -244,6 +244,23 @@ fn token_cases() -> Vec<(&'static str, Scripted, TokenOutcome)> {
             TokenOutcome::Failed("invalid_grant"),
         ),
         (
+            "a 200 carrying an access token and an error yields the token, as upstream checks the token first",
+            Scripted::Json(
+                200,
+                json!({
+                    "access_token": "sentinel-access-token",
+                    "error": "invalid_grant",
+                    "error_description": "ignored"
+                }),
+            ),
+            TokenOutcome::Token("sentinel-access-token", None),
+        ),
+        (
+            "a 200 carrying an empty access token and an error reports the error",
+            Scripted::Json(200, json!({"access_token": "", "error": "invalid_grant"})),
+            TokenOutcome::Failed("invalid_grant"),
+        ),
+        (
             "an HTTP 400 carrying an access token is refused, deviating from upstream",
             Scripted::Json(400, json!({"access_token": "sentinel-access-token"})),
             TokenOutcome::Failed("HTTP status 400"),

@@ -5,8 +5,8 @@ use anyhow::{Context, Result, bail};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use velnor_runner::protocol::{
-    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, is_transient_acquire_error,
-    renew_failure_is_job_gone,
+    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, GitHubApiError,
+    is_transient_acquire_error, renew_failure_is_job_gone,
 };
 
 use super::support::{
@@ -108,6 +108,43 @@ async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
             "{name}"
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn acquire_job_typed_parse_failure_reports_position_and_path_without_the_value() -> Result<()>
+{
+    const SENTINEL: &str = "zq-sentinel-9d2f";
+    let server = TestServer::start().await?;
+    server.respond(
+        "POST",
+        ACQUIRE_PATH,
+        scripted(vec![Scripted::Json(
+            200,
+            json!({"planId": PLAN_ID, "jobId": JOB_ID, "requestId": SENTINEL}),
+        )]),
+    )?;
+
+    let error = immediate_run_service()?
+        .acquire_job(&run_service_url(&server), "broker-message", "Linux", None)
+        .await
+        .err()
+        .context("a wrong-typed field must fail the acquire")?;
+
+    assert!(is_transient_acquire_error(&error), "{error:#}");
+    let rendered = format!("{error:#}");
+    assert!(!rendered.contains(SENTINEL), "{rendered}");
+    let api_error = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<GitHubApiError>())
+        .context("the chain must carry the GitHubApiError")?;
+    assert!(!api_error.body.contains(SENTINEL), "{}", api_error.body);
+    assert!(api_error.body.contains("requestId"), "{}", api_error.body);
+    assert!(
+        api_error.body.contains("line 1 column"),
+        "{}",
+        api_error.body
+    );
     Ok(())
 }
 
