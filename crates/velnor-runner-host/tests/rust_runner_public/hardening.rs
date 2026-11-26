@@ -63,7 +63,8 @@ fn environment_of_call(path: &Path) -> Result<Vec<(String, String)>, Box<dyn Err
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
 -> Result<(), Box<dyn Error>> {
-    const TEST: &str = "hardening::rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv";
+    const TEST: &str =
+        "hardening::rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv";
     if !is_child_of(TEST) {
         let path = format!(
             "{}:/rust-runner-l1-extra",
