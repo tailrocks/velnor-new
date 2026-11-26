@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod context_value;
+pub mod expr;
 pub mod job_message;
 pub mod protocol;
 pub mod runner_json;
