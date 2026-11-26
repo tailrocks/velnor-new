@@ -10,19 +10,30 @@ manager writes the files of a phase before that phase's issues are created; the 
 | Level | What | Parent | Labels |
 |---|---|---|---|
 | L1 | One epic per phase: `[VELNOR-0] Correctness`, `[VELNOR-1] Reuse`, `[VELNOR-2] Runner and Native`, `[VELNOR-3] Proof` | #574 | `epic`, `fast-ci` |
-| L2 | One issue per delivery-plan item (W0–W10, V01, N25, …) | its phase epic | `fast-ci`, one `exec:*`, one `effort:*`; `needs-owner` while a gate without a default is unanswered |
+| L2 | One issue per delivery-plan item (W0–W10, V01, N25, …) | its phase epic | `fast-ci`, one `exec:*`, one `effort:*`; `needs-owner` while a gate without a runnable default is unanswered |
 | L3 | A sub-issue of an L2 item | its L2 issue | same as L2 |
-| Owner step | `[OWNER] <what is needed>`: an answer to a question without a default (`[OWNER] Answer Q3`), or an action such as W6's ruleset change | #574 | `owner-action`, never `fast-ci` |
+| Owner step | `[OWNER] <what is needed>`: an answer to a question without a runnable default (`[OWNER] Answer Q3`, `[OWNER] Answer D4`), or an action such as W6's ruleset change | #574 | `owner-action`, never `fast-ci` |
 
 - **Size.** One issue is one PR of at most 8 agent-hours. An L2 item above 8 h lists its L3 sub-issues in `children`;
   they are written with it, each has its own header, checks and PR, and the L2 issue closes when they close. Nothing
   is split later, at a first commit.
 - **Dependencies** are GitHub's native "blocked by" relationships, created from `blocked_by` and from `gate`. The
   roadmap's ready-issue query reads only those, so nothing else tracks order.
-- **Owner gates block natively.** For each id in `gate` that has no default in the owner sheet, and for each owner
-  action, the script creates one `[OWNER]` issue and makes every item that names it blocked by it. The ready query
-  then never returns a gated item. The `[OWNER]` issue closes only with the owner's answer, or the read-back of the
-  action, posted on it. A gate id that has a default creates no blocker: the item runs on the default.
+- **Owner gates block natively.** For each id in `gate` that has no runnable default for the item, and for each owner
+  action, the script creates one `[OWNER]` issue and makes every such item blocked by it. The ready query then never
+  returns a gated item. The `[OWNER]` issue closes only with the owner's answer, or the read-back of the action, posted
+  on it. A default is runnable for an item when the item's done condition can be met under that default, at most with
+  a narrower claim that the item states. A runnable default creates no blocker: the item runs on the default. A
+  default of `Parked`, `None`, or one that withholds what the done condition needs blocks exactly like a missing
+  default. The table below decides every gate whose default is parked or declines something.
+
+| Gate | Default | Item | Outcome | Reason |
+|---|---|---|---|---|
+| D4 | Parked | X06b | Blocked | Done needs the chosen evaluator; parked means nobody has chosen it |
+| D20 | No rental | BM15 | Blocked | Done needs a ratio against a rented high-clock node |
+| D22 | No rented arm; a narrower claim | BM10 | Runnable, narrower | Done allows dropping the arm: BM10 closes with no RBE arm and no figure, and S3's claim names only the arms run |
+| Q17 | None built | N07 | Blocked | Done needs the generated `runner-v` release workflow the default withholds |
+| D21, D23, D25, D26 | No / Off / No / Nothing built | none | — | No item names them as a gate |
 - **Milestones:** one per phase (`VELNOR-0` … `VELNOR-3`), created by the manager after the owner confirms. The existing
   `FAST-*` milestones are left alone.
 - **Executor seat** comes from the labels `exec:haiku`, `exec:sonnet` or `exec:opus` and `effort:low`,

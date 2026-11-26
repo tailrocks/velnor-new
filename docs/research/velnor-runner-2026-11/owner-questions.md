@@ -5,7 +5,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 **How to read it.**
 
 - **Needed by** names the delivery-plan item that waits for the answer (W0–W10 and N26 are phase 0).
-- The plan runs on each **default** until you answer. Where it says "no default", the work waits: the question becomes an `[OWNER]` issue that blocks its items.
+- The plan runs on each **default** until you answer. Where it says "no default", or where a default says it blocks an item (`Parked` blocks always), the work waits: the question becomes an `[OWNER]` issue that blocks those items.
 - Numbers keep their labels: (measured), (estimate) and (target). A measured number names its run.
 - Q ids are new. D ids are older questions that still stand, reworded where the ground moved.
 
@@ -205,7 +205,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 
 - **Question.** `release-plz.toml` declares the `runner` group, but no workflow releases it. Generate one now, or wait for Q9?
 - **Recommendation.** Wait for Q9.
-- **Default.** None built.
+- **Default.** None built. This blocks N07.
 - **Needed by.** N07, which also waits for Q9.
 
 ### 18. D15: Recovery from a bad Velnor release
@@ -257,12 +257,12 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 
 | Id | Question | Recommendation | Default |
 |---|---|---|---|
-| D4 | Which general expression evaluator (full-compatibility stream only) | Asked when X06b is scheduled | Parked |
+| D4 | Which general expression evaluator (full-compatibility stream only) | Asked when X06b is scheduled | Parked: blocks X06b |
 | D11 | Cutover counts per job type before Native takes a job type | As written in the design, counted per obligation kind | As written |
 | D18 | A Velnor merge train instead of GitHub's queue | Not now. Measure GitHub's share first, and try the speculative queue (the label run tests the PR on the current queue tip) | GitHub's queue |
-| D20 | Rent high-clock nodes | One, for the benchmark only | No rental |
+| D20 | Rent high-clock nodes | One, for the benchmark only | No rental: blocks BM15 |
 | D21 | One compile for both witness runs | No | No |
-| D22 | Rent comparator runners for the benchmark | One vendor arm plus GitHub larger runners | No rented arm; a narrower claim |
+| D22 | Rent comparator runners for the benchmark | One vendor arm plus GitHub larger runners | No rented arm; a narrower claim: BM10 drops its arm and does not block |
 | D23 | Verify an agent's unpushed commits automatically | Not yet | Off |
 | D24 | Agent work above PR work | Yes, within a budget | Equal to PR work |
 | D25 | Agents working inside cluster sandboxes | A two-agent pilot after `velnor verify` ships | No |
@@ -318,7 +318,7 @@ All other decisions stand as written.
 | 14 | D8 | Deploy identity and node changes | after Q1 | Yes | None: cluster work waits |
 | 15 | Q5 | Release hosting | R | Hosted for now | Hosted |
 | 16 | Q15 | Release subject across squash | R04, R06, DG03 | Signed manifest | Rebuild |
-| 17 | Q17 | `runner-v` release | N07 | After Q9 | None built |
+| 17 | Q17 | `runner-v` release | N07 | After Q9 | None built: N07 waits |
 | 18 | D15 | Recovery from a bad helper | — | Re-pin PR, signed once N26 is required | Same |
 | 19 | Q16 | Emergency stop | L05 | You plus an audited hold | You only |
 | 20 | Q6 | Forks in the product | W2 | Keep the fence in velnor-gen | Same |

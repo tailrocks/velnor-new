@@ -48,9 +48,11 @@ full Actions protocol.
 - **Done when.** Every check reads the state of main or of GitHub, not the contents of a PR, and names the exit code
   or output it expects. When another session lands the work first, the checks pass and the issue closes with their
   output instead of being built again.
-- **Gate.** A Q or D id from [owner-questions.md](owner-questions.md). A question without a default, and every owner
-  action, is an `[OWNER]` issue that blocks the item natively. A question with a default does not block: the item
-  runs on the default.
+- **Gate.** A Q or D id from [owner-questions.md](owner-questions.md). A question without a runnable default, and every owner
+  action, is an `[OWNER]` issue that blocks the item natively. A default is runnable when the item's done condition
+  can be met under it, at most with a narrower claim the item states; `Parked` and `None` never are. A runnable
+  default does not block: the item runs on the default. The
+  [issue format](planning/backlog-issue-format.md#hierarchy-and-labels) lists which declining defaults block.
 - **Release.** An item that changes velnor-gen or velnor-ci takes effect in CI only after its release train
   (section 4.1). Its "done when" checks on `rust-ci.yml` or on runs can pass only after the train's pin PR.
 - **Deletion.** Each item removes what it replaces in the same PR. Nothing deletes `images/runner`,
@@ -624,7 +626,7 @@ crates under `crates/velnor-*` named by N16; its acceptance is the H corpus.
 | BM06 | **Warm compile (S6)** per package, 300 diffs | Slower witness P90 published; digests equal | 6 | Sonnet medium | Sonnet low | C05 | — |
 | BM07 | **Strong conventional arm.** Official runner on persistent agents with a reflinked warm target and mirrors | Same expected test ids as the contract | 12 | Sonnet high | Sonnet low | BM03, C04 | — |
 | BM09 | **Contract freeze and publication rule** | A planted tie is reported as a tie | 6 | Opus high | Opus high | BM03 | — |
-| BM10 | **RBE arm (optional)** for the cold-build lane | Same outputs and test ids on the lane, or dropped with the figure | 16 | Opus high | Opus high | BM03 | D22 |
+| BM10 | **RBE arm (optional)** for the cold-build lane | Same outputs and test ids on the lane, or, under D22's default (no rented arm), dropped with the figure and S3's claim names only the arms run | 16 | Opus high | Opus high | BM03 | D22 |
 | BM11 | **Toolchain matrix** (linkers, debuginfo, incremental, dependency opt-level) | Zero false greens; edit-to-test per cell | 8 | Sonnet high | Sonnet low | C06 | — |
 | BM12 | **Page-cache contention** with 1, 4 and 6 sandboxes | P90 slowdown 1.25× idle or less | 6 | Sonnet medium | Sonnet low | C05, ST04 | — |
 | BM13 | **Per-execution overhead** of the read audit and tree hash | 3% of suite wall or less | 6 | Sonnet medium | Sonnet low | V07, C10 | — |
