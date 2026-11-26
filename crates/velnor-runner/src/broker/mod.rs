@@ -9,7 +9,7 @@ pub(crate) mod proto;
 use std::path::PathBuf;
 
 pub(crate) use facts::TrustedFacts;
-pub(crate) use git::{git_args, isolate};
+pub(crate) use git::{TREE_PROBE, git_args, isolate};
 pub(crate) use mirror::mirror_path;
 pub(crate) use proto::{Request, Response, Token};
 

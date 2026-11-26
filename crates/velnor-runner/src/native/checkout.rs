@@ -7,7 +7,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use crate::broker::{Request, Response, StoreWriter, Token, TrustedFacts, git_args, mirror_path};
+use crate::broker::{
+    Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, git_args, mirror_path,
+};
 use crate::exec::{ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult};
 use crate::store::store_root;
 
@@ -119,11 +121,8 @@ async fn materialize(
     ctx: &mut StepContext<'_>,
     mirror: &Path,
     facts: &TrustedFacts,
+    dest_arg: &str,
 ) -> Result<Option<StepResult>, ExecError> {
-    let dest = ctx.workspace.to_path_buf();
-    let dest_arg = dest
-        .to_str()
-        .ok_or_else(|| invalid("workspace is not UTF-8"))?;
     if let Some(ended) = require(ctx, &["init", "-q", dest_arg]).await? {
         return Ok(Some(ended));
     }
@@ -131,7 +130,7 @@ async fn materialize(
         .with_context(|| format!("resolve {}", mirror.display()))
         .map_err(invalid)?
         .join("objects");
-    let alternates = dest.join(".git/objects/info/alternates");
+    let alternates = Path::new(dest_arg).join(".git/objects/info/alternates");
     tokio::fs::write(&alternates, format!("{}\n", objects.display()))
         .await
         .with_context(|| format!("write {}", alternates.display()))
@@ -163,9 +162,15 @@ async fn populate(
     facts: &TrustedFacts,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
+    let dest = ctx
+        .workspace
+        .to_str()
+        .ok_or_else(|| invalid("workspace is not UTF-8"))?
+        .to_owned();
     let mirror = mirror_path(&store_root(), facts).map_err(invalid)?;
-    let object = format!("{}^{{commit}}", facts.sha.as_str());
-    let present = git(ctx, Some(&mirror), &["cat-file", "-e", &object], true).await?;
+    let tree = format!("{}^{{tree}}", facts.sha.as_str());
+    let probe = [TREE_PROBE.as_slice(), &[tree.as_str()]].concat();
+    let present = git(ctx, Some(&mirror), &probe, true).await?;
     if present == ProcessOutcome::Cancelled {
         return Ok(StepResult::Cancelled);
     }
@@ -185,7 +190,7 @@ async fn populate(
         ensure_disjoint(ctx.workspace, guarded).map_err(invalid)?;
     }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
-    Ok(materialize(ctx, &mirror, facts)
+    Ok(materialize(ctx, &mirror, facts, &dest)
         .await?
         .unwrap_or(StepResult::Succeeded))
 }

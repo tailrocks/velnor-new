@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/git_mirror.rs
 
+use std::ffi::OsString;
 use std::fs::TryLockError;
 use std::io::{Read, Write};
 use std::os::fd::OwnedFd;
@@ -14,7 +15,7 @@ use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags};
 use rustix::io::Errno;
 
 use super::facts::TrustedFacts;
-use super::git::{auth_env, git, git_args, has_commit};
+use super::git::{fetch_env, git, git_args, has_commit, has_tree};
 
 pub(crate) fn mirror_path(root: &Path, facts: &TrustedFacts) -> Result<PathBuf> {
     let url = facts.server_url.url();
@@ -251,6 +252,32 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
             .with_context(|| format!("create {}", parent.display()))?;
     }
     let _lock = lock(Path::new(&lock_file)).await?;
+    prepare(&mirror).await?;
+    let sha = facts.sha.as_str();
+    if has_tree(&mirror, sha).await {
+        return Ok(());
+    }
+    if has_commit(&mirror, sha).await {
+        remove_entry(&mirror).await?;
+        prepare(&mirror).await?;
+    }
+    remove_ref_locks(&mirror).await?;
+    let clone_url = facts.clone_url();
+    let env = fetch_env(facts.server_url.url(), token);
+    let mut fetched = fetch_refs(&mirror, &clone_url, facts.refspecs(), &env).await;
+    if !has_tree(&mirror, sha).await
+        && let Some(spec) = facts.sha_refspec()
+    {
+        fetched = fetch_refs(&mirror, &clone_url, vec![spec], &env).await;
+    }
+    if has_tree(&mirror, sha).await {
+        return Ok(());
+    }
+    fetched?;
+    bail!("checkout: commit {sha} not found in {clone_url}")
+}
+
+async fn prepare(mirror: &Path) -> Result<()> {
     let config = mirror.join("config");
     let config_is_file = tokio::fs::symlink_metadata(&config)
         .await
@@ -262,32 +289,14 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
             .with_context(|| format!("path {} is not UTF-8", mirror.display()))?;
         git(&git_args(None, &["init", "-q", "--bare", mirror_arg]), &[]).await?;
     }
-    reset_mirror(&mirror).await?;
-    let sha = facts.sha.as_str();
-    if has_commit(&mirror, sha).await {
-        return Ok(());
-    }
-    remove_ref_locks(&mirror).await?;
-    let clone_url = facts.clone_url();
-    let env = auth_env(facts.server_url.url(), token);
-    let mut fetched = fetch_refs(&mirror, &clone_url, facts.refspecs(), &env).await;
-    if !has_commit(&mirror, sha).await
-        && let Some(spec) = facts.sha_refspec()
-    {
-        fetched = fetch_refs(&mirror, &clone_url, vec![spec], &env).await;
-    }
-    if has_commit(&mirror, sha).await {
-        return Ok(());
-    }
-    fetched?;
-    bail!("checkout: commit {sha} not found in {clone_url}")
+    reset_mirror(mirror).await
 }
 
 async fn fetch_refs(
     mirror: &Path,
     clone_url: &str,
     specs: Vec<String>,
-    env: &[(String, String)],
+    env: &[(OsString, OsString)],
 ) -> Result<()> {
     let mut args = git_args(
         Some(mirror),
