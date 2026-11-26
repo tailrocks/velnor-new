@@ -99,7 +99,7 @@ fn registered(name: &str, resume: Option<&str>) -> bool {
         && (RESERVED_TOKENS
             .iter()
             .any(|known| known.eq_ignore_ascii_case(name))
-            || resume.is_some_and(|token| token.eq_ignore_ascii_case(name)))
+            || resume.is_some_and(|token| token == name.to_uppercase()))
 }
 
 fn parse<'a>(line: &'a str, resume: Option<&str>) -> Option<WorkflowCommand<'a>> {
@@ -209,7 +209,7 @@ fn stop(token: &str, out: &mut Output<'_>) {
     if token.chars().count() > 6 {
         out.masker.add(token);
     }
-    out.issues.stop(lowered);
+    out.issues.stop(token.to_uppercase());
 }
 
 pub(super) fn apply(line: &str, out: &mut Output<'_>) {
@@ -218,7 +218,7 @@ pub(super) fn apply(line: &str, out: &mut Output<'_>) {
     };
     let name = command.name.to_ascii_lowercase();
     if let Some(token) = out.issues.stop_token() {
-        if name == token {
+        if command.name.to_uppercase() == token {
             out.issues.resume();
         }
         return;

@@ -25,7 +25,7 @@ pub(crate) fn parse(
     expression: &str,
     env: &dyn ParseEnvironment,
 ) -> Result<Option<Node>, ParseError> {
-    if expression.chars().count() > MAX_LENGTH {
+    if expression.encode_utf16().count() > MAX_LENGTH {
         return Err(ParseError::without_token(ParseErrorKind::ExceededMaxLength));
     }
 

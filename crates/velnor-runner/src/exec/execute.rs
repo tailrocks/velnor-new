@@ -34,13 +34,28 @@ impl Job<'_> {
         cancel: Option<&JobCancel>,
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
-        let minutes = step
-            .timeout_in_minutes
-            .as_ref()
-            .map(|token| token::scalar(token, env))
-            .transpose()?
-            .and_then(|text| text.parse::<f64>().ok())
-            .filter(|minutes| minutes.is_finite() && *minutes > 0.0);
+        let minutes = match step.timeout_in_minutes.as_ref() {
+            Some(token) => {
+                let text = token::scalar(token, env)?;
+                match text.trim().parse::<f64>() {
+                    Ok(minutes) if minutes.is_finite() => Some(minutes).filter(|m| *m > 0.0),
+                    _ => {
+                        if !text.trim().is_empty() {
+                            for line in [
+                                "An error occurred when attempting to determine the step timeout."
+                                    .to_owned(),
+                                format!("'{text}' is not a number"),
+                            ] {
+                                out.message(&line);
+                                out.annotate(AnnotationLevel::Error, line);
+                            }
+                        }
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
         let files = FileCommands::create(&self.options.temp).await?;
         let process_env = self.ctx.process_env(&step_env, &files.variables());
         let limits = Limits {
