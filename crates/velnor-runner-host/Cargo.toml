@@ -69,6 +69,10 @@ name = "rust_runner_public"
 path = "tests/rust_runner_public.rs"
 
 [[test]]
+name = "rust_runner_controller_public"
+path = "tests/rust_runner_controller_public.rs"
+
+[[test]]
 name = "local_pair_public"
 path = "tests/local_pair_public.rs"
 required-features = ["local-mode"]
