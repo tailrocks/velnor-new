@@ -73,16 +73,16 @@ async fn empty_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn ensure_disjoint(workspace: &Path, mirror: &Path) -> Result<()> {
+fn ensure_disjoint(workspace: &Path, guarded: &Path) -> Result<()> {
     let workspace = std::fs::canonicalize(workspace)
         .with_context(|| format!("resolve {}", workspace.display()))?;
-    let mirror =
-        std::fs::canonicalize(mirror).with_context(|| format!("resolve {}", mirror.display()))?;
-    if workspace.starts_with(&mirror) || mirror.starts_with(&workspace) {
+    let guarded =
+        std::fs::canonicalize(guarded).with_context(|| format!("resolve {}", guarded.display()))?;
+    if workspace.starts_with(&guarded) || guarded.starts_with(&workspace) {
         bail!(
-            "checkout: workspace {} and git mirror {} must not contain each other",
+            "checkout: workspace {} and {} must not contain each other",
             workspace.display(),
-            mirror.display()
+            guarded.display()
         );
     }
     Ok(())
@@ -187,7 +187,9 @@ async fn populate(
             }
         }
     }
-    ensure_disjoint(ctx.workspace, &mirror).map_err(invalid)?;
+    for guarded in [&store_root().join("git"), ctx.temp] {
+        ensure_disjoint(ctx.workspace, guarded).map_err(invalid)?;
+    }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
     Ok(materialize(ctx, &mirror, facts)
         .await?
@@ -199,11 +201,16 @@ async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<Step
     let facts = store.facts().map_err(ExecError::Invalid)?;
     let cancel = ctx.cancel.clone();
     let work = populate(store, facts, ctx);
-    match cancel {
+    let result = match cancel {
         Some(cancel) => tokio::select! {
             result = work => result,
             () = cancel.cancelled() => Ok(StepResult::Cancelled),
         },
         None => work.await,
+    };
+    if matches!(result, Ok(StepResult::Succeeded)) {
+        ctx.set_output("commit", facts.sha.as_str());
+        ctx.set_output("ref", facts.git_ref());
     }
+    result
 }

@@ -364,3 +364,26 @@ fn checkout_pull_request_fetches_merge_commit() -> Result<()> {
     assert_eq!(rig.fetches(), 1);
     Ok(())
 }
+
+#[test]
+fn checkout_declares_the_commit_and_ref_outputs() -> Result<()> {
+    let rig = Rig::new()?;
+    for (fixture, sha, git_ref) in [
+        ("checkout_outputs", &rig.head, "refs/heads/main"),
+        (
+            "checkout_pull_request_outputs",
+            &rig.merge,
+            "refs/pull/7/merge",
+        ),
+    ] {
+        let scratch = Scratch::new()?;
+        let ran = rig.run(fixture, sha, &scratch)?;
+        assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+        assert!(
+            ran.has_line(&format!("outputs commit={sha} ref={git_ref}")),
+            "{}",
+            ran.stdout
+        );
+    }
+    Ok(())
+}

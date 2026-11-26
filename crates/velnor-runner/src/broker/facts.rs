@@ -289,6 +289,15 @@ impl TrustedFacts {
         )
     }
 
+    pub(crate) fn git_ref(&self) -> String {
+        match &self.event {
+            TrustedEvent::Branch { branch: name }
+            | TrustedEvent::MergeGroup { queue_branch: name } => format!("refs/heads/{name}"),
+            TrustedEvent::Tag { name } => format!("refs/tags/{name}"),
+            TrustedEvent::PullRequest { number, .. } => format!("refs/pull/{number}/merge"),
+        }
+    }
+
     pub(crate) fn refspecs(&self) -> Vec<String> {
         let mut specs = vec!["+refs/heads/*:refs/heads/*".to_owned()];
         match &self.event {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::exec_support::{Ran, Scratch};
 use crate::native_checkout::{Rig, finish, git};
@@ -114,5 +114,42 @@ fn workspace_inside_the_store_is_refused_and_the_mirror_survives() -> Result<()>
         let object = format!("{}^{{commit}}", rig.head);
         assert_eq!(git(&rig.mirror(), &["rev-parse", &object])?, rig.head);
     }
+    Ok(())
+}
+
+fn refused(ran: &Ran) -> bool {
+    ran.code == Some(1)
+        && (ran.stdout.contains("must not contain each other")
+            || ran.stderr.contains("must not contain each other"))
+}
+
+#[test]
+fn workspace_that_contains_the_job_temp_directory_is_refused() -> Result<()> {
+    let rig = Rig::new()?;
+    let scratch = Scratch::new()?;
+    let workspace = scratch.workspace();
+    let parent = workspace.parent().context("scratch root")?;
+    let job = rig.job("checkout_depth1", &rig.head, &rig.server_url())?;
+    let ran = finish(rig.start_at(&job, parent, &scratch, &[])?)?;
+    assert!(refused(&ran), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(
+        workspace
+            .parent()
+            .is_some_and(|root| root.join("temp").is_dir())
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_inside_another_repositorys_mirror_is_refused_and_that_mirror_survives() -> Result<()> {
+    let rig = Rig::new()?;
+    let other = rig.store().join("git/_local/someone/other/1.git");
+    std::fs::create_dir_all(&other)?;
+    std::fs::write(other.join("HEAD"), "ref: refs/heads/main\n")?;
+    let job = rig.job("checkout_depth1", &rig.head, &rig.server_url())?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start_at(&job, &other, &scratch, &[])?)?;
+    assert!(refused(&ran), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(other.join("HEAD").is_file());
     Ok(())
 }
