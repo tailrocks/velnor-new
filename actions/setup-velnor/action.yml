@@ -212,15 +212,25 @@ runs:
             downloads=$((downloads + 1))
             n=$downloads
             downloaded=
+            failures=
+            host="${RELEASES#*://}"
+            host="${host%%/*}"
+            host="${host##*@}"
             for tag in "tools-v$VERSION" "rust-ci-v$VERSION"; do
               echo "Downloading $RELEASES/$tag/$archive"
-              if curl --fail --silent --show-error --location --retry 3 --max-time 600 --retry-max-time 900 --max-filesize "$MAX_BYTES" --output "$file" "$RELEASES/$tag/$archive"; then
+              rc=0
+              status="$(curl --fail --silent --show-error --location --retry 3 --max-time 600 --retry-max-time 900 --max-filesize "$MAX_BYTES" --write-out '%{http_code}' --output "$file" "$RELEASES/$tag/$archive")" || rc=$?
+              if [ "$rc" -eq 0 ]; then
                 downloaded=1
                 break
               fi
               rm -f "$file"
+              status="${status##*[!0-9]}"
+              reason="curl exit $rc, last HTTP status ${status:-none}"
+              if [ "$rc" -eq 63 ]; then reason="$reason, the file is larger than $MAX_BYTES bytes"; fi
+              failures="$failures${failures:+; }$tag from $host: $reason"
             done
-            [ -n "$downloaded" ] || fail "downloading $archive for velnor-ci $VERSION from the release tag tools-v$VERSION or rust-ci-v$VERSION failed, or the file is larger than $MAX_BYTES bytes"
+            [ -n "$downloaded" ] || fail "downloading $archive for velnor-ci $VERSION failed after curl retries: $failures"
             [ "$(wc -c < "$file")" -le "$MAX_BYTES" ] || fail "the $archive download for velnor-ci $VERSION is larger than $MAX_BYTES bytes"
           fi
           got="$(digest "$file")"
