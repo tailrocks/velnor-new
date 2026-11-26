@@ -165,8 +165,6 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
     steps
 }
 
-/// The shared-store steps. A job that plans runs them after the plan, so a
-/// run that selects nothing skips them: `gate` is the job's selection.
 pub(crate) fn mbx(facts: &RepoFacts, gate: Option<&Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
