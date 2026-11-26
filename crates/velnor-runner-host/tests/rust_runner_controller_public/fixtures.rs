@@ -199,7 +199,7 @@ pub(super) fn host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
          endpoint = \"unix://{}/no-such-docker.sock\"\n",
         root.display()
     );
-    let config = HostConfig::parse(&base)?;
+    let config = HostConfig::parse_draft(&base)?;
     let id = ConnectionId::parse("lab")?;
     let connection = config.connection(&id).ok_or("connection lab")?;
     let policy =

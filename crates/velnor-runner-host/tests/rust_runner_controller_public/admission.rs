@@ -19,7 +19,7 @@ fn polls_returning(world: &World, id: &str, after: u64) -> usize {
 }
 
 pub(super) fn run(test: &str) -> TestResult<()> {
-    let mut world = World::new("T6", 1, true)?;
+    let mut world = World::new("T6", 2, true)?;
     world.configure_orb("FAKE_RUNNER_HOLD=1\n")?;
     world.queue_message(61, &[push_offer(1, 6001, "main", WORKFLOW)])?;
     world.spawn_controller(test, &[])?;
@@ -28,7 +28,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let second = held_job(&world, 2);
     changed_config(&world, second)?;
     assert_eq!(world.finish(40)?, "Ok(ConfigChanged)");
-    assert_clean(&world, "1");
+    assert_clean(&world, "2");
     Ok(())
 }
 
@@ -60,9 +60,15 @@ fn drained(world: &World, first: u64) -> TestResult<()> {
         .map(|event| event.seq)
         .max()
         .unwrap_or_default();
-    wait_for("two polls of the drained message", 40, || {
-        polls_returning(world, "62", proof) >= 2
-    });
+    world.wait_for_event_unless(
+        "two polls of the drained message",
+        40,
+        |_| polls_returning(world, "62", proof) >= 2,
+        |_| {
+            (acquire_ids(world) != ["1"])
+                .then(|| "offer 2 was acquired while the host was draining".to_owned())
+        },
+    );
     assert_eq!(acquire_ids(world), ["1"]);
     assert!(!deleted_messages(world).contains(&"62".to_owned()));
     assert_eq!(controller_readiness(&world.state), Readiness::Draining);
@@ -71,12 +77,18 @@ fn drained(world: &World, first: u64) -> TestResult<()> {
 }
 
 fn changed_config(world: &World, second: u64) -> TestResult<()> {
-    world.write_host_toml(2)?;
+    world.write_host_toml(3)?;
     world.queue_message(63, &[push_offer(3, 6003, "main", WORKFLOW)])?;
     let marker = world.events().last().map_or(0, |event| event.seq);
-    wait_for("two polls of the third message", 40, || {
-        polls_returning(world, "63", marker) >= 2
-    });
+    world.wait_for_event_unless(
+        "two polls of the third message",
+        40,
+        |_| polls_returning(world, "63", marker) >= 2,
+        |_| {
+            (acquire_ids(world) != ["1", "2"])
+                .then(|| "offer 3 was acquired after host.toml changed".to_owned())
+        },
+    );
     assert_eq!(acquire_ids(world), ["1", "2"]);
     assert!(!deleted_messages(world).contains(&"63".to_owned()));
     assert_eq!(controller_readiness(&world.state), Readiness::Reconciling);

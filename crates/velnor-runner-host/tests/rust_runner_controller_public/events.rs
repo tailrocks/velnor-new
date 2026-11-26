@@ -37,6 +37,27 @@ pub(super) fn wait_for(what: &str, seconds: u64, mut check: impl FnMut() -> bool
     }
 }
 
+pub(super) fn wait_unless(
+    what: &str,
+    seconds: u64,
+    mut check: impl FnMut() -> bool,
+    mut violation: impl FnMut() -> Option<String>,
+) {
+    let deadline = Instant::now() + Duration::from_secs(seconds);
+    loop {
+        assert_eq!(
+            violation(),
+            None,
+            "behaviour broken while waiting for {what}"
+        );
+        if check() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "timed out waiting for {what}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 pub(super) fn parse_events(path: &Path) -> Vec<Event> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return Vec::new();

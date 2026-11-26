@@ -35,7 +35,9 @@ fn rust_runner_creates_missing_machine() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rust_runner_skips_create_when_machine_exists() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"jackin"},{"name":"velnor"}]"#)?;
+    let fixture = Fixture::new(
+        r#"[{"name":"jackin"},{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#,
+    )?;
     fixture.launcher().ensure_machine()?;
     assert!(
         fixture
@@ -53,7 +55,7 @@ fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>
     let fixture = Fixture::new("[]")?;
     fixture.launcher().ensure_machine()?;
     let expected = format!(
-        "-m velnor -u root ln -sfn /mnt/mac{} /var/lib/velnor",
+        "-m velnor -u root ln -sfnT /mnt/mac{} /var/lib/velnor",
         fixture.store.display()
     );
     assert!(fixture.log()?.contains(&expected), "{:?}", fixture.log()?);
@@ -67,7 +69,8 @@ fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    let fixture =
+        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     let launcher = fixture.launcher();
     let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"))?;
     let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"))?;
@@ -108,7 +111,8 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    let fixture =
+        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     let mut job = fixture
         .launcher()
         .start_job(reservation(21)?, &jit(SECRET_JIT))?;
@@ -126,7 +130,8 @@ async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    let fixture =
+        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     fixture.configure("FAKE_RUNNER_EXIT=3\n")?;
     let mut job = fixture
         .launcher()
@@ -179,7 +184,8 @@ async fn wait_until_dead(pid: &str) -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rust_runner_fails_when_binary_missing() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    let fixture =
+        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     std::fs::remove_file(fixture.store.join("bin/velnor-runner"))?;
     let error = fixture
         .launcher()
@@ -258,15 +264,16 @@ fn launch_mode_defaults_to_official_runner() -> Result<(), HostError> {
 
 #[test]
 fn launch_mode_rust_runner_parses() -> Result<(), HostError> {
-    let parsed = HostConfig::parse(&host_config(
+    let text = host_config(
         Some("rust-runner"),
         "linux/arm64",
         "velnor-mac",
         &MAC_LABELS,
-    ))?;
+    );
+    let parsed = HostConfig::parse_draft(&text)?;
     assert_eq!(parsed.host.launch_mode, LaunchMode::RustRunner);
-    let reparsed = HostConfig::parse(&parsed.to_toml()?)?;
-    assert_eq!(reparsed.host.launch_mode, LaunchMode::RustRunner);
+    assert_eq!(parsed.to_toml().err(), Some(HostError::Config));
+    assert_eq!(HostConfig::parse(&text).err(), Some(HostError::Config));
     Ok(())
 }
 
@@ -290,7 +297,7 @@ fn launch_mode_unknown_value_is_rejected() {
 #[test]
 fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
     assert!(
-        HostConfig::parse(&host_config(
+        HostConfig::parse_draft(&host_config(
             Some("rust-runner"),
             "linux/arm64",
             "velnor-mac",
@@ -299,7 +306,7 @@ fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
         .is_ok()
     );
     assert_eq!(
-        HostConfig::parse(&host_config(
+        HostConfig::parse_draft(&host_config(
             Some("rust-runner"),
             "linux/amd64",
             "velnor-mac",

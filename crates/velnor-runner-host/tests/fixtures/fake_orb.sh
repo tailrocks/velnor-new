@@ -7,12 +7,29 @@ root=$(dirname "$0")
 seen=$FAKE_ORB_SEEN
 printf '%s\n' "$*" >> "$FAKE_ORB_LOG"
 
+gone() {
+  [ ! -d "$root" ] && return 0
+  [ -n "$FAKE_TEST_PID" ] && ! kill -0 "$FAKE_TEST_PID" 2>/dev/null
+}
+
 lock() {
-  while ! mkdir "$seen/.lock" 2>/dev/null; do sleep 0.01; done
+  tries=0
+  while ! mkdir "$seen/.lock" 2>/dev/null; do
+    owner=$(cat "$seen/.lock/owner" 2>/dev/null)
+    if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+      rm -rf "$seen/.lock"
+      continue
+    fi
+    gone && exit 75
+    tries=$((tries + 1))
+    [ "$tries" -gt 3000 ] && exit 75
+    sleep 0.01
+  done
+  echo $$ > "$seen/.lock/owner"
 }
 
 unlock() {
-  rmdir "$seen/.lock"
+  rm -rf "$seen/.lock"
 }
 
 mkdir -p "$seen/calls"
@@ -65,7 +82,7 @@ list)
   exit 0
   ;;
 create)
-  printf '[{"name":"velnor"}]\n' > "$FAKE_ORB_LIST"
+  printf '[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]\n' > "$FAKE_ORB_LIST"
   exit 0
   ;;
 -m) ;;
@@ -99,9 +116,10 @@ ps)
       exit 1
     fi
   fi
-  if [ -f "$FAKE_ORB_PS" ]; then
-    cat "$FAKE_ORB_PS" | tee "$seen/calls/$call.out"
-  fi
+  {
+    printf '1 /sbin/init\n'
+    [ -f "$FAKE_ORB_PS" ] && cat "$FAKE_ORB_PS"
+  } | tee "$seen/calls/$call.out"
   exit 0
   ;;
 kill)
@@ -123,10 +141,10 @@ kill)
   else
     stat -c %a "$jit" > "$seen/$name.mode"
   fi
-  echo $$ > "$seen/$name.pid"
   mkdir -p "$work"
   entry=${FAKE_RUNNER_PS_PID:-$$}
   add_to_table "$entry $*"
+  echo $$ > "$seen/$name.pid"
   if [ -z "$FAKE_RUNNER_PS_PID" ]; then
     trap 'drop_from_table $$; echo $? > "$seen/calls/$call.status"' EXIT
   fi
@@ -138,7 +156,7 @@ kill)
   if [ -n "$FAKE_RUNNER_HOLD" ]; then
     sleep 60 &
     echo $! > "$seen/$name.child"
-    while [ ! -e "$seen/release-$name" ] && [ -d "$root" ]; do
+    while [ ! -e "$seen/release-$name" ] && ! gone; do
       sleep 0.05
     done
     kill $! 2>/dev/null

@@ -8,11 +8,15 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::events::{Event, parse_events, wait_for};
+use super::events::{Event, parse_events, wait_for, wait_unless};
 use super::fixtures::{TestResult, host_toml};
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.sh");
 const FAKE_CURL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_curl.ts");
+const FAKE_SHAPES: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/fake_github_shapes.ts"
+);
 pub(super) const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_CONTROLLER_CHILD";
 
 pub(super) struct World {
@@ -43,17 +47,8 @@ fn curl_wrapper(bun: &Path) -> String {
         "#!/bin/sh\n\
          input=\"$VELNOR_FAKE_DIR/seen/.curl.$$\"\n\
          cat > \"$input\"\n\
-         attempt=0\n\
-         while [ \"$attempt\" -lt 3 ]; do\n\
-         attempt=$((attempt + 1))\n\
          {bun} \"$VELNOR_FAKE_DIR/fake_curl.ts\" < \"$input\"\n\
          status=$?\n\
-         case \"$status\" in\n\
-         0) rm -f \"$input\"; exit 0 ;;\n\
-         3|4) rm -f \"$input\"; exit \"$status\" ;;\n\
-         esac\n\
-         echo \"bun exited $status (attempt $attempt)\" >> \"$VELNOR_FAKE_DIR/seen/fake-retries\"\n\
-         done\n\
          rm -f \"$input\"\n\
          exit \"$status\"\n",
         bun = bun.display()
@@ -89,11 +84,15 @@ impl World {
             std::fs::create_dir_all(path)?;
         }
         std::fs::copy(FAKE_ORB, world.root.join("orb"))?;
-        std::fs::write(world.root.join("list.json"), r#"[{"name":"velnor"}]"#)?;
+        std::fs::write(
+            world.root.join("list.json"),
+            r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#,
+        )?;
         let runner = world.store.join("bin/velnor-runner");
         std::fs::write(&runner, "")?;
         std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755))?;
         std::fs::copy(FAKE_CURL, world.root.join("fake_curl.ts"))?;
+        std::fs::copy(FAKE_SHAPES, world.root.join("fake_github_shapes.ts"))?;
         let curl = world.root.join("bin/curl");
         std::fs::write(&curl, curl_wrapper(&bun()?))?;
         std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o700))?;
@@ -156,13 +155,14 @@ impl World {
 
     pub(super) fn configure_orb(&self, extra: &str) -> TestResult<()> {
         let env = format!(
-            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_REQUESTS={requests}\n{extra}",
+            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_REQUESTS={requests}\nFAKE_TEST_PID={pid}\n{extra}",
             log = self.root.join("orb.log").display(),
             list = self.root.join("list.json").display(),
             store = self.store.display(),
             seen = self.seen.display(),
             ps = self.root.join("ps.table").display(),
             requests = self.seen.join("requests").display(),
+            pid = std::process::id(),
         );
         let staging = self.root.join("fake_orb.env.staging");
         std::fs::write(&staging, env)?;
@@ -231,6 +231,21 @@ impl World {
         wait_for(what, seconds, || check(&self.events()));
     }
 
+    pub(super) fn wait_for_event_unless(
+        &self,
+        what: &str,
+        seconds: u64,
+        check: impl Fn(&[Event]) -> bool,
+        violation: impl Fn(&[Event]) -> Option<String>,
+    ) {
+        wait_unless(
+            what,
+            seconds,
+            || check(&self.events()),
+            || violation(&self.events()),
+        );
+    }
+
     pub(super) fn finish(&mut self, seconds: u64) -> TestResult<String> {
         let started = Instant::now();
         let mut child = self.child.take().ok_or("no controller child")?;
@@ -290,60 +305,51 @@ impl World {
 
     fn cleanup(&mut self) {
         if let Ok(entries) = std::fs::read_dir(&self.seen) {
-            let names: Vec<String> = entries
-                .filter_map(Result::ok)
-                .filter_map(|entry| entry.file_name().into_string().ok())
-                .collect();
-            for name in &names {
-                if let Some(jit) = name.strip_suffix(".pid") {
+            for entry in entries.filter_map(Result::ok) {
+                if let Some(jit) = entry.file_name().to_string_lossy().strip_suffix(".pid") {
                     let _ = std::fs::write(self.seen.join(format!("release-{jit}")), "");
                 }
             }
-            if let Some(child) = self.child.as_mut() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
-            for name in &names {
-                if name.strip_suffix(".pid").is_some()
-                    && let Ok(pid) = std::fs::read_to_string(self.seen.join(name))
-                {
-                    self.kill_if_ours(pid.trim());
-                }
-            }
+        }
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline && !self.kill_orbs().is_empty() {
+            std::thread::sleep(Duration::from_millis(50));
         }
     }
 
-    fn kill_if_ours(&self, pid: &str) {
-        let Ok(output) = Command::new("ps").args(["-o", "args=", "-p", pid]).output() else {
-            return;
+    fn kill_orbs(&self) -> Vec<String> {
+        let Ok(output) = Command::new("ps").args(["-axo", "pid=,args="]).output() else {
+            return Vec::new();
         };
-        let args = String::from_utf8_lossy(&output.stdout);
-        if output.status.success()
-            && args
-                .trim()
-                .starts_with(&format!("/bin/sh {}/orb ", self.root.display()))
-        {
+        let orb = format!("/bin/sh {}/orb ", self.root.display());
+        let found: Vec<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.trim().split_once(' '))
+            .filter(|(_, args)| args.trim_start().starts_with(&orb))
+            .map(|(pid, _)| pid.to_owned())
+            .collect();
+        for pid in &found {
             let _ = Command::new("kill").args(["-9", pid]).status();
         }
+        found
     }
 }
 
 impl Drop for World {
     fn drop(&mut self) {
-        if std::thread::panicking() {
-            self.cleanup();
-            eprintln!(
-                "--- requests ---\n{}",
-                std::fs::read_to_string(self.seen.join("requests")).unwrap_or_default()
-            );
-            eprintln!(
-                "--- child stdout ---\n{}",
-                std::fs::read_to_string(self.root.join("child.out")).unwrap_or_default()
-            );
-            eprintln!("--- child stderr ---\n{}", self.child_stderr());
-        } else if let Some(child) = self.child.as_mut() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        self.cleanup();
+        eprintln!(
+            "--- requests ---\n{}",
+            std::fs::read_to_string(self.seen.join("requests")).unwrap_or_default()
+        );
+        eprintln!(
+            "--- child stdout ---\n{}",
+            std::fs::read_to_string(self.root.join("child.out")).unwrap_or_default()
+        );
+        eprintln!("--- child stderr ---\n{}", self.child_stderr());
     }
 }

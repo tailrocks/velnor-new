@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use super::events::{Event, wait_for};
 use super::harness::World;
 
+#[derive(Debug)]
 pub(super) struct Snapshot {
     pub(super) jit: Vec<String>,
     pub(super) work: Vec<String>,
@@ -25,6 +26,14 @@ pub(super) fn assert_clean(world: &World, capacity: &str) {
         !world.state.join("launch.db").exists(),
         "launch.db was created"
     );
+}
+
+pub(super) fn assert_capacity(world: &World, capacity: &str) {
+    let polls = world.gh("poll");
+    assert!(!polls.is_empty(), "the controller never polled");
+    for poll in polls {
+        assert_eq!(poll.field("capacity"), capacity, "poll {}", poll.seq);
+    }
 }
 
 pub(super) fn reservation(event: &Event) -> u64 {

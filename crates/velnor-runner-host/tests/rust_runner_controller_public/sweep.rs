@@ -7,7 +7,7 @@ use std::time::Instant;
 use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{assert_clean, reservation, snapshot};
+use super::checks::{assert_capacity, assert_clean, reservation, snapshot};
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -38,6 +38,10 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         std::fs::Permissions::from_mode(0o700),
     )?;
     std::fs::create_dir_all(world.store.join("work/99"))?;
+    std::fs::set_permissions(
+        world.store.join("work"),
+        std::fs::Permissions::from_mode(0o700),
+    )?;
     std::fs::write(world.store.join("jit/99.jit"), "stale")?;
     std::fs::set_permissions(
         world.store.join("jit/99.jit"),
@@ -174,6 +178,7 @@ fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     );
     let own = reservation(&world.gh("jit")[0]);
     assert!(state.jit.iter().all(|name| name == &format!("{own}.jit")) || state.jit.is_empty());
+    assert_capacity(world, "1");
     world.stop()?;
     assert_eq!(world.finish(10)?, "Ok(Shutdown)");
     Ok(())
