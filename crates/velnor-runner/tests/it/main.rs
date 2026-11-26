@@ -5,6 +5,8 @@
 mod cancel;
 #[path = "exec_commands.rs"]
 mod commands;
+#[path = "exec_drain.rs"]
+mod drain;
 #[path = "exec_builder.rs"]
 mod exec_builder;
 #[path = "exec_cli.rs"]

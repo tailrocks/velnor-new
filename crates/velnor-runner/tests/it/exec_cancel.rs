@@ -31,8 +31,12 @@ async fn run_and_cancel_after_300ms(fixture: &str) -> Result<JobRun> {
         ),
     )
     .await
-    .context("run_job returns after the cancel")?;
-    assert!(started.elapsed() < Duration::from_secs(10));
+    .context("a cancelled job stops its running step instead of waiting for it to end")?;
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "a cancelled job took {:?} to finish",
+        started.elapsed()
+    );
     Ok(run)
 }
 

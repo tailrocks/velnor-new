@@ -166,6 +166,7 @@ impl Job<'_> {
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
             let step_env = step_environment(step, &env);
+            let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
             let step_expr = self
                 .ctx
                 .expr_env(self.status, step_env.as_deref().unwrap_or_default());
@@ -183,14 +184,21 @@ impl Job<'_> {
                     result: StepResult::Failed,
                     outputs: Vec::new(),
                     summary: None,
+                    env: Vec::new(),
                 }
             });
             outputs = executed.outputs;
             record.summary_path = executed.summary;
             record.outcome = executed.result;
             record.conclusion = if executed.result == StepResult::Failed
-                && continue_on_error(step, &step_expr, out)
-            {
+                && continue_on_error(
+                    step,
+                    &self.ctx.expr_env(
+                        self.status,
+                        &[step_vars.as_slice(), executed.env.as_slice()].concat(),
+                    ),
+                    out,
+                ) {
                 StepResult::Succeeded
             } else {
                 executed.result

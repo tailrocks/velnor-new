@@ -21,6 +21,7 @@ pub(super) struct Executed {
     pub(super) result: StepResult,
     pub(super) outputs: Vec<(String, String)>,
     pub(super) summary: Option<PathBuf>,
+    pub(super) env: Vec<(String, String)>,
 }
 
 type Ran = Result<(StepResult, Vec<(String, String)>), ExecError>;
@@ -164,6 +165,7 @@ impl Job<'_> {
             result,
             outputs,
             summary,
+            env: writes,
         })
     }
 }

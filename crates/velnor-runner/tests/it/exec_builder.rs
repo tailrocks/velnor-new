@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -95,6 +95,47 @@ pub(crate) fn finished(mut command: Command) -> Result<Ran> {
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         code: output.status.code(),
+        elapsed: started.elapsed(),
+    })
+}
+
+fn drained(pipe: Option<impl std::io::Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
+pub(crate) fn finished_within(mut command: Command, limit: Duration) -> Result<Ran> {
+    let started = Instant::now();
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("start velnor-runner exec")?;
+    let stdout = drained(child.stdout.take());
+    let stderr = drained(child.stderr.take());
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if started.elapsed() > limit {
+            child.kill().context("stop the stuck runner")?;
+            child.wait().context("reap the stuck runner")?;
+            bail!("velnor-runner exec did not finish within {limit:?}");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let collect = |handle: std::thread::JoinHandle<Vec<u8>>| {
+        String::from_utf8_lossy(&handle.join().unwrap_or_default()).into_owned()
+    };
+    Ok(Ran {
+        stdout: collect(stdout),
+        stderr: collect(stderr),
+        code: status.code(),
         elapsed: started.elapsed(),
     })
 }

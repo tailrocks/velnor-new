@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rustix::fs::OFlags;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
@@ -13,7 +14,7 @@ use super::{AnnotationLevel, ExecError};
 
 const DIRECTORY: &str = "_runner_file_commands";
 const SUMMARY_DIRECTORY: &str = "step_summary";
-const MAX_SUMMARY_BYTES: usize = 1 << 20;
+const FILE_LIMIT: usize = 1 << 20;
 
 #[derive(Debug)]
 pub(super) struct FileCommands {
@@ -38,18 +39,41 @@ async fn create_file(directory: &Path, kind: &str) -> Result<PathBuf, ExecError>
     Ok(path)
 }
 
-async fn read_bounded(path: &Path, limit: u64) -> std::io::Result<Vec<u8>> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Command,
+    Summary,
+}
+
+fn invalid(message: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message)
+}
+
+async fn read_bounded(path: &Path, kind: Kind) -> std::io::Result<Vec<u8>> {
+    let file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(OFlags::NONBLOCK.bits().cast_signed())
+        .open(path)
+        .await?;
+    let metadata = file.metadata().await?;
+    if kind == Kind::Summary && metadata.len() == 0 {
+        return Ok(Vec::new());
+    }
+    if !metadata.is_file() {
+        return Err(invalid("not a regular file".to_owned()));
+    }
     let mut bytes = Vec::new();
-    tokio::fs::File::open(path)
-        .await?
-        .take(limit)
+    file.take(FILE_LIMIT as u64 + 1)
         .read_to_end(&mut bytes)
         .await?;
+    if kind == Kind::Command && bytes.len() > FILE_LIMIT {
+        return Err(invalid(format!("larger than {FILE_LIMIT} bytes")));
+    }
     Ok(bytes)
 }
 
-async fn read_text(path: &Path, limit: u64) -> Result<String, ExecError> {
-    let read = read_bounded(path, limit).await;
+async fn read_text(path: &Path, kind: Kind) -> Result<String, ExecError> {
+    let read = read_bounded(path, kind).await;
     let _ = tokio::fs::remove_file(path).await;
     match read {
         Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
@@ -66,7 +90,7 @@ fn failure(context: &str, error: &ExecError) -> [String; 2] {
 }
 
 async fn pairs(path: &Path, context: &str, failures: &mut Vec<String>) -> Vec<(String, String)> {
-    let text = match read_text(path, u64::MAX).await {
+    let text = match read_text(path, Kind::Command).await {
         Ok(text) => text,
         Err(error) => {
             failures.extend(failure(context, &error));
@@ -108,7 +132,7 @@ impl FileCommands {
         let mut failures = Vec::new();
         let env = pairs(&self.env, "env", &mut failures).await;
         let outputs = pairs(&self.output, "output", &mut failures).await;
-        let path = match read_text(&self.path, u64::MAX).await {
+        let path = match read_text(&self.path, Kind::Command).await {
             Ok(text) => text
                 .lines()
                 .filter(|line| !line.is_empty())
@@ -119,7 +143,7 @@ impl FileCommands {
                 Vec::new()
             }
         };
-        let summary = match read_text(&self.summary, MAX_SUMMARY_BYTES as u64 + 1).await {
+        let summary = match read_text(&self.summary, Kind::Summary).await {
             Ok(text) => text,
             Err(error) => {
                 failures.extend(failure("step_summary", &error));
@@ -144,10 +168,10 @@ pub(super) async fn save_summary(
     if summary.trim().is_empty() {
         return Ok(None);
     }
-    if summary.len() > MAX_SUMMARY_BYTES {
+    if summary.len() > FILE_LIMIT {
         out.annotate(
             AnnotationLevel::Error,
-            format!("Step summary exceeds the {MAX_SUMMARY_BYTES} byte limit and was dropped."),
+            format!("Step summary exceeds the {FILE_LIMIT} byte limit and was dropped."),
         );
         return Ok(None);
     }

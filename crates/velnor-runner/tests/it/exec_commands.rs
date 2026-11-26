@@ -75,6 +75,28 @@ async fn stop_commands_suspend_workflow_commands_until_the_token() -> Result<()>
 }
 
 #[tokio::test]
+async fn a_stop_that_is_never_resumed_ends_with_its_step() -> Result<()> {
+    let (run, _) = execute(
+        &job(vec![
+            run("a", "echo '::stop-commands::never-resumed-5'"),
+            run("b", "echo '::warning::second-step'"),
+        ]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    let warnings: Vec<&str> = run
+        .annotations
+        .iter()
+        .filter(|annotation| annotation.level == AnnotationLevel::Warning)
+        .map(|annotation| annotation.message.as_str())
+        .collect();
+    assert_eq!(warnings, ["second-step"]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_stop_token_that_names_a_command_fails_the_step() -> Result<()> {
     let (run, _) = execute(
         &job(vec![run(

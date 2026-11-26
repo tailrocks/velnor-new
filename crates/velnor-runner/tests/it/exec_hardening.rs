@@ -93,8 +93,12 @@ fn env_names_are_case_sensitive() -> Result<()> {
 }
 
 fn signalling_the_runner_kills_the_step_group(signal: Signal) -> Result<()> {
+    signalled_runner_cancels_the_job(signal, BACKGROUND_SLEEP)
+}
+
+fn signalled_runner_cancels_the_job(signal: Signal, script: &str) -> Result<()> {
     let scratch = Scratch::new()?;
-    let path = write_job(&scratch, &job(vec![run("hold", BACKGROUND_SLEEP)]))?;
+    let path = write_job(&scratch, &job(vec![run("hold", script)]))?;
     let child = bounded(&scratch, &path)
         .stdout(Stdio::piped())
         .spawn()
@@ -102,6 +106,7 @@ fn signalling_the_runner_kills_the_step_group(signal: Signal) -> Result<()> {
     let pid_file = scratch.options().temp.join("bg.pid");
     wait_for_file(&pid_file)?;
     let runner = Pid::from_raw(i32::try_from(child.id())?).context("the runner pid")?;
+    let signalled = Instant::now();
     kill_process(runner, signal).context("send the signal")?;
     let output = child.wait_with_output().context("wait for the runner")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -110,7 +115,20 @@ fn signalling_the_runner_kills_the_step_group(signal: Signal) -> Result<()> {
         "{stdout}"
     );
     assert_eq!(output.status.code(), Some(1));
+    assert!(
+        signalled.elapsed() < Duration::from_secs(4),
+        "the runner took {:?} to cancel the job",
+        signalled.elapsed()
+    );
     assert_gone(pid_from(&pid_file)?)
+}
+
+#[test]
+fn terminating_the_runner_while_it_drains_a_finished_step_cancels_the_job() -> Result<()> {
+    signalled_runner_cancels_the_job(
+        Signal::TERM,
+        "(for i in $(seq 1 30); do echo tick; sleep 1; done) &\necho $! > \"$RUNNER_TEMP/bg.pid\"",
+    )
 }
 
 #[test]
@@ -186,7 +204,7 @@ async fn cancel_kills_the_whole_step_group() -> Result<()> {
         ),
     )
     .await
-    .context("run_job returns after the cancel")?;
+    .context("a cancelled job kills its step group and finishes within 20 s")?;
     assert_eq!(run.result, JobResult::Cancelled);
     assert!(
         recorder.lines.iter().any(|line| line == "bg-dead"),

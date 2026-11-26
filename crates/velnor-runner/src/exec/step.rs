@@ -1,17 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future::Future;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
+use rustix::process::Pid;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 use uuid::Uuid;
 
-use super::cancel::{Groups, terminate};
+use super::cancel::{Groups, group_of, terminate};
 use super::output::Output;
 use super::private;
 use super::shell;
@@ -134,26 +137,16 @@ fn finish_line(line: &mut Vec<u8>, truncated: &mut bool) {
     }
 }
 
-async fn supervise(
+async fn supervise<S>(
     child: &mut Child,
+    group: Option<Pid>,
     lines: &mut mpsc::Receiver<Chunk>,
-    limits: &Limits<'_>,
+    stop: &mut S,
     mut on_chunk: impl FnMut(Chunk),
-) -> Result<Ending, ExecError> {
-    let deadline = deadline(limits.minutes);
-    let timer = async {
-        match deadline {
-            Some(duration) => tokio::time::sleep(duration).await,
-            None => std::future::pending().await,
-        }
-    };
-    let cancelled = async {
-        match limits.cancel {
-            Some(cancel) => cancel.cancelled().await,
-            None => std::future::pending().await,
-        }
-    };
-    tokio::pin!(timer, cancelled);
+) -> Result<Ending, ExecError>
+where
+    S: Future<Output = Ending> + Unpin,
+{
     let mut open = true;
     loop {
         tokio::select! {
@@ -166,14 +159,48 @@ async fn supervise(
                     .map(Ending::Exited)
                     .map_err(|source| ExecError::io("wait for the step process", source));
             }
-            () = &mut timer => {
-                terminate(child).await;
-                return Ok(Ending::TimedOut);
+            stopped = &mut *stop => {
+                terminate(child, group).await;
+                return Ok(stopped);
             }
-            () = &mut cancelled => {
-                terminate(child).await;
-                return Ok(Ending::Cancelled);
+        }
+    }
+}
+
+enum Drained {
+    Closed,
+    Cut,
+    Stopped(Ending),
+}
+
+async fn drain<S>(
+    lines: &mut mpsc::Receiver<Chunk>,
+    stop: &mut S,
+    watch: bool,
+    mut on_chunk: impl FnMut(Chunk),
+) -> Drained
+where
+    S: Future<Output = Ending> + Unpin,
+{
+    let mut waited = Duration::ZERO;
+    let mut backlog = DRAIN_LIMIT;
+    loop {
+        let started = Instant::now();
+        let received = tokio::select! {
+            stopped = &mut *stop, if watch => return Drained::Stopped(stopped),
+            received = tokio::time::timeout(DRAIN_GRACE.saturating_sub(waited), lines.recv()) => received,
+        };
+        waited += started.elapsed();
+        match received {
+            Ok(Some(chunk)) => {
+                backlog = backlog.saturating_sub(chunk.bytes.len().max(1));
+                on_chunk(chunk);
+                if backlog == 0 {
+                    return Drained::Cut;
+                }
             }
+            Ok(None) => return Drained::Closed,
+            Err(_) => return Drained::Cut,
         }
     }
 }
@@ -210,6 +237,7 @@ async fn drive(
         )
     })?;
     limits.groups.track(&child);
+    let group = group_of(&child);
     let (sender, mut lines) = mpsc::channel(LINE_BUFFER);
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
@@ -229,27 +257,40 @@ async fn drive(
         )));
     }
     drop(sender);
-    let ending = supervise(&mut child, &mut lines, limits, &mut on_chunk).await;
-    let mut backlog = DRAIN_LIMIT;
-    let drained = loop {
-        match tokio::time::timeout(DRAIN_GRACE, lines.recv()).await {
-            Ok(Some(chunk)) => {
-                backlog = backlog.saturating_sub(chunk.bytes.len().max(1));
-                on_chunk(chunk);
-                if backlog == 0 {
-                    break false;
-                }
-            }
-            Ok(None) => break true,
-            Err(_) => break false,
+    let timer = async {
+        match deadline(limits.minutes) {
+            Some(duration) => tokio::time::sleep(duration).await,
+            None => std::future::pending().await,
         }
     };
-    if !drained {
+    let cancelled = async {
+        match limits.cancel {
+            Some(cancel) => cancel.cancelled().await,
+            None => std::future::pending().await,
+        }
+    };
+    let stop = async {
+        tokio::select! {
+            () = timer => Ending::TimedOut,
+            () = cancelled => Ending::Cancelled,
+        }
+    };
+    tokio::pin!(stop);
+    let ending = supervise(&mut child, group, &mut lines, &mut stop, &mut on_chunk).await;
+    let watch = matches!(ending, Ok(Ending::Exited(_)));
+    let drained = drain(&mut lines, &mut stop, watch, on_chunk).await;
+    if !matches!(drained, Drained::Closed) {
         for reader in &readers {
             reader.abort();
         }
     }
-    ending
+    match drained {
+        Drained::Stopped(stopped) => {
+            terminate(&mut child, group).await;
+            Ok(stopped)
+        }
+        Drained::Closed | Drained::Cut => ending,
+    }
 }
 
 pub(super) async fn run(

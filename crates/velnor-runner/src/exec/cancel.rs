@@ -50,17 +50,11 @@ impl Default for JobCancel {
     }
 }
 
-fn group_of(child: &Child) -> Option<Pid> {
+pub(super) fn group_of(child: &Child) -> Option<Pid> {
     child
         .id()
         .and_then(|id| i32::try_from(id).ok())
         .and_then(Pid::from_raw)
-}
-
-fn signal_group(child: &Child, signal: Signal) {
-    if let Some(pid) = group_of(child) {
-        let _ = kill_process_group(pid, signal);
-    }
 }
 
 #[derive(Debug, Default)]
@@ -93,9 +87,10 @@ fn group_alive(group: Pid) -> bool {
     test_kill_process_group(group).is_ok()
 }
 
-pub(super) async fn terminate(child: &mut Child) {
-    let group = group_of(child);
-    signal_group(child, Signal::TERM);
+pub(super) async fn terminate(child: &mut Child, group: Option<Pid>) {
+    if let Some(group) = group {
+        let _ = kill_process_group(group, Signal::TERM);
+    }
     let deadline = tokio::time::Instant::now() + KILL_GRACE;
     let _ = tokio::time::timeout_at(deadline, child.wait()).await;
     if let Some(group) = group {
