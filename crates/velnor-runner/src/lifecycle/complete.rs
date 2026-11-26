@@ -120,7 +120,7 @@ pub(super) fn build(
             .collect(),
         annotations,
         telemetry: Vec::new(),
-        environment_url: None,
+        environment_url: run.environment_url.clone(),
         billing_owner_id: message.billing_owner_id.clone(),
         infrastructure_failure_category: None,
     }

@@ -117,7 +117,7 @@ fn is_retriable(error: &anyhow::Error) -> bool {
     api_status(error).is_none_or(|status| status >= 500 || matches!(status, 408 | 429))
 }
 
-pub(super) fn backoff(base: Duration, streak: u32) -> Duration {
+fn backoff(base: Duration, streak: u32) -> Duration {
     base.saturating_mul(
         1_u32
             .checked_shl(streak.saturating_sub(1))
@@ -304,7 +304,7 @@ impl Session {
     }
 }
 
-async fn retry_poll(
+pub(super) async fn retry_poll(
     error: anyhow::Error,
     streak: u32,
     error_delay: Duration,
@@ -312,7 +312,7 @@ async fn retry_poll(
     if !is_retriable(&error) || streak >= MAX_CONSECUTIVE_POLL_ERRORS {
         return Err(LifecycleError::Poll(error));
     }
-    eprintln!("warning: waiting for a job failed, retrying: {error:#}");
+    eprintln!("warning: polling the broker failed, retrying: {error:#}");
     tokio::time::sleep(backoff(error_delay, streak)).await;
     Ok(())
 }

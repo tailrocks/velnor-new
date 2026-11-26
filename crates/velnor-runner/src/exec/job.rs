@@ -20,6 +20,8 @@ use super::{AnnotationLevel, JobCancel, JobResult, JobRun, RunOptions, StepRecor
 use crate::expr::JobStatus;
 use crate::job_message::{ActionStep, AgentJobRequestMessage};
 
+mod environment;
+
 pub(super) struct Job<'a> {
     pub(super) options: &'a RunOptions,
     pub(super) adapters: &'a AdapterRegistry,
@@ -48,6 +50,7 @@ pub async fn run_job(
         result: JobResult::Failed,
         steps: Vec::new(),
         outputs: BTreeMap::new(),
+        environment_url: None,
         annotations: Vec::new(),
     };
     let mut masker = Masker::default();
@@ -112,6 +115,7 @@ impl Job<'_> {
             run.steps.push(record);
         }
         self.collect_outputs(out, run).await;
+        self.collect_environment_url(out, run).await;
         self.groups.kill_all();
         run.result = match self.status {
             JobStatus::Success => JobResult::Succeeded,

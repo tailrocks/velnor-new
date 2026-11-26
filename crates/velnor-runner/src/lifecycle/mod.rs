@@ -67,7 +67,7 @@ pub enum LifecycleError {
     SignIn(anyhow::Error),
     #[error("create the broker session: {0:#}")]
     Session(anyhow::Error),
-    #[error("wait for a job: {0:#}")]
+    #[error("poll the broker: {0:#}")]
     Poll(anyhow::Error),
     #[error("acquire the job: {0:#}")]
     Acquire(anyhow::Error),
@@ -244,7 +244,7 @@ async fn run_and_report(
     let files = LogFiles::create(root).await?;
     let cancel = options.shutdown.clone();
     let grace = CancelGrace::new(options.cancel_timeout_floor);
-    let poll = cancel_poll::spawn_cancel_poll(
+    let _poll = cancel_poll::spawn_cancel_poll(
         Arc::clone(session),
         message.job_id.clone(),
         cancel.clone(),
@@ -270,7 +270,7 @@ async fn run_and_report(
             .map_err(LifecycleError::Renew)?,
     }
     let (mut sink, events) = GithubSink::channel(&files)?;
-    let reporter = Reporter::new(
+    let mut reporter = Reporter::new(
         connection,
         message,
         files,
@@ -279,15 +279,22 @@ async fn run_and_report(
         options.feed_flush_interval,
     )
     .spawn(events);
+    let mut deadline = std::pin::pin!(cancel_deadline(&cancel, &grace));
     let run = tokio::select! {
         run = run_job(message, run_options, &options.adapters, &mut sink, cancel.clone()) => Some(run),
-        () = cancel_deadline(&cancel, &grace) => None,
+        () = deadline.as_mut() => None,
     };
-    drop(poll);
     drop(sink);
-    let report = reporter.await.unwrap_or_default();
-    Ok(match run {
-        Some(run) => Finish::Ran(run, report),
-        None => Finish::Abandoned(report),
-    })
+    let Some(run) = run else {
+        return Ok(Finish::Abandoned(reporter.await.unwrap_or_default()));
+    };
+    let report = tokio::select! {
+        report = &mut reporter => report.unwrap_or_default(),
+        () = deadline.as_mut() => {
+            reporter.abort();
+            let dropped = ReportSummary { logs_dropped: true, ..ReportSummary::default() };
+            return Ok(Finish::Abandoned(dropped));
+        }
+    };
+    Ok(Finish::Ran(run, report))
 }

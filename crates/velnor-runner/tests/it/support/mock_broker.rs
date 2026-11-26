@@ -147,10 +147,14 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
     );
     let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
     let (cancel_after, decoy_first, hosted_shutdown) = match behavior.cancel {
-        Cancel::Never => (None, false, false),
+        Cancel::Never | Cancel::BusyPollFails(_) => (None, false, false),
         Cancel::After(after) => (Some(after), false, false),
         Cancel::AfterACancelOfAnotherJob(after) => (Some(after), true, false),
         Cancel::HostedShutdownAfter(after) => (Some(after), false, true),
+    };
+    let busy_failure = match behavior.cancel {
+        Cancel::BusyPollFails(status) => Some(status),
+        _ => None,
     };
     let online = behavior.online;
     let refresh = message(&kind("ForceTokenRefresh"), &json!({}));
@@ -171,6 +175,9 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
             Some("Online") => Reply::json(200, &request),
             Some("Busy") => {
                 let number = busy_polls.fetch_add(1, Ordering::SeqCst);
+                if let Some(status) = busy_failure {
+                    return Reply::status(status);
+                }
                 match cancel_after {
                     _ if decoy_first && number == 0 => Reply::json(200, &decoy),
                     Some(after) if !delivered.swap(true, Ordering::SeqCst) => {

@@ -144,6 +144,7 @@ pub struct JobRun {
     pub result: JobResult,
     pub steps: Vec<StepRecord>,
     pub outputs: BTreeMap<String, String>,
+    pub environment_url: Option<String>,
     pub annotations: Vec<Annotation>,
 }
 
