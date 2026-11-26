@@ -158,7 +158,6 @@ pub(crate) fn check(needs_max_bytes: usize, trusted_api: bool) -> RenderedStep {
     RenderedStep {
         name: "Check cache waste".to_owned(),
         run: Some("velnor-ci report --check \"$RUNNER_TEMP/ci-metrics\"".to_owned()),
-        continue_on_error: true,
         env: vec![(
             "VELNOR_REPORT_NEEDS".to_owned(),
             Value::BoundedExpr {

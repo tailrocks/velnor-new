@@ -171,7 +171,7 @@ fn assert_unified_cache_verdict(workflow: &serde_json::Value) -> TestResult {
         .iter()
         .position(|step| step["name"] == "Check cache waste")
         .ok_or("waste check")?;
-    assert_eq!(steps[waste]["continue-on-error"], true);
+    assert_ne!(steps[waste]["continue-on-error"], true);
     let needs = cache["needs"].as_array().ok_or("cache needs")?;
     assert!(needs.iter().any(|need| need == "rust-trim"));
     for (id, job) in jobs
@@ -347,7 +347,7 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
                     .is_some_and(|name| name.starts_with("Fetch the sources of root "));
             assert_eq!(
                 step["continue-on-error"].as_bool().unwrap_or(false),
-                producer || verified_save || verification || step["name"] == "Check cache waste",
+                producer || verified_save || verification,
                 "{step}"
             );
         }
