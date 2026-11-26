@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use futures_util::FutureExt;
@@ -71,14 +71,29 @@ fn resolve_inputs(
     action: &Action,
     given: &BTreeMap<String, String>,
 ) -> Result<ContextValue, ExecError> {
-    if let Some(name) = given.keys().find(|name| !action.inputs.contains_key(*name)) {
+    let declared: BTreeSet<String> = action
+        .inputs
+        .keys()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    if let Some(name) = given
+        .keys()
+        .find(|name| !declared.contains(&name.to_ascii_lowercase()))
+    {
         return Err(ExecError::Unsupported(format!(
             "setup-velnor input '{name}' is not supported by velnor-runner"
         )));
     }
+    let given: BTreeMap<String, &String> = given
+        .iter()
+        .map(|(name, value)| (name.to_ascii_lowercase(), value))
+        .collect();
     let mut entries = Vec::new();
     for (name, definition) in &action.inputs {
-        let value = given.get(name).or(definition.default.as_ref());
+        let value = given
+            .get(&name.to_ascii_lowercase())
+            .copied()
+            .or(definition.default.as_ref());
         match value {
             Some(value) => entries.push((name.clone(), ContextValue::String(value.clone()))),
             None if definition.required => {

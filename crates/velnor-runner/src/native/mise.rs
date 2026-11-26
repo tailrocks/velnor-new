@@ -146,10 +146,11 @@ async fn mise_capture(
     ctx: &mut StepContext<'_>,
     install: &Install,
     args: &[&str],
+    process_env: &[(String, String)],
 ) -> Result<String, ExecError> {
     let words: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
     let program = install.binary.to_string_lossy().into_owned();
-    let env = ctx.env_with(&install.process_env(ctx));
+    let env = ctx.env_with(process_env);
     ctx.capture((&program, &words, ctx.workspace, &env)).await
 }
 
@@ -158,7 +159,8 @@ async fn mise_json(
     install: &Install,
     args: &[&str],
 ) -> Result<BTreeMap<String, String>, ExecError> {
-    let output = mise_capture(ctx, install, args).await?;
+    let process_env = install.process_env(ctx);
+    let output = mise_capture(ctx, install, args, &process_env).await?;
     let values: BTreeMap<String, serde_json::Value> = serde_json::from_str(&output)
         .map_err(|error| ExecError::Invalid(format!("mise {} output: {error}", args.join(" "))))?;
     Ok(values
@@ -238,6 +240,12 @@ impl Install {
         ));
         env
     }
+
+    fn probe_env(&self, ctx: &StepContext<'_>) -> Vec<(String, String)> {
+        let mut env = self.process_env(ctx);
+        env.push(("MISE_NO_ENV".to_owned(), "1".to_owned()));
+        env
+    }
 }
 
 async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), ExecError> {
@@ -275,7 +283,8 @@ pub(crate) async fn mise_action(
     let binary = locate_binary(inputs, &tools).await?;
     let lock = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &lock, binary);
-    let loaded = mise_capture(ctx, &install, &["config", "ls", "--json"]).await?;
+    let probe_env = install.probe_env(ctx);
+    let loaded = mise_capture(ctx, &install, &["config", "ls", "--json"], &probe_env).await?;
     require_sole_config(ctx.workspace, &loaded).await?;
     let mut args = vec!["install".to_owned(), "--locked".to_owned()];
     args.extend(inputs.install_args.split_whitespace().map(str::to_owned));

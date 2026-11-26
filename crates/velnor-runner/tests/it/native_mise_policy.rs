@@ -80,6 +80,37 @@ fn mise_action_requires_the_lockfile_setting_to_be_true() -> Result<()> {
 }
 
 #[test]
+fn mise_action_evaluates_no_env_before_it_accepts_the_config() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let marker = world.temp().join("sourced");
+    let workspace = world.workspace();
+    std::fs::write(
+        workspace.join("mise.local.toml"),
+        "[env]\n_.source = \"./x.sh\"\n",
+    )
+    .context("plant mise.local.toml")?;
+    std::fs::write(
+        workspace.join("x.sh"),
+        format!("echo ran > {}\n", marker.display()),
+    )
+    .context("plant x.sh")?;
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    assert!(
+        ran.lines()
+            .iter()
+            .any(|line| line.starts_with("unsupported: mise policy: mise loads [")),
+        "{}",
+        ran.stdout
+    );
+    assert!(ran.has_line("step 1 failed"), "{}", ran.stdout);
+    assert!(!marker.exists(), "mise evaluated the planted _.source");
+    assert_eq!(world.mise_installs(), Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
 fn mise_action_rejects_every_other_config_mise_loads() -> Result<()> {
     let cases: [(&str, &[(&str, &str)]); 11] = [
         ("mise/config.toml", &[]),

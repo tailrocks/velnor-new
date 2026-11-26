@@ -139,6 +139,7 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod native_mise;
+mod native_mise_inputs;
 mod native_mise_policy;
 mod native_setup_velnor;
 mod protocol_broker;

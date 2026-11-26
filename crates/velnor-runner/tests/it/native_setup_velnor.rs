@@ -277,6 +277,32 @@ fn setup_velnor_rejects_an_input_key_it_does_not_implement() -> Result<()> {
 }
 
 #[test]
+fn setup_velnor_matches_input_names_case_insensitively() -> Result<()> {
+    let world = World::new()?;
+    let action = real_action()?.replacen(
+        "inputs:\n",
+        "inputs:\n  install-args:\n    description: Extra install arguments.\n    default: ''\n",
+        1,
+    );
+    let sha = world.publish_action(&action)?;
+    let job = world.with_text(
+        &job_fixture("setup_velnor_real_action"),
+        &[
+            (SHA_PLACEHOLDER, &sha),
+            ("\"lit\": \"version\"", "\"lit\": \"Version\""),
+            (
+                "\"lit\": \"sha256-macos-arm64\"",
+                "\"lit\": \"Install-Args\"",
+            ),
+        ],
+    )?;
+    let ran = world.run(&job, &[])?;
+    assert!(ran.has_line(REAL_ERROR), "{}", ran.stdout);
+    assert!(!ran.stdout.contains("unsupported"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
 fn setup_velnor_accepts_the_repository_in_any_case() -> Result<()> {
     let world = World::new()?;
     let sha = world.publish_action(&real_action()?)?;
