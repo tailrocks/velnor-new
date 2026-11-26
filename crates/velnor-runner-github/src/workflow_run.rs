@@ -95,6 +95,9 @@ pub struct GitHubRepository {
 
     #[serde(default)]
     pub private: bool,
+
+    #[serde(default)]
+    pub default_branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]

@@ -7,7 +7,9 @@ use std::process::{Command as ProcessCommand, ExitCode};
 use std::time::Duration;
 
 use clap::Parser;
-use velnor_runner_host::{LaunchMode, READINESS_BUDGET, Readiness, doctor_json, status_json};
+use velnor_runner_host::{
+    HostError, LaunchMode, READINESS_BUDGET, Readiness, RustRunnerFailure, doctor_json, status_json,
+};
 
 use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
 use crate::state_directory::user_home;
@@ -53,8 +55,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
     };
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
+        Command::Doctor { probe: true } if in_rust_runner_mode(&state) => command_unavailable(),
         Command::Doctor { probe } => print_doctor(&state, *probe),
         Command::Logs { follow } => logs(*follow),
+        Command::Drain { wait: true } if in_rust_runner_mode(&state) => command_unavailable(),
         Command::Drain { wait } => drain(&state, *wait),
         Command::Resume => remove_flag(&state, "drain"),
         Command::Credential { action } => match action {
@@ -106,6 +110,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Service { action } => crate::service::service(*action, &state),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { .. } => ExitCode::from(1),
+        Command::Disconnect { .. } if in_rust_runner_mode(&state) => command_unavailable(),
         Command::Disconnect {
             connection_id,
             wait,
@@ -113,6 +118,21 @@ fn dispatch(cli: &Cli) -> ExitCode {
         #[cfg(feature = "local-mode")]
         Command::Local => local(cli.state.as_deref()),
     }
+}
+
+fn in_rust_runner_mode(state: &Path) -> bool {
+    matches!(
+        connection_state::read_host(state),
+        Ok(Some(config)) if config.host.launch_mode == LaunchMode::RustRunner
+    )
+}
+
+fn command_unavailable() -> ExitCode {
+    eprintln!(
+        "{}",
+        HostError::RustRunner(RustRunnerFailure::CommandUnavailable)
+    );
+    ExitCode::from(1)
 }
 
 #[cfg(feature = "local-mode")]
