@@ -5,6 +5,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
@@ -252,11 +253,16 @@ struct Scratch {
 
 impl Scratch {
     fn create() -> Result<Self, CurlFail> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| CurlFail::Reset)?
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("velnor-https-{nanos}"));
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "velnor-https-{}-{sequence}-{nanos}",
+            std::process::id()
+        ));
         fs::create_dir(&dir).map_err(|_| CurlFail::Reset)?;
         let perms = std::os::unix::fs::PermissionsExt::from_mode(0o700);
         fs::set_permissions(&dir, perms).map_err(|_| CurlFail::Reset)?;
