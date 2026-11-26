@@ -27,7 +27,7 @@ fn attack(plant: impl FnOnce(&Plant) -> Result<()>) -> Result<()> {
     let rig = Rig::new()?;
     let sink = TlsSink::start(&rig.root)?;
     let mirror = rig.store().join(format!(
-        "git/{HOST}+{}/tailrocks/velnor-new/0.git",
+        "git/{HOST}+{}/tailrocks/velnor-new/1.git",
         sink.port
     ));
     git_init(&mirror, &["--bare"])?;

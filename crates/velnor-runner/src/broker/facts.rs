@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroU64;
+
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -150,13 +152,14 @@ pub(crate) enum TrustedEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TrustedFacts {
-    pub(crate) repository_id: u64,
+    pub(crate) repository_id: NonZeroU64,
     pub(crate) repository: RepoName,
     pub(crate) server_url: ServerUrl,
     pub(crate) default_branch: String,
     pub(crate) sha: CommitId,
     pub(crate) run_id: u64,
     pub(crate) run_attempt: u32,
+    pub(crate) event_name: String,
     pub(crate) event: TrustedEvent,
 }
 
@@ -268,7 +271,14 @@ impl TrustedFacts {
         let repository = RepoName::try_from(required(github, "repository")?.to_owned())?;
         let event = event_of(github, &repository)?;
         Ok(Self {
-            repository_id: number(github, "repository_id"),
+            repository_id: required(github, "repository_id")?.parse().map_err(|_| {
+                FactsError::Invalid {
+                    field: "repository_id",
+                    value: required(github, "repository_id")
+                        .unwrap_or_default()
+                        .to_owned(),
+                }
+            })?,
             server_url: ServerUrl::try_from(required(github, "server_url")?.to_owned())?,
             default_branch: text(github, &["event", "repository", "default_branch"])
                 .unwrap_or_default()
@@ -276,6 +286,7 @@ impl TrustedFacts {
             sha: CommitId::try_from(required(github, "sha")?.to_owned())?,
             run_id: number(github, "run_id"),
             run_attempt: number(github, "run_attempt"),
+            event_name: required(github, "event_name")?.to_owned(),
             repository,
             event,
         })
@@ -286,6 +297,26 @@ impl TrustedFacts {
             "{}/{}.git",
             self.server_url.url().as_str().trim_end_matches('/'),
             self.repository.as_str()
+        )
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the cache broker of #2952 calls it after the restack"
+        )
+    )]
+    pub(crate) fn may_write_stores(&self) -> bool {
+        matches!(
+            (self.event_name.as_str(), &self.event),
+            (
+                "push",
+                TrustedEvent::Branch { .. } | TrustedEvent::Tag { .. }
+            ) | (
+                "workflow_dispatch" | "schedule",
+                TrustedEvent::Branch { .. }
+            )
         )
     }
 
@@ -322,89 +353,4 @@ impl TrustedFacts {
 }
 
 #[cfg(test)]
-mod tests {
-    use anyhow::{Context, Result};
-    use serde_json::{Value, json};
-
-    use super::{PullRequestHead, TrustedEvent, TrustedFacts};
-    use crate::job_message::AgentJobRequestMessage;
-
-    const FIXTURE: &str = include_str!("../../fixtures/exec/checkout_pull_request.json");
-
-    fn entry(key: &str, value: &Value) -> Value {
-        json!({"k": key, "v": value})
-    }
-
-    fn string(value: &str) -> Value {
-        json!({"t": 0, "s": value})
-    }
-
-    fn object(entries: &[Value]) -> Value {
-        json!({"t": 2, "d": entries})
-    }
-
-    fn pull_request_head(
-        base_id: Option<&str>,
-        head_repo: Option<(&str, Option<u64>)>,
-    ) -> Result<PullRequestHead> {
-        let sha = "0123456789012345678901234567890123456789";
-        let mut job: Value = serde_json::from_str(
-            &FIXTURE
-                .replace("@SHA@", sha)
-                .replace("@SERVER_URL@", "https://github.com"),
-        )?;
-        let mut head = vec![entry("ref", &string("topic"))];
-        if let Some((name, id)) = head_repo {
-            let mut repo = vec![entry("full_name", &string(name))];
-            if let Some(id) = id {
-                repo.push(entry("id", &json!({"t": 4, "n": id})));
-            }
-            head.push(entry("repo", &object(&repo)));
-        }
-        let event = object(&[entry(
-            "pull_request",
-            &object(&[entry("head", &object(&head))]),
-        )]);
-        let github = job["ContextData"]["github"]["d"]
-            .as_array_mut()
-            .context("github context entries")?;
-        github.push(entry("event", &event));
-        if let Some(base_id) = base_id {
-            github.push(entry("repository_id", &string(base_id)));
-        }
-        let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
-        match TrustedFacts::from_job_message(&message)?.event {
-            TrustedEvent::PullRequest { head, .. } => Ok(head),
-            other => anyhow::bail!("not a pull request event: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn a_pull_request_head_is_the_base_repository_only_when_the_message_proves_it() -> Result<()> {
-        use PullRequestHead::{Fork, SameRepository};
-        let base = "tailrocks/velnor-new";
-        let cases = [
-            (None, None, Fork),
-            (Some("1"), None, Fork),
-            (None, Some((base, None)), SameRepository),
-            (None, Some(("Tailrocks/Velnor-New", None)), SameRepository),
-            (None, Some(("someone/velnor-new", None)), Fork),
-            (Some("1"), Some((base, Some(1))), SameRepository),
-            (Some("1"), Some((base, Some(2))), Fork),
-            (
-                Some("1"),
-                Some(("someone/renamed", Some(1))),
-                SameRepository,
-            ),
-            (Some("1"), Some((base, None)), SameRepository),
-        ];
-        for (base_id, head, expected) in cases {
-            assert_eq!(
-                pull_request_head(base_id, head)?,
-                expected,
-                "base id {base_id:?}, head {head:?}"
-            );
-        }
-        Ok(())
-    }
-}
+mod tests;

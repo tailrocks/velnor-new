@@ -95,7 +95,7 @@ impl Rig {
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
-        self.mirror_of(0)
+        self.mirror_of(1)
     }
 
     pub(crate) fn mirror_of(&self, repository_id: u64) -> PathBuf {
