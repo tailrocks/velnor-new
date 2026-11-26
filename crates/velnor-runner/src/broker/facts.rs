@@ -271,14 +271,11 @@ impl TrustedFacts {
         let repository = RepoName::try_from(required(github, "repository")?.to_owned())?;
         let event = event_of(github, &repository)?;
         Ok(Self {
-            repository_id: required(github, "repository_id")?.parse().map_err(|_| {
-                FactsError::Invalid {
+            repository_id: id(github, &["repository_id"])
+                .and_then(NonZeroU64::new)
+                .ok_or(FactsError::Missing {
                     field: "repository_id",
-                    value: required(github, "repository_id")
-                        .unwrap_or_default()
-                        .to_owned(),
-                }
-            })?,
+                })?,
             server_url: ServerUrl::try_from(required(github, "server_url")?.to_owned())?,
             default_branch: text(github, &["event", "repository", "default_branch"])
                 .unwrap_or_default()

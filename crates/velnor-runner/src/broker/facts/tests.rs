@@ -127,6 +127,23 @@ fn a_missing_or_zero_repository_id_has_no_facts() -> Result<()> {
         let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
         assert!(TrustedFacts::from_job_message(&message).is_err(), "{id:?}");
     }
+    let mut job: Value = serde_json::from_str(
+        &FIXTURE
+            .replace("@SHA@", "0123456789012345678901234567890123456789")
+            .replace("@SERVER_URL@", "https://github.com"),
+    )?;
+    let github = job["ContextData"]["github"]["d"]
+        .as_array_mut()
+        .context("github context entries")?;
+    github.retain(|entry| entry["k"] != "repository_id");
+    github.push(entry("repository_id", &json!({"t": 4, "n": 42})));
+    let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
+    assert_eq!(
+        TrustedFacts::from_job_message(&message)?
+            .repository_id
+            .get(),
+        42
+    );
     let facts = br#"{"repository_id": 0, "repository": "a/b", "server_url": "https://github.com",
 "default_branch": "main", "sha": "0123456789012345678901234567890123456789", "run_id": 1,
 "run_attempt": 1, "event_name": "push", "event": {"kind": "branch", "branch": "main"}}"#;
