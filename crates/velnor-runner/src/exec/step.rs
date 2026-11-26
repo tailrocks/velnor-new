@@ -20,6 +20,7 @@ use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
 const LINE_BUFFER: usize = 64;
 const LINE_LIMIT: usize = 1 << 20;
+const DRAIN_LIMIT: usize = (LINE_BUFFER + 2) * LINE_LIMIT;
 const READ_PIECE: usize = 64 << 10;
 const CAPTURE_LIMIT: usize = 8 << 20;
 
@@ -229,13 +230,21 @@ async fn drive(
     }
     drop(sender);
     let ending = supervise(&mut child, &mut lines, limits, &mut on_chunk).await;
-    let drained = tokio::time::timeout(DRAIN_GRACE, async {
-        while let Some(chunk) = lines.recv().await {
-            on_chunk(chunk);
+    let mut backlog = DRAIN_LIMIT;
+    let drained = loop {
+        match tokio::time::timeout(DRAIN_GRACE, lines.recv()).await {
+            Ok(Some(chunk)) => {
+                backlog = backlog.saturating_sub(chunk.bytes.len().max(1));
+                on_chunk(chunk);
+                if backlog == 0 {
+                    break false;
+                }
+            }
+            Ok(None) => break true,
+            Err(_) => break false,
         }
-    })
-    .await;
-    if drained.is_err() {
+    };
+    if !drained {
         for reader in &readers {
             reader.abort();
         }

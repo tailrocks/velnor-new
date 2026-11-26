@@ -9,6 +9,7 @@ use tokio::process::Child;
 use tokio::sync::watch;
 
 pub(super) const KILL_GRACE: Duration = Duration::from_secs(5);
+const GROUP_POLL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone)]
 pub struct JobCancel {
@@ -88,13 +89,22 @@ impl Drop for Groups {
     }
 }
 
+fn group_alive(group: Pid) -> bool {
+    test_kill_process_group(group).is_ok()
+}
+
 pub(super) async fn terminate(child: &mut Child) {
+    let group = group_of(child);
     signal_group(child, Signal::TERM);
-    if tokio::time::timeout(KILL_GRACE, child.wait())
-        .await
-        .is_err()
-    {
-        signal_group(child, Signal::KILL);
-        let _ = child.wait().await;
+    let deadline = tokio::time::Instant::now() + KILL_GRACE;
+    let _ = tokio::time::timeout_at(deadline, child.wait()).await;
+    if let Some(group) = group {
+        while group_alive(group) && tokio::time::Instant::now() < deadline {
+            tokio::time::sleep(GROUP_POLL).await;
+        }
+        if group_alive(group) {
+            let _ = kill_process_group(group, Signal::KILL);
+        }
     }
+    let _ = child.wait().await;
 }

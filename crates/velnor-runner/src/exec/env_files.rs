@@ -111,7 +111,6 @@ impl FileCommands {
         let path = match read_text(&self.path, u64::MAX).await {
             Ok(text) => text
                 .lines()
-                .map(str::trim)
                 .filter(|line| !line.is_empty())
                 .map(str::to_owned)
                 .collect(),
