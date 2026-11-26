@@ -72,15 +72,9 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
         .iter()
         .filter(|run| run.event == "merge_group" && run.head_sha == context.sha)
         .max_by_key(|run| run.id);
-    let passed = latest.is_some_and(|run| {
-        if run.status == "completed" {
-            run.conclusion.as_deref() == Some("success")
-        } else {
-            context
-                .required
-                .as_deref()
-                .is_some_and(|name| required_job_passed(github, &repo, run.id, name))
-        }
+    let passed = latest.is_some_and(|run| match context.required.as_deref() {
+        Some(name) => required_job_passed(github, &repo, run.id, name),
+        None => run.status == "completed" && run.conclusion.as_deref() == Some("success"),
     });
     if passed {
         SkipPush {
