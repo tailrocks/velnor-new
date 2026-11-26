@@ -11,6 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
+use tokio::runtime::{Handle, RuntimeFlavor};
 use url::Url;
 
 pub(crate) const GIT_ENV: [(&str, &str); 3] = [
@@ -70,6 +71,7 @@ impl Leader {
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .process_group(0)
+            .kill_on_drop(true)
             .spawn()
             .context("start git")?;
         let group = child
@@ -87,15 +89,20 @@ impl Leader {
     async fn finish(&mut self) -> Result<(ExitStatus, String)> {
         let mut stderr = self.child.stderr.take().context("git has no stderr")?;
         let mut text = Vec::new();
-        let (read, status) = tokio::join!(stderr.read_to_end(&mut text), self.child.wait());
+        let reaped = &mut self.reaped;
+        let child = &mut self.child;
+        let wait = async {
+            let status = child.wait().await;
+            *reaped = true;
+            status
+        };
+        let (read, status) = tokio::join!(stderr.read_to_end(&mut text), wait);
         let status = status.context("wait for git")?;
-        self.reaped = true;
         read.context("read git stderr")?;
         Ok((status, String::from_utf8_lossy(&text).trim().to_owned()))
     }
 
-    fn kill_group_and_reap(&mut self) {
-        let _ = kill_process_group(self.group, Signal::KILL);
+    fn reap_group(&mut self) {
         for _ in 0..200 {
             let reaped = !matches!(self.child.try_wait(), Ok(None));
             if reaped && test_kill_process_group(self.group).is_err() {
@@ -108,8 +115,13 @@ impl Leader {
 
 impl Drop for Leader {
     fn drop(&mut self) {
-        if !self.reaped {
-            tokio::task::block_in_place(|| self.kill_group_and_reap());
+        if self.reaped {
+            return;
+        }
+        let _ = kill_process_group(self.group, Signal::KILL);
+        match Handle::try_current().map(|handle| handle.runtime_flavor()) {
+            Ok(RuntimeFlavor::MultiThread) => tokio::task::block_in_place(|| self.reap_group()),
+            _ => self.reap_group(),
         }
     }
 }
@@ -129,3 +141,6 @@ pub(super) async fn has_commit(git_dir: &Path, sha: &str) -> bool {
         .await
         .is_ok()
 }
+
+#[cfg(test)]
+mod tests;
