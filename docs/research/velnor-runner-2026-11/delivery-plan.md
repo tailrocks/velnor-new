@@ -110,7 +110,7 @@ flowchart LR
 | W2 → W4 | The lint jobs are born under the new label flow |
 | W4 → W3 | Deleting `.velnor/config.toml` makes `velnor-gen check` report `ci.yml` as unmarked, so `ci.yml` goes first |
 | W2–W5 → W6 step 1 | R2: the ruleset binds a gate only when it is honest, fresh and guards the release |
-| W6 → W8 | The baseline needs the queue running. W8 runs with push reuse off |
+| W6 step 1 → W8 | The baseline needs the queue running. W8 runs with push reuse off |
 | W8 → W7, W9 | Their effect is measured against the baseline |
 | W10 → W7, N26 | Both read the contract's resolved keys |
 | N26 → W6 step 2 | Only a base-controlled verdict may be called proof against a PR that edits its gate (R4) |
@@ -428,7 +428,7 @@ records, the full resolved key, classified obligations (V12, V14) and shadow com
 | N27 | **Helper-pin regression check (R9).** A declared `rust-ci-bench` workflow replays the last N commits on the pinned helper and on a candidate with `velnor-ci bench collect/compare/budget`. The threshold and the noise rule are fixed in advance from W8's run-to-run spread. It is not part of S1–S6 | A pin-bump PR carries the result; a planted slowdown beyond the threshold blocks it; a planted change inside the noise does not | 10 | Opus medium | Opus high | W8 | — |
 | BM01 | **Planted failures (S1).** 100 failing edits on every fast path: push reuse, same tree, record keys, selection (older mtime, undeclared build-script input, sibling file, clock shift, seeded flake) | 100% red; reruns on every change to a fast path | 10 | Opus high | Opus high | W7, V04 | Q8 |
 | BM08 | **Floor inventory.** Wall and CPU per test binary on a scale-set worker | Longest binary and per-package floor posted | 4 | Sonnet medium | Sonnet low | W8 | — |
-| BM14 | **GitHub's share.** 50 auto-merged PRs timed from green to enqueue, group and merge; a shadow train that lands nothing | Numbers for D18 posted | 6 | Sonnet medium | Sonnet low | W6 | — |
+| BM14 | **GitHub's share.** 50 auto-merged PRs timed from green to enqueue, group and merge; a shadow train that lands nothing | Numbers for D18 posted | 6 | Sonnet medium | Sonnet low | W6 step 1 | — |
 
 ## 6. Phase 2: runner, Velnor Native, platform, storage and the App
 
@@ -662,9 +662,10 @@ Phase 0's own graph is in section 4.
 ```mermaid
 flowchart TB
   subgraph P0[Phase 0]
-    W0 --> W1 --> W2 --> W4 --> W3 --> W6 --> W8 --> W9
-    W1 --> W5 --> W6
-    W3 --> W10 --> N26 --> W6
+    W0 --> W1 --> W2 --> W4 --> W3 --> S1{{W6 step 1: ruleset}} --> W8 --> W9
+    W1 --> W5 --> S1
+    W3 --> W10 --> N26
+    S1 --> N26 --> S2{{W6 step 2: require Velnor / Verified}}
     W8 --> W7
     W10 --> W7
   end
