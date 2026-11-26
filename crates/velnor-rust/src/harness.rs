@@ -21,6 +21,7 @@ const SECTIONS: [(&str, TargetKind); 4] = [
 pub(crate) fn custom_harnesses(
     view: &RepoView,
     package: &RustPackage,
+    workspace_features: &[String],
 ) -> Result<Vec<CustomHarness>, DetectError> {
     if !view.tracked_paths.contains(&package.manifest) {
         return Err(DetectError::invalid(
@@ -33,7 +34,10 @@ pub(crate) fn custom_harnesses(
     };
     let manifest =
         table(bytes).map_err(|reason| DetectError::invalid(&package.manifest, reason))?;
-    let defaults = enabled_features(&manifest, &requested_by_siblings(view, package));
+    let defaults = enabled_features(
+        &manifest,
+        &requested_by_siblings(view, package, workspace_features),
+    );
     let library = manifest
         .get("lib")
         .into_iter()

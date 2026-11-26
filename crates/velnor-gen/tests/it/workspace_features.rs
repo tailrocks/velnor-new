@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
+use velnor_model::{RepoPath, RepoView, RequiredFeature, Target, TargetKind, TargetName};
 use velnor_render::rendered_workflow;
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect, plan};
 
@@ -273,5 +273,49 @@ fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResul
     )?)?;
     let alone_lane = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n";
     detect(&repository(&["Cargo.toml"], alone_lane)?)?;
+    Ok(())
+}
+
+const GATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"local-mode\"]\n";
+
+fn gated_harness(config: &str) -> Result<String, Box<dyn Error>> {
+    let mut repo = repository(&["Cargo.toml"], config)?;
+    repo.files
+        .insert(RepoPath::new("Cargo.toml")?, GATED_HARNESS.to_vec());
+    for metadata in repo.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            member.targets.push(Target {
+                name: TargetName::new("gate")?,
+                kinds: vec![TargetKind::Test],
+                tests: true,
+                doctest: false,
+                source: None,
+                requires_features: true,
+                required_features: vec![RequiredFeature {
+                    name: "local-mode".to_owned(),
+                    enabled_by: vec!["local-mode".to_owned()],
+                }],
+            });
+        }
+    }
+    workflow(&repo)
+}
+
+#[test]
+fn a_harness_false_target_gated_on_a_workspace_feature_runs_directly_with_that_feature()
+-> TestResult {
+    let text = gated_harness(FEATURES)?;
+    let direct: Vec<_> = text
+        .lines()
+        .filter(|line| line.contains("--test=gate"))
+        .collect();
+    assert_eq!(direct.len(), 1, "{text}");
+    assert!(direct[0].contains("local-mode"), "{direct:?}");
+    assert!(
+        gated_harness("")?
+            .lines()
+            .all(|line| !line.contains("--test=gate")),
+        "unfeatured"
+    );
     Ok(())
 }

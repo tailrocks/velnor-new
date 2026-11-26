@@ -71,7 +71,14 @@ pub(crate) fn rust_roots(
                     targets.entry(name).or_default().insert(target);
                 }
             }
-            root(manifest, metadata, &owner, &targets, view)
+            root(
+                manifest,
+                metadata,
+                &owner,
+                &targets,
+                view,
+                &config.workspace_features.names,
+            )
         })
         .collect::<Result<_, _>>()?;
     Ok((roots, every))
@@ -83,6 +90,7 @@ fn root(
     owner: &BTreeMap<&RepoPath, &RepoPath>,
     targets: &Targets,
     view: &RepoView,
+    workspace_features: &[String],
 ) -> Result<RustRoot, DetectError> {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
@@ -111,7 +119,7 @@ fn root(
     let mut members: Vec<RustMember> = metadata
         .members
         .iter()
-        .map(|package| member(package, targets, view))
+        .map(|package| member(package, targets, view, workspace_features))
         .collect::<Result<_, _>>()?;
     members.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(RustRoot {
@@ -322,6 +330,7 @@ fn member(
     package: &RustPackage,
     targets: &Targets,
     view: &RepoView,
+    workspace_features: &[String],
 ) -> Result<RustMember, DetectError> {
     Ok(RustMember {
         name: package.name.clone(),
@@ -346,7 +355,7 @@ fn member(
             })
             .collect(),
         targets: package.targets.clone(),
-        custom_harnesses: custom_harnesses(view, package)?,
+        custom_harnesses: custom_harnesses(view, package, workspace_features)?,
     })
 }
 

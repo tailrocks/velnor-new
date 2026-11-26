@@ -5,10 +5,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage};
 
-use crate::harness::enabled_features;
+use crate::harness::{enabled_features, implicit_features};
 use crate::toml_file::table;
 
-pub(crate) fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> Vec<String> {
+pub(crate) fn requested_by_siblings(
+    view: &RepoView,
+    package: &RustPackage,
+    workspace_features: &[String],
+) -> Vec<String> {
     let Some((workspace, metadata)) = view.rust_metadata.iter().find(|(_, metadata)| {
         metadata
             .members
@@ -26,7 +30,17 @@ pub(crate) fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> V
             Some((&member.manifest, parsed))
         })
         .collect();
-    let mut requested: BTreeMap<&RepoPath, BTreeSet<String>> = BTreeMap::new();
+    let mut requested: BTreeMap<&RepoPath, BTreeSet<String>> = metadata
+        .members
+        .iter()
+        .filter_map(|member| {
+            let parsed = manifests.get(&member.manifest)?;
+            Some((
+                &member.manifest,
+                workspace_requests(parsed, member.name.as_str(), workspace_features),
+            ))
+        })
+        .collect();
     loop {
         let mut changed = false;
         for member in &metadata.members {
@@ -77,6 +91,26 @@ pub(crate) fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> V
         .remove(&package.manifest)
         .unwrap_or_default()
         .into_iter()
+        .collect()
+}
+
+fn workspace_requests(manifest: &toml::Table, package: &str, names: &[String]) -> BTreeSet<String> {
+    let defined: BTreeSet<&str> = manifest
+        .get("features")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::Table::keys)
+        .map(String::as_str)
+        .collect();
+    let implicit = implicit_features(manifest);
+    names
+        .iter()
+        .filter_map(|name| match name.split_once('/') {
+            Some((owner, feature)) => (owner == package).then_some(feature),
+            None => Some(name.as_str()),
+        })
+        .filter(|name| defined.contains(name) || implicit.contains(*name))
+        .map(ToOwned::to_owned)
         .collect()
 }
 
