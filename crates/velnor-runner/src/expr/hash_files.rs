@@ -11,10 +11,79 @@ use ring::digest::{Context, Digest, SHA256};
 use std::fmt::{Display, Write as _};
 use std::fs::{self, File};
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 const READ_BUFFER_BYTES: usize = 64 * 1024;
+const LONGEST_TIMEOUT: Duration = Duration::from_hours(365 * 24);
+
+#[derive(Clone)]
+struct Job {
+    workspace: PathBuf,
+    home: Option<PathBuf>,
+    arguments: Vec<String>,
+    timeout: Duration,
+    deadline: Instant,
+}
+
+impl Job {
+    fn escaped(&self) -> String {
+        self.arguments.join(", ").replace('\'', "''")
+    }
+
+    fn failure(&self, detail: &dyn Display) -> ExprError {
+        ExprError::evaluation(format!(
+            "hashFiles('{}') failed. Fail to hash files under directory '{}'. {detail}",
+            self.escaped(),
+            self.workspace.display()
+        ))
+    }
+
+    fn timed_out(&self) -> ExprError {
+        ExprError::evaluation(format!(
+            "hashFiles('{}') couldn't finish within {} seconds.",
+            self.escaped(),
+            self.timeout.as_secs()
+        ))
+    }
+
+    fn run(&self) -> Result<String, ExprError> {
+        let root = fs::canonicalize(&self.workspace).map_err(|error| self.failure(&error))?;
+        let lines = self
+            .arguments
+            .iter()
+            .flat_map(|argument| argument.split('\n'))
+            .map(trim_line)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'));
+        let patterns = PatternSet::new(&root, self.home.as_deref(), lines)
+            .map_err(|error| self.failure(&error))?;
+
+        let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
+        let mut aggregate = Context::new(&SHA256);
+        let mut count = 0_usize;
+        for found in patterns.walk(&root, self.deadline) {
+            let path = match found {
+                Ok(path) => path,
+                Err(GlobError::TimedOut) => return Err(self.timed_out()),
+                Err(error) => return Err(self.failure(&error)),
+            };
+            match file_digest(&path, &mut buffer, self.deadline) {
+                Ok(Some(digest)) => {
+                    aggregate.update(digest.as_ref());
+                    count += 1;
+                }
+                Ok(None) => return Err(self.timed_out()),
+                Err(error) => return Err(self.failure(&format!("{}: {error}", path.display()))),
+            }
+        }
+        if count == 0 {
+            return Ok(String::new());
+        }
+        Ok(hex_digest(aggregate.finish().as_ref()))
+    }
+}
 
 pub(crate) fn hash_files(
     workspace: &Path,
@@ -22,56 +91,34 @@ pub(crate) fn hash_files(
     args: &[Value],
     timeout: Duration,
 ) -> Result<String, ExprError> {
-    let deadline = Instant::now() + timeout;
     let arguments: Vec<String> = args.iter().map(Value::convert_to_string).collect();
     if let Some(option) = arguments.first().filter(|first| first.starts_with("--")) {
         return Err(ExprError::evaluation(format!(
             "Invalid glob option {option}"
         )));
     }
-    let escaped = arguments.join(", ").replace('\'', "''");
-    let failure = |detail: &dyn Display| {
-        ExprError::evaluation(format!(
-            "hashFiles('{escaped}') failed. Fail to hash files under directory '{}'. {detail}",
-            workspace.display()
-        ))
+    let job = Job {
+        workspace: workspace.to_path_buf(),
+        home: home.map(Path::to_path_buf),
+        arguments,
+        timeout,
+        deadline: Instant::now() + timeout.min(LONGEST_TIMEOUT),
     };
-    let timed_out = || {
-        ExprError::evaluation(format!(
-            "hashFiles('{escaped}') couldn't finish within {} seconds.",
-            timeout.as_secs()
-        ))
-    };
-    let root = fs::canonicalize(workspace).map_err(|error| failure(&error))?;
-    let lines = arguments
-        .iter()
-        .flat_map(|argument| argument.split('\n'))
-        .map(trim_line)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'));
-    let patterns = PatternSet::new(&root, home, lines).map_err(|error| failure(&error))?;
-
-    let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
-    let mut aggregate = Context::new(&SHA256);
-    let mut count = 0_usize;
-    for found in patterns.walk(&root, deadline) {
-        let path = match found {
-            Ok(path) => path,
-            Err(GlobError::TimedOut) => return Err(timed_out()),
-            Err(error) => return Err(failure(&error)),
-        };
-        match file_digest(&path, &mut buffer, deadline) {
-            Ok(Some(digest)) => {
-                aggregate.update(digest.as_ref());
-                count += 1;
-            }
-            Ok(None) => return Err(timed_out()),
-            Err(error) => return Err(failure(&format!("{}: {error}", path.display()))),
+    let (sender, receiver) = mpsc::channel();
+    let worker = job.clone();
+    thread::Builder::new()
+        .name("hash-files".to_owned())
+        .spawn(move || {
+            let _ = sender.send(worker.run());
+        })
+        .map_err(|error| job.failure(&error))?;
+    match receiver.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(job.timed_out()),
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err(job.failure(&"the hashing thread ended without a result"))
         }
     }
-    if count == 0 {
-        return Ok(String::new());
-    }
-    Ok(hex_digest(aggregate.finish().as_ref()))
 }
 
 fn file_digest(path: &Path, buffer: &mut [u8], deadline: Instant) -> io::Result<Option<Digest>> {
