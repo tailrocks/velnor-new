@@ -51,6 +51,7 @@ impl MiseInputs {
                 "install_args" => value.trim().clone_into(&mut parsed.install_args),
                 "cache" if value.trim() == "false" => cache_disabled = true,
                 "cache" => return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned())),
+                _ if value.trim().is_empty() => {}
                 other => {
                     return Err(ExecError::Unsupported(format!(
                         "jdx/mise-action input '{other}' is not supported by velnor-runner"
@@ -172,12 +173,16 @@ fn current_path(ctx: &StepContext<'_>) -> String {
         .unwrap_or_default()
 }
 
+fn data_dir(tools: &Path, _lock: &[u8]) -> PathBuf {
+    tools.join("data")
+}
+
 impl Install {
-    fn new(ctx: &StepContext<'_>, tools: &Path, binary: PathBuf) -> Self {
+    fn new(ctx: &StepContext<'_>, tools: &Path, lock: &[u8], binary: PathBuf) -> Self {
         let dir = binary
             .parent()
             .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned());
-        let data = tools.join("data").to_string_lossy().into_owned();
+        let data = data_dir(tools, lock).to_string_lossy().into_owned();
         let mut env = vec![
             ("MISE_DATA_DIR".to_owned(), data.clone()),
             (
@@ -249,7 +254,11 @@ pub(crate) async fn mise_action(
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
     enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
-    let install = Install::new(ctx, &tools, binary);
+    let lock_path = ctx.workspace.join("mise.lock");
+    let lock = tokio::fs::read(&lock_path)
+        .await
+        .map_err(|source| ExecError::io(format!("read {}", lock_path.display()), source))?;
+    let install = Install::new(ctx, &tools, &lock, binary);
     let loaded = mise_capture(ctx, &install, &["config", "ls", "--json"]).await?;
     require_sole_config(ctx.workspace, &loaded).await?;
     let mut args = vec!["install".to_owned(), "--locked".to_owned()];

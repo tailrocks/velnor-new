@@ -116,6 +116,129 @@ fn mise_action_fails_closed_on_the_no_digest_sentinel() -> Result<()> {
 }
 
 #[test]
+fn mise_action_rejects_inputs_it_does_not_implement() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    for (name, value) in [
+        ("install", "false"),
+        ("env", "false"),
+        ("working_directory", "sub"),
+        ("mise_toml", "[tools]"),
+    ] {
+        let job = world.with_input(&job_fixture("mise_action_ok"), name, value)?;
+        let ran = world.run(&job, &[])?;
+        assert_failed(
+            &ran,
+            &format!(
+                "unsupported: jdx/mise-action input '{name}' is not supported by velnor-runner"
+            ),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn mise_action_treats_an_empty_unsupported_input_as_unset() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let mut job = job_fixture("mise_action_ok");
+    for name in ["install", "env", "working_directory", "mise_toml"] {
+        job = world.with_input(&job, name, "")?;
+    }
+    let ran = world.run(&job, &[])?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    assert_eq!(world.mise_installs().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn mise_action_rejects_a_version_that_is_not_exact() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    for version in ["latest", "2026.11", "../../2026.11.10", "2026.13.1"] {
+        let job = world.with_input(&job_fixture("mise_action_ok"), "version", version)?;
+        let ran = world.run(&job, &[])?;
+        assert_failed(
+            &ran,
+            &format!("mise version '{version}' is not an exact YYYY.M.D version"),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{version}");
+    }
+    Ok(())
+}
+
+#[test]
+fn mise_action_prepends_tool_dirs_in_mise_order_without_duplicating_the_inherited_path()
+-> Result<()> {
+    let world = World::new()?;
+    let binary = world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+    let ran = world.run(
+        &job,
+        &[
+            ("PATH", "/zz-inherited:/usr/bin:/bin"),
+            ("MISE_DOUBLE_EXTRA_DIR", "/zz-extra"),
+        ],
+    )?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    let directory = world.binary_dir();
+    let expected = format!(
+        "path={}/tool-bin:/zz-extra:{}/tools/data/shims:{}:/zz-inherited:/usr/bin:/bin",
+        directory.display(),
+        world.store.display(),
+        binary
+            .parent()
+            .map_or_else(String::new, |dir| dir.display().to_string())
+    );
+    assert!(ran.has_line(&expected), "{expected}\n{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn mise_action_puts_the_store_shims_on_the_path() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+    let ran = world.run(&job, &[])?;
+    let shims = format!("{}/tools/data/shims", world.store.display());
+    let path = ran
+        .lines()
+        .into_iter()
+        .find_map(|line| line.strip_prefix("path="))
+        .map_or_default(str::to_owned);
+    assert!(path.split(':').any(|entry| entry == shims), "{path}");
+    Ok(())
+}
+
+#[test]
+fn mise_action_keeps_the_callers_mise_environment() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_job_env(
+        &job_fixture("mise_action_ok"),
+        &[("MISE_YES", "0"), ("MISE_TRUSTED_CONFIG_PATHS", "/x")],
+    )?;
+    let job =
+        world.with_final_script(&job, "echo \"later=$MISE_YES $MISE_TRUSTED_CONFIG_PATHS\"")?;
+    let ran = world.run(&job, &[])?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    assert!(ran.has_line("later=0 /x"), "{}", ran.stdout);
+    let calls = world.mise_calls();
+    assert!(calls.len() > 1, "{calls:?}");
+    for call in &calls {
+        assert!(call.ends_with("trusted=/x yes=0"), "{call}");
+    }
+    Ok(())
+}
+
+#[test]
 fn mise_action_rejects_cache_true() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;

@@ -233,6 +233,10 @@ the environment. This prevents persisted `BASH_ENV`, exported functions, or
 `SHELLOPTS` from bypassing the helper's copy, digest check, and execution before
 the generated command runs.
 
+### Composite action `required` inputs
+
+[`ActionRunner.cs`](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/ActionRunner.cs) at `v2.338.2` fills each declared input a caller did not pass with its `default` and never checks `required`, so an omitted `required: true` input reaches the steps as an empty string. `velnor-runner` deviates on purpose when it expands `tailrocks/velnor-new/actions/setup-velnor`: a `required: true` input with no value and no default fails the step with `setup-velnor input '<name>' is required` before any inner step runs, so a missing `version` stops the install instead of reaching the shell script as an empty string.
+
 ### Workflow command parsing
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) gives a step's standard output and its standard error each an `OutputManager` that feeds the same `ActionCommandManager`, so a workflow command on either stream runs. [`ActionCommand.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Common/ActionCommand.cs) calls `TrimStart()` on a line before it checks for the `::` prefix, so a command can follow leading Unicode whitespace. Command data escapes `%`, `\r` and `\n` as `%25`, `%0D` and `%0A`; command properties also escape `:` and `,` as `%3A` and `%2C`. `::stop-commands::<token>` pauses command processing until a command named by the token resumes it. `velnor-ci` therefore escapes every control and non-space whitespace character and `%` in anything it prints, and escapes `:` in names taken from repository content, so no printed line can start a command on either stream.

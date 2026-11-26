@@ -193,6 +193,55 @@ impl World {
         Ok(patched)
     }
 
+    pub(crate) fn with_input(&self, job: &Path, name: &str, value: &str) -> Result<PathBuf> {
+        let mut message: Value =
+            serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
+                .context("parse the job fixture")?;
+        let inputs = message["Steps"][0]["Inputs"]["map"]
+            .as_array_mut()
+            .context("the step inputs")?;
+        inputs.retain(|pair| pair["key"]["lit"] != name);
+        inputs.push(json!({
+            "key": {"type": 0, "lit": name},
+            "value": {"type": 0, "lit": value}
+        }));
+        let patched = self.root.join("with-input.json");
+        std::fs::write(&patched, serde_json::to_vec(&message)?).context("write the job")?;
+        Ok(patched)
+    }
+
+    pub(crate) fn with_job_env(&self, job: &Path, env: &[(&str, &str)]) -> Result<PathBuf> {
+        let mut message: Value =
+            serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
+                .context("parse the job fixture")?;
+        let pairs: Vec<Value> = env
+            .iter()
+            .map(|(name, value)| {
+                json!({
+                    "key": {"type": 0, "lit": name},
+                    "value": {"type": 0, "lit": value}
+                })
+            })
+            .collect();
+        message["EnvironmentVariables"] = json!([{"type": 2, "map": pairs}]);
+        let patched = self.root.join("with-env.json");
+        std::fs::write(&patched, serde_json::to_vec(&message)?).context("write the job")?;
+        Ok(patched)
+    }
+
+    pub(crate) fn with_final_script(&self, job: &Path, script: &str) -> Result<PathBuf> {
+        let mut message: Value =
+            serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
+                .context("parse the job fixture")?;
+        let inputs = message["Steps"][1]["Inputs"]["map"]
+            .as_array_mut()
+            .context("the script inputs")?;
+        inputs[0]["value"]["lit"] = script.into();
+        let patched = self.root.join("with-script.json");
+        std::fs::write(&patched, serde_json::to_vec(&message)?).context("write the job")?;
+        Ok(patched)
+    }
+
     pub(crate) fn with_leading_script(&self, job: &Path, script: &str) -> Result<PathBuf> {
         let mut message: Value =
             serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)

@@ -23,7 +23,7 @@ case "$1" in
   env)
     case "$2" in
       --redacted) printf '{"SECRET":"%s"}\n' "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
-      *) printf '{"PATH":"%s/tool-bin:%s","FOO":"bar","SECRET":"%s"}\n' "$(dirname "$0")" "$PATH" "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
+      *) printf '{"PATH":"%s/tool-bin:%s%s","FOO":"bar","SECRET":"%s"}\n' "$(dirname "$0")" "${MISE_DOUBLE_EXTRA_DIR:+$MISE_DOUBLE_EXTRA_DIR:}" "$PATH" "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
     esac
     ;;
 esac

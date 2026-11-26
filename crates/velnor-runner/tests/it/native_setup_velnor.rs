@@ -192,3 +192,45 @@ fn setup_velnor_rejects_a_second_step() -> Result<()> {
     assert!(!ran.stdout.contains("second-ran"), "{}", ran.stdout);
     Ok(())
 }
+
+#[test]
+fn setup_velnor_is_unsupported_outside_its_own_repository() -> Result<()> {
+    let world = World::new()?;
+    let sha = world.publish_action(&real_action()?)?;
+    let fork = world.mirror().with_file_name("../../someone/fork.git");
+    std::fs::create_dir_all(fork.parent().context("the fork parent")?)?;
+    git(
+        &world.mirror(),
+        &["clone", "--quiet", "--bare", ".", &fork.to_string_lossy()],
+    )?;
+    let job = world.with_text(
+        &job_fixture("setup_velnor_real_action"),
+        &[
+            (SHA_PLACEHOLDER, &sha),
+            ("\"s\": \"tailrocks/velnor-new\"", "\"s\": \"someone/fork\""),
+        ],
+    )?;
+    let ran = world.run(&job, &[])?;
+    assert_failed(
+        &ran,
+        "unsupported: setup-velnor is only supported in tailrocks/velnor-new, not someone/fork",
+    );
+    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn setup_velnor_rejects_an_action_key_it_does_not_implement() -> Result<()> {
+    let world = World::new()?;
+    let action = format!("{}outputs:\n  version:\n    value: x\n", real_action()?);
+    let sha = world.publish_action(&action)?;
+    let ran = world.run(&real_job(&world, "setup_velnor_real_action", &sha)?, &[])?;
+    assert!(ran.has_line("job failed"), "{}", ran.stdout);
+    assert!(
+        ran.stdout.contains("unknown field `outputs`"),
+        "{}",
+        ran.stdout
+    );
+    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
+    Ok(())
+}

@@ -16,22 +16,32 @@ use crate::store::store_root;
 
 const PREFIX: &str = "tailrocks/velnor-new/actions/setup-velnor@";
 const ACTION_PATH: &str = "actions/setup-velnor/action.yml";
+const OWNER_REPOSITORY: &str = "tailrocks/velnor-new";
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Action {
+    #[serde(rename = "name")]
+    _name: Option<String>,
+    #[serde(rename = "description")]
+    _description: Option<String>,
     #[serde(default)]
     inputs: BTreeMap<String, InputDefinition>,
     runs: Runs,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct InputDefinition {
+    #[serde(rename = "description")]
+    _description: Option<String>,
     default: Option<String>,
     #[serde(default)]
     required: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Runs {
     using: String,
     #[serde(default)]
@@ -162,6 +172,16 @@ impl StepAdapter for SetupVelnor {
                 .facts
                 .as_ref()
                 .map_err(|reason| ExecError::Invalid(reason.clone()))?;
+            if !facts
+                .repository
+                .as_str()
+                .eq_ignore_ascii_case(OWNER_REPOSITORY)
+            {
+                return Err(ExecError::Unsupported(format!(
+                    "setup-velnor is only supported in {OWNER_REPOSITORY}, not {}",
+                    facts.repository.as_str()
+                )));
+            }
             let steps = expand(&pinned_action_yml(ctx, facts, &sha).await?, &ctx.inputs)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));
