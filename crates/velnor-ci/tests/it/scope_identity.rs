@@ -26,6 +26,7 @@ fn util(directory: &str) -> RustRoot {
             dependencies: Vec::new(),
             targets: Vec::new(),
             custom_harnesses: Vec::new(),
+            gated_targets_built: Vec::new(),
         }],
         depends_on: Vec::new(),
         external_dependencies: Vec::new(),

@@ -132,3 +132,52 @@ fn an_inactive_optional_path_dependency_without_artifacts_is_accepted() {
     let output = audit(&repo, &["--write"]);
     assert!(output.status.success(), "{output:?}");
 }
+
+fn gated_extra_repo(config: &str) -> crate::io::Repo {
+    let repo = workspace_below_the_root();
+    unit(&repo, ".velnor/rust-ci.toml", config);
+    repo.git(&["add", "--all"]);
+    own_units(&repo, "rust/target/debug", &[]);
+    repo
+}
+
+fn extra_units(repo: &crate::io::Repo) {
+    for (hash, fingerprint) in [
+        ("f00000000000000d", "test-bin-extra"),
+        ("f00000000000000e", "bin-extra"),
+    ] {
+        unit(
+            repo,
+            &format!("rust/target/debug/deps/extra-{hash}.d"),
+            "out.d: app/src/extra.rs\n",
+        );
+        unit(
+            repo,
+            &format!("rust/target/debug/.fingerprint/app-{hash}/{fingerprint}"),
+            "",
+        );
+    }
+}
+
+#[test]
+fn a_target_the_workspace_features_enable_must_have_a_unit_before_the_inputs_lock_is_written() {
+    let plain = gated_extra_repo("");
+    let accepted = audit(&plain, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+
+    let repo = gated_extra_repo("workspace_features = ['extra']\n");
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr)
+            .contains("target extra (rust/app/src/extra.rs, 0 of 2 units)"),
+        "{refused:?}"
+    );
+    assert!(!lock.exists());
+
+    extra_units(&repo);
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+    assert!(lock.exists());
+}

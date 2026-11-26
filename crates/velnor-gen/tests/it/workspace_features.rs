@@ -151,6 +151,11 @@ fn the_audit_build_of_every_target_and_the_doctests_take_the_features_and_check_
     assert_featured(&steps, "Build every target", true);
     assert_featured(&steps, "Doctests", true);
     assert_featured(&steps, "Check package-0 alone", false);
+    assert!(
+        named(&steps, "Check package-0 alone")[0]
+            .contains("velnor-ci inputs build -- cargo check -p package-0"),
+        "{steps:?}"
+    );
     Ok(())
 }
 
@@ -286,9 +291,13 @@ fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResul
 pub(crate) const GATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"local-mode\"]\n";
 
 fn gated_harness(config: &str) -> Result<String, Box<dyn Error>> {
+    gated_on(GATED_HARNESS, "local-mode", config)
+}
+
+fn gated_on(manifest: &[u8], feature: &str, config: &str) -> Result<String, Box<dyn Error>> {
     let mut repo = repository(&["Cargo.toml"], config)?;
     repo.files
-        .insert(RepoPath::new("Cargo.toml")?, GATED_HARNESS.to_vec());
+        .insert(RepoPath::new("Cargo.toml")?, manifest.to_vec());
     for metadata in repo.rust_metadata.values_mut() {
         for member in &mut metadata.members {
             member.targets.push(Target {
@@ -299,8 +308,8 @@ fn gated_harness(config: &str) -> Result<String, Box<dyn Error>> {
                 source: None,
                 requires_features: true,
                 required_features: vec![RequiredFeature {
-                    name: "local-mode".to_owned(),
-                    enabled_by: vec!["local-mode".to_owned()],
+                    name: feature.to_owned(),
+                    enabled_by: vec![feature.to_owned()],
                 }],
             });
         }
@@ -324,5 +333,21 @@ fn a_harness_false_target_gated_on_a_workspace_feature_runs_directly_with_that_f
             .all(|line| !line.contains("--test=gate")),
         "unfeatured"
     );
+    Ok(())
+}
+
+const GATED_ON_RENAMED_DEPENDENCY: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[dependencies]\nalias = { package = \"serde\", version = \"1\", optional = true }\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"alias\"]\n";
+
+#[test]
+fn a_dependency_selector_on_an_optional_renamed_dependency_gates_a_harness_false_target_directly()
+-> TestResult {
+    let direct = |config: &str| -> Result<usize, Box<dyn Error>> {
+        Ok(gated_on(GATED_ON_RENAMED_DEPENDENCY, "alias", config)?
+            .lines()
+            .filter(|line| line.contains("--test=gate"))
+            .count())
+    };
+    assert_eq!(direct("workspace_features = ['alias/derive']\n")?, 1);
+    assert_eq!(direct(FEATURES)?, 0);
     Ok(())
 }

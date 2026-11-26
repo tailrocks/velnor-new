@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage};
+use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage, TargetName};
 
 use crate::harness::{enabled_features, implicit_features};
 use crate::toml_file::table;
@@ -23,6 +23,11 @@ pub(crate) fn requested_by_siblings(
     };
     let split_build = resolver_splits_build(view, workspace);
     let root_only = plain_names_need_root_package(view, workspace);
+    let member_names: BTreeSet<&str> = metadata
+        .members
+        .iter()
+        .map(|member| member.name.as_str())
+        .collect();
     let manifests: BTreeMap<&RepoPath, toml::Table> = metadata
         .members
         .iter()
@@ -42,6 +47,7 @@ pub(crate) fn requested_by_siblings(
                     parsed,
                     member.name.as_str(),
                     workspace_features,
+                    &member_names,
                     !root_only || member.manifest == *workspace,
                 ),
             ))
@@ -100,10 +106,34 @@ pub(crate) fn requested_by_siblings(
         .collect()
 }
 
+pub(crate) fn gated_targets_built(
+    view: &RepoView,
+    package: &RustPackage,
+    workspace_features: &[String],
+) -> Vec<TargetName> {
+    if workspace_features.is_empty() {
+        return Vec::new();
+    }
+    let requested = requested_by_siblings(view, package, workspace_features);
+    package
+        .targets
+        .iter()
+        .filter(|target| {
+            target.requires_features
+                && target
+                    .required_features
+                    .iter()
+                    .all(|required| required.enabled(true, &requested, package.name.as_str()))
+        })
+        .map(|target| target.name.clone())
+        .collect()
+}
+
 fn workspace_requests(
     manifest: &toml::Table,
     package: &str,
     names: &[String],
+    members: &BTreeSet<&str>,
     plain: bool,
 ) -> BTreeSet<String> {
     let defined: BTreeSet<&str> = manifest
@@ -117,7 +147,8 @@ fn workspace_requests(
     names
         .iter()
         .filter_map(|name| match name.split_once('/') {
-            Some((owner, feature)) => (owner == package).then_some(feature),
+            Some((owner, feature)) if owner == package => Some(feature),
+            Some((owner, _)) => (plain && !members.contains(owner)).then_some(owner),
             None => plain.then_some(name.as_str()),
         })
         .filter(|name| defined.contains(name) || implicit.contains(*name))

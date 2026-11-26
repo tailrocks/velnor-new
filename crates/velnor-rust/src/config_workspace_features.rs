@@ -54,13 +54,14 @@ pub(crate) fn check(
 }
 
 fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
-    let Some((package, feature)) = name.split_once('/') else {
-        let root_only = plain_names_need_root_package(view, &root.manifest);
-        return root
-            .members
+    let root_only = plain_names_need_root_package(view, &root.manifest);
+    let confined = || {
+        root.members
             .iter()
-            .filter(|member| !root_only || member.manifest == root.manifest)
-            .any(|member| defined_features(view, member).contains(name));
+            .filter(move |member| !root_only || member.manifest == root.manifest)
+    };
+    let Some((package, feature)) = name.split_once('/') else {
+        return confined().any(|member| defined_features(view, member).contains(name));
     };
     match root
         .members
@@ -68,9 +69,7 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
         .find(|member| member.name.as_str() == package)
     {
         Some(member) => defined_features(view, member).contains(feature),
-        None => root
-            .members
-            .iter()
+        None => confined()
             .filter_map(|member| manifest(view, member))
             .any(|manifest| feature_dependency_specs(&manifest).any(|(key, _)| key == package)),
     }

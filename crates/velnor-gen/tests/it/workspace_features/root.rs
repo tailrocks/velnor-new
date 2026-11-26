@@ -110,3 +110,26 @@ fn a_member_harness_gated_on_the_feature_runs_directly_only_when_the_root_packag
     assert_eq!(member_gate(&inherited("2021"))?.len(), 1);
     Ok(())
 }
+
+#[test]
+fn a_dependency_selector_only_a_member_declares_is_refused_for_a_root_package_under_resolver_one()
+-> TestResult {
+    let config = "workspace_features = ['alias/derive']\n";
+    let member = b"[package]\nname = \"member\"\n[dependencies]\nalias = { package = \"serde\", version = \"1\", optional = true }\n";
+    for (edition, refused) in [("2018", true), ("2021", false)] {
+        let root = format!("{ROOT_WITHOUT_FEATURE}edition = \"{edition}\"\n");
+        let mut repo = root_and_member(&root, config)?;
+        repo.files
+            .insert(RepoPath::new("crates/member/Cargo.toml")?, member.to_vec());
+        if refused {
+            assert_eq!(
+                refusal(&repo)?,
+                (".".to_owned(), "alias/derive".to_owned()),
+                "{edition}"
+            );
+        } else {
+            detect(&repo)?;
+        }
+    }
+    Ok(())
+}

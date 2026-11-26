@@ -285,6 +285,7 @@ pub struct RustMember {
     pub dependencies: Vec<MemberDependency>,
     pub targets: Vec<Target>,
     pub custom_harnesses: Vec<CustomHarness>,
+    pub gated_targets_built: Vec<TargetName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
