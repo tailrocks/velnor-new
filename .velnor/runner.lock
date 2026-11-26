@@ -100,4 +100,4 @@ node_arm64_sha256 = "ec53c915c3fdd8786c5685abd25ae3fe9fba0692307f9811d7caaadea1b
 node_arm64_sha256_source = "node_checksum_manifest_url; PASS: node_checksum_signature_url against node_checksum_signing_key_fingerprint."
 
 bollard = "=0.21.1"
-turso = "=0.8.3"
+turso = "=0.8.4"
