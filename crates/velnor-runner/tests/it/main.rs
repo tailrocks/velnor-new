@@ -78,6 +78,8 @@ mod followup;
 mod hardening;
 mod job_message;
 mod protocol_acquire_renew;
+#[path = "exec_late.rs"]
+mod late;
 #[path = "exec_parity.rs"]
 mod parity;
 #[path = "exec_process.rs"]
