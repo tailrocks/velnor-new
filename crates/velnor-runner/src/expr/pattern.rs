@@ -14,6 +14,8 @@ pub(crate) enum GlobError {
     RelativePathing(String),
     #[error("Invalid pattern '{0}'")]
     InvalidPattern(String),
+    #[error("path '{0}' is not valid UTF-8")]
+    NotUtf8(String),
     #[error("Unable to determine HOME directory")]
     NoHome,
     #[error("Expected HOME directory to be a rooted path. Actual '{0}'")]
@@ -34,7 +36,7 @@ impl GlobError {
 pub(crate) fn components_of(path: &Path) -> Result<Vec<String>, GlobError> {
     let text = path
         .to_str()
-        .ok_or_else(|| GlobError::InvalidPattern(path.display().to_string()))?;
+        .ok_or_else(|| GlobError::NotUtf8(path.display().to_string()))?;
     if text
         .split(std::path::is_separator)
         .any(|part| part == "." || part == "..")
