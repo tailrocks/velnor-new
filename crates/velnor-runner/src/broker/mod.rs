@@ -1,11 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The store broker: the only code that writes a store during a job. Adapters
-//! send it a [`Request`]; it decides the repository, the path and the commit
-//! from the host's [`TrustedFacts`]. Here it runs in the runner's process;
-//! the sandbox parent serves the same requests over a socket (#2911).
-
 pub(crate) mod facts;
 mod mirror;
 pub(crate) mod proto;

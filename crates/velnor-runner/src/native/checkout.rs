@@ -92,7 +92,6 @@ fn invalid(error: impl std::fmt::Display) -> ExecError {
     ExecError::Invalid(format!("{error:#}"))
 }
 
-/// Runs git with the steps' rights through the executor's process runner.
 async fn git(
     ctx: &mut StepContext<'_>,
     git_dir: Option<&Path>,
@@ -178,8 +177,14 @@ async fn populate(
     }
     if present == ProcessOutcome::Failed {
         let token = ctx.github_token.clone().map(Token::new);
-        if let Response::Failed { message } = store.request(Request::FetchMirror { token }).await {
-            return Err(ExecError::Invalid(message));
+        match store.request(Request::FetchMirror { token }).await {
+            Response::Done => {}
+            Response::Failed { message } => return Err(ExecError::Invalid(message)),
+            Response::Hello(_) => {
+                return Err(ExecError::Invalid(
+                    "store broker protocol error: Hello answered a FetchMirror request".to_owned(),
+                ));
+            }
         }
     }
     ensure_disjoint(ctx.workspace, &mirror).map_err(invalid)?;

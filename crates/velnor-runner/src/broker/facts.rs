@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What the host verified about a job. Everything the store broker writes is
-//! scoped by these facts; no request, job message field or `GITHUB_*`
-//! variable chooses the repository, the mirror path or the commit.
-
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -219,14 +215,10 @@ fn event_of(github: &ContextValue, repository: &RepoName) -> Result<TrustedEvent
 }
 
 impl TrustedFacts {
-    /// Parses the file the host wrote from its verified source.
     pub(crate) fn parse(bytes: &[u8]) -> Result<Self, FactsError> {
         Ok(serde_json::from_slice(bytes)?)
     }
 
-    /// Builds facts from the job message. Only `velnor-runner exec` without
-    /// `--trusted` uses this, for local runs and tests; a job message is not a
-    /// verified source.
     pub(crate) fn from_job_message(message: &AgentJobRequestMessage) -> Result<Self, FactsError> {
         let contexts =
             message
@@ -262,8 +254,6 @@ impl TrustedFacts {
         )
     }
 
-    /// The only refs the broker fetches: every branch, and for a pull request
-    /// the merge commit of the verified pull request number.
     pub(crate) fn refspecs(&self) -> Vec<String> {
         let mut specs = vec!["+refs/heads/*:refs/heads/*".to_owned()];
         if let TrustedEvent::PullRequest { number, .. } = &self.event {

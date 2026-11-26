@@ -95,7 +95,6 @@ impl TlsSink {
 }
 
 impl TlsSink {
-    /// Waits for the runner to exit and fails if a request reaches the sink first.
     pub(crate) fn run_unvisited(&self, mut runner: Child) -> Result<Ran> {
         let deadline = Instant::now() + WAIT;
         loop {

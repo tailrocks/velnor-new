@@ -23,9 +23,6 @@ fn git_init(dir: &Path, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Runs a checkout whose real origin cannot be resolved while a planted
-/// repository location tries to resolve it to the TLS sink; the credential must
-/// never reach the sink.
 fn attack(plant: impl FnOnce(&Plant) -> Result<()>) -> Result<()> {
     let rig = Rig::new()?;
     let sink = TlsSink::start(&rig.root)?;

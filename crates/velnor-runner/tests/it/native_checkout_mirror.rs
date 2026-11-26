@@ -5,8 +5,10 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
+use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, commit, finish, git};
@@ -244,5 +246,46 @@ fn checkout_fetch_uses_trusted_facts() -> Result<()> {
         &["for-each-ref", "--format=%(refname)", "refs/pull"],
     )?;
     assert_eq!(refs, "refs/pull/7/merge");
+    Ok(())
+}
+
+#[test]
+fn sigterm_while_another_process_holds_the_mirror_lock_exits_cancelled() -> Result<()> {
+    let rig = Rig::new()?;
+    let lock_path = rig
+        .root
+        .join("store/git/_local/tailrocks/velnor-new.git.lock");
+    std::fs::create_dir_all(lock_path.parent().context("lock parent")?)?;
+    let holder = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)?;
+    holder.lock()?;
+    let scratch = Scratch::new()?;
+    let mut runner = rig.start(
+        &rig.job("checkout_depth1", &rig.head, &rig.server_url())?,
+        &scratch,
+    )?;
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(runner.try_wait()?.is_none(), "the runner did not wait");
+    let signalled = Command::new("kill")
+        .args(["-TERM", &runner.id().to_string()])
+        .status()
+        .context("run kill")?;
+    assert!(signalled.success());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while runner.try_wait()?.is_none() {
+        if Instant::now() > deadline {
+            let _ = runner.kill();
+            let _ = runner.wait();
+            bail!("the runner did not exit while the mirror lock was held");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let ran = finish(runner)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(ran.stdout.contains("cancelled"), "{}", ran.stdout);
+    drop(holder);
     Ok(())
 }

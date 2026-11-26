@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What crosses the sandbox boundary: one JSON message per datagram. A request
-//! says what to write and never where or for whom; that comes from the facts.
-
 use serde::{Deserialize, Serialize};
 
 use super::facts::TrustedFacts;

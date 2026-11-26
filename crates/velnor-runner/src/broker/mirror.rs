@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/git_mirror.rs
 
-//! The write half of the bare git mirror: lock, rebuild the files git reads to
-//! find the repository and its configuration, and run the one authenticated
-//! fetch. Only the broker calls this; the checkout adapter reads the mirror.
-
+use std::fs::TryLockError;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use base64::Engine;
@@ -18,15 +16,12 @@ use url::Url;
 
 use super::facts::TrustedFacts;
 
-/// Environment of every git command on the mirror, whoever runs it.
 pub(crate) const GIT_ENV: [(&str, &str); 3] = [
     ("GIT_CONFIG_NOSYSTEM", "1"),
     ("GIT_CONFIG_GLOBAL", "/dev/null"),
     ("GIT_TERMINAL_PROMPT", "0"),
 ];
 
-/// The one git argument builder: hooks off, replace refs off, and the
-/// repository named explicitly so git never discovers one from the directory.
 pub(crate) fn git_args(git_dir: Option<&Path>, args: &[&str]) -> Vec<String> {
     let mut all = vec![
         "-c".to_owned(),
@@ -116,20 +111,28 @@ async fn has_commit(git_dir: &Path, sha: &str) -> bool {
 }
 
 async fn lock(path: &Path) -> Result<std::fs::File> {
-    let path = path.to_owned();
-    tokio::task::spawn_blocking(move || {
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&path)
-            .with_context(|| format!("open {}", path.display()))?;
-        file.lock()
-            .with_context(|| format!("lock {}", path.display()))?;
-        Ok(file)
-    })
-    .await
-    .context("wait for the mirror lock")?
+    let file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .await
+        .with_context(|| format!("open {}", path.display()))?
+        .into_std()
+        .await;
+    let mut backoff = Duration::from_millis(5);
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(TryLockError::WouldBlock) => {
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(Duration::from_millis(100));
+            }
+            Err(TryLockError::Error(error)) => {
+                return Err(error).with_context(|| format!("lock {}", path.display()));
+            }
+        }
+    }
 }
 
 const MIRROR_CONFIG: &str = "[core]\n\trepositoryformatversion = 0\n\tbare = true\n";
@@ -181,10 +184,6 @@ fn valid_head(head: &str) -> bool {
         })
 }
 
-/// Steps can write the mirror, so before any git command that carries the
-/// credential the runner rebuilds everything git reads to locate the
-/// repository or its configuration: `config`, `HEAD`, and no `commondir` or
-/// nested `.git` that would redirect git elsewhere.
 async fn reset_mirror(mirror: &Path) -> Result<()> {
     remove_entry(&mirror.join("commondir")).await?;
     remove_entry(&mirror.join(".git")).await?;
@@ -221,8 +220,6 @@ async fn remove_ref_locks(mirror: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Brings the commit the host verified into the mirror, once, under the
-/// mirror lock. Everything it fetches comes from the facts.
 pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>) -> Result<()> {
     let mirror = mirror_path(root, facts)?;
     let mut lock_file = mirror.clone().into_os_string();
