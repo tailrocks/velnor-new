@@ -174,3 +174,16 @@ fn expr_to_json_stops_at_the_memory_budget() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn expr_to_json_escapes_line_separators_like_json_net() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        r#"{"TEXT":"a\u0085b\u2028c\u2029d\u0001e\u007f\"q\\","k\u2028":1}"#,
+    )])?;
+    let expected = format!(r#""a\u0085b\u2028c\u2029d\u0001e{}\"q\\""#, '\u{7f}');
+
+    assert_eq!(text("toJSON(env.TEXT)", &env)?, expected);
+    assert!(text("toJSON(env)", &env)?.contains(r#""k\u2028": 1"#));
+    Ok(())
+}

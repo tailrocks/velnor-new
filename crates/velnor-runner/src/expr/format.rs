@@ -8,6 +8,7 @@ use super::eval::evaluate_node;
 use super::node::Node;
 use super::number::format_number;
 use super::value::Value;
+use crate::context_value::write_json_string;
 
 pub(crate) fn evaluate_format(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
     let [format, rest @ ..] = args else {
@@ -277,7 +278,11 @@ fn write_json(
                 Value::Null => "null".to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Number(value) => format_number(*value),
-                Value::String(value) => serde_json::Value::String(value.clone()).to_string(),
+                Value::String(value) => {
+                    let mut quoted = String::new();
+                    write_json_string(value, &mut quoted);
+                    quoted
+                }
                 Value::Array(_) => "[]".to_string(),
                 Value::Object(_) => "{}".to_string(),
             };

@@ -261,7 +261,7 @@ pub const fn non_finite_text(value: NonFinite) -> &'static str {
     }
 }
 
-fn write_json_string(value: &str, output: &mut String) {
+pub(crate) fn write_json_string(value: &str, output: &mut String) {
     use std::fmt::Write as _;
 
     output.push('"');
