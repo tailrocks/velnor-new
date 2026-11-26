@@ -141,6 +141,7 @@ fn run_jit_options_debug_output_hides_the_jit_configuration() {
         renew_interval: Duration::from_secs(60),
         renew_lock_grace: Duration::from_secs(300),
         cancel_timeout_floor: Duration::from_secs(60),
+        upload_block_budget: Duration::from_secs(60),
         cancel_poll_error_delay: Duration::from_secs(2),
         adapters: AdapterRegistry::empty(),
     };

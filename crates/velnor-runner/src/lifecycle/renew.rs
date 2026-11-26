@@ -18,6 +18,7 @@ const RETRY_CAP: Duration = Duration::from_secs(20);
 const MIN_GAP: Duration = Duration::from_secs(1);
 
 pub(super) type RenewHandle = BackgroundTask;
+pub(super) type FirstRenew = oneshot::Receiver<Result<(), anyhow::Error>>;
 
 pub(super) struct RenewTarget {
     pub(super) client: RunServiceClient,
@@ -56,12 +57,27 @@ fn next_delay(interval: Duration, remaining: Option<Duration>) -> Duration {
         .max(floor)
 }
 
+fn give_up(
+    first_renewed: &mut Option<oneshot::Sender<Result<(), anyhow::Error>>>,
+    cancel: &JobCancel,
+    note: &str,
+    error: anyhow::Error,
+) {
+    eprintln!("warning: {note}: {error:#}");
+    match first_renewed.take() {
+        Some(first_renewed) => {
+            let _ = first_renewed.send(Err(error));
+        }
+        None => cancel.cancel(),
+    }
+}
+
 pub(super) fn spawn_renew(
     target: RenewTarget,
     interval: Duration,
     lock_grace: Duration,
     cancel: JobCancel,
-) -> (RenewHandle, oneshot::Receiver<()>) {
+) -> (RenewHandle, FirstRenew) {
     let (first_renewed, first) = oneshot::channel();
     let handle = BackgroundTask::spawn(async move {
         let mut first_renewed = Some(first_renewed);
@@ -75,7 +91,7 @@ pub(super) fn spawn_renew(
             {
                 Ok(renewed) => {
                     if let Some(first_renewed) = first_renewed.take() {
-                        let _ = first_renewed.send(());
+                        let _ = first_renewed.send(Ok(()));
                     }
                     failures = 0;
                     let remaining = until_lock_expires(&renewed.locked_until);
@@ -83,15 +99,18 @@ pub(super) fn spawn_renew(
                     next_delay(interval, remaining)
                 }
                 Err(error) if job_is_gone(&error) => {
-                    eprintln!("warning: the job is gone on GitHub, cancelling it: {error:#}");
-                    cancel.cancel();
+                    give_up(
+                        &mut first_renewed,
+                        &cancel,
+                        "the job is gone on GitHub",
+                        error,
+                    );
                     return;
                 }
                 Err(error) => {
                     failures += 1;
                     if Instant::now() >= give_up_at {
-                        eprintln!("warning: job lock expired, cancelling the job: {error:#}");
-                        cancel.cancel();
+                        give_up(&mut first_renewed, &cancel, "job lock expired", error);
                         return;
                     }
                     eprintln!("warning: renew job lock failed, retrying: {error:#}");

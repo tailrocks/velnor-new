@@ -168,3 +168,20 @@ async fn lifecycle_runs_the_job_when_the_acknowledgement_fails_for_another_reaso
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
     Ok(())
 }
+
+#[tokio::test]
+async fn lifecycle_runs_the_job_when_the_acknowledgement_says_the_runner_is_not_found() -> Result<()>
+{
+    let behavior = Behavior {
+        acknowledge: Acknowledge::RunnerGone,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    mock.server.only_request("POST", "/run/acquirejob")?;
+    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    Ok(())
+}

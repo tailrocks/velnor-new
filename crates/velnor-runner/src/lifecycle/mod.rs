@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use reqwest::StatusCode;
 use tokio::task::JoinHandle;
 
@@ -38,6 +39,7 @@ pub struct RunJitOptions {
     pub renew_interval: Duration,
     pub renew_lock_grace: Duration,
     pub cancel_timeout_floor: Duration,
+    pub upload_block_budget: Duration,
     pub cancel_poll_error_delay: Duration,
     pub adapters: AdapterRegistry,
 }
@@ -70,6 +72,8 @@ pub enum LifecycleError {
         path: PathBuf,
         source: std::io::Error,
     },
+    #[error("renew the job lock: {0:#}")]
+    Renew(anyhow::Error),
     #[error("complete the job: {0:#}")]
     Complete(anyhow::Error),
 }
@@ -140,7 +144,7 @@ async fn acquire_and_run(
     let Some(message) = acquire::acquire(session, request).await? else {
         return Ok(LifecycleOutcome::NoJob);
     };
-    let connection = acquire::connect(&message)?;
+    let connection = acquire::connect(&message, options.upload_block_budget)?;
     let (completion, failure) =
         match run_and_report(options, session, run_options, &message, &connection).await {
             Ok(Finish::Ran(run, report)) => {
@@ -225,13 +229,12 @@ async fn run_and_report(
         options.renew_lock_grace,
         cancel.clone(),
     );
-    let renewed = tokio::select! {
+    tokio::select! {
         biased;
-        first = first_renewed => first.is_ok(),
-        () = cancel.cancelled() => false,
-    };
-    if !renewed {
-        return Ok(Finish::NotStarted);
+        first = first_renewed => first
+            .unwrap_or_else(|_| Err(anyhow!("the renew task stopped")))
+            .map_err(LifecycleError::Renew)?,
+        () = cancel.cancelled() => return Ok(Finish::NotStarted),
     }
     let (mut sink, events) = GithubSink::channel(&files)?;
     let grace = CancelGrace::new(options.cancel_timeout_floor);

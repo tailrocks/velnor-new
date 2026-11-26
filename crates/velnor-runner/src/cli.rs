@@ -14,6 +14,7 @@ use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 use crate::lifecycle::{RunJitOptions, run_jit};
+use crate::protocol::BLOCK_BUDGET;
 use crate::secret::Secret;
 
 const USAGE_ERROR: u8 = 2;
@@ -199,6 +200,7 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
         renew_interval: RENEW_INTERVAL,
         renew_lock_grace: RENEW_LOCK_GRACE,
         cancel_timeout_floor: CANCEL_TIMEOUT_FLOOR,
+        upload_block_budget: BLOCK_BUDGET,
         cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
         adapters: build_adapters(),
     };

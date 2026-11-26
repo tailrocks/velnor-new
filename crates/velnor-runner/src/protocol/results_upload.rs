@@ -5,6 +5,7 @@
 use anyhow::{Context, Result, bail};
 use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use std::path::Path;
+use std::time::Duration;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -12,15 +13,14 @@ use url::Url;
 
 use super::error::sanitize_response_body;
 use super::http::{http_client, redacted_reqwest_error, validate_authenticated_url};
-use super::results::{BlobKind, REQUEST_TIMEOUT, STEP_SUMMARY, TwirpResultsClient, retrying};
+use super::results::{BlobKind, STEP_SUMMARY, TwirpResultsClient, retrying};
 use super::results_wire::{
     MetadataRequest, ScopeRequest, SignedUrlResponse, SoftSizeLimitExceeded,
 };
 
 pub(super) const BLOCK_SIZE: usize = 2 * 1024 * 1024;
 const BLOB_TYPE: &str = "x-ms-blob-type";
-const BLOB_VERSION: &str = "x-ms-version";
-const SEAL_VERSION: &str = "2021-08-06";
+const BLOB_SEALED: &str = "x-ms-blob-sealed";
 
 struct LogBlocks {
     reader: BufReader<File>,
@@ -46,7 +46,7 @@ impl LogBlocks {
         ))
     }
 
-    async fn next(&mut self) -> Result<Option<Vec<u8>>> {
+    async fn next(&mut self) -> Result<Option<(Vec<u8>, bool)>> {
         let mut block = Vec::with_capacity(BLOCK_SIZE);
         while block.len() < BLOCK_SIZE {
             if self.reader.read_until(b'\n', &mut block).await? == 0 {
@@ -54,22 +54,38 @@ impl LogBlocks {
             }
             self.lines += 1;
         }
-        Ok((!block.is_empty()).then_some(block))
+        if block.is_empty() {
+            return Ok(None);
+        }
+        let last = self.reader.fill_buf().await?.is_empty();
+        Ok(Some((block, last)))
     }
 }
 
-fn with_query(url: &Url, comp: &str) -> Url {
+fn append_url(url: &Url, seal: bool) -> Url {
     let mut url = url.clone();
-    url.query_pairs_mut().append_pair("comp", comp);
+    {
+        let mut query = url.query_pairs_mut();
+        query.append_pair("comp", "appendblock");
+        if seal {
+            query.append_pair("seal", "true");
+        }
+    }
     url
 }
 
-async fn put(url: &Url, label: &str, body: Vec<u8>, headers: &[(&str, &str)]) -> Result<()> {
+async fn put(
+    url: &Url,
+    label: &str,
+    budget: Duration,
+    body: Vec<u8>,
+    headers: &[(&str, &str)],
+) -> Result<()> {
     let empty = body.is_empty();
     let mut request = http_client()?
         .put(url.clone())
         .header(CONTENT_TYPE, "text/plain")
-        .timeout(REQUEST_TIMEOUT)
+        .timeout(budget)
         .body(body);
     if empty {
         request = request.header(CONTENT_LENGTH, 0);
@@ -151,25 +167,27 @@ impl TwirpResultsClient {
         retrying(kind.label, || async {
             let (mut blocks, size) = LogBlocks::open(path).await?;
             let url = Self::blob_url(kind, self.signed(kind, scope).await?)?;
+            let (label, budget) = (kind.label, self.block_budget);
             if size <= BLOCK_SIZE as u64 {
-                let content = blocks.next().await?.unwrap_or_default();
-                put(&url, kind.label, content, &[(BLOB_TYPE, "BlockBlob")]).await?;
+                let (content, _) = blocks.next().await?.unwrap_or_default();
+                put(&url, label, budget, content, &[(BLOB_TYPE, "BlockBlob")]).await?;
             } else {
-                put(&url, kind.label, Vec::new(), &[(BLOB_TYPE, "AppendBlob")]).await?;
-                let append = with_query(&url, "appendblock");
-                while let Some(block) = blocks.next().await? {
-                    put(&append, kind.label, block, &[]).await?;
-                }
-                let seal = with_query(&url, "seal");
-                if let Err(error) = put(
-                    &seal,
-                    kind.label,
+                put(
+                    &url,
+                    label,
+                    budget,
                     Vec::new(),
-                    &[(BLOB_VERSION, SEAL_VERSION)],
+                    &[(BLOB_TYPE, "AppendBlob")],
                 )
-                .await
-                {
-                    eprintln!("warning: seal the {}: {error:#}", kind.label);
+                .await?;
+                let (append, seal) = (append_url(&url, false), append_url(&url, true));
+                while let Some((block, last)) = blocks.next().await? {
+                    let (target, sealed) = if last {
+                        (&seal, "True")
+                    } else {
+                        (&append, "False")
+                    };
+                    put(target, label, budget, block, &[(BLOB_SEALED, sealed)]).await?;
                 }
             }
             self.create_metadata(kind, scope, Some(blocks.lines), None)
@@ -203,7 +221,8 @@ impl TwirpResultsClient {
             let content = tokio::fs::read(path)
                 .await
                 .with_context(|| format!("read {}", path.display()))?;
-            put(&url, kind.label, content, &[(BLOB_TYPE, "BlockBlob")]).await?;
+            let headers = [(BLOB_TYPE, "BlockBlob")];
+            put(&url, kind.label, self.block_budget, content, &headers).await?;
             self.create_metadata(kind, scope, None, Some(size)).await
         })
         .await

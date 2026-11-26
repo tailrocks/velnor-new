@@ -50,6 +50,7 @@ pub(crate) struct Settings {
     pub(crate) renew_interval: Duration,
     pub(crate) renew_lock_grace: Duration,
     pub(crate) cancel_timeout_floor: Duration,
+    pub(crate) upload_block_budget: Duration,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
 }
@@ -60,6 +61,7 @@ impl Settings {
             renew_interval: Duration::from_millis(200),
             renew_lock_grace: Duration::from_secs(300),
             cancel_timeout_floor: Duration::from_secs(60),
+            upload_block_budget: Duration::from_secs(60),
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
         }
@@ -77,6 +79,11 @@ impl Settings {
 
     pub(crate) fn killing_after_cancel_floor(mut self, floor: Duration) -> Self {
         self.cancel_timeout_floor = floor;
+        self
+    }
+
+    pub(crate) fn uploading_each_block_within(mut self, budget: Duration) -> Self {
+        self.upload_block_budget = budget;
         self
     }
 
@@ -99,6 +106,7 @@ pub(crate) async fn run_in(
         renew_interval: settings.renew_interval,
         renew_lock_grace: settings.renew_lock_grace,
         cancel_timeout_floor: settings.cancel_timeout_floor,
+        upload_block_budget: settings.upload_block_budget,
         cancel_poll_error_delay: Duration::from_millis(50),
         adapters: AdapterRegistry::empty(),
     };

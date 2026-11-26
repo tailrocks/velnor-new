@@ -87,7 +87,10 @@ fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a s
         .filter(|value| !value.is_empty())
 }
 
-pub(super) fn connect(message: &AgentJobRequestMessage) -> Result<JobConnection, LifecycleError> {
+pub(super) fn connect(
+    message: &AgentJobRequestMessage,
+    block_budget: Duration,
+) -> Result<JobConnection, LifecycleError> {
     let endpoint = message
         .system_connection()
         .map_err(LifecycleError::Acquire)?;
@@ -107,6 +110,7 @@ pub(super) fn connect(message: &AgentJobRequestMessage) -> Result<JobConnection,
         .map_err(LifecycleError::Acquire)?;
     let results = variable(message, RESULTS_ENDPOINT_VARIABLE).and_then(|url| {
         TwirpResultsClient::new(url, token)
+            .map(|client| client.with_block_budget(block_budget))
             .inspect_err(|error| eprintln!("warning: results service disabled: {error:#}"))
             .ok()
     });

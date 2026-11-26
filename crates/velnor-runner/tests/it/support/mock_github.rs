@@ -40,6 +40,7 @@ pub(crate) enum Renew {
     Renewed,
     RenewedAfter(Duration),
     ExpiringThenFailing,
+    RenewedThenJobGone,
     JobGone,
     ServerError,
 }
@@ -65,6 +66,7 @@ pub(crate) enum Acknowledge {
     #[default]
     Accepted,
     JobGone,
+    RunnerGone,
     Unavailable,
 }
 
@@ -94,8 +96,11 @@ pub(crate) struct Behavior {
     pub(crate) should_acknowledge: bool,
     pub(crate) acknowledge: Acknowledge,
     pub(crate) cancel_timeout: Duration,
+    pub(crate) cancel_timeout_text: Option<&'static str>,
     pub(crate) unusable_job: bool,
     pub(crate) blob_status: u16,
+    pub(crate) seal_status: Option<u16>,
+    pub(crate) blob_delay: Duration,
     pub(crate) feed: bool,
 }
 
@@ -109,8 +114,11 @@ impl Default for Behavior {
             should_acknowledge: true,
             acknowledge: Acknowledge::Accepted,
             cancel_timeout: Duration::from_secs(300),
+            cancel_timeout_text: None,
             unusable_job: false,
             blob_status: 201,
+            seal_status: None,
+            blob_delay: Duration::ZERO,
             feed: false,
         }
     }
@@ -170,7 +178,7 @@ impl MockGithub {
         mount_identity(&server)?;
         mount_broker(&server, &base, &behavior)?;
         mount_run_service(&server, job_message(&base, job, feed.as_ref())?, &behavior)?;
-        mount_results(&server, &base, behavior.blob_status)?;
+        mount_results(&server, &base, &behavior)?;
         Ok(Self { server, feed, jit })
     }
 
@@ -180,6 +188,12 @@ impl MockGithub {
 
     pub(crate) fn requests_to(&self, method: &str, path: &str) -> Result<Vec<RecordedRequest>> {
         self.server.requests_to(method, path)
+    }
+
+    pub(crate) fn uploaded(&self, blob: &str) -> Result<String> {
+        let puts = self.requests_to("PUT", blob)?;
+        anyhow::ensure!(!puts.is_empty(), "{blob} was uploaded");
+        Ok(puts.iter().map(RecordedRequest::text).collect())
     }
 
     pub(crate) fn complete_request(&self) -> Result<Value> {
@@ -204,6 +218,31 @@ fn mount_identity(server: &TestServer) -> Result<()> {
     })
 }
 
+fn mount_acknowledge(server: &TestServer, acknowledge: Acknowledge) -> Result<()> {
+    server.respond("POST", "/broker/acknowledge", move |_| match acknowledge {
+        Acknowledge::Accepted => Reply::status(200),
+        Acknowledge::JobGone => Reply::json(
+            404,
+            &json!({
+                "source": "actions-broker-listener",
+                "errorKind": "AcknowledgeJobNotFound",
+                "statusCode": 404,
+                "errorMessage": "the job was withdrawn",
+            }),
+        ),
+        Acknowledge::RunnerGone => Reply::json(
+            404,
+            &json!({
+                "source": "actions-broker-listener",
+                "errorKind": "RunnerNotFound",
+                "statusCode": 404,
+                "errorMessage": "the runner was not found",
+            }),
+        ),
+        Acknowledge::Unavailable => Reply::status(503),
+    })
+}
+
 fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<()> {
     server.respond("POST", "/broker/session", |_| {
         Reply::json(
@@ -216,20 +255,7 @@ fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<
         )
     })?;
     server.respond("DELETE", "/broker/session", |_| Reply::status(204))?;
-    let acknowledge = behavior.acknowledge;
-    server.respond("POST", "/broker/acknowledge", move |_| match acknowledge {
-        Acknowledge::Accepted => Reply::status(200),
-        Acknowledge::JobGone => Reply::json(
-            404,
-            &json!({
-                "source": "actions-broker-listener",
-                "errorKind": "AcknowledgeJobNotFound",
-                "statusCode": 404,
-                "errorMessage": "the job was withdrawn",
-            }),
-        ),
-        Acknowledge::Unavailable => Reply::status(503),
-    })?;
+    mount_acknowledge(server, behavior.acknowledge)?;
     let kind = |name: &str| match behavior.message_types {
         MessageTypes::Lowercase => name.to_lowercase(),
         MessageTypes::Canonical => name.to_owned(),
@@ -244,10 +270,13 @@ fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<
             "billing_owner_id": "owner-1",
         }),
     );
+    let timeout = behavior
+        .cancel_timeout_text
+        .map_or_else(|| timespan(behavior.cancel_timeout), str::to_owned);
     let cancel_of = |job_id: &str| {
         message(
             &kind("JobCancellation"),
-            &json!({"jobId": job_id, "timeout": timespan(behavior.cancel_timeout)}),
+            &json!({"jobId": job_id, "timeout": timeout}),
         )
     };
     let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
@@ -297,6 +326,9 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
         Renew::RenewedAfter(delay) => {
             Reply::json(200, &json!({"lockedUntil": "2099-01-01T00:00:00Z"})).after(delay)
         }
+        Renew::RenewedThenJobGone if renewals.fetch_add(1, Ordering::SeqCst) == 0 => {
+            Reply::json(200, &json!({"lockedUntil": "2099-01-01T00:00:00Z"}))
+        }
         Renew::ExpiringThenFailing if renewals.fetch_add(1, Ordering::SeqCst) == 0 => {
             let expires = OffsetDateTime::now_utc() + Duration::from_secs(1);
             Reply::json(
@@ -305,7 +337,7 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
             )
         }
 
-        Renew::JobGone => Reply::json(
+        Renew::JobGone | Renew::RenewedThenJobGone => Reply::json(
             404,
             &json!({"source": "actions-run-service", "statusCode": 404, "message": "gone"}),
         ),
@@ -316,7 +348,16 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
     server.respond("POST", "/run/completejob", |_| Reply::status(200))
 }
 
-fn mount_results(server: &TestServer, base: &str, blob_status: u16) -> Result<()> {
+fn mount_results(server: &TestServer, base: &str, behavior: &Behavior) -> Result<()> {
+    let (blob_status, seal_status, delay) = (
+        behavior.blob_status,
+        behavior.seal_status,
+        behavior.blob_delay,
+    );
+    let blob_reply = move |request: &RecordedRequest| {
+        let sealing = request.query("seal").is_some();
+        Reply::status(seal_status.filter(|_| sealing).unwrap_or(blob_status)).after(delay)
+    };
     server.respond("POST", RESULTS_STEPS_UPDATE, |_| {
         Reply::json(200, &json!({"ok": true}))
     })?;
@@ -329,7 +370,7 @@ fn mount_results(server: &TestServer, base: &str, blob_status: u16) -> Result<()
         server.respond("POST", &format!("{receiver}/{method}"), move |_| {
             Reply::json(200, &json!({"logs_url": url}))
         })?;
-        server.respond("PUT", blob, move |_| Reply::status(blob_status))?;
+        server.respond("PUT", blob, blob_reply)?;
     }
     let summary_url = format!("{base}{SUMMARY_BLOB}");
     server.respond(
@@ -337,7 +378,7 @@ fn mount_results(server: &TestServer, base: &str, blob_status: u16) -> Result<()
         &format!("{receiver}/GetStepSummarySignedBlobURL"),
         move |_| Reply::json(200, &json!({"summary_url": summary_url})),
     )?;
-    server.respond("PUT", SUMMARY_BLOB, move |_| Reply::status(blob_status))?;
+    server.respond("PUT", SUMMARY_BLOB, blob_reply)?;
     for method in [
         "CreateStepLogsMetadata",
         "CreateJobLogsMetadata",
