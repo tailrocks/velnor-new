@@ -14,6 +14,14 @@ pub(crate) enum GlobError {
     RelativePathing(String),
     #[error("Invalid pattern '{0}'")]
     InvalidPattern(String),
+    #[error(
+        "pattern segment '{0}' has a character class with a non-ASCII character, which is not supported"
+    )]
+    NonAsciiClass(String),
+    #[error(
+        "pattern segment '{segment}' uses '?' or a character class, which is not supported for the non-ASCII name '{name}'"
+    )]
+    NonAsciiName { segment: String, name: String },
     #[error("path '{0}' is not valid UTF-8")]
     NotUtf8(String),
     #[error("Unable to determine HOME directory")]
@@ -62,15 +70,25 @@ pub(crate) enum Seg {
     Glob {
         matcher: GlobMatcher,
         literal: Option<String>,
+        segment: String,
+        code_units: bool,
     },
 }
 
 impl Seg {
-    pub(crate) fn is_match(&self, name: &str) -> bool {
+    pub(crate) fn is_match(&self, name: &str) -> Result<bool, GlobError> {
         match self {
-            Seg::GlobStar | Seg::Any => true,
-            Seg::Literal(literal) => literal == name,
-            Seg::Glob { matcher, .. } => matcher.is_match(name),
+            Seg::GlobStar | Seg::Any => Ok(true),
+            Seg::Literal(literal) => Ok(literal == name),
+            Seg::Glob {
+                segment,
+                code_units: true,
+                ..
+            } if !name.is_ascii() => Err(GlobError::NonAsciiName {
+                segment: segment.clone(),
+                name: name.to_owned(),
+            }),
+            Seg::Glob { matcher, .. } => Ok(matcher.is_match(name)),
         }
     }
 
@@ -86,6 +104,7 @@ impl Seg {
         if part == "**" {
             return Ok(Seg::GlobStar);
         }
+        let code_units = needs_code_units(part)?;
         let matcher = GlobBuilder::new(&escape_segment(part))
             .allow_unclosed_class(true)
             .build()
@@ -94,6 +113,8 @@ impl Seg {
         Ok(Seg::Glob {
             matcher,
             literal: Some(literal_of(part)).filter(|literal| !literal.is_empty()),
+            segment: part.to_owned(),
+            code_units,
         })
     }
 }
@@ -173,14 +194,14 @@ fn home_segments(home: Option<&Path>) -> Result<Vec<Seg>, GlobError> {
     Ok(components_of(home)?.into_iter().map(Seg::Literal).collect())
 }
 
-pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {
+pub(crate) fn align(segs: &[Seg], path: &[String]) -> Result<Vec<bool>, GlobError> {
     let mut live = vec![false; segs.len() + 1];
     live[0] = true;
     skip_globstars(segs, &mut live);
     for name in path {
         let mut next = vec![false; segs.len() + 1];
         for (index, seg) in segs.iter().enumerate() {
-            if live[index] && seg.is_match(name) {
+            if live[index] && seg.is_match(name)? {
                 next[if matches!(seg, Seg::GlobStar) {
                     index
                 } else {
@@ -194,7 +215,7 @@ pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {
             break;
         }
     }
-    live
+    Ok(live)
 }
 
 fn skip_globstars(segs: &[Seg], live: &mut [bool]) {
@@ -245,6 +266,33 @@ fn class_end(chars: &[char], open: usize) -> Option<usize> {
         .iter()
         .position(|character| *character == ']')
         .map(|offset| index + offset)
+}
+
+fn needs_code_units(part: &str) -> Result<bool, GlobError> {
+    let chars: Vec<char> = part.chars().collect();
+    let mut found = false;
+    let mut index = 0;
+    while index < chars.len() {
+        match chars[index] {
+            '\\' => index += 2,
+            '?' => {
+                found = true;
+                index += 1;
+            }
+            '[' => match class_end(&chars, index) {
+                Some(end) => {
+                    if !chars[index..=end].iter().all(char::is_ascii) {
+                        return Err(GlobError::NonAsciiClass(part.to_owned()));
+                    }
+                    found = true;
+                    index = end + 1;
+                }
+                None => index += 1,
+            },
+            _ => index += 1,
+        }
+    }
+    Ok(found)
 }
 
 fn escape_segment(part: &str) -> String {

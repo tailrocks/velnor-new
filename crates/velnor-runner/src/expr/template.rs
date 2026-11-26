@@ -5,12 +5,12 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_expression;
-use super::format::MemoryCounter;
+use super::memory::{MemoryCounter, Subject};
 
-const OPEN: &str = "${{";
-const CLOSE: &str = "}}";
+pub(super) const OPEN: &str = "${{";
+pub(super) const CLOSE: &str = "}}";
 
-fn find_close(source: &str) -> Option<usize> {
+pub(super) fn find_close(source: &str) -> Option<usize> {
     let mut in_string = false;
     let bytes = source.as_bytes();
     let mut index = 0;
@@ -27,7 +27,7 @@ fn find_close(source: &str) -> Option<usize> {
 
 pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprError> {
     let mut rendered = String::with_capacity(source.len());
-    let mut memory = MemoryCounter::new("format");
+    let mut memory = MemoryCounter::new(Subject::Template(source));
     let mut rest = source;
     while let Some(start) = rest.find(OPEN) {
         memory.add(&rest[..start])?;

@@ -110,7 +110,7 @@ fn push_operand(context: &mut ParseContext<'_>, token: &Token) -> Result<(), Par
                     context.expression,
                 ));
             };
-            Node::NamedValue(root)
+            Node::NamedValue(root, token.raw_value.clone())
         }
         TokenKind::Wildcard => Node::Wildcard,
         TokenKind::PropertyName => Node::Literal(Value::String(token.raw_value.clone())),

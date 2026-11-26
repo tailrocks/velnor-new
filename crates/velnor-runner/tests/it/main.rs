@@ -9,12 +9,18 @@ mod expr_hash_files;
 mod expr_hash_files_fs;
 #[path = "expr/hash_files_patterns.rs"]
 mod expr_hash_files_patterns;
+#[path = "expr/hash_files_unicode.rs"]
+mod expr_hash_files_unicode;
 #[path = "expr/indexing.rs"]
 mod expr_indexing;
 #[path = "expr/limits.rs"]
 mod expr_limits;
+#[path = "expr/memory.rs"]
+mod expr_memory;
 #[path = "expr/operators.rs"]
 mod expr_operators;
+#[path = "expr/ordinal_case.rs"]
+mod expr_ordinal_case;
 #[path = "expr/status.rs"]
 mod expr_status;
 #[path = "expr/support.rs"]

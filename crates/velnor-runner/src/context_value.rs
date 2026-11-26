@@ -347,13 +347,24 @@ pub(crate) fn ordinal_ignore_case_fold(value: &str) -> String {
     value.chars().map(simple_ordinal_uppercase).collect()
 }
 
+const YPOGEGRAMMENI_TO_PROSGEGRAMMENI: u32 = 8;
+
 fn simple_ordinal_uppercase(character: char) -> char {
-    if matches!(character, '\u{0131}' | '\u{017f}') {
-        return character;
-    }
-    let mut upper = character.to_uppercase();
-    match (upper.next(), upper.next()) {
-        (Some(single), None) => single,
-        _ => character,
+    match character {
+        '\u{0131}' | '\u{017f}' => character,
+        '\u{1f80}'..='\u{1f87}' | '\u{1f90}'..='\u{1f97}' | '\u{1fa0}'..='\u{1fa7}' => {
+            char::from_u32(u32::from(character) + YPOGEGRAMMENI_TO_PROSGEGRAMMENI)
+                .unwrap_or(character)
+        }
+        '\u{1fb3}' => '\u{1fbc}',
+        '\u{1fc3}' => '\u{1fcc}',
+        '\u{1ff3}' => '\u{1ffc}',
+        _ => {
+            let mut upper = character.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(single), None) => single,
+                _ => character,
+            }
+        }
     }
 }

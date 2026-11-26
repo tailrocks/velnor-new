@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 use velnor_runner::context_value::ContextValue;
 use velnor_runner::expr::{ExprEnv, RootContext, Value, evaluate_expression};
+
+const LINEAR_TIME_LIMIT: Duration = Duration::from_secs(10);
 
 pub(crate) fn env_with(contexts: &[(RootContext, &str)]) -> Result<ExprEnv> {
     let mut env = ExprEnv::new(PathBuf::from("/nonexistent-workspace"));
@@ -35,10 +40,48 @@ pub(crate) fn truthy(expression: &str, env: &ExprEnv) -> Result<bool> {
     Ok(eval(expression, env)?.is_truthy())
 }
 
+pub(crate) fn describe_success(value: &Value) -> String {
+    let kind = match value {
+        Value::Null => "null",
+        Value::Boolean(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    };
+    format!(
+        "kind {kind} with {} bytes as text",
+        value.convert_to_string().len()
+    )
+}
+
 pub(crate) fn error_text(expression: &str, env: &ExprEnv) -> Result<String> {
     match evaluate_expression(expression, env) {
-        Ok(value) => anyhow::bail!("{expression:?} evaluated to {value:?}"),
+        Ok(value) => bail!("{expression:?} evaluated to {}", describe_success(&value)),
         Err(error) => Ok(error.to_string()),
+    }
+}
+
+pub(crate) fn exceeded_memory(expression: &str) -> String {
+    format!(
+        "The maximum allowed memory size was exceeded while evaluating the following expression: {expression}"
+    )
+}
+
+pub(crate) fn within_the_linear_time_limit<T: Send + 'static>(
+    behaviour: &str,
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = sender.send(work());
+    });
+    match receiver.recv_timeout(LINEAR_TIME_LIMIT) {
+        Ok(result) => result,
+        Err(_) => bail!(
+            "{behaviour} did not finish within {} seconds",
+            LINEAR_TIME_LIMIT.as_secs()
+        ),
     }
 }
 

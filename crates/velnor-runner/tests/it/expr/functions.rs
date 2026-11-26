@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/tests.rs
 
-use crate::expr_support::{empty_env, env_with, error_text, text, truthy};
+use crate::expr_support::{
+    empty_env, env_with, error_text, exceeded_memory, text, truthy, within_the_linear_time_limit,
+};
 use anyhow::Result;
-use std::time::{Duration, Instant};
 use velnor_runner::expr::RootContext;
 
 #[test]
@@ -22,6 +23,22 @@ fn expr_format_substitutes_arguments() -> Result<()> {
     assert_eq!(text("format('{0}', true)", &env)?, "true");
     assert!(error_text("format('{1}', 'a')", &env)?.contains("references more arguments"));
     assert!(error_text("format('{0')", &env)?.contains("Invalid format string"));
+    Ok(())
+}
+
+#[test]
+fn expr_format_reports_unescaped_specifiers_of_the_argument_kind() -> Result<()> {
+    let env = empty_env();
+
+    assert_eq!(text("format('{0:}', 'z')", &env)?, "z");
+    assert_eq!(
+        error_text("format('{0:x}', 1)", &env)?,
+        "The format specifiers 'x' are not valid for objects of type 'Number'"
+    );
+    assert_eq!(
+        error_text("format('{0:a}}b}', 'z')", &env)?,
+        "The format specifiers 'a}b' are not valid for objects of type 'String'"
+    );
     Ok(())
 }
 
@@ -101,46 +118,21 @@ fn expr_from_json_accepts_only_a_string_literal() -> Result<()> {
 
 #[test]
 fn expr_contains_scans_long_values_in_linear_time() -> Result<()> {
-    let haystack = "a".repeat(400_000);
-    let needle = format!("{}b", "a".repeat(200_000));
-    let env = env_with(&[(
-        RootContext::Env,
-        &format!(
-            r#"{{"HAYSTACK":"{haystack}","NEEDLE":"{needle}","UPPER":"{}"}}"#,
-            "A".repeat(100_000)
-        ),
-    )])?;
+    within_the_linear_time_limit("contains over million-character values", || {
+        let haystack = "a".repeat(1_000_000);
+        let needle = format!("{}b", "a".repeat(500_000));
+        let env = env_with(&[(
+            RootContext::Env,
+            &format!(
+                r#"{{"HAYSTACK":"{haystack}","NEEDLE":"{needle}","UPPER":"{}"}}"#,
+                "A".repeat(100_000)
+            ),
+        )])?;
 
-    let started = Instant::now();
-    assert!(!truthy("contains(env.HAYSTACK, env.NEEDLE)", &env)?);
-    assert!(truthy("contains(env.HAYSTACK, env.UPPER)", &env)?);
-    assert!(started.elapsed() < Duration::from_secs(10));
-    Ok(())
-}
-
-#[test]
-fn expr_format_stops_at_the_memory_budget() -> Result<()> {
-    let env = env_with(&[(
-        RootContext::Env,
-        &format!(r#"{{"PAYLOAD":"{}"}}"#, "x".repeat(100_000)),
-    )])?;
-
-    assert_eq!(
-        text(
-            &format!("format('{}', env.PAYLOAD)", "{0}".repeat(20)),
-            &env
-        )?
-        .len(),
-        2_000_000
-    );
-    assert!(
-        error_text(
-            &format!("format('{}', env.PAYLOAD)", "{0}".repeat(4_000)),
-            &env
-        )?
-        .starts_with("The maximum allowed memory size was exceeded")
-    );
-    Ok(())
+        assert!(!truthy("contains(env.HAYSTACK, env.NEEDLE)", &env)?);
+        assert!(truthy("contains(env.HAYSTACK, env.UPPER)", &env)?);
+        Ok(())
+    })
 }
 
 #[test]
@@ -168,9 +160,9 @@ fn expr_to_json_stops_at_the_memory_budget() -> Result<()> {
     let beyond = env_with(&[(RootContext::Env, &items(400_000))])?;
 
     assert!(text("toJSON(env.LIST)", &within)?.starts_with("[\n  1,\n  1,"));
-    assert!(
-        error_text("toJSON(env.LIST)", &beyond)?
-            .starts_with("The maximum allowed memory size was exceeded")
+    assert_eq!(
+        error_text("toJSON(env.LIST)", &beyond)?,
+        exceeded_memory("toJSON(env.LIST)")
     );
     Ok(())
 }
@@ -179,9 +171,9 @@ fn expr_to_json_stops_at_the_memory_budget() -> Result<()> {
 fn expr_to_json_escapes_line_separators_like_json_net() -> Result<()> {
     let env = env_with(&[(
         RootContext::Env,
-        r#"{"TEXT":"a\u0085b\u2028c\u2029d\u0001e\u007f\"q\\","k\u2028":1}"#,
+        r#"{"TEXT":"a\u0085b\u2028c\u2029d\u0001e\u001bf\u007f\"q\\","k\u2028":1}"#,
     )])?;
-    let expected = format!(r#""a\u0085b\u2028c\u2029d\u0001e{}\"q\\""#, '\u{7f}');
+    let expected = format!(r#""a\u0085b\u2028c\u2029d\u0001e\u001bf{}\"q\\""#, '\u{7f}');
 
     assert_eq!(text("toJSON(env.TEXT)", &env)?, expected);
     assert!(text("toJSON(env)", &env)?.contains(r#""k\u2028": 1"#));
@@ -190,18 +182,18 @@ fn expr_to_json_escapes_line_separators_like_json_net() -> Result<()> {
 
 #[test]
 fn expr_format_scans_long_format_strings_in_linear_time() -> Result<()> {
-    let env = env_with(&[(
-        RootContext::Env,
-        &format!(
-            r#"{{"OPEN":"{}","CLOSE":"{}"}}"#,
-            "{{".repeat(300_000),
-            "}}".repeat(300_000)
-        ),
-    )])?;
+    within_the_linear_time_limit("format over 600,000-character format strings", || {
+        let env = env_with(&[(
+            RootContext::Env,
+            &format!(
+                r#"{{"OPEN":"{}","CLOSE":"{}"}}"#,
+                "{{".repeat(300_000),
+                "}}".repeat(300_000)
+            ),
+        )])?;
 
-    let started = Instant::now();
-    assert_eq!(text("format(env.OPEN)", &env)?.len(), 300_000);
-    assert_eq!(text("format(env.CLOSE)", &env)?.len(), 300_000);
-    assert!(started.elapsed() < Duration::from_secs(10));
-    Ok(())
+        assert_eq!(text("format(env.OPEN)", &env)?.len(), 300_000);
+        assert_eq!(text("format(env.CLOSE)", &env)?.len(), 300_000);
+        Ok(())
+    })
 }

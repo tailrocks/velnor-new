@@ -9,7 +9,7 @@ use super::value::Value;
 pub(crate) enum Node {
     Literal(Value),
     Wildcard,
-    NamedValue(RootContext),
+    NamedValue(RootContext, String),
     Index(Box<Node>, Box<Node>),
     Not(Box<Node>),
     And(Vec<Node>),
@@ -34,7 +34,7 @@ impl Node {
 
     pub(crate) fn children(&self) -> Vec<&Node> {
         match self {
-            Node::Literal(_) | Node::Wildcard | Node::NamedValue(_) => Vec::new(),
+            Node::Literal(_) | Node::Wildcard | Node::NamedValue(..) => Vec::new(),
             Node::Not(inner) => vec![inner.as_ref()],
             Node::Index(left, right) | Node::Binary(_, left, right) => {
                 vec![left.as_ref(), right.as_ref()]

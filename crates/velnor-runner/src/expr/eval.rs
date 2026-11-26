@@ -32,7 +32,7 @@ pub(crate) fn evaluate_node(node: &Node, env: &ExprEnv) -> Result<Value, ExprErr
     match node {
         Node::Literal(value) => Ok(value.clone()),
         Node::Wildcard => Ok(Value::String("*".to_string())),
-        Node::NamedValue(root) => Ok(env.context(*root)),
+        Node::NamedValue(root, _) => Ok(env.context(*root)),
         Node::Not(inner) => Ok(Value::Boolean(evaluate_node(inner, env)?.is_falsy())),
         Node::And(parameters) => {
             let mut result = Value::Null;
@@ -66,8 +66,8 @@ pub(crate) fn evaluate_node(node: &Node, env: &ExprEnv) -> Result<Value, ExprErr
                 BinaryOperator::LessThanOrEqual => left.abstract_less_than_or_equal(&right),
             }))
         }
-        Node::Index(target, index) => evaluate_index(target, index, env),
-        Node::Function { function, args, .. } => evaluate_function(*function, args, env),
+        Node::Index(target, index) => evaluate_index(node, target, index, env),
+        Node::Function { function, args, .. } => evaluate_function(node, *function, args, env),
     }
 }
 
@@ -75,16 +75,21 @@ fn arity_error() -> ExprError {
     ExprError::evaluation("Invalid number of function arguments")
 }
 
-fn evaluate_function(function: Function, args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
+fn evaluate_function(
+    node: &Node,
+    function: Function,
+    args: &[Node],
+    env: &ExprEnv,
+) -> Result<Value, ExprError> {
     match function {
         Function::Contains => evaluate_contains(args, env),
         Function::StartsWith => evaluate_starts_with(args, env),
-        Function::Format => evaluate_format(args, env),
+        Function::Format => evaluate_format(node, args, env),
         Function::ToJson => {
             let [value] = args else {
                 return Err(arity_error());
             };
-            to_json(&evaluate_node(value, env)?).map(Value::String)
+            to_json(node, &evaluate_node(value, env)?).map(Value::String)
         }
         Function::FromJson => {
             let [value] = args else {

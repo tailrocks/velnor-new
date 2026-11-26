@@ -5,40 +5,49 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_node;
+use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
 use super::number::format_number;
 use super::value::{Value, ValueKind};
 use crate::context_value::write_json_string;
+use std::ops::Range;
 
-pub(crate) fn evaluate_format(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
+pub(crate) fn evaluate_format(
+    node: &Node,
+    args: &[Node],
+    env: &ExprEnv,
+) -> Result<Value, ExprError> {
     let [format, rest @ ..] = args else {
         return Err(ExprError::evaluation(
             "Invalid number of function arguments",
         ));
     };
     let format = evaluate_node(format, env)?.convert_to_string();
-    format_template(&format, rest.len(), |index| match rest.get(index) {
-        Some(arg) => evaluate_node(arg, env),
-        None => Ok(Value::Null),
+    let mut memory = MemoryCounter::new(Subject::Node(node));
+    format_template(&format, rest.len(), &mut memory, |index| {
+        match rest.get(index) {
+            Some(arg) => evaluate_node(arg, env),
+            None => Ok(Value::Null),
+        }
     })
     .map(Value::String)
 }
 
 struct Placeholder {
     arg_index: usize,
-    specifiers: String,
+    specifiers: Range<usize>,
     rbrace: usize,
 }
 
-fn char_at(chars: &[char], position: usize) -> char {
-    chars.get(position).copied().unwrap_or('\0')
+fn byte_at(bytes: &[u8], position: usize) -> u8 {
+    bytes.get(position).copied().unwrap_or(0)
 }
 
-fn find_char(chars: &[char], from: usize, needle: char) -> Option<usize> {
-    chars
+fn find_byte(bytes: &[u8], from: usize, needle: u8) -> Option<usize> {
+    bytes
         .get(from..)?
         .iter()
-        .position(|&c| c == needle)
+        .position(|&byte| byte == needle)
         .map(|position| position + from)
 }
 
@@ -49,37 +58,37 @@ enum Scan {
     At(usize),
 }
 
-struct NextChar {
-    needle: char,
+struct NextByte {
+    needle: u8,
     scan: Scan,
 }
 
-impl NextChar {
-    fn new(needle: char) -> Self {
+impl NextByte {
+    fn new(needle: u8) -> Self {
         Self {
             needle,
             scan: Scan::Unknown,
         }
     }
 
-    fn from(&mut self, chars: &[char], index: usize) -> Option<usize> {
+    fn from(&mut self, bytes: &[u8], index: usize) -> Option<usize> {
         match self.scan {
             Scan::Absent => return None,
             Scan::At(position) if position >= index => return Some(position),
             Scan::At(_) | Scan::Unknown => {}
         }
-        let found = find_char(chars, index, self.needle);
+        let found = find_byte(bytes, index, self.needle);
         self.scan = found.map_or(Scan::Absent, Scan::At);
         found
     }
 }
 
-fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Option<Placeholder> {
+fn read_placeholder(bytes: &[u8], lbrace: usize, rbrace: Option<usize>) -> Option<Placeholder> {
     if rbrace.is_none_or(|rbrace| rbrace <= lbrace + 1) {
         return None;
     }
-    let (arg_index, end_arg_index) = read_arg_index(chars, lbrace + 1)?;
-    let (specifiers, rbrace) = read_format_specifiers(chars, end_arg_index + 1)?;
+    let (arg_index, end_arg_index) = read_arg_index(bytes, lbrace + 1)?;
+    let (specifiers, rbrace) = read_format_specifiers(bytes, end_arg_index + 1)?;
     Some(Placeholder {
         arg_index,
         specifiers,
@@ -87,111 +96,100 @@ fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Opt
     })
 }
 
-const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
-const STRING_BASE_OVERHEAD: usize = 26;
-const BYTES_PER_UTF16_UNIT: usize = 2;
-
-pub(crate) struct MemoryCounter {
-    function: &'static str,
-    bytes: usize,
+enum Segment {
+    Text(Range<usize>),
+    Argument {
+        index: usize,
+        specifiers: Range<usize>,
+    },
 }
 
-impl MemoryCounter {
-    pub(crate) fn new(function: &'static str) -> Self {
-        Self { function, bytes: 0 }
-    }
+struct Segments<'a, 'm, 'n> {
+    format: &'a str,
+    memory: &'m mut MemoryCounter<'n>,
+    found: Vec<Segment>,
+}
 
-    pub(crate) fn add(&mut self, value: &str) -> Result<(), ExprError> {
-        if value.is_empty() {
+impl Segments<'_, '_, '_> {
+    fn text(&mut self, range: Range<usize>) -> Result<(), ExprError> {
+        if range.is_empty() {
             return Ok(());
         }
-        let units = value.encode_utf16().count();
-        self.add_bytes(
-            STRING_BASE_OVERHEAD.saturating_add(units.saturating_mul(BYTES_PER_UTF16_UNIT)),
-        )
-    }
-
-    pub(crate) fn add_bytes(&mut self, bytes: usize) -> Result<(), ExprError> {
-        self.bytes = self.bytes.saturating_add(bytes);
-        if self.bytes > MAX_MEMORY_BYTES {
-            return Err(ExprError::evaluation(format!(
-                "The maximum allowed memory size was exceeded while evaluating the following expression: {}",
-                self.function
-            )));
-        }
+        self.memory.add(&self.format[range.clone()])?;
+        self.found.push(Segment::Text(range));
         Ok(())
     }
 }
 
-enum Segment {
-    Text(String),
-    Argument { index: usize, specifiers: String },
-}
-
-fn parse_template(format: &str, argument_count: usize) -> Result<Vec<Segment>, ExprError> {
-    let chars: Vec<char> = format.chars().collect();
-    let mut segments = Vec::new();
+fn scan_template(
+    format: &str,
+    argument_count: usize,
+    memory: &mut MemoryCounter<'_>,
+) -> Result<Vec<Segment>, ExprError> {
+    let bytes = format.as_bytes();
+    let mut segments = Segments {
+        format,
+        memory,
+        found: Vec::new(),
+    };
     let mut index = 0usize;
     let invalid = || ExprError::evaluation(format!("Invalid format string: {format}"));
-    let mut opening = NextChar::new('{');
-    let mut closing = NextChar::new('}');
+    let mut opening = NextByte::new(b'{');
+    let mut closing = NextByte::new(b'}');
 
-    while index < chars.len() {
-        let lbrace = opening.from(&chars, index);
-        let rbrace = closing.from(&chars, index);
+    while index < bytes.len() {
+        let lbrace = opening.from(bytes, index);
+        let rbrace = closing.from(bytes, index);
 
         match (lbrace, rbrace) {
             (Some(lbrace), rbrace) if rbrace.is_none_or(|rbrace| rbrace > lbrace) => {
-                if char_at(&chars, lbrace + 1) == '{' {
-                    segments.push(Segment::Text(chars[index..=lbrace].iter().collect()));
+                if byte_at(bytes, lbrace + 1) == b'{' {
+                    segments.text(index..lbrace + 1)?;
                     index = lbrace + 2;
                     continue;
                 }
-                let placeholder = read_placeholder(&chars, lbrace, rbrace).ok_or_else(invalid)?;
+                let placeholder = read_placeholder(bytes, lbrace, rbrace).ok_or_else(invalid)?;
                 if placeholder.arg_index >= argument_count {
                     return Err(ExprError::evaluation(format!(
                         "The following format string references more arguments than were supplied: {format}"
                     )));
                 }
-                segments.push(Segment::Text(chars[index..lbrace].iter().collect()));
-                segments.push(Segment::Argument {
+                segments.text(index..lbrace)?;
+                segments.found.push(Segment::Argument {
                     index: placeholder.arg_index,
                     specifiers: placeholder.specifiers,
                 });
                 index = placeholder.rbrace + 1;
             }
             (_, Some(rbrace)) => {
-                if char_at(&chars, rbrace + 1) != '}' {
+                if byte_at(bytes, rbrace + 1) != b'}' {
                     return Err(invalid());
                 }
-                segments.push(Segment::Text(chars[index..=rbrace].iter().collect()));
+                segments.text(index..rbrace + 1)?;
                 index = rbrace + 2;
             }
             _ => {
-                segments.push(Segment::Text(chars[index..].iter().collect()));
+                segments.text(index..bytes.len())?;
                 break;
             }
         }
     }
 
-    Ok(segments)
+    Ok(segments.found)
 }
 
-pub(crate) fn format_template(
+fn format_template(
     format: &str,
     argument_count: usize,
+    memory: &mut MemoryCounter<'_>,
     mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
 ) -> Result<String, ExprError> {
-    let mut memory = MemoryCounter::new("format");
     let mut cache: Vec<Option<(ValueKind, String)>> = vec![None; argument_count];
     let mut result = String::new();
 
-    for segment in parse_template(format, argument_count)? {
+    for segment in scan_template(format, argument_count, memory)? {
         match segment {
-            Segment::Text(text) => {
-                memory.add(&text)?;
-                result.push_str(&text);
-            }
+            Segment::Text(range) => result.push_str(&format[range]),
             Segment::Argument { index, specifiers } => {
                 let slot = &mut cache[index];
                 if slot.is_none() {
@@ -203,7 +201,8 @@ pub(crate) fn format_template(
                 };
                 if !specifiers.is_empty() {
                     return Err(ExprError::evaluation(format!(
-                        "The format specifiers '{specifiers}' are not valid for objects of type '{}'",
+                        "The format specifiers '{}' are not valid for objects of type '{}'",
+                        format[specifiers].replace("}}", "}"),
                         kind.as_str()
                     )));
                 }
@@ -216,57 +215,54 @@ pub(crate) fn format_template(
     Ok(result)
 }
 
-fn read_arg_index(chars: &[char], start: usize) -> Option<(usize, usize)> {
-    let length = chars
+fn read_arg_index(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    let length = bytes
         .get(start..)?
         .iter()
-        .take_while(|c| c.is_ascii_digit())
+        .take_while(|byte| byte.is_ascii_digit())
         .count();
     if length == 0 {
         return None;
     }
-    let digits: String = chars[start..start + length].iter().collect();
+    let digits = std::str::from_utf8(&bytes[start..start + length]).ok()?;
     let parsed = digits.parse::<u8>().ok()?;
     Some((usize::from(parsed), start + length - 1))
 }
 
-fn read_format_specifiers(chars: &[char], start: usize) -> Option<(String, usize)> {
-    match char_at(chars, start) {
-        '}' => return Some((String::new(), start)),
-        ':' => {}
+fn read_format_specifiers(bytes: &[u8], start: usize) -> Option<(Range<usize>, usize)> {
+    match byte_at(bytes, start) {
+        b'}' => return Some((start..start, start)),
+        b':' => {}
         _ => return None,
     }
-    let mut specifiers = String::new();
     let mut index = start + 1;
     loop {
-        let c = *chars.get(index)?;
-        if c != '}' {
-            specifiers.push(c);
+        let byte = *bytes.get(index)?;
+        if byte != b'}' {
             index += 1;
-        } else if chars.get(index + 1).copied() == Some('}') {
-            specifiers.push('}');
+        } else if bytes.get(index + 1).copied() == Some(b'}') {
             index += 2;
         } else {
-            return Some((specifiers, index));
+            return Some((start + 1..index, index));
         }
     }
 }
 
-pub(crate) fn to_json(value: &Value) -> Result<String, ExprError> {
+pub(crate) fn to_json(node: &Node, value: &Value) -> Result<String, ExprError> {
     let mut writer = JsonWriter {
         out: String::new(),
-        memory: MemoryCounter::new("toJSON"),
+        memory: MemoryCounter::new(Subject::Node(node)),
     };
     write_json(value, &mut writer, 0, JsonPrefix::Root)?;
     Ok(writer.out)
 }
 
-struct JsonWriter {
+struct JsonWriter<'a> {
     out: String,
-    memory: MemoryCounter,
+    memory: MemoryCounter<'a>,
 }
 
-impl JsonWriter {
+impl JsonWriter<'_> {
     fn push(&mut self, piece: &str) -> Result<(), ExprError> {
         self.memory.add(piece)?;
         self.out.push_str(piece);
@@ -283,7 +279,7 @@ enum JsonPrefix {
 
 fn write_json(
     value: &Value,
-    writer: &mut JsonWriter,
+    writer: &mut JsonWriter<'_>,
     level: usize,
     prefix: JsonPrefix,
 ) -> Result<(), ExprError> {

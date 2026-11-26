@@ -938,7 +938,7 @@ HOME before the workspace filter
 ([index.js:2207](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2207)), and a dangling
 symlink matched by a pattern failing the call, because the runner's
 `statSync` on each match throws
-([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)). Six
+([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)). Five
 behaviours differ on purpose:
 
 - **Outside-target symlinks are ignored.** The runner only checks that the
@@ -964,19 +964,16 @@ behaviours differ on purpose:
   and follows links
   ([index.js:1446](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1446)). Velnor never
   follows symlinks and returns the runner's `Invalid glob option` error for it.
-- **Directory entries are visited in name order.** The runner takes the order of
-  `readdir` ([index.js:1405](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1405)),
-  which varies by file system. The digest depends on file order, so Velnor sorts
-  to keep it reproducible.
-- **`?` and character classes match the UTF-8 bytes of a non-ASCII name.**
-  `globset` compiles `?` and `[...]` to a byte matcher, so `?` matches one byte
-  and a class that holds a non-ASCII character matches nothing, where the
-  runner's minimatch matches UTF-16 code units: `hashFiles('?')` misses a file
-  named `é` that the runner hashes, and `hashFiles('??')` hashes `é` where the
-  runner hashes a name of two code units such as an emoji. Literal non-ASCII
-  names and `*` agree with the runner. No `hashFiles` pattern of
-  velnor-new's workflows or of the generator's output contains a non-ASCII
-  character, so a second, UTF-16 matcher is not worth carrying.
+- **`?` and character classes fail on non-ASCII names.** `globset` compiles `?`
+  and `[...]` to a byte matcher, so `?` matches one byte and a class that holds
+  a non-ASCII character matches nothing, where the runner's minimatch matches
+  UTF-16 code units: `hashFiles('?')` would miss a file named `é` that the
+  runner hashes, and `hashFiles('??')` would hash `é` where the runner hashes a
+  name of two code units such as an emoji. Velnor fails the call instead of
+  changing the digest. A character class with a non-ASCII character is an error
+  when the pattern is parsed, and a segment with `?` or a class that is tested
+  against a non-ASCII name is an error while walking. Literal non-ASCII names
+  and `*` agree with the runner.
 - **A `HOME` with `.` or `..` segments is rejected for every `~` pattern.**
   Velnor rejects such a `HOME` for every pattern that starts with `~`. The runner
   rejects it with `Relative pathing '.' and '..' is not allowed` only for
@@ -985,3 +982,27 @@ behaviours differ on purpose:
   ([index.js:2198](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2198)).
   The pattern quoted in Velnor's error is the `HOME`-expanded pattern text. The
   runner quotes its rebuilt `<collapsed>/**` text.
+
+## Expression memory accounting deviations from the runner
+
+The runner counts memory per function node with a
+[`MemoryCounter`](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTExpressions2/Expressions2/Sdk/MemoryCounter.cs)
+and names the node's expression in the error
+([MemoryCounter.cs:28](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTExpressions2/Expressions2/Sdk/MemoryCounter.cs#L28)).
+Velnor's counters for `format`, `toJSON` and wildcard projections use the same
+sizes and the same 10 MiB limit, and print the same
+`ConvertToExpression` text. Two behaviours differ:
+
+- **There is no expression-wide total.** The runner also adds every
+  intermediate result of an expression to one `EvaluationMemory`, which fails
+  against the same limit
+  ([EvaluationMemory.cs:82](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTExpressions2/Expressions2/Sdk/EvaluationMemory.cs#L82)).
+  Velnor checks each call on its own, so an expression whose calls each stay
+  under the limit but exceed it together succeeds.
+- **A template charges and reports a rebuilt `format`.** The runner turns a
+  string with several `${{ }}` spans into one
+  [`format('...', ...)` expression](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTObjectTemplating/ObjectTemplating/TemplateReader.cs#L619)
+  and counts its pieces. Velnor evaluates the spans in order, charges one string
+  overhead per literal run instead of one per escaped brace, and reports the
+  `format('...', ...)` text rebuilt from the source, cut at the 21,000-character
+  expression limit and ended with `...`.

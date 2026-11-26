@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
-use crate::expr_support::{TempDir, error_text, expected_digest, text};
+use crate::expr_support::{TempDir, empty_env, error_text, expected_digest, text};
 use anyhow::Result;
 use std::time::Duration;
 
@@ -73,6 +73,11 @@ fn expr_hash_files_rejects_unknown_option() -> Result<()> {
     );
     assert!(error_text("hashFiles()", &env)?.contains("Too few parameters"));
     Ok(())
+}
+
+#[test]
+fn expr_hash_files_times_out_after_two_minutes_by_default() {
+    assert_eq!(empty_env().hash_files_timeout, Duration::from_secs(120));
 }
 
 #[test]

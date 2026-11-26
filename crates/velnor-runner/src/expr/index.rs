@@ -5,7 +5,7 @@
 use super::env::ExprEnv;
 use super::error::ExprError;
 use super::eval::evaluate_node;
-use super::format::MemoryCounter;
+use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
 use super::value::{ArrayValue, ObjectValue, Value};
 
@@ -15,6 +15,7 @@ enum Collection {
 }
 
 pub(crate) fn evaluate_index(
+    node: &Node,
     target: &Node,
     index: &Node,
     env: &ExprEnv,
@@ -41,24 +42,26 @@ pub(crate) fn evaluate_index(
     };
 
     match collection {
-        Collection::Array(array) if array.is_filtered() => filtered_index(&array, key.as_ref()),
-        Collection::Object(object) => object_index(&object, key.as_ref()),
-        Collection::Array(array) => array_index(&array, key.as_ref()),
+        Collection::Array(array) if array.is_filtered() => {
+            filtered_index(node, &array, key.as_ref())
+        }
+        Collection::Object(object) => object_index(node, &object, key.as_ref()),
+        Collection::Array(array) => array_index(node, &array, key.as_ref()),
     }
 }
 
 const POINTER_BYTES: usize = 8;
 const MIN_OBJECT_BYTES: usize = 24;
 
-fn projection() -> Result<MemoryCounter, ExprError> {
-    let mut memory = MemoryCounter::new("wildcard");
+fn projection(node: &Node) -> Result<MemoryCounter<'_>, ExprError> {
+    let mut memory = MemoryCounter::new(Subject::Node(node));
     memory.add_bytes(MIN_OBJECT_BYTES)?;
     Ok(memory)
 }
 
 fn project(
     values: impl IntoIterator<Item = Value>,
-    memory: &mut MemoryCounter,
+    memory: &mut MemoryCounter<'_>,
     result: &mut Vec<Value>,
 ) -> Result<(), ExprError> {
     for value in values {
@@ -68,8 +71,12 @@ fn project(
     Ok(())
 }
 
-fn filtered_index(array: &ArrayValue, key: Option<&Value>) -> Result<Value, ExprError> {
-    let mut memory = MemoryCounter::new("wildcard");
+fn filtered_index(
+    node: &Node,
+    array: &ArrayValue,
+    key: Option<&Value>,
+) -> Result<Value, ExprError> {
+    let mut memory = MemoryCounter::new(Subject::Node(node));
     let mut result = Vec::new();
     for item in array.items() {
         match (item, key) {
@@ -98,9 +105,13 @@ fn filtered_index(array: &ArrayValue, key: Option<&Value>) -> Result<Value, Expr
     Ok(Value::Array(ArrayValue::filtered(result)))
 }
 
-fn object_index(object: &ObjectValue, key: Option<&Value>) -> Result<Value, ExprError> {
+fn object_index(
+    node: &Node,
+    object: &ObjectValue,
+    key: Option<&Value>,
+) -> Result<Value, ExprError> {
     let Some(key) = key else {
-        let mut memory = projection()?;
+        let mut memory = projection(node)?;
         let mut values = Vec::new();
         project(
             object.entries().iter().map(|(_, value)| value.clone()),
@@ -114,9 +125,9 @@ fn object_index(object: &ObjectValue, key: Option<&Value>) -> Result<Value, Expr
         .unwrap_or(Value::Null))
 }
 
-fn array_index(array: &ArrayValue, key: Option<&Value>) -> Result<Value, ExprError> {
+fn array_index(node: &Node, array: &ArrayValue, key: Option<&Value>) -> Result<Value, ExprError> {
     let Some(key) = key else {
-        let mut memory = projection()?;
+        let mut memory = projection(node)?;
         let mut values = Vec::new();
         project(array.items().iter().cloned(), &mut memory, &mut values)?;
         return Ok(Value::Array(ArrayValue::filtered(values)));
