@@ -69,13 +69,7 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
             .lines()
             .any(|line| line.ends_with("hello"))
     );
-    assert!(
-        mock.requests_to("PUT", JOB_LOG_BLOB)?
-            .first()
-            .context("the job log was uploaded")?
-            .text()
-            .contains("hello")
-    );
+    assert!(mock.uploaded(JOB_LOG_BLOB)?.contains("hello"));
     let delete = mock.server.only_request("DELETE", "/broker/session")?;
     assert_eq!(delete.query("sessionId"), Some(SESSION_ID));
     Ok(())

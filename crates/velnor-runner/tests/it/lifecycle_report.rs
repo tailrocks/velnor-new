@@ -39,12 +39,8 @@ async fn lifecycle_reports_unsupported_job_as_failed_completion() -> Result<()> 
             .as_str()
             .is_some_and(|message| message.contains("unsupported: uses actions/foo@v1"))
     );
-    let job_log = mock.requests_to("PUT", JOB_LOG_BLOB)?;
     assert!(
-        job_log
-            .first()
-            .context("the job log was uploaded")?
-            .text()
+        mock.uploaded(JOB_LOG_BLOB)?
             .contains("unsupported: uses actions/foo@v1")
     );
     Ok(())

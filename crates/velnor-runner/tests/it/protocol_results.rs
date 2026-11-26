@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
-
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::protocol::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
@@ -103,12 +101,12 @@ fn step(external_id: &str) -> TwirpStep {
     }
 }
 
-const RECEIVER_PATH: &str = "/twirp/results.services.receiver.Receiver";
-const RUN: &str = "run-backend";
-const JOB: &str = "job-backend";
-const STEP: &str = "step-1";
+pub(super) const RECEIVER_PATH: &str = "/twirp/results.services.receiver.Receiver";
+pub(super) const RUN: &str = "run-backend";
+pub(super) const JOB: &str = "job-backend";
+pub(super) const STEP: &str = "step-1";
 
-fn receiver(method: &str) -> String {
+pub(super) fn receiver(method: &str) -> String {
     format!("{RECEIVER_PATH}/{method}")
 }
 
@@ -337,82 +335,5 @@ async fn twirp_update_steps_gives_up_after_three_attempts() -> Result<()> {
         "{error:#}"
     );
     assert_eq!(server.requests_to("POST", STEPS_UPDATE_PATH)?.len(), 3);
-    Ok(())
-}
-
-#[tokio::test]
-async fn job_log_over_one_block_is_appended_in_blocks_without_losing_a_line() -> Result<()> {
-    const LINES: usize = 150_000;
-    let server = TestServer::start().await?;
-    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
-    let blob_url = format!("{}/blob/log?sig=1", server.uri());
-    server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
-    })?;
-    server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
-    server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
-        Reply::json(200, &json!({"ok": true}))
-    })?;
-    let mut text = String::new();
-    for number in 0..LINES {
-        writeln!(text, "{number:020} {}", "x".repeat(40))?;
-    }
-    let scratch = Scratch::new()?;
-    let log = scratch.write("job.log", text.as_bytes())?;
-
-    client.upload_job_log(RUN, JOB, &log).await?;
-
-    let puts = server.requests_to("PUT", "/blob/log")?;
-    assert_eq!(puts[0].header("x-ms-blob-type"), Some("AppendBlob"));
-    assert_eq!(puts[0].text(), "");
-    let blocks: Vec<_> = puts
-        .iter()
-        .filter(|put| put.query("comp") == Some("appendblock"))
-        .collect();
-    assert!(blocks.len() >= 3, "{} blocks", blocks.len());
-    for block in &blocks[..blocks.len() - 1] {
-        let size = block.text().len();
-        assert!(
-            (2 * 1024 * 1024..2 * 1024 * 1024 + 128).contains(&size),
-            "{size}"
-        );
-        assert!(block.text().ends_with('\n'));
-    }
-    let joined: String = blocks.iter().map(|block| block.text()).collect();
-    assert_eq!(joined, text);
-    let seal = puts.last().context("the seal request")?;
-    assert_eq!(seal.query("comp"), Some("seal"));
-    let metadata = server
-        .only_request("POST", &receiver("CreateJobLogsMetadata"))?
-        .json()?;
-    assert_eq!(metadata["line_count"], LINES);
-    Ok(())
-}
-
-#[tokio::test]
-async fn job_log_of_one_block_is_a_single_block_blob() -> Result<()> {
-    let server = TestServer::start().await?;
-    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
-    let blob_url = format!("{}/blob/log", server.uri());
-    server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
-    })?;
-    server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
-    server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
-        Reply::json(200, &json!({"ok": true}))
-    })?;
-    let scratch = Scratch::new()?;
-    let log = scratch.write("job.log", b"one\ntwo\nthree\n")?;
-
-    client.upload_job_log(RUN, JOB, &log).await?;
-
-    let put = server.only_request("PUT", "/blob/log")?;
-    assert_eq!(put.header("x-ms-blob-type"), Some("BlockBlob"));
-    assert_eq!(put.query("comp"), None);
-    assert_eq!(put.text(), "one\ntwo\nthree\n");
-    let metadata = server
-        .only_request("POST", &receiver("CreateJobLogsMetadata"))?
-        .json()?;
-    assert_eq!(metadata["line_count"], 3);
     Ok(())
 }

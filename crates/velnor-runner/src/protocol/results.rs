@@ -20,6 +20,7 @@ const RECEIVER: &str = "twirp/results.services.receiver.Receiver";
 const STEPS_UPDATE: &str =
     "twirp/github.actions.results.api.v1.WorkflowStepUpdateService/WorkflowStepsUpdate";
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub const BLOCK_BUDGET: Duration = Duration::from_secs(60);
 const ATTEMPTS: u64 = 3;
 const RETRY_STEP: Duration = Duration::from_millis(200);
 const KNOWN_HOSTS: &[&str] = &["results-receiver.actions.githubusercontent.com"];
@@ -112,6 +113,7 @@ pub(super) const STEP_SUMMARY: BlobKind = BlobKind {
 pub struct TwirpResultsClient {
     pub(super) results_service_url: String,
     token: Secret<String>,
+    pub(super) block_budget: Duration,
 }
 
 impl TwirpResultsClient {
@@ -121,7 +123,14 @@ impl TwirpResultsClient {
         Ok(Self {
             results_service_url: url.as_str().trim_end_matches('/').to_owned(),
             token: Secret::new(token.into()),
+            block_budget: BLOCK_BUDGET,
         })
+    }
+
+    #[must_use]
+    pub fn with_block_budget(mut self, budget: Duration) -> Self {
+        self.block_budget = budget;
+        self
     }
 
     #[must_use]

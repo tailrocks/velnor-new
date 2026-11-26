@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use super::lifecycle_support::{fixture_job, run};
+use super::lifecycle_support::{Settings, fixture_job, run, run_with};
 use super::support::mock_github::{Behavior, JOB_LOG_BLOB, MockGithub, STEP_LOG_BLOB, step_id};
 
 const STAMP_LEN: usize = "2026-11-27T00:00:00.0000000Z ".len();
@@ -35,14 +35,6 @@ fn texts(log: &str) -> Vec<&str> {
     log.lines()
         .map(|line| line.get(STAMP_LEN..).unwrap_or_default())
         .collect()
-}
-
-fn uploaded(mock: &MockGithub, blob: &str) -> Result<String> {
-    Ok(mock
-        .requests_to("PUT", blob)?
-        .first()
-        .with_context(|| format!("{blob} was uploaded"))?
-        .text())
 }
 
 fn frame_lines(frames: &[Value]) -> Result<Vec<String>> {
@@ -78,7 +70,7 @@ async fn lifecycle_step_and_job_logs_use_seven_digit_timestamps() -> Result<()> 
         .chain(std::iter::once("omega".to_owned()))
         .collect();
     for blob in [STEP_LOG_BLOB, JOB_LOG_BLOB] {
-        let log = uploaded(&mock, blob)?;
+        let log = mock.uploaded(blob)?;
         let lines: Vec<&str> = log.lines().collect();
         let first = lines
             .iter()
@@ -112,7 +104,73 @@ async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
     let lines = frame_lines(&frames)?;
     let one = lines.iter().position(|line| line == "one").context("one")?;
     assert_eq!(lines[one + 1], "two");
-    let step_log = uploaded(&mock, STEP_LOG_BLOB)?;
+    let step_log = mock.uploaded(STEP_LOG_BLOB)?;
     assert_eq!(lines, texts(&step_log), "the feed shows the logged lines");
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_keeps_every_line_of_a_step_that_prints_far_more_than_the_buffer() -> Result<()> {
+    const LINES: usize = 200_000;
+    let behavior = Behavior {
+        feed: true,
+        ..Behavior::default()
+    };
+    let script = format!("seq 1 {LINES}");
+    let mock = MockGithub::start(fixture_job("hello", Some(&script))?, behavior).await?;
+
+    run(&mock, Duration::from_millis(200)).await?;
+
+    let step_log = mock.uploaded(STEP_LOG_BLOB)?;
+    let job_log = mock.uploaded(JOB_LOG_BLOB)?;
+    let numbers = |log: &str| -> Vec<usize> {
+        texts(log)
+            .into_iter()
+            .filter_map(|text| text.parse().ok())
+            .collect()
+    };
+    let expected: Vec<usize> = (1..=LINES).collect();
+    assert_eq!(numbers(&step_log), expected);
+    assert_eq!(numbers(&job_log), expected);
+    let frames = mock.feed.as_ref().context("feed")?.frames().await?;
+    assert!(frames.len() > 100, "{} frames", frames.len());
+    let lines = frame_lines(&frames)?;
+    assert_eq!(lines, texts(&step_log), "the feed lost no line");
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_gives_every_block_its_own_upload_budget_so_a_slow_link_loses_no_log()
+-> Result<()> {
+    const LINES: usize = 200_000;
+    let behavior = Behavior {
+        blob_delay: Duration::from_millis(600),
+        ..Behavior::default()
+    };
+    let script = format!("seq 1 {LINES}");
+    let mock = MockGithub::start(fixture_job("hello", Some(&script))?, behavior).await?;
+
+    run_with(
+        &mock,
+        Settings::new()
+            .renewing_every(Duration::from_millis(200))
+            .uploading_each_block_within(Duration::from_secs(1)),
+    )
+    .await?;
+
+    for blob in [STEP_LOG_BLOB, JOB_LOG_BLOB] {
+        let puts = mock.requests_to("PUT", blob)?;
+        assert!(puts.len() >= 4, "{blob}: {} requests", puts.len());
+        assert_eq!(
+            puts.last().context("the last block")?.query("seal"),
+            Some("true"),
+            "{blob} was sealed"
+        );
+        let numbers = texts(&mock.uploaded(blob)?)
+            .into_iter()
+            .filter_map(|text| text.parse::<usize>().ok())
+            .count();
+        assert_eq!(numbers, LINES, "{blob}");
+    }
     Ok(())
 }

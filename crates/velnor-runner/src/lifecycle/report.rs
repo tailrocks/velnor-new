@@ -24,7 +24,6 @@ use crate::protocol::{
 
 const CONNECT_BUDGET: Duration = Duration::from_secs(5);
 const UPDATE_BUDGET: Duration = Duration::from_secs(10);
-const UPLOAD_BUDGET: Duration = Duration::from_secs(60);
 const FAST_FLUSH: Duration = Duration::from_millis(250);
 const SLOW_FLUSH: Duration = Duration::from_millis(500);
 const FAST_WINDOW: Duration = Duration::from_secs(60);
@@ -53,6 +52,15 @@ pub(super) struct Reporter {
     files: LogFiles,
     change_order: i64,
     uploads: JoinSet<()>,
+}
+
+async fn warn_on_error<F>(label: &str, future: F)
+where
+    F: Future<Output = anyhow::Result<()>>,
+{
+    if let Err(error) = future.await {
+        eprintln!("warning: {label}: {error:#}");
+    }
 }
 
 async fn best_effort<F>(label: &str, budget: Duration, future: F)
@@ -251,7 +259,7 @@ impl Reporter {
         let job_id = self.job_id.clone();
         let step_id = self.step_id(number);
         self.uploads.spawn(async move {
-            best_effort("upload step log", UPLOAD_BUDGET, async move {
+            warn_on_error("upload step log", async move {
                 results
                     .upload_step_log(&plan_id, &job_id, &step_id, &state.path)
                     .await
@@ -345,7 +353,7 @@ impl Reporter {
         let job_id = self.job_id.clone();
         let step_id = self.step_id(number);
         self.uploads.spawn(async move {
-            best_effort("upload step summary", UPLOAD_BUDGET, async move {
+            warn_on_error("upload step summary", async move {
                 results
                     .upload_step_summary(&plan_id, &job_id, &step_id, &path)
                     .await
@@ -359,7 +367,7 @@ impl Reporter {
         if let Some(results) = self.results.clone() {
             let (plan_id, job_id) = (self.plan_id.clone(), self.job_id.clone());
             let path = self.files.job_path();
-            best_effort("upload job log", UPLOAD_BUDGET, async move {
+            warn_on_error("upload job log", async move {
                 let size = tokio::fs::metadata(&path)
                     .await
                     .with_context(|| format!("stat {}", path.display()))?

@@ -27,7 +27,7 @@ pub use jit::{
     DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings, decode_jit_config,
 };
 pub use oauth::{OAuthAccessToken, OAuthClient, OAuthJwtCredentials, OAuthRegistrationNotFound};
-pub use results::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
+pub use results::{BLOCK_BUDGET, StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 pub use run_service::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
     RenewJobResponse, RetryDelays, RunServiceAnnotation, RunServiceAnnotationLevel,

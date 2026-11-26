@@ -12,11 +12,9 @@ use super::exec_support::Scratch;
 use super::lifecycle_support::{
     CANCEL_BUDGET, Settings, fixture_job, job_replacing, run_in, run_with,
 };
-use super::support::mock_github::{
-    Behavior, Cancel, MessageTypes, MockGithub, Renew, STEP_LOG_BLOB,
-};
+use super::support::mock_github::{Behavior, Cancel, MessageTypes, MockGithub};
 
-fn cancelled_with_cleanup(complete: &serde_json::Value) -> Result<()> {
+pub(crate) fn cancelled_with_cleanup(complete: &serde_json::Value) -> Result<()> {
     assert_eq!(complete["conclusion"], "canceled");
     let steps = complete["stepResults"].as_array().context("step results")?;
     let conclusions: Vec<_> = steps.iter().map(|step| &step["conclusion"]).collect();
@@ -91,99 +89,62 @@ async fn lifecycle_message_types_are_matched_case_insensitively() -> Result<()> 
 }
 
 #[tokio::test]
-async fn lifecycle_renew_404_cancels_job() -> Result<()> {
+async fn lifecycle_cancel_with_a_timeout_that_does_not_parse_still_cancels_with_the_default()
+-> Result<()> {
     let behavior = Behavior {
-        renew: Renew::JobGone,
+        cancel: Cancel::After(Duration::from_millis(300)),
+        cancel_timeout_text: Some("soon"),
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("cancel", None)?, behavior).await?;
 
-    let outcome = run_with(&mock, Settings::new().within(CANCEL_BUDGET)).await?;
-
-    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
-    let complete = mock.complete_request()?;
-    assert_eq!(complete["conclusion"], "canceled");
-    assert!(complete["stepResults"].as_array().is_none_or(Vec::is_empty));
-    assert!(mock.requests_to("PUT", STEP_LOG_BLOB)?.is_empty());
-    Ok(())
-}
-
-#[tokio::test]
-async fn lifecycle_does_not_start_the_job_when_the_first_renew_never_succeeds() -> Result<()> {
-    let behavior = Behavior {
-        renew: Renew::ServerError,
-        ..Behavior::default()
-    };
-    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-
     let outcome = run_with(
         &mock,
         Settings::new()
-            .giving_up_after(Duration::from_secs(1))
+            .renewing_every(Duration::from_secs(60))
             .within(CANCEL_BUDGET),
     )
     .await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
-    assert!(
-        mock.complete_request()?["stepResults"]
-            .as_array()
-            .is_none_or(Vec::is_empty)
-    );
-    assert!(mock.requests_to("PUT", STEP_LOG_BLOB)?.is_empty());
-    Ok(())
+    cancelled_with_cleanup(&mock.complete_request()?)
 }
 
 #[tokio::test]
-async fn lifecycle_does_not_start_the_job_before_the_first_renew_succeeds() -> Result<()> {
+async fn lifecycle_cancel_message_timeout_below_the_floor_still_lets_the_cleanup_finish()
+-> Result<()> {
     let behavior = Behavior {
-        renew: Renew::RenewedAfter(Duration::from_millis(1500)),
+        cancel: Cancel::After(Duration::from_millis(300)),
+        cancel_timeout: Duration::from_secs(1),
         ..Behavior::default()
     };
-    let scratch = Scratch::new()?;
-    let marker = scratch.work_dir().with_file_name("started");
-    let script = format!("touch {}", marker.display());
     let mock = MockGithub::start(
-        job_replacing("hello", Some(("echo hello", &script)))?,
+        job_replacing("cancel", Some(("echo cleanup", "sleep 1; echo cleanup")))?,
         behavior,
     )
     .await?;
-    let started = std::time::SystemTime::now();
-
-    run_in(&mock, &scratch, Settings::new()).await??;
-
-    let touched = std::fs::metadata(&marker)?.modified()?;
-    assert!(
-        touched.duration_since(started)? >= Duration::from_millis(1400),
-        "the step started before the first renew was answered"
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn lifecycle_gives_up_when_renew_fails_past_the_lock_grace() -> Result<()> {
-    let behavior = Behavior {
-        renew: Renew::ExpiringThenFailing,
-        ..Behavior::default()
-    };
-    let mock = MockGithub::start(fixture_job("cancel", None)?, behavior).await?;
-    let started = Instant::now();
 
     let outcome = run_with(
         &mock,
         Settings::new()
-            .giving_up_after(Duration::from_secs(1))
+            .killing_after_cancel_floor(Duration::from_secs(18))
+            .renewing_every(Duration::from_secs(60))
             .within(CANCEL_BUDGET),
     )
     .await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
+    let complete = mock.complete_request()?;
+    cancelled_with_cleanup(&complete)?;
     assert!(
-        mock.requests_to("POST", "/run/renewjob")?.len() >= 2,
-        "the renewal was retried before it gave up"
+        complete["annotations"]
+            .as_array()
+            .is_none_or(|notes| notes.iter().all(|note| !note["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("cancellation timeout")))),
+        "{complete}"
     );
-    assert!(started.elapsed() < CANCEL_BUDGET);
-    cancelled_with_cleanup(&mock.complete_request()?)
+    Ok(())
 }
 
 fn hanging_cleanup(scratch: &Scratch) -> Result<serde_json::Value> {

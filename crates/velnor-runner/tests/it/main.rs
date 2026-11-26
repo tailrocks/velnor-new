@@ -125,6 +125,7 @@ mod protocol_acquire_renew;
 mod lifecycle;
 mod lifecycle_cancel;
 mod lifecycle_logs;
+mod lifecycle_renew;
 mod lifecycle_report;
 mod lifecycle_session;
 mod lifecycle_support;
@@ -134,6 +135,7 @@ mod protocol_feed;
 mod protocol_http_guard;
 mod protocol_oauth;
 mod protocol_results;
+mod protocol_results_blobs;
 mod redaction;
 #[path = "exec_review.rs"]
 mod review;
