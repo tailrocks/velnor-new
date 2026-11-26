@@ -26,8 +26,8 @@ async fn lifecycle_refreshes_the_token_after_a_401_poll_and_still_runs_the_job()
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
     assert_eq!(
         mock.requests_to("POST", "/oauth/token")?.len(),
-        2,
-        "one sign-in and one refresh"
+        3,
+        "the sign-in, the refresh after the 401 and the one before the acquire"
     );
     assert_eq!(mock.polls("Online")?, 2, "the 401 poll was retried");
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
@@ -265,5 +265,26 @@ async fn lifecycle_stops_acquiring_when_shutdown_arrives() -> Result<()> {
     assert_eq!(outcome, LifecycleOutcome::NoJob);
     assert!(mock.requests_to("POST", "/run/completejob")?.is_empty());
     mock.server.only_request("DELETE", "/broker/session")?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_acquires_with_a_fresh_token_when_the_job_request_needs_no_acknowledgement()
+-> Result<()> {
+    let behavior = Behavior {
+        oauth: OAuthTokens::StaleFirst,
+        should_acknowledge: false,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run_with(&mock, Settings::new().within(CANCEL_BUDGET)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let acquire = mock.server.only_request("POST", "/run/acquirejob")?;
+    assert_eq!(
+        acquire.header("authorization"),
+        Some(format!("Bearer {OAUTH_TOKEN}").as_str())
+    );
     Ok(())
 }

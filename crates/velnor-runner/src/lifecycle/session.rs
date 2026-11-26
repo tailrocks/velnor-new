@@ -183,6 +183,11 @@ impl Session {
         self.auth().token.expose().clone()
     }
 
+    pub(super) async fn fresh_access_token(&self) -> anyhow::Result<String> {
+        self.refresh().await?;
+        Ok(self.access_token())
+    }
+
     async fn refresh(&self) -> anyhow::Result<()> {
         let token = self
             .oauth

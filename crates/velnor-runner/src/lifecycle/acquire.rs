@@ -57,7 +57,11 @@ pub(super) async fn acquire(
         .as_deref()
         .filter(|url| !url.is_empty())
         .ok_or_else(|| LifecycleError::Acquire(anyhow!("job request has no run_service_url")))?;
-    let client = RunServiceClient::new(session.access_token()).map_err(LifecycleError::Acquire)?;
+    let token = session
+        .fresh_access_token()
+        .await
+        .map_err(LifecycleError::SignIn)?;
+    let client = RunServiceClient::new(token).map_err(LifecycleError::Acquire)?;
     let outcome = client
         .acquire_job(
             run_service_url,
