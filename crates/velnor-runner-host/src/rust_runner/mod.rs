@@ -6,8 +6,15 @@ use std::process::Command;
 
 mod job;
 mod machine;
+mod paths;
+mod processes;
+mod sweep;
 
 pub use job::RunningJob;
+pub use paths::ReservationId;
+pub use processes::MachineProcess;
+
+pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
 const GUEST_STORE: &str = "/var/lib/velnor";
@@ -15,6 +22,7 @@ const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
+const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
 const PID_NAMESPACE: [&str; 6] = [
     "unshare",
     "--user",
@@ -24,8 +32,9 @@ const PID_NAMESPACE: [&str; 6] = [
     "--kill-child",
 ];
 const HOST_DIRECTORIES: [&str; 8] = [
-    "bin", "crates", "tools", "git", "gen", "cache", "records", "jit",
+    "bin", "crates", "tools", "git", "gen", "cache", "records", "work",
 ];
+const JIT_DIRECTORY: &str = "jit";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRunnerLauncher {
@@ -51,12 +60,25 @@ impl RustRunnerLauncher {
     }
 
     fn orb(&self) -> Command {
-        Command::new(&self.orb)
+        let mut command = Command::new(&self.orb);
+        command.env_clear();
+        for name in PRESERVED_ENVIRONMENT {
+            if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
+        command
     }
 
     fn in_machine(&self) -> Command {
         let mut command = self.orb();
         command.args(["-m", MACHINE_NAME]);
+        command
+    }
+
+    fn as_root(&self) -> Command {
+        let mut command = self.in_machine();
+        command.args(["-u", "root"]);
         command
     }
 }

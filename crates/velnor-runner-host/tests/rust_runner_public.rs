@@ -6,8 +6,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use velnor_runner_github::EncodedJit;
 use velnor_runner_host::{
-    HostConfig, HostError, LaunchMode, RunningJob, RustRunnerFailure, RustRunnerLauncher,
+    HostConfig, HostError, LaunchMode, ReservationId, RunningJob, RustRunnerFailure,
+    RustRunnerLauncher,
 };
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.sh");
@@ -42,11 +44,12 @@ impl Fixture {
 
     fn configure(&self, extra: &str) -> Result<(), Box<dyn Error>> {
         let env = format!(
-            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\n{extra}",
+            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\n{extra}",
             log = self.root.join("orb.log").display(),
             list = self.root.join("list.json").display(),
             store = self.store.display(),
             seen = self.root.join("seen").display(),
+            ps = self.root.join("ps.table").display(),
         );
         std::fs::write(self.root.join("fake_orb.env"), env)?;
         Ok(())
@@ -68,9 +71,17 @@ impl Fixture {
         self.root.join("seen").join(name)
     }
 
-    fn jit_file(&self, reservation: i64) -> PathBuf {
+    fn jit_file(&self, reservation: u64) -> PathBuf {
         self.store.join("jit").join(format!("{reservation}.jit"))
     }
+}
+
+fn reservation(value: u64) -> Result<ReservationId, Box<dyn Error>> {
+    ReservationId::new(value).ok_or_else(|| "zero reservation".into())
+}
+
+fn jit(text: &str) -> EncodedJit {
+    EncodedJit::new(text.to_owned())
 }
 
 fn runner_lines(log: &[String]) -> Vec<&String> {
@@ -79,13 +90,13 @@ fn runner_lines(log: &[String]) -> Vec<&String> {
         .collect()
 }
 
-fn wait_for(path: &Path) -> Result<(), Box<dyn Error>> {
+async fn wait_for(path: &Path) -> Result<(), Box<dyn Error>> {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !path.exists() {
         if Instant::now() > deadline {
             return Err(format!("{} never appeared", path.display()).into());
         }
-        std::thread::sleep(Duration::from_millis(20));
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
     Ok(())
 }
@@ -143,35 +154,35 @@ fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>
     );
     assert!(fixture.log()?.contains(&expected), "{:?}", fixture.log()?);
     for name in [
-        "bin", "crates", "tools", "git", "gen", "cache", "records", "jit",
+        "bin", "crates", "tools", "git", "gen", "cache", "records", "jit", "work",
     ] {
         assert!(fixture.store.join(name).is_dir(), "{name}");
     }
     Ok(())
 }
 
-#[test]
-fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
+#[tokio::test(flavor = "current_thread")]
+async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
     let launcher = fixture.launcher();
-    let first = launcher.start_job(11, "first-jit")?;
-    let second = launcher.start_job(12, "second-jit")?;
-    assert!(first.wait()?.success());
-    assert!(second.wait()?.success());
+    let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"))?;
+    let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"))?;
+    assert!(first.wait().await?.success());
+    assert!(second.wait().await?.success());
 
     let log = fixture.log()?;
     let lines = runner_lines(&log);
     assert_eq!(lines.len(), 2, "{log:?}");
     assert!(
         lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/11.jit"
+            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/11.jit --work-dir /var/lib/velnor/work/11"
                 .to_owned()
         ),
         "{lines:?}"
     );
     assert!(
         lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/12.jit"
+            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/12.jit --work-dir /var/lib/velnor/work/12"
                 .to_owned()
         ),
         "{lines:?}"
@@ -191,11 +202,13 @@ fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dy
     Ok(())
 }
 
-#[test]
-fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
+#[tokio::test(flavor = "current_thread")]
+async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
-    let job = fixture.launcher().start_job(21, SECRET_JIT)?;
-    assert!(job.wait()?.success());
+    let mut job = fixture
+        .launcher()
+        .start_job(reservation(21)?, &jit(SECRET_JIT))?;
+    assert!(job.wait().await?.success());
 
     assert_eq!(std::fs::read_to_string(fixture.seen("21.jit"))?, SECRET_JIT);
     assert!(
@@ -207,28 +220,55 @@ fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[test]
-fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>> {
+#[tokio::test(flavor = "current_thread")]
+async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
     fixture.configure("FAKE_RUNNER_EXIT=3\n")?;
-    let job = fixture.launcher().start_job(31, SECRET_JIT)?;
-    let status = job.wait()?;
+    let mut job = fixture
+        .launcher()
+        .start_job(reservation(31)?, &jit(SECRET_JIT))?;
+    let status = job.wait().await?;
     assert_eq!(status.code(), Some(3));
     assert!(!fixture.jit_file(31).exists());
 
     fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
-    let job: RunningJob = fixture.launcher().start_job(32, SECRET_JIT)?;
+    let job: RunningJob = fixture
+        .launcher()
+        .start_job(reservation(32)?, &jit(SECRET_JIT))?;
     let child_file = fixture.seen("32.jit.child");
-    wait_for(&child_file)?;
+    wait_for(&child_file).await?;
     let child = std::fs::read_to_string(&child_file)?.trim().to_owned();
     assert!(fixture.jit_file(32).exists());
     assert!(process_exists(&child));
-    job.stop()?;
+    job.stop().await?;
     assert!(!fixture.jit_file(32).exists());
+    wait_until_dead(&child).await?;
+
+    let job = fixture
+        .launcher()
+        .start_job(reservation(33)?, &jit(SECRET_JIT))?;
+    let pid_file = fixture.seen("33.jit.pid");
+    wait_for(&pid_file).await?;
+    wait_for(&fixture.seen("33.jit.child")).await?;
+    let pid = std::fs::read_to_string(&pid_file)?.trim().to_owned();
+    assert!(fixture.jit_file(33).exists());
+    drop(job);
+    wait_until_dead(&pid).await?;
+    assert!(!fixture.jit_file(33).exists());
+    let orphan = std::fs::read_to_string(fixture.seen("33.jit.child"))?
+        .trim()
+        .to_owned();
+    std::process::Command::new("kill").arg(&orphan).status()?;
+    wait_until_dead(&orphan).await
+}
+
+async fn wait_until_dead(pid: &str) -> Result<(), Box<dyn Error>> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while process_exists(&child) {
-        assert!(Instant::now() < deadline, "child {child} survived stop");
-        std::thread::sleep(Duration::from_millis(20));
+    while process_exists(pid) {
+        if Instant::now() > deadline {
+            return Err(format!("process {pid} survived").into());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
     Ok(())
 }
@@ -374,4 +414,188 @@ fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
         .err(),
         Some(HostError::PlatformSelector)
     );
+}
+
+const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_PUBLIC_CHILD";
+
+fn rerun(
+    test: &str,
+    shell_prefix: &str,
+    environment: &[(&str, &str)],
+) -> Result<(), Box<dyn Error>> {
+    let executable = std::env::current_exe()?;
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "{shell_prefix} exec \"$0\" --exact {test} --nocapture"
+        ))
+        .arg(&executable)
+        .env(CHILD_MARKER, test)
+        .envs(environment.iter().copied())
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("running 1 test"), "{stdout}\n{stderr}");
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed"),
+        "{stdout}\n{stderr}"
+    );
+    Ok(())
+}
+
+fn is_child_of(test: &str) -> bool {
+    std::env::var(CHILD_MARKER).is_ok_and(|marker| marker == test)
+}
+
+fn environment_keys_of_a_clean_shell() -> Result<Vec<String>, Box<dyn Error>> {
+    let output = std::process::Command::new("env")
+        .args(["-i", "sh", "-c", "env"])
+        .output()?;
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .filter_map(|line| line.split_once('=').map(|(key, _)| key.to_owned()))
+        .collect())
+}
+
+fn environment_of_call(path: &Path) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    Ok(std::fs::read_to_string(path)?
+        .lines()
+        .filter_map(|line| {
+            line.split_once('=')
+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        })
+        .collect())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
+-> Result<(), Box<dyn Error>> {
+    const TEST: &str = "rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv";
+    if !is_child_of(TEST) {
+        let path = format!(
+            "{}:/rust-runner-l1-extra",
+            std::env::var("PATH").unwrap_or_default()
+        );
+        return rerun(
+            TEST,
+            "",
+            &[
+                ("ORBENV", "PAT-CANARY-L1-ORBENV"),
+                ("GH_TOKEN", "PAT-CANARY-L1-GHTOKEN"),
+                ("VELNOR_SECRET", "PAT-CANARY-L1-SECRET"),
+                ("HOME", "/rust-runner-l1-home"),
+                ("PATH", &path),
+            ],
+        );
+    }
+    let fixture = Fixture::new("[]")?;
+    let launcher = fixture.launcher();
+    launcher.ensure_machine()?;
+    let mut job = launcher.start_job(reservation(41)?, &jit(SECRET_JIT))?;
+    assert!(job.wait().await?.success());
+    fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
+    let held = launcher.start_job(reservation(42)?, &jit(SECRET_JIT))?;
+    wait_for(&fixture.seen("42.jit.pid")).await?;
+    held.stop().await?;
+    std::fs::write(fixture.root.join("ps.table"), "4242 sleep 600\n")?;
+    assert_eq!(launcher.list_processes()?.len(), 1);
+    launcher.kill_processes(&[4242])?;
+
+    let log = fixture.log()?;
+    for expected in [
+        "list -f json",
+        "create -a arm64 ubuntu velnor",
+        "-m velnor -u root ln -sfn",
+        "-m velnor test -x /var/lib/velnor/bin/velnor-runner",
+        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/41.jit",
+        "-m velnor -u root ps -eo pid=,args=",
+        "-m velnor -u root kill -9 4242",
+    ] {
+        assert!(
+            log.iter().any(|line| line.contains(expected)),
+            "{expected}: {log:?}"
+        );
+    }
+    assert_environments_are_cleared(&fixture)
+}
+
+fn assert_environments_are_cleared(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
+    let allowed = {
+        let mut keys = environment_keys_of_a_clean_shell()?;
+        keys.extend(["PATH".to_owned(), "HOME".to_owned()]);
+        keys
+    };
+    let host_path = std::env::var("PATH")?;
+    let host_home = std::env::var("HOME")?;
+    let calls = std::fs::read_dir(fixture.seen("calls"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "env"))
+        .collect::<Vec<_>>();
+    assert!(calls.len() >= fixture.log()?.len(), "{}", calls.len());
+    for call in calls {
+        let environment = environment_of_call(&call)?;
+        for (key, value) in &environment {
+            assert!(
+                allowed.contains(key),
+                "{key} reached orb in {}",
+                call.display()
+            );
+            assert_ne!(key, "ORBENV", "{}", call.display());
+            assert!(!value.contains("PAT-CANARY"), "{key} in {}", call.display());
+        }
+        let value_of = |name: &str| {
+            environment
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.as_str())
+        };
+        assert_eq!(
+            value_of("PATH"),
+            Some(host_path.as_str()),
+            "{}",
+            call.display()
+        );
+        assert_eq!(
+            value_of("HOME"),
+            Some(host_home.as_str()),
+            "{}",
+            call.display()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn rust_runner_jit_directory_is_private() -> Result<(), Box<dyn Error>> {
+    const TEST: &str = "rust_runner_jit_directory_is_private";
+    if !is_child_of(TEST) {
+        rerun(TEST, "umask 0;", &[])?;
+        return Ok(());
+    }
+    let fresh = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+    fresh.launcher().ensure_machine()?;
+    assert_eq!(mode_of(&fresh.store.join("jit"))?, 0o700);
+    assert!(fresh.store.join("work").is_dir());
+
+    for mode in [0o755, 0o750, 0o710, 0o770, 0o701, 0o777] {
+        let fixture = Fixture::new(r#"[{"name":"velnor"}]"#)?;
+        std::fs::create_dir_all(fixture.store.join("jit"))?;
+        std::fs::set_permissions(
+            fixture.store.join("jit"),
+            std::fs::Permissions::from_mode(mode),
+        )?;
+        assert_eq!(
+            fixture.launcher().ensure_machine().err(),
+            Some(HostError::RustRunner(
+                RustRunnerFailure::JitDirectoryAccessible
+            )),
+            "{mode:o}"
+        );
+    }
+    Ok(())
+}
+
+fn mode_of(path: &Path) -> Result<u32, Box<dyn Error>> {
+    Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
 }
