@@ -180,7 +180,16 @@ fn a_helper_that_builds_apart_gives_the_no_run_build_and_the_separate_audit_the_
 
 #[test]
 fn an_unknown_or_invalid_workspace_feature_name_is_refused() -> TestResult {
-    for names in ["['a b']", "['']", "['a', 'a']", "['a,b']", "['$x']"] {
+    for names in [
+        "['a b']",
+        "['']",
+        "['a', 'a']",
+        "['a,b']",
+        "['$x']",
+        "['dep/foo/bar']",
+        "['/x']",
+        "['x/']",
+    ] {
         let config = format!("workspace_features = {names}\n");
         let repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
         match detect(&repo) {
