@@ -7,11 +7,15 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::git_mirror::{MirrorWant, materialize, update_mirror};
-use crate::exec::{ExecError, Inputs, StepAdapter, StepContext, StepFuture, StepResult};
+use crate::broker::{
+    GIT_ENV, Request, Response, StoreWriter, Token, TrustedFacts, git_args, mirror_path,
+};
+use crate::exec::{ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult};
 use crate::store::store_root;
 
-pub(super) struct Checkout;
+pub(super) struct Checkout {
+    pub(super) store: StoreWriter,
+}
 
 impl StepAdapter for Checkout {
     fn handles(&self, reference: &str) -> bool {
@@ -19,7 +23,7 @@ impl StepAdapter for Checkout {
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
-        Box::pin(checkout(ctx))
+        Box::pin(checkout(&self.store, ctx))
     }
 }
 
@@ -29,9 +33,9 @@ fn unsupported_input(name: &str) -> ExecError {
     ))
 }
 
-fn validate_inputs(inputs: &Inputs) -> Result<(), ExecError> {
+fn validate_inputs(inputs: &BTreeMap<String, String>) -> Result<(), ExecError> {
     let mut persist_false = false;
-    for (name, value) in inputs.iter() {
+    for (name, value) in inputs {
         match name.to_ascii_lowercase().as_str() {
             "fetch-depth" => {
                 if value.parse::<u64>().is_err() {
@@ -40,15 +44,7 @@ fn validate_inputs(inputs: &Inputs) -> Result<(), ExecError> {
                     )));
                 }
             }
-            "persist-credentials" => match value.as_str() {
-                "false" | "False" | "FALSE" => persist_false = true,
-                "" | "true" | "True" | "TRUE" => {}
-                _ => {
-                    return Err(ExecError::Invalid(format!(
-                        "actions/checkout input 'persist-credentials' must be a boolean, got '{value}'"
-                    )));
-                }
-            },
+            "persist-credentials" => persist_false = !value.eq_ignore_ascii_case("true"),
             _ => return Err(unsupported_input(name)),
         }
     }
@@ -59,13 +55,6 @@ fn validate_inputs(inputs: &Inputs) -> Result<(), ExecError> {
             "actions/checkout requires persist-credentials: false in velnor-runner".to_owned(),
         ))
     }
-}
-
-fn variable<'a>(env: &'a BTreeMap<String, String>, name: &str) -> Result<&'a str, ExecError> {
-    env.get(name)
-        .map(String::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| ExecError::Invalid(format!("checkout: {name} is not set")))
 }
 
 async fn empty_directory(path: &Path) -> Result<()> {
@@ -99,45 +88,117 @@ fn ensure_disjoint(workspace: &Path, mirror: &Path) -> Result<()> {
     Ok(())
 }
 
-struct Target<'a> {
-    workspace: &'a Path,
-    token: Option<&'a str>,
+fn invalid(error: impl std::fmt::Display) -> ExecError {
+    ExecError::Invalid(format!("{error:#}"))
+}
+
+/// Runs git with the steps' rights through the executor's process runner.
+async fn git(
+    ctx: &mut StepContext<'_>,
+    git_dir: Option<&Path>,
+    args: &[&str],
+    quiet: bool,
+) -> Result<ProcessOutcome, ExecError> {
+    let args = git_args(git_dir, args);
+    let env: Vec<(String, String)> = GIT_ENV
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+        .collect();
+    let dir = ctx.workspace.to_path_buf();
+    ctx.run_process(("git", &args, &dir, &env), quiet).await
+}
+
+async fn require(
+    ctx: &mut StepContext<'_>,
+    args: &[&str],
+) -> Result<Option<StepResult>, ExecError> {
+    match git(ctx, None, args, false).await? {
+        ProcessOutcome::Succeeded => Ok(None),
+        ProcessOutcome::Cancelled => Ok(Some(StepResult::Cancelled)),
+        ProcessOutcome::Failed => Err(ExecError::Invalid(format!(
+            "checkout: git {} failed",
+            args.iter().find(|arg| !arg.starts_with('-')).unwrap_or(&"")
+        ))),
+    }
+}
+
+async fn materialize(
+    ctx: &mut StepContext<'_>,
+    mirror: &Path,
+    facts: &TrustedFacts,
+) -> Result<Option<StepResult>, ExecError> {
+    let dest = ctx.workspace.to_path_buf();
+    let dest_arg = dest
+        .to_str()
+        .ok_or_else(|| invalid("workspace is not UTF-8"))?;
+    if let Some(ended) = require(ctx, &["init", "-q", dest_arg]).await? {
+        return Ok(Some(ended));
+    }
+    let objects = std::path::absolute(mirror)
+        .with_context(|| format!("resolve {}", mirror.display()))
+        .map_err(invalid)?
+        .join("objects");
+    let alternates = dest.join(".git/objects/info/alternates");
+    tokio::fs::write(&alternates, format!("{}\n", objects.display()))
+        .await
+        .with_context(|| format!("write {}", alternates.display()))
+        .map_err(invalid)?;
+    let clone_url = facts.clone_url();
+    let sha = facts.sha.as_str();
+    for args in [
+        vec!["-C", dest_arg, "remote", "add", "origin", &clone_url],
+        vec![
+            "-C",
+            dest_arg,
+            "-c",
+            "advice.detachedHead=false",
+            "checkout",
+            "-q",
+            "--detach",
+            sha,
+        ],
+    ] {
+        if let Some(ended) = require(ctx, &args).await? {
+            return Ok(Some(ended));
+        }
+    }
+    Ok(None)
 }
 
 async fn populate(
-    target: &Target<'_>,
-    clone_url: &str,
-    repository: &str,
-    want: &MirrorWant,
-) -> Result<()> {
-    let mirror = update_mirror(&store_root(), clone_url, repository, target.token, want).await?;
-    ensure_disjoint(target.workspace, &mirror)?;
-    empty_directory(target.workspace).await?;
-    materialize(&mirror, clone_url, want.sha(), target.workspace).await
+    store: &StoreWriter,
+    facts: &TrustedFacts,
+    ctx: &mut StepContext<'_>,
+) -> Result<StepResult, ExecError> {
+    let mirror = mirror_path(&store_root(), facts).map_err(invalid)?;
+    let object = format!("{}^{{commit}}", facts.sha.as_str());
+    let present = git(ctx, Some(&mirror), &["cat-file", "-e", &object], true).await?;
+    if present == ProcessOutcome::Cancelled {
+        return Ok(StepResult::Cancelled);
+    }
+    if present == ProcessOutcome::Failed {
+        let token = ctx.github_token.clone().map(Token::new);
+        if let Response::Failed { message } = store.request(Request::FetchMirror { token }).await {
+            return Err(ExecError::Invalid(message));
+        }
+    }
+    ensure_disjoint(ctx.workspace, &mirror).map_err(invalid)?;
+    empty_directory(ctx.workspace).await.map_err(invalid)?;
+    Ok(materialize(ctx, &mirror, facts)
+        .await?
+        .unwrap_or(StepResult::Succeeded))
 }
 
-async fn checkout(ctx: &mut StepContext<'_>) -> Result<StepResult, ExecError> {
+async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<StepResult, ExecError> {
     validate_inputs(&ctx.inputs)?;
-    let server = variable(&ctx.env, "GITHUB_SERVER_URL")?;
-    let repository = variable(&ctx.env, "GITHUB_REPOSITORY")?;
-    let clone_url = format!("{}/{repository}.git", server.trim_end_matches('/'));
-    let want = MirrorWant::parse(
-        variable(&ctx.env, "GITHUB_SHA")?,
-        ctx.env.get("GITHUB_REF").map_or("", String::as_str),
-    )
-    .map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
-    let target = Target {
-        workspace: ctx.workspace,
-        token: ctx.github_token.as_deref(),
-    };
-    let work = populate(&target, &clone_url, repository, &want);
-    let finished = match ctx.cancel.clone() {
+    let facts = store.facts().map_err(ExecError::Invalid)?;
+    let cancel = ctx.cancel.clone();
+    let work = populate(store, facts, ctx);
+    match cancel {
         Some(cancel) => tokio::select! {
             result = work => result,
-            () = cancel.cancelled() => return Ok(StepResult::Cancelled),
+            () = cancel.cancelled() => Ok(StepResult::Cancelled),
         },
         None => work.await,
-    };
-    finished.map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
-    Ok(StepResult::Succeeded)
+    }
 }

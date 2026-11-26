@@ -93,7 +93,10 @@ mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod protocol_acquire_renew;
+mod native_checkout_attack;
+mod native_checkout_inputs;
 mod native_checkout_mirror;
+mod native_checkout_sink;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;

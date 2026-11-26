@@ -47,8 +47,7 @@ pub(crate) fn commit(work: &Path, file: &str) -> Result<String> {
 pub(crate) struct Rig {
     pub(crate) root: PathBuf,
     pub(crate) head: String,
-    parent: String,
-    merge: String,
+    pub(crate) merge: String,
 }
 
 impl Rig {
@@ -61,7 +60,7 @@ impl Rig {
         std::fs::create_dir_all(&upstream)?;
         git(&upstream, &["init", "-q", "--bare"])?;
         git(&work, &["init", "-q", "-b", "main"])?;
-        let parent = commit(&work, "first")?;
+        commit(&work, "first")?;
         git(&work, &["branch", "feature"])?;
         git(&work, &["checkout", "-q", "feature"])?;
         commit(&work, "feature")?;
@@ -76,12 +75,7 @@ impl Rig {
             &work,
             &["push", "-q", &target, &format!("{merge}:refs/pull/7/merge")],
         )?;
-        Ok(Self {
-            root,
-            head,
-            parent,
-            merge,
-        })
+        Ok(Self { root, head, merge })
     }
 
     pub(crate) fn advance(&self, file: &str) -> Result<String> {
@@ -143,11 +137,23 @@ impl Rig {
         scratch: &Scratch,
         env: &[(&str, &str)],
     ) -> Result<Child> {
-        Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+        self.start_at(job, &scratch.workspace(), scratch, env)
+    }
+
+    fn command(
+        &self,
+        job: &Path,
+        workspace: &Path,
+        scratch: &Scratch,
+        env: &[(&str, &str)],
+    ) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+        command
+            .current_dir(&self.root)
             .args(["exec", "--job"])
             .arg(job)
             .arg("--workspace")
-            .arg(scratch.workspace())
+            .arg(workspace)
             .arg("--temp")
             .arg(scratch.options().temp)
             .env("VELNOR_STORE_ROOT", self.store())
@@ -156,7 +162,31 @@ impl Rig {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .envs(env.iter().copied())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        command
+    }
+
+    pub(crate) fn start_at(
+        &self,
+        job: &Path,
+        workspace: &Path,
+        scratch: &Scratch,
+        env: &[(&str, &str)],
+    ) -> Result<Child> {
+        self.command(job, workspace, scratch, env)
+            .spawn()
+            .context("start velnor-runner exec")
+    }
+
+    pub(crate) fn start_trusted(
+        &self,
+        job: &Path,
+        facts: &Path,
+        scratch: &Scratch,
+    ) -> Result<Child> {
+        self.command(job, &scratch.workspace(), scratch, &[])
+            .arg("--trusted")
+            .arg(facts)
             .spawn()
             .context("start velnor-runner exec")
     }
@@ -165,7 +195,7 @@ impl Rig {
         finish(self.start(&self.job(fixture, sha, &self.server_url())?, scratch)?)
     }
 
-    fn fetches(&self) -> usize {
+    pub(crate) fn fetches(&self) -> usize {
         let trace = std::fs::read_to_string(self.trace()).unwrap_or_default();
         trace
             .lines()
@@ -201,30 +231,23 @@ fn checkout_depth1_materializes_head_commit() -> Result<()> {
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     let workspace = scratch.workspace();
     assert_eq!(git(&workspace, &["rev-parse", "HEAD"])?, rig.head);
-    assert_eq!(
-        std::fs::read_to_string(workspace.join(".git/objects/info/alternates"))?,
-        format!("{}\n", rig.mirror().join("objects").display())
-    );
-    let counted = git(&workspace, &["count-objects", "-v"])?;
-    assert!(counted.lines().any(|line| line == "count: 0"), "{counted}");
-    assert!(
-        counted.lines().any(|line| line == "in-pack: 0"),
-        "{counted}"
-    );
+    assert!(git(&workspace, &["symbolic-ref", "-q", "HEAD"]).is_err());
+    assert_eq!(git(&workspace, &["status", "--porcelain"])?, "");
+    assert_eq!(std::fs::read_to_string(workspace.join("second"))?, "second");
     assert_eq!(rig.fetches(), 1);
     Ok(())
 }
 
 #[test]
-fn checkout_depth2_has_parent_commit() -> Result<()> {
+fn history_is_available_through_the_mirror() -> Result<()> {
     let rig = Rig::new()?;
     let scratch = Scratch::new()?;
     let ran = rig.run("checkout_depth2", &rig.head, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
-    assert_eq!(
-        git(&scratch.workspace(), &["rev-parse", "HEAD~1"])?,
-        rig.parent
-    );
+    let workspace = scratch.workspace();
+    assert_eq!(git(&workspace, &["rev-parse", "HEAD"])?, rig.head);
+    assert!(git(&workspace, &["symbolic-ref", "-q", "HEAD"]).is_err());
+    assert_eq!(git(&workspace, &["rev-list", "--count", "HEAD"])?, "2");
     Ok(())
 }
 
@@ -276,6 +299,23 @@ fn checkout_rejects_ref_input_with_unsupported_message() -> Result<()> {
     Ok(())
 }
 
+fn find_in_tree(dir: &Path, needles: &[&str]) -> Result<Option<PathBuf>> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            if let Some(found) = find_in_tree(&path, needles)? {
+                return Ok(Some(found));
+            }
+        } else if path.is_file() {
+            let body = String::from_utf8_lossy(&std::fs::read(&path)?).into_owned();
+            if needles.iter().any(|needle| body.contains(needle)) {
+                return Ok(Some(path));
+            }
+        }
+    }
+    Ok(None)
+}
+
 #[test]
 fn checkout_never_writes_token_to_git_config() -> Result<()> {
     let rig = Rig::new()?;
@@ -295,18 +335,12 @@ fn checkout_never_writes_token_to_git_config() -> Result<()> {
             "{text}"
         );
     }
-    let configs = [
-        rig.mirror().join("config"),
-        scratch.workspace().join(".git/config"),
-    ];
-    for path in configs {
-        let body = std::fs::read_to_string(&path)?;
-        assert!(
-            !body.contains(TOKEN) && !body.contains(&credential),
-            "{}",
-            path.display()
-        );
-    }
+    assert!(find_in_tree(&rig.store(), &[TOKEN, &credential])?.is_none());
+    assert!(find_in_tree(&scratch.workspace().join(".git"), &[TOKEN, &credential])?.is_none());
+    assert_eq!(
+        git(&scratch.workspace(), &["config", "remote.origin.url"])?,
+        format!("{}/tailrocks/velnor-new.git", rig.server_url())
+    );
     assert!(!refused.workspace().join(".git").exists());
     Ok(())
 }

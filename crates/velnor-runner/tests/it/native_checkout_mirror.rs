@@ -1,23 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::io::Write;
+use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{Receiver, channel};
-use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
+use anyhow::{Context, Result};
 
 use crate::exec_support::Scratch;
-use crate::native_checkout::{Rig, finish, git};
-
-const TOKEN: &str = "checkout-token-value";
-const WAIT: Duration = Duration::from_secs(30);
+use crate::native_checkout::{Rig, commit, finish, git};
 
 fn plant_hook(dir: &Path, name: &str, marker: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
@@ -129,45 +121,73 @@ fn failed_fetch_that_stored_the_commit_still_succeeds() -> Result<()> {
     Ok(())
 }
 
+fn checkout(rig: &Rig, job: &Path) -> Result<(Option<i32>, String)> {
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(job, &scratch)?)?;
+    Ok((
+        ran.code,
+        git(&scratch.workspace(), &["rev-parse", "HEAD"]).unwrap_or_default(),
+    ))
+}
+
 #[test]
 fn mirror_is_keyed_by_host_owner_and_repository() -> Result<()> {
     let rig = Rig::new()?;
+    let other = rig.root.join("up/someone/velnor-new.git");
+    let work = rig.root.join("other-work");
+    std::fs::create_dir_all(&other)?;
+    std::fs::create_dir_all(&work)?;
+    git(&other, &["init", "-q", "--bare"])?;
+    git(&work, &["init", "-q", "-b", "main"])?;
+    let theirs = commit(&work, "theirs")?;
+    git(&work, &["push", "-q", &other.to_string_lossy(), "main"])?;
     let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
     let elsewhere = format!("http://127.0.0.1:{closed}");
-    let other_owner = [("tailrocks/velnor-new", "someone/velnor-new")];
-    let runs = [
-        rig.job("checkout_depth1", &rig.head, &rig.server_url())?,
-        rig.job("checkout_depth1", &rig.head, &elsewhere)?,
-        rig.job_edit(
-            "checkout_depth1",
-            &rig.head,
-            &rig.server_url(),
-            &other_owner,
-        )?,
+    let someone = [("tailrocks/velnor-new", "someone/velnor-new")];
+    let url = rig.server_url();
+    let ours = (
+        rig.job("checkout_depth1", &rig.head, &url)?,
+        rig.head.clone(),
+    );
+    let cases = [
+        (&ours.0, (Some(0), rig.head.clone())),
+        (
+            &rig.job("checkout_depth1", &rig.head, &elsewhere)?,
+            (Some(1), String::new()),
+        ),
+        (
+            &rig.job_edit("checkout_depth1", &theirs, &url, &someone)?,
+            (Some(0), theirs.clone()),
+        ),
+        (
+            &rig.job_edit("checkout_depth1", &rig.head, &url, &someone)?,
+            (Some(1), String::new()),
+        ),
+        (
+            &rig.job("checkout_depth1", &theirs, &url)?,
+            (Some(1), String::new()),
+        ),
+        (&ours.0, (Some(0), ours.1.clone())),
     ];
-    let codes = runs
-        .iter()
-        .map(|job| {
-            let scratch = Scratch::new()?;
-            Ok(finish(rig.start(job, &scratch)?)?.code)
-        })
-        .collect::<Result<Vec<_>>>()?;
-    assert_eq!(codes, [Some(0), Some(1), Some(1)]);
-    let git_dir = rig.store().join("git");
-    for mirror in [
-        "_local/tailrocks/velnor-new.git",
-        &format!("127.0.0.1+{closed}/tailrocks/velnor-new.git"),
-        "_local/someone/velnor-new.git",
-    ] {
-        assert!(git_dir.join(mirror).join("HEAD").is_file(), "{mirror}");
+    for (job, expected) in cases {
+        assert_eq!(checkout(&rig, job)?, expected);
     }
     Ok(())
 }
 
 #[test]
-fn persist_credentials_accepts_only_upstream_spellings() -> Result<()> {
+fn persist_credentials_other_than_true_is_accepted_as_false() -> Result<()> {
     let rig = Rig::new()?;
-    for (spelling, accepted) in [("False", true), ("FALSE", true), ("fAlse", false)] {
+    for (spelling, accepted) in [
+        ("False", true),
+        ("FALSE", true),
+        ("fAlse", true),
+        ("no", true),
+        ("", true),
+        ("true", false),
+        ("TRUE", false),
+        ("True", false),
+    ] {
         let job = rig.job_edit(
             "checkout_depth1",
             &rig.head,
@@ -186,160 +206,43 @@ fn persist_credentials_accepts_only_upstream_spellings() -> Result<()> {
     Ok(())
 }
 
-struct TlsSink {
-    server: Child,
-    _stdin: ChildStdin,
-    port: u16,
-    request: Receiver<String>,
-}
-
-impl TlsSink {
-    fn start(dir: &Path) -> Result<Self> {
-        let (cert, key) = (dir.join("cert.pem"), dir.join("key.pem"));
-        let made = Command::new("openssl")
-            .args([
-                "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-            ])
-            .args(["-subj", "/CN=127.0.0.1", "-keyout"])
-            .arg(&key)
-            .arg("-out")
-            .arg(&cert)
-            .output()
-            .context("run openssl")?;
-        if !made.status.success() {
-            bail!("openssl req: {}", String::from_utf8_lossy(&made.stderr));
-        }
-        let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
-        let mut server = Command::new("openssl")
-            .args(["s_server", "-quiet", "-accept", &port.to_string()])
-            .arg("-cert")
-            .arg(&cert)
-            .arg("-key")
-            .arg(&key)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .context("start openssl s_server")?;
-        let stdin = server.stdin.take().context("s_server stdin")?;
-        let stdout = server.stdout.take().context("s_server stdout")?;
-        let (sender, request) = channel();
-        std::thread::spawn(move || {
-            let mut seen = String::new();
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                let end = line.trim().is_empty();
-                seen.push_str(&line);
-                seen.push('\n');
-                if end {
-                    break;
-                }
-            }
-            let _ = sender.send(seen);
-        });
-        let sink = Self {
-            server,
-            _stdin: stdin,
-            port,
-            request,
-        };
-        for _ in 0..100 {
-            if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                return Ok(sink);
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-        bail!("openssl s_server did not listen on {port}")
-    }
-
-    fn url(&self) -> String {
-        format!("https://127.0.0.1:{}", self.port)
-    }
-
-    fn first_request(&self) -> Result<String> {
-        self.request
-            .recv_timeout(WAIT)
-            .context("no request reached the TLS endpoint")
-    }
-}
-
-impl Drop for TlsSink {
-    fn drop(&mut self) {
-        let _ = self.server.kill();
-        let _ = self.server.wait();
-    }
-}
-
-fn header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
-    request.lines().find_map(|line| {
-        let (key, value) = line.split_once(':')?;
-        key.eq_ignore_ascii_case(name).then(|| value.trim())
-    })
-}
-
-fn trace(rig: &Rig) -> String {
-    std::fs::read_to_string(rig.trace()).unwrap_or_default()
-}
-
 #[test]
-fn token_reaches_https_origin_as_scoped_header_and_never_argv() -> Result<()> {
+fn checkout_fetch_uses_trusted_facts() -> Result<()> {
     let rig = Rig::new()?;
-    let sink = TlsSink::start(&rig.root)?;
-    let job = rig.job("checkout_depth1", &rig.head, &sink.url())?;
+    let closed = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let facts = rig.root.join("trusted.json");
+    std::fs::write(
+        &facts,
+        format!(
+            r#"{{"repository_id": 1, "repository": "tailrocks/velnor-new",
+"server_url": "{}", "default_branch": "main", "sha": "{}", "run_id": 1,
+"run_attempt": 1, "event": {{"kind": "pull_request", "number": 7,
+"base_branch": "main", "head_repository": "tailrocks/velnor-new"}}}}"#,
+            rig.server_url(),
+            rig.merge
+        ),
+    )?;
+    let lies = [
+        ("refs/pull/7/merge", "refs/pull/9/merge"),
+        ("tailrocks/velnor-new", "someone/else"),
+    ];
+    let job = rig.job_edit(
+        "checkout_pull_request",
+        &rig.merge,
+        &format!("http://127.0.0.1:{closed}"),
+        &lies,
+    )?;
     let scratch = Scratch::new()?;
-    let env = [("GIT_SSL_NO_VERIFY", "1")];
-    let runner = rig.start_env(&job, &scratch, &env)?;
-    let request = sink.first_request()?;
-    drop(sink);
-    let ran = finish(runner)?;
-    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
-    let credential = STANDARD.encode(format!("x-access-token:{TOKEN}"));
-    assert!(
-        request.starts_with("GET /tailrocks/velnor-new.git/info/refs?"),
-        "{request}"
-    );
+    let ran = finish(rig.start_trusted(&job, &facts, &scratch)?)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     assert_eq!(
-        header(&request, "authorization"),
-        Some(format!("basic {credential}").as_str()),
-        "{request}"
+        git(&scratch.workspace(), &["rev-parse", "HEAD"])?,
+        rig.merge
     );
-    let argv = trace(&rig);
-    assert!(argv.contains("\"cmd_name\""), "git trace is empty");
-    for text in [&argv, &ran.stdout, &ran.stderr] {
-        assert!(
-            !text.contains(TOKEN) && !text.contains(&credential),
-            "the credential leaked: {text}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn token_is_not_sent_over_plain_http() -> Result<()> {
-    let rig = Rig::new()?;
-    let listener = TcpListener::bind("127.0.0.1:0")?;
-    let url = format!("http://{}", listener.local_addr()?);
-    let (sender, request) = channel();
-    std::thread::spawn(move || {
-        let Ok((mut stream, _)) = listener.accept() else {
-            return;
-        };
-        let mut seen = Vec::new();
-        let mut byte = [0_u8; 1];
-        while !seen.ends_with(b"\r\n\r\n") && stream.read(&mut byte).is_ok_and(|n| n == 1) {
-            seen.push(byte[0]);
-        }
-        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
-        let _ = sender.send(String::from_utf8_lossy(&seen).into_owned());
-    });
-    let job = rig.job("checkout_depth1", &rig.head, &url)?;
-    let scratch = Scratch::new()?;
-    let ran = finish(rig.start(&job, &scratch)?)?;
-    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
-    let request = request.recv_timeout(WAIT).context("no request arrived")?;
-    assert!(
-        request.starts_with("GET /tailrocks/velnor-new.git/info/refs?"),
-        "{request}"
-    );
-    assert_eq!(header(&request, "authorization"), None, "{request}");
+    let refs = git(
+        &rig.mirror(),
+        &["for-each-ref", "--format=%(refname)", "refs/pull"],
+    )?;
+    assert_eq!(refs, "refs/pull/7/merge");
     Ok(())
 }
