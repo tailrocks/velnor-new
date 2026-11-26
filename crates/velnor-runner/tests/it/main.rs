@@ -80,6 +80,8 @@ mod protocol_oauth;
 mod protocol_results;
 mod protocol_timeline;
 mod redaction;
+#[path = "exec_review.rs"]
+mod review;
 #[path = "exec_semantics.rs"]
 mod semantics;
 mod support;

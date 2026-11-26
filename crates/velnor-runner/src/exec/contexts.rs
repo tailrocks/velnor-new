@@ -57,6 +57,16 @@ pub(super) fn set_pair(pairs: &mut Vec<(String, String)>, name: &str, value: &st
     pairs.push((name.to_owned(), value.to_owned()));
 }
 
+pub(super) fn set_output(outputs: &mut Vec<(String, String)>, name: &str, value: &str) {
+    match outputs
+        .iter_mut()
+        .find(|(known, _)| known.eq_ignore_ascii_case(name))
+    {
+        Some((_, known)) => value.clone_into(known),
+        None => outputs.push((name.to_owned(), value.to_owned())),
+    }
+}
+
 pub(super) fn string(value: &str) -> ContextValue {
     ContextValue::String(value.to_owned())
 }

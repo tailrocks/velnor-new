@@ -8,7 +8,7 @@ use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
 use tokio::process::Child;
 use tokio::sync::watch;
 
-const KILL_GRACE: Duration = Duration::from_secs(5);
+pub(super) const KILL_GRACE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct JobCancel {
@@ -79,6 +79,12 @@ impl Groups {
         for group in live.drain(..) {
             let _ = kill_process_group(group, Signal::KILL);
         }
+    }
+}
+
+impl Drop for Groups {
+    fn drop(&mut self) {
+        self.kill_all();
     }
 }
 

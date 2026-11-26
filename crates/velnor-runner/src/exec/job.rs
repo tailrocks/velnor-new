@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use super::adapter::{AdapterCall, AdapterRegistry, invoke};
 use super::cancel::Groups;
 use super::context::{JobContext, StepEntry};
-use super::contexts::set_pair;
+use super::contexts::set_output;
 use super::env_files::{Collected, FileCommands, save_summary};
-use super::mask;
+use super::mask::{self, Masker};
 use super::preflight::{problems, reference};
 use super::shell;
 use super::sink::LogSink;
@@ -59,7 +59,8 @@ pub async fn run_job(
         outputs: BTreeMap::new(),
         annotations: Vec::new(),
     };
-    let mut masker = mask::for_job(message);
+    let mut masker = Masker::default();
+    let loaded = mask::load(&mut masker, message);
     let mut annotations = Vec::new();
     let mut out = Output {
         number: 0,
@@ -67,7 +68,11 @@ pub async fn run_job(
         masker: &mut masker,
         annotations: &mut annotations,
     };
-    match JobContext::new(message, options).await {
+    let started = match loaded {
+        Ok(()) => JobContext::new(message, options).await,
+        Err(error) => Err(error),
+    };
+    match started {
         Err(error) => reject(&mut out, &mut run, &[error.to_string()]),
         Ok(ctx) => {
             let unsupported: Vec<String> = problems(message, adapters, &ctx)
@@ -91,6 +96,9 @@ pub async fn run_job(
         }
     }
     run.annotations.append(&mut annotations);
+    for annotation in &mut run.annotations {
+        mask::mask_annotation(&masker, annotation);
+    }
     sink.job_finished(&run);
     run
 }
@@ -259,7 +267,7 @@ impl Job<'_> {
         process_env: Vec<(String, String)>,
         limits: &Limits<'_>,
         out: &mut Output<'_>,
-    ) -> Result<(StepResult, BTreeMap<String, String>), ExecError> {
+    ) -> Result<(StepResult, Vec<(String, String)>), ExecError> {
         let script = ScriptStep {
             script: token::input(step.inputs.as_ref(), "script", env)?.unwrap_or_default(),
             shell: shell::resolve(step, &self.ctx, env)?,
@@ -267,7 +275,7 @@ impl Job<'_> {
             env: process_env,
         };
         let result = run_script(&script, &self.options.temp, limits, out).await?;
-        Ok((result, BTreeMap::new()))
+        Ok((result, Vec::new()))
     }
 
     fn working_directory(
@@ -300,7 +308,7 @@ impl Job<'_> {
         process_env: &[(String, String)],
         limits: &Limits<'_>,
         out: &mut Output<'_>,
-    ) -> Result<(StepResult, BTreeMap<String, String>), ExecError> {
+    ) -> Result<(StepResult, Vec<(String, String)>), ExecError> {
         let adapter = self
             .adapters
             .find(reference)
@@ -317,6 +325,7 @@ impl Job<'_> {
             temp: &self.options.temp,
             cancel: limits.cancel.cloned(),
             minutes: limits.minutes,
+            groups: limits.groups,
         };
         invoke(adapter, call, out).await
     }
@@ -324,7 +333,7 @@ impl Job<'_> {
     async fn finish(
         &mut self,
         result: StepResult,
-        adapter_outputs: BTreeMap<String, String>,
+        adapter_outputs: Vec<(String, String)>,
         collected: Collected,
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
@@ -350,9 +359,9 @@ impl Job<'_> {
         }
         self.ctx.apply_env(&writes);
         self.ctx.prepend_path(&collected.path);
-        let mut outputs: Vec<(String, String)> = adapter_outputs.into_iter().collect();
+        let mut outputs = adapter_outputs;
         for (name, value) in &collected.outputs {
-            set_pair(&mut outputs, name, value);
+            set_output(&mut outputs, name, value);
         }
         let summary = save_summary(
             &self.options.temp,

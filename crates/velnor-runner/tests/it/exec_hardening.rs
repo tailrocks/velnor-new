@@ -10,14 +10,15 @@ use futures_util::FutureExt;
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 use velnor_runner::exec::{
-    AdapterRegistry, JobCancel, JobResult, JobRun, LogSink, StepAdapter, StepContext, StepFuture,
-    StepResult, run_job,
+    AdapterRegistry, JobCancel, JobResult, StepAdapter, StepContext, StepFuture, StepResult,
+    run_job,
 };
 use velnor_runner::job_message::AgentJobRequestMessage;
 
 use crate::exec_builder::{
-    BACKGROUND_SLEEP, BACKGROUND_STATE, assert_gone, binary, bounded, expression, finished, job,
-    literal, mapping, pid_from, run, run_message, step, wait_for_file, with, write_job,
+    BACKGROUND_SLEEP, BACKGROUND_STATE, Recorder, assert_gone, binary, bounded, expression,
+    finished, job, literal, mapping, pid_from, run, run_message, step, wait_for_file, with,
+    write_job,
 };
 use crate::exec_support::{Scratch, fixture_path};
 
@@ -26,7 +27,7 @@ fn step_env_is_cleared_to_the_allow_list() -> Result<()> {
     let scratch = Scratch::new()?;
     let message = job(vec![run(
         "probe",
-        "echo \"probe=${VELNOR_LEAK_PROBE-unset} gh=${GH_TOKEN-unset} gt=${GITHUB_TOKEN-unset} aws=${AWS_SECRET_ACCESS_KEY-unset} ssh=${SSH_AUTH_SOCK-unset}\"\necho \"term-is-xterm=$([ \"${TERM-}\" = xterm ] && echo yes || echo no)\"\necho \"home=${HOME-unset} user=${USER-unset} lang=${LANG-unset} lcall=${LC_ALL-unset} tmpdir=${TMPDIR-unset} path=${PATH:+set}\"",
+        "echo \"probe=${VELNOR_LEAK_PROBE-unset} gh=${GH_TOKEN-unset} gt=${GITHUB_TOKEN-unset} aws=${AWS_SECRET_ACCESS_KEY-unset} ssh=${SSH_AUTH_SOCK-unset}\"\necho \"term-is-xterm=$([ \"${TERM-}\" = xterm ] && echo yes || echo no)\"\necho \"lc-token=${LC_TOKEN-unset} lc-numeric=${LC_NUMERIC-unset}\"\necho \"home=${HOME-unset} user=${USER-unset} lang=${LANG-unset} lcall=${LC_ALL-unset} tmpdir=${TMPDIR-unset} path=${PATH:+set}\"",
     )]);
     let path = write_job(&scratch, &message)?;
     let mut command = bounded(&scratch, &path);
@@ -41,6 +42,8 @@ fn step_env_is_cleared_to_the_allow_list() -> Result<()> {
         .env("USER", "probe-user")
         .env("LANG", "C.UTF-8")
         .env("LC_ALL", "C")
+        .env("LC_TOKEN", "lc-secret")
+        .env("LC_NUMERIC", "C")
         .env("TMPDIR", "/tmp/probe");
     let ran = finished(command)?;
     assert!(
@@ -49,6 +52,11 @@ fn step_env_is_cleared_to_the_allow_list() -> Result<()> {
         ran.stdout
     );
     assert!(ran.has_line("term-is-xterm=no"), "{}", ran.stdout);
+    assert!(
+        ran.has_line("lc-token=unset lc-numeric=C"),
+        "{}",
+        ran.stdout
+    );
     assert!(
         ran.has_line(
             "home=/probe/home user=probe-user lang=C.UTF-8 lcall=C tmpdir=/tmp/probe path=set"
@@ -84,8 +92,7 @@ fn env_names_are_case_sensitive() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn terminating_the_runner_kills_the_step_group() -> Result<()> {
+fn signalling_the_runner_kills_the_step_group(signal: Signal) -> Result<()> {
     let scratch = Scratch::new()?;
     let path = write_job(&scratch, &job(vec![run("hold", BACKGROUND_SLEEP)]))?;
     let child = bounded(&scratch, &path)
@@ -95,7 +102,7 @@ fn terminating_the_runner_kills_the_step_group() -> Result<()> {
     let pid_file = scratch.options().temp.join("bg.pid");
     wait_for_file(&pid_file)?;
     let runner = Pid::from_raw(i32::try_from(child.id())?).context("the runner pid")?;
-    kill_process(runner, Signal::TERM).context("send SIGTERM")?;
+    kill_process(runner, signal).context("send the signal")?;
     let output = child.wait_with_output().context("wait for the runner")?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -104,6 +111,21 @@ fn terminating_the_runner_kills_the_step_group() -> Result<()> {
     );
     assert_eq!(output.status.code(), Some(1));
     assert_gone(pid_from(&pid_file)?)
+}
+
+#[test]
+fn terminating_the_runner_kills_the_step_group() -> Result<()> {
+    signalling_the_runner_kills_the_step_group(Signal::TERM)
+}
+
+#[test]
+fn interrupting_the_runner_kills_the_step_group() -> Result<()> {
+    signalling_the_runner_kills_the_step_group(Signal::INT)
+}
+
+#[test]
+fn hanging_up_the_runner_kills_the_step_group() -> Result<()> {
+    signalling_the_runner_kills_the_step_group(Signal::HUP)
 }
 
 #[test]
@@ -263,23 +285,6 @@ async fn adapter_steps_honour_timeout_minutes() -> Result<()> {
     );
     Ok(())
 }
-#[derive(Default)]
-struct Recorder {
-    lines: Vec<String>,
-}
-
-impl LogSink for Recorder {
-    fn step_started(&mut self, _number: u32, _name: &str) {}
-
-    fn line(&mut self, _number: u32, text: &str) {
-        self.lines.push(text.to_owned());
-    }
-
-    fn step_finished(&mut self, _number: u32, _result: StepResult) {}
-
-    fn job_finished(&mut self, _run: &JobRun) {}
-}
-
 struct Sleeper;
 
 impl StepAdapter for Sleeper {

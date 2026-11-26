@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -19,7 +19,10 @@ use super::sink::LogSink;
 use super::{Annotation, AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
-const LINE_BUFFER: usize = 256;
+const LINE_BUFFER: usize = 64;
+const LINE_LIMIT: usize = 1 << 20;
+const READ_PIECE: usize = 64 << 10;
+const CAPTURE_LIMIT: usize = 8 << 20;
 
 pub(super) struct Output<'a> {
     pub(super) number: u32,
@@ -30,11 +33,7 @@ pub(super) struct Output<'a> {
 
 impl Output<'_> {
     pub(super) fn line(&mut self, text: &str) {
-        let before = self.annotations.len();
         commands::apply(text, self.masker, self.annotations);
-        for annotation in &mut self.annotations[before..] {
-            annotation.message = self.masker.mask(&annotation.message).into_owned();
-        }
         self.message(text);
     }
 
@@ -84,39 +83,81 @@ fn spawn(spec: &ProcessSpec<'_>) -> std::io::Result<Child> {
         .spawn()
 }
 
-async fn read_lines<R>(reader: R, sender: mpsc::Sender<String>)
+struct Chunk {
+    stderr: bool,
+    bytes: Vec<u8>,
+}
+
+impl Chunk {
+    fn text(mut self) -> String {
+        if self.bytes.last() == Some(&b'\n') {
+            self.bytes.pop();
+        }
+        if self.bytes.last() == Some(&b'\r') {
+            self.bytes.pop();
+        }
+        String::from_utf8_lossy(&self.bytes).into_owned()
+    }
+}
+
+async fn read_lines<R>(reader: R, stderr: bool, whole_lines: bool, sender: mpsc::Sender<Chunk>)
 where
     R: AsyncRead + Unpin,
 {
     let mut reader = BufReader::new(reader);
-    let mut buffer = Vec::new();
+    let mut line = Vec::new();
+    let mut truncated = false;
     loop {
-        buffer.clear();
-        match reader.read_until(b'\n', &mut buffer).await {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {}
+        let mut piece = Vec::new();
+        let read = (&mut reader)
+            .take(READ_PIECE as u64)
+            .read_until(b'\n', &mut piece)
+            .await;
+        if matches!(read, Ok(0) | Err(_)) {
+            if !line.is_empty() || truncated {
+                finish_line(&mut line, &mut truncated);
+                let _ = sender
+                    .send(Chunk {
+                        stderr,
+                        bytes: std::mem::take(&mut line),
+                    })
+                    .await;
+            }
+            break;
         }
-        if buffer.last() == Some(&b'\n') {
-            buffer.pop();
-        }
-        if buffer.last() == Some(&b'\r') {
-            buffer.pop();
-        }
-        if sender
-            .send(String::from_utf8_lossy(&buffer).into_owned())
-            .await
-            .is_err()
-        {
+        let bytes = if whole_lines {
+            let ended = piece.last() == Some(&b'\n');
+            let room = LINE_LIMIT.saturating_sub(line.len());
+            truncated |= piece.len() > room;
+            line.extend_from_slice(&piece[..piece.len().min(room)]);
+            if !ended {
+                continue;
+            }
+            finish_line(&mut line, &mut truncated);
+            std::mem::take(&mut line)
+        } else {
+            piece
+        };
+        if sender.send(Chunk { stderr, bytes }).await.is_err() {
             break;
         }
     }
 }
 
+fn finish_line(line: &mut Vec<u8>, truncated: &mut bool) {
+    if std::mem::take(truncated) {
+        while matches!(line.last(), Some(b'\n' | b'\r')) {
+            line.pop();
+        }
+        line.extend_from_slice(format!(" [line truncated at {LINE_LIMIT} bytes]\n").as_bytes());
+    }
+}
+
 async fn supervise(
     child: &mut Child,
-    lines: &mut mpsc::Receiver<String>,
+    lines: &mut mpsc::Receiver<Chunk>,
     limits: &Limits<'_>,
-    out: &mut Output<'_>,
+    mut on_chunk: impl FnMut(Chunk),
 ) -> Result<Ending, ExecError> {
     let deadline = deadline(limits.minutes);
     let timer = async {
@@ -136,7 +177,7 @@ async fn supervise(
     loop {
         tokio::select! {
             line = lines.recv(), if open => match line {
-                Some(text) => out.line(&text),
+                Some(chunk) => on_chunk(chunk),
                 None => open = false,
             },
             status = child.wait() => {
@@ -175,11 +216,12 @@ fn exit_code(status: ExitStatus) -> i32 {
         .unwrap_or(1)
 }
 
-pub(super) async fn run(
+async fn drive(
     spec: &ProcessSpec<'_>,
     limits: &Limits<'_>,
-    out: &mut Output<'_>,
-) -> Result<StepResult, ExecError> {
+    whole_lines: bool,
+    mut on_chunk: impl FnMut(Chunk),
+) -> Result<Ending, ExecError> {
     let mut child = spawn(spec).map_err(|source| {
         ExecError::io(
             format!("start {} in {}", spec.program, spec.dir.display()),
@@ -190,16 +232,26 @@ pub(super) async fn run(
     let (sender, mut lines) = mpsc::channel(LINE_BUFFER);
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        readers.push(tokio::spawn(read_lines(stdout, sender.clone())));
+        readers.push(tokio::spawn(read_lines(
+            stdout,
+            false,
+            whole_lines,
+            sender.clone(),
+        )));
     }
     if let Some(stderr) = child.stderr.take() {
-        readers.push(tokio::spawn(read_lines(stderr, sender.clone())));
+        readers.push(tokio::spawn(read_lines(
+            stderr,
+            true,
+            whole_lines,
+            sender.clone(),
+        )));
     }
     drop(sender);
-    let ending = supervise(&mut child, &mut lines, limits, out).await;
+    let ending = supervise(&mut child, &mut lines, limits, &mut on_chunk).await;
     let drained = tokio::time::timeout(DRAIN_GRACE, async {
-        while let Some(text) = lines.recv().await {
-            out.line(&text);
+        while let Some(chunk) = lines.recv().await {
+            on_chunk(chunk);
         }
     })
     .await;
@@ -208,7 +260,16 @@ pub(super) async fn run(
             reader.abort();
         }
     }
-    Ok(match ending? {
+    ending
+}
+
+pub(super) async fn run(
+    spec: &ProcessSpec<'_>,
+    limits: &Limits<'_>,
+    out: &mut Output<'_>,
+) -> Result<StepResult, ExecError> {
+    let ending = drive(spec, limits, true, |chunk| out.line(&chunk.text())).await?;
+    Ok(match ending {
         Ending::Exited(status) if status.success() => StepResult::Succeeded,
         Ending::Exited(status) => {
             out.annotations.push(Annotation::new(
@@ -223,6 +284,53 @@ pub(super) async fn run(
         }
         Ending::Cancelled => StepResult::Cancelled,
     })
+}
+
+#[derive(Default)]
+struct Captured {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+impl Captured {
+    fn push(&mut self, chunk: &[u8]) {
+        let room = CAPTURE_LIMIT - self.bytes.len();
+        self.truncated |= chunk.len() > room;
+        self.bytes
+            .extend_from_slice(&chunk[..chunk.len().min(room)]);
+    }
+}
+
+pub(super) async fn capture(
+    spec: &ProcessSpec<'_>,
+    limits: &Limits<'_>,
+) -> Result<String, ExecError> {
+    let mut stdout = Captured::default();
+    let mut stderr = Captured::default();
+    let ending = drive(spec, limits, false, |chunk| {
+        let target = if chunk.stderr {
+            &mut stderr
+        } else {
+            &mut stdout
+        };
+        target.push(&chunk.bytes);
+    })
+    .await?;
+    let command = || format!("{} {}", spec.program, spec.args.join(" "));
+    match ending {
+        Ending::Cancelled => Err(ExecError::Cancelled),
+        Ending::Exited(status) if status.success() && stdout.truncated => Err(ExecError::Invalid(
+            format!("{} printed more than {CAPTURE_LIMIT} bytes", command()),
+        )),
+        Ending::Exited(status) if status.success() => {
+            Ok(String::from_utf8_lossy(&stdout.bytes).into_owned())
+        }
+        Ending::Exited(_) | Ending::TimedOut => Err(ExecError::Invalid(format!(
+            "{} failed: {}",
+            command(),
+            String::from_utf8_lossy(&stderr.bytes).trim()
+        ))),
+    }
 }
 
 pub(super) async fn run_script(
