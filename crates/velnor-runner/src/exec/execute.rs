@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::adapter::{AdapterCall, invoke};
@@ -13,7 +12,7 @@ use super::preflight::reference;
 use super::shell;
 use super::step::{Limits, ScriptStep, run_script};
 use super::token;
-use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
+use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::expr::ExprEnv;
 use crate::job_message::ActionStep;
 
@@ -112,7 +111,7 @@ impl Job<'_> {
             .ok_or_else(|| ExecError::Unsupported(format!("uses {reference}")))?;
         let inputs = match step.inputs.as_ref() {
             Some(inputs) => token::mapping(inputs, env)?.into_iter().collect(),
-            None => BTreeMap::new(),
+            None => Inputs::default(),
         };
         let call = AdapterCall {
             reference: reference.to_owned(),

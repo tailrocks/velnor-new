@@ -10,6 +10,7 @@ mod encode;
 mod env_files;
 mod execute;
 mod host_env;
+mod inputs;
 mod issues;
 mod job;
 mod mask;
@@ -27,6 +28,7 @@ use std::path::PathBuf;
 
 pub use adapter::{AdapterRegistry, StepAdapter, StepContext, StepFuture};
 pub use cancel::JobCancel;
+pub use inputs::Inputs;
 pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
 

@@ -52,21 +52,41 @@ impl Masker {
             return;
         }
         self.values.push(value.to_owned());
-        self.values
-            .sort_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
     }
 
     pub(super) fn mask<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        let mut masked = Cow::Borrowed(text);
+        let mut spans = Vec::new();
         for value in &self.values {
-            if masked.contains(value.as_str()) {
-                masked = Cow::Owned(masked.replace(value.as_str(), MASK));
-            }
+            value_spans(text, value, &mut spans);
         }
         for regex in &self.patterns {
-            masked = replace_matches(masked, regex);
+            spans.extend(
+                regex
+                    .find_iter(text)
+                    .filter(|found| !found.is_empty())
+                    .map(|found| (found.start(), found.end())),
+            );
         }
-        masked
+        if spans.is_empty() {
+            return Cow::Borrowed(text);
+        }
+        spans.sort_unstable();
+        let mut masked = String::with_capacity(text.len());
+        let mut copied = 0;
+        let mut spans = spans.into_iter();
+        let mut current = spans.next().unwrap_or_default();
+        for (start, end) in spans.chain(std::iter::once((usize::MAX, usize::MAX))) {
+            if start <= current.1 {
+                current.1 = current.1.max(end);
+                continue;
+            }
+            masked.push_str(&text[copied..current.0]);
+            masked.push_str(MASK);
+            copied = current.1;
+            current = (start, end);
+        }
+        masked.push_str(&text[copied..]);
+        Cow::Owned(masked)
     }
 
     pub(super) fn reveals(&self, text: &str) -> bool {
@@ -74,22 +94,13 @@ impl Masker {
     }
 }
 
-fn replace_matches<'a>(text: Cow<'a, str>, regex: &Regex) -> Cow<'a, str> {
-    let mut replaced = String::new();
-    let mut last = 0;
-    for found in regex
-        .find_iter(text.as_ref())
-        .filter(|found| !found.is_empty())
-    {
-        replaced.push_str(&text[last..found.start()]);
-        replaced.push_str(MASK);
-        last = found.end();
+fn value_spans(text: &str, value: &str, spans: &mut Vec<(usize, usize)>) {
+    let mut from = 0;
+    while let Some(found) = text[from..].find(value) {
+        let start = from + found;
+        spans.push((start, start + value.len()));
+        from = start + text[start..].chars().next().map_or(1, char::len_utf8);
     }
-    if last == 0 {
-        return text;
-    }
-    replaced.push_str(&text[last..]);
-    Cow::Owned(replaced)
 }
 
 pub(super) fn mask_annotation(masker: &Masker, annotation: &mut Annotation) {

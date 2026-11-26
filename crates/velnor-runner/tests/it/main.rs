@@ -40,6 +40,8 @@ mod extra;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
+#[path = "exec_parity.rs"]
+mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod protocol_broker;

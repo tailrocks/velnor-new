@@ -147,7 +147,9 @@ impl Job<'_> {
             self.status = JobStatus::Cancelled;
         }
         let prepared = self.ctx.begin_step(step.name.as_deref()).await;
-        let env = self.ctx.expr_env(self.status, &[]);
+        let step_env = step_environment(step, &self.ctx.expr_env(self.status, &[]));
+        let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
+        let env = self.ctx.expr_env(self.status, &step_vars);
         let name = out.masker.mask(&step_name(step, &env)).into_owned();
         let mut record = StepRecord {
             number,
@@ -157,22 +159,19 @@ impl Job<'_> {
             conclusion: StepResult::Skipped,
             summary_path: None,
         };
-        let condition = if step.enabled {
-            evaluate_condition(step.condition.as_deref().unwrap_or_default(), &env)
-        } else {
-            Ok(false)
+        let condition = match (step.enabled, &step_env) {
+            (false, _) => Ok(false),
+            (true, Err(_)) => Ok(true),
+            (true, Ok(_)) => {
+                evaluate_condition(step.condition.as_deref().unwrap_or_default(), &env)
+            }
         };
         let mut outputs = Vec::new();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
-            let step_env = step_environment(step, &env);
-            let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
-            let step_expr = self
-                .ctx
-                .expr_env(self.status, step_env.as_deref().unwrap_or_default());
             let executed = match (condition, prepared, step_env) {
                 (Ok(_), Ok(()), Ok(step_env)) => {
-                    self.execute(step, step_env, &step_expr, cancel.as_ref(), out)
+                    self.execute(step, step_env, &env, cancel.as_ref(), out)
                         .await
                 }
                 (Err(error), _, _) => Err(error.into()),

@@ -7,6 +7,8 @@ use super::mask::Masker;
 use super::sink::LogSink;
 use super::{Annotation, AnnotationLevel};
 
+pub(super) const LINE_LIMIT: usize = 1 << 20;
+
 pub(super) struct Output<'a> {
     pub(super) number: u32,
     pub(super) sink: &'a mut dyn LogSink,
@@ -23,6 +25,24 @@ impl Output<'_> {
     pub(super) fn line(&mut self, text: &str) {
         commands::apply(text, self);
         self.message(text);
+    }
+
+    pub(super) fn bounded_line(&mut self, text: &str, overflow: bool) {
+        commands::apply(text, self);
+        let masked = self.masker.mask(text);
+        if !overflow && masked.len() <= LINE_LIMIT {
+            self.sink.line(self.number, &masked);
+            return;
+        }
+        let mut end = LINE_LIMIT.min(masked.len());
+        while !masked.is_char_boundary(end) {
+            end -= 1;
+        }
+        let kept = &masked[..end];
+        self.sink.line(
+            self.number,
+            &format!("{kept} [line truncated at {LINE_LIMIT} bytes]"),
+        );
     }
 
     pub(super) fn message(&mut self, text: &str) {

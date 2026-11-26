@@ -11,7 +11,7 @@ use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
 use super::step::{Limits, ProcessSpec, capture, deadline, report_timeout, run};
-use super::{ExecError, JobCancel, StepResult};
+use super::{ExecError, Inputs, JobCancel, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
@@ -58,7 +58,7 @@ impl AdapterRegistry {
 
 pub struct StepContext<'a> {
     pub reference: String,
-    pub inputs: BTreeMap<String, String>,
+    pub inputs: Inputs,
     pub env: BTreeMap<String, String>,
     pub workspace: &'a Path,
     pub temp: &'a Path,
@@ -138,7 +138,7 @@ impl StepContext<'_> {
 
 pub(super) struct AdapterCall<'a> {
     pub(super) reference: String,
-    pub(super) inputs: BTreeMap<String, String>,
+    pub(super) inputs: Inputs,
     pub(super) env: BTreeMap<String, String>,
     pub(super) workspace: &'a Path,
     pub(super) temp: &'a Path,

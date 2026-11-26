@@ -44,11 +44,7 @@ impl JobContext {
         options: &RunOptions,
     ) -> Result<Self, ExecError> {
         private::create_dir(&options.temp).await?;
-        tokio::fs::create_dir_all(&options.workspace)
-            .await
-            .map_err(|source| {
-                ExecError::io(format!("create {}", options.workspace.display()), source)
-            })?;
+        private::create_dir(&options.workspace).await?;
         let contexts = message
             .materialize_context_values()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?

@@ -51,6 +51,7 @@ const SELF_HOSTED: &str = "self-hosted";
 pub(super) const EVENT_DIRECTORY: &str = "_github_workflow";
 const GITHUB_TOKEN_VARIABLE: &str = "system.github.token";
 const ACCESS_TOKEN_VARIABLE: &str = "system.accesstoken";
+const STEP_DEBUG_VARIABLE: &str = "ACTIONS_STEP_DEBUG";
 
 pub(super) fn set_pair(pairs: &mut Vec<(String, String)>, name: &str, value: &str) {
     pairs.retain(|(known, _)| known != name);
@@ -184,27 +185,30 @@ pub(super) fn runner_context(
         "X64"
     };
     let environment = variable(message, "system.runnerEnvironment").unwrap_or(SELF_HOSTED);
-    object(
-        &[
-            ("os".to_owned(), "Linux".to_owned()),
-            ("arch".to_owned(), arch.to_owned()),
-            ("name".to_owned(), options.runner_name.clone()),
-            (
-                "temp".to_owned(),
-                options.temp.to_string_lossy().into_owned(),
-            ),
-            (
-                "tool_cache".to_owned(),
-                options
-                    .temp
-                    .join("tool_cache")
-                    .to_string_lossy()
-                    .into_owned(),
-            ),
-            ("environment".to_owned(), environment.to_owned()),
-        ],
-        false,
-    )
+    let mut pairs = vec![
+        ("os".to_owned(), "Linux".to_owned()),
+        ("arch".to_owned(), arch.to_owned()),
+        ("name".to_owned(), options.runner_name.clone()),
+        (
+            "temp".to_owned(),
+            options.temp.to_string_lossy().into_owned(),
+        ),
+        (
+            "tool_cache".to_owned(),
+            options
+                .temp
+                .join("tool_cache")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        ("environment".to_owned(), environment.to_owned()),
+    ];
+    if variable(message, STEP_DEBUG_VARIABLE)
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"))
+    {
+        pairs.push(("debug".to_owned(), "1".to_owned()));
+    }
+    object(&pairs, false)
 }
 
 pub(super) fn exported_variables(
