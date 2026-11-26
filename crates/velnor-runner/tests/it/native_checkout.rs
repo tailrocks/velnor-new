@@ -75,6 +75,7 @@ impl Rig {
             &work,
             &["push", "-q", &target, &format!("{merge}:refs/pull/7/merge")],
         )?;
+        crate::native_checkout_env::install_wrapper(&root)?;
         Ok(Self { root, head, merge })
     }
 
@@ -102,6 +103,14 @@ impl Rig {
         self.store().join(format!(
             "git/_local/tailrocks/velnor-new/{repository_id}.git"
         ))
+    }
+
+    pub(crate) fn path(&self) -> String {
+        format!(
+            "{}:{}",
+            self.root.join("bin").display(),
+            std::env::var("PATH").unwrap_or_default()
+        )
     }
 
     pub(crate) fn trace(&self) -> PathBuf {
@@ -165,7 +174,7 @@ impl Rig {
             .arg("--temp")
             .arg(scratch.options().temp)
             .env("VELNOR_STORE_ROOT", self.store())
-            .env("GIT_TRACE2_EVENT", self.trace())
+            .env("PATH", self.path())
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .envs(env.iter().copied())

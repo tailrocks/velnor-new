@@ -7,9 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use crate::broker::{
-    GIT_ENV, Request, Response, StoreWriter, Token, TrustedFacts, git_args, mirror_path,
-};
+use crate::broker::{Request, Response, StoreWriter, Token, TrustedFacts, git_args, mirror_path};
 use crate::exec::{ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult};
 use crate::store::store_root;
 
@@ -99,12 +97,8 @@ async fn git(
     quiet: bool,
 ) -> Result<ProcessOutcome, ExecError> {
     let args = git_args(git_dir, args);
-    let env: Vec<(String, String)> = GIT_ENV
-        .iter()
-        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-        .collect();
     let dir = ctx.workspace.to_path_buf();
-    ctx.run_process(("git", &args, &dir, &env), quiet).await
+    ctx.run_process(("git", &args, &dir, &[]), quiet).await
 }
 
 async fn require(

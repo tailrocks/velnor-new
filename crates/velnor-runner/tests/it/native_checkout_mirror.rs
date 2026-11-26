@@ -342,7 +342,11 @@ fn a_cancelled_fetch_leaves_no_git_helper_behind() -> Result<()> {
     )?;
     let scratch = Scratch::new()?;
     let exec_path_text = exec_path.to_string_lossy().into_owned();
-    let mut runner = rig.start_env(&job, &scratch, &[("GIT_EXEC_PATH", &exec_path_text)])?;
+    crate::native_checkout_env::wrapper_env(
+        &rig.root,
+        &format!("export GIT_EXEC_PATH='{exec_path_text}'\n"),
+    )?;
+    let mut runner = rig.start(&job, &scratch)?;
     let deadline = Instant::now() + Duration::from_secs(10);
     let pid = loop {
         if let Ok(text) = std::fs::read_to_string(&pid_file)

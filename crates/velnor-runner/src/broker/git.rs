@@ -14,11 +14,21 @@ use tokio::process::{Child, Command};
 use tokio::runtime::{Handle, RuntimeFlavor};
 use url::Url;
 
-pub(crate) const GIT_ENV: [(&str, &str); 3] = [
+const GIT_ENV: [(&str, &str); 3] = [
     ("GIT_CONFIG_NOSYSTEM", "1"),
     ("GIT_CONFIG_GLOBAL", "/dev/null"),
     ("GIT_TERMINAL_PROMPT", "0"),
 ];
+
+pub(crate) fn isolate(command: &mut Command) -> &mut Command {
+    command.env_clear();
+    for name in ["PATH", "LANG", "LC_ALL"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    command.env("HOME", "/dev/null").envs(GIT_ENV)
+}
 
 pub(crate) fn git_args(git_dir: Option<&Path>, args: &[&str]) -> Vec<String> {
     let mut all = vec![
@@ -62,10 +72,9 @@ struct Leader {
 
 impl Leader {
     fn spawn(args: &[String], env: &[(String, String)]) -> Result<Self> {
-        let child = Command::new("git")
+        let mut command = Command::new("git");
+        let child = isolate(&mut command)
             .args(args)
-            .envs(GIT_ENV)
-            .env("HOME", "/dev/null")
             .envs(env.iter().map(|(name, value)| (name, value)))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -115,10 +124,10 @@ impl Leader {
 
 impl Drop for Leader {
     fn drop(&mut self) {
+        let _ = kill_process_group(self.group, Signal::KILL);
         if self.reaped {
             return;
         }
-        let _ = kill_process_group(self.group, Signal::KILL);
         match Handle::try_current().map(|handle| handle.runtime_flavor()) {
             Ok(RuntimeFlavor::MultiThread) => tokio::task::block_in_place(|| self.reap_group()),
             _ => self.reap_group(),

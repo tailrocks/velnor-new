@@ -49,3 +49,21 @@ async fn dropping_a_running_git_on_a_current_thread_runtime_kills_its_group() {
         "the git process group outlived the dropped future"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_holding_stderr_dies_when_the_leader_already_exited() {
+    let dir = std::env::temp_dir().join(format!("velnor-git-member-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let file = dir.join("pid");
+    let alias = format!("alias.s=!sleep 30 & echo $! > {}; exit 0", file.display());
+    let args = ["-c".to_owned(), alias, "s".to_owned()];
+    let run = tokio::time::timeout(Duration::from_secs(2), git(&args, &[]));
+    let (outcome, pid) = tokio::join!(run, pid_from(&file));
+    let survived = alive(&pid);
+    if survived {
+        let _ = Command::new("kill").args(["-KILL", &pid]).status();
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(outcome.is_err(), "the member holds stderr open");
+    assert!(!survived, "the group member outlived the dropped future");
+}

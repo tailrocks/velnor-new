@@ -140,8 +140,8 @@ fn token_reaches_https_origin_as_scoped_header_and_never_argv() -> Result<()> {
     let sink = TlsSink::start(&rig.root)?;
     let job = rig.job("checkout_depth1", &rig.head, &sink.url())?;
     let scratch = Scratch::new()?;
-    let env = [("GIT_SSL_NO_VERIFY", "1")];
-    let runner = rig.start_env(&job, &scratch, &env)?;
+    crate::native_checkout_env::wrapper_env(&rig.root, "export GIT_SSL_NO_VERIFY=1\n")?;
+    let runner = rig.start(&job, &scratch)?;
     let request = sink.first_request()?;
     drop(sink);
     let ran = finish(runner)?;
@@ -204,8 +204,8 @@ fn cancel_during_the_fetch_stops_the_step_and_frees_the_mirror() -> Result<()> {
     let sink = TlsSink::start(&rig.root)?;
     let job = rig.job("checkout_depth1", &rig.head, &sink.url())?;
     let scratch = Scratch::new()?;
-    let env = [("GIT_SSL_NO_VERIFY", "1")];
-    let mut runner = rig.start_env(&job, &scratch, &env)?;
+    crate::native_checkout_env::wrapper_env(&rig.root, "export GIT_SSL_NO_VERIFY=1\n")?;
+    let mut runner = rig.start(&job, &scratch)?;
     sink.first_request()?;
     let signalled = Command::new("kill")
         .args(["-TERM", &runner.id().to_string()])
