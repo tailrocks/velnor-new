@@ -42,14 +42,14 @@ impl MaskKind {
         }
     }
 
-    fn token_bits(token: &str) -> Option<i32> {
+    fn name_bits(token: &str) -> Option<i32> {
         let token = token.trim();
         if token.eq_ignore_ascii_case("variable") {
             Some(1)
         } else if token.eq_ignore_ascii_case("regex") {
             Some(2)
         } else {
-            token.parse().ok()
+            None
         }
     }
 }
@@ -65,11 +65,14 @@ impl<'de> Deserialize<'de> for MaskKind {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         match WireMaskType::deserialize(deserializer)? {
             WireMaskType::Number(number) => Ok(Self::from_number(number)),
-            WireMaskType::Text(text) => text
-                .split(',')
-                .try_fold(0, |bits, token| Some(bits | Self::token_bits(token)?))
-                .map(Self::from_number)
-                .ok_or_else(|| de::Error::custom(format!("unknown mask type `{text}`"))),
+            WireMaskType::Text(text) => match text.trim().parse() {
+                Ok(number) => Ok(Self::from_number(number)),
+                Err(_) => text
+                    .split(',')
+                    .try_fold(0, |bits, token| Some(bits | Self::name_bits(token)?))
+                    .map(Self::from_number)
+                    .ok_or_else(|| de::Error::custom(format!("unknown mask type `{text}`"))),
+            },
         }
     }
 }
