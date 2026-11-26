@@ -4,6 +4,7 @@
 use crate::expr_support::{TempDir, error_text, expected_digest, text};
 use anyhow::Result;
 use std::fs;
+use velnor_runner::expr::ExprEnv;
 
 #[test]
 fn expr_hash_files_accepts_dot_slash_prefix() -> Result<()> {
@@ -332,11 +333,10 @@ fn expr_hash_files_rejects_relative_home_whatever_the_cwd() -> Result<()> {
 }
 
 #[test]
-fn expr_hash_files_rejects_empty_home() -> Result<()> {
+fn expr_hash_files_rejects_empty_home_var() -> Result<()> {
     let dir = TempDir::new()?;
     dir.write("ws/a.txt", "a")?;
-    let mut env = dir.env();
-    env.home = Some(String::new().into());
+    let env = ExprEnv::with_home_var(dir.env().workspace, Some(String::new().into()));
     assert!(error_text("hashFiles('~')", &env)?.contains("Unable to determine HOME directory"));
     Ok(())
 }

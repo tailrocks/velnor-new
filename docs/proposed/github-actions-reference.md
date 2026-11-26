@@ -938,12 +938,12 @@ HOME before the workspace filter
 ([index.js:2207](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L2207)), and a dangling
 symlink matched by a pattern failing the call, because the runner's
 `statSync` on each match throws
-([index.js:1558](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1558)). Four
+([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)). Five
 behaviours differ on purpose:
 
 - **Outside-target symlinks are ignored.** The runner only checks that the
   lexical path starts with the workspace
-  ([index.js:1554](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1554)) and then reads
+  ([index.js:90](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L90)) and then reads
   through the link, so a symlinked file or a symlinked parent directory pulls
   files from outside the workspace into the digest. Velnor resolves the parent
   chain of each search root and the target of each matched symlink, and drops
@@ -953,11 +953,12 @@ behaviours differ on purpose:
 - **Search roots are clamped to the workspace.** The runner walks every search
   root a pattern yields, wherever it lies
   ([index.js:1358](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1358)), and only afterwards drops matches outside the
-  workspace ([index.js:1554](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1554)), so `hashFiles('/')` or a bare `~`
+  workspace ([index.js:90](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L90)), so `hashFiles('/')` or a bare `~`
   traverses the whole file system or home directory. Velnor narrows a root that
   contains the workspace to the workspace and skips a root outside it, as
-  `PatternSet::roots` in `crates/velnor-runner/src/expr/glob.rs` does. The digest is
-  the same, because outside matches never count, but the walk stays bounded.
+  `PatternSet::roots` in `crates/velnor-runner/src/expr/glob.rs` does. Upstream
+  fails when its walk outside the workspace hits an unreadable path; Velnor
+  returns the workspace digest and the walk stays bounded.
 - **`--follow-symbolic-links` is rejected.** The runner accepts the option
   ([HashFilesFunction.cs:52](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Runner.Worker/Expressions/HashFilesFunction.cs#L52))
   and follows links
@@ -967,3 +968,6 @@ behaviours differ on purpose:
   `readdir` ([index.js:1405](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1405)),
   which varies by file system. The digest depends on file order, so Velnor sorts
   to keep it reproducible.
+- **A `HOME` with `.` or `..` segments is resolved lexically.** The runner
+  rejects such a path with `Relative pathing '.' and '..' is not allowed`;
+  Velnor resolves the segments lexically.
