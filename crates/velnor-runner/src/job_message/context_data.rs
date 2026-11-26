@@ -14,7 +14,7 @@ const BOOLEAN: i64 = 3;
 const NUMBER: i64 = 4;
 const CASE_SENSITIVE_DICTIONARY: i64 = 5;
 
-pub(super) fn member<'a>(object: &'a Map<String, Value>, name: &str) -> Option<&'a Value> {
+pub(crate) fn member<'a>(object: &'a Map<String, Value>, name: &str) -> Option<&'a Value> {
     member_or_null(object, name).filter(|value| !value.is_null())
 }
 

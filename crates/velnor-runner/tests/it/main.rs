@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "exec_cancel.rs"]
+mod cancel;
+#[path = "exec_cli.rs"]
+mod exec_cli;
+#[path = "exec_support.rs"]
+mod exec_support;
 #[cfg(target_os = "linux")]
 #[path = "expr/format_allocation.rs"]
 mod expr_format_allocation;
@@ -58,6 +64,8 @@ mod expr_template;
 mod expr_unsupported;
 #[path = "expr/vars.rs"]
 mod expr_vars;
+#[path = "exec_extra.rs"]
+mod extra;
 mod job_message;
 mod protocol_acquire_renew;
 mod protocol_broker;

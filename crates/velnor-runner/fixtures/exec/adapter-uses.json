@@ -1,0 +1,68 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "foo",
+      "ContextName": "foo",
+      "Reference": {
+        "Type": "repository",
+        "Name": "actions/foo",
+        "Ref": "v1",
+        "RepositoryType": "GitHub"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Greet"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "who"
+            },
+            "value": {
+              "type": 0,
+              "lit": "world"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Use greeting"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 3,
+              "expr": "format('[ \"{0}\" = \"hello-world\" ]', steps.foo.outputs.greeting)"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
