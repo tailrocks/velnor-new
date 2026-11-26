@@ -90,6 +90,7 @@ where
     let mut reader = BufReader::new(reader);
     let mut line = Vec::new();
     let mut overflow = false;
+    let mut first = true;
     loop {
         let mut piece = Vec::new();
         let read = (&mut reader)
@@ -108,6 +109,9 @@ where
                     .await;
             }
             break;
+        }
+        if std::mem::take(&mut first) && piece.starts_with(&[0xEF, 0xBB, 0xBF]) {
+            piece.drain(..3);
         }
         let chunk = if whole_lines {
             let ended = piece.last() == Some(&b'\n');

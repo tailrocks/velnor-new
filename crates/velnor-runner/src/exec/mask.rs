@@ -11,6 +11,7 @@ use super::{Annotation, ExecError};
 use crate::job_message::{AgentJobRequestMessage, MaskType};
 
 const MASK: &str = "***";
+const SECRET_WHITELIST: [&str; 2] = ["ACTIONS_STEP_DEBUG", "ACTIONS_RUNNER_DEBUG"];
 
 #[derive(Debug, Default, Clone)]
 pub(super) struct Masker {
@@ -139,6 +140,12 @@ pub(super) fn load(masker: &mut Masker, message: &AgentJobRequestMessage) -> Res
         }
     }
     for (name, variable) in &message.variables {
+        if SECRET_WHITELIST
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(name))
+        {
+            continue;
+        }
         let Some(value) = variable
             .value
             .as_ref()

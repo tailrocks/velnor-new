@@ -107,3 +107,5 @@ mod shells;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;
+#[path = "exec_triage.rs"]
+mod triage;
