@@ -244,7 +244,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
     match workflow.mbx {
         ImageMbx::Off => {}
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
-        ImageMbx::Shared => steps.push(mbx_store_step()),
+        ImageMbx::Shared => steps.extend([mbx_private_step(), mbx_store_step()]),
     }
     steps.extend(workflow.mirror.map(mirror_step));
     let restores = sources_restores(&workflow.sources);

@@ -20,8 +20,8 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
-    let private =
-        facts.config.mbx.routed() && !remote && facts.config.mbx_store == MbxStore::Private;
+    let isolated = facts.config.mbx.routed() && !remote;
+    let shared = facts.config.mbx_store == MbxStore::Shared;
     let out_dirs_in_target = facts
         .helper
         .as_ref()
@@ -43,13 +43,15 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     };
     for job in jobs {
         if !compiles(job) {
-            if compiling_only {
-                if !prepares_cargo(job) {
-                    job.steps.retain(|step| !is_shared_store_step(&step.kind));
-                }
-                if facts.config.mbx.routed() {
-                    insert(job, &[StepKind::MbxPrivate], After::Helper);
-                }
+            if compiling_only && !prepares_cargo(job) {
+                job.steps.retain(|step| !is_shared_store_step(&step.kind));
+            }
+            let holds_store = job
+                .steps
+                .iter()
+                .any(|step| is_shared_store_step(&step.kind));
+            if (compiling_only && facts.config.mbx.routed()) || (isolated && holds_store) {
+                insert(job, &[StepKind::MbxPrivate], After::Helper);
             }
             continue;
         }
@@ -71,10 +73,10 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
                 After::Tools,
             );
         }
-        if private {
+        if isolated {
             insert(
                 job,
-                &with_out_dirs(vec![StepKind::MbxPrivate], out_dirs_in_target),
+                &with_out_dirs(vec![StepKind::MbxPrivate], out_dirs_in_target && !shared),
                 After::Helper,
             );
         }

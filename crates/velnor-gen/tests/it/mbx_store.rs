@@ -184,3 +184,79 @@ fn the_shared_store_is_skipped_when_the_plan_failed_or_was_skipped_from_0_1_112(
     }
     Ok(())
 }
+
+#[test]
+fn every_job_that_selects_the_shared_store_first_points_mbx_at_a_private_directory() -> TestResult {
+    for helper in ["0.1.85", "0.1.111", "0.1.112"] {
+        for shape in ["", "shape = 'groups'\n"] {
+            let text = workflow(&repo(&format!("{shape}mbx_shared_store = true\n"), helper)?)?;
+            let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+            let mut stores = 0;
+            for (id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {
+                let steps = job["steps"].as_array().ok_or("steps missing")?;
+                let position =
+                    |matches: &dyn Fn(&serde_json::Value) -> bool| steps.iter().position(matches);
+                let Some(store) =
+                    position(&|step| step["run"].as_str().is_some_and(|run| run.contains(EXEC)))
+                else {
+                    continue;
+                };
+                stores += 1;
+                let private = position(&|step| step["name"] == "Private mbx store")
+                    .ok_or_else(|| format!("{helper} {id}: no private mbx store"))?;
+                assert!(
+                    private < store,
+                    "{helper} {id}: the shared store must override"
+                );
+                assert_eq!(
+                    steps[private]["run"].as_str(),
+                    Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\""),
+                    "{helper} {id}"
+                );
+            }
+            assert!(stores > 0, "{helper}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn every_sample_job_with_the_shared_store_step_has_a_private_mbx_store_before_it() -> TestResult {
+    let mut stores = 0;
+    for dir in crate::golden::sample_dirs(&crate::golden::samples())? {
+        let workflows = dir.join("expected/.github/workflows");
+        let Ok(entries) = std::fs::read_dir(&workflows) else {
+            continue;
+        };
+        for entry in entries {
+            let file = entry?.path();
+            let text = std::fs::read_to_string(&file)?;
+            let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+            let Some(jobs) = yaml["jobs"].as_object() else {
+                continue;
+            };
+            for (id, job) in jobs {
+                let steps = job["steps"].as_array().map_or(&[][..], Vec::as_slice);
+                let named = |name: &str| steps.iter().position(|step| step["name"] == name);
+                let Some(store) = named("velnor-ci mbx-store") else {
+                    continue;
+                };
+                stores += 1;
+                let private = named("Private mbx store").ok_or_else(|| {
+                    format!(
+                        "{}: {file:?} job {id} has no private mbx store",
+                        dir.display()
+                    )
+                })?;
+                assert!(
+                    private < store,
+                    "{}: {} job {id}",
+                    dir.display(),
+                    file.display()
+                );
+            }
+        }
+    }
+    assert!(stores > 0, "no sample selects the shared store");
+    Ok(())
+}
