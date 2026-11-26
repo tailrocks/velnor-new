@@ -3,9 +3,11 @@
 
 use std::path::Path;
 
-use super::{ExecError, RunOptions, private};
+use super::{ExecError, RunOptions, private, token};
 use crate::context_value::ContextValue;
+use crate::expr::ExprEnv;
 use crate::job_message::AgentJobRequestMessage;
+use crate::protocol::http::runner_architecture;
 
 const GITHUB_EXPORTS: [&str; 37] = [
     "action",
@@ -191,12 +193,8 @@ pub(super) fn service_variables(message: &AgentJobRequestMessage) -> Vec<(String
 pub(super) fn runner_context(
     message: &AgentJobRequestMessage,
     options: &RunOptions,
-) -> ContextValue {
-    let arch = if cfg!(target_arch = "aarch64") {
-        "ARM64"
-    } else {
-        "X64"
-    };
+) -> Result<ContextValue, ExecError> {
+    let arch = runner_architecture().map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
     let environment = variable(message, "system.runnerEnvironment").unwrap_or(SELF_HOSTED);
     let mut pairs = vec![
         ("os".to_owned(), "Linux".to_owned()),
@@ -221,7 +219,7 @@ pub(super) fn runner_context(
     {
         pairs.push(("debug".to_owned(), "1".to_owned()));
     }
-    object(&pairs, false)
+    Ok(object(&pairs, false))
 }
 
 pub(super) fn exported_variables(
@@ -265,4 +263,22 @@ pub(super) async fn write_event(path: &Path, github: &ContextValue) -> Result<()
         private::create_dir(parent).await?;
     }
     private::write_replacing(path, body.as_bytes()).await
+}
+
+pub(super) fn run_defaults(
+    message: &AgentJobRequestMessage,
+    env: &ExprEnv,
+) -> Result<Vec<(String, String)>, ExecError> {
+    let mut run = Vec::new();
+    for defaults in &message.defaults {
+        if let Some(entry) = token::find(defaults, "run") {
+            run.clear();
+            for (name, value) in token::mapping(entry, env)? {
+                if !value.is_empty() {
+                    set_output(&mut run, &name, &value);
+                }
+            }
+        }
+    }
+    Ok(run)
 }

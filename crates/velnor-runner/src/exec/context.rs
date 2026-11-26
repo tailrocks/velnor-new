@@ -3,11 +3,9 @@
 
 use std::path::PathBuf;
 
-use serde_json::Value as Json;
-
 use super::contexts::{
-    EVENT_DIRECTORY, exported_variables, github_context, object, runner_context, secrets_context,
-    service_variables, set_pair, string, with_action, write_event,
+    EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
+    secrets_context, service_variables, set_pair, string, with_action, write_event,
 };
 use super::host_env::host_env;
 use super::{ExecError, RunOptions, StepResult};
@@ -33,7 +31,7 @@ pub(super) struct JobContext {
     runtime: Vec<(String, String)>,
     service: Vec<(String, String)>,
     env: Vec<(String, String)>,
-    defaults: Vec<Json>,
+    defaults: Vec<(String, String)>,
     path_prepend: Vec<String>,
     steps: Vec<(String, StepEntry)>,
 }
@@ -59,7 +57,7 @@ impl JobContext {
             .into_inner();
         let event_path = options.temp.join(EVENT_DIRECTORY).join("event.json");
         let github = github_context(message, contexts.get("github"), options, &event_path);
-        let runner = runner_context(message, options);
+        let runner = runner_context(message, options)?;
         let mut base = ExprEnv::new(options.workspace.clone());
         base.set_context(RootContext::Github, &github);
         base.set_context(RootContext::Runner, &runner);
@@ -79,6 +77,7 @@ impl JobContext {
             }
             base.set_context(RootContext::Env, &object(&env, true));
         }
+        let defaults = run_defaults(message, &base)?;
         Ok(Self {
             host: host_env(),
             runtime: exported_variables(&github, &runner),
@@ -88,7 +87,7 @@ impl JobContext {
             event_path,
             base,
             env,
-            defaults: message.defaults.clone(),
+            defaults,
             path_prepend: Vec::new(),
             steps: Vec::new(),
         })
@@ -160,21 +159,11 @@ impl JobContext {
         }
     }
 
-    pub(super) fn default_run_token(&self, name: &str) -> Option<&Json> {
-        self.defaults.iter().rev().find_map(|defaults| {
-            token::find(defaults, "run").and_then(|run| token::find(run, name))
-        })
-    }
-
-    pub(super) fn default_run_value(
-        &self,
-        name: &str,
-        env: &ExprEnv,
-    ) -> Result<Option<String>, ExecError> {
-        Ok(self
-            .default_run_token(name)
-            .map(|value| token::scalar(value, env))
-            .transpose()?)
+    pub(super) fn default_run(&self, name: &str) -> Option<&str> {
+        self.defaults
+            .iter()
+            .find(|(known, _)| known.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
     }
 
     pub(super) fn process_env(

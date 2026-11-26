@@ -87,10 +87,7 @@ impl Job<'_> {
         };
         let directory = match chosen.filter(|directory| !directory.is_empty()) {
             Some(directory) => Some(directory),
-            None => self
-                .ctx
-                .default_run_value("working-directory", env)?
-                .filter(|directory| !directory.is_empty()),
+            None => self.ctx.default_run("working-directory").map(str::to_owned),
         };
         Ok(directory.map_or_else(
             || self.options.workspace.clone(),

@@ -34,16 +34,27 @@ struct WorkflowCommand<'a> {
     data: String,
 }
 
-fn fold(text: &str) -> String {
-    text.chars()
-        .map(|character| {
+fn simple_upper(character: char) -> char {
+    match character {
+        '\u{131}' | '\u{17f}' => character,
+        '\u{1f80}'..='\u{1f87}' | '\u{1f90}'..='\u{1f97}' | '\u{1fa0}'..='\u{1fa7}' => {
+            char::from_u32(u32::from(character) + 8).unwrap_or(character)
+        }
+        '\u{1fb3}' => '\u{1fbc}',
+        '\u{1fc3}' => '\u{1fcc}',
+        '\u{1ff3}' => '\u{1ffc}',
+        _ => {
             let mut upper = character.to_uppercase();
             match (upper.next(), upper.next()) {
                 (Some(single), None) => single,
                 _ => character,
             }
-        })
-        .collect()
+        }
+    }
+}
+
+fn fold(text: &str) -> String {
+    text.chars().map(simple_upper).collect()
 }
 
 fn unescape_data(value: &str) -> String {

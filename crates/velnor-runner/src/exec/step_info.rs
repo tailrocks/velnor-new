@@ -73,8 +73,8 @@ pub(super) fn continue_on_error(step: &ActionStep, env: &ExprEnv, out: &mut Outp
     let Some(token) = step.continue_on_error.as_ref() else {
         return false;
     };
-    match token::scalar(token, env) {
-        Ok(value) => value.eq_ignore_ascii_case("true"),
+    match token::boolean(token, env) {
+        Ok(value) => value,
         Err(error) => {
             report_pair(out, CONTINUE_ON_ERROR_FAILED, &error.to_string());
             false
