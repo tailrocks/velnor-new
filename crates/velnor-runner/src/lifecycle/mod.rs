@@ -9,6 +9,7 @@ mod logs;
 mod renew;
 mod report;
 mod session;
+mod tail;
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -20,18 +21,20 @@ use tokio::task::JoinHandle;
 
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, JobRun, RunOptions, run_job};
 use crate::job_message::AgentJobRequestMessage;
-use crate::protocol::{AcquireJobSkipReason, decode_jit_config};
+use crate::protocol::{AcquireJobSkipReason, RunnerJobRequestRef, decode_jit_config};
 use acquire::JobConnection;
-use logs::GithubSink;
+use logs::{GithubSink, LogFiles};
 use renew::RenewTarget;
-use report::Reporter;
+use report::{ReportSummary, Reporter};
 use session::{Assignment, Session};
 
 #[derive(Debug)]
 pub struct RunJitOptions {
     pub jit: String,
     pub work_dir: PathBuf,
+    pub shutdown: JobCancel,
     pub renew_interval: Duration,
+    pub renew_lock_grace: Duration,
     pub cancel_poll_error_delay: Duration,
     pub adapters: AdapterRegistry,
 }
@@ -98,14 +101,15 @@ async fn serve(
     session: &Arc<Session>,
 ) -> Result<LifecycleOutcome, LifecycleError> {
     let request = match session
-        .wait_for_job(options.cancel_poll_error_delay)
+        .wait_for_job(options.cancel_poll_error_delay, &options.shutdown)
         .await?
     {
         Assignment::Job(request) => request,
         Assignment::Shutdown => return Ok(LifecycleOutcome::NoJob),
     };
-    let message = acquire::acquire(session, &request).await?;
-    let connection = acquire::connect(&message)?;
+    if options.shutdown.is_cancelled() {
+        return Ok(LifecycleOutcome::NoJob);
+    }
     let root =
         std::path::absolute(&options.work_dir).map_err(|source| LifecycleError::WorkDir {
             path: options.work_dir.clone(),
@@ -116,13 +120,37 @@ async fn serve(
         temp: root.join("temp"),
         runner_name: agent_name.to_owned(),
     };
-    let outcome = execute(options, session, &run_options, &message, &connection).await;
-    remove_work_dirs(&run_options).await;
+    let outcome = match prepare_work_dirs(&run_options).await {
+        Ok(()) => acquire_and_run(options, session, &run_options, &request).await,
+        Err(error) => Err(error),
+    };
+    remove_work_dirs(&root, &run_options).await;
     outcome.map(LifecycleOutcome::Completed)
 }
 
-async fn remove_work_dirs(options: &RunOptions) {
-    for directory in [&options.workspace, &options.temp] {
+async fn acquire_and_run(
+    options: &RunJitOptions,
+    session: &Arc<Session>,
+    run_options: &RunOptions,
+    request: &RunnerJobRequestRef,
+) -> Result<JobResult, LifecycleError> {
+    let message = acquire::acquire(session, request).await?;
+    let connection = acquire::connect(&message)?;
+    let (completion, failure) =
+        match run_and_report(options, session, run_options, &message, &connection).await {
+            Ok((run, report)) => (complete::build(&message, &run, &report), Ok(run.result)),
+            Err(error) => (complete::forced_failure(&message, &error), Err(error)),
+        };
+    if let Err(error) = &failure {
+        eprintln!("error: {error}");
+    }
+    complete::send(&connection, &completion).await?;
+    failure
+}
+
+async fn remove_work_dirs(root: &Path, options: &RunOptions) {
+    let logs = LogFiles::dir_of(root);
+    for directory in [&options.workspace, &options.temp, &logs] {
         if let Err(error) = remove_dir(directory).await {
             eprintln!("warning: remove {}: {error}", directory.display());
         }
@@ -153,16 +181,21 @@ async fn prepare_work_dirs(options: &RunOptions) -> Result<(), LifecycleError> {
     Ok(())
 }
 
-async fn execute(
+async fn run_and_report(
     options: &RunJitOptions,
     session: &Arc<Session>,
     run_options: &RunOptions,
     message: &AgentJobRequestMessage,
     connection: &JobConnection,
-) -> Result<JobResult, LifecycleError> {
-    prepare_work_dirs(run_options).await?;
-    let cancel = JobCancel::new();
-    let renew = renew::spawn_renew(
+) -> Result<(JobRun, ReportSummary), LifecycleError> {
+    let root = run_options
+        .workspace
+        .parent()
+        .unwrap_or(&run_options.workspace);
+    let files = LogFiles::create(root).await?;
+    let (mut sink, events) = GithubSink::channel(&files)?;
+    let cancel = options.shutdown.clone();
+    let _renew = renew::spawn_renew(
         RenewTarget {
             client: connection.run_service.clone(),
             run_service_url: connection.run_service_url.clone(),
@@ -170,6 +203,7 @@ async fn execute(
             job_id: message.job_id.clone(),
         },
         options.renew_interval,
+        options.renew_lock_grace,
         cancel.clone(),
     );
     let poll = cancel_poll::spawn_cancel_poll(
@@ -178,14 +212,10 @@ async fn execute(
         cancel.clone(),
         options.cancel_poll_error_delay,
     );
-    let (mut sink, events) = GithubSink::channel();
-    let reporter = Reporter::new(connection, message).spawn(events);
+    let reporter = Reporter::new(connection, message, files).spawn(events);
     let run: JobRun = run_job(message, run_options, &options.adapters, &mut sink, cancel).await;
     drop(poll);
     drop(sink);
     let report = reporter.await.unwrap_or_default();
-    let completion = complete::build(message, &run, &report);
-    complete::send(connection, &completion).await?;
-    drop(renew);
-    Ok(run.result)
+    Ok((run, report))
 }

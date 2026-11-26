@@ -8,6 +8,8 @@ use std::time::Duration;
 use anyhow::{Context, anyhow};
 
 use super::LifecycleError;
+use crate::context_value::ordinal_ignore_case_eq;
+use crate::exec::JobCancel;
 use crate::protocol::{
     BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError, OAuthClient,
     OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus, TaskAgentMessage,
@@ -19,8 +21,32 @@ const SESSION_ATTEMPTS: u32 = 3;
 const SESSION_RETRY_STEP: Duration = Duration::from_secs(2);
 const MAX_CONSECUTIVE_POLL_ERRORS: u32 = 10;
 const MAX_POLL_ERROR_DELAY: Duration = Duration::from_secs(60);
+const JOB_CANCELLATION: &str = "JobCancellation";
 const HOSTED_RUNNER_SHUTDOWN: &str = "HostedRunnerShutdown";
 const FORCE_TOKEN_REFRESH: &str = "ForceTokenRefresh";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum MessageKind {
+    JobRequest,
+    JobCancellation,
+    HostedRunnerShutdown,
+    ForceTokenRefresh,
+    Other,
+}
+
+impl MessageKind {
+    pub(super) fn of(message: &TaskAgentMessage) -> Self {
+        [
+            (RUNNER_JOB_REQUEST, Self::JobRequest),
+            (JOB_CANCELLATION, Self::JobCancellation),
+            (HOSTED_RUNNER_SHUTDOWN, Self::HostedRunnerShutdown),
+            (FORCE_TOKEN_REFRESH, Self::ForceTokenRefresh),
+        ]
+        .into_iter()
+        .find(|(name, _)| ordinal_ignore_case_eq(&message.message_type, name))
+        .map_or(Self::Other, |(_, kind)| kind)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Auth {
@@ -190,7 +216,16 @@ impl Session {
     pub(super) async fn wait_for_job(
         &self,
         error_delay: Duration,
+        shutdown: &JobCancel,
     ) -> Result<Assignment, LifecycleError> {
+        tokio::select! {
+            biased;
+            () = shutdown.cancelled() => Ok(Assignment::Shutdown),
+            assignment = self.next_assignment(error_delay) => assignment,
+        }
+    }
+
+    async fn next_assignment(&self, error_delay: Duration) -> Result<Assignment, LifecycleError> {
         let mut streak = 0_u32;
         loop {
             let message = match self.poll(RunnerStatus::Online).await {
@@ -209,16 +244,18 @@ impl Session {
             let Some(message) = message else {
                 continue;
             };
-            match message.message_type.as_str() {
-                RUNNER_JOB_REQUEST => {
+            match MessageKind::of(&message) {
+                MessageKind::JobRequest => {
                     let request = serde_json::from_str(&message.body)
                         .context("parse RunnerJobRequest body")
                         .map_err(LifecycleError::Poll)?;
                     return Ok(Assignment::Job(request));
                 }
-                HOSTED_RUNNER_SHUTDOWN => return Ok(Assignment::Shutdown),
-                FORCE_TOKEN_REFRESH => self.refresh().await.map_err(LifecycleError::Poll)?,
-                _ => {}
+                MessageKind::HostedRunnerShutdown => return Ok(Assignment::Shutdown),
+                MessageKind::ForceTokenRefresh => {
+                    self.refresh().await.map_err(LifecycleError::Poll)?;
+                }
+                MessageKind::JobCancellation | MessageKind::Other => {}
             }
         }
     }

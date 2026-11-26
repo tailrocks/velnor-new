@@ -2,21 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/runner.rs
 
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
 use time::OffsetDateTime;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
+use super::{LifecycleError, remove_dir};
 use crate::exec::{JobRun, LogSink, StepResult};
+
+pub(super) const STAMP_LEN: usize = "2026-11-27T00:00:00.0000000Z ".len();
 
 #[derive(Debug)]
 pub(super) enum Event {
     StepStarted {
         number: u32,
         name: String,
-        at: OffsetDateTime,
-    },
-    Line {
-        number: u32,
-        text: String,
         at: OffsetDateTime,
     },
     StepFinished {
@@ -27,24 +30,87 @@ pub(super) enum Event {
     JobFinished(Box<JobRun>),
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct LogFiles {
+    dir: PathBuf,
+}
+
+impl LogFiles {
+    pub(super) fn dir_of(root: &Path) -> PathBuf {
+        root.join("logs")
+    }
+
+    pub(super) async fn create(root: &Path) -> Result<Self, LifecycleError> {
+        let dir = Self::dir_of(root);
+        let created = match remove_dir(&dir).await {
+            Ok(()) => tokio::fs::create_dir_all(&dir).await,
+            Err(error) => Err(error),
+        };
+        created.map_err(|source| LifecycleError::WorkDir {
+            path: dir.clone(),
+            source,
+        })?;
+        Ok(Self { dir })
+    }
+
+    pub(super) fn job_path(&self) -> PathBuf {
+        self.dir.join("job.log")
+    }
+
+    pub(super) fn step_path(&self, number: u32) -> PathBuf {
+        self.dir.join(format!("step-{number}.log"))
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct GithubSink {
     events: UnboundedSender<Event>,
+    files: LogFiles,
+    job: File,
+    steps: BTreeMap<u32, File>,
+    write_failed: bool,
 }
 
 impl GithubSink {
-    pub(super) fn channel() -> (Self, UnboundedReceiver<Event>) {
+    pub(super) fn channel(
+        files: &LogFiles,
+    ) -> Result<(Self, UnboundedReceiver<Event>), LifecycleError> {
+        let path = files.job_path();
+        let job = File::create(&path).map_err(|source| LifecycleError::WorkDir { path, source })?;
         let (events, receiver) = unbounded_channel();
-        (Self { events }, receiver)
+        let sink = Self {
+            events,
+            files: files.clone(),
+            job,
+            steps: BTreeMap::new(),
+            write_failed: false,
+        };
+        Ok((sink, receiver))
     }
 
     fn send(&self, event: Event) {
         let _ = self.events.send(event);
     }
+
+    fn note_failure(&mut self, result: std::io::Result<()>) {
+        if let Err(error) = result
+            && !self.write_failed
+        {
+            self.write_failed = true;
+            eprintln!("warning: write the job log spill file: {error}");
+        }
+    }
 }
 
 impl LogSink for GithubSink {
     fn step_started(&mut self, number: u32, name: &str) {
+        let path = self.files.step_path(number);
+        match File::create(&path) {
+            Ok(file) => {
+                self.steps.insert(number, file);
+            }
+            Err(error) => self.note_failure(Err(error)),
+        }
         self.send(Event::StepStarted {
             number,
             name: name.to_owned(),
@@ -53,14 +119,17 @@ impl LogSink for GithubSink {
     }
 
     fn line(&mut self, number: u32, text: &str) {
-        self.send(Event::Line {
-            number,
-            text: text.to_owned(),
-            at: OffsetDateTime::now_utc(),
-        });
+        let stamped = format!("{}\n", log_line(OffsetDateTime::now_utc(), text));
+        let written = self.job.write_all(stamped.as_bytes());
+        self.note_failure(written);
+        if let Some(file) = self.steps.get_mut(&number) {
+            let written = file.write_all(stamped.as_bytes());
+            self.note_failure(written);
+        }
     }
 
     fn step_finished(&mut self, number: u32, result: StepResult) {
+        self.steps.remove(&number);
         self.send(Event::StepFinished {
             number,
             result,

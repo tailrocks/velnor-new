@@ -123,6 +123,11 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod lifecycle;
+mod lifecycle_cancel;
+mod lifecycle_logs;
+mod lifecycle_report;
+mod lifecycle_session;
+mod lifecycle_support;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
@@ -140,7 +145,6 @@ mod shells;
 mod stopped;
 #[path = "exec_strict.rs"]
 mod strict;
-mod run_cli;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

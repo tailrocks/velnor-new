@@ -119,6 +119,28 @@ pub(super) fn build(
     }
 }
 
+pub(super) fn forced_failure(
+    message: &AgentJobRequestMessage,
+    error: &LifecycleError,
+) -> RunServiceCompleteJob {
+    let issue = Annotation::new(
+        AnnotationLevel::Error,
+        format!("The runner could not run the job: {error}"),
+    );
+    RunServiceCompleteJob {
+        plan_id: message.plan.plan_id.clone(),
+        job_id: message.job_id.clone(),
+        conclusion: TaskResult::Failed,
+        outputs: BTreeMap::new(),
+        step_results: Vec::new(),
+        annotations: vec![annotation(&issue)],
+        telemetry: Vec::new(),
+        environment_url: None,
+        billing_owner_id: message.billing_owner_id.clone(),
+        infrastructure_failure_category: None,
+    }
+}
+
 pub(super) async fn send(
     connection: &JobConnection,
     completion: &RunServiceCompleteJob,

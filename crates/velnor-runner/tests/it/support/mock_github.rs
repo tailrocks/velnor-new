@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-use rsa::pkcs1::EncodeRsaPrivateKey;
-use rsa::{Generate, PrivateKey};
+use anyhow::{Context, Result};
 use serde_json::{Value, json};
 
+use super::jit::jit_config;
+use super::mock_feed::MockFeed;
 use super::{RecordedRequest, Reply, TestServer};
 
 pub(crate) const OAUTH_TOKEN: &str = "oauth-token-1";
@@ -25,116 +23,92 @@ pub(crate) const STEP_LOG_BLOB: &str = "/blob/step-log";
 pub(crate) const JOB_LOG_BLOB: &str = "/blob/job-log";
 pub(crate) const SUMMARY_BLOB: &str = "/blob/summary";
 
+pub(crate) const STEP_LOG_URL: &str =
+    "/results/twirp/results.services.receiver.Receiver/GetStepLogsSignedBlobURL";
+pub(crate) const OTHER_JOB_ID: &str = "00000000-0000-0000-0000-0000000000ff";
+const POLL_STALL: Duration = Duration::from_secs(30);
+
+pub(crate) fn step_id(number: usize) -> String {
+    format!("10000000-0000-0000-0000-{number:012}")
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum Renew {
     #[default]
     Renewed,
     JobGone,
+    ServerError,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+pub(crate) enum Online {
+    #[default]
+    Job,
+    JobAfterOneUnauthorized,
+    Idle,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) enum Cancel {
+    #[default]
+    Never,
+    After(Duration),
+    AfterACancelOfAnotherJob(Duration),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) enum MessageTypes {
+    #[default]
+    Canonical,
+    Lowercase,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Behavior {
     pub(crate) renew: Renew,
-    pub(crate) cancel_after: Option<Duration>,
+    pub(crate) cancel: Cancel,
+    pub(crate) online: Online,
+    pub(crate) message_types: MessageTypes,
+    pub(crate) should_acknowledge: bool,
+    pub(crate) unusable_job: bool,
+    pub(crate) blob_status: u16,
+    pub(crate) feed: bool,
+}
+
+impl Default for Behavior {
+    fn default() -> Self {
+        Self {
+            renew: Renew::Renewed,
+            cancel: Cancel::Never,
+            online: Online::Job,
+            message_types: MessageTypes::Canonical,
+            should_acknowledge: true,
+            unusable_job: false,
+            blob_status: 201,
+            feed: false,
+        }
+    }
 }
 
 pub(crate) struct MockGithub {
     pub(crate) server: TestServer,
+    pub(crate) feed: Option<MockFeed>,
     jit: String,
-}
-
-fn der_read(input: &[u8]) -> Result<(u8, &[u8], &[u8])> {
-    let (&tag, rest) = input.split_first().context("DER tag")?;
-    let (&first, rest) = rest.split_first().context("DER length")?;
-    let (length, rest) = if first & 0x80 == 0 {
-        (usize::from(first), rest)
-    } else {
-        let count = usize::from(first & 0x7f);
-        if rest.len() < count {
-            bail!("DER length is cut short");
-        }
-        let (digits, rest) = rest.split_at(count);
-        (
-            digits
-                .iter()
-                .fold(0_usize, |length, byte| (length << 8) | usize::from(*byte)),
-            rest,
-        )
-    };
-    if rest.len() < length {
-        bail!("DER content is cut short");
-    }
-    let (content, rest) = rest.split_at(length);
-    Ok((tag, content, rest))
-}
-
-fn rsa_parameters() -> Result<Value> {
-    let key = PrivateKey::generate();
-    let document = key.to_pkcs1_der().context("encode the test key")?;
-    let (_, mut rest, _) = der_read(document.as_bytes())?;
-    let mut integers = Vec::new();
-    while !rest.is_empty() {
-        let (_, content, remainder) = der_read(rest)?;
-        integers.push(STANDARD.encode(content));
-        rest = remainder;
-    }
-    let [_version, modulus, exponent, d, p, q, dp, dq, inverse_q] = integers
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("the test key is not a PKCS#1 key"))?;
-    Ok(json!({
-        "modulus": modulus,
-        "exponent": exponent,
-        "d": d,
-        "p": p,
-        "q": q,
-        "dp": dp,
-        "dq": dq,
-        "inverseQ": inverse_q,
-    }))
-}
-
-fn jit_config(base: &str) -> Result<String> {
-    let files = json!({
-        ".runner": json!({
-            "AgentId": "42",
-            "AgentName": "velnor-test",
-            "PoolId": "1",
-            "Ephemeral": "True",
-            "DisableUpdate": "True",
-            "ServerUrlV2": format!("{base}/broker"),
-            "UseV2Flow": "true",
-        }),
-        ".credentials": json!({
-            "Scheme": "OAuth",
-            "Data": {
-                "ClientId": "client-1",
-                "AuthorizationUrl": format!("{base}/oauth/token"),
-            },
-        }),
-        ".credentials_rsaparams": rsa_parameters()?,
-    });
-    let encoded: serde_json::Map<String, Value> = files
-        .as_object()
-        .context("JIT files")?
-        .iter()
-        .map(|(name, content)| {
-            (
-                name.clone(),
-                Value::String(STANDARD.encode(content.to_string())),
-            )
-        })
-        .collect();
-    Ok(STANDARD.encode(Value::Object(encoded).to_string()))
 }
 
 fn message(message_type: &str, body: &Value) -> Value {
     json!({"messageId": 1, "messageType": message_type, "body": body.to_string()})
 }
 
-fn job_message(base: &str, mut job: Value) -> Result<Value> {
+fn job_message(base: &str, mut job: Value, feed: Option<&MockFeed>) -> Result<Value> {
     let object = job.as_object_mut().context("job message is an object")?;
     object.insert("Plan".to_owned(), json!({"PlanId": PLAN_ID}));
     object.insert("BillingOwnerId".to_owned(), json!("owner-1"));
+    if let Some(steps) = object.get_mut("Steps").and_then(Value::as_array_mut) {
+        for (index, step) in steps.iter_mut().enumerate() {
+            step["Id"] = json!(step_id(index + 1));
+        }
+    }
     let variables = object
         .entry("Variables")
         .or_insert_with(|| json!({}))
@@ -144,12 +118,14 @@ fn job_message(base: &str, mut job: Value) -> Result<Value> {
         "system.github.results_endpoint".to_owned(),
         json!({"Value": format!("{base}/results")}),
     );
+    let data = feed.map_or_else(|| json!({}), |feed| json!({"FeedStreamUrl": feed.url()}));
     object.insert(
         "Resources".to_owned(),
         json!({"Endpoints": [{
             "Name": "SystemVssConnection",
             "Url": format!("{base}/run/"),
             "Authorization": {"Scheme": "OAuth", "Parameters": {"AccessToken": JOB_TOKEN}},
+            "Data": data,
         }]}),
     );
     Ok(job)
@@ -160,11 +136,16 @@ impl MockGithub {
         let server = TestServer::start().await?;
         let base = server.uri();
         let jit = jit_config(&base)?;
+        let feed = if behavior.feed {
+            Some(MockFeed::start().await?)
+        } else {
+            None
+        };
         mount_identity(&server)?;
-        mount_broker(&server, &base, behavior)?;
-        mount_run_service(&server, job_message(&base, job)?, behavior)?;
-        mount_results(&server, &base)?;
-        Ok(Self { server, jit })
+        mount_broker(&server, &base, &behavior)?;
+        mount_run_service(&server, job_message(&base, job, feed.as_ref())?, &behavior)?;
+        mount_results(&server, &base, behavior.blob_status)?;
+        Ok(Self { server, feed, jit })
     }
 
     pub(crate) fn jit(&self) -> &str {
@@ -178,6 +159,14 @@ impl MockGithub {
     pub(crate) fn complete_request(&self) -> Result<Value> {
         self.server.only_request("POST", "/run/completejob")?.json()
     }
+
+    pub(crate) fn polls(&self, status: &str) -> Result<usize> {
+        Ok(self
+            .requests_to("GET", "/broker/message")?
+            .iter()
+            .filter(|poll| poll.query("status") == Some(status))
+            .count())
+    }
 }
 
 fn mount_identity(server: &TestServer) -> Result<()> {
@@ -189,7 +178,7 @@ fn mount_identity(server: &TestServer) -> Result<()> {
     })
 }
 
-fn mount_broker(server: &TestServer, base: &str, behavior: Behavior) -> Result<()> {
+fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<()> {
     server.respond("POST", "/broker/session", |_| {
         Reply::json(
             200,
@@ -202,50 +191,79 @@ fn mount_broker(server: &TestServer, base: &str, behavior: Behavior) -> Result<(
     })?;
     server.respond("DELETE", "/broker/session", |_| Reply::status(204))?;
     server.respond("POST", "/broker/acknowledge", |_| Reply::status(200))?;
+    let kind = |name: &str| match behavior.message_types {
+        MessageTypes::Lowercase => name.to_lowercase(),
+        MessageTypes::Canonical => name.to_owned(),
+    };
     let request = message(
-        "RunnerJobRequest",
+        &kind("RunnerJobRequest"),
         &json!({
             "id": "message-1",
             "runner_request_id": "request-1",
-            "should_acknowledge": true,
+            "should_acknowledge": behavior.should_acknowledge,
             "run_service_url": format!("{base}/run/"),
             "billing_owner_id": "owner-1",
         }),
     );
-    let cancel = message(
-        "JobCancellation",
-        &json!({"JobId": JOB_ID, "Timeout": "00:01:00"}),
-    );
-    let delivered = Arc::new(AtomicBool::new(false));
-    server.respond(
-        "GET",
-        "/broker/message",
-        move |request_seen| match request_seen.query("status") {
+    let cancel_of = |job_id: &str| {
+        message(
+            &kind("JobCancellation"),
+            &json!({"JobId": job_id, "Timeout": "00:01:00"}),
+        )
+    };
+    let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
+    let (cancel_after, decoy_first) = match behavior.cancel {
+        Cancel::Never => (None, false),
+        Cancel::After(after) => (Some(after), false),
+        Cancel::AfterACancelOfAnotherJob(after) => (Some(after), true),
+    };
+    let online = behavior.online;
+    let unauthorized = AtomicBool::new(matches!(online, Online::JobAfterOneUnauthorized));
+    let delivered = AtomicBool::new(false);
+    let busy_polls = Arc::new(AtomicUsize::new(0));
+    server.respond("GET", "/broker/message", move |seen| {
+        match seen.query("status") {
+            Some("Online") if unauthorized.swap(false, Ordering::SeqCst) => Reply::status(401),
+            Some("Online") if matches!(online, Online::Idle) => {
+                Reply::status(204).after(POLL_STALL)
+            }
             Some("Online") => Reply::json(200, &request),
-            Some("Busy") => match behavior.cancel_after {
-                Some(after) if !delivered.swap(true, Ordering::SeqCst) => {
-                    Reply::json(200, &cancel).after(after)
+            Some("Busy") => {
+                let number = busy_polls.fetch_add(1, Ordering::SeqCst);
+                match cancel_after {
+                    _ if decoy_first && number == 0 => Reply::json(200, &decoy),
+                    Some(after) if !delivered.swap(true, Ordering::SeqCst) => {
+                        Reply::json(200, &cancel).after(after)
+                    }
+                    _ => Reply::status(204).after(POLL_STALL),
                 }
-                _ => Reply::status(204).after(Duration::from_secs(30)),
-            },
+            }
             _ => Reply::status(400),
-        },
-    )
+        }
+    })
 }
 
-fn mount_run_service(server: &TestServer, job: Value, behavior: Behavior) -> Result<()> {
-    server.respond("POST", "/run/acquirejob", move |_| Reply::json(200, &job))?;
-    server.respond("POST", "/run/renewjob", move |_| match behavior.renew {
+fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Result<()> {
+    let (unusable_job, renew) = (behavior.unusable_job, behavior.renew);
+    server.respond("POST", "/run/acquirejob", move |_| {
+        if unusable_job {
+            Reply::json(200, &json!({"unexpected": "not a job message"}))
+        } else {
+            Reply::json(200, &job)
+        }
+    })?;
+    server.respond("POST", "/run/renewjob", move |_| match renew {
         Renew::Renewed => Reply::json(200, &json!({"lockedUntil": "2099-01-01T00:00:00Z"})),
         Renew::JobGone => Reply::json(
             404,
             &json!({"source": "actions-run-service", "statusCode": 404, "message": "gone"}),
         ),
+        Renew::ServerError => Reply::json(500, &json!({"message": "unavailable"})),
     })?;
     server.respond("POST", "/run/completejob", |_| Reply::status(200))
 }
 
-fn mount_results(server: &TestServer, base: &str) -> Result<()> {
+fn mount_results(server: &TestServer, base: &str, blob_status: u16) -> Result<()> {
     server.respond("POST", RESULTS_STEPS_UPDATE, |_| {
         Reply::json(200, &json!({"ok": true}))
     })?;
@@ -258,7 +276,7 @@ fn mount_results(server: &TestServer, base: &str) -> Result<()> {
         server.respond("POST", &format!("{receiver}/{method}"), move |_| {
             Reply::json(200, &json!({"logs_url": url}))
         })?;
-        server.respond("PUT", blob, |_| Reply::status(201))?;
+        server.respond("PUT", blob, move |_| Reply::status(blob_status))?;
     }
     let summary_url = format!("{base}{SUMMARY_BLOB}");
     server.respond(
@@ -266,7 +284,7 @@ fn mount_results(server: &TestServer, base: &str) -> Result<()> {
         &format!("{receiver}/GetStepSummarySignedBlobURL"),
         move |_| Reply::json(200, &json!({"summary_url": summary_url})),
     )?;
-    server.respond("PUT", SUMMARY_BLOB, |_| Reply::status(201))?;
+    server.respond("PUT", SUMMARY_BLOB, move |_| Reply::status(blob_status))?;
     for method in [
         "CreateStepLogsMetadata",
         "CreateJobLogsMetadata",

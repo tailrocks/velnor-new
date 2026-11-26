@@ -14,7 +14,6 @@ use crate::protocol::{GitHubApiError, RunServiceClient, renew_failure_is_job_gon
 
 const RETRY_BASE: Duration = Duration::from_secs(5);
 const RETRY_CAP: Duration = Duration::from_secs(20);
-const LOCK_GRACE: Duration = Duration::from_secs(300);
 const MIN_GAP: Duration = Duration::from_secs(1);
 
 pub(super) type RenewHandle = BackgroundTask;
@@ -59,11 +58,12 @@ fn next_delay(interval: Duration, remaining: Option<Duration>) -> Duration {
 pub(super) fn spawn_renew(
     target: RenewTarget,
     interval: Duration,
+    lock_grace: Duration,
     cancel: JobCancel,
 ) -> RenewHandle {
     BackgroundTask::spawn(async move {
         let mut failures = 0_u32;
-        let mut give_up_at = Instant::now() + LOCK_GRACE;
+        let mut give_up_at = Instant::now() + lock_grace;
         loop {
             let delay = match target
                 .client
@@ -73,7 +73,7 @@ pub(super) fn spawn_renew(
                 Ok(renewed) => {
                     failures = 0;
                     let remaining = until_lock_expires(&renewed.locked_until);
-                    give_up_at = Instant::now() + remaining.unwrap_or(interval) + LOCK_GRACE;
+                    give_up_at = Instant::now() + remaining.unwrap_or(interval) + lock_grace;
                     next_delay(interval, remaining)
                 }
                 Err(error) if job_is_gone(&error) => {

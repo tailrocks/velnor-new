@@ -16,6 +16,8 @@ use velnor_runner::protocol::{
     GitHubApiError, RetryDelays, RunServiceClient, RunServiceCompleteJob, TaskResult,
 };
 
+mod jit;
+pub(crate) mod mock_feed;
 pub(crate) mod mock_github;
 
 pub(crate) const TOKEN: &str = "test-token";
