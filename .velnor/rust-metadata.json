@@ -2002,6 +2002,26 @@
               "requires_features": false
             },
             {
+              "name": "rust_runner_public",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner-host/tests/rust_runner_public.rs",
+              "requires_features": false
+            },
+            {
+              "name": "rust_runner_controller_public",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner-host/tests/rust_runner_controller_public.rs",
+              "requires_features": false
+            },
+            {
               "name": "local_pair_public",
               "kinds": [
                 "test"
@@ -2259,7 +2279,7 @@
     "crates/velnor-runner-cli/Cargo.toml": "e1bf314fbce1ff6d092d00f22ec5ac91fe766a162f3340c44d09c4ab59f2d034",
     "crates/velnor-runner-core/Cargo.toml": "840a5d400de507934a9977b52967e0e593e2e48ca5eadc248fae44cbca6f005e",
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
-    "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
+    "crates/velnor-runner-host/Cargo.toml": "98e8d5b178f2fa7039a39c77edbd74c5c2f8be7390253dea1da6ec08f04b614b",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
     "crates/velnor-runner/Cargo.toml": "e96e0335ba85086bb73e60b411786386aea4423f51705fc8f7e30cbc27f9de7f",
@@ -2267,5 +2287,5 @@
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "0877d604dec30bb9bff9d23be54cbd49d7df1b76ca96d8b143d4037ebc3a6edd"
+  "layout": "003d7b5418bba03fa6a8c74d4df7ab7795bc9044fa5067ddacce988d771d796f"
 }

@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use velnor_runner_host::{
-    ConnectionId, HostConfig, HostError, SecretStore, build_job_authority_policy_json, store_secret,
+    ConnectionId, HostConfig, HostError, LaunchMode, SecretStore, build_job_authority_policy_json,
+    store_secret,
 };
 
 use super::connect::{ConnectError, ConnectRequest, connect_with_store, persist_reconnected};
@@ -56,6 +57,7 @@ fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> 
         organization: None,
         runner_group: None,
         platform: "linux/amd64",
+        launch_mode: LaunchMode::OfficialRunner,
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
         endpoint: "unix:///var/run/docker.sock",
@@ -182,6 +184,44 @@ fn p5_request(state: &Path) -> ConnectRequest<'_> {
         max_jobs: Some(2),
         ..request(state, None)
     }
+}
+
+#[test]
+fn connect_writes_launch_mode_rust_runner() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let request = ConnectRequest {
+        scale_set: "velnor-mac",
+        scale_set_labels: vec!["velnor".to_owned(), "velnor-mac".to_owned()],
+        platform: "linux/arm64",
+        launch_mode: LaunchMode::RustRunner,
+        ..request(&state, None)
+    };
+    assert_eq!(connect(&keychain, &request, "token-0"), Ok(()));
+
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    assert!(text.contains("launch_mode = \"rust-runner\""), "{text}");
+    let config = HostConfig::parse(&text)?;
+    assert_eq!(config.host.launch_mode, LaunchMode::RustRunner);
+    Ok(())
+}
+
+#[test]
+fn connect_defaults_launch_mode_to_official_runner() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    assert_eq!(
+        connect(&keychain, &request(&state, None), "token-0"),
+        Ok(())
+    );
+
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    assert!(text.contains("launch_mode = \"official-runner\""), "{text}");
+    let config = HostConfig::parse(&text)?;
+    assert_eq!(config.host.launch_mode, LaunchMode::OfficialRunner);
+    Ok(())
 }
 
 #[test]
