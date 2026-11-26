@@ -259,9 +259,18 @@ jq '{name, target, enforcement, conditions, rules, bypass_actors: []}
 jq -r '.rules[].type' payload.json | sort | tr '\n' ' '
 # expected: deletion merge_queue non_fast_forward pull_request required_linear_history required_status_checks
 gh api -X PUT $R/rulesets/24396608 --input payload.json > after.json
-diff <(jq -S '{rules, bypass_actors}' payload.json) <(jq -S '{rules, bypass_actors}' after.json)   # expected: no output, exit 0
+N='{name, target, enforcement, conditions, rules, bypass_actors}
+  | walk(if type == "object" then to_entries | sort_by(.key) | from_entries
+         elif type == "array" then sort_by(tojson) else . end)'
+diff <(jq "$N" payload.json) <(jq "$N" after.json)   # expected: no output, exit 0
 gh api -X PATCH $R -F allow_auto_merge=true --jq .allow_auto_merge                                  # expected: true
 ```
+
+The read-back compares all six writable fields, because the `PUT` replaces every one of them. The live response adds
+no key inside those six fields (its `id`, `source`, `source_type`, `node_id`, timestamps and `_links` sit outside them),
+so the only normalization is to sort object keys and to sort every array, since each array in them is a set (`rules`,
+`bypass_actors`, `required_status_checks`, `ref_name.include` and `exclude`, `allowed_merge_methods`) and the API need
+not return them in the order sent.
 
 Step 2 repeats the same commands with one more entry in `required_status_checks`:
 `{"context": "Velnor / Verified", "integration_id": <the verifier App's id>}`. The wait of 0 minutes is for clarity
