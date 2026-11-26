@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::config::{HostConfig, LaunchMode};
 use crate::daemon_lock::DaemonLock;
-use crate::error::{HostError, RustRunnerFailure};
+use crate::error::HostError;
 use crate::launch::ImageAuthority;
 use crate::launch_blocking::ListenFault;
 
@@ -34,9 +34,17 @@ pub fn run_host_blocking(
     state: &Path,
     daemon_lock: &DaemonLock,
 ) -> Result<(), ListenFault> {
-    if config.host.launch_mode == LaunchMode::RustRunner {
-        return Err(HostError::RustRunner(RustRunnerFailure::ControllerUnavailable).into());
+    match config.host.launch_mode {
+        LaunchMode::OfficialRunner => run_official_blocking(config, state, daemon_lock),
+        LaunchMode::RustRunner => crate::rust_runner::run_blocking(config, state, daemon_lock),
     }
+}
+
+fn run_official_blocking(
+    config: &HostConfig,
+    state: &Path,
+    daemon_lock: &DaemonLock,
+) -> Result<(), ListenFault> {
     let _controller_run = daemon_lock.begin_controller_run()?;
     let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state_root.is_dir() {

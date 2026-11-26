@@ -14,7 +14,7 @@ use crate::worker::execution_authorization::VerifiedProofChannelBinding;
 mod claim;
 #[path = "verifier/workflow_verification.rs"]
 mod workflow_verification;
-use claim::{PullClaim, SourceClaim, verify_source_claim};
+pub(crate) use claim::{PullClaim, SourceClaim, verify_source_claim};
 use workflow_verification::VerifiedWorkflowClosure;
 
 use super::{

@@ -11,7 +11,7 @@ use crate::error::HostError;
 
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
-pub(super) fn read_host_config(path: &Path) -> Result<Option<HostConfig>, HostError> {
+pub(crate) fn read_host_config(path: &Path) -> Result<Option<HostConfig>, HostError> {
     let mut options = std::fs::OpenOptions::new();
     options
         .read(true)

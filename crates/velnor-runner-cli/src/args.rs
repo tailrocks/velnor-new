@@ -178,7 +178,7 @@ pub struct ConnectArgs {
     /// Organization runner group, by name. Requires `--org`. Defaults to the Default group.
     #[arg(long = "runner-group", requires = "organization")]
     pub runner_group: Option<String>,
-    /// How the host starts a runner for each job: `official-runner` creates the runner container pair, `rust-runner` starts `velnor-runner` in the `OrbStack` machine `velnor`; the host controller does not run that mode yet.
+    /// How the host starts a runner for each job: `official-runner` creates the runner container pair, `rust-runner` starts `velnor-runner` in the `OrbStack` machine `velnor`; `drain --wait`, `disconnect` and `doctor --probe` do not support `rust-runner` yet.
     #[arg(
         long,
         value_parser = ["official-runner", "rust-runner"],

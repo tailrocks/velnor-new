@@ -8,7 +8,7 @@ pub(crate) use assigned_population::AssignedPopulationBlock;
 pub(crate) use assigned_population::{
     AssignedPopulationAction, plan_assigned_population_with_successors,
 };
-mod config_watch;
+pub(crate) mod config_watch;
 #[path = "host_controller/loop.rs"]
 mod loop_driver;
 mod retirement;
