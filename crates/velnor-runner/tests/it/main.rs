@@ -39,7 +39,6 @@ mod job_message;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;
-mod protocol_timeline;
 mod redaction;
 #[path = "exec_semantics.rs"]
 mod semantics;

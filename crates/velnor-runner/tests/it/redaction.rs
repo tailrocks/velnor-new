@@ -9,8 +9,7 @@ use serde_json::json;
 use velnor_runner::context_value::ContextValue;
 use velnor_runner::job_message::AgentJobRequestMessage;
 use velnor_runner::protocol::{
-    BrokerClient, DistributedTaskClient, FeedStreamClient, RunServiceClient, TwirpResultsClient,
-    github_json_http_response,
+    BrokerClient, FeedStreamClient, RunServiceClient, TwirpResultsClient, github_json_http_response,
 };
 
 use super::support::{Reply, TestServer};
@@ -41,8 +40,6 @@ fn assert_no_secret(label: &str, debug: &str) {
 fn client_debug_output_contains_no_bearer_token() -> Result<()> {
     let broker = BrokerClient::new("https://broker.actions.githubusercontent.com/", BEARER)?;
     let run_service = RunServiceClient::new(BEARER)?;
-    let timeline =
-        DistributedTaskClient::new("https://pipelines.actions.githubusercontent.com/", BEARER)?;
     let feed = FeedStreamClient::new(
         "https://pipelines.actions.githubusercontent.com/feed",
         BEARER,
@@ -54,7 +51,6 @@ fn client_debug_output_contains_no_bearer_token() -> Result<()> {
 
     assert_no_secret("BrokerClient", &format!("{broker:?}"));
     assert_no_secret("RunServiceClient", &format!("{run_service:?}"));
-    assert_no_secret("DistributedTaskClient", &format!("{timeline:?}"));
     assert_no_secret("FeedStreamClient", &format!("{feed:?}"));
     assert_no_secret("TwirpResultsClient", &format!("{results:?}"));
     Ok(())

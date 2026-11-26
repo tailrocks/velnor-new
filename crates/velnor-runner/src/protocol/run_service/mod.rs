@@ -72,7 +72,7 @@ impl Default for RetryDelays {
             acquire_min: Duration::from_secs(5),
             acquire_max: Duration::from_secs(15),
             complete_initial: Duration::from_secs(5),
-            complete_max: Duration::from_secs(60),
+            complete_max: Duration::from_secs(5),
         }
     }
 }
