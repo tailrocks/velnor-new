@@ -105,3 +105,13 @@ pub(super) fn resolve(
         .filter(|shell| !shell.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_SHELL.to_owned()))
 }
+
+pub(super) fn depends_on_steps(step: &ActionStep) -> bool {
+    step.inputs
+        .as_ref()
+        .and_then(|inputs| token::find(inputs, "shell"))
+        .is_some_and(|shell| {
+            let text = shell.to_string().to_ascii_lowercase();
+            text.contains("steps.") || text.contains("steps[")
+        })
+}

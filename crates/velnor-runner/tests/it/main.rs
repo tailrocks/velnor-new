@@ -42,6 +42,8 @@ mod followup;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
+#[path = "exec_late.rs"]
+mod late;
 #[path = "exec_parity.rs"]
 mod parity;
 #[path = "exec_process.rs"]

@@ -4,7 +4,7 @@
 use super::{Annotation, AnnotationLevel};
 
 const MAX_PER_LEVEL: usize = 10;
-const MAX_MESSAGE_CHARS: usize = 4096;
+const MAX_MESSAGE_UNITS: usize = 4096;
 
 #[derive(Debug, Default)]
 pub(super) struct Issues {
@@ -35,7 +35,15 @@ impl Issues {
             return;
         }
         *count += 1;
-        if let Some((end, _)) = annotation.message.char_indices().nth(MAX_MESSAGE_CHARS) {
+        let mut units = 0;
+        let end = annotation
+            .message
+            .char_indices()
+            .find_map(|(at, character)| {
+                units += character.len_utf16();
+                (units > MAX_MESSAGE_UNITS).then_some(at)
+            });
+        if let Some(end) = end {
             annotation.message.truncate(end);
         }
         self.items.push(annotation);

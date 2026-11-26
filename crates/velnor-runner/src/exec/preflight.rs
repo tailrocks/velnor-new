@@ -37,6 +37,9 @@ fn present(value: Option<&serde_json::Value>) -> bool {
 }
 
 fn shell_problem(step: &ActionStep, context: &JobContext) -> Option<String> {
+    if shell::depends_on_steps(step) {
+        return None;
+    }
     let step_env =
         step_environment(step, &context.expr_env(JobStatus::Success, &[])).unwrap_or_default();
     match shell::resolve(
