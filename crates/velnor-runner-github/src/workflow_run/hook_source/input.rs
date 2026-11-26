@@ -46,7 +46,6 @@ pub struct UntrustedHookSourceInput {
     pub(super) workflow_sha: String,
     pub(super) tested_sha: String,
     pub(super) job_workflow_ref: String,
-    pub(super) workflow_job_id: String,
     #[serde(default)]
     pub(super) pull_request: Option<UntrustedHookPullRequest>,
 }
@@ -71,7 +70,6 @@ impl UntrustedHookSourceInput {
             &self.workflow_sha,
             &self.tested_sha,
             &self.job_workflow_ref,
-            &self.workflow_job_id,
         ];
         if self.repository_id <= 0
             || self.run_id <= 0
@@ -80,7 +78,6 @@ impl UntrustedHookSourceInput {
                 value.is_empty() || value.len() > MAX_TEXT_BYTES || value.contains('\0')
             })
             || !canonical_repository(&self.repository)
-            || !valid_workflow_job_id(&self.workflow_job_id)
             || !valid_sha(&self.workflow_sha)
             || !valid_sha(&self.tested_sha)
         {
@@ -159,17 +156,6 @@ fn valid_branch(value: &str) -> bool {
         && !value.contains("..")
         && !value.bytes().any(|byte| byte.is_ascii_control())
         && !value.contains(' ')
-}
-
-fn valid_workflow_job_id(value: &str) -> bool {
-    value.len() <= 100
-        && value
-            .bytes()
-            .next()
-            .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn canonical_name(value: &str) -> bool {
