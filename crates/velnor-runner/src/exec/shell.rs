@@ -71,10 +71,12 @@ fn split(spec: &str) -> Vec<String> {
 }
 
 pub(super) fn is_supported(spec: &str) -> bool {
-    matches!(
-        split(expand(spec)).first().map(String::as_str),
-        Some("bash" | "sh")
-    )
+    let expanded = expand(spec);
+    expanded.contains(PLACEHOLDER)
+        && matches!(
+            split(expanded).first().map(String::as_str),
+            Some("bash" | "sh")
+        )
 }
 
 pub(super) fn command(spec: &str, script: &Path) -> Option<(String, Vec<String>)> {
@@ -82,12 +84,9 @@ pub(super) fn command(spec: &str, script: &Path) -> Option<(String, Vec<String>)
     let expanded = expand(spec);
     let mut tokens = split(expanded).into_iter();
     let program = tokens.next()?;
-    let mut args: Vec<String> = tokens
+    let args = tokens
         .map(|token| token.replace(PLACEHOLDER, &script))
         .collect();
-    if !expanded.contains(PLACEHOLDER) {
-        args.push(script.into_owned());
-    }
     Some((program, args))
 }
 

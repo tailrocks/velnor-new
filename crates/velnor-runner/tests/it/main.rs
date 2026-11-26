@@ -76,6 +76,8 @@ mod extra;
 mod hardening;
 mod job_message;
 mod protocol_acquire_renew;
+#[path = "exec_parity.rs"]
+mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod protocol_broker;

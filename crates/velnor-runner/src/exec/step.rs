@@ -15,16 +15,16 @@ use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::cancel::{Groups, group_of, terminate};
-use super::output::Output;
+use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
 use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
 const LINE_BUFFER: usize = 64;
-const LINE_LIMIT: usize = 1 << 20;
 const DRAIN_LIMIT: usize = (LINE_BUFFER + 2) * LINE_LIMIT;
 const READ_PIECE: usize = 64 << 10;
+const READ_LIMIT: usize = LINE_LIMIT + READ_PIECE;
 const CAPTURE_LIMIT: usize = 8 << 20;
 
 pub(super) struct ProcessSpec<'a> {
@@ -70,17 +70,21 @@ fn spawn(spec: &ProcessSpec<'_>) -> std::io::Result<Child> {
 struct Chunk {
     stderr: bool,
     bytes: Vec<u8>,
+    overflow: bool,
 }
 
 impl Chunk {
-    fn text(mut self) -> String {
+    fn text(mut self) -> (String, bool) {
         if self.bytes.last() == Some(&b'\n') {
             self.bytes.pop();
         }
         if self.bytes.last() == Some(&b'\r') {
             self.bytes.pop();
         }
-        String::from_utf8_lossy(&self.bytes).into_owned()
+        (
+            String::from_utf8_lossy(&self.bytes).into_owned(),
+            self.overflow,
+        )
     }
 }
 
@@ -90,7 +94,7 @@ where
 {
     let mut reader = BufReader::new(reader);
     let mut line = Vec::new();
-    let mut truncated = false;
+    let mut overflow = false;
     loop {
         let mut piece = Vec::new();
         let read = (&mut reader)
@@ -98,42 +102,41 @@ where
             .read_until(b'\n', &mut piece)
             .await;
         if matches!(read, Ok(0) | Err(_)) {
-            if !line.is_empty() || truncated {
-                finish_line(&mut line, &mut truncated);
+            if !line.is_empty() || overflow {
+                let bytes = std::mem::take(&mut line);
                 let _ = sender
                     .send(Chunk {
                         stderr,
-                        bytes: std::mem::take(&mut line),
+                        bytes,
+                        overflow,
                     })
                     .await;
             }
             break;
         }
-        let bytes = if whole_lines {
+        let chunk = if whole_lines {
             let ended = piece.last() == Some(&b'\n');
-            let room = LINE_LIMIT.saturating_sub(line.len());
-            truncated |= piece.len() > room;
+            let room = READ_LIMIT.saturating_sub(line.len());
+            overflow |= piece.len() > room;
             line.extend_from_slice(&piece[..piece.len().min(room)]);
             if !ended {
                 continue;
             }
-            finish_line(&mut line, &mut truncated);
-            std::mem::take(&mut line)
+            Chunk {
+                stderr,
+                bytes: std::mem::take(&mut line),
+                overflow: std::mem::take(&mut overflow),
+            }
         } else {
-            piece
+            Chunk {
+                stderr,
+                bytes: piece,
+                overflow: false,
+            }
         };
-        if sender.send(Chunk { stderr, bytes }).await.is_err() {
+        if sender.send(chunk).await.is_err() {
             break;
         }
-    }
-}
-
-fn finish_line(line: &mut Vec<u8>, truncated: &mut bool) {
-    if std::mem::take(truncated) {
-        while matches!(line.last(), Some(b'\n' | b'\r')) {
-            line.pop();
-        }
-        line.extend_from_slice(format!(" [line truncated at {LINE_LIMIT} bytes]\n").as_bytes());
     }
 }
 
@@ -211,10 +214,9 @@ pub(super) fn deadline(minutes: Option<f64>) -> Option<Duration> {
 
 pub(super) fn report_timeout(out: &mut Output<'_>, minutes: Option<f64>) {
     let minutes = minutes.unwrap_or_default();
-    out.message(&format!(
-        "step {} timed out after {minutes} minutes",
-        out.number
-    ));
+    let text = format!("step {} timed out after {minutes} minutes", out.number);
+    out.message(&text);
+    out.annotate(AnnotationLevel::Error, text);
 }
 
 fn exit_code(status: ExitStatus) -> i32 {
@@ -298,7 +300,11 @@ pub(super) async fn run(
     limits: &Limits<'_>,
     out: &mut Output<'_>,
 ) -> Result<StepResult, ExecError> {
-    let ending = drive(spec, limits, true, |chunk| out.line(&chunk.text())).await?;
+    let ending = drive(spec, limits, true, |chunk| {
+        let (text, overflow) = chunk.text();
+        out.bounded_line(&text, overflow);
+    })
+    .await?;
     Ok(match ending {
         Ending::Exited(status) if status.success() => StepResult::Succeeded,
         Ending::Exited(status) => {

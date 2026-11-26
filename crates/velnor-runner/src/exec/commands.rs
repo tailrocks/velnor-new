@@ -63,7 +63,7 @@ fn parse_properties(
         .split(separator)
         .filter_map(|property| {
             let (name, value) = property.split_once('=')?;
-            Some((name.trim().to_owned(), unescape(value)))
+            Some((name.trim().to_ascii_lowercase(), unescape(value)))
         })
         .collect()
 }
@@ -116,9 +116,9 @@ fn annotation(level: AnnotationLevel, command: WorkflowCommand<'_>) -> Annotatio
         title: text(properties, "title"),
         file: text(properties, "file"),
         line: number(properties, "line"),
-        end_line: number(properties, "endLine"),
+        end_line: number(properties, "endline"),
         column: number(properties, "col"),
-        end_column: number(properties, "endColumn"),
+        end_column: number(properties, "endcolumn"),
         message: command.data,
     }
 }
