@@ -19,6 +19,16 @@ velnor-ci-serial = { max-threads = 1 }
 probe-cleanup-observer-serial = { max-threads = 1 }
 setup-action = { max-threads = 2 }
 
+[profile.default]
+default-filter = 'not test(=audit::bounds::limit_env::a_tree_above_100000_entries_passes_under_the_default_limit)'
+
+[profile.slow]
+default-filter = 'test(=audit::bounds::limit_env::a_tree_above_100000_entries_passes_under_the_default_limit)'
+
+[[profile.slow.overrides]]
+filter = 'test(=audit::bounds::limit_env::a_tree_above_100000_entries_passes_under_the_default_limit)'
+slow-timeout = { period = "400s", terminate-after = 1 }
+
 [profile.ci]
 retries = 0
 test-threads = "num-cpus"
