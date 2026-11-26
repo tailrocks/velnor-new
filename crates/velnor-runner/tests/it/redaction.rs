@@ -152,6 +152,7 @@ fn run_jit_options_debug_output_hides_the_jit_configuration() {
         session_retry_interval: Duration::from_secs(30),
         report_budget: Duration::from_secs(10),
         upload_drain_budget: Duration::from_secs(600),
+        feed_flush_interval: Duration::from_millis(250),
         retry_delays: RetryDelays::default(),
         os: RunnerOs::Linux,
         adapters: AdapterRegistry::empty(),

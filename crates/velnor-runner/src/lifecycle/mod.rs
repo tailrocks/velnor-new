@@ -47,6 +47,7 @@ pub struct RunJitOptions {
     pub session_retry_interval: Duration,
     pub report_budget: Duration,
     pub upload_drain_budget: Duration,
+    pub feed_flush_interval: Duration,
     pub retry_delays: RetryDelays,
     pub os: RunnerOs,
     pub adapters: AdapterRegistry,
@@ -275,6 +276,7 @@ async fn run_and_report(
         files,
         options.report_budget,
         options.upload_drain_budget,
+        options.feed_flush_interval,
     )
     .spawn(events);
     let run = tokio::select! {

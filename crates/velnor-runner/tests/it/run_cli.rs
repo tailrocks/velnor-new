@@ -24,13 +24,13 @@ async fn velnor_runner(arguments: &[&str]) -> Result<Output> {
         .context("run velnor-runner")
 }
 
-struct Started {
-    child: Child,
-    jit_file: PathBuf,
-    work_dir: PathBuf,
+pub(crate) struct Started {
+    pub(crate) child: Child,
+    pub(crate) jit_file: PathBuf,
+    pub(crate) work_dir: PathBuf,
 }
 
-fn start_runner(mock: &MockGithub, scratch: &Scratch) -> Result<Started> {
+pub(crate) fn start_runner(mock: &MockGithub, scratch: &Scratch) -> Result<Started> {
     std::fs::create_dir_all(scratch.work_dir())?;
     let jit_file = scratch.work_dir().join("jit.txt");
     std::fs::write(&jit_file, mock.jit())?;
@@ -53,7 +53,10 @@ fn start_runner(mock: &MockGithub, scratch: &Scratch) -> Result<Started> {
     })
 }
 
-async fn until<T>(what: &str, mut probe: impl FnMut() -> Result<Option<T>>) -> Result<T> {
+pub(crate) async fn until<T>(
+    what: &str,
+    mut probe: impl FnMut() -> Result<Option<T>>,
+) -> Result<T> {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         if let Some(found) = probe()? {
@@ -66,7 +69,7 @@ async fn until<T>(what: &str, mut probe: impl FnMut() -> Result<Option<T>>) -> R
     }
 }
 
-async fn signal_and_wait(started: Started, signal: Signal) -> Result<Output> {
+pub(crate) async fn signal_and_wait(started: Started, signal: Signal) -> Result<Output> {
     let runner = started.child.id().context("the runner pid")?;
     let runner = Pid::from_raw(i32::try_from(runner)?).context("a valid runner pid")?;
     kill_process(runner, signal).context("send the signal")?;

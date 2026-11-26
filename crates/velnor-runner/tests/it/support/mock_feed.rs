@@ -14,6 +14,7 @@ use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
 const CLOSE_BUDGET: Duration = Duration::from_secs(10);
+const LINE_BUDGET: Duration = Duration::from_secs(30);
 
 pub(crate) struct MockFeed {
     url: String,
@@ -59,6 +60,29 @@ impl MockFeed {
 
     pub(crate) fn url(&self) -> &str {
         &self.url
+    }
+
+    pub(crate) async fn wait_for_line(&self, text: &str) -> Result<()> {
+        tokio::time::timeout(LINE_BUDGET, async {
+            loop {
+                let seen = self
+                    .messages
+                    .lock()
+                    .map_err(|_| anyhow!("feed state poisoned"))?
+                    .iter()
+                    .any(|frame| {
+                        frame["value"]
+                            .as_array()
+                            .is_some_and(|lines| lines.iter().any(|line| line == text))
+                    });
+                if seen {
+                    return Ok(());
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .with_context(|| format!("the feed carried {text:?}"))?
     }
 
     pub(crate) async fn frames(&self) -> Result<Vec<Value>> {

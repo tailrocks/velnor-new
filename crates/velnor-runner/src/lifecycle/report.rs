@@ -27,7 +27,6 @@ use crate::protocol::{
 
 const CONNECT_BUDGET: Duration = Duration::from_secs(5);
 const UPLOAD_SLOTS: usize = 4;
-const FAST_FLUSH: Duration = Duration::from_millis(250);
 const SLOW_FLUSH: Duration = Duration::from_millis(500);
 const FAST_WINDOW: Duration = Duration::from_secs(60);
 const FEED_BATCH_LINES: usize = 100;
@@ -56,6 +55,7 @@ pub(super) struct Reporter {
     files: LogFiles,
     budget: Duration,
     drain_budget: Duration,
+    flush_interval: Duration,
     status: Option<StatusQueue>,
     upload_slots: Arc<Semaphore>,
     uploads: JoinSet<()>,
@@ -77,6 +77,7 @@ impl Reporter {
         files: LogFiles,
         budget: Duration,
         drain_budget: Duration,
+        flush_interval: Duration,
     ) -> Self {
         let plan_id = message.plan.plan_id.clone();
         let job_id = message.job_id.clone();
@@ -103,6 +104,7 @@ impl Reporter {
             files,
             budget,
             drain_budget,
+            flush_interval,
             upload_slots: Arc::new(Semaphore::new(UPLOAD_SLOTS)),
             uploads: JoinSet::new(),
         }
@@ -124,7 +126,7 @@ impl Reporter {
     async fn run(mut self, mut events: UnboundedReceiver<Event>) -> ReportSummary {
         self.connect_feed().await;
         let started = Instant::now();
-        let mut ticker = interval(FAST_FLUSH);
+        let mut ticker = interval(self.flush_interval);
         ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let mut slow = false;
         loop {

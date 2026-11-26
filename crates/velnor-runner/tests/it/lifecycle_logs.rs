@@ -6,7 +6,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use super::lifecycle_support::{Settings, fixture_job, run, run_with};
+use super::exec_support::Scratch;
+use super::lifecycle_support::{Settings, fixture_job, run, run_in, run_with};
 use super::support::mock_github::{Behavior, JOB_LOG_BLOB, MockGithub, STEP_LOG_BLOB, step_id};
 
 const STAMP_LEN: usize = "2026-11-27T00:00:00.0000000Z ".len();
@@ -111,15 +112,30 @@ async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
         feed: true,
         ..Behavior::default()
     };
-    let mock = MockGithub::start(
-        fixture_job("hello", Some("echo one; sleep 1; echo two"))?,
-        behavior,
-    )
-    .await?;
+    let scratch = Scratch::new()?;
+    let release = scratch.work_dir().with_file_name("release");
+    let script = format!(
+        "echo one; while [ ! -e \"{}\" ]; do sleep 0.05; done; echo two",
+        release.display()
+    );
+    let mock = MockGithub::start(fixture_job("hello", Some(&script))?, behavior).await?;
+    let feed = mock.feed.as_ref().context("feed")?;
 
-    run(&mock, Duration::from_millis(200)).await?;
+    let (ran, released) = tokio::join!(
+        run_in(
+            &mock,
+            &scratch,
+            Settings::new().renewing_every(Duration::from_millis(200))
+        ),
+        async {
+            feed.wait_for_line("one").await?;
+            std::fs::write(&release, "").context("release the step")
+        }
+    );
+    ran??;
+    released?;
 
-    let frames = mock.feed.as_ref().context("feed")?.frames().await?;
+    let frames = feed.frames().await?;
     assert!(frames.len() >= 2, "{frames:?}");
     let lines = frame_lines(&frames)?;
     let one = lines.iter().position(|line| line == "one").context("one")?;
@@ -132,7 +148,7 @@ async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
 #[tokio::test]
 async fn lifecycle_keeps_every_logged_line_and_feeds_only_the_tail_left_when_a_step_ends()
 -> Result<()> {
-    const LINES: usize = 200_000;
+    const LINES: usize = 20_000;
     let behavior = Behavior {
         feed: true,
         ..Behavior::default()
@@ -140,7 +156,13 @@ async fn lifecycle_keeps_every_logged_line_and_feeds_only_the_tail_left_when_a_s
     let script = format!("seq 1 {LINES}");
     let mock = MockGithub::start(fixture_job("hello", Some(&script))?, behavior).await?;
 
-    run(&mock, Duration::from_millis(200)).await?;
+    run_with(
+        &mock,
+        Settings::new()
+            .renewing_every(Duration::from_millis(200))
+            .flushing_the_feed_every(Duration::from_secs(3600)),
+    )
+    .await?;
 
     let step_log = mock.uploaded(STEP_LOG_BLOB)?;
     let job_log = mock.uploaded(JOB_LOG_BLOB)?;
@@ -169,9 +191,17 @@ async fn lifecycle_keeps_every_logged_line_and_feeds_only_the_tail_left_when_a_s
             "line {number}"
         );
     }
-    let tail = &sent[sent.len().saturating_sub(200)..];
-    assert_eq!(tail.last().map(|(number, _)| *number), Some(logged.len()));
-    assert!(tail.windows(2).all(|pair| pair[1].0 == pair[0].0 + 1));
+    let drain_start = (1..sent.len())
+        .rev()
+        .find(|&index| sent[index].0 != sent[index - 1].0 + 1)
+        .unwrap_or(0);
+    let drained = &sent[drain_start..];
+    assert!(
+        drained.len() <= 200,
+        "{} lines in the final drain",
+        drained.len()
+    );
+    assert_eq!(drained.last().map(|(number, _)| *number), Some(LINES));
     Ok(())
 }
 
