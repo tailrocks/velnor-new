@@ -5,13 +5,14 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use futures_util::FutureExt;
+use serde_json::json;
 use velnor_runner::exec::{
     AdapterRegistry, AnnotationLevel, JobCancel, JobResult, StdoutSink, StepAdapter, StepContext,
     StepFuture, StepResult, run_job,
 };
-
 use velnor_runner::job_message::AgentJobRequestMessage;
 
+use crate::exec_builder::{job, run};
 use crate::exec_support::{Scratch, fixture_message, fixture_path, run_fixture, run_path};
 
 #[test]
@@ -244,5 +245,32 @@ async fn workflow_command_annotations_mask_message_title_and_file() -> Result<()
     assert_eq!(error.message, "bad ***");
     assert_eq!(error.title.as_deref(), Some("t-***"));
     assert_eq!(error.file.as_deref(), Some("***.rs"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn annotation_title_and_file_are_masked_like_the_message() -> Result<()> {
+    const SECRET: &str = "s3cr3t-Value-12345";
+    let scratch = Scratch::new()?;
+    let mut message = job(vec![run(
+        "s",
+        &format!("echo '::error title={SECRET},file={SECRET}::{SECRET}'"),
+    )]);
+    message["Variables"] = json!({"MY_SECRET": {"Value": SECRET, "IsSecret": true}});
+    let message: AgentJobRequestMessage = serde_json::from_value(message)?;
+
+    let ran = run_job(
+        &message,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let annotation = ran.annotations.first().context("the error annotation")?;
+    assert_eq!(annotation.message, "***");
+    assert_eq!(annotation.title.as_deref(), Some("***"));
+    assert_eq!(annotation.file.as_deref(), Some("***"));
     Ok(())
 }

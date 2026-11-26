@@ -4,9 +4,43 @@
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use std::convert::Infallible;
+
 use rsa::pkcs1::EncodeRsaPrivateKey;
+use rsa::rand_core::{TryCryptoRng, TryRng};
 use rsa::{Generate, PrivateKey};
 use serde_json::{Value, json};
+
+const KEY_SEED: u64 = 0x2894_0000_0000_0001;
+
+struct SeededRng(u64);
+
+impl TryRng for SeededRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Infallible> {
+        let [a, b, c, d, ..] = self.try_next_u64()?.to_le_bytes();
+        Ok(u32::from_le_bytes([a, b, c, d]))
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Infallible> {
+        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut word = self.0;
+        word = (word ^ (word >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        word = (word ^ (word >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        Ok(word ^ (word >> 31))
+    }
+
+    fn try_fill_bytes(&mut self, destination: &mut [u8]) -> Result<(), Infallible> {
+        for chunk in destination.chunks_mut(8) {
+            let word = self.try_next_u64()?.to_le_bytes();
+            chunk.copy_from_slice(&word[..chunk.len()]);
+        }
+        Ok(())
+    }
+}
+
+impl TryCryptoRng for SeededRng {}
 
 fn der_read(input: &[u8]) -> Result<(u8, &[u8], &[u8])> {
     let (&tag, rest) = input.split_first().context("DER tag")?;
@@ -34,7 +68,7 @@ fn der_read(input: &[u8]) -> Result<(u8, &[u8], &[u8])> {
 }
 
 fn rsa_parameters() -> Result<Value> {
-    let key = PrivateKey::generate();
+    let key = PrivateKey::generate_from_rng(&mut SeededRng(KEY_SEED));
     let document = key.to_pkcs1_der().context("encode the test key")?;
     let (_, mut rest, _) = der_read(document.as_bytes())?;
     let mut integers = Vec::new();

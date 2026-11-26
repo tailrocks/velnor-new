@@ -252,12 +252,8 @@ impl Reporter {
         let step_id = self.step_id(number);
         self.uploads.spawn(async move {
             best_effort("upload step log", UPLOAD_BUDGET, async move {
-                let content = tokio::fs::read_to_string(&state.path)
-                    .await
-                    .with_context(|| format!("read {}", state.path.display()))?;
-                let lines: Vec<String> = content.lines().map(ToOwned::to_owned).collect();
                 results
-                    .upload_step_log(&plan_id, &job_id, &step_id, &lines)
+                    .upload_step_log(&plan_id, &job_id, &step_id, &state.path)
                     .await
             })
             .await;
@@ -350,11 +346,8 @@ impl Reporter {
         let step_id = self.step_id(number);
         self.uploads.spawn(async move {
             best_effort("upload step summary", UPLOAD_BUDGET, async move {
-                let content = tokio::fs::read_to_string(&path)
-                    .await
-                    .with_context(|| format!("read {}", path.display()))?;
                 results
-                    .upload_step_summary(&plan_id, &job_id, &step_id, &content)
+                    .upload_step_summary(&plan_id, &job_id, &step_id, &path)
                     .await
             })
             .await;
@@ -367,15 +360,14 @@ impl Reporter {
             let (plan_id, job_id) = (self.plan_id.clone(), self.job_id.clone());
             let path = self.files.job_path();
             best_effort("upload job log", UPLOAD_BUDGET, async move {
-                let log = tokio::fs::read(&path)
+                let size = tokio::fs::metadata(&path)
                     .await
-                    .with_context(|| format!("read {}", path.display()))?;
-                let lines = log.split(|byte| *byte == b'\n').count().saturating_sub(1);
-                if lines == 0 {
+                    .with_context(|| format!("stat {}", path.display()))?
+                    .len();
+                if size == 0 {
                     return Ok(());
                 }
-                let lines = i64::try_from(lines).context("job log line count")?;
-                results.upload_job_log(&plan_id, &job_id, &log, lines).await
+                results.upload_job_log(&plan_id, &job_id, &path).await
             })
             .await;
         }

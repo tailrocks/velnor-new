@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use super::jit::jit_config;
 use super::mock_feed::MockFeed;
@@ -36,6 +38,8 @@ pub(crate) fn step_id(number: usize) -> String {
 pub(crate) enum Renew {
     #[default]
     Renewed,
+    RenewedAfter(Duration),
+    ExpiringThenFailing,
     JobGone,
     ServerError,
 }
@@ -57,6 +61,24 @@ pub(crate) enum Cancel {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+pub(crate) enum Acknowledge {
+    #[default]
+    Accepted,
+    JobGone,
+    Unavailable,
+}
+
+fn timespan(timeout: Duration) -> String {
+    let seconds = timeout.as_secs();
+    format!(
+        "0.{:02}:{:02}:{:02}.0000",
+        seconds / 3600,
+        seconds / 60 % 60,
+        seconds % 60
+    )
+}
+
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum MessageTypes {
     #[default]
     Canonical,
@@ -70,6 +92,8 @@ pub(crate) struct Behavior {
     pub(crate) online: Online,
     pub(crate) message_types: MessageTypes,
     pub(crate) should_acknowledge: bool,
+    pub(crate) acknowledge: Acknowledge,
+    pub(crate) cancel_timeout: Duration,
     pub(crate) unusable_job: bool,
     pub(crate) blob_status: u16,
     pub(crate) feed: bool,
@@ -83,6 +107,8 @@ impl Default for Behavior {
             online: Online::Job,
             message_types: MessageTypes::Canonical,
             should_acknowledge: true,
+            acknowledge: Acknowledge::Accepted,
+            cancel_timeout: Duration::from_secs(300),
             unusable_job: false,
             blob_status: 201,
             feed: false,
@@ -190,7 +216,20 @@ fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<
         )
     })?;
     server.respond("DELETE", "/broker/session", |_| Reply::status(204))?;
-    server.respond("POST", "/broker/acknowledge", |_| Reply::status(200))?;
+    let acknowledge = behavior.acknowledge;
+    server.respond("POST", "/broker/acknowledge", move |_| match acknowledge {
+        Acknowledge::Accepted => Reply::status(200),
+        Acknowledge::JobGone => Reply::json(
+            404,
+            &json!({
+                "source": "actions-broker-listener",
+                "errorKind": "AcknowledgeJobNotFound",
+                "statusCode": 404,
+                "errorMessage": "the job was withdrawn",
+            }),
+        ),
+        Acknowledge::Unavailable => Reply::status(503),
+    })?;
     let kind = |name: &str| match behavior.message_types {
         MessageTypes::Lowercase => name.to_lowercase(),
         MessageTypes::Canonical => name.to_owned(),
@@ -208,7 +247,7 @@ fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<
     let cancel_of = |job_id: &str| {
         message(
             &kind("JobCancellation"),
-            &json!({"JobId": job_id, "Timeout": "00:01:00"}),
+            &json!({"jobId": job_id, "timeout": timespan(behavior.cancel_timeout)}),
         )
     };
     let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
@@ -252,13 +291,27 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
             Reply::json(200, &job)
         }
     })?;
+    let renewals = AtomicUsize::new(0);
     server.respond("POST", "/run/renewjob", move |_| match renew {
         Renew::Renewed => Reply::json(200, &json!({"lockedUntil": "2099-01-01T00:00:00Z"})),
+        Renew::RenewedAfter(delay) => {
+            Reply::json(200, &json!({"lockedUntil": "2099-01-01T00:00:00Z"})).after(delay)
+        }
+        Renew::ExpiringThenFailing if renewals.fetch_add(1, Ordering::SeqCst) == 0 => {
+            let expires = OffsetDateTime::now_utc() + Duration::from_secs(1);
+            Reply::json(
+                200,
+                &json!({"lockedUntil": expires.format(&Rfc3339).unwrap_or_default()}),
+            )
+        }
+
         Renew::JobGone => Reply::json(
             404,
             &json!({"source": "actions-run-service", "statusCode": 404, "message": "gone"}),
         ),
-        Renew::ServerError => Reply::json(500, &json!({"message": "unavailable"})),
+        Renew::ExpiringThenFailing | Renew::ServerError => {
+            Reply::json(500, &json!({"message": "unavailable"}))
+        }
     })?;
     server.respond("POST", "/run/completejob", |_| Reply::status(200))
 }

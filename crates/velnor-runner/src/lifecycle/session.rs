@@ -11,9 +11,9 @@ use super::LifecycleError;
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::JobCancel;
 use crate::protocol::{
-    BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError, OAuthClient,
-    OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus, TaskAgentMessage,
-    TaskAgentSession, broker_error_category,
+    Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
+    OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus,
+    TaskAgentMessage, TaskAgentSession, broker_error_category,
 };
 use crate::secret::Secret;
 
@@ -206,7 +206,10 @@ impl Session {
         polled.map(|poll| poll.message)
     }
 
-    pub(super) async fn acknowledge(&self, runner_request_id: &str) -> anyhow::Result<()> {
+    pub(super) async fn acknowledge(
+        &self,
+        runner_request_id: &str,
+    ) -> anyhow::Result<Acknowledgement> {
         let broker = self.auth().broker.clone();
         broker
             .acknowledge_runner_request(&self.id, runner_request_id, RunnerStatus::Busy)

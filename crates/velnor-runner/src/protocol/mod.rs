@@ -8,12 +8,13 @@ pub mod http;
 pub mod jit;
 pub mod oauth;
 pub mod results;
+mod results_upload;
 mod results_wire;
 pub mod run_service;
 pub mod session;
 pub mod timeline;
 
-pub use broker::{BrokerClient, BrokerPoll};
+pub use broker::{Acknowledgement, BrokerClient, BrokerPoll};
 pub use error::{
     BrokerErrorCategory, GitHubApiError, ServiceErrorKind, broker_error_category,
     service_error_kind,

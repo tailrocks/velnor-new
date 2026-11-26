@@ -25,6 +25,12 @@ impl Scratch {
         self.root.join("_work")
     }
 
+    pub(crate) fn write(&self, name: &str, content: &[u8]) -> Result<PathBuf> {
+        let path = self.root.join(name);
+        std::fs::write(&path, content).with_context(|| format!("write {}", path.display()))?;
+        Ok(path)
+    }
+
     pub(crate) fn workspace(&self) -> PathBuf {
         self.root.join("workspace")
     }

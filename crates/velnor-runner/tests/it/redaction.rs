@@ -9,8 +9,10 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 use url::Url;
 use velnor_runner::context_value::ContextValue;
+use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::expr::{ExprEnv, RootContext, evaluate_expression};
 use velnor_runner::job_message::{AgentJobRequestMessage, ContainerResource};
+use velnor_runner::lifecycle::RunJitOptions;
 use velnor_runner::protocol::{
     BrokerClient, DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings,
     FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken,
@@ -330,4 +332,21 @@ async fn a_rejected_request_error_never_carries_a_token_from_the_response_body()
         .context("a 401 completion fails")?;
     assert!(format!("{plain:#}").contains("plain failure text"));
     Ok(())
+}
+
+#[test]
+fn run_jit_options_debug_output_hides_the_jit_configuration() {
+    const JIT: &str = "jit-config-bundle-0001";
+    let options = RunJitOptions {
+        jit: Secret::new(JIT.to_owned()),
+        work_dir: std::path::PathBuf::from("_work"),
+        shutdown: JobCancel::new(),
+        renew_interval: Duration::from_secs(60),
+        renew_lock_grace: Duration::from_secs(300),
+        cancel_timeout_floor: Duration::from_secs(60),
+        cancel_poll_error_delay: Duration::from_secs(2),
+        adapters: AdapterRegistry::empty(),
+    };
+
+    assert!(!format!("{options:?}").contains(JIT));
 }
