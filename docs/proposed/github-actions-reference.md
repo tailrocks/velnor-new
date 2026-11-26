@@ -65,6 +65,95 @@ after 24 hours has a JIT configuration nobody holds, so it cannot come online
 or run a job. GitHub removes offline ephemeral runners itself; this residual is
 accepted.
 
+### Job protocol client (`velnor-runner`)
+
+`crates/velnor-runner` follows `actions/runner` v2.338.2. Each row names the
+upstream mechanism the code copies.
+
+| Behavior | Upstream source |
+| --- | --- |
+| Every run-service call makes at most 5 attempts with a random 5 to 15 second back-off. Acquire does not retry a typed 404, 409 or 422. Completion does not retry a 401 or a typed 404. Renew does not retry a typed 404. Everything else is retried, including a 400 and a dropped connection. | `src/Runner.Common/RunServer.cs` lines 63-102, `src/Runner.Common/RunnerService.cs` lines 71-110 |
+| A run-service error is typed only when its body has `source` equal to `actions-run-service`. The body `statusCode`, not the HTTP status, decides. A completion that gets a typed 404 fails as job not found, as upstream records the job-not-found exception and fails. A 404 with another or no `source` is an ordinary retried error. | `src/Sdk/RSWebApi/RunServiceHttpClient.cs` lines 100-112, 165-172, 212-219, 237-256 |
+| A broker error is typed only when its body has `source` equal to `actions-broker-listener`. Poll types `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned` and `RunnerSessionInvalid`. Acknowledge types `AcknowledgeJobNotFound` and `RunnerNotFound`. Every other broker error is untyped. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
+| Session creation maps 403 to access denied and 409 to a session conflict, and does not retry. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 157-167 |
+| The worker applies only Regex mask hints. It logs and skips every other type, including Variable, and the job still runs. A `type` that is not an integer, a numeric string or a known name fails the job message. | `src/Runner.Worker/Worker.cs` lines 176-190; `src/Sdk/WebApi/WebApi/VssJsonMediaTypeFormatter.cs` line 87; `src/Runner.Sdk/Util/StringUtil.cs` lines 12-18, 35-38 |
+| A feed stream WebSocket connect is cancelled after 30 seconds. | `src/Runner.Common/JobServer.cs` lines 207-208 |
+| A blob upload sets `x-ms-blob-type: BlockBlob` only when the blob storage type is Azure. | `src/Sdk/WebApi/WebApi/ResultsHttpClient.cs` lines 268-271 |
+
+Deliberate deviations:
+
+- The crate has no logger. A mask hint with an unsupported type parses to
+  `MaskKind::Unsupported` and carries the spelling from the wire. The worker
+  that consumes the job message writes the "Unsupported mask type" line and
+  skips the hint.
+- A mask `type` that is a float, boolean, null, object, array or an unknown
+  name fails the job message, as upstream's string-enum converter does
+  (`VssJsonMediaTypeFormatter.cs` line 87, `StringUtil.cs` lines 12-18,
+  35-38). A string that trims to an `i32` parses as that number. Any other
+  string is a comma-separated list of names, matched case-insensitively and
+  trimmed, whose values are ORed, so `Variable, Regex` becomes 3 and parses
+  to `MaskKind::Unsupported("3")`. A number inside a list fails the job
+  message. A numeric string outside `i32` fails in both. A JSON integer
+  outside `i32` fails the job message, a deviation from .NET, where
+  `Enum.ToObject` truncates it. An unknown
+  integer parses to `MaskKind::Unsupported`, and a missing `type` parses to
+  `Unsupported("0")`, the enum default. The names Variable and Regex match
+  case-insensitively.
+- The parser maps `Variable` to `MaskKind::Variable`. The consumer decides
+  what to do with it.
+- A completion treats the first HTTP 401 as fatal. Upstream's HTTP handler
+  first invalidates the token and repeats the request with a fresh one, and
+  raises the unauthorized exception only when that fails
+  (`src/Sdk/Common/Common/RawHttpMessageHandler.cs` lines 175-217). The crate
+  has no token provider, so refreshing the token belongs to its caller.
+- An acquire whose 2xx response has no JSON object (an empty body, a
+  non-JSON body, `null` or an array) or whose JSON object fails the typed
+  `AgentJobRequestMessage` parse is a transient failure, and is retried under
+  the acquire policy. Upstream's `ReadContentAsAsync` returns `null` for a
+  body that is not JSON or does not lex as JSON, so `GetJobMessageAsync`
+  returns `null` and `JobDispatcher.Run` fails on its first dereference of the
+  message. Upstream's `RetryRequest` retries any other exception, including a
+  parse error (`src/Sdk/WebApi/WebApi/RawHttpClientBase.cs` lines 261-285;
+  `src/Runner.Common/RunServer.cs` lines 63-71; `src/Runner.Common/RunnerService.cs`
+  lines 71-110; `src/Runner.Listener/JobDispatcher.cs` lines 89-91).
+- An OAuth token exchange yields a token only for HTTP 200. Upstream treats a
+  200, or a 400 with a JSON body, as a valid response and checks `access_token`
+  first: a non-empty `access_token` issues a token even when the same response
+  carries `error`, and only an empty one falls through to the `error` branch.
+  Velnor does the same for a 200, so a 200 with both `access_token` and `error`
+  yields the token. It refuses a 400 that carries an access token, and refuses
+  a 201 and every other 2xx (`src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenHttpClient.cs`
+  lines 99-102, `IsValidTokenResponse`; `src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenProvider.cs`
+  lines 138-170, `OnGetTokenAsync`). A 400 carrying `error` still maps to the
+  token error, and `invalid_client` still means the registration is gone.
+- The acquire typed-parse error names the failure category, the line and the
+  column, and the JSON path of the field. It never repeats the offending value,
+  because serde's own message quotes it and the body can carry a secret.
+- The run-service, Distributed Task, feed and results clients accept only an
+  HTTPS URL on `*.actions.githubusercontent.com` with no port, query or
+  fragment. GitHub Enterprise Server hands the runner
+  `https://[hostname]/_services/pipelines/` endpoints (`docs/checks/actions.md`)
+  and runs jobs through the Distributed Task job server, not the run service
+  (`src/Runner.Worker/JobRunner.cs` lines 66-107). `velnor-runner` runs this
+  repository's jobs on github.com (`docs/goals.md`), so those endpoints are
+  refused by design.
+- `TimelineRecord` carries the record state and the three issue counters, not
+  `Issues` or `Variables`. Upstream sends those two collections only through
+  the Distributed Task job server, and skips that update for a run-service job
+  (`src/Runner.Worker/JobRunner.cs` lines 66-85 start the queue with
+  `resultsServiceOnly: true`; `src/Runner.Common/JobServerQueue.cs` lines
+  696-698 guard `UpdateTimelineRecordsAsync` with `!_resultsServiceOnly`). A
+  run-service job reports annotations, with `rawDetails`, and outputs in
+  `completejob` (`src/Runner.Worker/JobRunner.cs` line 332).
+- `AgentJobRequestMessage.variables` is a case-sensitive map. Upstream's wire
+  message also deserializes into a plain dictionary; the case-insensitive
+  store is `Runner.Worker.Variables`, a `ConcurrentDictionary` with
+  `StringComparer.OrdinalIgnoreCase` (`src/Runner.Worker/Variables.cs` line
+  17). The step executor that builds that store owns the case folding.
+- Step-update and blob uploads to the results service make 3 attempts with a
+  200 ms step between them. This is Velnor's policy; it is not copied from
+  upstream.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:

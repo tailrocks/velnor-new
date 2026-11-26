@@ -1069,6 +1069,173 @@
           ]
         },
         {
+          "name": "velnor-runner",
+          "version": "0.1.0",
+          "manifest": "crates/velnor-runner/Cargo.toml",
+          "dependencies": [
+            {
+              "name": "anyhow",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "base64",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "clap",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "derive",
+                "string"
+              ]
+            },
+            {
+              "name": "futures-util",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "sink",
+                "std"
+              ]
+            },
+            {
+              "name": "reqwest",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "native-tls",
+                "system-proxy"
+              ]
+            },
+            {
+              "name": "ring",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "alloc"
+              ]
+            },
+            {
+              "name": "serde",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "derive"
+              ]
+            },
+            {
+              "name": "serde_json",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "serde_path_to_error",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "thiserror",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "time",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "formatting"
+              ]
+            },
+            {
+              "name": "tokio",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "rt-multi-thread",
+                "macros",
+                "time",
+                "io-util",
+                "sync",
+                "net",
+                "process",
+                "fs"
+              ]
+            },
+            {
+              "name": "tokio-tungstenite",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "native-tls"
+              ]
+            },
+            {
+              "name": "url",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "uuid",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "v4"
+              ]
+            },
+            {
+              "name": "tokio",
+              "kind": "dev",
+              "manifest": null,
+              "features": [
+                "rt-multi-thread",
+                "macros",
+                "time",
+                "io-util",
+                "sync",
+                "net",
+                "process",
+                "fs",
+                "test-util"
+              ]
+            }
+          ],
+          "targets": [
+            {
+              "name": "velnor_runner",
+              "kinds": [
+                "lib"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner/src/lib.rs",
+              "requires_features": false
+            },
+            {
+              "name": "velnor-runner",
+              "kinds": [
+                "bin"
+              ],
+              "tests": false,
+              "doctest": false,
+              "source": "crates/velnor-runner/src/main.rs",
+              "requires_features": false
+            },
+            {
+              "name": "it",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner/tests/it/main.rs",
+              "requires_features": true
+            }
+          ]
+        },
+        {
           "name": "velnor-runner-attestation",
           "version": "0.1.0",
           "manifest": "crates/velnor-runner-attestation/Cargo.toml",
@@ -2053,7 +2220,7 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "fcd357b27346204436fc3fa5df3b07762849947dc17bdc3edb88137ce1d88ae3",
+    "Cargo.toml": "2bf0bce74ffffa67cbf08eaea4b55769f939f6d58200dcb22b320988fe620e75",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "e20fd11899c56a7977fe6b5561fd962f80dca5177971f73d02fce5643643b28a",
@@ -2070,9 +2237,10 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
+    "crates/velnor-runner/Cargo.toml": "545f2842b2ceccf9e12d7549cf840c24989225b8434d8fcd9097cc818ec52862",
     "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "2ab12b451234ffeecc51a0ffa99adb1f7d3c3c0e0ff4dca17dea1994e82d8164"
+  "layout": "0877d604dec30bb9bff9d23be54cbd49d7df1b76ca96d8b143d4037ebc3a6edd"
 }

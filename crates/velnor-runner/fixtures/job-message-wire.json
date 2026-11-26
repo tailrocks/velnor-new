@@ -1,0 +1,140 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "Plan": {
+    "ScopeIdentifier": "00000000-0000-0000-0000-0000000000a1",
+    "PlanType": "actions",
+    "Version": 12,
+    "PlanId": "00000000-0000-0000-0000-000000000002"
+  },
+  "Timeline": {
+    "Id": "00000000-0000-0000-0000-000000000003",
+    "ChangeId": 1
+  },
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "test",
+  "JobName": "test",
+  "RequestId": 99,
+  "Variables": {
+    "system.github.token": {
+      "Value": "token-value",
+      "IsSecret": true
+    }
+  },
+  "Mask": [
+    {
+      "Type": "regex",
+      "Value": "token-value"
+    }
+  ],
+  "Resources": {
+    "Containers": [
+      {
+        "Alias": "build",
+        "Properties": {
+          "image": "ghcr.io/tailrocks/build",
+          "options": "--label velnor-redaction-marker-registry"
+        }
+      }
+    ],
+    "Endpoints": [
+      {
+        "Name": "SystemVssConnection",
+        "Url": "https://pipelines.actions.githubusercontent.com/abc",
+        "Authorization": {
+          "Scheme": "OAuth",
+          "Parameters": {
+            "AccessToken": "system-token"
+          }
+        },
+        "Data": {
+          "ResultsServiceUrl": "https://results-receiver.actions.githubusercontent.com/"
+        }
+      }
+    ]
+  },
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000010",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Run echo hello"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "Key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "Value": {
+              "type": 0,
+              "lit": "echo hello"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "ContextData": {
+    "github": {
+      "t": 2,
+      "d": [
+        {
+          "k": "repository",
+          "v": "tailrocks/velnor-new"
+        },
+        {
+          "k": "run_attempt",
+          "v": 1
+        },
+        {
+          "k": "token",
+          "v": "github-context-token"
+        },
+        {
+          "k": "event",
+          "v": {
+            "t": 2,
+            "d": [
+              {
+                "k": "forced",
+                "v": false
+              },
+              {
+                "k": "ratio",
+                "v": 0.5
+              },
+              {
+                "k": "labels",
+                "v": {
+                  "t": 1,
+                  "a": [
+                    "bug",
+                    true,
+                    3
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "secrets": {
+      "t": 2,
+      "d": [
+        {
+          "k": "DEPLOY_KEY",
+          "v": "context-secret-value"
+        }
+      ]
+    }
+  }
+}
