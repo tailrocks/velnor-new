@@ -96,6 +96,9 @@ where
         } => (*config, config_sha256),
         ConfigFact::Invalid => return Readiness::Degraded,
     };
+    if config.host.launch_mode == crate::config::LaunchMode::RustRunner {
+        return crate::rust_runner::heartbeat_readiness(state, &config_sha256);
+    }
     let mut has_credential = has_credential;
     let mut missing_credential = false;
     for connection in config.connections() {

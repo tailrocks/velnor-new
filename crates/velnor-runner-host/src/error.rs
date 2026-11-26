@@ -57,9 +57,6 @@ pub enum RustRunnerFailure {
     #[error("velnor-runner could not be waited for or stopped")]
     Wait,
 
-    #[error("the host controller cannot start runners in rust-runner launch mode yet")]
-    ControllerUnavailable,
-
     #[error("the jit directory of the host store is readable by other users")]
     JitDirectoryAccessible,
 
@@ -71,6 +68,21 @@ pub enum RustRunnerFailure {
 
     #[error("runner processes of the velnor machine survived a kill")]
     ProcessesSurvive,
+
+    #[error("GitHub refused to remove a runner of the scale set")]
+    RunnerRemovalRefused,
+
+    #[error("a runner is still registered after its removal")]
+    RunnerStillRegistered,
+
+    #[error("the job directory is still on the host store after its removal")]
+    JobFilesLeft,
+
+    #[error("this command is not available in rust-runner launch mode yet")]
+    CommandUnavailable,
+
+    #[error("a blocking task of the rust-runner controller did not finish")]
+    TaskFailed,
 }
 
 const ERROR_DETAIL_BYTES: u8 = 64;

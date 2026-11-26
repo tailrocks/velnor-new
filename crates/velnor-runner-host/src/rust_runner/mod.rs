@@ -4,16 +4,19 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod controller;
 mod job;
 mod machine;
 mod paths;
 mod processes;
 mod sweep;
 
+pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
 
+pub(crate) use controller::{heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";

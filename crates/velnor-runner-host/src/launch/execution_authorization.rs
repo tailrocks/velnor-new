@@ -9,7 +9,10 @@ mod wire;
 pub(crate) use request::ExecutionSourceRequest;
 
 pub use source::verify_persisted_execution_source_role;
-pub(crate) use source::{AuthorizedExecutionSource, PersistedExecutionSource};
+pub(crate) use source::{
+    AuthorizedExecutionSource, PersistedExecutionSource, PullClaim, SourceClaim,
+    VerifiedWorkflowIdentity, verify_source_claim,
+};
 pub(crate) use verifier::verify_execution_source;
 pub(crate) use wire::{
     ExecutionProofChallenge, ExecutionProofChallengeFields, PersistedExecutionDecision,

@@ -174,6 +174,23 @@ Pinned sources: [actions/scaleset `a7e9c70`](https://github.com/actions/scaleset
 
 If the real broker never returns an undeleted message once the cursor is reset, the redelivery model is wrong: record the polls and stop; never acknowledge a deferred offer to work around it.
 
+### Source claim built from GitHub at launch
+
+The rust-runner host controller verifies a job before it acquires it, from GitHub only. It builds the same source claim that the official path receives from the runner's hook (`SourceClaim`), and runs the shared checks on it: the merge commit's parents equal the pull request's base and head, and the root workflow and every referenced workflow match the approved job-authority policy.
+
+The claim takes its event ref and tested SHA from the values GitHub documents for each event as `GITHUB_REF` and `GITHUB_SHA` in [events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows):
+
+| Event | `GITHUB_REF` | `GITHUB_SHA` | Where the host reads it |
+|---|---|---|---|
+| [`push`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push) | `refs/heads/<branch>` or `refs/tags/<tag>` that was pushed | the pushed commit | ref from the job workflow ref of the offer, which the run's `head_branch` must equal; SHA from the run's `head_sha` |
+| [`pull_request`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) | `refs/pull/<number>/merge` | the last merge commit of that ref | number from the job workflow ref of the offer; SHA from `merge_commit_sha` of `GET /repos/{owner}/{repo}/pulls/{number}`; base and head from the same response |
+| [`workflow_dispatch`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch) | the branch or tag that received the dispatch | the last commit on that ref | as for `push` |
+| [`schedule`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) | the default branch | the last commit on the default branch | as for `push` |
+| [`merge_group`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group) | the merge group ref | the merge group SHA | as for `push` |
+| [`release`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release) | `refs/tags/<tag>` of the release | the last commit of the tagged release | as for `push` |
+
+`GITHUB_WORKFLOW_REF` is the repository, the run's root workflow path and the event ref, and `GITHUB_WORKFLOW_SHA` equals the tested SHA, as in the official path. The host takes the root path from `GET /repos/{owner}/{repo}/actions/runs/{run}/attempts/{attempt}`. An offer whose job workflow ref is not a branch or tag ref of the event (a commit-pinned reusable workflow, for instance) cannot be reduced to an event ref this way and is refused, which fails closed.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:
