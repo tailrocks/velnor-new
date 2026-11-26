@@ -175,7 +175,7 @@ impl Job<'_> {
                 evaluate_condition(step.condition.as_deref().unwrap_or_default(), &env)
             }
         };
-        let condition_failed = condition.is_err();
+        let condition_failed = condition.is_err() || step_env.is_err();
         let mut outputs = Vec::new();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);

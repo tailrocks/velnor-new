@@ -251,7 +251,6 @@ fn parse(contents: &str) -> (Vec<(String, String)>, Option<ExecError>) {
 }
 
 fn parse_into(contents: &str, commands: &mut Vec<(String, String)>) -> Result<(), ExecError> {
-    let contents = contents.strip_prefix('\u{feff}').unwrap_or(contents);
     let mut index = 0;
     while let Some((line, _)) = read_line(contents, &mut index) {
         if line.is_empty() {

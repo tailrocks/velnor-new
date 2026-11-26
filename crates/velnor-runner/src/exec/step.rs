@@ -19,6 +19,7 @@ use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
+use super::timeout::{Timeout, expired};
 use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
@@ -36,7 +37,7 @@ pub(super) struct ProcessSpec<'a> {
 }
 
 pub(super) struct Limits<'a> {
-    pub(super) minutes: Option<f64>,
+    pub(super) timeout: Option<Timeout>,
     pub(super) cancel: Option<&'a JobCancel>,
     pub(super) groups: &'a Groups,
 }
@@ -207,12 +208,8 @@ where
     }
 }
 
-pub(super) fn deadline(minutes: Option<f64>) -> Option<Duration> {
-    minutes.and_then(|minutes| Duration::try_from_secs_f64(minutes * 60.0).ok())
-}
-
-pub(super) fn report_timeout(out: &mut Output<'_>, minutes: Option<f64>) {
-    let minutes = minutes.unwrap_or_default();
+pub(super) fn report_timeout(out: &mut Output<'_>, timeout: Option<Timeout>) {
+    let minutes = timeout.map_or(0.0, |timeout| timeout.minutes);
     let text = format!("step {} timed out after {minutes} minutes", out.number);
     out.message(&text);
     out.annotate(AnnotationLevel::Error, text);
@@ -258,12 +255,6 @@ async fn drive(
         )));
     }
     drop(sender);
-    let timer = async {
-        match deadline(limits.minutes) {
-            Some(duration) => tokio::time::sleep(duration).await,
-            None => std::future::pending().await,
-        }
-    };
     let cancelled = async {
         match limits.cancel {
             Some(cancel) => cancel.cancelled().await,
@@ -272,7 +263,7 @@ async fn drive(
     };
     let stop = async {
         tokio::select! {
-            () = timer => Ending::TimedOut,
+            () = expired(limits.timeout) => Ending::TimedOut,
             () = cancelled => Ending::Cancelled,
         }
     };
@@ -317,7 +308,7 @@ pub(super) async fn run(
             StepResult::Failed
         }
         Ending::TimedOut => {
-            report_timeout(out, limits.minutes);
+            report_timeout(out, limits.timeout);
             StepResult::Failed
         }
         Ending::Cancelled => StepResult::Cancelled,

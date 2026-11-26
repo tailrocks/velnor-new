@@ -22,6 +22,7 @@ mod shell;
 mod sink;
 mod step;
 mod step_info;
+mod timeout;
 mod token;
 
 use std::collections::BTreeMap;
