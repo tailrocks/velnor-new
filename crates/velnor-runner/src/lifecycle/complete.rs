@@ -1,0 +1,131 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/runner.rs
+
+use std::collections::BTreeMap;
+
+use super::LifecycleError;
+use super::acquire::JobConnection;
+use super::report::ReportSummary;
+use crate::exec::{Annotation, AnnotationLevel, JobResult, JobRun, StepRecord, StepResult};
+use crate::job_message::AgentJobRequestMessage;
+use crate::protocol::{
+    RunServiceAnnotation, RunServiceAnnotationLevel, RunServiceCompleteJob, RunServiceStepResult,
+    RunServiceVariableValue, TaskResult, TimelineRecordState,
+};
+
+fn task_result(result: JobResult) -> TaskResult {
+    match result {
+        JobResult::Succeeded => TaskResult::Succeeded,
+        JobResult::Failed => TaskResult::Failed,
+        JobResult::Cancelled => TaskResult::Canceled,
+    }
+}
+
+fn step_conclusion(result: StepResult) -> TaskResult {
+    match result {
+        StepResult::Succeeded => TaskResult::Succeeded,
+        StepResult::Failed => TaskResult::Failed,
+        StepResult::Skipped => TaskResult::Skipped,
+        StepResult::Cancelled => TaskResult::Canceled,
+    }
+}
+
+fn annotation(annotation: &Annotation) -> RunServiceAnnotation {
+    RunServiceAnnotation {
+        level: match annotation.level {
+            AnnotationLevel::Notice => RunServiceAnnotationLevel::Notice,
+            AnnotationLevel::Warning => RunServiceAnnotationLevel::Warning,
+            AnnotationLevel::Error => RunServiceAnnotationLevel::Failure,
+        },
+        message: annotation.message.clone(),
+        title: annotation.title.clone(),
+        path: annotation.file.clone(),
+        start_line: annotation.line.map(i64::from),
+        end_line: annotation.end_line.map(i64::from),
+        start_column: annotation.column.map(i64::from),
+        end_column: annotation.end_column.map(i64::from),
+        step_number: annotation.step.map(i64::from),
+        is_infrastructure_issue: false,
+    }
+}
+
+fn step_result(
+    message: &AgentJobRequestMessage,
+    run: &JobRun,
+    record: &StepRecord,
+    report: &ReportSummary,
+) -> RunServiceStepResult {
+    let times = report.times.get(&record.number);
+    RunServiceStepResult {
+        external_id: usize::try_from(record.number)
+            .ok()
+            .and_then(|number| number.checked_sub(1))
+            .and_then(|index| message.steps.get(index))
+            .and_then(|step| step.id.clone()),
+        number: Some(i64::from(record.number)),
+        name: record.name.clone(),
+        status: TimelineRecordState::Completed,
+        conclusion: step_conclusion(record.conclusion),
+        started_at: times.and_then(|times| times.started_at.clone()),
+        completed_at: times.and_then(|times| times.completed_at.clone()),
+        annotations: run
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.step == Some(record.number))
+            .map(annotation)
+            .collect(),
+    }
+}
+
+pub(super) fn build(
+    message: &AgentJobRequestMessage,
+    run: &JobRun,
+    report: &ReportSummary,
+) -> RunServiceCompleteJob {
+    let outputs: BTreeMap<String, RunServiceVariableValue> = run
+        .outputs
+        .iter()
+        .map(|(name, value)| {
+            (
+                name.clone(),
+                RunServiceVariableValue {
+                    value: value.clone(),
+                    is_secret: false,
+                },
+            )
+        })
+        .collect();
+    RunServiceCompleteJob {
+        plan_id: message.plan.plan_id.clone(),
+        job_id: message.job_id.clone(),
+        conclusion: task_result(run.result),
+        outputs,
+        step_results: run
+            .steps
+            .iter()
+            .map(|record| step_result(message, run, record, report))
+            .collect(),
+        annotations: run
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.step.is_none())
+            .map(annotation)
+            .collect(),
+        telemetry: Vec::new(),
+        environment_url: None,
+        billing_owner_id: message.billing_owner_id.clone(),
+        infrastructure_failure_category: None,
+    }
+}
+
+pub(super) async fn send(
+    connection: &JobConnection,
+    completion: &RunServiceCompleteJob,
+) -> Result<(), LifecycleError> {
+    connection
+        .run_service
+        .complete_job(&connection.run_service_url, completion)
+        .await
+        .map_err(LifecycleError::Complete)
+}

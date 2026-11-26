@@ -51,6 +51,7 @@ velnor-model = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+rsa = { workspace = true }
 serde-saphyr = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

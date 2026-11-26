@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use anyhow::{Context, Error, Result, anyhow};
 use serde_json::Value;
@@ -14,6 +15,8 @@ use tokio::task::JoinHandle;
 use velnor_runner::protocol::{
     GitHubApiError, RetryDelays, RunServiceClient, RunServiceCompleteJob, TaskResult,
 };
+
+pub(crate) mod mock_github;
 
 pub(crate) const TOKEN: &str = "test-token";
 pub(crate) const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
@@ -51,6 +54,10 @@ impl RecordedRequest {
             .collect()
     }
 
+    pub(crate) fn text(&self) -> String {
+        String::from_utf8_lossy(&self.body).into_owned()
+    }
+
     pub(crate) fn json(&self) -> Result<Value> {
         serde_json::from_slice(&self.body)
             .with_context(|| format!("{} {} body is JSON", self.method, self.path))
@@ -64,6 +71,7 @@ pub(crate) struct Reply {
     stall: bool,
     hangup: bool,
     location: Option<String>,
+    delay: Duration,
 }
 
 impl Reply {
@@ -79,6 +87,7 @@ impl Reply {
             stall: false,
             hangup: false,
             location: None,
+            delay: Duration::ZERO,
         }
     }
 
@@ -103,6 +112,11 @@ impl Reply {
         }
     }
 
+    pub(crate) fn after(mut self, delay: Duration) -> Self {
+        self.delay = delay;
+        self
+    }
+
     pub(crate) fn json(status: u16, body: &Value) -> Self {
         Self {
             status,
@@ -111,6 +125,7 @@ impl Reply {
             stall: false,
             hangup: false,
             location: None,
+            delay: Duration::ZERO,
         }
     }
 }
@@ -241,6 +256,7 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         .location
         .as_ref()
         .map_or_else(String::new, |location| format!("location: {location}\r\n"));
+    tokio::time::sleep(reply.delay).await;
     let head = format!(
         "HTTP/1.1 {} Test\r\ncontent-type: {}\r\n{location}content-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,

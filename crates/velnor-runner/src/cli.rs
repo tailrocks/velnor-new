@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
@@ -14,10 +15,14 @@ use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 use crate::store::store_root;
+use crate::lifecycle::{RunJitOptions, run_jit};
 
 const USAGE_ERROR: u8 = 2;
 const FORCED_EXIT: u8 = 130;
 const JOB_MESSAGE_TYPE: &str = "PipelineAgentJobRequest";
+const LIFECYCLE_ERROR: u8 = 1;
+const RENEW_INTERVAL: Duration = Duration::from_secs(60);
+const CANCEL_POLL_ERROR_DELAY: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Parser)]
 #[command(
@@ -37,6 +42,25 @@ pub enum Command {
         after_help = "A SIGTERM, SIGINT or SIGHUP cancels the job; a second signal ends the runner.\n\nExit codes:\n  0    the job succeeded\n  1    the job failed or was cancelled\n  2    usage error or an unreadable job message\n  130  a second signal ended the runner"
     )]
     Exec(ExecArgs),
+    #[command(about = "Wait for one job from GitHub with a JIT configuration, run it and exit")]
+    Run(RunArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    #[arg(
+        long,
+        value_name = "VALUE",
+        help = "The encoded_jit_config string, or @FILE to read it from a file"
+    )]
+    pub jit: String,
+    #[arg(
+        long,
+        value_name = "DIR",
+        default_value = "_work",
+        help = "Directory for the job workspace and temp files"
+    )]
+    pub work_dir: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -171,6 +195,36 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     }
 }
 
+fn build_adapters() -> AdapterRegistry {
+    AdapterRegistry::empty()
+}
+
+fn jit_value(raw: &str) -> Result<String> {
+    match raw.strip_prefix('@') {
+        Some(path) => std::fs::read_to_string(path)
+            .map(|text| text.trim().to_owned())
+            .with_context(|| format!("read {path}")),
+        None => Ok(raw.to_owned()),
+    }
+}
+
+async fn run_command(args: &RunArgs) -> Result<ExitCode> {
+    let options = RunJitOptions {
+        jit: jit_value(&args.jit)?,
+        work_dir: args.work_dir.clone(),
+        renew_interval: RENEW_INTERVAL,
+        cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
+        adapters: build_adapters(),
+    };
+    Ok(match run_jit(options).await {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::from(LIFECYCLE_ERROR)
+        }
+    })
+}
+
 fn run(cli: &Cli) -> Result<ExitCode> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -179,6 +233,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
         .context("start the async runtime")?;
     let code = match &cli.command {
         Command::Exec(args) => runtime.block_on(exec(args)),
+        Command::Run(args) => runtime.block_on(run_command(args)),
     };
     runtime.shutdown_background();
     code

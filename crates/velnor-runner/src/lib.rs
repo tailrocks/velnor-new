@@ -8,6 +8,7 @@ pub mod exec;
 pub mod expr;
 pub mod job_message;
 mod native;
+pub mod lifecycle;
 pub mod protocol;
 pub mod runner_json;
 pub mod secret;

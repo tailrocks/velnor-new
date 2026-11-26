@@ -122,6 +122,7 @@ mod parity;
 #[path = "exec_process.rs"]
 mod process;
 mod protocol_acquire_renew;
+mod lifecycle;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
@@ -139,6 +140,7 @@ mod shells;
 mod stopped;
 #[path = "exec_strict.rs"]
 mod strict;
+mod run_cli;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;
