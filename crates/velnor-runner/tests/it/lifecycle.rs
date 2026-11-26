@@ -11,7 +11,7 @@ use velnor_runner::lifecycle::{LifecycleOutcome, RunJitOptions, run_jit};
 use super::exec_support::{Scratch, fixture_path};
 use super::support::mock_github::{
     Behavior, JOB_ID, JOB_LOG_BLOB, JOB_TOKEN, MockGithub, OAUTH_TOKEN, PLAN_ID,
-    RESULTS_STEPS_UPDATE, Renew, SESSION_ID, STEP_LOG_BLOB,
+    RESULTS_STEPS_UPDATE, Renew, SESSION_ID, STEP_LOG_BLOB, SUMMARY_BLOB,
 };
 
 const RUN_BUDGET: Duration = Duration::from_secs(60);
@@ -100,6 +100,19 @@ async fn lifecycle_run_acquires_executes_and_completes_job() -> Result<()> {
     );
     let delete = mock.server.only_request("DELETE", "/broker/session")?;
     assert_eq!(delete.query("sessionId"), Some(SESSION_ID));
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_uploads_masked_step_summary() -> Result<()> {
+    let mock = MockGithub::start(fixture_job("step-summary", None)?, Behavior::default()).await?;
+
+    run(&mock, Duration::from_millis(200)).await?;
+
+    let summary = mock.requests_to("PUT", SUMMARY_BLOB)?;
+    assert_eq!(summary.len(), 1);
+    assert!(summary[0].text().contains("secret is ***"));
+    assert!(!summary[0].text().contains("s3cr3t-value"));
     Ok(())
 }
 
