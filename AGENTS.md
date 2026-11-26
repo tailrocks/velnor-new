@@ -33,10 +33,21 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
 - Quality: enforced by CI and compiler gates; see `docs/proposed/ci-maintenance/rust-quality-contract.md`.
 - Verification gates: exact commands, purposes, and usage: `docs/implemented/ci-maintenance/repo-verification.md`.
-- Every Rust build and test goes through mise and mbx. In a fresh checkout run `export MISE_TRUSTED_CONFIG_PATHS=$PWD; mise install`, then check that `type -a cargo | head -1` shows a path under `mise/command-wrappers/bin/`. The four allowed exceptions are in [`docs/implemented/ci-maintenance/repo-verification.md`](docs/implemented/ci-maintenance/repo-verification.md#everything-goes-through-mbx).
+- Every Rust command goes through mise and mbx: build, check, clippy, doc, `cargo nextest` and `cargo run`. In a fresh checkout or worktree run `export MISE_TRUSTED_CONFIG_PATHS=$PWD; mise install`, then check that `type -a cargo | head -1` shows a path under `mise/command-wrappers/bin/` and that `mbx doctor` passes. Never set `CARGO_TARGET_DIR` or call a toolchain's cargo directly; parallel worktrees share compiled work only through mbx. After a slow build, run `mbx analyze` and fix the cause. The four allowed exceptions are in [`docs/implemented/ci-maintenance/repo-verification.md`](docs/implemented/ci-maintenance/repo-verification.md#everything-goes-through-mbx).
 - Read these only when you change the old code that is left:
   - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml`.
   - Cache: read `docs/proposed/cache-decisions.md` and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
+
+### Speed initiative
+
+- The initiative [#2876](https://github.com/tailrocks/velnor-new/issues/2876) in the project Velnor is the current priority: the lowest PR-to-main time, dogfooded on `velnor-runner` on the owner's Mac. Its tasks take precedence over the roadmap under #574 and over `docs/research/velnor-runner-2026-11/delivery-plan.md`.
+- Work fully autonomously. Never ask the owner and never wait for them; decide from evidence. For a hard design decision, consult a subagent on Opus 5.5 at high effort, then decide and record the decision on the issue. Owner tasks of this initiative are done by the agent. The owner approved the `docs/goals.md` change of its task G01.
+- Models: never Fable. Haiku 5.5 for mechanical work, Sonnet 5.5 for building, Opus 5.5 only for reviews and hard decisions. Effort is low or medium by default, high for reviews and the runner protocol, never xhigh or max. Follow each task's routing fields.
+- Run with heavy parallelism: one git worktree per task, builders and reviewers in parallel.
+- Build and verify locally on the Mac before every push: the task's Done when commands and the full gate. CI confirms a result; it never discovers one.
+- Use stacked pull requests. Start a task as soon as its blockers have open pull requests: branch from the blocker's branch and run `gh pr create --base <blocker branch>`; after the blocker merges, run `git rebase --onto origin/main <blocker branch>` and `gh pr edit <number> --base main`. Never wait idle.
+- `velnor-runner` takes only the best of tailrocks/velnor-legacy. Never copy outdated, deprecated or compatibility-only code; port from actions/runner only what GitHub's service requires today. Performance comes before compatibility.
+- File every friction with taskrock or Velnor as a Bug with status Triage in the project Velnor, then continue.
 
 ### Review guidelines
 
