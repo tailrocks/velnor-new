@@ -42,6 +42,38 @@ fn find_char(chars: &[char], from: usize, needle: char) -> Option<usize> {
         .map(|position| position + from)
 }
 
+#[derive(Clone, Copy)]
+enum Scan {
+    Unknown,
+    Absent,
+    At(usize),
+}
+
+struct NextChar {
+    needle: char,
+    scan: Scan,
+}
+
+impl NextChar {
+    fn new(needle: char) -> Self {
+        Self {
+            needle,
+            scan: Scan::Unknown,
+        }
+    }
+
+    fn from(&mut self, chars: &[char], index: usize) -> Option<usize> {
+        match self.scan {
+            Scan::Absent => return None,
+            Scan::At(position) if position >= index => return Some(position),
+            Scan::At(_) | Scan::Unknown => {}
+        }
+        let found = find_char(chars, index, self.needle);
+        self.scan = found.map_or(Scan::Absent, Scan::At);
+        found
+    }
+}
+
 fn read_placeholder(chars: &[char], lbrace: usize, rbrace: Option<usize>) -> Option<Placeholder> {
     if rbrace.is_none_or(|rbrace| rbrace <= lbrace + 1) {
         return None;
@@ -101,10 +133,12 @@ fn parse_template(format: &str, argument_count: usize) -> Result<Vec<Segment>, E
     let mut segments = Vec::new();
     let mut index = 0usize;
     let invalid = || ExprError::evaluation(format!("Invalid format string: {format}"));
+    let mut opening = NextChar::new('{');
+    let mut closing = NextChar::new('}');
 
     while index < chars.len() {
-        let lbrace = find_char(&chars, index, '{');
-        let rbrace = find_char(&chars, index, '}');
+        let lbrace = opening.from(&chars, index);
+        let rbrace = closing.from(&chars, index);
 
         match (lbrace, rbrace) {
             (Some(lbrace), rbrace) if rbrace.is_none_or(|rbrace| rbrace > lbrace) => {

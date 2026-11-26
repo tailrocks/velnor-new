@@ -187,3 +187,21 @@ fn expr_to_json_escapes_line_separators_like_json_net() -> Result<()> {
     assert!(text("toJSON(env)", &env)?.contains(r#""k\u2028": 1"#));
     Ok(())
 }
+
+#[test]
+fn expr_format_scans_long_format_strings_in_linear_time() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        &format!(
+            r#"{{"OPEN":"{}","CLOSE":"{}"}}"#,
+            "{{".repeat(300_000),
+            "}}".repeat(300_000)
+        ),
+    )])?;
+
+    let started = Instant::now();
+    assert_eq!(text("format(env.OPEN)", &env)?.len(), 300_000);
+    assert_eq!(text("format(env.CLOSE)", &env)?.len(), 300_000);
+    assert!(started.elapsed() < Duration::from_secs(10));
+    Ok(())
+}

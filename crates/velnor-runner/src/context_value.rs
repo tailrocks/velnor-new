@@ -329,9 +329,18 @@ pub fn ordinal_ignore_case_eq(left: &str, right: &str) -> bool {
 
 #[must_use]
 pub fn ordinal_ignore_case_cmp(left: &str, right: &str) -> Ordering {
-    left.chars()
+    folded_utf16_units(left).cmp(folded_utf16_units(right))
+}
+
+fn folded_utf16_units(value: &str) -> impl Iterator<Item = u16> + '_ {
+    value
+        .chars()
         .map(simple_ordinal_uppercase)
-        .cmp(right.chars().map(simple_ordinal_uppercase))
+        .flat_map(|character| {
+            let mut units = [0_u16; 2];
+            let length = character.encode_utf16(&mut units).len();
+            units.into_iter().take(length)
+        })
 }
 
 pub(crate) fn ordinal_ignore_case_fold(value: &str) -> String {
