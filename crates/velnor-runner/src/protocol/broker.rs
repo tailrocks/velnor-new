@@ -9,7 +9,8 @@ use std::time::Duration;
 use url::Url;
 
 use super::error::{
-    BrokerErrorCategory, github_api_error, github_api_error_categorized, is_retriable_status,
+    BrokerErrorCategory, broker_error_kind, github_api_error, github_api_error_categorized,
+    github_api_error_with, is_retriable_status,
 };
 use super::http::{
     RUNNER_VERSION, github_json_request, runner_architecture, runner_os, slash_url,
@@ -91,10 +92,11 @@ impl BrokerClient {
         );
         let (http_status, text) = self.send(Method::GET, &url, None, POLL_TIMEOUT).await?;
         if !(200..300).contains(&http_status) {
-            return Err(github_api_error(
+            return Err(broker_api_error(
                 "get broker message",
                 http_status,
                 text.trim(),
+                None,
             ));
         }
         if http_status == 204 || text.trim().is_empty() {
@@ -124,11 +126,11 @@ impl BrokerClient {
             .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
             .await?;
         if !(200..300).contains(&http_status) {
-            return Err(github_api_error_categorized(
+            return Err(broker_api_error(
                 "acknowledge broker runner request",
                 http_status,
                 &text,
-                session_error_category(http_status),
+                Some(session_error_category(http_status)),
             ));
         }
         Ok(())
@@ -156,6 +158,15 @@ impl BrokerClient {
         )
         .await
     }
+}
+
+fn broker_api_error(
+    action: &str,
+    status: u16,
+    body: &str,
+    category: Option<BrokerErrorCategory>,
+) -> anyhow::Error {
+    github_api_error_with(action, status, body, category, broker_error_kind(body))
 }
 
 fn session_error_category(status: u16) -> BrokerErrorCategory {

@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::context_value::ContextValue;
-use velnor_runner::job_message::{AgentJobRequestMessage, MaskType, template_token_context_value};
+use velnor_runner::job_message::{AgentJobRequestMessage, MaskKind, template_token_context_value};
 
 const FIXTURE: &str = include_str!("../../fixtures/job-message-wire.json");
 
@@ -112,37 +112,75 @@ fn context_data_rejects_unknown_integer_type() {
     assert!(materialize_one(&json!({"t": 9})).is_err());
 }
 
+fn unsupported(spelling: &str) -> MaskKind {
+    MaskKind::Unsupported(spelling.to_owned())
+}
+
 #[test]
-fn mask_hints_accept_numeric_and_named_types() -> Result<()> {
+fn mask_hints_accept_integers_numeric_strings_and_names() -> Result<()> {
     let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
     wire["Mask"] = json!([
         {"Type": 1, "Value": "first"},
         {"type": 2, "value": "second"},
         {"Type": "Variable", "Value": "third"},
         {"Type": "regex", "Value": "fourth"},
+        {"Type": "1", "Value": "fifth"},
+        {"Type": " 2 ", "Value": "sixth"},
     ]);
 
     let message = AgentJobRequestMessage::from_value(wire)?;
 
-    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind).collect();
+    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind.clone()).collect();
     assert_eq!(
         kinds,
         [
-            Some(MaskType::Variable),
-            Some(MaskType::Regex),
-            Some(MaskType::Variable),
-            Some(MaskType::Regex),
+            MaskKind::Variable,
+            MaskKind::Regex,
+            MaskKind::Variable,
+            MaskKind::Regex,
+            MaskKind::Variable,
+            MaskKind::Regex,
         ]
     );
     Ok(())
 }
 
 #[test]
-fn mask_hint_with_unknown_type_is_rejected() -> Result<()> {
+fn mask_hints_with_unsupported_types_are_kept_for_the_worker_to_skip() -> Result<()> {
     let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
-    wire["Mask"] = json!([{"Type": 3, "Value": "secret"}]);
+    wire["Mask"] = json!([
+        {"Type": 3, "Value": "integer"},
+        {"Type": 0, "Value": "zero"},
+        {"Type": "7", "Value": "numeric string"},
+        {"Type": "Bogus", "Value": "name"},
+        {"Type": null, "Value": "null"},
+        {"Value": "absent"},
+        {"Type": 1, "Value": "kept"},
+    ]);
 
-    assert!(AgentJobRequestMessage::from_value(wire).is_err());
+    let message = AgentJobRequestMessage::from_value(wire)?;
+
+    let kinds: Vec<_> = message.mask.iter().map(|hint| hint.kind.clone()).collect();
+    assert_eq!(
+        kinds,
+        [
+            unsupported("3"),
+            unsupported("0"),
+            unsupported("7"),
+            unsupported("Bogus"),
+            unsupported("null"),
+            unsupported("0"),
+            MaskKind::Variable,
+        ]
+    );
+    assert_eq!(
+        message.mask[6]
+            .value
+            .as_ref()
+            .map(|value| value.expose().as_str()),
+        Some("kept")
+    );
+    assert_eq!(message.steps.len(), 1);
     Ok(())
 }
 

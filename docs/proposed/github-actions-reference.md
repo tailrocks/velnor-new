@@ -65,6 +65,38 @@ after 24 hours has a JIT configuration nobody holds, so it cannot come online
 or run a job. GitHub removes offline ephemeral runners itself; this residual is
 accepted.
 
+### Job protocol client (`velnor-runner`)
+
+`crates/velnor-runner` follows `actions/runner` v2.338.2. Each row names the
+upstream mechanism the code copies.
+
+| Behavior | Upstream source |
+| --- | --- |
+| Every run-service call makes at most 5 attempts with a random 5 to 15 second back-off. Acquire does not retry a typed 404, 409 or 422. Completion does not retry a 401 or a typed 404. Renew does not retry a typed 404. Everything else is retried, including a 400 and a dropped connection. | `src/Runner.Common/RunServer.cs` lines 63-102, `src/Runner.Common/RunnerService.cs` lines 71-110 |
+| A run-service error is typed only when its body has `source` equal to `actions-run-service`. A completion that gets a typed 404 reports that the service already observed the job as terminal. A 404 with another or no `source` is an ordinary retried error. | `src/Sdk/RSWebApi/RunServiceHttpClient.cs` lines 100-112, 165-172, 212-219, 237-256 |
+| A broker error is typed only when its body has `source` equal to `actions-broker-listener`. The kinds are `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned`, `RunnerSessionInvalid` and `AcknowledgeJobNotFound`. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
+| Session creation maps 403 to access denied and 409 to a session conflict, and does not retry. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 157-167 |
+| A mask hint with a type other than variable or regex is logged and skipped. The job still runs. Integer and numeric-string types are accepted. | `src/Runner.Worker/Worker.cs` lines 176-190 |
+
+Deliberate deviations:
+
+- The crate has no logger. A mask hint with an unsupported type parses to
+  `MaskKind::Unsupported` and carries the spelling from the wire. The worker
+  that consumes the job message writes the "Unsupported mask type" line and
+  skips the hint.
+- A mask `type` that is a float, boolean, object or null, or a missing `type`,
+  parses to `MaskKind::Unsupported`. Upstream treats a missing `type` as the
+  enum default (0, unsupported). The crate has not verified what upstream
+  does with the other token kinds.
+- A completion treats the first HTTP 401 as fatal. Upstream's HTTP handler
+  first invalidates the token and repeats the request with a fresh one, and
+  raises the unauthorized exception only when that fails
+  (`src/Sdk/Common/Common/RawHttpMessageHandler.cs` lines 175-217). The crate
+  has no token provider, so refreshing the token belongs to its caller.
+- Step-update and blob uploads to the results service make 3 attempts with a
+  200 ms step between them. This is Velnor's policy; it is not copied from
+  upstream.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:

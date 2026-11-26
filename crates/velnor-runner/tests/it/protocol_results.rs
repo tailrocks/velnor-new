@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::protocol::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 
-use super::support::{Reply, TOKEN, TestServer, assert_bearer};
+use super::support::{Reply, Scripted, TOKEN, TestServer, assert_bearer, scripted};
 
 const STEPS_UPDATE_PATH: &str =
     "/twirp/github.actions.results.api.v1.WorkflowStepUpdateService/WorkflowStepsUpdate";
@@ -225,5 +225,52 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
         .context("metadata without ok must fail")?;
 
     assert!(format!("{error:#}").contains("ok=false"), "{error:#}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn twirp_update_steps_retries_a_transient_failure_and_then_succeeds() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    server.respond(
+        "POST",
+        STEPS_UPDATE_PATH,
+        scripted(vec![
+            Scripted::Text(500, "temporary"),
+            Scripted::Json(200, json!({"ok": true})),
+        ]),
+    )?;
+
+    client
+        .update_steps(&[step("step-1")], "run-backend", "job-backend", 1)
+        .await?;
+
+    let requests = server.requests_to("POST", STEPS_UPDATE_PATH)?;
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].json()?, requests[1].json()?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn twirp_update_steps_gives_up_after_three_attempts() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    server.respond(
+        "POST",
+        STEPS_UPDATE_PATH,
+        scripted(vec![Scripted::Text(500, "temporary")]),
+    )?;
+
+    let error = client
+        .update_steps(&[step("step-1")], "run-backend", "job-backend", 1)
+        .await
+        .err()
+        .context("a persistent 500 must fail")?;
+
+    assert!(
+        format!("{error:#}").contains("after 3 attempts"),
+        "{error:#}"
+    );
+    assert_eq!(server.requests_to("POST", STEPS_UPDATE_PATH)?.len(), 3);
     Ok(())
 }

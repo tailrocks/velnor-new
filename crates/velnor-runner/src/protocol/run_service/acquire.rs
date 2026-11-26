@@ -9,11 +9,10 @@ use serde_json::Value;
 
 use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::{GithubHttpResponse, github_json_http_response};
-use super::{REQUEST_TIMEOUT, RunServiceClient, run_service_error_code};
+use super::{Failure, REQUEST_TIMEOUT, RunServiceClient, run_service_error_code};
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 
-const MAX_ATTEMPTS: u32 = 5;
 const ACTION: &str = "acquire run-service job";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,21 +93,12 @@ impl RunServiceClient {
             billing_owner_id,
         })
         .context("serialize acquire job request")?;
-        let mut attempt = 1;
-        loop {
-            let error = match self.acquire_once(url.as_str(), &body).await {
-                Ok(outcome) => return Ok(outcome),
-                Err(error) => error,
-            };
-            if attempt >= MAX_ATTEMPTS {
-                return Err(AcquireRetriesExhausted(error).into());
-            }
-            tokio::time::sleep(self.delays.acquire_delay()).await;
-            attempt += 1;
-        }
+        self.with_retries(|| self.acquire_once(url.as_str(), &body))
+            .await
+            .map_err(|error| AcquireRetriesExhausted(error).into())
     }
 
-    async fn acquire_once(&self, url: &str, body: &str) -> Result<AcquireJobOutcome> {
+    async fn acquire_once(&self, url: &str, body: &str) -> Result<AcquireJobOutcome, Failure> {
         let response = github_json_http_response(
             Method::POST,
             url,
@@ -117,16 +107,16 @@ impl RunServiceClient {
             REQUEST_TIMEOUT,
         )
         .await
-        .context("acquire run-service job request")?;
+        .map_err(|error| Failure::Retry(error.context("acquire run-service job request")))?;
         let status = response.status;
         if (200..300).contains(&status) {
             return decode_acquired(&response).map_err(|error| {
-                github_api_error_categorized(
+                Failure::Retry(github_api_error_categorized(
                     ACTION,
                     status,
                     &format!("parse AgentJobRequestMessage response: {error}"),
                     BrokerErrorCategory::Transient,
-                )
+                ))
             });
         }
         if let Some(reason) = AcquireJobSkipReason::from_body(response.body.expose()) {
@@ -137,12 +127,12 @@ impl RunServiceClient {
                 body: response.body.into_inner(),
             });
         }
-        Err(github_api_error_categorized(
+        Err(Failure::Retry(github_api_error_categorized(
             ACTION,
             status,
             response.body.expose(),
             BrokerErrorCategory::Transient,
-        ))
+        )))
     }
 }
 

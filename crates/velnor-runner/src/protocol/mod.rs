@@ -16,7 +16,10 @@ pub mod timeline;
 
 pub use broker::{BrokerClient, BrokerPoll};
 pub use distributed_task::DistributedTaskClient;
-pub use error::{BrokerErrorCategory, GitHubApiError, broker_error_category};
+pub use error::{
+    BrokerErrorCategory, GitHubApiError, ServiceErrorKind, broker_error_category,
+    service_error_kind,
+};
 pub use feed::{FeedLines, FeedStreamClient, FeedWebSocket};
 pub use http::{
     GithubHttpResponse, RUNNER_USER_AGENT, RUNNER_VERSION, github_json_http_response,

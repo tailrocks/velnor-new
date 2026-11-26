@@ -2,22 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/tests/broker_protocol.rs
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use reqwest::StatusCode;
-use serde_json::{Value, json};
+use serde_json::json;
 use velnor_runner::protocol::{
-    AcquireJobOutcome, AcquireJobSkipReason, BrokerClient, BrokerErrorCategory, BrokerPoll,
-    RUNNER_JOB_REQUEST, RUNNER_VERSION, RetryDelays, RunServiceClient, RunServiceCompleteJob,
-    RunnerStatus, TaskAgentMessage, TaskAgentSession, TaskResult,
+    AcquireJobOutcome, BrokerClient, BrokerErrorCategory, BrokerPoll, RUNNER_JOB_REQUEST,
+    RUNNER_VERSION, RunServiceClient, RunnerStatus, ServiceErrorKind, TaskAgentMessage,
+    TaskAgentSession, broker_error_category, service_error_kind,
 };
 
 use super::support::{
-    RecordedRequest, Reply, TOKEN, TestServer, assert_bearer, assert_github_status,
+    JOB_ID, PLAN_ID, RecordedRequest, Reply, TOKEN, TestServer, assert_bearer,
+    assert_github_status, complete_job,
 };
 
 const UPSTREAM_OS: &str = if cfg!(target_os = "linux") {
@@ -36,9 +33,6 @@ const UPSTREAM_ARCHITECTURE: &str = if cfg!(target_arch = "x86_64") {
 } else {
     "ARM"
 };
-
-const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
-const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
 
 fn mount_broker_routes(server: &TestServer, run_service_url: &str) -> Result<()> {
     server.respond("POST", "/broker/session", |_| {
@@ -191,131 +185,23 @@ async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
     let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
     server.respond("POST", "/broker/acknowledge", |_| Reply::stall())?;
 
+    let started = Instant::now();
     let outcome = tokio::time::timeout(
         Duration::from_secs(10),
         broker.acknowledge_runner_request("session-1", "request-1", RunnerStatus::Online),
     )
     .await
     .context("acknowledgement must give up within ten seconds")?;
+    assert!(
+        started.elapsed() < Duration::from_millis(6500),
+        "acknowledgement took {:?}",
+        started.elapsed()
+    );
 
     let error = outcome.err().context("a stalled acknowledgement fails")?;
     assert!(format!("{error:#}").contains("timed out"), "{error:#}");
     let request = server.only_request("POST", "/broker/acknowledge")?;
     assert_eq!(request.json()?["runnerRequestId"], "request-1");
-    Ok(())
-}
-
-#[tokio::test]
-async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?;
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-
-    for (status, reason, expected_category) in [
-        (
-            StatusCode::NOT_FOUND,
-            AcquireJobSkipReason::NotFound,
-            BrokerErrorCategory::Terminal,
-        ),
-        (
-            StatusCode::CONFLICT,
-            AcquireJobSkipReason::AlreadyAcquired,
-            BrokerErrorCategory::Conflict,
-        ),
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            AcquireJobSkipReason::Unprocessable,
-            BrokerErrorCategory::Conflict,
-        ),
-    ] {
-        server.reset()?;
-        let refusal = json!({
-            "source": "actions-run-service",
-            "statusCode": status.as_u16(),
-            "errorMessage": "acquire refused"
-        });
-        let reply_body = refusal.clone();
-        server.respond("POST", "/run/jobs/123/acquirejob", move |_| {
-            Reply::json(status.as_u16(), &reply_body)
-        })?;
-
-        let outcome = run_service
-            .acquire_job(
-                &run_service_url,
-                "broker-message",
-                std::env::consts::OS,
-                None,
-            )
-            .await?;
-        let AcquireJobOutcome::Skipped {
-            status: actual,
-            body,
-            reason: actual_reason,
-            category: actual_category,
-        } = outcome
-        else {
-            bail!("expected skipped acquire");
-        };
-        assert_eq!(actual, status);
-        assert_eq!(actual_reason, reason);
-        assert_eq!(serde_json::from_str::<Value>(&body)?, refusal);
-        assert_eq!(actual_category, expected_category);
-        assert_eq!(
-            server
-                .requests_to("POST", "/run/jobs/123/acquirejob")?
-                .len(),
-            1
-        );
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn complete_job_retries_5xx_and_succeeds() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?.with_retry_delays(RetryDelays::IMMEDIATE);
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-    let attempts = Arc::new(AtomicUsize::new(0));
-    let responder_attempts = Arc::clone(&attempts);
-    server.respond("POST", "/run/jobs/123/completejob", move |_| {
-        if responder_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-            Reply::text(500, "temporary")
-        } else {
-            Reply::status(204)
-        }
-    })?;
-
-    run_service
-        .complete_job(&run_service_url, &complete_job())
-        .await?;
-
-    assert_eq!(attempts.load(Ordering::SeqCst), 2);
-    Ok(())
-}
-
-#[tokio::test]
-async fn complete_job_does_not_retry_non_retryable_4xx() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?;
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-    server.respond("POST", "/run/jobs/123/completejob", |_| {
-        Reply::text(400, "bad completion")
-    })?;
-
-    let Err(error) = run_service
-        .complete_job(&run_service_url, &complete_job())
-        .await
-    else {
-        bail!("400 completion must not retry");
-    };
-    assert_github_status(&error, 400, "complete run-service job")?;
-
-    assert_eq!(
-        server
-            .requests_to("POST", "/run/jobs/123/completejob")?
-            .len(),
-        1
-    );
     Ok(())
 }
 
@@ -335,17 +221,146 @@ fn job_message(run_service_url: &str) -> TaskAgentMessage {
     }
 }
 
-fn complete_job() -> RunServiceCompleteJob {
-    RunServiceCompleteJob {
-        plan_id: PLAN_ID.to_owned(),
-        job_id: JOB_ID.to_owned(),
-        conclusion: TaskResult::Succeeded,
-        outputs: BTreeMap::new(),
-        step_results: Vec::new(),
-        annotations: Vec::new(),
-        telemetry: Vec::new(),
-        environment_url: None,
-        billing_owner_id: Some("42".to_owned()),
-        infrastructure_failure_category: None,
+#[tokio::test]
+async fn broker_session_creation_classifies_refusals_without_retrying() -> Result<()> {
+    let server = TestServer::start().await?;
+    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    let session = TaskAgentSession::new("host (PID: 1)", 42, "velnor-test");
+
+    for (status, category) in [
+        (409, BrokerErrorCategory::Conflict),
+        (403, BrokerErrorCategory::Terminal),
+        (400, BrokerErrorCategory::Terminal),
+        (500, BrokerErrorCategory::Transient),
+        (429, BrokerErrorCategory::Transient),
+    ] {
+        server.reset()?;
+        server.respond("POST", "/broker/session", move |_| Reply::status(status))?;
+
+        let error = broker
+            .create_session(&session)
+            .await
+            .err()
+            .with_context(|| format!("{status}: session creation must fail"))?;
+
+        assert_github_status(&error, status, "create broker session")?;
+        assert_eq!(broker_error_category(&error), Some(category), "{status}");
+        assert_eq!(server.requests_to("POST", "/broker/session")?.len(), 1);
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn broker_session_deletion_names_the_session_in_the_query() -> Result<()> {
+    let server = TestServer::start().await?;
+    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    server.respond("DELETE", "/broker/session", |_| Reply::status(204))?;
+
+    broker.delete_session("session-1").await?;
+
+    let request = server.only_request("DELETE", "/broker/session")?;
+    assert_bearer(&request);
+    assert_eq!(request.query("sessionId"), Some("session-1"));
+
+    server.reset()?;
+    server.respond("DELETE", "/broker/session", |_| Reply::status(500))?;
+    let error = broker
+        .delete_session("session-1")
+        .await
+        .err()
+        .context("a refused deletion fails")?;
+    assert_github_status(&error, 500, "delete broker session")?;
+    Ok(())
+}
+
+fn broker_error(source: &str, error_kind: &str) -> serde_json::Value {
+    json!({
+        "source": source,
+        "errorKind": error_kind,
+        "statusCode": 404,
+        "errorMessage": "refused"
+    })
+}
+
+#[tokio::test]
+async fn broker_refusals_carry_the_typed_error_kind() -> Result<()> {
+    let server = TestServer::start().await?;
+    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+
+    for (name, status, body, expected) in [
+        (
+            "RunnerNotFound",
+            404,
+            broker_error("actions-broker-listener", "RunnerNotFound"),
+            Some(ServiceErrorKind::RunnerNotFound),
+        ),
+        (
+            "RunnerVersionTooOld",
+            403,
+            broker_error("actions-broker-listener", "RunnerVersionTooOld"),
+            Some(ServiceErrorKind::RunnerVersionTooOld),
+        ),
+        (
+            "HostedRunnerDeprovisioned",
+            410,
+            broker_error("actions-broker-listener", "HostedRunnerDeprovisioned"),
+            Some(ServiceErrorKind::HostedRunnerDeprovisioned),
+        ),
+        (
+            "RunnerSessionInvalid",
+            401,
+            broker_error("actions-broker-listener", "RunnerSessionInvalid"),
+            Some(ServiceErrorKind::RunnerSessionInvalid),
+        ),
+        (
+            "AcknowledgeJobNotFound",
+            404,
+            broker_error("actions-broker-listener", "AcknowledgeJobNotFound"),
+            Some(ServiceErrorKind::AcknowledgeJobNotFound),
+        ),
+        (
+            "another source",
+            404,
+            broker_error("some-other-service", "RunnerNotFound"),
+            None,
+        ),
+        (
+            "no source",
+            404,
+            json!({"errorKind": "RunnerNotFound"}),
+            None,
+        ),
+        (
+            "unknown kind",
+            404,
+            broker_error("actions-broker-listener", "SomethingNew"),
+            None,
+        ),
+    ] {
+        server.reset()?;
+        server.respond("GET", "/broker/message", {
+            let body = body.clone();
+            move |_| Reply::json(status, &body)
+        })?;
+        server.respond("POST", "/broker/acknowledge", move |_| {
+            Reply::json(status, &body)
+        })?;
+
+        let polled = broker
+            .get_runner_message("session-1", RunnerStatus::Online, true)
+            .await
+            .err()
+            .with_context(|| format!("{name}: the poll must fail"))?;
+        assert_github_status(&polled, status, "get broker message")?;
+        assert_eq!(service_error_kind(&polled), expected, "{name} poll");
+
+        let acknowledged = broker
+            .acknowledge_runner_request("session-1", "request-1", RunnerStatus::Busy)
+            .await
+            .err()
+            .with_context(|| format!("{name}: the acknowledgement must fail"))?;
+        assert_github_status(&acknowledged, status, "acknowledge broker runner request")?;
+        assert_eq!(service_error_kind(&acknowledged), expected, "{name} ack");
+    }
+    Ok(())
 }

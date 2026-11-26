@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use anyhow::{Context, Error, Result, anyhow};
@@ -9,9 +11,13 @@ use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
-use velnor_runner::protocol::GitHubApiError;
+use velnor_runner::protocol::{
+    GitHubApiError, RetryDelays, RunServiceClient, RunServiceCompleteJob, TaskResult,
+};
 
 pub(crate) const TOKEN: &str = "test-token";
+pub(crate) const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
+pub(crate) const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
 
 const MAX_REQUEST_BYTES: usize = 1 << 20;
 
@@ -39,6 +45,12 @@ impl RecordedRequest {
             .map(|(_, value)| value.as_str())
     }
 
+    pub(crate) fn form(&self) -> BTreeMap<String, String> {
+        url::form_urlencoded::parse(&self.body)
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect()
+    }
+
     pub(crate) fn json(&self) -> Result<Value> {
         serde_json::from_slice(&self.body)
             .with_context(|| format!("{} {} body is JSON", self.method, self.path))
@@ -50,6 +62,8 @@ pub(crate) struct Reply {
     content_type: &'static str,
     body: String,
     stall: bool,
+    hangup: bool,
+    location: Option<String>,
 }
 
 impl Reply {
@@ -63,6 +77,8 @@ impl Reply {
             content_type: "text/plain",
             body: body.to_owned(),
             stall: false,
+            hangup: false,
+            location: None,
         }
     }
 
@@ -73,12 +89,28 @@ impl Reply {
         }
     }
 
+    pub(crate) fn hangup() -> Self {
+        Self {
+            hangup: true,
+            ..Self::status(200)
+        }
+    }
+
+    pub(crate) fn redirect(location: &str) -> Self {
+        Self {
+            location: Some(location.to_owned()),
+            ..Self::status(302)
+        }
+    }
+
     pub(crate) fn json(status: u16, body: &Value) -> Self {
         Self {
             status,
             content_type: "application/json",
             body: body.to_string(),
             stall: false,
+            hangup: false,
+            location: None,
         }
     }
 }
@@ -202,8 +234,15 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if reply.stall {
         std::future::pending::<()>().await;
     }
+    if reply.hangup {
+        return;
+    }
+    let location = reply
+        .location
+        .as_ref()
+        .map_or_else(String::new, |location| format!("location: {location}\r\n"));
     let head = format!(
-        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\n{location}content-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,
         reply.content_type,
         reply.body.len()
@@ -280,4 +319,65 @@ pub(crate) fn assert_github_status(error: &Error, status: u16, action: &str) -> 
     assert_eq!(api_error.status, status);
     assert_eq!(api_error.action, action);
     Ok(())
+}
+
+#[derive(Clone)]
+pub(crate) enum Scripted {
+    Text(u16, &'static str),
+    Json(u16, Value),
+    Hangup,
+}
+
+pub(crate) fn scripted(
+    steps: Vec<Scripted>,
+) -> impl Fn(&RecordedRequest) -> Reply + Send + Sync + 'static {
+    let next = AtomicUsize::new(0);
+    move |_| {
+        let index = next.fetch_add(1, Ordering::SeqCst);
+        match steps.get(index).or_else(|| steps.last()) {
+            Some(Scripted::Text(status, body)) => Reply::text(*status, body),
+            Some(Scripted::Json(status, body)) => Reply::json(*status, body),
+            Some(Scripted::Hangup) => Reply::hangup(),
+            None => Reply::status(500),
+        }
+    }
+}
+
+pub(crate) fn run_service_error(code: u16) -> Value {
+    serde_json::json!({
+        "source": "actions-run-service",
+        "statusCode": code,
+        "errorMessage": "run-service refused"
+    })
+}
+
+pub(crate) fn complete_job() -> RunServiceCompleteJob {
+    RunServiceCompleteJob {
+        plan_id: PLAN_ID.to_owned(),
+        job_id: JOB_ID.to_owned(),
+        conclusion: TaskResult::Succeeded,
+        outputs: BTreeMap::new(),
+        step_results: Vec::new(),
+        annotations: Vec::new(),
+        telemetry: Vec::new(),
+        environment_url: None,
+        billing_owner_id: Some("42".to_owned()),
+        infrastructure_failure_category: None,
+    }
+}
+
+pub(crate) fn immediate_run_service() -> Result<RunServiceClient> {
+    Ok(RunServiceClient::new(TOKEN)?.with_retry_delays(RetryDelays::IMMEDIATE))
+}
+
+pub(crate) fn run_service_url(server: &TestServer) -> String {
+    format!("{}/run/jobs/123", server.uri())
+}
+
+pub(crate) fn foreign_source_error(code: u16) -> Value {
+    serde_json::json!({
+        "source": "some-other-service",
+        "statusCode": code,
+        "errorMessage": "elsewhere"
+    })
 }
