@@ -200,3 +200,27 @@ async fn lifecycle_uploads_only_a_few_step_logs_at_once() -> Result<()> {
     assert!((2..=4).contains(&peak), "{peak} uploads were in flight");
     Ok(())
 }
+
+#[tokio::test]
+async fn lifecycle_completes_the_job_when_the_uploads_do_not_finish_within_the_drain_budget()
+-> Result<()> {
+    let behavior = Behavior {
+        blob_delay: Duration::from_secs(30),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(job_with_steps(12)?, behavior).await?;
+    let started = Instant::now();
+
+    let outcome = run_with(
+        &mock,
+        Settings::new()
+            .draining_uploads_within(Duration::from_secs(1))
+            .within(CANCEL_BUDGET),
+    )
+    .await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    Ok(())
+}
