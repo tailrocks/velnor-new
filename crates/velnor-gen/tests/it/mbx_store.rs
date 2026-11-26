@@ -188,8 +188,22 @@ fn the_shared_store_is_skipped_when_the_plan_failed_or_was_skipped_from_0_1_112(
 #[test]
 fn every_job_that_selects_the_shared_store_first_points_mbx_at_a_private_directory() -> TestResult {
     for helper in ["0.1.85", "0.1.111", "0.1.112"] {
-        for shape in ["", "shape = 'groups'\n"] {
-            let text = workflow(&repo(&format!("{shape}mbx_shared_store = true\n"), helper)?)?;
+        for (shape, remote) in [
+            ("", ""),
+            ("shape = 'groups'\n", ""),
+            ("", "[cache]\nmbx_remote = \"github-actions\"\n"),
+            (
+                "shape = 'groups'\n",
+                "[cache]\nmbx_remote = \"github-actions\"\n",
+            ),
+        ] {
+            if helper == "0.1.85" && !remote.is_empty() {
+                continue;
+            }
+            let text = workflow(&repo(
+                &format!("{shape}mbx_shared_store = true\n{remote}"),
+                helper,
+            )?)?;
             let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
             let mut stores = 0;
             for (id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {

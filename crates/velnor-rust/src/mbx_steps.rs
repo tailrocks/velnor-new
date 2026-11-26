@@ -20,8 +20,8 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
-    let isolated = facts.config.mbx.routed() && !remote;
     let shared = facts.config.mbx_store == MbxStore::Shared;
+    let isolated = facts.config.mbx.routed() && (shared || !remote);
     let out_dirs_in_target = facts
         .helper
         .as_ref()
