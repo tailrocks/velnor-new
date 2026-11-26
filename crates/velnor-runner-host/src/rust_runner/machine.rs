@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs::DirBuilder;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
-use super::{GUEST_RUNNER, GUEST_STORE, HOST_DIRECTORIES, MACHINE_NAME, RustRunnerLauncher};
+use super::{
+    GUEST_RUNNER, GUEST_STORE, HOST_DIRECTORIES, JIT_DIRECTORY, MACHINE_NAME, RustRunnerLauncher,
+};
 use crate::error::{HostError, RustRunnerFailure};
 
 #[derive(Deserialize)]
@@ -50,13 +54,31 @@ impl RustRunnerLauncher {
             std::fs::create_dir_all(self.host_store.join(name))
                 .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         }
+        self.create_private_jit_directory()
+    }
+
+    fn create_private_jit_directory(&self) -> Result<(), HostError> {
+        let directory = self.host_store.join(JIT_DIRECTORY);
+        DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&directory)
+            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+        let metadata = std::fs::symlink_metadata(&directory)
+            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+        if !metadata.is_dir() {
+            return Err(failure(RustRunnerFailure::HostStore));
+        }
+        if metadata.permissions().mode() & 0o077 != 0 {
+            return Err(failure(RustRunnerFailure::JitDirectoryAccessible));
+        }
         Ok(())
     }
 
     fn link_store(&self) -> Result<(), HostError> {
         let target = format!("/mnt/mac{}", self.host_store.display());
-        let mut command = self.in_machine();
-        command.args(["-u", "root", "ln", "-sfn", &target, GUEST_STORE]);
+        let mut command = self.as_root();
+        command.args(["ln", "-sfn", &target, GUEST_STORE]);
         succeeds(&mut command, RustRunnerFailure::MachineLink)
     }
 
