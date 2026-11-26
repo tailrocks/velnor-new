@@ -168,7 +168,7 @@ pub(super) async fn save_summary(
     summary: &str,
     out: &mut Output<'_>,
 ) -> Result<Option<PathBuf>, ExecError> {
-    if summary.trim().is_empty() {
+    if summary.is_empty() {
         return Ok(None);
     }
     if summary.len() > FILE_LIMIT {

@@ -10,7 +10,7 @@ use super::job::Job;
 use super::output::Output;
 use super::preflight::reference;
 use super::shell;
-use super::step::{Limits, ScriptStep, run_script};
+use super::step::{Limits, ScriptStep, run_script, settle};
 use super::step_info::step_timeout;
 use super::timeout::Timeout;
 use super::token;
@@ -60,6 +60,7 @@ impl Job<'_> {
                 (StepResult::Failed, Vec::new())
             }
         };
+        let result = settle(result, &limits, out);
         self.finish(result, adapter_outputs, collected, out).await
     }
 

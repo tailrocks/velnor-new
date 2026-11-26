@@ -19,7 +19,7 @@ use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
-use super::timeout::{Timeout, expired};
+use super::timeout::{Interruption, Timeout};
 use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
@@ -215,6 +215,20 @@ pub(super) fn report_timeout(out: &mut Output<'_>, timeout: Option<Timeout>) {
     out.annotate(AnnotationLevel::Error, text);
 }
 
+pub(super) fn settle(result: StepResult, limits: &Limits<'_>, out: &mut Output<'_>) -> StepResult {
+    if result != StepResult::Succeeded {
+        return result;
+    }
+    match Interruption::now(limits.cancel, limits.timeout) {
+        None => result,
+        Some(Interruption::Cancelled) => StepResult::Cancelled,
+        Some(Interruption::TimedOut) => {
+            report_timeout(out, limits.timeout);
+            StepResult::Failed
+        }
+    }
+}
+
 fn exit_code(status: ExitStatus) -> i32 {
     status
         .code()
@@ -255,16 +269,10 @@ async fn drive(
         )));
     }
     drop(sender);
-    let cancelled = async {
-        match limits.cancel {
-            Some(cancel) => cancel.cancelled().await,
-            None => std::future::pending().await,
-        }
-    };
     let stop = async {
-        tokio::select! {
-            () = expired(limits.timeout) => Ending::TimedOut,
-            () = cancelled => Ending::Cancelled,
+        match Interruption::wait(limits.cancel, limits.timeout).await {
+            Interruption::TimedOut => Ending::TimedOut,
+            Interruption::Cancelled => Ending::Cancelled,
         }
     };
     tokio::pin!(stop);

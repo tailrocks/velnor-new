@@ -11,7 +11,7 @@ use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
 use super::step::{Limits, ProcessSpec, capture, report_timeout, run};
-use super::timeout::{Timeout, expired};
+use super::timeout::{Interruption, Timeout};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
@@ -148,25 +148,6 @@ pub(super) struct AdapterCall<'a> {
     pub(super) groups: &'a Groups,
 }
 
-#[derive(Clone, Copy)]
-enum Interruption {
-    Cancelled,
-    TimedOut,
-}
-
-async fn interrupted(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Interruption {
-    let cancelled = async {
-        match cancel {
-            Some(cancel) => cancel.cancelled().await,
-            None => std::future::pending().await,
-        }
-    };
-    tokio::select! {
-        () = cancelled => Interruption::Cancelled,
-        () = expired(timeout) => Interruption::TimedOut,
-    }
-}
-
 pub(super) async fn invoke(
     adapter: &dyn StepAdapter,
     call: AdapterCall<'_>,
@@ -196,7 +177,7 @@ pub(super) async fn invoke(
         tokio::select! {
             biased;
             result = &mut running => (Some(result), None),
-            why = interrupted(call.cancel.as_ref(), call.timeout) => {
+            why = Interruption::wait(call.cancel.as_ref(), call.timeout) => {
                 step_cancel.cancel();
                 let settled = tokio::time::timeout(CANCEL_GRACE, &mut running).await.ok();
                 (settled, Some(why))
