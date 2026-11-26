@@ -377,3 +377,55 @@ fn a_tag_job_fetches_its_tag_when_no_branch_reaches_the_commit() -> Result<()> {
     assert_eq!(tags, "refs/tags/v1");
     Ok(())
 }
+
+#[test]
+fn a_branch_job_fetches_its_commit_when_no_head_reaches_it_any_more() -> Result<()> {
+    let rig = Rig::new()?;
+    let work = rig.root.join("work");
+    let upstream = rig.root.join("up/tailrocks/velnor-new.git");
+    let target = upstream.to_string_lossy().into_owned();
+    git(
+        &upstream,
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    )?;
+    git(&work, &["checkout", "-q", "--detach"])?;
+    let forced = commit(&work, "forced-away")?;
+    git(
+        &work,
+        &["push", "-q", &target, &format!("{forced}:refs/heads/queue")],
+    )?;
+    git(&work, &["push", "-q", &target, ":refs/heads/queue"])?;
+    git(&work, &["checkout", "-q", "main"])?;
+    for (id, event) in [
+        (6, r#"{"kind": "branch", "branch": "main"}"#),
+        (
+            7,
+            r#"{"kind": "merge_group", "queue_branch": "gh-readonly-queue/main/pr-1"}"#,
+        ),
+    ] {
+        let facts = trusted_facts(&rig, id, &forced, event)?;
+        assert_eq!(
+            checkout_trusted(&rig, &facts)?,
+            (Some(0), forced.clone()),
+            "{event}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_mirror_store_is_private_to_its_owner() -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let rig = Rig::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    let mut directory = rig.mirror();
+    while directory != rig.store() {
+        if directory != rig.mirror() {
+            let mode = std::fs::metadata(&directory)?.mode();
+            assert_eq!(mode & 0o077, 0, "{} is {mode:o}", directory.display());
+        }
+        assert!(directory.pop());
+    }
+    Ok(())
+}

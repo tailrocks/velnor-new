@@ -298,6 +298,16 @@ impl TrustedFacts {
         }
     }
 
+    pub(crate) fn sha_refspec(&self) -> Option<String> {
+        match &self.event {
+            TrustedEvent::Branch { branch: name }
+            | TrustedEvent::MergeGroup { queue_branch: name } => {
+                Some(format!("+{}:refs/velnor/heads/{name}", self.sha.as_str()))
+            }
+            TrustedEvent::Tag { .. } | TrustedEvent::PullRequest { .. } => None,
+        }
+    }
+
     pub(crate) fn refspecs(&self) -> Vec<String> {
         let mut specs = vec!["+refs/heads/*:refs/heads/*".to_owned()];
         match &self.event {

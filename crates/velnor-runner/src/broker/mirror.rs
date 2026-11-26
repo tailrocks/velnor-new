@@ -312,7 +312,10 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
     let mut lock_file = mirror.clone().into_os_string();
     lock_file.push(".lock");
     if let Some(parent) = mirror.parent() {
-        tokio::fs::create_dir_all(parent)
+        tokio::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(parent)
             .await
             .with_context(|| format!("create {}", parent.display()))?;
     }
@@ -335,9 +338,28 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
     }
     remove_ref_locks(&mirror).await?;
     let clone_url = facts.clone_url();
-    let specs = facts.refspecs();
+    let env = auth_env(facts.server_url.url(), token);
+    let mut fetched = fetch_refs(&mirror, &clone_url, facts.refspecs(), &env).await;
+    if !has_commit(&mirror, sha).await
+        && let Some(spec) = facts.sha_refspec()
+    {
+        fetched = fetch_refs(&mirror, &clone_url, vec![spec], &env).await;
+    }
+    if has_commit(&mirror, sha).await {
+        return Ok(());
+    }
+    fetched?;
+    bail!("checkout: commit {sha} not found in {clone_url}")
+}
+
+async fn fetch_refs(
+    mirror: &Path,
+    clone_url: &str,
+    specs: Vec<String>,
+    env: &[(String, String)],
+) -> Result<()> {
     let mut args = git_args(
-        Some(&mirror),
+        Some(mirror),
         &[
             "-c",
             "protocol.version=2",
@@ -348,14 +370,9 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
             "--no-tags",
             "--quiet",
             "--",
-            &clone_url,
+            clone_url,
         ],
     );
     args.extend(specs);
-    let fetched = git(&args, &auth_env(facts.server_url.url(), token)).await;
-    if has_commit(&mirror, sha).await {
-        return Ok(());
-    }
-    fetched?;
-    bail!("checkout: commit {sha} not found in {clone_url}")
+    git(&args, env).await
 }
