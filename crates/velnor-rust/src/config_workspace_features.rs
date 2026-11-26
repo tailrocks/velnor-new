@@ -63,11 +63,31 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
     let Some((package, feature)) = name.split_once('/') else {
         return confined().any(|member| defined_features(view, member).contains(name));
     };
-    root.members.iter().any(|member| {
-        member.name.as_str() == package && defined_features(view, member).contains(feature)
-    }) || confined()
+    let aliased: Vec<String> = confined()
         .filter_map(|member| manifest(view, member))
-        .any(|manifest| feature_dependency_specs(&manifest).any(|(key, _)| key == package))
+        .flat_map(|manifest| {
+            feature_dependency_specs(&manifest)
+                .filter(|(key, _)| *key == package)
+                .map(|(_, spec)| {
+                    spec.get("package")
+                        .and_then(toml::Value::as_str)
+                        .unwrap_or(package)
+                        .to_owned()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    if aliased.is_empty() {
+        return root.members.iter().any(|member| {
+            member.name.as_str() == package && defined_features(view, member).contains(feature)
+        });
+    }
+    aliased.iter().all(|target| {
+        root.members
+            .iter()
+            .find(|member| member.name.as_str() == target)
+            .is_none_or(|member| defined_features(view, member).contains(feature))
+    })
 }
 
 fn manifest(view: &RepoView, member: &RustMember) -> Option<toml::Table> {

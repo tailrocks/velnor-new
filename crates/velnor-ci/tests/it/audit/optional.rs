@@ -300,3 +300,17 @@ fn only_a_target_the_workspace_features_newly_enable_needs_a_unit_and_an_inactiv
     let accepted = audit(&repo, &["--write"]);
     assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
 }
+
+#[test]
+fn a_workspace_feature_selector_activates_an_optional_dependency_whose_implicit_feature_is_suppressed()
+ {
+    let repo = app_and_lib(
+        "[features]\nsuppress = [\"dep:alias\"]\n\n[dependencies]\nalias = { package = \"lib\", path = \"../lib\", optional = true }\n",
+        "workspace_features = ['alias/y']\n",
+    );
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    forwarded_units(&repo, &["lg"]);
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}

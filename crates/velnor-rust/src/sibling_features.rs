@@ -83,15 +83,19 @@ pub(crate) fn requested_by_siblings(
                     if keys.is_empty() {
                         keys.insert(dependency.name.to_string());
                     }
+                    let direct = if !root_only || member.manifest == *workspace {
+                        workspace_forwards(workspace_features, &keys)
+                    } else {
+                        Vec::new()
+                    };
                     if dependency.optional
+                        && direct.is_empty()
                         && !keys.iter().any(|key| activated(parsed, enabled, key))
                     {
                         continue;
                     }
                     wanted.extend(forwarded_features(parsed, enabled, &keys));
-                    if !root_only || member.manifest == *workspace {
-                        wanted.extend(workspace_forwards(workspace_features, &keys));
-                    }
+                    wanted.extend(direct);
                 }
                 let slot = requested.entry(target).or_default();
                 for feature in wanted {
@@ -286,6 +290,7 @@ fn activated(manifest: &toml::Table, enabled: &BTreeSet<String>, key: &str) -> b
         name == key && spec.get("optional").and_then(toml::Value::as_bool) == Some(true)
     });
     let explicit = format!("dep:{key}");
+    let strong = format!("{key}/");
     !optional
         || enabled.contains(key)
         || manifest
@@ -297,5 +302,5 @@ fn activated(manifest: &toml::Table, enabled: &BTreeSet<String>, key: &str) -> b
             .filter_map(|(_, members)| members.as_array())
             .flatten()
             .filter_map(toml::Value::as_str)
-            .any(|member| member == explicit)
+            .any(|member| member == explicit || member.starts_with(&strong))
 }

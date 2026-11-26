@@ -152,3 +152,23 @@ fn a_dependency_alias_named_like_a_member_is_accepted_when_the_dependency_alone_
     );
     Ok(())
 }
+
+#[test]
+fn a_member_name_does_not_excuse_a_dependency_alias_of_that_name_that_lacks_the_feature()
+-> TestResult {
+    let aliased = |features: &str| {
+        format!(
+            "[package]\nname = \"package-0\"\nedition = \"2021\"\n{features}[dependencies]\nmember = {{ package = \"package-0\", path = \".\" }}\n"
+        )
+    };
+    let config = "workspace_features = ['member/local-mode']\n";
+    assert_eq!(
+        refusal(&root_and_member(&aliased(""), config)?)?,
+        (".".to_owned(), "member/local-mode".to_owned())
+    );
+    detect(&root_and_member(
+        &aliased("[features]\nlocal-mode = []\n"),
+        config,
+    )?)?;
+    Ok(())
+}
