@@ -15,25 +15,40 @@ fn mise_action_runs_locked_install_with_store_data_dir() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
-    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    let job = world.with_final_script(
+        &job_fixture("mise_action_ok"),
+        "echo \"later=$MISE_CACHE_DIR $MISE_AUTO_INSTALL $MISE_TRUSTED_CONFIG_PATHS $MISE_YES $MISE_SHIMS_DIR\"",
+    )?;
+    let ran = world.run(&job, &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
-    let calls = world.mise_calls();
-    let environment = format!(
-        "data={}/tools/data cache={}/mise-cache auto=false trusted={} yes=1",
-        world.store.display(),
+    let calls = world.calls();
+    assert_eq!(
+        calls.first().map(|call| call.argv.as_str()),
+        Some("config ls --json")
+    );
+    assert_eq!(world.mise_installs(), vec!["argv=install --locked"]);
+    for call in &calls {
+        let root = call.root();
+        assert_eq!(
+            call.env_value("MISE_DATA_DIR"),
+            format!("{}/tools/data", world.store.display())
+        );
+        assert_eq!(
+            call.env_value("MISE_CACHE_DIR"),
+            format!("{}/cache", root.display())
+        );
+        assert_eq!(
+            call.env_value("MISE_TRUSTED_CONFIG_PATHS"),
+            format!("{}/config", root.display())
+        );
+    }
+    let later = format!(
+        "later={}/mise-cache false {} 1 {}/mise-shims",
         world.temp().display(),
-        world.workspace().display()
+        world.workspace().display(),
+        world.temp().display()
     );
-    assert_eq!(
-        calls.first(),
-        Some(&format!("argv=config ls --json {environment}")),
-        "{calls:?}"
-    );
-    assert_eq!(
-        world.mise_installs(),
-        vec![format!("argv=install --locked {environment}")],
-        "{calls:?}"
-    );
+    assert!(ran.has_line(&later), "{later}\n{}", ran.stdout);
     Ok(())
 }
 
@@ -62,10 +77,8 @@ fn mise_action_masks_a_secret_that_contains_command_escapes() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
-    let ran = world.run(
-        &job_fixture("mise_action_ok"),
-        &[("MISE_DOUBLE_SECRET", "tok%25en%0Aline")],
-    )?;
+    world.configure_double(&[("SECRET", "tok%25en%0Aline")])?;
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert!(ran.has_line("secret=***"), "{}", ran.stdout);
     assert!(!ran.stdout.contains("tok%25en"), "{}", ran.stdout);
@@ -125,19 +138,14 @@ fn mise_action_prepends_tool_dirs_in_mise_order_without_duplicating_the_inherite
     let binary = world.install_mise()?;
     world.init_workspace(true)?;
     let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
-    let ran = world.run(
-        &job,
-        &[
-            ("PATH", "/zz-inherited:/usr/bin:/bin"),
-            ("MISE_DOUBLE_EXTRA_DIR", "/zz-extra"),
-        ],
-    )?;
+    world.configure_double(&[("EXTRA_DIR", "/zz-extra")])?;
+    let ran = world.run(&job, &[("PATH", "/zz-inherited:/usr/bin:/bin")])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     let directory = world.binary_dir();
     let expected = format!(
-        "path={}/tool-bin:/zz-extra:{}/tools/data/shims:{}:/zz-inherited:/usr/bin:/bin",
+        "path={}/tool-bin:/zz-extra:{}/mise-shims:{}:/zz-inherited:/usr/bin:/bin",
         directory.display(),
-        world.store.display(),
+        world.temp().display(),
         binary
             .parent()
             .map_or_else(String::new, |dir| dir.display().to_string())
@@ -153,19 +161,13 @@ fn mise_action_keeps_an_inherited_entry_that_mise_promotes() -> Result<()> {
         let binary = world.install_mise()?;
         world.init_workspace(true)?;
         let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
-        let ran = world.run(
-            &job,
-            &[
-                ("PATH", "/zz-inherited:/usr/bin:/bin"),
-                ("MISE_DOUBLE_PROMOTE", "/usr/bin"),
-                ("MISE_DOUBLE_NO_PATHS", no_paths),
-            ],
-        )?;
+        world.configure_double(&[("PROMOTE", "/usr/bin"), ("NO_PATHS", no_paths)])?;
+        let ran = world.run(&job, &[("PATH", "/zz-inherited:/usr/bin:/bin")])?;
         assert!(ran.has_line("job succeeded"), "{no_paths}\n{}", ran.stdout);
         let expected = format!(
-            "path={}/tool-bin:/usr/bin:{}/tools/data/shims:{}:/zz-inherited:/usr/bin:/bin",
+            "path={}/tool-bin:/usr/bin:{}/mise-shims:{}:/zz-inherited:/usr/bin:/bin",
             world.binary_dir().display(),
-            world.store.display(),
+            world.temp().display(),
             binary
                 .parent()
                 .map_or_else(String::new, |dir| dir.display().to_string())
@@ -185,19 +187,13 @@ fn mise_action_promotes_an_entry_mise_drops_from_its_inherited_position() -> Res
     let binary = world.install_mise()?;
     world.init_workspace(true)?;
     let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
-    let ran = world.run(
-        &job,
-        &[
-            ("PATH", "/a:/b:/usr/bin:/bin"),
-            ("MISE_DOUBLE_PROMOTE", "/b"),
-            ("MISE_DOUBLE_DROP_PROMOTED", "1"),
-        ],
-    )?;
+    world.configure_double(&[("PROMOTE", "/b"), ("DROP_PROMOTED", "1")])?;
+    let ran = world.run(&job, &[("PATH", "/a:/b:/usr/bin:/bin")])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     let expected = format!(
-        "path={}/tool-bin:/b:{}/tools/data/shims:{}:/a:/b:/usr/bin:/bin",
+        "path={}/tool-bin:/b:{}/mise-shims:{}:/a:/b:/usr/bin:/bin",
         world.binary_dir().display(),
-        world.store.display(),
+        world.temp().display(),
         binary
             .parent()
             .map_or_else(String::new, |dir| dir.display().to_string())
@@ -228,7 +224,8 @@ fn mise_action_cancelled_during_the_path_probe_cancels_the_job() -> Result<()> {
     let hung = world.temp().join("paths-hung");
     let hung_text = hung.to_string_lossy().into_owned();
     let job = world.only_first_step(&job_fixture("mise_action_ok"))?;
-    let runner = world.start(&job, &[("MISE_DOUBLE_HANG_PATHS", &hung_text)])?;
+    world.configure_double(&[("HANG_PATHS", &hung_text)])?;
+    let runner = world.start(&job, &[])?;
     let deadline = Instant::now() + Duration::from_secs(10);
     while !hung.exists() {
         if Instant::now() > deadline {
@@ -251,13 +248,13 @@ fn mise_action_cancelled_during_the_path_probe_cancels_the_job() -> Result<()> {
 }
 
 #[test]
-fn mise_action_puts_the_store_shims_on_the_path() -> Result<()> {
+fn mise_action_puts_the_job_shims_dir_on_the_path() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
     let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
     let ran = world.run(&job, &[])?;
-    let shims = format!("{}/tools/data/shims", world.store.display());
+    let shims = format!("{}/mise-shims", world.temp().display());
     let path = ran
         .lines()
         .into_iter()
@@ -281,10 +278,16 @@ fn mise_action_keeps_the_callers_mise_environment() -> Result<()> {
     let ran = world.run(&job, &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert!(ran.has_line("later=0 /x"), "{}", ran.stdout);
-    let calls = world.mise_calls();
-    assert!(calls.len() > 1, "{calls:?}");
+    let calls = world.calls();
+    assert!(calls.len() > 1, "{} calls", calls.len());
     for call in &calls {
-        assert!(call.ends_with("trusted=/x yes=0"), "{call}");
+        assert_eq!(call.env_value("MISE_YES"), "1", "{}", call.argv);
+        assert_eq!(
+            call.env_value("MISE_TRUSTED_CONFIG_PATHS"),
+            format!("{}/config", call.root().display()),
+            "{}",
+            call.argv
+        );
     }
     Ok(())
 }
@@ -308,10 +311,8 @@ fn mise_action_reports_a_tool_missing_from_the_store() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
-    let ran = world.run(
-        &job_fixture("mise_action_missing_tool"),
-        &[("MISE_DOUBLE_INSTALL_EXIT", "1")],
-    )?;
+    world.configure_double(&[("INSTALL_EXIT", "1")])?;
+    let ran = world.run(&job_fixture("mise_action_missing_tool"), &[])?;
     assert!(
         ran.has_line("mise ERROR: tool is missing"),
         "{}",
@@ -346,11 +347,9 @@ fn mise_action_honours_install_args() -> Result<()> {
     let ran = world.run(&job_fixture("mise_action_install_args"), &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     let installs = world.mise_installs();
-    assert!(
-        installs.first().is_some_and(
-            |call| call.starts_with("argv=install --locked jactionlint shellcheck node ")
-        ),
-        "{installs:?}"
+    assert_eq!(
+        installs,
+        vec!["argv=install --locked jactionlint shellcheck node"]
     );
     Ok(())
 }

@@ -10,15 +10,18 @@ use ring::digest;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
-mod config_scan;
+mod inputs;
+mod isolation;
 mod pin;
 
-use self::config_scan::require_workspace_config_only;
+use self::inputs::MiseInputs;
+use self::isolation::{Isolation, StoreEnv};
 use self::pin::require_pinned_revision;
 use super::composite::SetupVelnor;
-use super::mise_lock::{enforce_locked_mise_policy, is_valid_mise_version, require_sole_config};
+use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::exec::{
-    AdapterRegistry, ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
+    AdapterRegistry, ExecError, ProcessEnv, ProcessOutcome, StepAdapter, StepContext, StepFuture,
+    StepResult,
 };
 use crate::expr::hex_digest;
 use crate::store::store_root;
@@ -26,74 +29,10 @@ use crate::store::store_root;
 const ACTION: &str = "jdx/mise-action";
 const PREFIX: &str = "jdx/mise-action@";
 const NOT_IN_STORE: &str = "tool is not installed in the tools store";
-const CACHE_MUST_BE_FALSE: &str = "jdx/mise-action input 'cache' must be false";
-const BOOLEAN_INPUTS: [&str; 11] = [
-    "auto_update",
-    "fetch_from_github",
-    "reshim",
-    "install",
-    "bootstrap",
-    "env",
-    "wings_enabled",
-    "export_path",
-    "experimental",
-    "add_shims_to_path",
-    "monorepo",
-];
 
 pub(super) fn register(registry: &mut AdapterRegistry, setup: SetupVelnor) {
     registry.register(Box::new(MiseAction));
     registry.register(Box::new(setup));
-}
-
-#[derive(Debug)]
-pub(crate) struct MiseInputs {
-    version: String,
-    sha256: String,
-    install_args: String,
-}
-
-impl MiseInputs {
-    pub(crate) fn parse(inputs: &BTreeMap<String, String>) -> Result<Self, ExecError> {
-        let mut parsed = Self {
-            version: String::new(),
-            sha256: String::new(),
-            install_args: String::new(),
-        };
-        let mut cache_disabled = false;
-        for (name, value) in inputs {
-            match name.to_ascii_lowercase().as_str() {
-                "version" => value.trim().clone_into(&mut parsed.version),
-                "sha256" => value.trim().clone_into(&mut parsed.sha256),
-                "install_args" => value.trim().clone_into(&mut parsed.install_args),
-                "cache" if matches!(value.trim(), "false" | "False" | "FALSE") => {
-                    cache_disabled = true;
-                }
-                "cache" => return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned())),
-                other if value.trim().is_empty() && BOOLEAN_INPUTS.contains(&other) => {
-                    return Err(ExecError::Invalid(format!(
-                        "Input does not meet YAML 1.2 \"Core Schema\" specification: {other}\nSupport boolean input list: `true | True | TRUE | false | False | FALSE`"
-                    )));
-                }
-                _ if value.trim().is_empty() => {}
-                other => {
-                    return Err(ExecError::Unsupported(format!(
-                        "jdx/mise-action input '{other}' is not supported by velnor-runner"
-                    )));
-                }
-            }
-        }
-        if !cache_disabled {
-            return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned()));
-        }
-        if !is_valid_mise_version(&parsed.version) {
-            return Err(ExecError::Invalid(format!(
-                "mise version '{}' is not an exact YYYY.M.D version",
-                parsed.version
-            )));
-        }
-        Ok(parsed)
-    }
 }
 
 async fn sha256_hex(path: &Path) -> Result<String, ExecError> {
@@ -148,31 +87,55 @@ fn env_command(name: &str, value: &str) -> String {
     format!("{name}<<{delimiter}\n{value}\n{delimiter}\n")
 }
 
-async fn mise_capture(
-    ctx: &mut StepContext<'_>,
-    install: &Install,
-    args: &[&str],
-    process_env: &[(String, String)],
-) -> Result<String, ExecError> {
-    let words: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
-    let program = install.binary.to_string_lossy().into_owned();
-    let env = ctx.env_with(process_env);
-    ctx.capture((&program, &words, ctx.workspace, &env)).await
+struct Mise {
+    program: String,
+    cwd: PathBuf,
+    env: Vec<(String, String)>,
+    inherited_path: String,
 }
 
-async fn mise_json(
-    ctx: &mut StepContext<'_>,
-    install: &Install,
-    args: &[&str],
-) -> Result<BTreeMap<String, String>, ExecError> {
-    let process_env = install.process_env(ctx);
-    let output = mise_capture(ctx, install, args, &process_env).await?;
-    let values: BTreeMap<String, serde_json::Value> = serde_json::from_str(&output)
-        .map_err(|error| ExecError::Invalid(format!("mise {} output: {error}", args.join(" "))))?;
-    Ok(values
-        .into_iter()
-        .filter_map(|(name, value)| Some((name, value.as_str()?.to_owned())))
-        .collect())
+impl Mise {
+    fn new(install: &Install, isolation: &Isolation) -> Self {
+        let env = isolation.env(&install.store);
+        let inherited_path = env
+            .iter()
+            .find(|(name, _)| name == "PATH")
+            .map_or_default(|(_, value)| value.clone());
+        Self {
+            program: install.binary.to_string_lossy().into_owned(),
+            cwd: isolation.config_dir(),
+            env,
+            inherited_path,
+        }
+    }
+
+    async fn capture(&self, ctx: &mut StepContext<'_>, args: &[&str]) -> Result<String, ExecError> {
+        let words: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+        ctx.capture((
+            &self.program,
+            &words,
+            &self.cwd,
+            ProcessEnv::Exact(&self.env),
+        ))
+        .await
+    }
+
+    async fn json(
+        &self,
+        ctx: &mut StepContext<'_>,
+        isolation: &Isolation,
+        args: &[&str],
+    ) -> Result<BTreeMap<String, String>, ExecError> {
+        let output = self.capture(ctx, args).await?;
+        let values: BTreeMap<String, serde_json::Value> =
+            serde_json::from_str(&output).map_err(|error| {
+                ExecError::Invalid(format!("mise {} output: {error}", args.join(" ")))
+            })?;
+        Ok(values
+            .into_iter()
+            .filter_map(|(name, value)| Some((name, isolation.to_workspace(value.as_str()?))))
+            .collect())
+    }
 }
 
 fn path_additions(computed: &str, current: &str, binary_dir: &str) -> Vec<String> {
@@ -206,15 +169,15 @@ fn path_additions(computed: &str, current: &str, binary_dir: &str) -> Vec<String
 
 async fn managed_paths(
     ctx: &mut StepContext<'_>,
-    install: &Install,
+    mise: &Mise,
+    isolation: &Isolation,
 ) -> Result<Option<Vec<String>>, ExecError> {
-    let process_env = install.process_env(ctx);
-    match mise_capture(ctx, install, &["env", "--paths"], &process_env).await {
+    match mise.capture(ctx, &["env", "--paths"]).await {
         Err(ExecError::Cancelled) => Err(ExecError::Cancelled),
         output => Ok(output.ok().map(|text| {
             text.lines()
                 .filter(|line| !line.is_empty())
-                .map(str::to_owned)
+                .map(|line| isolation.to_workspace(line))
                 .collect()
         })),
     }
@@ -222,33 +185,68 @@ async fn managed_paths(
 
 struct Install {
     binary: PathBuf,
-    dir: String,
-    data: String,
-    env: Vec<(String, String)>,
+    store: StoreEnv,
+    exports: Vec<(String, String)>,
 }
 
-fn current_path(ctx: &StepContext<'_>) -> String {
+fn effective(ctx: &StepContext<'_>, name: &str) -> Option<String> {
     ctx.env
-        .get("PATH")
+        .get(name)
         .cloned()
-        .or_else(|| std::env::var("PATH").ok())
-        .unwrap_or_default()
+        .or_else(|| std::env::var(name).ok())
+        .filter(|value| !value.is_empty())
 }
 
 fn data_dir(tools: &Path, _lock: &[u8]) -> PathBuf {
     tools.join("data")
 }
 
+fn store_env(
+    ctx: &StepContext<'_>,
+    tools: &Path,
+    lock: &str,
+    binary: &Path,
+) -> Result<StoreEnv, ExecError> {
+    let home_relative = |variable: &str, directory: &str| {
+        effective(ctx, variable).map(PathBuf::from).map_or_else(
+            || {
+                effective(ctx, "HOME")
+                    .map(|home| PathBuf::from(home).join(directory))
+                    .ok_or_else(|| {
+                        ExecError::Invalid(format!(
+                            "mise needs {variable} or HOME to place its {directory} directory"
+                        ))
+                    })
+            },
+            Ok,
+        )
+    };
+    Ok(StoreEnv {
+        bin: binary.parent().map_or_default(Path::to_path_buf),
+        data: data_dir(tools, lock.as_bytes()),
+        shims: ctx.temp.join("mise-shims"),
+        cargo_home: home_relative("CARGO_HOME", ".cargo")?,
+        rustup_home: home_relative("RUSTUP_HOME", ".rustup")?,
+    })
+}
+
 impl Install {
-    fn new(ctx: &StepContext<'_>, tools: &Path, lock: &str, binary: PathBuf) -> Self {
-        let dir = binary
-            .parent()
-            .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned());
-        let data = data_dir(tools, lock.as_bytes())
-            .to_string_lossy()
-            .into_owned();
-        let mut env = vec![
-            ("MISE_DATA_DIR".to_owned(), data.clone()),
+    fn new(
+        ctx: &StepContext<'_>,
+        tools: &Path,
+        lock: &str,
+        binary: PathBuf,
+    ) -> Result<Self, ExecError> {
+        let store = store_env(ctx, tools, lock, &binary)?;
+        let mut exports = vec![
+            (
+                "MISE_DATA_DIR".to_owned(),
+                store.data.to_string_lossy().into_owned(),
+            ),
+            (
+                "MISE_SHIMS_DIR".to_owned(),
+                store.shims.to_string_lossy().into_owned(),
+            ),
             (
                 "MISE_CACHE_DIR".to_owned(),
                 ctx.temp.join("mise-cache").to_string_lossy().into_owned(),
@@ -263,45 +261,40 @@ impl Install {
             ("MISE_YES", "1".to_owned()),
         ] {
             if !ctx.env.contains_key(name) && std::env::var_os(name).is_none() {
-                env.push((name.to_owned(), value));
+                exports.push((name.to_owned(), value));
             }
         }
-        Self {
+        Ok(Self {
             binary,
-            dir,
-            data,
-            env,
-        }
-    }
-
-    fn process_env(&self, ctx: &StepContext<'_>) -> Vec<(String, String)> {
-        let mut env = self.env.clone();
-        env.push((
-            "PATH".to_owned(),
-            format!("{}:{}", self.dir, current_path(ctx)),
-        ));
-        env
-    }
-
-    fn probe_env(&self, ctx: &StepContext<'_>) -> Vec<(String, String)> {
-        let mut env = self.process_env(ctx);
-        env.push(("MISE_NO_ENV".to_owned(), "1".to_owned()));
-        env
+            store,
+            exports,
+        })
     }
 }
 
-async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), ExecError> {
-    let redacted = mise_json(ctx, install, &["env", "--redacted", "--json"]).await?;
+async fn export(
+    ctx: &mut StepContext<'_>,
+    mise: &Mise,
+    isolation: &Isolation,
+    install: &Install,
+) -> Result<(), ExecError> {
+    let redacted = mise
+        .json(ctx, isolation, &["env", "--redacted", "--json"])
+        .await?;
     for value in redacted.values() {
         ctx.add_mask(value);
     }
-    let computed = mise_json(ctx, install, &["env", "--json"]).await?;
-    let managed = managed_paths(ctx, install).await?;
+    let computed = mise.json(ctx, isolation, &["env", "--json"]).await?;
+    let managed = managed_paths(ctx, mise, isolation).await?;
     let github_path = ctx.env.get("GITHUB_PATH").cloned().unwrap_or_default();
     let github_env = ctx.env.get("GITHUB_ENV").cloned().unwrap_or_default();
-    let mut paths = vec![install.dir.clone(), format!("{}/shims", install.data)];
+    let dir = install.store.bin.to_string_lossy().into_owned();
+    let mut paths = vec![
+        dir.clone(),
+        install.store.shims.to_string_lossy().into_owned(),
+    ];
     let mut variables: String = install
-        .env
+        .exports
         .iter()
         .map(|(name, value)| env_command(name, value))
         .collect();
@@ -309,7 +302,7 @@ async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), Exec
         if name.eq_ignore_ascii_case("PATH") {
             let mut added = managed
                 .clone()
-                .unwrap_or_else(|| path_additions(value, &current_path(ctx), &install.dir));
+                .unwrap_or_else(|| path_additions(value, &mise.inherited_path, &dir));
             added.reverse();
             paths.extend(added);
         } else {
@@ -320,27 +313,27 @@ async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), Exec
     append(&github_env, &variables).await
 }
 
-pub(crate) async fn mise_action(
+async fn mise_action(
     inputs: &MiseInputs,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
-    require_workspace_config_only(&ctx.env, ctx.workspace).await?;
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
-    let lock = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
-    let install = Install::new(ctx, &tools, &lock, binary);
-    let probe_env = install.probe_env(ctx);
-    let loaded = mise_capture(ctx, &install, &["config", "ls", "--json"], &probe_env).await?;
-    require_sole_config(ctx.workspace, &loaded).await?;
+    let accepted = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
+    let install = Install::new(ctx, &tools, &accepted.lock, binary)?;
+    let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
+    let mise = Mise::new(&install, &isolation);
+    let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;
+    require_sole_config(&isolation.config_file(), &loaded)?;
     let mut args = vec!["install".to_owned(), "--locked".to_owned()];
     args.extend(inputs.install_args.split_whitespace().map(str::to_owned));
-    let program = install.binary.to_string_lossy().into_owned();
-    let env = ctx.env_with(&install.process_env(ctx));
-    let dir = ctx.workspace.to_path_buf();
-    match ctx
-        .run_process((&program, &args, &dir, &env), false)
-        .await?
-    {
+    let spec = (
+        mise.program.as_str(),
+        args.as_slice(),
+        mise.cwd.as_path(),
+        ProcessEnv::Exact(&mise.env),
+    );
+    match ctx.run_process(spec, false).await? {
         ProcessOutcome::Succeeded => {}
         ProcessOutcome::Cancelled => return Ok(StepResult::Cancelled),
         ProcessOutcome::Failed => {
@@ -348,7 +341,8 @@ pub(crate) async fn mise_action(
             return Ok(StepResult::Failed);
         }
     }
-    export(ctx, &install).await?;
+    export(ctx, &mise, &isolation, &install).await?;
+    isolation.remove().await?;
     Ok(StepResult::Succeeded)
 }
 

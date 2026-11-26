@@ -12,17 +12,6 @@ use sha2::{Digest, Sha256};
 
 use crate::exec_support::{Ran, Scratch};
 
-const HERMETIC_UNSET: [&str; 9] = [
-    "XDG_CONFIG_HOME",
-    "MISE_CONFIG_DIR",
-    "MISE_SYSTEM_DIR",
-    "MISE_CONFIG_FILE",
-    "MISE_GLOBAL_CONFIG_FILE",
-    "MISE_SYSTEM_CONFIG_FILE",
-    "MISE_OVERRIDE_CONFIG_FILENAMES",
-    "MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES",
-    "MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS",
-];
 pub(crate) const VERSION: &str = "2026.11.10";
 pub(crate) const SHA_PLACEHOLDER: &str = "__SETUP_VELNOR_SHA__";
 pub(crate) const CONFIG: &str = "[settings]\nlockfile = true\n\n[tools]\nnode = \"26.13.1\"\n";
@@ -32,7 +21,8 @@ const TOOL: &str = "#!/bin/sh\necho tooly-ran\n";
 pub(crate) struct World {
     scratch: Scratch,
     pub(crate) store: PathBuf,
-    root: PathBuf,
+    pub(crate) root: PathBuf,
+    temp: PathBuf,
 }
 
 pub(crate) fn pinned_mise_action() -> Result<String> {
@@ -101,10 +91,12 @@ impl World {
         let root = scratch.workspace().with_file_name("");
         let store = root.join("store");
         std::fs::create_dir_all(&store).context("create the store")?;
+        let temp = root.join("temp");
         Ok(Self {
             scratch,
             store,
             root,
+            temp,
         })
     }
 
@@ -116,12 +108,22 @@ impl World {
         self.root.join("home")
     }
 
-    pub(crate) fn system_config(&self) -> PathBuf {
-        self.root.join("system")
+    pub(crate) fn temp(&self) -> PathBuf {
+        self.temp.clone()
     }
 
-    pub(crate) fn temp(&self) -> PathBuf {
-        self.root.join("temp")
+    pub(crate) fn canonical_temp(&self) -> Result<PathBuf> {
+        std::fs::create_dir_all(&self.temp).context("create the temp directory")?;
+        std::fs::canonicalize(&self.temp).context("resolve the temp directory")
+    }
+
+    pub(crate) fn symlinked_temp(&mut self) -> Result<()> {
+        let real = self.root.join("tmp-real");
+        let link = self.root.join("tmp-link");
+        std::fs::create_dir_all(&real).context("create the real temp directory")?;
+        std::os::unix::fs::symlink("tmp-real", &link).context("link the temp directory")?;
+        self.temp = link;
+        Ok(())
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
@@ -130,10 +132,6 @@ impl World {
 
     pub(crate) fn binary_dir(&self) -> PathBuf {
         self.store.join("tools/mise").join(VERSION)
-    }
-
-    fn log(&self) -> PathBuf {
-        self.root.join("mise.log")
     }
 
     pub(crate) fn install_mise(&self) -> Result<PathBuf> {
@@ -154,11 +152,19 @@ impl World {
     }
 
     pub(crate) fn init_workspace_with(&self, config: &str, commit_lock: bool) -> Result<()> {
+        self.write_workspace(config, LOCK, commit_lock)
+    }
+
+    pub(crate) fn init_workspace_with_lock(&self, config: &str, lock: &str) -> Result<()> {
+        self.write_workspace(config, lock, true)
+    }
+
+    fn write_workspace(&self, config: &str, lock: &str, commit_lock: bool) -> Result<()> {
         let workspace = self.workspace();
         std::fs::create_dir_all(&workspace).context("create the workspace")?;
         git(&workspace, &["init", "--quiet"])?;
         std::fs::write(workspace.join("mise.toml"), config).context("write mise.toml")?;
-        std::fs::write(workspace.join("mise.lock"), LOCK).context("write mise.lock")?;
+        std::fs::write(workspace.join("mise.lock"), lock).context("write mise.lock")?;
         let tracked: &[&str] = if commit_lock {
             &["mise.toml", "mise.lock"]
         } else {
@@ -323,10 +329,20 @@ impl World {
     }
 
     pub(crate) fn start(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
+        let mut command = self.command(job);
+        command
+            .env("VELNOR_STORE_ROOT", &self.store)
+            .env_remove("MISE_TRUSTED_CONFIG_PATHS")
+            .env_remove("MISE_YES")
+            .env_remove("CARGO_HOME")
+            .env_remove("RUSTUP_HOME")
+            .env("HOME", self.home())
+            .envs(extra_env.iter().copied());
+        command.spawn().context("start velnor-runner exec")
+    }
+
+    pub(crate) fn command(&self, job: &Path) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
-        for name in HERMETIC_UNSET {
-            command.env_remove(name);
-        }
         command
             .arg("exec")
             .arg("--job")
@@ -334,47 +350,26 @@ impl World {
             .arg("--workspace")
             .arg(self.workspace())
             .arg("--temp")
-            .arg(self.temp())
-            .env("VELNOR_STORE_ROOT", &self.store)
-            .env("MISE_DOUBLE_LOG", self.log())
-            .env_remove("MISE_TRUSTED_CONFIG_PATHS")
-            .env_remove("MISE_YES")
-            .env("HOME", self.home())
-            .env("MISE_SYSTEM_CONFIG_DIR", self.system_config())
-            .env(
-                "MISE_CEILING_PATHS",
-                self.root.parent().unwrap_or(&self.root),
-            )
-            .envs(extra_env.iter().copied())
+            .arg(&self.temp)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("start velnor-runner exec")
+            .stderr(Stdio::piped());
+        command
     }
 
     pub(crate) fn run(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Ran> {
+        let child = self.start(job, extra_env)?;
+        Self::finish(child)
+    }
+
+    pub(crate) fn finish(child: Child) -> Result<Ran> {
         let started = Instant::now();
-        let output = self
-            .start(job, extra_env)?
-            .wait_with_output()
-            .context("run velnor-runner exec")?;
+        let output = child.wait_with_output().context("run velnor-runner exec")?;
         Ok(Ran {
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             code: output.status.code(),
             elapsed: started.elapsed(),
         })
-    }
-
-    pub(crate) fn mise_calls(&self) -> Vec<String> {
-        std::fs::read_to_string(self.log())
-            .map_or_default(|text| text.lines().map(str::to_owned).collect())
-    }
-
-    pub(crate) fn mise_installs(&self) -> Vec<String> {
-        let mut calls = self.mise_calls();
-        calls.retain(|call| call.starts_with("argv=install "));
-        calls
     }
 }
 

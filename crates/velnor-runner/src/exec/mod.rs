@@ -39,6 +39,7 @@ pub use facts::JobFacts;
 pub use inputs::Inputs;
 pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
+pub use step::ProcessEnv;
 
 use crate::expr::ExprError;
 

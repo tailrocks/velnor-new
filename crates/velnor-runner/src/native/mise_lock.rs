@@ -3,7 +3,7 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/mise.rs
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -73,25 +73,20 @@ async fn is_regular_file(path: &Path) -> bool {
         .is_ok_and(|meta| meta.file_type().is_file())
 }
 
-#[derive(Deserialize)]
-struct LoadedConfig {
-    path: std::path::PathBuf,
+pub(super) struct AcceptedConfig {
+    pub(super) config: String,
+    pub(super) lock: String,
 }
 
-pub(super) async fn require_sole_config(
-    workspace: &Path,
-    config_listing: &str,
-) -> Result<(), ExecError> {
+#[derive(Deserialize)]
+struct LoadedConfig {
+    path: PathBuf,
+}
+
+pub(super) fn require_sole_config(expected: &Path, config_listing: &str) -> Result<(), ExecError> {
     let loaded: Vec<LoadedConfig> = serde_json::from_str(config_listing)
         .map_err(|error| invalid(format!("mise config ls --json output: {error}")))?;
-    let expected = tokio::fs::canonicalize(workspace.join(CONFIG))
-        .await
-        .map_err(|source| ExecError::io(format!("resolve {CONFIG}"), source))?;
-    let mut resolved = Vec::new();
-    for config in &loaded {
-        resolved.push(tokio::fs::canonicalize(&config.path).await.ok());
-    }
-    if resolved.len() == 1 && resolved[0].as_deref() == Some(expected.as_path()) {
+    if loaded.len() == 1 && loaded[0].path == expected {
         return Ok(());
     }
     let listed: Vec<String> = loaded
@@ -124,7 +119,37 @@ async fn require_tracked_and_clean(ctx: &mut StepContext<'_>) -> Result<(), Exec
     }
 }
 
-async fn resolve_locked_mise_config(ctx: &mut StepContext<'_>) -> Result<String, ExecError> {
+fn require_supported_directives(config: &toml::Table) -> Result<(), ExecError> {
+    for section in ["env", "vars"] {
+        let tables: Vec<&toml::Table> = match config.get(section) {
+            Some(toml::Value::Table(table)) => vec![table],
+            Some(toml::Value::Array(entries)) => {
+                entries.iter().filter_map(toml::Value::as_table).collect()
+            }
+            _ => Vec::new(),
+        };
+        for table in tables {
+            let unsupported = match table.get("_") {
+                None => None,
+                Some(toml::Value::Table(directives)) => directives
+                    .keys()
+                    .find(|name| *name != "path")
+                    .map(|name| format!("_.{name}")),
+                Some(_) => Some("_".to_owned()),
+            };
+            if let Some(name) = unsupported {
+                return Err(ExecError::Unsupported(format!(
+                    "mise policy: [{section}] {name} is not supported by velnor-runner"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn resolve_locked_mise_config(
+    ctx: &mut StepContext<'_>,
+) -> Result<AcceptedConfig, ExecError> {
     let workspace = ctx.workspace;
     for name in [CONFIG, LOCK] {
         if !is_regular_file(&workspace.join(name)).await {
@@ -133,14 +158,18 @@ async fn resolve_locked_mise_config(ctx: &mut StepContext<'_>) -> Result<String,
             )));
         }
     }
-    require_tracked_and_clean(ctx).await?;
     let read = async |name: &str| {
         tokio::fs::read_to_string(workspace.join(name))
             .await
             .map_err(|source| ExecError::io(format!("read {name}"), source))
     };
-    let config: toml::Table = read(CONFIG)
-        .await?
+    let accepted = AcceptedConfig {
+        config: read(CONFIG).await?,
+        lock: read(LOCK).await?,
+    };
+    require_tracked_and_clean(ctx).await?;
+    let config: toml::Table = accepted
+        .config
         .parse()
         .map_err(|error| invalid(format!("{CONFIG} is not valid TOML: {error}")))?;
     let locked = config
@@ -154,14 +183,15 @@ async fn resolve_locked_mise_config(ctx: &mut StepContext<'_>) -> Result<String,
             "mise policy: {CONFIG} does not set [settings] lockfile = true"
         )));
     }
-    read(LOCK).await
+    require_supported_directives(&config)?;
+    Ok(accepted)
 }
 
 pub(super) async fn enforce_locked_mise_policy(
     ctx: &mut StepContext<'_>,
     install_args: &str,
-) -> Result<String, ExecError> {
-    let lock = resolve_locked_mise_config(ctx).await?;
-    validate_install_args(install_args, &lock)?;
-    Ok(lock)
+) -> Result<AcceptedConfig, ExecError> {
+    let accepted = resolve_locked_mise_config(ctx).await?;
+    validate_install_args(install_args, &accepted.lock)?;
+    Ok(accepted)
 }

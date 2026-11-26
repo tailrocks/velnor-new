@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use futures_util::FutureExt;
 use velnor_runner::exec::{
-    AdapterRegistry, JobCancel, JobResult, JobRun, LogSink, StepAdapter, StepContext, StepFuture,
-    StepResult, run_job,
+    AdapterRegistry, JobCancel, JobResult, JobRun, LogSink, ProcessEnv, StepAdapter, StepContext,
+    StepFuture, StepResult, run_job,
 };
 
 use crate::exec_support::{Scratch, fixture_message};
@@ -40,7 +40,9 @@ impl StepAdapter for Probe {
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
             let args = ["-c".to_owned(), self.0.to_owned()];
-            let output = ctx.capture(("sh", &args, ctx.workspace, &[])).await?;
+            let output = ctx
+                .capture(("sh", &args, ctx.workspace, ProcessEnv::Overlay(&[])))
+                .await?;
             ctx.log(&format!("captured={output}"));
             Ok(StepResult::Succeeded)
         }
