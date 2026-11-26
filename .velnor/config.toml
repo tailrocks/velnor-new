@@ -23,6 +23,15 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
+  "crates/velnor-runner/**",
+  "Cargo.toml",
+  "Cargo.lock",
+]
+packages = ["velnor-runner"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = [
   "crates/velnor-runner-cli/**",
   "Cargo.toml",
   "Cargo.lock",
