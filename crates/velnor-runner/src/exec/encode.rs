@@ -42,6 +42,9 @@ fn json(value: &str) -> String {
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or_default()
         .to_owned()
+        .replace('\u{85}', "\\u0085")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
 }
 
 fn uri_data(value: &str) -> String {

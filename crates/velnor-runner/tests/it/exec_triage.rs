@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use velnor_runner::exec::{AdapterRegistry, AnnotationLevel, JobCancel, JobResult, StepResult};
 
-use crate::exec_builder::{execute, expression, job, mapping, run, with};
+use crate::exec_builder::{execute, expression, job, mapping, run, run_message, step, with};
 use crate::exec_support::Scratch;
 
 const BOM: &str = "\\357\\273\\277";
@@ -134,5 +134,55 @@ async fn secret_debug_flags_are_not_registered_as_masks() -> Result<()> {
     });
     let (_, lines) = run_steps(&message).await?;
     assert!(lines.iter().any(|line| line == "flag=true"), "{lines:?}");
+    Ok(())
+}
+
+#[test]
+fn step_outputs_differing_by_non_ascii_case_keep_the_last_value() -> Result<()> {
+    let message = job(vec![
+        run(
+            "a",
+            "echo 'ä=old' >> \"$GITHUB_OUTPUT\"\necho 'Ä=new' >> \"$GITHUB_OUTPUT\"",
+        ),
+        step(
+            "b",
+            expression("format('echo \"got={0}\"', steps.a.outputs['ä'])"),
+        ),
+    ]);
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("got=new"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn json_encoded_line_separators_of_a_secret_are_masked() -> Result<()> {
+    let mut message = job(vec![run(
+        "a",
+        "cat <<'FORMS'\nraw:a\u{2028}b\u{85}c\u{2029}d\njson:a\\u2028b\\u0085c\\u2029d\nFORMS",
+    )]);
+    message["Variables"] = json!({"S": {"Value": "a\u{2028}b\u{85}c\u{2029}d", "IsSecret": true}});
+    let ran = run_message(&Scratch::new()?, &message)?;
+    for label in ["raw", "json"] {
+        assert!(ran.has_line(&format!("{label}:***")), "{}", ran.stdout);
+    }
+    Ok(())
+}
+
+#[test]
+fn step_debug_is_read_as_a_dot_net_boolean() -> Result<()> {
+    for (value, enabled) in [
+        ("true", true),
+        (" TRUE ", true),
+        ("\0true\0", true),
+        ("1", false),
+        ("$true", false),
+        ("yes", false),
+    ] {
+        let mut message = job(vec![run("a", "echo \"debug=$RUNNER_DEBUG\"")]);
+        message["Variables"] = json!({"ACTIONS_STEP_DEBUG": {"Value": value}});
+        let ran = run_message(&Scratch::new()?, &message)?;
+        let expected = if enabled { "debug=1" } else { "debug=" };
+        assert!(ran.has_line(expected), "{value:?}: {}", ran.stdout);
+    }
     Ok(())
 }
