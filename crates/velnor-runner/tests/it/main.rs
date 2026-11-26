@@ -56,6 +56,7 @@ mod offload;
 mod parity;
 #[path = "exec_process.rs"]
 mod process;
+mod lifecycle;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;
@@ -68,6 +69,7 @@ mod semantics;
 mod shells;
 #[path = "exec_stopped.rs"]
 mod stopped;
+mod run_cli;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

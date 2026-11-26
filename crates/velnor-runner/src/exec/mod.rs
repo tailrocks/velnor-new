@@ -118,6 +118,7 @@ pub struct Annotation {
     pub end_line: Option<u32>,
     pub column: Option<u32>,
     pub end_column: Option<u32>,
+    pub step: Option<u32>,
 }
 
 impl Annotation {
@@ -131,6 +132,7 @@ impl Annotation {
             end_line: None,
             column: None,
             end_column: None,
+            step: None,
         }
     }
 }

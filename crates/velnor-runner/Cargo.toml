@@ -50,4 +50,5 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+rsa = { workspace = true }
 sha2 = { workspace = true }
