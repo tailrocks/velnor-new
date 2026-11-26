@@ -5,6 +5,10 @@
 mod cancel;
 #[path = "exec_commands.rs"]
 mod commands;
+#[path = "exec_conditions.rs"]
+mod conditions;
+#[path = "exec_defaults.rs"]
+mod defaults;
 #[path = "exec_drain.rs"]
 mod drain;
 #[path = "exec_builder.rs"]

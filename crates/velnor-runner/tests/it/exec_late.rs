@@ -165,3 +165,66 @@ async fn annotation_messages_are_cut_at_4096_utf16_units() -> Result<()> {
     assert_eq!(message.message.encode_utf16().count(), 4096);
     Ok(())
 }
+
+async fn stop_then_resume(stop: &str, resume: &str) -> Result<Vec<String>> {
+    let script = format!(
+        "echo '::stop-commands::{stop}'\necho '::error::paused'\necho '::{resume}::'\necho '::error::after'"
+    );
+    let (finished, _) = execute(
+        &job(vec![run("a", &script)]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    Ok(finished
+        .annotations
+        .into_iter()
+        .map(|annotation| annotation.message)
+        .collect())
+}
+
+#[tokio::test]
+async fn long_s_and_dotless_i_are_not_resumed_by_their_ascii_letters() -> Result<()> {
+    assert_eq!(
+        stop_then_resume("ſecret-token", "secret-token").await?,
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        stop_then_resume("ıd-token-xyz", "id-token-xyz").await?,
+        Vec::<String>::new()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn iota_subscript_letters_resume_with_their_simple_uppercase() -> Result<()> {
+    assert_eq!(
+        stop_then_resume("ᾳbcdefgh", "ᾼBCDEFGH").await?,
+        vec!["after".to_owned()]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn runner_arch_names_the_build_target_with_the_upstream_four_way_mapping() -> Result<()> {
+    let expected = match std::env::consts::ARCH {
+        "x86" => "X86",
+        "x86_64" => "X64",
+        "arm" => "ARM",
+        "aarch64" => "ARM64",
+        other => other,
+    };
+    let (_, lines) = execute(
+        &job(vec![run("a", "echo \"arch=$RUNNER_ARCH\"")]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    assert!(
+        lines.iter().any(|line| line == &format!("arch={expected}")),
+        "{lines:?}"
+    );
+    Ok(())
+}

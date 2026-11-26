@@ -59,3 +59,15 @@ fn expr_length_limit_counts_utf16_units() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn expr_length_limit_is_exactly_21000_units() -> Result<()> {
+    let env = empty_env();
+    let padded = |units: usize| format!("true{}", " ".repeat(units - 4));
+    assert!(truthy(&padded(21_000), &env)?);
+    assert_eq!(
+        error_text(&padded(21_001), &env)?,
+        "Exceeded max expression length 21000"
+    );
+    Ok(())
+}

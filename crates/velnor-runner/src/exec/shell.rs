@@ -104,9 +104,9 @@ pub(super) fn resolve(
         return Ok(shell);
     }
     Ok(context
-        .default_run_value("shell", env)?
+        .default_run("shell")
         .filter(|shell| !shell.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_SHELL.to_owned()))
+        .map_or_else(|| DEFAULT_SHELL.to_owned(), str::to_owned))
 }
 
 fn plain(token: &Json) -> Option<&str> {
@@ -125,7 +125,7 @@ pub(super) fn admission_spec(step: &ActionStep, context: &JobContext) -> Option<
         }
     }
     context
-        .default_run_token("shell")
-        .and_then(plain)
+        .default_run("shell")
+        .filter(|shell| !shell.trim().is_empty())
         .map(str::to_owned)
 }

@@ -93,3 +93,36 @@ pub(super) fn input(
         .map(|token| scalar(token, env))
         .transpose()
 }
+
+pub(super) fn boolean(token: &Json, env: &ExprEnv) -> Result<bool, ExprError> {
+    match token {
+        Json::Bool(value) => Ok(*value),
+        Json::Null => Ok(false),
+        Json::Object(object) => match member(object, "type").and_then(Json::as_i64) {
+            Some(BOOLEAN) => Ok(member(object, "bool")
+                .and_then(Json::as_bool)
+                .unwrap_or(false)),
+            Some(NULL) => Ok(false),
+            Some(BASIC_EXPRESSION | INSERT_EXPRESSION) => {
+                match evaluate_expression(
+                    member(object, "expr")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default(),
+                    env,
+                )? {
+                    Value::Boolean(value) => Ok(value),
+                    other => Err(ExprError::evaluation(format!(
+                        "Unexpected value '{}': a Boolean was expected",
+                        other.convert_to_string()
+                    ))),
+                }
+            }
+            _ => Err(not_boolean()),
+        },
+        _ => Err(not_boolean()),
+    }
+}
+
+fn not_boolean() -> ExprError {
+    ExprError::evaluation("Unexpected type: a Boolean was expected")
+}
