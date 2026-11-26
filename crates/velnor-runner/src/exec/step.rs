@@ -302,7 +302,10 @@ pub(super) async fn run(
 ) -> Result<StepResult, ExecError> {
     let ending = drive(spec, limits, true, |chunk| {
         let (text, overflow) = chunk.text();
-        out.bounded_line(&text, overflow);
+        let mut lines = text.split('\r').peekable();
+        while let Some(line) = lines.next() {
+            out.bounded_line(line, overflow && lines.peek().is_none());
+        }
     })
     .await?;
     Ok(match ending {

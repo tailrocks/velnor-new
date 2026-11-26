@@ -94,8 +94,68 @@ fn parse_legacy(line: &str) -> Option<WorkflowCommand<'_>> {
     })
 }
 
-fn parse(line: &str) -> Option<WorkflowCommand<'_>> {
-    parse_modern(line).or_else(|| parse_legacy(line))
+fn registered(name: &str, resume: Option<&str>) -> bool {
+    !name.eq_ignore_ascii_case("pause-logging")
+        && (RESERVED_TOKENS
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(name))
+            || resume.is_some_and(|token| token.eq_ignore_ascii_case(name)))
+}
+
+fn parse<'a>(line: &'a str, resume: Option<&str>) -> Option<WorkflowCommand<'a>> {
+    parse_modern(line)
+        .filter(|command| registered(command.name, resume))
+        .or_else(|| parse_legacy(line).filter(|command| registered(command.name, resume)))
+}
+
+fn validate_range(properties: &mut BTreeMap<String, String>) {
+    let text = |properties: &BTreeMap<String, String>, key: &str| properties.get(key).cloned();
+    let parsed =
+        |value: &Option<String>| value.as_deref().and_then(|v| v.trim().parse::<i32>().ok());
+    let mut line = text(properties, "line");
+    let end_line = text(properties, "endline");
+    let mut column = text(properties, "col");
+    let end_column = text(properties, "endcolumn");
+    let (line_number, end_line_number) = (parsed(&line), parsed(&end_line));
+    let (column_number, end_column_number) = (parsed(&column), parsed(&end_column));
+    let mut has_line = line_number.is_some();
+    let has_end_line = end_line_number.is_some();
+    let mut has_column = column_number.is_some();
+    let has_end_column = end_column_number.is_some();
+    let any_column = has_column || has_end_column;
+    if has_end_line && !has_line {
+        properties.insert("line".to_owned(), end_line.clone().unwrap_or_default());
+        has_line = true;
+        line.clone_from(&end_line);
+    }
+    if has_end_column && !has_column {
+        properties.insert("col".to_owned(), end_column.clone().unwrap_or_default());
+        has_column = true;
+        column.clone_from(&end_column);
+    }
+    let drop_columns = |properties: &mut BTreeMap<String, String>| {
+        properties.remove("col");
+        properties.remove("endcolumn");
+    };
+    if !has_line && any_column {
+        drop_columns(properties);
+    }
+    if has_end_line && line != end_line && any_column {
+        drop_columns(properties);
+    }
+    if has_line
+        && has_end_line
+        && end_line_number.unwrap_or_default() < line_number.unwrap_or_default()
+    {
+        properties.remove("line");
+        properties.remove("endline");
+    }
+    if has_column
+        && has_end_column
+        && end_column_number.unwrap_or_default() < column_number.unwrap_or_default()
+    {
+        drop_columns(properties);
+    }
 }
 
 fn number(properties: &BTreeMap<String, String>, key: &str) -> Option<u32> {
@@ -109,7 +169,8 @@ fn text(properties: &BTreeMap<String, String>, key: &str) -> Option<String> {
         .cloned()
 }
 
-fn annotation(level: AnnotationLevel, command: WorkflowCommand<'_>) -> Annotation {
+fn annotation(level: AnnotationLevel, mut command: WorkflowCommand<'_>) -> Annotation {
+    validate_range(&mut command.properties);
     let properties = &command.properties;
     Annotation {
         level,
@@ -152,7 +213,7 @@ fn stop(token: &str, out: &mut Output<'_>) {
 }
 
 pub(super) fn apply(line: &str, out: &mut Output<'_>) {
-    let Some(command) = parse(line) else {
+    let Some(command) = parse(line, out.issues.stop_token()) else {
         return;
     };
     let name = command.name.to_ascii_lowercase();
@@ -169,5 +230,29 @@ pub(super) fn apply(line: &str, out: &mut Output<'_>) {
         "warning" => out.push(annotation(AnnotationLevel::Warning, command)),
         "notice" => out.push(annotation(AnnotationLevel::Notice, command)),
         _ => {}
+    }
+}
+
+fn relative(path: &str, folder: &str) -> Option<String> {
+    if !path.starts_with(folder) || path.len() == folder.len() {
+        return None;
+    }
+    let rest = if folder.ends_with('/') {
+        &path[folder.len()..]
+    } else if path[folder.len()..].starts_with('/') {
+        &path[folder.len() + 1..]
+    } else {
+        return None;
+    };
+    (!rest.is_empty()).then(|| rest.to_owned())
+}
+
+pub(super) fn relativize(annotation: &mut Annotation, workspace: &str) {
+    if let Some(file) = annotation
+        .file
+        .as_deref()
+        .and_then(|file| relative(file, workspace))
+    {
+        annotation.file = Some(file);
     }
 }

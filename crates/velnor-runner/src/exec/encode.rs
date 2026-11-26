@@ -67,7 +67,7 @@ fn xml(value: &str) -> String {
 }
 
 fn trim_double_quotes(value: &str) -> String {
-    if value.chars().count() > QUOTED_MINIMUM {
+    if value.encode_utf16().count() > QUOTED_MINIMUM {
         value
             .strip_prefix('"')
             .and_then(|rest| rest.strip_suffix('"'))
@@ -94,7 +94,7 @@ fn section(value: &str, before: bool) -> String {
         (None, Some(at)) => Some(&value[at + 1..]),
         (None, None) => None,
     };
-    part.filter(|part| part.chars().count() >= SHORT_SECTION)
+    part.filter(|part| part.encode_utf16().count() >= SHORT_SECTION)
         .map_or_else(String::new, str::to_owned)
 }
 

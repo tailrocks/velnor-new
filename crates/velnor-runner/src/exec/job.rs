@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use super::adapter::AdapterRegistry;
 use super::cancel::Groups;
+use super::commands;
 use super::context::{JobContext, StepEntry};
+use super::contexts::set_output;
 use super::execute::Executed;
 use super::issues::Issues;
 use super::mask::{self, Masker};
@@ -85,7 +87,9 @@ pub async fn run_job(
         }
     }
     run.annotations = issues.into_items();
+    let workspace = options.workspace.to_string_lossy();
     for annotation in &mut run.annotations {
+        commands::relativize(annotation, &workspace);
         mask::mask_annotation(&masker, annotation);
     }
     sink.job_finished(&run);
@@ -116,7 +120,11 @@ impl Job<'_> {
         let env = self.ctx.expr_env(self.status, &[]);
         match token::mapping(token, &env) {
             Ok(outputs) => {
-                for (name, value) in outputs.into_iter().filter(|(_, value)| !value.is_empty()) {
+                let mut unique = Vec::new();
+                for (name, value) in &outputs {
+                    set_output(&mut unique, name, value);
+                }
+                for (name, value) in unique.into_iter().filter(|(_, value)| !value.is_empty()) {
                     if out.masker.reveals(&value) {
                         let warning = format!("Skip output '{name}' since it may contain secret.");
                         out.message(&warning);
@@ -146,7 +154,7 @@ impl Job<'_> {
         if cancel.is_none() {
             self.status = JobStatus::Cancelled;
         }
-        let prepared = self.ctx.begin_step(step.name.as_deref()).await;
+        let prepared = self.ctx.begin_step(step).await;
         let step_env = step_environment(step, &self.ctx.expr_env(self.status, &[]));
         let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
         let env = self.ctx.expr_env(self.status, &step_vars);
@@ -179,6 +187,7 @@ impl Job<'_> {
             };
             let executed = executed.unwrap_or_else(|error| {
                 out.message(&error.to_string());
+                out.annotate(AnnotationLevel::Error, error.to_string());
                 Executed {
                     result: StepResult::Failed,
                     outputs: Vec::new(),
