@@ -3,7 +3,9 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/git_mirror.rs
 
 use std::fs::TryLockError;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::os::fd::OwnedFd;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -11,6 +13,8 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags};
+use rustix::io::Errno;
 use tokio::process::Command;
 use url::Url;
 
@@ -115,6 +119,7 @@ async fn lock(path: &Path) -> Result<std::fs::File> {
         .create(true)
         .truncate(false)
         .write(true)
+        .custom_flags((OFlags::NOFOLLOW | OFlags::CLOEXEC).bits().cast_signed())
         .open(path)
         .await
         .with_context(|| format!("open {}", path.display()))?
@@ -184,38 +189,100 @@ fn valid_head(head: &str) -> bool {
         })
 }
 
+const MAX_HEAD_BYTES: u64 = 512;
+const MAX_REF_DEPTH: usize = 32;
+
+fn read_head(path: &Path) -> Option<String> {
+    let flags = OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(flags.bits().cast_signed())
+        .open(path)
+        .ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut head = String::new();
+    file.take(MAX_HEAD_BYTES).read_to_string(&mut head).ok()?;
+    Some(head)
+}
+
 async fn reset_mirror(mirror: &Path) -> Result<()> {
     remove_entry(&mirror.join("commondir")).await?;
     remove_entry(&mirror.join(".git")).await?;
-    let head = tokio::fs::read_to_string(mirror.join("HEAD")).await;
-    let is_file = tokio::fs::symlink_metadata(mirror.join("HEAD"))
-        .await
-        .is_ok_and(|meta| meta.is_file());
-    if !is_file || !head.is_ok_and(|head| valid_head(&head)) {
+    let head = {
+        let path = mirror.join("HEAD");
+        tokio::task::spawn_blocking(move || read_head(&path))
+            .await
+            .context("wait for the mirror HEAD read")?
+    };
+    if !head.is_some_and(|head| valid_head(&head)) {
         install(mirror, "HEAD", MIRROR_HEAD).await?;
     }
     install(mirror, "config", MIRROR_CONFIG).await
 }
 
-async fn remove_ref_locks(mirror: &Path) -> Result<()> {
-    let mut pending = vec![mirror.join("refs")];
-    while let Some(dir) = pending.pop() {
-        let mut entries = match tokio::fs::read_dir(&dir).await {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error).with_context(|| format!("read {}", dir.display())),
-        };
-        while let Some(entry) = entries.next_entry().await? {
-            let kind = entry.file_type().await?;
-            let path = entry.path();
-            if kind.is_dir() {
-                pending.push(path);
-            } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "lock") {
-                tokio::fs::remove_file(&path)
-                    .await
-                    .with_context(|| format!("remove {}", path.display()))?;
-            }
+fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<()> {
+    let entries = Dir::read_from(dir).context("read a refs directory")?;
+    for entry in entries {
+        let entry = entry.context("read a refs entry")?;
+        let name = entry.file_name();
+        if matches!(name.to_bytes(), b"." | b"..") {
+            continue;
         }
+        let kind = rustix::fs::statat(dir, name, AtFlags::SYMLINK_NOFOLLOW)
+            .map(|stat| FileType::from_raw_mode(stat.st_mode));
+        match kind {
+            Ok(FileType::Directory) => {
+                if depth >= MAX_REF_DEPTH {
+                    bail!("mirror: refs nest deeper than {MAX_REF_DEPTH} directories");
+                }
+                let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+                match rustix::fs::openat(dir, name, flags, Mode::empty()) {
+                    Ok(child) => remove_locks_in(&child, depth + 1)?,
+                    Err(Errno::NOENT | Errno::LOOP | Errno::NOTDIR) => {}
+                    Err(error) => return Err(error).context("open a refs directory"),
+                }
+            }
+            Ok(FileType::RegularFile) if name.to_bytes().ends_with(b".lock") => {
+                match rustix::fs::unlinkat(dir, name, AtFlags::empty()) {
+                    Ok(()) | Err(Errno::NOENT) => {}
+                    Err(error) => return Err(error).context("remove a ref lock"),
+                }
+            }
+            Ok(_) | Err(Errno::NOENT) => {}
+            Err(error) => return Err(error).context("inspect a refs entry"),
+        }
+    }
+    Ok(())
+}
+
+fn remove_ref_locks_blocking(mirror: &Path) -> Result<bool> {
+    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+    let mirror_fd = rustix::fs::openat(CWD, mirror, flags, Mode::empty())
+        .with_context(|| format!("open {}", mirror.display()))?;
+    match rustix::fs::openat(&mirror_fd, "refs", flags | OFlags::NOFOLLOW, Mode::empty()) {
+        Ok(refs) => remove_locks_in(&refs, 0).map(|()| false),
+        Err(Errno::NOENT) => Ok(false),
+        Err(Errno::LOOP | Errno::NOTDIR) => Ok(true),
+        Err(error) => Err(error).context("open the mirror refs directory"),
+    }
+}
+
+async fn remove_ref_locks(mirror: &Path) -> Result<()> {
+    let mirror = mirror.to_owned();
+    let replace = {
+        let mirror = mirror.clone();
+        tokio::task::spawn_blocking(move || remove_ref_locks_blocking(&mirror))
+            .await
+            .context("wait for the ref lock cleanup")??
+    };
+    if replace {
+        let refs = mirror.join("refs");
+        remove_entry(&refs).await?;
+        tokio::fs::create_dir(&refs)
+            .await
+            .with_context(|| format!("create {}", refs.display()))?;
     }
     Ok(())
 }
@@ -230,7 +297,12 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
             .with_context(|| format!("create {}", parent.display()))?;
     }
     let _lock = lock(Path::new(&lock_file)).await?;
-    if !mirror.join("config").is_file() {
+    let config = mirror.join("config");
+    let config_is_file = tokio::fs::symlink_metadata(&config)
+        .await
+        .is_ok_and(|meta| meta.is_file());
+    if !config_is_file {
+        remove_entry(&config).await?;
         let mirror_arg = mirror
             .to_str()
             .with_context(|| format!("path {} is not UTF-8", mirror.display()))?;
