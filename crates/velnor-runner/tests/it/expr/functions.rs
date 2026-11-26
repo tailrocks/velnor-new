@@ -101,8 +101,9 @@ fn expr_ends_with_is_case_insensitive() -> Result<()> {
     assert!(!truthy("endsWith('ab', 'xab')", &env)?);
     assert!(truthy("endsWith(github.run_number, 45)", &env)?);
     assert!(truthy("endsWith('stra\u{df}e\u{c4}', '\u{e4}')", &env)?);
-    assert!(!truthy("endsWith(github, 'x')", &env)?);
-    assert!(!truthy("endsWith('x', github)", &env)?);
+    assert!(truthy("endsWith('x\u{2c6f}', '\u{250}')", &env)?);
+    assert!(!truthy("endsWith(github, 'Object')", &env)?);
+    assert!(!truthy("endsWith('anObject', github)", &env)?);
     Ok(())
 }
 
@@ -125,6 +126,7 @@ fn expr_from_json_parses_and_rejects() -> Result<()> {
     assert!(error_text("fromJSON(env.BAD)", &env)?.contains("Error parsing fromJson"));
     assert!(error_text("fromJSON('')", &env)?.contains("Error parsing fromJson"));
     assert!(error_text("fromJSON(env.MISSING)", &env)?.contains("Error parsing fromJson"));
+    assert!(error_text("fromJSON('{} x')", &env)?.contains("Error parsing fromJson"));
     assert!(error_text("fromJSON('a', 'b')", &env)?.contains("Too many parameters"));
     Ok(())
 }

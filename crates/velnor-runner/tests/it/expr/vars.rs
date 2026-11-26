@@ -44,3 +44,47 @@ fn expr_vars_reads_job_message() -> Result<()> {
     assert!(!truthy("vars.VELNOR_CACHE_DEBUG == '1'", &without_vars)?);
     Ok(())
 }
+
+#[test]
+fn expr_job_message_fills_only_service_owned_contexts() -> Result<()> {
+    let mut wire: serde_json::Value =
+        serde_json::from_str(include_str!("../../../fixtures/job-message-wire.json"))?;
+    let context_data = wire["ContextData"]
+        .as_object_mut()
+        .context("fixture has no ContextData")?;
+    context_data.insert(
+        "runner".into(),
+        json!({"t": 2, "d": [{"k": "os", "v": "Windows"}]}),
+    );
+    context_data.insert(
+        "env".into(),
+        json!({"t": 2, "d": [{"k": "X", "v": "from-message"}]}),
+    );
+    context_data.insert(
+        "steps".into(),
+        json!({"t": 2, "d": [{"k": "s", "v": {"t": 2, "d": [{"k": "outcome", "v": "success"}]}}]}),
+    );
+    context_data.insert("needs".into(), json!({"t": 2, "d": [{"k": "build", "v": {"t": 2, "d": [{"k": "result", "v": "success"}]}}]}));
+    context_data.insert(
+        "inputs".into(),
+        json!({"t": 2, "d": [{"k": "mode", "v": "fast"}]}),
+    );
+    context_data.insert(
+        "vars".into(),
+        json!({"t": 2, "d": [{"k": "FLAG", "v": "1"}]}),
+    );
+    let message = AgentJobRequestMessage::from_value(wire).context("parse message")?;
+    let contexts = message.materialize_context_values()?;
+    let mut env = empty_env();
+    env.set_job_contexts(contexts.expose());
+
+    assert_eq!(text("secrets.DEPLOY_KEY", &env)?, "");
+    assert_eq!(text("runner.os", &env)?, "");
+    assert_eq!(text("env.X", &env)?, "");
+    assert_eq!(text("steps.s.outcome", &env)?, "");
+    assert_eq!(text("github.repository", &env)?, "tailrocks/velnor-new");
+    assert_eq!(text("needs.build.result", &env)?, "success");
+    assert_eq!(text("inputs.mode", &env)?, "fast");
+    assert_eq!(text("vars.FLAG", &env)?, "1");
+    Ok(())
+}

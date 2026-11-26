@@ -34,6 +34,8 @@ impl RootContext {
         ("vars", Self::Vars),
     ];
 
+    const SERVICE_OWNED: [Self; 4] = [Self::Github, Self::Needs, Self::Inputs, Self::Vars];
+
     fn parse(name: &str) -> Option<Self> {
         Self::ALL
             .iter()
@@ -155,7 +157,9 @@ impl ExprEnv {
 
     pub fn set_job_contexts(&mut self, contexts: &BTreeMap<String, ContextValue>) {
         for (name, value) in contexts {
-            if let Some(root) = RootContext::parse(name) {
+            if let Some(root) =
+                RootContext::parse(name).filter(|root| RootContext::SERVICE_OWNED.contains(root))
+            {
                 self.set_context(root, value);
             }
         }

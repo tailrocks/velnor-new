@@ -2,81 +2,131 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use velnor_runner::expr::{ExprEnv, evaluate_condition, evaluate_template};
+use velnor_runner::expr::{ExprEnv, ExprError, evaluate_condition, evaluate_template};
 
-const RENDER_ONLY_EXPRESSIONS: [&str; 3] = [
-    "failure()",
-    "!cancelled() && vars.VELNOR_CACHE_DEBUG == '1' && steps.restored.outcome == 'success'",
-    "vars.VELNOR_CACHE_DEBUG == '1' && 'fingerprint.log' || ''",
+const OUT_OF_SCOPE: [(&str, &str); 3] = [
+    (
+        "generator/samples/declared-workflows/",
+        "unsupported expression context matrix",
+    ),
+    (
+        "generator/samples/declared-workflows/",
+        "unsupported expression context jobs",
+    ),
+    (
+        "generator/samples/reusable-workflows/",
+        "unsupported expression context matrix",
+    ),
 ];
 
-const WORKFLOWS: [&str; 3] = [
-    ".github/workflows/ci.yml",
-    "generator/samples/image-ghcr/expected/.github/workflows/ci.yml",
-    "generator/samples/image-ghcr/expected/.github/workflows/image.yml",
-];
+const COVERED: [&str; 4] = ["endsWith(", "vars.", "failure()", "VELNOR_CACHE_DEBUG"];
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn workflow_files() -> Vec<PathBuf> {
-    let root = repository_root();
-    WORKFLOWS.iter().map(|path| root.join(path)).collect()
+fn workflow_files(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    let mut pending = vec![
+        root.join("generator/samples"),
+        root.join(".github/workflows"),
+    ];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).with_context(|| directory.display().to_string())? {
+            let path = entry?.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "yml")
+                && path.parent().and_then(Path::file_name) == Some("workflows".as_ref())
+            {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    Ok(found)
 }
 
-fn collect(value: &serde_json::Value, key: &str, sources: &mut Vec<(bool, String)>) {
+fn collect(value: &serde_json::Value, path: &[&str], sources: &mut BTreeSet<(bool, String)>) {
     match value {
+        serde_json::Value::String(_) if matches!(path, ["jobs", _, "if"]) => {}
         serde_json::Value::String(text) if text.contains("${{") => {
-            sources.push((false, text.clone()));
+            sources.insert((false, text.clone()));
         }
-        serde_json::Value::String(text) if key == "if" => sources.push((true, text.clone())),
+        serde_json::Value::String(text) if path.last() == Some(&"if") => {
+            sources.insert((true, text.clone()));
+        }
         serde_json::Value::Array(items) => {
             for item in items {
-                collect(item, key, sources);
+                collect(item, path, sources);
             }
         }
         serde_json::Value::Object(entries) => {
             for (name, item) in entries {
-                collect(item, name, sources);
+                let mut child = path.to_vec();
+                child.push(name);
+                collect(item, &child, sources);
             }
         }
         _ => {}
     }
 }
 
-fn assert_evaluates(is_condition: bool, source: &str) -> Result<()> {
-    let env = ExprEnv::new(repository_root());
-    if is_condition {
-        evaluate_condition(source, &env).map(drop)
+fn parse_error(is_condition: bool, source: &str, env: &ExprEnv) -> Option<String> {
+    let result = if is_condition {
+        evaluate_condition(source, env).map(drop)
     } else {
-        evaluate_template(source, &env).map(drop)
+        evaluate_template(source, env).map(drop)
+    };
+    match result {
+        Err(ExprError::Parse(error)) => Some(error.to_string()),
+        Ok(()) | Err(ExprError::Evaluation(_)) => None,
     }
-    .with_context(|| source.to_owned())
 }
 
 #[test]
 fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
-    let mut sources = Vec::new();
-    for path in workflow_files() {
+    let root = repository_root();
+    let env = ExprEnv::new(root.clone());
+    let mut corpus = BTreeSet::new();
+    let mut known_hit = BTreeSet::new();
+    let mut unexpected = Vec::new();
+    for path in workflow_files(&root)? {
         let text = fs::read_to_string(&path).with_context(|| path.display().to_string())?;
         let document: serde_json::Value =
             serde_saphyr::from_str(&text).with_context(|| path.display().to_string())?;
-        collect(&document, "", &mut sources);
+        let relative = path.strip_prefix(&root)?.to_string_lossy().into_owned();
+        let mut sources = BTreeSet::new();
+        collect(&document, &[], &mut sources);
+        for (is_condition, source) in sources {
+            if let Some(error) = parse_error(is_condition, &source, &env) {
+                let known = OUT_OF_SCOPE.iter().position(|(prefix, message)| {
+                    relative.starts_with(prefix) && error.contains(message)
+                });
+                match known {
+                    Some(index) => {
+                        known_hit.insert(index);
+                    }
+                    None => unexpected.push(format!("{relative}: {source}: {error}")),
+                }
+            }
+            corpus.insert(source);
+        }
     }
-    for (is_condition, source) in &sources {
-        assert_evaluates(*is_condition, source)?;
-    }
-    for gap in ["endsWith(", "vars."] {
+    assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
+    assert_eq!(
+        known_hit.len(),
+        OUT_OF_SCOPE.len(),
+        "an out-of-scope entry no longer fails to parse"
+    );
+    for gap in COVERED {
         assert!(
-            sources.iter().any(|(_, source)| source.contains(gap)),
-            "no checked-in workflow uses {gap}"
+            corpus.iter().any(|source| source.contains(gap)),
+            "no generated workflow uses {gap}"
         );
-    }
-    for source in RENDER_ONLY_EXPRESSIONS {
-        assert_evaluates(true, source)?;
     }
     Ok(())
 }
