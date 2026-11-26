@@ -9,6 +9,7 @@ mod job;
 mod machine;
 mod paths;
 mod processes;
+mod store;
 mod sweep;
 
 pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
@@ -38,6 +39,7 @@ const HOST_DIRECTORIES: [&str; 8] = [
     "bin", "crates", "tools", "git", "gen", "cache", "records", "work",
 ];
 const JIT_DIRECTORY: &str = "jit";
+const WORK_DIRECTORY: &str = "work";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRunnerLauncher {

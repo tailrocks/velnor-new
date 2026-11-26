@@ -139,7 +139,8 @@ fn pending_connections(
             pat: Zeroizing::new(pat),
             policy: config
                 .validated_job_authority_policy(&binding.connection_id)?
-                .cloned(),
+                .ok_or(HostError::Config)?
+                .clone(),
             set: None,
             session: None,
             cleared: false,

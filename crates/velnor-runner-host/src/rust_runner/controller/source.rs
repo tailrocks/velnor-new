@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
-    VerifiedWorkflowSource, WorkflowRun, get_pull_request, get_workflow_run_attempt,
+    VerifiedWorkflowSource, WorkflowRun, get_pull_request, get_repository, get_workflow_run_attempt,
 };
 
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
@@ -18,6 +18,7 @@ use crate::launch::steps::source::authorize_source;
 
 const GITHUB_API: &str = "https://api.github.com";
 const GITHUB_SERVER_URL: &str = "https://github.com";
+const CROSS_REPOSITORY: &str = "cross_repository";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GrantedPull {
@@ -42,6 +43,10 @@ pub(super) struct LaunchGrant {
 }
 
 impl LaunchGrant {
+    pub(super) fn default_branch(&self) -> &str {
+        &self.default_branch
+    }
+
     pub(super) fn describe(&self) -> String {
         let pull = self.pull_request.as_ref().map_or_else(String::new, |pull| {
             format!(
@@ -72,17 +77,24 @@ impl LaunchGrant {
 
 pub(super) fn check_offer(
     connection: &RepositoryConnection,
-    policy: Option<&ApprovedJobAuthorityPolicy>,
+    policy: &ApprovedJobAuthorityPolicy,
     token: &str,
     source: &SourceMetadata,
+    known_default_branch: Option<&str>,
     deadline: Instant,
 ) -> Result<LaunchGrant, &'static str> {
-    let policy = policy.ok_or("closed_world_unproven")?;
     let mut transport =
         HttpsTransport::with_deadline(GITHUB_API, deadline).map_err(HostError::code)?;
     let verified = authorize_source(connection, source, token, &mut transport)
         .map_err(crate::launch::steps::source::SourceBlock::code)?;
-    verify_launch_source(connection, policy, &verified, token, deadline).map_err(HostError::code)
+    verify_launch_source(
+        connection,
+        policy,
+        &verified,
+        token,
+        known_default_branch,
+        deadline,
+    )
 }
 
 pub(super) fn verify_launch_source(
@@ -90,13 +102,13 @@ pub(super) fn verify_launch_source(
     policy: &ApprovedJobAuthorityPolicy,
     verified: &VerifiedWorkflowSource,
     token: &str,
+    known_default_branch: Option<&str>,
     deadline: Instant,
-) -> Result<LaunchGrant, HostError> {
-    let (owner, name) = connection
-        .repository
-        .split_once('/')
-        .ok_or(HostError::Identity)?;
-    let mut transport = HttpsTransport::with_deadline(GITHUB_API, deadline)?;
+) -> Result<LaunchGrant, &'static str> {
+    let identity = HostError::code(HostError::Identity);
+    let (owner, name) = connection.repository.split_once('/').ok_or(identity)?;
+    let mut transport =
+        HttpsTransport::with_deadline(GITHUB_API, deadline).map_err(HostError::code)?;
     let run = get_workflow_run_attempt(
         &mut transport,
         owner,
@@ -105,19 +117,30 @@ pub(super) fn verify_launch_source(
         verified.run_attempt,
         token,
     )
-    .map_err(|_| HostError::Identity)?;
+    .map_err(|_| identity)?;
+    if run.repository.id != connection.repository_id {
+        return Err(CROSS_REPOSITORY);
+    }
     let (claim, pull) = if verified.event_name == "pull_request" {
-        pull_claim(&mut transport, connection, verified, &run, token)?
+        pull_claim(&mut transport, connection, verified, &run, token).map_err(HostError::code)?
     } else {
-        (branch_claim(connection, verified, &run)?, None)
+        (
+            branch_claim(connection, verified, &run).map_err(HostError::code)?,
+            None,
+        )
     };
-    let checked = verify_source_claim(connection, policy, &claim, token, deadline)?;
-    let default_branch = run
-        .repository
-        .default_branch
-        .clone()
-        .filter(|branch| !branch.is_empty())
-        .ok_or(HostError::Identity)?;
+    if pull
+        .as_ref()
+        .is_some_and(|pull| pull.head_repository_id != connection.repository_id)
+    {
+        return Err(CROSS_REPOSITORY);
+    }
+    let checked = verify_source_claim(connection, policy, &claim, token, deadline)
+        .map_err(HostError::code)?;
+    let default_branch = match known_default_branch {
+        Some(branch) => branch.to_owned(),
+        None => default_branch(&mut transport, connection, token)?,
+    };
     Ok(LaunchGrant {
         repository_id: claim.repository_id,
         repository: claim.repository_name,
@@ -131,6 +154,23 @@ pub(super) fn verify_launch_source(
         pull_request: pull,
         workflow_closure: checked.closure.identities,
     })
+}
+
+fn default_branch(
+    transport: &mut HttpsTransport,
+    connection: &RepositoryConnection,
+    token: &str,
+) -> Result<String, &'static str> {
+    let identity = HostError::code(HostError::Identity);
+    let (owner, name) = connection.repository.split_once('/').ok_or(identity)?;
+    let repository = get_repository(transport, owner, name, token).map_err(|_| identity)?;
+    if repository.id != connection.repository_id {
+        return Err(identity);
+    }
+    repository
+        .default_branch
+        .filter(|branch| !branch.is_empty())
+        .ok_or(identity)
 }
 
 fn base_claim(

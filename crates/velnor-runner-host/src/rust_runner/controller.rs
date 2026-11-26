@@ -154,7 +154,11 @@ pub async fn run_rust_runner_host(
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
         return Err(HostError::Lock.into());
     }
-    let config_sha256 = host_toml_sha256(&state).ok_or(HostError::Config)?;
+    let (file_config, config_sha256) =
+        crate::readiness_scan::controller_config(&state).ok_or(HostError::Config)?;
+    if file_config != config {
+        return Ok(RustRunnerExit::ConfigChanged);
+    }
     let cx = Context {
         state,
         config_sha256,
@@ -257,7 +261,11 @@ impl Run<'_> {
         {
             return Err(HostError::Lock.into());
         }
-        self.cx.beat(Phase::Ready);
+        self.cx.beat(if self.machine_ok {
+            Phase::Ready
+        } else {
+            Phase::MachineUnavailable
+        });
         self.spawn_due_proofs();
         self.spawn_due_renewals();
         self.check_machine();
@@ -265,7 +273,7 @@ impl Run<'_> {
     }
 
     fn config_changed(&self) -> bool {
-        host_toml_sha256(&self.cx.state).is_some_and(|sha| sha != self.cx.config_sha256)
+        host_toml_sha256(&self.cx.state).as_deref() != Some(self.cx.config_sha256.as_str())
     }
 
     fn admission(&self) -> Admission {

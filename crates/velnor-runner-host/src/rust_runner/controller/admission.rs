@@ -28,6 +28,7 @@ pub(super) enum JobExit {
     Exited(ExitStatus),
     Stopped,
     SpawnFailed,
+    AcquireFailed,
 }
 
 impl JobExit {
@@ -36,6 +37,7 @@ impl JobExit {
             Self::Exited(status) => format!("exited({status})"),
             Self::Stopped => "stopped".to_owned(),
             Self::SpawnFailed => "spawn_failed".to_owned(),
+            Self::AcquireFailed => "acquire_failed".to_owned(),
         }
     }
 }

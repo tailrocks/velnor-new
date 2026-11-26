@@ -19,6 +19,7 @@ const FRESH: Duration = Duration::from_secs(30);
 pub(crate) enum Phase {
     Startup,
     WaitingForCredentials,
+    MachineUnavailable,
     Ready,
 }
 
@@ -68,6 +69,6 @@ pub(crate) fn assess(state: &Path, config_sha256: &str) -> Readiness {
         Phase::Ready if record.config_sha256 == config_sha256 && fresh => Readiness::Ready,
         Phase::Startup => Readiness::Reconciling,
         Phase::Ready if record.config_sha256 != config_sha256 => Readiness::Reconciling,
-        Phase::Ready => Readiness::Degraded,
+        Phase::MachineUnavailable | Phase::Ready => Readiness::Degraded,
     }
 }

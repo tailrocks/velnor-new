@@ -36,7 +36,7 @@ pub fn run_host_blocking(
 ) -> Result<(), ListenFault> {
     match config.host.launch_mode {
         LaunchMode::OfficialRunner => run_official_blocking(config, state, daemon_lock),
-        LaunchMode::RustRunner => crate::rust_runner::run_blocking(config, state, daemon_lock),
+        LaunchMode::RustRunner => crate::rust_runner::run_blocking(state, daemon_lock),
     }
 }
 

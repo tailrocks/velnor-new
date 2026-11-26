@@ -36,6 +36,9 @@ pub enum RustRunnerFailure {
     #[error("orb list did not return machine names")]
     MachineList,
 
+    #[error("the existing velnor machine is not an arm64 Ubuntu machine")]
+    MachineIncompatible,
+
     #[error("orb could not create the velnor machine")]
     MachineCreate,
 
@@ -59,6 +62,12 @@ pub enum RustRunnerFailure {
 
     #[error("the jit directory of the host store is readable by other users")]
     JitDirectoryAccessible,
+
+    #[error("the host store is not owned by this user, is writable by others or has an ACL")]
+    StoreUnsafe,
+
+    #[error("velnor-runner in the host store is not an owned, executable file closed to others")]
+    BinaryUnsafe,
 
     #[error("the processes of the velnor machine could not be listed")]
     ProcessList,

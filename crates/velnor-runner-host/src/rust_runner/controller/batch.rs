@@ -142,13 +142,15 @@ impl Run<'_> {
         let binding = live.binding.clone();
         let policy = live.policy.clone();
         let pat = live.pat.clone();
+        let default_branch = live.default_branch.clone();
         self.tasks.spawn(async move {
             let result = blocking(move || {
                 Ok(super::source::check_offer(
                     &binding,
-                    policy.as_ref(),
+                    &policy,
                     &pat,
                     &source,
+                    default_branch.as_deref(),
                     Instant::now() + CHECK_BUDGET,
                 ))
             })
@@ -176,6 +178,9 @@ impl Run<'_> {
                 return;
             }
         };
+        if let Some(live) = self.connections.get_mut(connection) {
+            live.default_branch = Some(grant.default_branch().to_owned());
+        }
         if !matches!(self.admission(), Admission::Open { free } if free > 0) {
             self.defer(connection);
             self.advance(connection);
@@ -231,7 +236,8 @@ impl Run<'_> {
             Ok(Acquisition::NotAcquired) => self.slots.abandon_launch(reservation),
             Err(error) => {
                 eprintln!("rust-runner acquire failed for reservation {reservation}: {error}");
-                self.slots.abandon_launch(reservation);
+                self.defer(connection);
+                self.begin_proof(reservation, JobExit::AcquireFailed);
             }
         }
         self.advance(connection);
