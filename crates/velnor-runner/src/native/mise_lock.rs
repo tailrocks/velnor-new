@@ -160,7 +160,8 @@ async fn resolve_locked_mise_config(ctx: &mut StepContext<'_>) -> Result<String,
 pub(super) async fn enforce_locked_mise_policy(
     ctx: &mut StepContext<'_>,
     install_args: &str,
-) -> Result<(), ExecError> {
+) -> Result<String, ExecError> {
     let lock = resolve_locked_mise_config(ctx).await?;
-    validate_install_args(install_args, &lock)
+    validate_install_args(install_args, &lock)?;
+    Ok(lock)
 }

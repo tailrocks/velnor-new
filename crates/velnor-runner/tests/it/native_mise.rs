@@ -145,12 +145,39 @@ fn mise_action_treats_an_empty_unsupported_input_as_unset() -> Result<()> {
     world.install_mise()?;
     world.init_workspace(true)?;
     let mut job = job_fixture("mise_action_ok");
-    for name in ["install", "env", "working_directory", "mise_toml"] {
+    for name in ["working_directory", "mise_toml", "log_level"] {
         job = world.with_input(&job, name, "")?;
     }
     let ran = world.run(&job, &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert_eq!(world.mise_installs().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn mise_action_fails_an_empty_boolean_input_as_upstream_does() -> Result<()> {
+    for name in [
+        "install",
+        "env",
+        "reshim",
+        "experimental",
+        "add_shims_to_path",
+    ] {
+        let world = World::new()?;
+        world.install_mise()?;
+        world.init_workspace(true)?;
+        let job = world.with_input(&job_fixture("mise_action_ok"), name, "")?;
+        let ran = world.run(&job, &[])?;
+        assert!(ran.has_line("job failed"), "{name}\n{}", ran.stdout);
+        assert!(
+            ran.stdout.contains(&format!(
+                "Input does not meet YAML 1.2 \"Core Schema\" specification: {name}"
+            )),
+            "{name}\n{}",
+            ran.stdout
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{name}");
+    }
     Ok(())
 }
 

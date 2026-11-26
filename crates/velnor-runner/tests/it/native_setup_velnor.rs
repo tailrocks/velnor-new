@@ -197,7 +197,12 @@ fn setup_velnor_rejects_a_second_step() -> Result<()> {
 fn setup_velnor_is_unsupported_outside_its_own_repository() -> Result<()> {
     let world = World::new()?;
     let sha = world.publish_action(&real_action()?)?;
-    let fork = world.mirror().with_file_name("../../someone/fork.git");
+    let fork = world
+        .mirror()
+        .parent()
+        .and_then(std::path::Path::parent)
+        .context("the mirror host directory")?
+        .join("someone/fork.git");
     std::fs::create_dir_all(fork.parent().context("the fork parent")?)?;
     git(
         &world.mirror(),
@@ -232,5 +237,61 @@ fn setup_velnor_rejects_an_action_key_it_does_not_implement() -> Result<()> {
         ran.stdout
     );
     assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn setup_velnor_rejects_a_runs_key_it_does_not_implement() -> Result<()> {
+    let world = World::new()?;
+    let action = format!("{}  post: cleanup.sh\n", real_action()?);
+    let sha = world.publish_action(&action)?;
+    let ran = world.run(&real_job(&world, "setup_velnor_real_action", &sha)?, &[])?;
+    assert!(ran.has_line("job failed"), "{}", ran.stdout);
+    assert!(
+        ran.stdout.contains("unknown field `post`"),
+        "{}",
+        ran.stdout
+    );
+    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn setup_velnor_rejects_an_input_key_it_does_not_implement() -> Result<()> {
+    let world = World::new()?;
+    let action = real_action()?.replacen(
+        "    required: true\n",
+        "    required: true\n    deprecationMessage: use something else\n",
+        1,
+    );
+    let sha = world.publish_action(&action)?;
+    let ran = world.run(&real_job(&world, "setup_velnor_real_action", &sha)?, &[])?;
+    assert!(ran.has_line("job failed"), "{}", ran.stdout);
+    assert!(
+        ran.stdout.contains("unknown field `deprecationMessage`"),
+        "{}",
+        ran.stdout
+    );
+    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn setup_velnor_accepts_the_repository_in_any_case() -> Result<()> {
+    let world = World::new()?;
+    let sha = world.publish_action(&real_action()?)?;
+    let job = world.with_text(
+        &job_fixture("setup_velnor_real_action"),
+        &[
+            (SHA_PLACEHOLDER, &sha),
+            (
+                "\"s\": \"tailrocks/velnor-new\"",
+                "\"s\": \"Tailrocks/Velnor-New\"",
+            ),
+        ],
+    )?;
+    let ran = world.run(&job, &[])?;
+    assert!(ran.has_line(REAL_ERROR), "{}", ran.stdout);
+    assert!(!ran.stdout.contains("only supported in"), "{}", ran.stdout);
     Ok(())
 }

@@ -22,6 +22,21 @@ const ACTION: &str = "jdx/mise-action";
 const PREFIX: &str = "jdx/mise-action@";
 const NOT_IN_STORE: &str = "tool is not installed in the tools store";
 const CACHE_MUST_BE_FALSE: &str = "jdx/mise-action input 'cache' must be false";
+const BOOLEAN_INPUTS: [&str; 13] = [
+    "auto_update",
+    "fetch_from_github",
+    "reshim",
+    "install",
+    "bootstrap",
+    "cache_save",
+    "cache_save_post",
+    "env",
+    "wings_enabled",
+    "export_path",
+    "experimental",
+    "add_shims_to_path",
+    "monorepo",
+];
 const VERSION_POLICY: &str = include_str!("../../../../.velnor/version-policy.toml");
 
 pub(super) fn register(registry: &mut AdapterRegistry, setup: SetupVelnor) {
@@ -51,6 +66,11 @@ impl MiseInputs {
                 "install_args" => value.trim().clone_into(&mut parsed.install_args),
                 "cache" if value.trim() == "false" => cache_disabled = true,
                 "cache" => return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned())),
+                other if value.trim().is_empty() && BOOLEAN_INPUTS.contains(&other) => {
+                    return Err(ExecError::Invalid(format!(
+                        "Input does not meet YAML 1.2 \"Core Schema\" specification: {other}\nSupport boolean input list: `true | True | TRUE | false | False | FALSE`"
+                    )));
+                }
                 _ if value.trim().is_empty() => {}
                 other => {
                     return Err(ExecError::Unsupported(format!(
@@ -173,12 +193,12 @@ fn current_path(ctx: &StepContext<'_>) -> String {
         .unwrap_or_default()
 }
 
-fn data_dir(tools: &Path, _lock: &[u8]) -> PathBuf {
+fn data_dir(tools: &Path, _lock: &str) -> PathBuf {
     tools.join("data")
 }
 
 impl Install {
-    fn new(ctx: &StepContext<'_>, tools: &Path, lock: &[u8], binary: PathBuf) -> Self {
+    fn new(ctx: &StepContext<'_>, tools: &Path, lock: &str, binary: PathBuf) -> Self {
         let dir = binary
             .parent()
             .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned());
@@ -253,11 +273,7 @@ pub(crate) async fn mise_action(
 ) -> Result<StepResult, ExecError> {
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
-    enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
-    let lock_path = ctx.workspace.join("mise.lock");
-    let lock = tokio::fs::read(&lock_path)
-        .await
-        .map_err(|source| ExecError::io(format!("read {}", lock_path.display()), source))?;
+    let lock = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &lock, binary);
     let loaded = mise_capture(ctx, &install, &["config", "ls", "--json"]).await?;
     require_sole_config(ctx.workspace, &loaded).await?;
