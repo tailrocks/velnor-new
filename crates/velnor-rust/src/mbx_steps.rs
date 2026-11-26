@@ -111,7 +111,7 @@ enum After {
 }
 
 fn is_shared_store_step(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::MbxStore | StepKind::MbxSeed)
+    matches!(kind, StepKind::MbxStore)
 }
 
 fn prepares_cargo(job: &Job) -> bool {

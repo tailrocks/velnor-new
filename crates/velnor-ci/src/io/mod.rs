@@ -244,7 +244,6 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::AppToken(args) => app_token::run(&args),
         Command::RevokeToken => app_token::revoke(),
         Command::MbxStore => crate::mbx_store::setup(),
-        Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, args.key.as_deref()),
         Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),

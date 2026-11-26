@@ -132,10 +132,6 @@ pub enum Command {
     )]
     MbxStore,
     #[command(
-        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it appends no MBX_CACHE_DIR and MBX builds cold. It never writes MBX_SHARE_OUT_DIR; mbx-store does"
-    )]
-    MbxSeed,
-    #[command(
         about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, and (helper 0.1.111 or later) a HOME that is a symlink, dangling or looping included, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),

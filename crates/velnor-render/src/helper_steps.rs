@@ -247,26 +247,6 @@ pub(crate) fn mbx_store_step() -> RenderedStep {
     }
 }
 
-pub(crate) fn mbx_seed_step() -> RenderedStep {
-    RenderedStep {
-        name: "velnor-ci mbx-seed".to_owned(),
-        condition: Some(
-            "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}"
-                .to_owned(),
-        ),
-        run: Some("velnor-ci mbx-seed".to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
-    use velnor_model::StepKind::ToolsLocal;
-    match kind {
-        ToolsLocal(verb, anchor) => crate::tools_steps::tools_local_step(*verb, anchor),
-        _ => mbx_seed_step(),
-    }
-}
-
 pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
 
 pub(crate) fn mbx_private_step() -> RenderedStep {

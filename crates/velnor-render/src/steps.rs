@@ -369,7 +369,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
-        StepKind::MbxSeed | StepKind::ToolsLocal(..) => crate::helper_steps::node_step(kind),
+        StepKind::ToolsLocal(verb, anchor) => crate::tools_steps::tools_local_step(*verb, anchor),
         StepKind::TestSetup { name, run, .. } | StepKind::Ansible { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

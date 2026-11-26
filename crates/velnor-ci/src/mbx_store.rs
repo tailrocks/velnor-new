@@ -10,6 +10,7 @@ use crate::error::CiError;
 use crate::escape::file_value;
 
 pub const SHARED_DIR_ENV: &str = "VELNOR_MBX_SHARED_DIR";
+pub const SEED_DIR_ENV: &str = "VELNOR_MBX_SEED_DIR";
 pub const SHIMS_DIR_NAME: &str = "velnor-mbx-shims";
 pub const KEEP_OUT_DIR: &str = "MBX_SHARE_OUT_DIR=0\n";
 
