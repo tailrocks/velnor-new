@@ -19,7 +19,7 @@ use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
-use super::timeout::{Interruption, Timeout};
+use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
@@ -51,8 +51,7 @@ pub(super) struct ScriptStep {
 
 enum Ending {
     Exited(ExitStatus),
-    TimedOut,
-    Cancelled,
+    Interrupted,
 }
 
 fn spawn(spec: &ProcessSpec<'_>) -> std::io::Result<Child> {
@@ -208,27 +207,6 @@ where
     }
 }
 
-pub(super) fn report_timeout(out: &mut Output<'_>, timeout: Option<Timeout>) {
-    let minutes = timeout.map_or(0.0, |timeout| timeout.minutes);
-    let text = format!("step {} timed out after {minutes} minutes", out.number);
-    out.message(&text);
-    out.annotate(AnnotationLevel::Error, text);
-}
-
-pub(super) fn settle(result: StepResult, limits: &Limits<'_>, out: &mut Output<'_>) -> StepResult {
-    if result != StepResult::Succeeded {
-        return result;
-    }
-    match Interruption::now(limits.cancel, limits.timeout) {
-        None => result,
-        Some(Interruption::Cancelled) => StepResult::Cancelled,
-        Some(Interruption::TimedOut) => {
-            report_timeout(out, limits.timeout);
-            StepResult::Failed
-        }
-    }
-}
-
 fn exit_code(status: ExitStatus) -> i32 {
     status
         .code()
@@ -270,10 +248,8 @@ async fn drive(
     }
     drop(sender);
     let stop = async {
-        match Interruption::wait(limits.cancel, limits.timeout).await {
-            Interruption::TimedOut => Ending::TimedOut,
-            Interruption::Cancelled => Ending::Cancelled,
-        }
+        interrupted(limits.cancel, limits.timeout).await;
+        Ending::Interrupted
     };
     tokio::pin!(stop);
     let ending = supervise(&mut child, group, &mut lines, &mut stop, &mut on_chunk).await;
@@ -315,11 +291,7 @@ pub(super) async fn run(
             );
             StepResult::Failed
         }
-        Ending::TimedOut => {
-            report_timeout(out, limits.timeout);
-            StepResult::Failed
-        }
-        Ending::Cancelled => StepResult::Cancelled,
+        Ending::Interrupted => stop_result(limits.cancel, limits.timeout),
     })
 }
 
@@ -355,14 +327,14 @@ pub(super) async fn capture(
     .await?;
     let command = || format!("{} {}", spec.program, spec.args.join(" "));
     match ending {
-        Ending::Cancelled => Err(ExecError::Cancelled),
+        Ending::Interrupted => Err(ExecError::Cancelled),
         Ending::Exited(status) if status.success() && stdout.truncated => Err(ExecError::Invalid(
             format!("{} printed more than {CAPTURE_LIMIT} bytes", command()),
         )),
         Ending::Exited(status) if status.success() => {
             Ok(String::from_utf8_lossy(&stdout.bytes).into_owned())
         }
-        Ending::Exited(_) | Ending::TimedOut => Err(ExecError::Invalid(format!(
+        Ending::Exited(_) => Err(ExecError::Invalid(format!(
             "{} failed: {}",
             command(),
             String::from_utf8_lossy(&stderr.bytes).trim()

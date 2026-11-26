@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use super::JobCancel;
+use super::output::Output;
+use super::{AnnotationLevel, JobCancel, StepResult};
 
 #[derive(Clone, Copy)]
 pub(super) struct Timeout {
@@ -24,40 +25,64 @@ impl Timeout {
     }
 }
 
-pub(super) async fn expired(timeout: Option<Timeout>) {
+async fn expired(timeout: Option<Timeout>) {
     match timeout {
         Some(timeout) => tokio::time::sleep_until(timeout.at).await,
         None => std::future::pending().await,
     }
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum Interruption {
+async fn cancelled(cancel: Option<&JobCancel>) {
+    match cancel {
+        Some(cancel) => cancel.cancelled().await,
+        None => std::future::pending().await,
+    }
+}
+
+pub(super) async fn interrupted(cancel: Option<&JobCancel>, timeout: Option<Timeout>) {
+    tokio::select! {
+        () = cancelled(cancel) => {}
+        () = expired(timeout) => {}
+    }
+}
+
+enum Interruption {
     Cancelled,
     TimedOut,
 }
 
-impl Interruption {
-    pub(super) fn now(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Option<Self> {
-        if cancel.is_some_and(JobCancel::is_cancelled) {
-            Some(Self::Cancelled)
-        } else if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
-            Some(Self::TimedOut)
-        } else {
-            None
-        }
+fn interruption(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Option<Interruption> {
+    if cancel.is_some_and(JobCancel::is_cancelled) {
+        Some(Interruption::Cancelled)
+    } else if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
+        Some(Interruption::TimedOut)
+    } else {
+        None
     }
+}
 
-    pub(super) async fn wait(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Self {
-        let cancelled = async {
-            match cancel {
-                Some(cancel) => cancel.cancelled().await,
-                None => std::future::pending().await,
-            }
-        };
-        tokio::select! {
-            () = cancelled => Self::Cancelled,
-            () = expired(timeout) => Self::TimedOut,
+pub(super) fn stop_result(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> StepResult {
+    match interruption(cancel, timeout) {
+        Some(Interruption::Cancelled) => StepResult::Cancelled,
+        _ => StepResult::Failed,
+    }
+}
+
+pub(super) fn settle(
+    result: StepResult,
+    cancel: Option<&JobCancel>,
+    timeout: Option<Timeout>,
+    out: &mut Output<'_>,
+) -> StepResult {
+    match interruption(cancel, timeout) {
+        None => result,
+        Some(Interruption::Cancelled) => StepResult::Cancelled,
+        Some(Interruption::TimedOut) => {
+            let minutes = timeout.map_or(0.0, |timeout| timeout.minutes);
+            let text = format!("step {} timed out after {minutes} minutes", out.number);
+            out.message(&text);
+            out.annotate(AnnotationLevel::Error, text);
+            StepResult::Failed
         }
     }
 }

@@ -104,6 +104,8 @@ mod review;
 mod semantics;
 #[path = "exec_shells.rs"]
 mod shells;
+#[path = "exec_stopped.rs"]
+mod stopped;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

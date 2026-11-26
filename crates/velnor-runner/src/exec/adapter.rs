@@ -10,8 +10,8 @@ use futures_util::future::BoxFuture;
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
-use super::step::{Limits, ProcessSpec, capture, report_timeout, run};
-use super::timeout::{Interruption, Timeout};
+use super::step::{Limits, ProcessSpec, capture, run};
+use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
@@ -171,32 +171,28 @@ pub(super) async fn invoke(
         groups: call.groups,
         out: &mut inner,
     };
-    let (finished, why) = {
+    let finished = {
         let running = adapter.run(&mut context);
         tokio::pin!(running);
         tokio::select! {
             biased;
-            result = &mut running => (Some(result), None),
-            why = Interruption::wait(call.cancel.as_ref(), call.timeout) => {
+            result = &mut running => Some(result),
+            () = interrupted(call.cancel.as_ref(), call.timeout) => {
                 step_cancel.cancel();
-                let settled = tokio::time::timeout(CANCEL_GRACE, &mut running).await.ok();
-                (settled, Some(why))
+                let _ = tokio::time::timeout(CANCEL_GRACE, &mut running).await;
+                None
             }
         }
     };
     let outputs = std::mem::take(&mut context.outputs);
     drop(context);
-    match (why, finished) {
-        (None, Some(Ok(result))) => Ok((result, outputs)),
-        (None, Some(Err(error))) => {
+    match finished {
+        Some(Ok(result)) => Ok((result, outputs)),
+        Some(Err(error)) => {
             out.message(&error.to_string());
             out.annotate(AnnotationLevel::Error, error.to_string());
             Ok((StepResult::Failed, outputs))
         }
-        (Some(Interruption::TimedOut), _) => {
-            report_timeout(out, call.timeout);
-            Ok((StepResult::Failed, outputs))
-        }
-        _ => Ok((StepResult::Cancelled, outputs)),
+        None => Ok((stop_result(call.cancel.as_ref(), call.timeout), outputs)),
     }
 }

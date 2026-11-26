@@ -49,7 +49,7 @@ impl Masker {
     }
 
     fn insert(&mut self, value: &str) {
-        if value.trim().is_empty() || self.values.iter().any(|known| known == value) {
+        if value.is_empty() || self.values.iter().any(|known| known == value) {
             return;
         }
         self.values.push(value.to_owned());
@@ -149,7 +149,7 @@ pub(super) fn load(masker: &mut Masker, message: &AgentJobRequestMessage) -> Res
         let Some(value) = variable
             .value
             .as_ref()
-            .map(|value| value.expose().as_str())
+            .map(|value| value.expose().trim())
             .filter(|_| variable.is_secret)
         else {
             continue;

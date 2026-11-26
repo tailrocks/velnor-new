@@ -151,8 +151,8 @@ impl Job<'_> {
         out: &mut Output<'_>,
     ) -> StepRecord {
         out.enter(number);
-        let cancel = (!self.cancel.is_cancelled()).then(|| self.cancel.clone());
-        if cancel.is_none() {
+        let already_cancelled = self.cancel.is_cancelled();
+        if already_cancelled {
             self.status = JobStatus::Cancelled;
         }
         let prepared = self.ctx.begin_step(step).await;
@@ -176,6 +176,12 @@ impl Job<'_> {
             }
         };
         let condition_failed = condition.is_err() || step_env.is_err();
+        let survives_cancel = !already_cancelled
+            && evaluate_condition(
+                step.condition.as_deref().unwrap_or_default(),
+                &self.ctx.expr_env(JobStatus::Cancelled, &step_vars),
+            ) == Ok(true);
+        let cancel = (!already_cancelled && !survives_cancel).then(|| self.cancel.clone());
         let mut outputs = Vec::new();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
@@ -214,6 +220,9 @@ impl Job<'_> {
             } else {
                 executed.result
             };
+        }
+        if self.cancel.is_cancelled() {
+            self.status = JobStatus::Cancelled;
         }
         out.sink.step_finished(number, record.outcome);
         self.settle(&record, outputs);

@@ -7,10 +7,10 @@ use anyhow::{Context, Result};
 use futures_util::FutureExt;
 use serde_json::{Value, json};
 use velnor_runner::exec::{
-    AdapterRegistry, JobCancel, JobResult, StepAdapter, StepContext, StepFuture, StepResult,
+    AdapterRegistry, Inputs, JobCancel, JobResult, StepAdapter, StepContext, StepFuture, StepResult,
 };
 
-use crate::exec_builder::{execute, expression, job, mapping, run, step, with};
+use crate::exec_builder::{execute, expression, job, mapping, run, run_message, step, with};
 use crate::exec_support::Scratch;
 
 const BOM: &str = "\\357\\273\\277";
@@ -218,4 +218,97 @@ async fn a_whitespace_only_step_summary_is_kept() -> Result<()> {
     .await?;
     assert!(finished.steps[0].summary_path.is_some());
     Ok(())
+}
+
+async fn summary_of(script: &str) -> Result<(velnor_runner::exec::JobRun, Vec<String>)> {
+    run_steps(&job(vec![run("a", script)])).await
+}
+
+#[tokio::test]
+async fn a_summary_holding_only_a_byte_order_mark_is_kept() -> Result<()> {
+    let (finished, _) = summary_of(&format!("printf '{BOM}' >> \"$GITHUB_STEP_SUMMARY\"")).await?;
+    assert!(finished.steps[0].summary_path.is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_summary_of_invalid_utf8_under_the_limit_is_kept_whatever_it_decodes_to() -> Result<()> {
+    let (finished, _) = summary_of(
+        "head -c 400000 /dev/zero | LC_ALL=C tr '\\0' '\\377' >> \"$GITHUB_STEP_SUMMARY\"",
+    )
+    .await?;
+    assert!(finished.steps[0].summary_path.is_some());
+    assert!(
+        finished.annotations.is_empty(),
+        "{:?}",
+        finished.annotations
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_summary_of_exactly_the_limit_is_kept() -> Result<()> {
+    let (finished, _) =
+        summary_of("head -c 1048576 /dev/zero | tr '\\0' a >> \"$GITHUB_STEP_SUMMARY\"").await?;
+    assert!(finished.steps[0].summary_path.is_some());
+    assert!(
+        finished.annotations.is_empty(),
+        "{:?}",
+        finished.annotations
+    );
+    Ok(())
+}
+
+#[test]
+fn root_contexts_are_found_whatever_the_case_of_their_names() -> Result<()> {
+    let mut message = job(vec![step(
+        "s",
+        expression("format('echo \"job={0} input={1}\"', github.job, inputs.x)"),
+    )]);
+    message["ContextData"] = json!({
+        "Github": {"t": 2, "d": [{"k": "job", "v": {"t": 0, "s": "ctx-job"}}]},
+        "Inputs": {"t": 2, "d": [{"k": "x", "v": {"t": 0, "s": "1"}}]}
+    });
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("job=ctx-job input=1"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn an_endpoint_parameter_of_only_whitespace_is_masked() -> Result<()> {
+    let mut message = job(vec![run("a", "echo \"[   ]\"")]);
+    message["Resources"] = json!({"Endpoints": [{
+        "Name": "SystemVssConnection",
+        "Authorization": {"Scheme": "OAuth", "Parameters": {"AccessToken": "tok-ws-1", "Extra": "   "}}
+    }]});
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("[***]"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn a_secret_variable_of_only_whitespace_is_trimmed_to_nothing_and_not_masked() -> Result<()> {
+    let mut message = job(vec![run("a", "echo \"[   ]\"")]);
+    message["Variables"] = json!({"W": {"Value": "   ", "IsSecret": true}});
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("[   ]"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
+fn adapter_inputs_are_keyed_by_ordinal_ignore_case() {
+    let inputs: Inputs = [("\u{3c2}".to_owned(), "final".to_owned())]
+        .into_iter()
+        .collect();
+    assert_eq!(inputs.get("\u{3a3}"), Some(&"final".to_owned()));
+    let both: Inputs = [
+        ("\u{3a3}".to_owned(), "one".to_owned()),
+        ("\u{3c2}".to_owned(), "two".to_owned()),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        (both.len(), both.get("\u{3c3}")),
+        (1, Some(&"two".to_owned()))
+    );
 }
