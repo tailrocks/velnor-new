@@ -22,14 +22,12 @@ const ACTION: &str = "jdx/mise-action";
 const PREFIX: &str = "jdx/mise-action@";
 const NOT_IN_STORE: &str = "tool is not installed in the tools store";
 const CACHE_MUST_BE_FALSE: &str = "jdx/mise-action input 'cache' must be false";
-const BOOLEAN_INPUTS: [&str; 13] = [
+const BOOLEAN_INPUTS: [&str; 11] = [
     "auto_update",
     "fetch_from_github",
     "reshim",
     "install",
     "bootstrap",
-    "cache_save",
-    "cache_save_post",
     "env",
     "wings_enabled",
     "export_path",
@@ -60,7 +58,7 @@ impl MiseInputs {
         };
         let mut cache_disabled = false;
         for (name, value) in inputs {
-            match name.as_str() {
+            match name.to_ascii_lowercase().as_str() {
                 "version" => value.trim().clone_into(&mut parsed.version),
                 "sha256" => value.trim().clone_into(&mut parsed.sha256),
                 "install_args" => value.trim().clone_into(&mut parsed.install_args),
@@ -193,7 +191,7 @@ fn current_path(ctx: &StepContext<'_>) -> String {
         .unwrap_or_default()
 }
 
-fn data_dir(tools: &Path, _lock: &str) -> PathBuf {
+fn data_dir(tools: &Path, _lock: &[u8]) -> PathBuf {
     tools.join("data")
 }
 
@@ -202,7 +200,9 @@ impl Install {
         let dir = binary
             .parent()
             .map_or_else(String::new, |dir| dir.to_string_lossy().into_owned());
-        let data = data_dir(tools, lock).to_string_lossy().into_owned();
+        let data = data_dir(tools, lock.as_bytes())
+            .to_string_lossy()
+            .into_owned();
         let mut env = vec![
             ("MISE_DATA_DIR".to_owned(), data.clone()),
             (
