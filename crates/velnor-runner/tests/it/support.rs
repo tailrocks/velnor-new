@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use anyhow::{Context, Error, Result, anyhow};
 use serde_json::Value;
@@ -10,6 +11,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 use velnor_runner::protocol::GitHubApiError;
+
+pub(crate) mod mock_github;
 
 pub(crate) const TOKEN: &str = "test-token";
 
@@ -39,6 +42,10 @@ impl RecordedRequest {
             .map(|(_, value)| value.as_str())
     }
 
+    pub(crate) fn text(&self) -> String {
+        String::from_utf8_lossy(&self.body).into_owned()
+    }
+
     pub(crate) fn json(&self) -> Result<Value> {
         serde_json::from_slice(&self.body)
             .with_context(|| format!("{} {} body is JSON", self.method, self.path))
@@ -50,6 +57,7 @@ pub(crate) struct Reply {
     content_type: &'static str,
     body: String,
     stall: bool,
+    delay: Duration,
 }
 
 impl Reply {
@@ -63,6 +71,7 @@ impl Reply {
             content_type: "text/plain",
             body: body.to_owned(),
             stall: false,
+            delay: Duration::ZERO,
         }
     }
 
@@ -73,12 +82,18 @@ impl Reply {
         }
     }
 
+    pub(crate) fn after(mut self, delay: Duration) -> Self {
+        self.delay = delay;
+        self
+    }
+
     pub(crate) fn json(status: u16, body: &Value) -> Self {
         Self {
             status,
             content_type: "application/json",
             body: body.to_string(),
             stall: false,
+            delay: Duration::ZERO,
         }
     }
 }
@@ -202,6 +217,7 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     if reply.stall {
         std::future::pending::<()>().await;
     }
+    tokio::time::sleep(reply.delay).await;
     let head = format!(
         "HTTP/1.1 {} Test\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,

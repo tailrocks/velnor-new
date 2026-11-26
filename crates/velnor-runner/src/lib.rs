@@ -6,6 +6,7 @@ pub mod context_value;
 pub mod exec;
 pub mod expr;
 pub mod job_message;
+pub mod lifecycle;
 pub mod protocol;
 pub mod runner_json;
 pub mod secret;

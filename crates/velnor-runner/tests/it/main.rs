@@ -36,10 +36,12 @@ mod extra;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
+mod lifecycle;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;
 mod redaction;
 #[path = "exec_semantics.rs"]
 mod semantics;
+mod run_cli;
 mod support;

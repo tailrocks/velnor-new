@@ -165,6 +165,7 @@ impl Job<'_> {
             Ok(false)
         };
         let mut outputs = Vec::new();
+        let annotations_before = out.annotations.len();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
             let continue_on_error = continue_on_error(step, &env, out);
@@ -188,6 +189,9 @@ impl Job<'_> {
             } else {
                 executed.result
             };
+        }
+        for annotation in &mut out.annotations[annotations_before..] {
+            annotation.step = Some(number);
         }
         out.sink.step_finished(number, record.outcome);
         self.settle(&record, outputs);

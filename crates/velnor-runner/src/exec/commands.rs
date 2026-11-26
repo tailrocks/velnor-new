@@ -70,6 +70,7 @@ fn annotation(level: AnnotationLevel, command: WorkflowCommand<'_>) -> Annotatio
         end_line: number(properties, "endLine"),
         column: number(properties, "col"),
         end_column: number(properties, "endColumn"),
+        step: None,
         message: command.data,
     }
 }

@@ -21,6 +21,10 @@ impl Scratch {
         Ok(Self { root })
     }
 
+    pub(crate) fn work_dir(&self) -> PathBuf {
+        self.root.join("_work")
+    }
+
     pub(crate) fn workspace(&self) -> PathBuf {
         self.root.join("workspace")
     }
