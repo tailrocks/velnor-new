@@ -10,9 +10,9 @@ use super::job::Job;
 use super::output::Output;
 use super::preflight::reference;
 use super::shell;
-use super::step::{Limits, ScriptStep, run_script, settle};
+use super::step::{Limits, ScriptStep, run_script};
 use super::step_info::step_timeout;
-use super::timeout::Timeout;
+use super::timeout::{Timeout, settle};
 use super::token;
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::expr::ExprEnv;
@@ -51,7 +51,6 @@ impl Job<'_> {
             self.run_script_step(step, env, process_env, &limits, out)
                 .await
         };
-        let collected = files.collect().await;
         let (result, adapter_outputs) = match ran {
             Ok(done) => done,
             Err(error) => {
@@ -60,7 +59,8 @@ impl Job<'_> {
                 (StepResult::Failed, Vec::new())
             }
         };
-        let result = settle(result, &limits, out);
+        let result = settle(result, cancel, timeout, out);
+        let collected = files.collect().await;
         self.finish(result, adapter_outputs, collected, out).await
     }
 

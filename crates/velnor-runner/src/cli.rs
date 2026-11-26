@@ -6,13 +6,15 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use tokio::signal::unix::{SignalKind, signal};
+use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
 
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 
 const USAGE_ERROR: u8 = 2;
+const FORCED_EXIT: u8 = 130;
+const JOB_MESSAGE_TYPE: &str = "PipelineAgentJobRequest";
 
 #[derive(Debug, Parser)]
 #[command(
@@ -85,40 +87,61 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     Ok((options, scratch))
 }
 
-fn cancel_on_signal() -> Result<JobCancel> {
-    let mut terminate = signal(SignalKind::terminate()).context("listen for SIGTERM")?;
-    let mut interrupt = signal(SignalKind::interrupt()).context("listen for SIGINT")?;
-    let mut hangup = signal(SignalKind::hangup()).context("listen for SIGHUP")?;
-    let cancel = JobCancel::new();
-    let trigger = cancel.clone();
-    tokio::spawn(async move {
+struct Signals {
+    terminate: Signal,
+    interrupt: Signal,
+    hangup: Signal,
+}
+
+impl Signals {
+    fn listen() -> Result<Self> {
+        Ok(Self {
+            terminate: signal(SignalKind::terminate()).context("listen for SIGTERM")?,
+            interrupt: signal(SignalKind::interrupt()).context("listen for SIGINT")?,
+            hangup: signal(SignalKind::hangup()).context("listen for SIGHUP")?,
+        })
+    }
+
+    async fn next(&mut self) {
         tokio::select! {
-            _ = terminate.recv() => {}
-            _ = interrupt.recv() => {}
-            _ = hangup.recv() => {}
+            _ = self.terminate.recv() => {}
+            _ = self.interrupt.recv() => {}
+            _ = self.hangup.recv() => {}
         }
-        trigger.cancel();
-    });
-    Ok(cancel)
+    }
 }
 
 async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     let body = std::fs::read_to_string(&args.job)
         .with_context(|| format!("read {}", args.job.display()))?;
     let message = AgentJobRequestMessage::parse_json(&body)?;
+    anyhow::ensure!(
+        message.message_type == JOB_MESSAGE_TYPE,
+        "{} is not a {JOB_MESSAGE_TYPE} job message (MessageType is {:?})",
+        args.job.display(),
+        message.message_type
+    );
     let (options, _scratch) = options(args)?;
-    let run = run_job(
-        &message,
-        &options,
-        &AdapterRegistry::empty(),
-        &mut StdoutSink,
-        cancel_on_signal()?,
-    )
-    .await;
-    Ok(match run.result {
-        JobResult::Succeeded => ExitCode::SUCCESS,
-        JobResult::Failed | JobResult::Cancelled => ExitCode::FAILURE,
-    })
+    let mut signals = Signals::listen()?;
+    let cancel = JobCancel::new();
+    let adapters = AdapterRegistry::empty();
+    let mut sink = StdoutSink;
+    let job = run_job(&message, &options, &adapters, &mut sink, cancel.clone());
+    let escalation = async {
+        signals.next().await;
+        cancel.cancel();
+        signals.next().await;
+    };
+    tokio::select! {
+        run = job => Ok(match run.result {
+            JobResult::Succeeded => ExitCode::SUCCESS,
+            JobResult::Failed | JobResult::Cancelled => ExitCode::FAILURE,
+        }),
+        () = escalation => {
+            eprintln!("terminated by a second signal");
+            Ok(ExitCode::from(FORCED_EXIT))
+        }
+    }
 }
 
 fn run(cli: &Cli) -> Result<ExitCode> {

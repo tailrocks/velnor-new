@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 
+use crate::exec_builder::{bounded, finished};
 use crate::exec_support::{Scratch, run_fixture};
 
 #[test]
@@ -117,5 +118,28 @@ fn exec_masks_secret_values_in_logs() -> Result<()> {
     assert_eq!(ran.lines().iter().filter(|line| **line == "***").count(), 4);
     assert!(ran.has_line("job succeeded"));
     assert_eq!(ran.code, Some(0));
+    Ok(())
+}
+
+#[test]
+fn exec_rejects_a_payload_that_is_not_a_job_request() -> Result<()> {
+    let scratch = Scratch::new()?;
+    for (index, body) in [
+        "{}",
+        "{\"MessageType\": \"PipelineAgentJobResponse\", \"Steps\": []}",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let path = scratch
+            .options()
+            .temp
+            .with_extension(format!("{index}.json"));
+        std::fs::write(&path, body)?;
+        let ran = finished(bounded(&scratch, &path))?;
+        assert_eq!(ran.code, Some(2), "{body}: {}", ran.stderr);
+        assert!(ran.stderr.contains("MessageType"), "{}", ran.stderr);
+        assert!(ran.stdout.is_empty(), "{}", ran.stdout);
+    }
     Ok(())
 }

@@ -10,7 +10,7 @@ use super::contexts::{
 use super::host_env::host_env;
 use super::{ExecError, RunOptions, StepResult};
 use super::{private, token};
-use crate::context_value::ContextValue;
+use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::{ActionReferenceType, ActionStep, AgentJobRequestMessage};
 
@@ -52,11 +52,17 @@ impl JobContext {
         private::create_dir(&options.temp).await?;
         private::create_dir(&options.workspace).await?;
         let contexts = message
-            .materialize_context_values()
+            .materialize_context_values_ordered()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?
             .into_inner();
+        let lookup = |name: &str| {
+            contexts
+                .iter()
+                .rfind(|(key, _)| ordinal_ignore_case_eq(key, name))
+                .map(|(_, value)| value)
+        };
         let event_path = options.temp.join(EVENT_DIRECTORY).join("event.json");
-        let github = github_context(message, contexts.get("github"), options, &event_path);
+        let github = github_context(message, lookup("github"), options, &event_path);
         let runner = runner_context(message, options)?;
         let mut base = ExprEnv::new(options.workspace.clone());
         base.set_context(RootContext::Github, &github);
@@ -66,7 +72,7 @@ impl JobContext {
             ("needs", RootContext::Needs),
             ("inputs", RootContext::Inputs),
         ] {
-            if let Some(value) = contexts.get(name) {
+            if let Some(value) = lookup(name) {
                 base.set_context(root, value);
             }
         }

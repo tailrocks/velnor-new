@@ -30,8 +30,16 @@ pub(super) struct Collected {
     pub(super) env: Vec<(String, String)>,
     pub(super) outputs: Vec<(String, String)>,
     pub(super) path: Vec<String>,
-    pub(super) summary: String,
+    pub(super) summary: Summary,
     pub(super) failures: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+pub(super) enum Summary {
+    #[default]
+    Empty,
+    TooLarge,
+    Text(String),
 }
 
 async fn create_file(directory: &Path, kind: &str) -> Result<PathBuf, ExecError> {
@@ -73,17 +81,23 @@ async fn read_bounded(path: &Path, kind: Kind) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-async fn read_text(path: &Path, kind: Kind) -> Result<String, ExecError> {
+async fn read_raw(path: &Path, kind: Kind) -> Result<Vec<u8>, ExecError> {
     let read = read_bounded(path, kind).await;
     let _ = tokio::fs::remove_file(path).await;
     match read {
-        Ok(bytes) => {
-            let text = String::from_utf8_lossy(&bytes);
-            Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned())
-        }
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Ok(bytes) => Ok(bytes),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(source) => Err(ExecError::io(format!("read {}", path.display()), source)),
     }
+}
+
+fn decode(bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned()
+}
+
+async fn read_text(path: &Path, kind: Kind) -> Result<String, ExecError> {
+    read_raw(path, kind).await.map(|bytes| decode(&bytes))
 }
 
 pub(super) fn failure(context: &str, error: &ExecError) -> [String; 2] {
@@ -146,11 +160,13 @@ impl FileCommands {
                 Vec::new()
             }
         };
-        let summary = match read_text(&self.summary, Kind::Summary).await {
-            Ok(text) => text,
+        let summary = match read_raw(&self.summary, Kind::Summary).await {
+            Ok(bytes) if bytes.is_empty() => Summary::Empty,
+            Ok(bytes) if bytes.len() > FILE_LIMIT => Summary::TooLarge,
+            Ok(bytes) => Summary::Text(decode(&bytes)),
             Err(error) => {
                 failures.extend(failure("step_summary", &error));
-                String::new()
+                Summary::Empty
             }
         };
         Collected {
@@ -165,19 +181,20 @@ impl FileCommands {
 
 pub(super) async fn save_summary(
     temp: &Path,
-    summary: &str,
+    summary: &Summary,
     out: &mut Output<'_>,
 ) -> Result<Option<PathBuf>, ExecError> {
-    if summary.is_empty() {
-        return Ok(None);
-    }
-    if summary.len() > FILE_LIMIT {
-        out.annotate(
-            AnnotationLevel::Error,
-            format!("Step summary exceeds the {FILE_LIMIT} byte limit and was dropped."),
-        );
-        return Ok(None);
-    }
+    let summary = match summary {
+        Summary::Empty => return Ok(None),
+        Summary::TooLarge => {
+            out.annotate(
+                AnnotationLevel::Error,
+                format!("Step summary exceeds the {FILE_LIMIT} byte limit and was dropped."),
+            );
+            return Ok(None);
+        }
+        Summary::Text(text) => text,
+    };
     let directory = temp.join(SUMMARY_DIRECTORY);
     private::create_dir(&directory).await?;
     let path = directory.join(format!("{}.md", out.number));
