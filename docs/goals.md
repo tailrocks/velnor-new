@@ -13,7 +13,7 @@ The work that gets the project there is tracked in the roadmap, issue [#574](htt
 
 The root `AGENTS.md` applies to all code. Hard decisions bind the existing engine only. Where new work needs the same choice, this file states it.
 
-New work serves Rust projects on GitHub Actions, on GitHub-hosted or self-hosted runners. Jobs are always executed by GitHub's official runner: on GitHub's machines, or on the project's own machines inside the containers that `velnor-runner` starts.
+New work serves Rust projects on GitHub Actions, on GitHub-hosted or self-hosted runners. Jobs are executed by GitHub's official runner: on GitHub's machines, or on the project's own machines inside the containers that the Velnor host starts. One exception: the jobs of this repository itself may be executed by Velnor's Rust runner `velnor-runner` on the Velnor host. GitHub's official runner stays the reference, and the workflows can be switched back to it by changing the `runner` label in `.velnor/rust-ci.toml`.
 
 ## Vision
 
@@ -42,7 +42,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 3. **A broken cache is slow, never wrong, and never silent.** A missing, rejected or stale cache takes a correct cold path. A cache that fails at its job is reported by a red check, as design rule 3 defines.
 4. **Secrets never reach the build.** Private dependencies are fetched with a short-lived token that can read only the repositories the project lists. The token is revoked before any code of the project or of its dependencies runs, and cargo then runs offline. Checkout stores no credentials, and the job's `GITHUB_TOKEN` has read-only permissions while that code runs. A pull request from this repository writes a cache only into its own scope. A pull request from a fork gets no token and only reads caches. Where a fork can read the caches, as in a public repository, nothing fetched from a private dependency or built from it is cached.
 5. **Every speed claim has a measurement.** A change states its effect with numbers from real runs, before and after.
-6. **Inside GitHub's free limits.** The design fits in GitHub's 10 GB of cache and on standard hosted runners. It does not depend on paid storage or larger machines.
+6. **Inside GitHub's free limits.** The design fits in GitHub's 10 GB of cache and on standard hosted runners. It does not depend on paid storage or larger machines. The one exception is the Velnor host, the owner's own machine, which runs this repository's jobs with `velnor-runner`; it uses no paid GitHub storage and no larger hosted machine.
 
 ## Targets
 
@@ -72,7 +72,7 @@ These are the numbers behind the promises, for a workflow the generator writes, 
 8. **A pull request builds on its own last run.** A pull request from this repository saves what it built, and only that pull request reads it.
 9. **No logic in YAML.** Every generated `run:` step is one command. A generated workflow uses only actions from a fixed list, each pinned to a full commit SHA. Decisions and loops live in one small helper program, written in Rust and shipped prebuilt.
 10. **Configuration matches reality.** Velnor checks its configuration against the repository, such as the name of the default branch. A mismatch fails the run.
-11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, started by the Velnor runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
+11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, started by the Velnor runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards. On the Velnor host the same workflows may run on Velnor's Rust runner `velnor-runner` instead of GitHub's official runner, and the official runner remains the reference that real GitHub confirms against.
 12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof. The plan and the required check of a run always come from a released version, never from the change under test.
 13. **Projects stay current.** A new Velnor version reaches a project only after it has passed on the lab project, and it is merged only with the project's own checks green. Velnor's own programs are released only from a tag on a commit of the default branch whose required check passed. The job that publishes checks out nothing and runs no code of the repository. It publishes files that a job without write permission built, after checking their digests.
 14. **Decided by experiment.** A choice between tools or designs is settled by an experiment on the lab project. The question, the measurements and the rule that picks the winner are written down before the first run. Whoever runs the experiment applies the rule and commits the result with its raw data. A choice that would change this file or a hard decision goes to the owner.
