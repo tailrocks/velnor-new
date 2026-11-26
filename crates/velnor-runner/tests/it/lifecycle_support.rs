@@ -45,12 +45,22 @@ pub(crate) fn job_replacing(name: &str, replacement: Option<(&str, &str)>) -> Re
     Ok(job)
 }
 
+pub(crate) fn job_with_steps(count: usize) -> Result<Value> {
+    let mut job = fixture_job("hello", None)?;
+    let steps = job["Steps"].as_array_mut().context("fixture steps")?;
+    let step = steps.first().cloned().context("fixture step")?;
+    *steps = vec![step; count];
+    Ok(job)
+}
+
 #[derive(Clone)]
 pub(crate) struct Settings {
     pub(crate) renew_interval: Duration,
     pub(crate) renew_lock_grace: Duration,
     pub(crate) cancel_timeout_floor: Duration,
     pub(crate) upload_block_budget: Duration,
+    pub(crate) session_retry_interval: Duration,
+    pub(crate) report_budget: Duration,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
 }
@@ -62,6 +72,8 @@ impl Settings {
             renew_lock_grace: Duration::from_secs(300),
             cancel_timeout_floor: Duration::from_secs(60),
             upload_block_budget: Duration::from_secs(60),
+            session_retry_interval: Duration::from_millis(50),
+            report_budget: Duration::from_secs(10),
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
         }
@@ -87,6 +99,11 @@ impl Settings {
         self
     }
 
+    pub(crate) fn reporting_within(mut self, budget: Duration) -> Self {
+        self.report_budget = budget;
+        self
+    }
+
     pub(crate) fn within(mut self, budget: Duration) -> Self {
         self.budget = budget;
         self
@@ -108,6 +125,8 @@ pub(crate) async fn run_in(
         cancel_timeout_floor: settings.cancel_timeout_floor,
         upload_block_budget: settings.upload_block_budget,
         cancel_poll_error_delay: Duration::from_millis(50),
+        session_retry_interval: settings.session_retry_interval,
+        report_budget: settings.report_budget,
         adapters: AdapterRegistry::empty(),
     };
     tokio::time::timeout(budget, run_jit(options))

@@ -17,8 +17,10 @@ use velnor_runner::protocol::{
 };
 
 mod jit;
+mod mock_broker;
 pub(crate) mod mock_feed;
 pub(crate) mod mock_github;
+mod mock_results;
 
 pub(crate) const TOKEN: &str = "test-token";
 pub(crate) const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
@@ -144,6 +146,7 @@ struct Route {
 struct State {
     routes: Vec<Route>,
     requests: Vec<RecordedRequest>,
+    in_flight: BTreeMap<String, (usize, usize)>,
 }
 
 pub(crate) struct TestServer {
@@ -215,6 +218,13 @@ impl TestServer {
             .collect())
     }
 
+    pub(crate) fn peak_concurrency(&self, path: &str) -> Result<usize> {
+        Ok(lock(&self.state)?
+            .in_flight
+            .get(path)
+            .map_or(0, |(_, peak)| *peak))
+    }
+
     pub(crate) fn only_request(&self, method: &str, path: &str) -> Result<RecordedRequest> {
         let mut requests = self.requests_to(method, path)?;
         match requests.len() {
@@ -239,6 +249,9 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
             return;
         };
         state.requests.push(request.clone());
+        let (current, peak) = state.in_flight.entry(request.path.clone()).or_default();
+        *current += 1;
+        *peak = (*peak).max(*current);
         match state
             .routes
             .iter()
@@ -259,6 +272,11 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         .as_ref()
         .map_or_else(String::new, |location| format!("location: {location}\r\n"));
     tokio::time::sleep(reply.delay).await;
+    if let Ok(mut state) = lock(&state)
+        && let Some((current, _)) = state.in_flight.get_mut(&request.path)
+    {
+        *current -= 1;
+    }
     let head = format!(
         "HTTP/1.1 {} Test\r\ncontent-type: {}\r\n{location}content-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,

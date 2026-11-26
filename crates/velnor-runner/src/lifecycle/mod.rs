@@ -9,6 +9,7 @@ mod logs;
 mod renew;
 mod report;
 mod session;
+mod status;
 mod tail;
 
 use std::future::Future;
@@ -41,6 +42,8 @@ pub struct RunJitOptions {
     pub cancel_timeout_floor: Duration,
     pub upload_block_budget: Duration,
     pub cancel_poll_error_delay: Duration,
+    pub session_retry_interval: Duration,
+    pub report_budget: Duration,
     pub adapters: AdapterRegistry,
 }
 
@@ -96,7 +99,12 @@ impl Drop for BackgroundTask {
 pub async fn run_jit(options: RunJitOptions) -> Result<LifecycleOutcome, LifecycleError> {
     let config = decode_jit_config(options.jit.expose()).map_err(LifecycleError::Config)?;
     let agent_name = config.settings.agent_name.clone().unwrap_or_default();
-    let session = Arc::new(Session::open(&config).await?);
+    let opened = tokio::select! {
+        biased;
+        () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
+        opened = Session::open(&config, options.session_retry_interval) => opened?,
+    };
+    let session = Arc::new(opened);
     let outcome = serve(&options, &agent_name, &session).await;
     session.close().await;
     outcome
@@ -141,7 +149,12 @@ async fn acquire_and_run(
     run_options: &RunOptions,
     request: &RunnerJobRequestRef,
 ) -> Result<LifecycleOutcome, LifecycleError> {
-    let Some(message) = acquire::acquire(session, request).await? else {
+    let acquired = tokio::select! {
+        biased;
+        () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
+        acquired = acquire::acquire(session, request) => acquired?,
+    };
+    let Some(message) = acquired else {
         return Ok(LifecycleOutcome::NoJob);
     };
     let connection = acquire::connect(&message, options.upload_block_budget)?;
@@ -218,6 +231,14 @@ async fn run_and_report(
         .unwrap_or(&run_options.workspace);
     let files = LogFiles::create(root).await?;
     let cancel = options.shutdown.clone();
+    let grace = CancelGrace::new(options.cancel_timeout_floor);
+    let poll = cancel_poll::spawn_cancel_poll(
+        Arc::clone(session),
+        message.job_id.clone(),
+        cancel.clone(),
+        grace.clone(),
+        options.cancel_poll_error_delay,
+    );
     let (_renew, first_renewed) = renew::spawn_renew(
         RenewTarget {
             client: connection.run_service.clone(),
@@ -231,21 +252,13 @@ async fn run_and_report(
     );
     tokio::select! {
         biased;
+        () = cancel.cancelled() => return Ok(Finish::NotStarted),
         first = first_renewed => first
             .unwrap_or_else(|_| Err(anyhow!("the renew task stopped")))
             .map_err(LifecycleError::Renew)?,
-        () = cancel.cancelled() => return Ok(Finish::NotStarted),
     }
     let (mut sink, events) = GithubSink::channel(&files)?;
-    let grace = CancelGrace::new(options.cancel_timeout_floor);
-    let poll = cancel_poll::spawn_cancel_poll(
-        Arc::clone(session),
-        message.job_id.clone(),
-        cancel.clone(),
-        grace.clone(),
-        options.cancel_poll_error_delay,
-    );
-    let reporter = Reporter::new(connection, message, files).spawn(events);
+    let reporter = Reporter::new(connection, message, files, options.report_budget).spawn(events);
     let run = tokio::select! {
         run = run_job(message, run_options, &options.adapters, &mut sink, cancel.clone()) => Some(run),
         () = cancel_deadline(&cancel, &grace) => None,

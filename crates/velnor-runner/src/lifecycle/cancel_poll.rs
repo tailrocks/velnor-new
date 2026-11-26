@@ -94,6 +94,10 @@ pub(super) fn spawn_cancel_poll(
             match session.poll(RunnerStatus::Busy).await {
                 Ok(Some(message)) => {
                     streak = 0;
+                    if MessageKind::of(&message) == MessageKind::HostedRunnerShutdown {
+                        cancel.cancel();
+                        return;
+                    }
                     if let Some(body) = cancellation(&message, &job_id) {
                         if let Some(timeout) = body.timeout.as_deref().and_then(parse_timespan) {
                             grace.allow(timeout);

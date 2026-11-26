@@ -17,8 +17,8 @@ use crate::protocol::{
 };
 use crate::secret::Secret;
 
-const SESSION_ATTEMPTS: u32 = 3;
-const SESSION_RETRY_STEP: Duration = Duration::from_secs(2);
+const TRANSIENT_SESSION_ATTEMPTS: u32 = 3;
+const SESSION_CONFLICT_WINDOW: Duration = Duration::from_secs(240);
 const MAX_CONSECUTIVE_POLL_ERRORS: u32 = 10;
 const MAX_POLL_ERROR_DELAY: Duration = Duration::from_secs(60);
 const JOB_CANCELLATION: &str = "JobCancellation";
@@ -125,7 +125,10 @@ pub(super) fn backoff(base: Duration, streak: u32) -> Duration {
 }
 
 impl Session {
-    pub(super) async fn open(config: &DecodedJitConfig) -> Result<Self, LifecycleError> {
+    pub(super) async fn open(
+        config: &DecodedJitConfig,
+        retry_interval: Duration,
+    ) -> Result<Self, LifecycleError> {
         let credentials = oauth_credentials(config).map_err(LifecycleError::Config)?;
         let base_url = config
             .settings
@@ -147,9 +150,13 @@ impl Session {
         let broker =
             BrokerClient::new(&base_url, token.clone()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());
-        let created = create_session(&broker, TaskAgentSession::new(owner, agent_id, agent_name))
-            .await
-            .map_err(LifecycleError::Session)?;
+        let created = create_session(
+            &broker,
+            TaskAgentSession::new(owner, agent_id, agent_name),
+            retry_interval,
+        )
+        .await
+        .map_err(LifecycleError::Session)?;
         let id = created
             .session_id
             .filter(|id| !id.is_empty())
@@ -211,9 +218,19 @@ impl Session {
         runner_request_id: &str,
     ) -> anyhow::Result<Acknowledgement> {
         let broker = self.auth().broker.clone();
-        broker
+        match broker
             .acknowledge_runner_request(&self.id, runner_request_id, RunnerStatus::Busy)
             .await
+        {
+            Err(error) if is_auth_failure(&error) => {
+                self.refresh().await?;
+                let broker = self.auth().broker.clone();
+                broker
+                    .acknowledge_runner_request(&self.id, runner_request_id, RunnerStatus::Busy)
+                    .await
+            }
+            other => other,
+        }
     }
 
     pub(super) async fn wait_for_job(
@@ -274,22 +291,29 @@ impl Session {
 async fn create_session(
     broker: &BrokerClient,
     session: TaskAgentSession,
+    interval: Duration,
 ) -> anyhow::Result<TaskAgentSession> {
-    let mut attempt = 1_u32;
+    let mut transient = 0_u32;
+    let mut conflicts = 0_u32;
     loop {
-        match broker.create_session(&session).await {
+        let error = match broker.create_session(&session).await {
             Ok(created) => return Ok(created),
-            Err(error)
-                if attempt < SESSION_ATTEMPTS
-                    && matches!(
-                        broker_error_category(&error),
-                        Some(BrokerErrorCategory::Transient | BrokerErrorCategory::Conflict)
-                    ) =>
-            {
-                tokio::time::sleep(SESSION_RETRY_STEP * attempt).await;
-                attempt += 1;
+            Err(error) => error,
+        };
+        let retry = match broker_error_category(&error) {
+            Some(BrokerErrorCategory::Transient) => {
+                transient += 1;
+                transient < TRANSIENT_SESSION_ATTEMPTS
             }
-            Err(error) => return Err(error),
+            Some(BrokerErrorCategory::Conflict) => {
+                conflicts += 1;
+                interval.saturating_mul(conflicts) < SESSION_CONFLICT_WINDOW
+            }
+            _ => false,
+        };
+        if !retry {
+            return Err(error);
         }
+        tokio::time::sleep(interval).await;
     }
 }

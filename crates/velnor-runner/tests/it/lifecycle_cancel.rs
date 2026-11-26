@@ -44,6 +44,26 @@ async fn lifecycle_cancel_message_cancels_running_step() -> Result<()> {
 }
 
 #[tokio::test]
+async fn lifecycle_hosted_runner_shutdown_cancels_the_running_job() -> Result<()> {
+    let behavior = Behavior {
+        cancel: Cancel::HostedShutdownAfter(Duration::from_millis(300)),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("cancel", None)?, behavior).await?;
+
+    let outcome = run_with(
+        &mock,
+        Settings::new()
+            .renewing_every(Duration::from_secs(60))
+            .within(CANCEL_BUDGET),
+    )
+    .await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
+    cancelled_with_cleanup(&mock.complete_request()?)
+}
+
+#[tokio::test]
 async fn lifecycle_cancel_message_for_another_job_is_ignored() -> Result<()> {
     let behavior = Behavior {
         cancel: Cancel::AfterACancelOfAnotherJob(Duration::from_millis(700)),

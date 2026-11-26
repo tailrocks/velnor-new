@@ -4,12 +4,14 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use velnor_runner::exec::JobResult;
+use velnor_runner::exec::{JobCancel, JobResult};
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 
 use super::exec_support::Scratch;
-use super::lifecycle_support::{Settings, fixture_job, run, run_in};
-use super::support::mock_github::{Acknowledge, Behavior, MockGithub, Online, SESSION_ID};
+use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in, run_with};
+use super::support::mock_github::{
+    Acknowledge, Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, Online, SESSION_ID, SessionCreate,
+};
 
 #[tokio::test]
 async fn lifecycle_refreshes_the_token_after_a_401_poll_and_still_runs_the_job() -> Result<()> {
@@ -183,5 +185,85 @@ async fn lifecycle_runs_the_job_when_the_acknowledgement_says_the_runner_is_not_
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
     mock.server.only_request("POST", "/run/acquirejob")?;
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    Ok(())
+}
+
+fn shutdown_after(delay: Duration) -> JobCancel {
+    let shutdown = JobCancel::new();
+    let signal = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        signal.cancel();
+    });
+    shutdown
+}
+
+#[tokio::test]
+async fn lifecycle_keeps_retrying_a_session_conflict_until_the_old_session_expires() -> Result<()> {
+    let behavior = Behavior {
+        session: SessionCreate::ConflictsFirst(6),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 7);
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_stops_waiting_for_a_session_when_shutdown_arrives() -> Result<()> {
+    let behavior = Behavior {
+        session: SessionCreate::ConflictsAlways,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let mut settings = Settings::new().within(CANCEL_BUDGET);
+    settings.shutdown = shutdown_after(Duration::from_millis(500));
+
+    let outcome = run_with(&mock, settings).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::NoJob);
+    assert!(mock.requests_to("DELETE", "/broker/session")?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_signs_in_again_when_the_acknowledgement_finds_the_token_expired() -> Result<()> {
+    let behavior = Behavior {
+        oauth: OAuthTokens::StaleFirst,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run_with(&mock, Settings::new().within(CANCEL_BUDGET)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(mock.requests_to("POST", "/broker/acknowledge")?.len(), 2);
+    let acquire = mock.server.only_request("POST", "/run/acquirejob")?;
+    assert_eq!(
+        acquire.header("authorization"),
+        Some(format!("Bearer {OAUTH_TOKEN}").as_str())
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_stops_acquiring_when_shutdown_arrives() -> Result<()> {
+    let behavior = Behavior {
+        acquire_delay: Duration::from_secs(30),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let mut settings = Settings::new().within(CANCEL_BUDGET);
+    settings.shutdown = shutdown_after(Duration::from_millis(500));
+
+    let outcome = run_with(&mock, settings).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::NoJob);
+    assert!(mock.requests_to("POST", "/run/completejob")?.is_empty());
+    mock.server.only_request("DELETE", "/broker/session")?;
     Ok(())
 }
