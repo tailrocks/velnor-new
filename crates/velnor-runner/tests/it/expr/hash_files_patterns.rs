@@ -340,3 +340,24 @@ fn expr_hash_files_rejects_empty_home_var() -> Result<()> {
     assert!(error_text("hashFiles('~')", &env)?.contains("Unable to determine HOME directory"));
     Ok(())
 }
+
+#[test]
+fn expr_hash_files_rejects_dotted_home() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/sub/b.txt", "b")?;
+    let root = fs::canonicalize(dir.path())?;
+    let mut env = dir.env();
+
+    for home in [root.join("ws/sub/.."), root.join(".").join("ws")] {
+        env.home = Some(home);
+        for pattern in ["~/a.txt", "~/**"] {
+            let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+            assert!(
+                message.contains("Relative pathing '.' and '..' is not allowed."),
+                "{pattern}: {message}"
+            );
+        }
+    }
+    Ok(())
+}

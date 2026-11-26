@@ -25,7 +25,7 @@ impl PatternSet {
         home: Option<&Path>,
         lines: impl Iterator<Item = &'a str>,
     ) -> Result<Self, GlobError> {
-        let workspace = components_of(workspace);
+        let workspace = components_of(workspace)?;
         let mut entries = Vec::new();
         for line in lines {
             let pattern = Pattern::parse(line, &workspace, home)?;

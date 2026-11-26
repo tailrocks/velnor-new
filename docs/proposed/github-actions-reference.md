@@ -968,6 +968,10 @@ behaviours differ on purpose:
   `readdir` ([index.js:1405](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1405)),
   which varies by file system. The digest depends on file order, so Velnor sorts
   to keep it reproducible.
-- **A `HOME` with `.` or `..` segments is resolved lexically.** The runner
+- **A `HOME` with `.` or `..` segments is rejected for every `~` pattern.** The
+  runner rejects the segments with `Relative pathing '.' and '..' is not
+  allowed` only for patterns that get implicit descendants, those that do not
+  end in `**`. Velnor rejects a dotted `HOME` for every pattern that starts
+  with `~`.** The runner
   rejects such a path with `Relative pathing '.' and '..' is not allowed`;
   Velnor resolves the segments lexically.

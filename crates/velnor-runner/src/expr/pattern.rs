@@ -31,13 +31,23 @@ impl GlobError {
     }
 }
 
-pub(crate) fn components_of(path: &Path) -> Vec<String> {
-    path.components()
+pub(crate) fn components_of(path: &Path) -> Result<Vec<String>, GlobError> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| GlobError::InvalidPattern(path.display().to_string()))?;
+    if text
+        .split(std::path::is_separator)
+        .any(|part| part == "." || part == "..")
+    {
+        return Err(GlobError::RelativePathing(text.to_owned()));
+    }
+    Ok(path
+        .components()
         .filter_map(|component| match component {
             Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
             _ => None,
         })
-        .collect()
+        .collect())
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +131,13 @@ impl Pattern {
         let (mut segs, rest): (Vec<Seg>, &[&str]) = if rooted {
             (Vec::new(), &parts[..])
         } else if first == Some("~") {
-            (home_segments(home)?, &parts[1..])
+            let segs = home_segments(home).map_err(|error| match (error, home) {
+                (GlobError::RelativePathing(_), Some(home)) => {
+                    GlobError::RelativePathing(text.replacen('~', &home.display().to_string(), 1))
+                }
+                (error, _) => error,
+            })?;
+            (segs, &parts[1..])
         } else {
             let anchored = workspace.iter().cloned().map(Seg::Literal).collect();
             (anchored, &parts[usize::from(first == Some("."))..])
@@ -150,7 +166,7 @@ fn home_segments(home: Option<&Path>) -> Result<Vec<Seg>, GlobError> {
     if !home.is_absolute() {
         return Err(GlobError::HomeNotRooted(home.display().to_string()));
     }
-    Ok(components_of(home).into_iter().map(Seg::Literal).collect())
+    Ok(components_of(home)?.into_iter().map(Seg::Literal).collect())
 }
 
 pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {
