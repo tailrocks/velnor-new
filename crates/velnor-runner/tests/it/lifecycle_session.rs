@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -11,15 +9,7 @@ use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::{Settings, fixture_job, run, run_in};
-use super::support::mock_github::{Behavior, MockGithub, Online, SESSION_ID};
-
-struct Restore(PathBuf);
-
-impl Drop for Restore {
-    fn drop(&mut self) {
-        let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
-    }
-}
+use super::support::mock_github::{Acknowledge, Behavior, MockGithub, Online, SESSION_ID};
 
 #[tokio::test]
 async fn lifecycle_refreshes_the_token_after_a_401_poll_and_still_runs_the_job() -> Result<()> {
@@ -96,11 +86,7 @@ async fn lifecycle_does_not_acquire_a_job_it_cannot_prepare_a_work_dir_for() -> 
     let scratch = Scratch::new()?;
     let work_dir = scratch.work_dir();
     std::fs::create_dir_all(&work_dir)?;
-    std::fs::set_permissions(&work_dir, std::fs::Permissions::from_mode(0o555))?;
-    let _restore = Restore(work_dir.clone());
-    if std::fs::write(work_dir.join("probe"), "").is_ok() {
-        return Ok(());
-    }
+    std::fs::write(work_dir.join("workspace"), "in the way")?;
 
     let outcome = run_in(&mock, &scratch, Settings::new()).await?;
 
@@ -147,5 +133,38 @@ async fn lifecycle_completes_the_job_as_failed_when_it_cannot_start_it() -> Resu
         "{annotations:?}"
     );
     assert_eq!(mock.requests_to("DELETE", "/broker/session")?.len(), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_ends_without_a_job_when_the_acknowledgement_says_the_job_is_gone() -> Result<()>
+{
+    let behavior = Behavior {
+        acknowledge: Acknowledge::JobGone,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::NoJob);
+    assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
+    assert!(mock.requests_to("POST", "/run/completejob")?.is_empty());
+    mock.server.only_request("DELETE", "/broker/session")?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_runs_the_job_when_the_acknowledgement_fails_for_another_reason() -> Result<()> {
+    let behavior = Behavior {
+        acknowledge: Acknowledge::Unavailable,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
     Ok(())
 }

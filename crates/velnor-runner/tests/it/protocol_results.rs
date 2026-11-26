@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write;
+
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::protocol::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 
+use super::exec_support::Scratch;
 use super::support::{Reply, TOKEN, TestServer, assert_bearer};
 
 const STEPS_UPDATE_PATH: &str =
@@ -125,9 +128,10 @@ async fn step_summary_uploads_to_summary_url_and_reports_size() -> Result<()> {
         Reply::json(200, &json!({"ok": true}))
     })?;
 
-    client
-        .upload_step_summary(RUN, JOB, STEP, "# Summary\n")
-        .await?;
+    let scratch = Scratch::new()?;
+    let summary = scratch.write("summary.md", b"# Summary\n")?;
+
+    client.upload_step_summary(RUN, JOB, STEP, &summary).await?;
 
     let signed = server.only_request("POST", &receiver("GetStepSummarySignedBlobURL"))?;
     assert_bearer(&signed);
@@ -158,8 +162,11 @@ async fn step_summary_over_soft_limit_is_rejected_without_upload_or_retry() -> R
         move |_| Reply::json(200, &json!({"summary_url": blob_url, "soft_size_limit": 4})),
     )?;
 
+    let scratch = Scratch::new()?;
+    let summary = scratch.write("summary.md", b"longer than four bytes")?;
+
     let error = client
-        .upload_step_summary(RUN, JOB, STEP, "longer than four bytes")
+        .upload_step_summary(RUN, JOB, STEP, &summary)
         .await
         .err()
         .context("oversized summary must fail")?;
@@ -193,9 +200,10 @@ async fn step_log_uploads_to_logs_url_and_reports_line_count() -> Result<()> {
         Reply::json(200, &json!({"ok": true}))
     })?;
 
-    client
-        .upload_step_log(RUN, JOB, STEP, &["one".to_owned(), "two".to_owned()])
-        .await?;
+    let scratch = Scratch::new()?;
+    let log = scratch.write("step.log", b"one\ntwo\n")?;
+
+    client.upload_step_log(RUN, JOB, STEP, &log).await?;
 
     let metadata = server
         .only_request("POST", &receiver("CreateStepLogsMetadata"))?
@@ -218,12 +226,92 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
         Reply::json(200, &json!({}))
     })?;
 
+    let scratch = Scratch::new()?;
+    let log = scratch.write("step.log", b"one\n")?;
+
     let error = client
-        .upload_step_log(RUN, JOB, STEP, &["one".to_owned()])
+        .upload_step_log(RUN, JOB, STEP, &log)
         .await
         .err()
         .context("metadata without ok must fail")?;
 
     assert!(format!("{error:#}").contains("ok=false"), "{error:#}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn job_log_over_one_block_is_appended_in_blocks_without_losing_a_line() -> Result<()> {
+    const LINES: usize = 150_000;
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    let blob_url = format!("{}/blob/log?sig=1", server.uri());
+    server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
+        Reply::json(200, &json!({"logs_url": blob_url}))
+    })?;
+    server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
+    server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
+        Reply::json(200, &json!({"ok": true}))
+    })?;
+    let mut text = String::new();
+    for number in 0..LINES {
+        writeln!(text, "{number:020} {}", "x".repeat(40))?;
+    }
+    let scratch = Scratch::new()?;
+    let log = scratch.write("job.log", text.as_bytes())?;
+
+    client.upload_job_log(RUN, JOB, &log).await?;
+
+    let puts = server.requests_to("PUT", "/blob/log")?;
+    assert_eq!(puts[0].header("x-ms-blob-type"), Some("AppendBlob"));
+    assert_eq!(puts[0].text(), "");
+    let blocks: Vec<_> = puts
+        .iter()
+        .filter(|put| put.query("comp") == Some("appendblock"))
+        .collect();
+    assert!(blocks.len() >= 3, "{} blocks", blocks.len());
+    for block in &blocks[..blocks.len() - 1] {
+        let size = block.text().len();
+        assert!(
+            (2 * 1024 * 1024..2 * 1024 * 1024 + 128).contains(&size),
+            "{size}"
+        );
+        assert!(block.text().ends_with('\n'));
+    }
+    let joined: String = blocks.iter().map(|block| block.text()).collect();
+    assert_eq!(joined, text);
+    let seal = puts.last().context("the seal request")?;
+    assert_eq!(seal.query("comp"), Some("seal"));
+    let metadata = server
+        .only_request("POST", &receiver("CreateJobLogsMetadata"))?
+        .json()?;
+    assert_eq!(metadata["line_count"], LINES);
+    Ok(())
+}
+
+#[tokio::test]
+async fn job_log_of_one_block_is_a_single_block_blob() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    let blob_url = format!("{}/blob/log", server.uri());
+    server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
+        Reply::json(200, &json!({"logs_url": blob_url}))
+    })?;
+    server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
+    server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
+        Reply::json(200, &json!({"ok": true}))
+    })?;
+    let scratch = Scratch::new()?;
+    let log = scratch.write("job.log", b"one\ntwo\nthree\n")?;
+
+    client.upload_job_log(RUN, JOB, &log).await?;
+
+    let put = server.only_request("PUT", "/blob/log")?;
+    assert_eq!(put.header("x-ms-blob-type"), Some("BlockBlob"));
+    assert_eq!(put.query("comp"), None);
+    assert_eq!(put.text(), "one\ntwo\nthree\n");
+    let metadata = server
+        .only_request("POST", &receiver("CreateJobLogsMetadata"))?
+        .json()?;
+    assert_eq!(metadata["line_count"], 3);
     Ok(())
 }

@@ -7,10 +7,13 @@ use anyhow::{Context, Result};
 use reqwest::Method;
 use serde_json::json;
 use velnor_runner::context_value::ContextValue;
+use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::lifecycle::RunJitOptions;
 use velnor_runner::protocol::{
     BrokerClient, FeedStreamClient, RunServiceClient, TwirpResultsClient, github_json_http_response,
 };
+use velnor_runner::secret::Secret;
 
 use super::support::{Reply, TestServer};
 
@@ -126,4 +129,21 @@ async fn response_and_acquired_job_debug_output_contains_no_secret_value() -> Re
         .await?;
     assert_no_secret("AcquireJobOutcome", &format!("{outcome:?}"));
     Ok(())
+}
+
+#[test]
+fn run_jit_options_debug_output_hides_the_jit_configuration() {
+    const JIT: &str = "jit-config-bundle-0001";
+    let options = RunJitOptions {
+        jit: Secret::new(JIT.to_owned()),
+        work_dir: std::path::PathBuf::from("_work"),
+        shutdown: JobCancel::new(),
+        renew_interval: Duration::from_secs(60),
+        renew_lock_grace: Duration::from_secs(300),
+        cancel_timeout_floor: Duration::from_secs(60),
+        cancel_poll_error_delay: Duration::from_secs(2),
+        adapters: AdapterRegistry::empty(),
+    };
+
+    assert!(!format!("{options:?}").contains(JIT));
 }

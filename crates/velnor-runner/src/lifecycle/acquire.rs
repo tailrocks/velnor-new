@@ -12,7 +12,8 @@ use crate::context_value::ordinal_ignore_case_eq;
 use crate::job_message::AgentJobRequestMessage;
 use crate::protocol::http::runner_os;
 use crate::protocol::{
-    AcquireJobOutcome, FeedStreamClient, RunServiceClient, RunnerJobRequestRef, TwirpResultsClient,
+    Acknowledgement, AcquireJobOutcome, FeedStreamClient, RunServiceClient, RunnerJobRequestRef,
+    TwirpResultsClient,
 };
 
 const ACKNOWLEDGE_BUDGET: Duration = Duration::from_secs(5);
@@ -28,20 +29,28 @@ pub(super) struct JobConnection {
     pub(super) feed: Option<FeedStreamClient>,
 }
 
-async fn acknowledge(session: &Session, runner_request_id: &str) {
+async fn acknowledge(session: &Session, runner_request_id: &str) -> Acknowledgement {
     match tokio::time::timeout(ACKNOWLEDGE_BUDGET, session.acknowledge(runner_request_id)).await {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => eprintln!("warning: acknowledge job request: {error:#}"),
-        Err(_) => eprintln!("warning: acknowledge job request timed out"),
+        Ok(Ok(acknowledgement)) => acknowledgement,
+        Ok(Err(error)) => {
+            eprintln!("warning: acknowledge job request: {error:#}");
+            Acknowledgement::Accepted
+        }
+        Err(_) => {
+            eprintln!("warning: acknowledge job request timed out");
+            Acknowledgement::Accepted
+        }
     }
 }
 
 pub(super) async fn acquire(
     session: &Session,
     request: &RunnerJobRequestRef,
-) -> Result<AgentJobRequestMessage, LifecycleError> {
-    if request.should_acknowledge {
-        acknowledge(session, &request.runner_request_id).await;
+) -> Result<Option<AgentJobRequestMessage>, LifecycleError> {
+    if request.should_acknowledge
+        && acknowledge(session, &request.runner_request_id).await == Acknowledgement::JobNotFound
+    {
+        return Ok(None);
     }
     let run_service_url = request
         .run_service_url
@@ -59,7 +68,7 @@ pub(super) async fn acquire(
         .await
         .map_err(LifecycleError::Acquire)?;
     match outcome {
-        AcquireJobOutcome::Acquired(payload) => payload.message.ok_or_else(|| {
+        AcquireJobOutcome::Acquired(payload) => payload.message.map(Some).ok_or_else(|| {
             LifecycleError::Acquire(anyhow!("acquired job is not a valid job message"))
         }),
         AcquireJobOutcome::Skipped { status, reason, .. } => {

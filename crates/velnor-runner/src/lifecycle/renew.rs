@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use tokio::sync::oneshot;
 use tokio::time::Instant;
 
 use super::BackgroundTask;
@@ -60,8 +61,10 @@ pub(super) fn spawn_renew(
     interval: Duration,
     lock_grace: Duration,
     cancel: JobCancel,
-) -> RenewHandle {
-    BackgroundTask::spawn(async move {
+) -> (RenewHandle, oneshot::Receiver<()>) {
+    let (first_renewed, first) = oneshot::channel();
+    let handle = BackgroundTask::spawn(async move {
+        let mut first_renewed = Some(first_renewed);
         let mut failures = 0_u32;
         let mut give_up_at = Instant::now() + lock_grace;
         loop {
@@ -71,6 +74,9 @@ pub(super) fn spawn_renew(
                 .await
             {
                 Ok(renewed) => {
+                    if let Some(first_renewed) = first_renewed.take() {
+                        let _ = first_renewed.send(());
+                    }
                     failures = 0;
                     let remaining = until_lock_expires(&renewed.locked_until);
                     give_up_at = Instant::now() + remaining.unwrap_or(interval) + lock_grace;
@@ -94,5 +100,6 @@ pub(super) fn spawn_renew(
             };
             tokio::time::sleep(delay).await;
         }
-    })
+    });
+    (handle, first)
 }

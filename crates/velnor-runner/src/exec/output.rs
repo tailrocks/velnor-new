@@ -51,6 +51,7 @@ impl Output<'_> {
     }
 
     pub(super) fn push(&mut self, mut annotation: Annotation) {
+        annotation.step = (self.number != 0).then_some(self.number);
         if let std::borrow::Cow::Owned(masked) = self.masker.mask(&annotation.message) {
             annotation.message = masked;
         }

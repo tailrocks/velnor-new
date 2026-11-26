@@ -184,7 +184,6 @@ impl Job<'_> {
         };
         let condition_failed = condition.is_err() || step_env.is_err();
         let mut outputs = Vec::new();
-        let annotations_before = out.annotations.len();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
             let executed = match (condition, prepared, step_env) {
@@ -227,9 +226,6 @@ impl Job<'_> {
         }
         if self.cancel.is_cancelled() {
             self.status = JobStatus::Cancelled;
-        }
-        for annotation in &mut out.annotations[annotations_before..] {
-            annotation.step = Some(number);
         }
         out.sink.step_finished(number, record.outcome);
         self.settle(&record, outputs);

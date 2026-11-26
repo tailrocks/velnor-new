@@ -119,26 +119,54 @@ pub(super) fn build(
     }
 }
 
-pub(super) fn forced_failure(
+fn forced(
     message: &AgentJobRequestMessage,
-    error: &LifecycleError,
+    conclusion: TaskResult,
+    level: AnnotationLevel,
+    text: String,
 ) -> RunServiceCompleteJob {
-    let issue = Annotation::new(
-        AnnotationLevel::Error,
-        format!("The runner could not run the job: {error}"),
-    );
     RunServiceCompleteJob {
         plan_id: message.plan.plan_id.clone(),
         job_id: message.job_id.clone(),
-        conclusion: TaskResult::Failed,
+        conclusion,
         outputs: BTreeMap::new(),
         step_results: Vec::new(),
-        annotations: vec![annotation(&issue)],
+        annotations: vec![annotation(&Annotation::new(level, text))],
         telemetry: Vec::new(),
         environment_url: None,
         billing_owner_id: message.billing_owner_id.clone(),
         infrastructure_failure_category: None,
     }
+}
+
+pub(super) fn forced_failure(
+    message: &AgentJobRequestMessage,
+    error: &LifecycleError,
+) -> RunServiceCompleteJob {
+    forced(
+        message,
+        TaskResult::Failed,
+        AnnotationLevel::Error,
+        format!("The runner could not run the job: {error}"),
+    )
+}
+
+pub(super) fn not_started(message: &AgentJobRequestMessage) -> RunServiceCompleteJob {
+    forced(
+        message,
+        TaskResult::Canceled,
+        AnnotationLevel::Warning,
+        "The job was canceled before it started.".to_owned(),
+    )
+}
+
+pub(super) fn abandoned(message: &AgentJobRequestMessage) -> RunServiceCompleteJob {
+    forced(
+        message,
+        TaskResult::Canceled,
+        AnnotationLevel::Warning,
+        "The job did not stop within its cancellation timeout; the runner stopped it.".to_owned(),
+    )
 }
 
 pub(super) async fn send(

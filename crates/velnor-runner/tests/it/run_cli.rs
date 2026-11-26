@@ -239,3 +239,60 @@ async fn run_cli_sigterm_while_waiting_for_a_job_deletes_the_session() -> Result
     assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
     Ok(())
 }
+
+const LOG_LINES: usize = 100_000;
+const LOG_LINE_BYTES: usize = 2_000;
+const PEAK_RSS_CEILING_KIB: u64 = 40 * 1024;
+
+async fn resident_kib(pid: u32) -> Option<u64> {
+    let output = Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .await
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout).trim().parse().ok()
+}
+
+async fn run_to_exit_sampling_memory(started: Started) -> Result<(Output, u64)> {
+    let Started { mut child, .. } = started;
+    let pid = child.id().context("the runner pid")?;
+    let mut peak = 0;
+    let deadline = Instant::now() + Duration::from_secs(120);
+    while child.try_wait()?.is_none() {
+        anyhow::ensure!(Instant::now() < deadline, "the runner did not exit");
+        peak = peak.max(resident_kib(pid).await.unwrap_or_default());
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Ok((child.wait_with_output().await?, peak))
+}
+
+#[tokio::test]
+async fn run_cli_peak_memory_stays_below_the_ceiling_while_the_log_is_far_larger() -> Result<()> {
+    let script = format!("yes {} | head -n {LOG_LINES}", "x".repeat(LOG_LINE_BYTES));
+    let mock = MockGithub::start(fixture_job("hello", Some(&script))?, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+    let started = start_runner(&mock, &scratch)?;
+
+    let (output, peak_kib) = run_to_exit_sampling_memory(started).await?;
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let uploaded: usize = mock
+        .requests_to("PUT", super::support::mock_github::JOB_LOG_BLOB)?
+        .iter()
+        .map(|put| put.text().len())
+        .sum();
+    assert!(
+        uploaded >= LOG_LINES * LOG_LINE_BYTES,
+        "the whole job log reached GitHub: {uploaded} bytes"
+    );
+    assert!(
+        peak_kib < PEAK_RSS_CEILING_KIB,
+        "peak resident memory {peak_kib} KiB is over {PEAK_RSS_CEILING_KIB} KiB while the log is {uploaded} bytes"
+    );
+    Ok(())
+}

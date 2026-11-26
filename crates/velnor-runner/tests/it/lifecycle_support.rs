@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome, RunJitOptions, run_jit};
+use velnor_runner::secret::Secret;
 
 use super::exec_support::{Scratch, fixture_path};
 use super::support::mock_github::MockGithub;
@@ -48,6 +49,7 @@ pub(crate) fn job_replacing(name: &str, replacement: Option<(&str, &str)>) -> Re
 pub(crate) struct Settings {
     pub(crate) renew_interval: Duration,
     pub(crate) renew_lock_grace: Duration,
+    pub(crate) cancel_timeout_floor: Duration,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
 }
@@ -57,6 +59,7 @@ impl Settings {
         Self {
             renew_interval: Duration::from_millis(200),
             renew_lock_grace: Duration::from_secs(300),
+            cancel_timeout_floor: Duration::from_secs(60),
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
         }
@@ -69,6 +72,11 @@ impl Settings {
 
     pub(crate) fn giving_up_after(mut self, grace: Duration) -> Self {
         self.renew_lock_grace = grace;
+        self
+    }
+
+    pub(crate) fn killing_after_cancel_floor(mut self, floor: Duration) -> Self {
+        self.cancel_timeout_floor = floor;
         self
     }
 
@@ -85,11 +93,12 @@ pub(crate) async fn run_in(
 ) -> Result<Result<LifecycleOutcome, LifecycleError>> {
     let budget = settings.budget;
     let options = RunJitOptions {
-        jit: mock.jit().to_owned(),
+        jit: Secret::new(mock.jit().to_owned()),
         work_dir: scratch.work_dir(),
         shutdown: settings.shutdown,
         renew_interval: settings.renew_interval,
         renew_lock_grace: settings.renew_lock_grace,
+        cancel_timeout_floor: settings.cancel_timeout_floor,
         cancel_poll_error_delay: Duration::from_millis(50),
         adapters: AdapterRegistry::empty(),
     };

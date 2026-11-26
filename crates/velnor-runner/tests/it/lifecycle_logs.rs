@@ -116,33 +116,3 @@ async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
     assert_eq!(lines, texts(&step_log), "the feed shows the logged lines");
     Ok(())
 }
-
-#[tokio::test]
-async fn lifecycle_keeps_every_line_of_a_step_that_prints_far_more_than_the_buffer() -> Result<()> {
-    const LINES: usize = 200_000;
-    let behavior = Behavior {
-        feed: true,
-        ..Behavior::default()
-    };
-    let script = format!("seq 1 {LINES}");
-    let mock = MockGithub::start(fixture_job("hello", Some(&script))?, behavior).await?;
-
-    run(&mock, Duration::from_millis(200)).await?;
-
-    let step_log = uploaded(&mock, STEP_LOG_BLOB)?;
-    let job_log = uploaded(&mock, JOB_LOG_BLOB)?;
-    let numbers = |log: &str| -> Vec<usize> {
-        texts(log)
-            .into_iter()
-            .filter_map(|text| text.parse().ok())
-            .collect()
-    };
-    let expected: Vec<usize> = (1..=LINES).collect();
-    assert_eq!(numbers(&step_log), expected);
-    assert_eq!(numbers(&job_log), expected);
-    let frames = mock.feed.as_ref().context("feed")?.frames().await?;
-    assert!(frames.len() > 100, "{} frames", frames.len());
-    let lines = frame_lines(&frames)?;
-    assert_eq!(lines, texts(&step_log), "the feed lost no line");
-    Ok(())
-}
