@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
+use super::JobCancel;
+
 #[derive(Clone, Copy)]
 pub(super) struct Timeout {
     pub(super) minutes: f64,
@@ -26,5 +28,36 @@ pub(super) async fn expired(timeout: Option<Timeout>) {
     match timeout {
         Some(timeout) => tokio::time::sleep_until(timeout.at).await,
         None => std::future::pending().await,
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Interruption {
+    Cancelled,
+    TimedOut,
+}
+
+impl Interruption {
+    pub(super) fn now(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Option<Self> {
+        if cancel.is_some_and(JobCancel::is_cancelled) {
+            Some(Self::Cancelled)
+        } else if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
+            Some(Self::TimedOut)
+        } else {
+            None
+        }
+    }
+
+    pub(super) async fn wait(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Self {
+        let cancelled = async {
+            match cancel {
+                Some(cancel) => cancel.cancelled().await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            () = cancelled => Self::Cancelled,
+            () = expired(timeout) => Self::TimedOut,
+        }
     }
 }

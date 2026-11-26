@@ -52,8 +52,7 @@ async fn a_byte_order_mark_on_a_later_line_of_a_stream_is_kept() -> Result<()> {
 
 #[tokio::test]
 async fn annotation_numbers_are_trimmed_of_dot_net_integer_whitespace_only() -> Result<()> {
-    let script =
-        "printf '::error line=\\302\\2405::nbsp\\n'\nprintf '::error line=\\t5\\v::ascii\\n'";
+    let script = "printf '::error line=\\302\\2405::nbsp\\n'\nprintf '::error line=\\t5\\v::ascii\\n'\nprintf '::error line=\\302\\2405,endLine=3::mixed\\n'";
     let (finished, _) = run_steps(&job(vec![run("a", script)])).await?;
     let line_of = |message: &str| {
         finished
@@ -64,6 +63,12 @@ async fn annotation_numbers_are_trimmed_of_dot_net_integer_whitespace_only() -> 
     };
     assert_eq!(line_of("nbsp"), Some(None));
     assert_eq!(line_of("ascii"), Some(Some(5)));
+    let mixed = finished
+        .annotations
+        .iter()
+        .find(|annotation| annotation.message == "mixed")
+        .map(|annotation| (annotation.line, annotation.end_line));
+    assert_eq!(mixed, Some((Some(3), Some(3))));
     Ok(())
 }
 
@@ -151,5 +156,66 @@ async fn the_step_timeout_counts_the_time_spent_before_the_process_starts() -> R
     .await
     .context("the job did not finish")??;
     assert_eq!(finished.steps[0].outcome, StepResult::Failed, "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line == "step 1 timed out after 0.005 minutes"),
+        "{lines:?}"
+    );
+    Ok(())
+}
+
+struct Instant;
+
+impl StepAdapter for Instant {
+    fn handles(&self, reference: &str) -> bool {
+        reference == "actions/instant@v1"
+    }
+
+    fn run<'a>(&'a self, _ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
+        async move { Ok(StepResult::Succeeded) }.boxed()
+    }
+}
+
+#[tokio::test]
+async fn an_adapter_that_finishes_after_the_step_timeout_expired_fails_the_step() -> Result<()> {
+    let scratch = Scratch::new()?;
+    std::fs::create_dir_all(scratch.workspace()).context("create the workspace")?;
+    let big = std::fs::File::create(scratch.workspace().join("big.bin"))
+        .context("create the large file")?;
+    big.set_len(2 << 30).context("size the large file")?;
+    let mut uses = with(
+        step("w", json!({"type": 0, "lit": "unused"})),
+        "TimeoutInMinutes",
+        json!(0.005),
+    );
+    uses["Reference"] = json!({"Type": "repository", "Name": "actions/instant", "Ref": "v1", "RepositoryType": "GitHub"});
+    uses["Inputs"] = mapping(&[("k", expression("hashFiles('big.bin')"))]);
+    let mut registry = AdapterRegistry::empty();
+    registry.register(Box::new(Instant));
+    let (finished, lines) = tokio::time::timeout(
+        Duration::from_secs(120),
+        execute(&job(vec![uses]), &scratch, &registry, JobCancel::new()),
+    )
+    .await
+    .context("the job did not finish")??;
+    assert_eq!(finished.steps[0].outcome, StepResult::Failed, "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line == "step 1 timed out after 0.005 minutes"),
+        "{lines:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_whitespace_only_step_summary_is_kept() -> Result<()> {
+    let (finished, _) = run_steps(&job(vec![run(
+        "a",
+        "printf '  \\n' >> \"$GITHUB_STEP_SUMMARY\"",
+    )]))
+    .await?;
+    assert!(finished.steps[0].summary_path.is_some());
     Ok(())
 }
