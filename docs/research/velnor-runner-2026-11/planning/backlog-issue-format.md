@@ -25,15 +25,35 @@ manager writes the files of a phase before that phase's issues are created; the 
   on it. A default is runnable for an item when the item's done condition can be met under that default, at most with
   a narrower claim that the item states. A runnable default creates no blocker: the item runs on the default. A
   default of `Parked`, `None`, or one that withholds what the done condition needs blocks exactly like a missing
-  default. The table below decides every gate whose default is parked or declines something.
+  default. The table below decides every gate in the owner sheet for every item that names it in `gate`.
 
 | Gate | Default | Item | Outcome | Reason |
 |---|---|---|---|---|
+| Q1, Q3, Q4, Q8, Q19, D7, D8 | None | Every item that names them | Blocked | No default: the work waits for the answer |
+| Q2 | (a) the label flow | W2 | Runnable | The default is the flow W2 builds |
+| Q6 | Yes | W2 | Runnable | The default keeps the fork fence W2 keeps |
+| D9 | (b) one approval each | W0–W5, W7, W9, W10, N26 | Runnable | Done needs the train's release; the default grants it after one owner approval of the release PR |
+| Q7 | Yes: split only on a measured gain | W7, W8, G01 | Runnable | No done condition needs a second job |
+| Q12 | (a) both steps | W10, N26, L02, L07, L08 | Runnable | The default is the path these items build |
+| Q13 | (b) after merge | W7 | Runnable | Done 4 catches the planted doc break where Q13 says: under the default, on the push after merge |
+| Q18 | Proposals; the cost returns with W8 | W8 | Runnable | W8 measures; its done condition needs no target accepted |
+| Q10 | Yes | N21 | Runnable | The default is the evidence rule N21 applies |
+| Q14 | (a) the dialect first | N20, N28, A01–A05, N139 | Runnable | These items build the dialect |
+| Q14 | (a) the dialect first | X02–X05, X06a, X06b, X07–X12 | Blocked | Done needs full-protocol conformance; the default puts full compatibility later, behind the owner's answer |
+| Q9 | (a) fixes only until Q1, then the Official host | RV01, RV02, RV05, P03, X16, F01, N07 | Runnable | The default keeps the crates to review, move behind P02 and rebuild as the Official host |
+| Q5 | Hosted | G02 | Runnable | Hosted release labels stay; done is a golden with mixed executors |
+| Q5 | Hosted | R04 | Runnable | The push run can build on hosted runners for the tag to promote; Q15 blocks R04 |
+| Q5 | Hosted | A06 | Blocked | Done needs a policy that verifies Velnor-signed bytes; the hosted policy denies self-hosted runners |
+| Q5 | Hosted | R01 | Blocked | Done needs release jobs on Velnor; the default keeps `--deny-self-hosted-runners` |
+| Q15 | Rebuild at the tag | R04 | Blocked | Done needs a tag run that compiles 0 crates; the default rebuilds at the tag |
+| Q15 | Rebuild at the tag | R06, DG03 | Runnable | R06's patched bytes pass smoke and attestation under either answer; DG03's done does not involve the release subject (Q8 blocks it) |
+| Q16 | You only, by hand | L05 | Runnable | Done is a lab revocation; the default decides only who applies a stop |
+| Q17 | None built | N07 | Blocked | Done needs the generated `runner-v` release workflow the default withholds |
 | D4 | Parked | X06b | Blocked | Done needs the chosen evaluator; parked means nobody has chosen it |
 | D20 | No rental | BM15 | Blocked | Done needs a ratio against a rented high-clock node |
 | D22 | No rented arm; a narrower claim | BM10 | Runnable, narrower | Done allows dropping the arm: BM10 closes with no RBE arm and no figure, and S3's claim names only the arms run |
-| Q17 | None built | N07 | Blocked | Done needs the generated `runner-v` release workflow the default withholds |
-| D21, D23, D25, D26 | No / Off / No / Nothing built | none | — | No item names them as a gate |
+| Q11, D11, D15, D18, D21, D23, D24, D25, D26 | (b) / As written / (a) / GitHub's queue / No / Off / Equal to PR work / No / Nothing built | none | — | No item names them as a gate |
+
 - **Milestones:** one per phase (`VELNOR-0` … `VELNOR-3`), created by the manager after the owner confirms. The existing
   `FAST-*` milestones are left alone.
 - **Executor seat** comes from the labels `exec:haiku`, `exec:sonnet` or `exec:opus` and `effort:low`,

@@ -160,7 +160,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
   - (a) The dialect first; full compatibility later, gated by you.
   - (b) Full protocol compatibility first, as the old plan had it.
 - **Recommendation.** (a).
-- **Default.** (a).
+- **Default.** (a). The dialect items (N20, N28, A01–A05, N139) run on it. It blocks X02–X12, the full-compatibility stream, which (a) puts behind your later answer.
 - **Needed by.** X stream. It parks the old D4 (which expression evaluator). D4 is asked again when item X06b of the full-compatibility stream is scheduled, and blocks only that item.
 
 ### 12. Q19: A native cache and storage beyond GitHub's free limits
@@ -193,13 +193,13 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 
 - **Question.** Keep building tools releases on GitHub-hosted runners with GitHub's attestation, or build them on Velnor and promote them with a pinned signer?
 - **Recommendation.** Keep hosted for now (eight of nine models). Move to "built once on main's push and promoted at the tag" once the release manifest (Q15) exists.
-- **Default.** Hosted. This is a stated exception to your decisions 9 (every job on Velnor) and 10 (a release never rebuilds): the tag rebuilds on hosted runners, about 4 minutes per release (measured), until item R04 lands.
+- **Default.** Hosted. This is a stated exception to your decisions 9 (every job on Velnor) and 10 (a release never rebuilds): the tag rebuilds on hosted runners, about 4 minutes per release (measured), until item R04 lands. It blocks A06 and R01, which sign and build releases on Velnor.
 
 ### 16. Q15: The release subject across a squash merge
 
 - **Question.** The tools embed the commit they were built from, and a squash merge changes it, so bytes built on the PR or in the queue are not the bytes of the tagged commit. Bind release binaries to the tagged commit with a signed manifest instead of rebuilding?
 - **Recommendation.** Yes. It is the precondition for "build once, promote".
-- **Default.** Rebuild at the tag (today).
+- **Default.** Rebuild at the tag (today). This blocks R04, whose done condition is a tag run that compiles 0 crates. R06 and DG03 run on it.
 
 ### 17. Q17: A `runner-v` release workflow
 
@@ -312,12 +312,12 @@ All other decisions stand as written.
 | 8 | Q8 | Reuse, with a goals sentence | W7, N25, V stream | Rungs 1 and 2 under the contract | None: no reuse, those items wait |
 | 9 | Q18 | Proposed targets; cost of the gate | W8 | Keep as proposals; accept the measured cost | Proposals; cost returns with W8 |
 | 10 | Q1 | goals.md executor amendment | X, P, ST, C | Approve as written | None: runner work waits |
-| 11 | Q14 | Native runs the velnor-gen dialect | X | Yes | Yes |
+| 11 | Q14 | Native runs the velnor-gen dialect | X | Yes | Yes: X02–X12 wait |
 | 12 | Q19 | Cache and storage limits in goals.md | C09, ST03 | Amend after Q1 | None: those items wait |
 | 13 | Q9 | Runner crates | P, F | Fixes only, then Official host | Same |
 | 14 | D8 | Deploy identity and node changes | after Q1 | Yes | None: cluster work waits |
-| 15 | Q5 | Release hosting | R | Hosted for now | Hosted |
-| 16 | Q15 | Release subject across squash | R04, R06, DG03 | Signed manifest | Rebuild |
+| 15 | Q5 | Release hosting | R | Hosted for now | Hosted: A06 and R01 wait |
+| 16 | Q15 | Release subject across squash | R04, R06, DG03 | Signed manifest | Rebuild: R04 waits |
 | 17 | Q17 | `runner-v` release | N07 | After Q9 | None built: N07 waits |
 | 18 | D15 | Recovery from a bad helper | — | Re-pin PR, signed once N26 is required | Same |
 | 19 | Q16 | Emergency stop | L05 | You plus an audited hold | You only |

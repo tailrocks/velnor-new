@@ -847,8 +847,8 @@ open duplicates (R12).
 - Until W2 lands, a phase-0 PR carries `ci:auto` and merges only when its head's `Required` ran the gate step and the
   tests (section 4).
 - A failed attempt retries once on the next stronger seat, then the issue gets `blocked` with the evidence.
-- An unanswered owner question without a default, and every owner step (the freeze, W6's two ruleset changes, the
-  identities of D7, labels the agents cannot create, N08's goals text), is an `[OWNER]` issue with the label
-  `owner-action`. The items that depend on it are blocked by it natively, and it closes only with the answer or the
-  read-back posted.
+- An unanswered owner question without a runnable default, and every owner step (the freeze, W6's two ruleset
+  changes, the identities of D7, labels the agents cannot create, N08's goals text), is an `[OWNER]` issue with the
+  label `owner-action`. The items that depend on it are blocked by it natively, and it closes only with the answer or
+  the read-back posted.
 - Dated measurements go in issues and PR descriptions; the evergreen design stays in `docs/` (Q10).

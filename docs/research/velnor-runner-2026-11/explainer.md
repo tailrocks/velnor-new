@@ -350,8 +350,8 @@ covers only the arms that ran.
 - The plan is delivered as GitHub issues with "done when" checks on the state of main. They link
   the PRs that already address them: #1608 to close as superseded, #1297 to close and let Renovate
   recreate.
-- A question without a default, and every step only you can do, is an issue that blocks the work
-  behind it.
+- A question without a default the work can run on, and every step only you can do, is an issue
+  that blocks the work behind it.
 - The `velnor-roadmap` and `velnor-runners-fc` sessions are told what is coming, so they do not
   open duplicates.
 - The owner confirms the plan first. Nothing is created until then.
