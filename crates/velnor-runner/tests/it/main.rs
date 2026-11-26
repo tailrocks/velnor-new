@@ -74,6 +74,8 @@ mod extra;
 mod hardening;
 mod job_message;
 mod protocol_acquire_renew;
+#[path = "exec_process.rs"]
+mod process;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
