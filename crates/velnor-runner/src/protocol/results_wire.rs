@@ -67,6 +67,7 @@ pub(super) struct SoftSizeLimitExceeded {
 }
 
 #[derive(Deserialize)]
-pub(super) struct MetadataResponse {
-    pub(super) ok: Option<bool>,
+pub(super) struct Acknowledgement {
+    #[serde(default)]
+    pub(super) ok: bool,
 }

@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use reqwest::StatusCode;
@@ -94,6 +95,7 @@ fn assert_recorded_bodies(server: &TestServer) -> Result<()> {
     assert_eq!(session_body["agent"]["id"], 42);
     assert_eq!(session_body["agent"]["name"], "velnor-test");
     assert_eq!(session_body["useFipsEncryption"], false);
+    assert_eq!(session_body["brokerSession"], true);
 
     let polls = server.requests_to("GET", "/broker/message")?;
     assert_eq!(polls.len(), 2);
@@ -180,6 +182,26 @@ async fn broker_poll_auth_failure_is_error_not_idle() -> Result<()> {
         assert_github_status(&error, status, "get broker message")?;
         assert_eq!(server.requests_to("GET", "/broker/message")?.len(), 1);
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
+    let server = TestServer::start().await?;
+    let broker = BrokerClient::new(&format!("{}/broker", server.uri()), TOKEN)?;
+    server.respond("POST", "/broker/acknowledge", |_| Reply::stall())?;
+
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(10),
+        broker.acknowledge_runner_request("session-1", "request-1", RunnerStatus::Online),
+    )
+    .await
+    .context("acknowledgement must give up within ten seconds")?;
+
+    let error = outcome.err().context("a stalled acknowledgement fails")?;
+    assert!(format!("{error:#}").contains("timed out"), "{error:#}");
+    let request = server.only_request("POST", "/broker/acknowledge")?;
+    assert_eq!(request.json()?["runnerRequestId"], "request-1");
     Ok(())
 }
 

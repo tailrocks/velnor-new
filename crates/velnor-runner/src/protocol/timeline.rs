@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub enum TaskResult {
     #[serde(alias = "Succeeded")]
     Succeeded,
+    #[serde(alias = "SucceededWithIssues")]
+    SucceededWithIssues,
     #[serde(alias = "Failed")]
     Failed,
     #[serde(alias = "Canceled")]

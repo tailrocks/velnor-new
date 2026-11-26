@@ -23,13 +23,13 @@ pub enum ActionReferenceType {
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-enum Discriminator {
+pub(super) enum Discriminator {
     Number(i64),
     Name(String),
 }
 
 impl Discriminator {
-    fn matches(&self, number: i64, name: &str) -> bool {
+    pub(super) fn matches(&self, number: i64, name: &str) -> bool {
         match self {
             Self::Number(value) => *value == number,
             Self::Name(value) => value.eq_ignore_ascii_case(name),
