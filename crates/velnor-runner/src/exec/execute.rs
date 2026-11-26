@@ -12,6 +12,7 @@ use super::preflight::reference;
 use super::shell;
 use super::step::{Limits, ScriptStep, run_script};
 use super::step_info::step_timeout;
+use super::timeout::Timeout;
 use super::token;
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::expr::ExprEnv;
@@ -35,11 +36,11 @@ impl Job<'_> {
         cancel: Option<&JobCancel>,
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
-        let minutes = step_timeout(step, env, out);
+        let timeout = Timeout::start(step_timeout(step, env, out));
         let files = FileCommands::create(&self.options.temp).await?;
         let process_env = self.ctx.process_env(&step_env, &files.variables());
         let limits = Limits {
-            minutes,
+            timeout,
             cancel,
             groups: &self.groups,
         };
@@ -119,7 +120,7 @@ impl Job<'_> {
             workspace: &self.options.workspace,
             temp: &self.options.temp,
             cancel: limits.cancel.cloned(),
-            minutes: limits.minutes,
+            timeout: limits.timeout,
             groups: limits.groups,
         };
         invoke(adapter, call, out).await

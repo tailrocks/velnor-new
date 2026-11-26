@@ -131,10 +131,17 @@ fn parse<'a>(line: &'a str, resume: Option<&str>) -> Option<WorkflowCommand<'a>>
         .or_else(|| parse_legacy(line).filter(|command| registered(command.name, resume)))
 }
 
+fn trim_integer(text: &str) -> &str {
+    text.trim_matches(|c: char| matches!(c, '\u{9}'..='\u{d}' | ' '))
+}
+
 fn validate_range(properties: &mut BTreeMap<String, String>) {
     let text = |properties: &BTreeMap<String, String>, key: &str| properties.get(key).cloned();
-    let parsed =
-        |value: &Option<String>| value.as_deref().and_then(|v| v.trim().parse::<i32>().ok());
+    let parsed = |value: &Option<String>| {
+        value
+            .as_deref()
+            .and_then(|v| trim_integer(v).parse::<i32>().ok())
+    };
     let mut line = text(properties, "line");
     let end_line = text(properties, "endline");
     let mut column = text(properties, "col");
@@ -182,7 +189,7 @@ fn validate_range(properties: &mut BTreeMap<String, String>) {
 }
 
 fn number(properties: &BTreeMap<String, String>, key: &str) -> Option<u32> {
-    properties.get(key)?.trim().parse().ok()
+    trim_integer(properties.get(key)?).parse().ok()
 }
 
 fn text(properties: &BTreeMap<String, String>, key: &str) -> Option<String> {

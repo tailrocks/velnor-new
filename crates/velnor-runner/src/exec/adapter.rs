@@ -10,8 +10,9 @@ use futures_util::future::BoxFuture;
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
-use super::step::{Limits, ProcessSpec, capture, deadline, report_timeout, run};
-use super::{ExecError, Inputs, JobCancel, StepResult};
+use super::step::{Limits, ProcessSpec, capture, report_timeout, run};
+use super::timeout::{Timeout, expired};
+use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
@@ -107,7 +108,7 @@ impl StepContext<'_> {
             env: &env,
         };
         let limits = Limits {
-            minutes: None,
+            timeout: None,
             cancel: self.cancel.as_ref(),
             groups: self.groups,
         };
@@ -128,7 +129,7 @@ impl StepContext<'_> {
             env: &env,
         };
         let limits = Limits {
-            minutes: None,
+            timeout: None,
             cancel: self.cancel.as_ref(),
             groups: self.groups,
         };
@@ -143,7 +144,7 @@ pub(super) struct AdapterCall<'a> {
     pub(super) workspace: &'a Path,
     pub(super) temp: &'a Path,
     pub(super) cancel: Option<JobCancel>,
-    pub(super) minutes: Option<f64>,
+    pub(super) timeout: Option<Timeout>,
     pub(super) groups: &'a Groups,
 }
 
@@ -153,22 +154,16 @@ enum Interruption {
     TimedOut,
 }
 
-async fn interrupted(cancel: Option<&JobCancel>, minutes: Option<f64>) -> Interruption {
+async fn interrupted(cancel: Option<&JobCancel>, timeout: Option<Timeout>) -> Interruption {
     let cancelled = async {
         match cancel {
             Some(cancel) => cancel.cancelled().await,
             None => std::future::pending().await,
         }
     };
-    let timer = async {
-        match deadline(minutes) {
-            Some(limit) => tokio::time::sleep(limit).await,
-            None => std::future::pending().await,
-        }
-    };
     tokio::select! {
         () = cancelled => Interruption::Cancelled,
-        () = timer => Interruption::TimedOut,
+        () = expired(timeout) => Interruption::TimedOut,
     }
 }
 
@@ -201,7 +196,7 @@ pub(super) async fn invoke(
         tokio::select! {
             biased;
             result = &mut running => (Some(result), None),
-            why = interrupted(call.cancel.as_ref(), call.minutes) => {
+            why = interrupted(call.cancel.as_ref(), call.timeout) => {
                 step_cancel.cancel();
                 let settled = tokio::time::timeout(CANCEL_GRACE, &mut running).await.ok();
                 (settled, Some(why))
@@ -211,9 +206,14 @@ pub(super) async fn invoke(
     let outputs = std::mem::take(&mut context.outputs);
     drop(context);
     match (why, finished) {
-        (None, Some(result)) => Ok((result?, outputs)),
+        (None, Some(Ok(result))) => Ok((result, outputs)),
+        (None, Some(Err(error))) => {
+            out.message(&error.to_string());
+            out.annotate(AnnotationLevel::Error, error.to_string());
+            Ok((StepResult::Failed, outputs))
+        }
         (Some(Interruption::TimedOut), _) => {
-            report_timeout(out, call.minutes);
+            report_timeout(out, call.timeout);
             Ok((StepResult::Failed, outputs))
         }
         _ => Ok((StepResult::Cancelled, outputs)),
