@@ -10,7 +10,7 @@ use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
 
 use crate::context_value::ordinal_ignore_case_eq;
-use crate::exec::{AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job};
+use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 
 const USAGE_ERROR: u8 = 2;
@@ -128,7 +128,7 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     let (options, _scratch) = options(args)?;
     let mut signals = Signals::listen()?;
     let cancel = JobCancel::new();
-    let adapters = AdapterRegistry::empty();
+    let adapters = crate::native::registry();
     let mut sink = StdoutSink;
     let job = run_job(&message, &options, &adapters, &mut sink, cancel.clone());
     let escalation = async {

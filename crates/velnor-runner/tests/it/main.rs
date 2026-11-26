@@ -83,6 +83,7 @@ mod followup;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
+mod native_checkout;
 #[path = "exec_late.rs"]
 mod late;
 #[path = "exec_offload.rs"]

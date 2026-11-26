@@ -27,7 +27,7 @@ pub(super) struct Job<'a> {
     pub(super) adapters: &'a AdapterRegistry,
     pub(super) groups: Groups,
     pub(super) ctx: JobContext,
-    message: &'a AgentJobRequestMessage,
+    pub(super) message: &'a AgentJobRequestMessage,
     pub(super) cancel: JobCancel,
     status: JobStatus,
 }
