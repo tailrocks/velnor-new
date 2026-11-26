@@ -66,8 +66,8 @@ deletes: ["the per-command version floors in crates/velnor-gen/src/helper_gate.r
 done_when:                    # the same checks as the body: a command and the result it must give
   - run: "git grep -nE 'HelperTooOld|BATCHED_HELPER' origin/main -- crates/velnor-gen/src/helper_gate.rs crates/velnor-rust/src/base_cache.rs"
     expect: "exit 1"
-  - run: "gh run list -R tailrocks/velnor-new --workflow rust-ci.yml --branch main --event push --status completed -L 3 --json conclusion -q '[.[].conclusion]|unique|join(\",\")'"
-    expect: "stdout: success"
+  - run: "gh run list -R tailrocks/velnor-new --workflow rust-ci.yml --branch main --event push --status completed -L 3 --json conclusion,attempt -q 'if length==3 and all(.[]; .conclusion==\"success\" and .attempt==1) then \"3 first-attempt successes\" else \"not 3 first-attempt successes\" end'"
+    expect: "stdout: 3 first-attempt successes"
 ---
 ```
 
