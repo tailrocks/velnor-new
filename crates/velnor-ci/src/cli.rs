@@ -84,7 +84,7 @@ pub enum Command {
     )]
     Plan(PlanArgs),
     #[command(
-        about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already succeeded on GITHUB_SHA, and skip=false otherwise. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
+        about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already passed on GITHUB_SHA, and skip=false otherwise. A run has passed when the job named by VELNOR_REQUIRED_CHECK succeeded in the latest merge_group run of this workflow on GITHUB_SHA, completed or still in progress; when the variable is empty, a completed run with the conclusion success is required. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
     )]
     MergeGroupPassed,
     #[command(
