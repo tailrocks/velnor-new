@@ -117,13 +117,10 @@ fn is_auth_failure(error: &anyhow::Error) -> bool {
 }
 
 fn is_retriable(error: &anyhow::Error) -> bool {
-    if matches!(
+    !matches!(
         broker_error_category(error),
         Some(BrokerErrorCategory::Terminal | BrokerErrorCategory::Expired)
-    ) {
-        return false;
-    }
-    api_status(error).is_none_or(|status| status >= 500 || matches!(status, 408 | 429))
+    )
 }
 
 fn is_session_expired(error: &anyhow::Error) -> bool {
