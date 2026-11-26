@@ -28,6 +28,39 @@ impl PreparationCause {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum RustRunnerFailure {
+    #[error("orb could not be run")]
+    OrbUnavailable,
+
+    #[error("orb list did not return machine names")]
+    MachineList,
+
+    #[error("orb could not create the velnor machine")]
+    MachineCreate,
+
+    #[error("the host store directories could not be created")]
+    HostStore,
+
+    #[error("/var/lib/velnor could not be linked to the host store in the velnor machine")]
+    MachineLink,
+
+    #[error("velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine")]
+    BinaryMissing,
+
+    #[error("the JIT file could not be written")]
+    JitFile,
+
+    #[error("velnor-runner could not be started in the velnor machine")]
+    Spawn,
+
+    #[error("velnor-runner could not be waited for or stopped")]
+    Wait,
+
+    #[error("the host controller cannot start runners in rust-runner launch mode yet")]
+    ControllerUnavailable,
+}
+
 const ERROR_DETAIL_BYTES: u8 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +228,9 @@ pub enum HostError {
 
     #[error("empty secret")]
     EmptySecret,
+
+    #[error("{0}")]
+    RustRunner(RustRunnerFailure),
 }
 
 impl HostError {
@@ -239,6 +275,7 @@ impl HostError {
             Self::Keychain => "keychain",
             Self::EmptySecret => "empty_secret",
             Self::RunnerExited => "runner_exited",
+            Self::RustRunner(_) => "rust_runner",
         }
     }
 }

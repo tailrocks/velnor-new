@@ -51,8 +51,9 @@ pub(super) fn sample_config(
             format!("organization = {}\n{group}", toml_basic_string(org))
         });
     format!(
-        "schema = 2\n[[connections]]\nconnection_id = {connection_id}\nrepository_id = {}\nrepository = {repository}\ncredential_ref = {credential_ref}\n{registration}[connections.scale_set]\nname = {scale_set_name}\nlabels = {labels}\n[connections.source_policy]\nmode = {source_policy_mode}\nbranches = {branches}\ntag_prefixes = {tag_prefixes}\nevents = {events}\npull_request_rules = {pull_request_rules}\n[host]\nmax_jobs = {}\n[host.resources]\nrunner_cpu_millicores = {}\nrunner_memory_bytes = {}\ndind_cpu_millicores = {}\ndind_memory_bytes = {}\noperational_memory_reserve_bytes = {}\n[docker]\ncontext = {docker_context}\nplatform = {platform}\nendpoint = {endpoint}\n",
+        "schema = 2\n[[connections]]\nconnection_id = {connection_id}\nrepository_id = {}\nrepository = {repository}\ncredential_ref = {credential_ref}\n{registration}[connections.scale_set]\nname = {scale_set_name}\nlabels = {labels}\n[connections.source_policy]\nmode = {source_policy_mode}\nbranches = {branches}\ntag_prefixes = {tag_prefixes}\nevents = {events}\npull_request_rules = {pull_request_rules}\n[host]\nlaunch_mode = \"{}\"\nmax_jobs = {}\n[host.resources]\nrunner_cpu_millicores = {}\nrunner_memory_bytes = {}\ndind_cpu_millicores = {}\ndind_memory_bytes = {}\noperational_memory_reserve_bytes = {}\n[docker]\ncontext = {docker_context}\nplatform = {platform}\nendpoint = {endpoint}\n",
         connection.repository_id,
+        request.launch_mode.as_str(),
         request.max_jobs.unwrap_or(1),
         request.runner_cpu_millicores,
         request.runner_memory_bytes,
