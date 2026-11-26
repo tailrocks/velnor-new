@@ -12,7 +12,6 @@ use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 
 const SHARED: &[u8] = b"shape = 'groups'\nmbx_shared_store = true\n";
 const STORE: &str = "velnor-ci mbx-store";
-const SEED: &str = "velnor-ci mbx-seed";
 const PRIVATE: &str = "Private mbx store";
 const INSTALL: &str = "Install tools";
 const OUT_DIRS: &str = "Keep mbx build-script outputs in target";
@@ -58,14 +57,15 @@ fn step_names(jobs: &Value, id: &str) -> Result<Vec<String>, Box<dyn std::error:
 }
 
 #[test]
-fn each_compiling_job_renders_the_shared_store_and_seed_steps_but_no_standalone_out_dirs_step()
--> TestResult {
+fn each_compiling_job_renders_the_shared_store_step_but_no_standalone_out_dirs_step() -> TestResult
+{
     let jobs = rendered_jobs("0.1.112")?;
     for id in COMPILING_JOBS {
         let names = step_names(&jobs, id)?;
-        for step in [STORE, SEED] {
-            assert!(names.iter().any(|name| name == step), "{id} lacks {step:?}");
-        }
+        assert!(
+            names.iter().any(|name| name == STORE),
+            "{id} lacks {STORE:?}"
+        );
         assert!(!names.iter().any(|name| name == OUT_DIRS), "{id}");
     }
     Ok(())
@@ -76,7 +76,7 @@ fn an_idle_job_and_the_archive_test_job_render_no_shared_store_steps() -> TestRe
     let jobs = rendered_jobs("0.1.112")?;
     for id in IDLE_JOBS {
         let names = step_names(&jobs, id)?;
-        for step in [STORE, OUT_DIRS, SEED] {
+        for step in [STORE, OUT_DIRS] {
             assert!(
                 !names.iter().any(|name| name == step),
                 "{id} renders {step:?}"
@@ -98,7 +98,7 @@ fn an_idle_job_and_the_archive_test_job_render_no_shared_store_steps() -> TestRe
 }
 
 #[test]
-fn a_job_that_runs_cargo_check_renders_the_shared_store_and_seed_steps_but_no_standalone_out_dirs_step()
+fn a_job_that_runs_cargo_check_renders_the_shared_store_step_but_no_standalone_out_dirs_step()
 -> TestResult {
     let yaml = document(&workflow(&repo("0.1.112", true)?)?)?;
     let jobs = yaml["jobs"].clone();
@@ -120,9 +120,10 @@ fn a_job_that_runs_cargo_check_renders_the_shared_store_and_seed_steps_but_no_st
     assert!(!checking.is_empty(), "no job runs cargo check");
     for id in &checking {
         let names = step_names(&jobs, id)?;
-        for step in [STORE, SEED] {
-            assert!(names.iter().any(|name| name == step), "{id} lacks {step:?}");
-        }
+        assert!(
+            names.iter().any(|name| name == STORE),
+            "{id} lacks {STORE:?}"
+        );
         assert!(!names.iter().any(|name| name == OUT_DIRS), "{id}");
     }
     Ok(())
@@ -164,7 +165,7 @@ fn the_archive_job_keeps_a_private_mbx_store_and_renders_no_shared_store_steps()
         Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\"")
     );
     let names = step_names(&jobs, "rust-test-default")?;
-    for step in [STORE, OUT_DIRS, SEED] {
+    for step in [STORE, OUT_DIRS] {
         assert!(!names.iter().any(|name| name == step), "renders {step:?}");
     }
     Ok(())
@@ -175,9 +176,10 @@ fn a_compiling_job_renders_the_shared_store_steps_and_sets_the_cache_dir() -> Te
     let jobs = rendered_jobs("0.1.112")?;
     for id in COMPILING_JOBS {
         let names = step_names(&jobs, id)?;
-        for step in [STORE, SEED] {
-            assert!(names.iter().any(|name| name == step), "{id} lacks {step:?}");
-        }
+        assert!(
+            names.iter().any(|name| name == STORE),
+            "{id} lacks {STORE:?}"
+        );
         assert!(!names.iter().any(|name| name == OUT_DIRS), "{id}");
         assert!(job_steps(&jobs, id)?.iter().any(sets_cache_dir), "{id}");
     }

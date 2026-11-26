@@ -8,7 +8,7 @@ use velnor_model::{ImageConfig, ImageOpenssl, ImagePrBuild, Step, StepKind};
 use crate::base_steps::sources_locks;
 use crate::cache::cache_step;
 use crate::cargo::offline_env;
-use crate::helper_steps::{mbx_private_step, mbx_seed_step, mbx_store_step, mirror_step};
+use crate::helper_steps::{mbx_private_step, mbx_store_step, mirror_step};
 use crate::image::{
     Events, IMAGE_BUILDKIT, IMAGE_SYSROOT_LOCK, IMAGE_TARGET, ImageBuild, ImageMbx, ImageWorkflow,
 };
@@ -244,7 +244,7 @@ fn build_steps(workflow: &ImageWorkflow<'_>, group: &Compile<'_>) -> Vec<Rendere
     match workflow.mbx {
         ImageMbx::Off => {}
         ImageMbx::Private => steps.extend([mbx_private_step(), mbx_out_dirs_step()]),
-        ImageMbx::Shared => steps.extend([mbx_store_step(), mbx_seed_step()]),
+        ImageMbx::Shared => steps.extend([mbx_private_step(), mbx_store_step()]),
     }
     steps.extend(workflow.mirror.map(mirror_step));
     let restores = sources_restores(&workflow.sources);

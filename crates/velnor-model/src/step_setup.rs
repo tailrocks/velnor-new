@@ -17,7 +17,6 @@ impl StepKind {
             | Self::MbxPin
             | Self::MbxPrivate
             | Self::MbxStore
-            | Self::MbxSeed
             | Self::CratesMirror(_) => true,
             Self::Helper(command) => match command {
                 HelperCommand::Plan => true,

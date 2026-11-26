@@ -75,65 +75,6 @@ fn a_helper_that_cannot_select_the_store_is_refused() -> TestResult {
     Ok(())
 }
 
-const SEED: &str = "\"$VELNOR_EXEC\" mbx-seed";
-
-#[test]
-fn the_pr_seed_runs_after_the_plan_and_only_for_a_selection_and_never_in_the_planning_job()
--> TestResult {
-    let text = workflow(&repo("mbx_shared_store = true\n", "0.1.86")?)?;
-    let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
-    let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
-    let mut seeded = 0;
-    for (id, job) in jobs {
-        let steps = job["steps"].as_array().ok_or("steps missing")?;
-        let at = |needle: &str| {
-            steps
-                .iter()
-                .position(|s| s["run"].as_str().is_some_and(|run| run.contains(needle)))
-        };
-        if id == "rust-plan" {
-            assert!(
-                at(EXEC).is_none() && at(SEED).is_none(),
-                "{id}: the planning job seeds nothing"
-            );
-            continue;
-        }
-        let Some(store) = at(EXEC) else { continue };
-        let seed = at(SEED).ok_or_else(|| format!("{id}: no mbx-seed"))?;
-        assert_eq!(seed, store + 1, "{id}");
-        let condition = steps[seed]["if"].as_str().ok_or("seed has no if")?;
-        assert!(
-            condition.contains(
-                "github.event_name == 'pull_request' || github.event_name == 'merge_group'"
-            ),
-            "{id}: {condition}"
-        );
-        if let Some(plan) = steps.iter().position(|s| s["id"].as_str() == Some("plan")) {
-            assert!(
-                plan < store,
-                "{id}: the plan runs before the store and the seed"
-            );
-            assert!(
-                condition.contains("steps.plan.outputs.rust_"),
-                "{id}: {condition}"
-            );
-            assert!(condition.contains("_mode != 'none'"), "{id}: {condition}");
-        }
-        seeded += 1;
-    }
-    assert!(seeded > 0);
-    Ok(())
-}
-
-#[test]
-fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
-    let text = workflow(&repo("mbx_shared_store = true\n", "0.1.85")?)?;
-    assert!(text.contains("mbx-store"));
-    assert!(!text.contains("mbx-seed"));
-    assert!(!workflow(&repo("", "0.1.86")?)?.contains("mbx-seed"));
-    Ok(())
-}
-
 #[test]
 fn a_cargo_capable_archive_job_keeps_the_shared_store_steps_from_helper_0_1_112() -> TestResult {
     let config = format!("mbx_shared_store = true\n{}", crate::test_groups::SHELL);
@@ -151,7 +92,6 @@ fn a_cargo_capable_archive_job_keeps_the_shared_store_steps_from_helper_0_1_112(
         .filter_map(|s| s["run"].as_str())
         .collect();
     assert!(runs.iter().any(|run| run.contains(EXEC)), "{runs:?}");
-    assert!(runs.iter().any(|run| run.contains(SEED)), "{runs:?}");
     Ok(())
 }
 
@@ -242,5 +182,95 @@ fn the_shared_store_is_skipped_when_the_plan_failed_or_was_skipped_from_0_1_112(
         ]);
         assert!(!runs(&condition, &context)?, "{outcome}: {condition}");
     }
+    Ok(())
+}
+
+#[test]
+fn every_job_that_selects_the_shared_store_first_points_mbx_at_a_private_directory() -> TestResult {
+    for helper in ["0.1.85", "0.1.111", "0.1.112"] {
+        for (shape, remote) in [
+            ("", ""),
+            ("shape = 'groups'\n", ""),
+            ("", "[cache]\nmbx_remote = \"github-actions\"\n"),
+            (
+                "shape = 'groups'\n",
+                "[cache]\nmbx_remote = \"github-actions\"\n",
+            ),
+        ] {
+            if helper == "0.1.85" && !remote.is_empty() {
+                continue;
+            }
+            let text = workflow(&repo(
+                &format!("{shape}mbx_shared_store = true\n{remote}"),
+                helper,
+            )?)?;
+            let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+            let mut stores = 0;
+            for (id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {
+                let steps = job["steps"].as_array().ok_or("steps missing")?;
+                let position =
+                    |matches: &dyn Fn(&serde_json::Value) -> bool| steps.iter().position(matches);
+                let Some(store) =
+                    position(&|step| step["run"].as_str().is_some_and(|run| run.contains(EXEC)))
+                else {
+                    continue;
+                };
+                stores += 1;
+                let private = position(&|step| step["name"] == "Private mbx store")
+                    .ok_or_else(|| format!("{helper} {id}: no private mbx store"))?;
+                assert!(
+                    private < store,
+                    "{helper} {id}: the shared store must override"
+                );
+                assert_eq!(
+                    steps[private]["run"].as_str(),
+                    Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\""),
+                    "{helper} {id}"
+                );
+            }
+            assert!(stores > 0, "{helper}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn every_sample_job_with_the_shared_store_step_has_a_private_mbx_store_before_it() -> TestResult {
+    let mut stores = 0;
+    for dir in crate::golden::sample_dirs(&crate::golden::samples())? {
+        let workflows = dir.join("expected/.github/workflows");
+        let Ok(entries) = std::fs::read_dir(&workflows) else {
+            continue;
+        };
+        for entry in entries {
+            let file = entry?.path();
+            let text = std::fs::read_to_string(&file)?;
+            let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+            let Some(jobs) = yaml["jobs"].as_object() else {
+                continue;
+            };
+            for (id, job) in jobs {
+                let steps = job["steps"].as_array().map_or(&[][..], Vec::as_slice);
+                let named = |name: &str| steps.iter().position(|step| step["name"] == name);
+                let Some(store) = named("velnor-ci mbx-store") else {
+                    continue;
+                };
+                stores += 1;
+                let private = named("Private mbx store").ok_or_else(|| {
+                    format!(
+                        "{}: {file:?} job {id} has no private mbx store",
+                        dir.display()
+                    )
+                })?;
+                assert!(
+                    private < store,
+                    "{}: {} job {id}",
+                    dir.display(),
+                    file.display()
+                );
+            }
+        }
+    }
+    assert!(stores > 0, "no sample selects the shared store");
     Ok(())
 }

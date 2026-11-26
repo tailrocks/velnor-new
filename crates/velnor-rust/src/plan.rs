@@ -28,7 +28,6 @@ use crate::units::{Unit, units};
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
-pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 // helper-gate: first in tools-v0.1.112 via e4e4c86f21
 const MBX_SELECTED_STORE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const MBX_STORE_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 112);
@@ -166,9 +165,7 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
     steps
 }
 
-/// The shared-store steps. A job that plans runs them after the plan, so a
-/// run that selects nothing never seeds: `seed_gate` is the job's selection.
-pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
+pub(crate) fn mbx(facts: &RepoFacts, gate: Option<&Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
@@ -185,21 +182,10 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
     let store = Step {
-        gate: seed_gate.cloned().filter(|_| selected_store),
+        gate: gate.cloned().filter(|_| selected_store),
         ..step(StepKind::MbxStore)
     };
-    let seed = facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
-        .then(|| Step {
-            gate: seed_gate.cloned(),
-            ..step(StepKind::MbxSeed)
-        });
-    [Some(store), out_dirs, seed]
-        .into_iter()
-        .flatten()
-        .collect()
+    [Some(store), out_dirs].into_iter().flatten().collect()
 }
 
 pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {

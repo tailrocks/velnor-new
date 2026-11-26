@@ -150,7 +150,6 @@ pub enum StepKind {
     MbxPrivate,
     MbxOutDirs,
     MbxStore,
-    MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
@@ -270,7 +269,6 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxOutDirs
             | Self::MbxStore { .. }
-            | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
             | Self::InstallGenerator(_)

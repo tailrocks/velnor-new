@@ -26,7 +26,6 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "app-token",
     "revoke-token",
     "mbx-store",
-    "mbx-seed",
     "tools-local",
     "tools-verify",
     "check-metadata",
