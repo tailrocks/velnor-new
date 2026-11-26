@@ -219,13 +219,14 @@ runs:
             for tag in "tools-v$VERSION" "rust-ci-v$VERSION"; do
               echo "Downloading $RELEASES/$tag/$archive"
               rc=0
-              status="$(curl --fail --silent --show-error --location --retry 3 --max-time 600 --retry-max-time 900 --max-filesize "$MAX_BYTES" --write-out '%{http_code}' --output "$file" "$RELEASES/$tag/$archive")" || rc=$?
+              status="$(curl --fail --silent --show-error --location --retry 3 --retry-connrefused --max-time 600 --retry-max-time 900 --max-filesize "$MAX_BYTES" --write-out '%{http_code}' --output "$file" "$RELEASES/$tag/$archive")" || rc=$?
               if [ "$rc" -eq 0 ]; then
                 downloaded=1
                 break
               fi
               rm -f "$file"
               status="${status##*[!0-9]}"
+              [ "$status" = 000 ] && status=
               reason="curl exit $rc, last HTTP status ${status:-none}"
               if [ "$rc" -eq 63 ]; then reason="$reason, the file is larger than $MAX_BYTES bytes"; fi
               failures="$failures${failures:+; }$tag from $host: $reason"
