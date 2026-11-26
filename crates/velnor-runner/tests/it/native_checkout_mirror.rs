@@ -219,7 +219,7 @@ fn checkout_fetch_uses_trusted_facts() -> Result<()> {
             r#"{{"repository_id": 1, "repository": "tailrocks/velnor-new",
 "server_url": "{}", "default_branch": "main", "sha": "{}", "run_id": 1,
 "run_attempt": 1, "event": {{"kind": "pull_request", "number": 7,
-"base_branch": "main", "head_repository": "tailrocks/velnor-new"}}}}"#,
+"base_branch": "main", "head": "same_repository"}}}}"#,
             rig.server_url(),
             rig.merge
         ),

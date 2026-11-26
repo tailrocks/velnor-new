@@ -119,12 +119,22 @@ async fn lock(path: &Path) -> Result<std::fs::File> {
         .create(true)
         .truncate(false)
         .write(true)
-        .custom_flags((OFlags::NOFOLLOW | OFlags::CLOEXEC).bits().cast_signed())
+        .custom_flags(
+            (OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC)
+                .bits()
+                .cast_signed(),
+        )
         .open(path)
         .await
-        .with_context(|| format!("open {}", path.display()))?
-        .into_std()
-        .await;
+        .with_context(|| format!("open {}", path.display()))?;
+    let meta = file
+        .metadata()
+        .await
+        .with_context(|| format!("inspect {}", path.display()))?;
+    if !meta.is_file() {
+        bail!("mirror lock {} is not a regular file", path.display());
+    }
+    let file = file.into_std().await;
     let mut backoff = Duration::from_millis(5);
     loop {
         match file.try_lock() {
@@ -222,7 +232,13 @@ async fn reset_mirror(mirror: &Path) -> Result<()> {
     install(mirror, "config", MIRROR_CONFIG).await
 }
 
-fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<()> {
+#[derive(PartialEq, Eq)]
+enum Refs {
+    Sound,
+    Replace,
+}
+
+fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<Refs> {
     let entries = Dir::read_from(dir).context("read a refs directory")?;
     for entry in entries {
         let entry = entry.context("read a refs entry")?;
@@ -235,11 +251,15 @@ fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<()> {
         match kind {
             Ok(FileType::Directory) => {
                 if depth >= MAX_REF_DEPTH {
-                    bail!("mirror: refs nest deeper than {MAX_REF_DEPTH} directories");
+                    return Ok(Refs::Replace);
                 }
                 let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
                 match rustix::fs::openat(dir, name, flags, Mode::empty()) {
-                    Ok(child) => remove_locks_in(&child, depth + 1)?,
+                    Ok(child) => {
+                        if remove_locks_in(&child, depth + 1)? == Refs::Replace {
+                            return Ok(Refs::Replace);
+                        }
+                    }
                     Err(Errno::NOENT | Errno::LOOP | Errno::NOTDIR) => {}
                     Err(error) => return Err(error).context("open a refs directory"),
                 }
@@ -254,17 +274,17 @@ fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<()> {
             Err(error) => return Err(error).context("inspect a refs entry"),
         }
     }
-    Ok(())
+    Ok(Refs::Sound)
 }
 
-fn remove_ref_locks_blocking(mirror: &Path) -> Result<bool> {
+fn remove_ref_locks_blocking(mirror: &Path) -> Result<Refs> {
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
     let mirror_fd = rustix::fs::openat(CWD, mirror, flags, Mode::empty())
         .with_context(|| format!("open {}", mirror.display()))?;
     match rustix::fs::openat(&mirror_fd, "refs", flags | OFlags::NOFOLLOW, Mode::empty()) {
-        Ok(refs) => remove_locks_in(&refs, 0).map(|()| false),
-        Err(Errno::NOENT) => Ok(false),
-        Err(Errno::LOOP | Errno::NOTDIR) => Ok(true),
+        Ok(refs) => remove_locks_in(&refs, 0),
+        Err(Errno::NOENT) => Ok(Refs::Sound),
+        Err(Errno::LOOP | Errno::NOTDIR) => Ok(Refs::Replace),
         Err(error) => Err(error).context("open the mirror refs directory"),
     }
 }
@@ -277,7 +297,7 @@ async fn remove_ref_locks(mirror: &Path) -> Result<()> {
             .await
             .context("wait for the ref lock cleanup")??
     };
-    if replace {
+    if replace == Refs::Replace {
         let refs = mirror.join("refs");
         remove_entry(&refs).await?;
         tokio::fs::create_dir(&refs)

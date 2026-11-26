@@ -121,6 +121,13 @@ impl From<ServerUrl> for String {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PullRequestHead {
+    SameRepository,
+    Fork,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum TrustedEvent {
@@ -133,7 +140,7 @@ pub(crate) enum TrustedEvent {
     PullRequest {
         number: u64,
         base_branch: String,
-        head_repository: RepoName,
+        head: PullRequestHead,
     },
     MergeGroup {
         queue_branch: String,
@@ -170,6 +177,42 @@ fn number<T: std::str::FromStr + Default>(github: &ContextValue, key: &str) -> T
         .unwrap_or_default()
 }
 
+fn id(github: &ContextValue, path: &[&str]) -> Option<u64> {
+    let mut value = github;
+    for key in path {
+        value = value.get(key)?;
+    }
+    match value {
+        ContextValue::String(text) => text.parse().ok(),
+        ContextValue::Number(number) => number.as_u64(),
+        _ => None,
+    }
+}
+
+fn pull_request_head(
+    github: &ContextValue,
+    repository: &RepoName,
+) -> Result<PullRequestHead, FactsError> {
+    let Some(name) = text(
+        github,
+        &["event", "pull_request", "head", "repo", "full_name"],
+    ) else {
+        return Ok(PullRequestHead::Fork);
+    };
+    let name = RepoName::try_from(name.to_owned())?;
+    let head_id = id(github, &["event", "pull_request", "head", "repo", "id"]);
+    let base_id = id(github, &["repository_id"]);
+    let same = match (head_id, base_id) {
+        (Some(head), Some(base)) => head == base,
+        _ => name.as_str().eq_ignore_ascii_case(repository.as_str()),
+    };
+    Ok(if same {
+        PullRequestHead::SameRepository
+    } else {
+        PullRequestHead::Fork
+    })
+}
+
 fn required<'a>(github: &'a ContextValue, field: &'static str) -> Result<&'a str, FactsError> {
     text(github, &[field]).ok_or(FactsError::Missing { field })
 }
@@ -181,18 +224,10 @@ fn event_of(github: &ContextValue, repository: &RepoName) -> Result<TrustedEvent
         .and_then(|rest| rest.strip_suffix("/merge"))
         .and_then(|number| number.parse().ok());
     if let Some(number) = pull {
-        let head = text(
-            github,
-            &["event", "pull_request", "head", "repo", "full_name"],
-        )
-        .map_or_else(
-            || Ok(repository.clone()),
-            |name| RepoName::try_from(name.to_owned()),
-        )?;
         return Ok(TrustedEvent::PullRequest {
             number,
             base_branch: text(github, &["base_ref"]).unwrap_or_default().to_owned(),
-            head_repository: head,
+            head: pull_request_head(github, repository)?,
         });
     }
     if let Some(name) = git_ref.strip_prefix("refs/tags/") {
@@ -260,5 +295,93 @@ impl TrustedFacts {
             specs.push(format!("+{}:refs/pull/{number}/merge", self.sha.as_str()));
         }
         specs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::{Context, Result};
+    use serde_json::{Value, json};
+
+    use super::{PullRequestHead, TrustedEvent, TrustedFacts};
+    use crate::job_message::AgentJobRequestMessage;
+
+    const FIXTURE: &str = include_str!("../../fixtures/exec/checkout_pull_request.json");
+
+    fn entry(key: &str, value: &Value) -> Value {
+        json!({"k": key, "v": value})
+    }
+
+    fn string(value: &str) -> Value {
+        json!({"t": 0, "s": value})
+    }
+
+    fn object(entries: &[Value]) -> Value {
+        json!({"t": 2, "d": entries})
+    }
+
+    fn pull_request_head(
+        base_id: Option<&str>,
+        head_repo: Option<(&str, Option<u64>)>,
+    ) -> Result<PullRequestHead> {
+        let sha = "0123456789012345678901234567890123456789";
+        let mut job: Value = serde_json::from_str(
+            &FIXTURE
+                .replace("@SHA@", sha)
+                .replace("@SERVER_URL@", "https://github.com"),
+        )?;
+        let mut head = vec![entry("ref", &string("topic"))];
+        if let Some((name, id)) = head_repo {
+            let mut repo = vec![entry("full_name", &string(name))];
+            if let Some(id) = id {
+                repo.push(entry("id", &json!({"t": 4, "n": id})));
+            }
+            head.push(entry("repo", &object(&repo)));
+        }
+        let event = object(&[entry(
+            "pull_request",
+            &object(&[entry("head", &object(&head))]),
+        )]);
+        let github = job["ContextData"]["github"]["d"]
+            .as_array_mut()
+            .context("github context entries")?;
+        github.push(entry("event", &event));
+        if let Some(base_id) = base_id {
+            github.push(entry("repository_id", &string(base_id)));
+        }
+        let message = AgentJobRequestMessage::parse_json(&job.to_string())?;
+        match TrustedFacts::from_job_message(&message)?.event {
+            TrustedEvent::PullRequest { head, .. } => Ok(head),
+            other => anyhow::bail!("not a pull request event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_pull_request_head_is_the_base_repository_only_when_the_message_proves_it() -> Result<()> {
+        use PullRequestHead::{Fork, SameRepository};
+        let base = "tailrocks/velnor-new";
+        let cases = [
+            (None, None, Fork),
+            (Some("1"), None, Fork),
+            (None, Some((base, None)), SameRepository),
+            (None, Some(("Tailrocks/Velnor-New", None)), SameRepository),
+            (None, Some(("someone/velnor-new", None)), Fork),
+            (Some("1"), Some((base, Some(1))), SameRepository),
+            (Some("1"), Some((base, Some(2))), Fork),
+            (
+                Some("1"),
+                Some(("someone/renamed", Some(1))),
+                SameRepository,
+            ),
+            (Some("1"), Some((base, None)), SameRepository),
+        ];
+        for (base_id, head, expected) in cases {
+            assert_eq!(
+                pull_request_head(base_id, head)?,
+                expected,
+                "base id {base_id:?}, head {head:?}"
+            );
+        }
+        Ok(())
     }
 }
