@@ -7,7 +7,7 @@ use std::process::{Command as ProcessCommand, ExitCode};
 use std::time::Duration;
 
 use clap::Parser;
-use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
+use velnor_runner_host::{LaunchMode, READINESS_BUDGET, Readiness, doctor_json, status_json};
 
 use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
 use crate::state_directory::user_home;
@@ -60,37 +60,46 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Credential { action } => match action {
             CredentialAction::ImportReleaseRead => credential::import_release_read(&state),
         },
-        Command::Connect { args } => connect(&ConnectRequest {
-            state: &state,
-            connection_id: &args.connection_id,
-            repo: &args.repo,
-            repository_id: args.repository_id,
-            job_authority_policy: args.job_authority_policy.as_deref(),
-            job_authority_inventory: args.job_authority_inventory.as_deref(),
-            job_authority_generator_source_sha: args.job_authority_generator_source_sha.as_deref(),
-            job_authority_generator_artifact_sha256: args
-                .job_authority_generator_artifact_sha256
-                .as_deref(),
-            job_authority_generation: args.job_authority_generation,
-            scale_set: &args.scale_set,
-            scale_set_labels: args.scale_set_labels.clone(),
-            source_policy_mode: &args.source_policy_mode,
-            events: args.events.clone(),
-            branches: args.branches.clone(),
-            tag_prefixes: args.tag_prefixes.clone(),
-            pull_request_rules: args.pull_request_rules.clone(),
-            organization: args.organization.as_deref(),
-            runner_group: args.runner_group.as_deref(),
-            platform: &args.platform,
-            max_jobs: args.max_jobs,
-            docker_context: args.docker_context.as_deref(),
-            endpoint: &args.endpoint,
-            runner_cpu_millicores: args.runner_cpu_millicores,
-            runner_memory_bytes: args.runner_memory_bytes,
-            dind_cpu_millicores: args.dind_cpu_millicores,
-            dind_memory_bytes: args.dind_memory_bytes,
-            operational_memory_reserve_bytes: args.operational_memory_reserve_bytes,
-        }),
+        Command::Connect { args } => {
+            let Some(launch_mode) = LaunchMode::parse(&args.launch_mode) else {
+                eprintln!("Unknown launch mode.");
+                return ExitCode::from(2);
+            };
+            connect(&ConnectRequest {
+                state: &state,
+                connection_id: &args.connection_id,
+                repo: &args.repo,
+                repository_id: args.repository_id,
+                job_authority_policy: args.job_authority_policy.as_deref(),
+                job_authority_inventory: args.job_authority_inventory.as_deref(),
+                job_authority_generator_source_sha: args
+                    .job_authority_generator_source_sha
+                    .as_deref(),
+                job_authority_generator_artifact_sha256: args
+                    .job_authority_generator_artifact_sha256
+                    .as_deref(),
+                job_authority_generation: args.job_authority_generation,
+                scale_set: &args.scale_set,
+                scale_set_labels: args.scale_set_labels.clone(),
+                source_policy_mode: &args.source_policy_mode,
+                events: args.events.clone(),
+                branches: args.branches.clone(),
+                tag_prefixes: args.tag_prefixes.clone(),
+                pull_request_rules: args.pull_request_rules.clone(),
+                organization: args.organization.as_deref(),
+                runner_group: args.runner_group.as_deref(),
+                platform: &args.platform,
+                launch_mode,
+                max_jobs: args.max_jobs,
+                docker_context: args.docker_context.as_deref(),
+                endpoint: &args.endpoint,
+                runner_cpu_millicores: args.runner_cpu_millicores,
+                runner_memory_bytes: args.runner_memory_bytes,
+                dind_cpu_millicores: args.dind_cpu_millicores,
+                dind_memory_bytes: args.dind_memory_bytes,
+                operational_memory_reserve_bytes: args.operational_memory_reserve_bytes,
+            })
+        }
         Command::Journal { action } => match action {
             JournalAction::Show { reservation } => journal_show::show(&state, *reservation),
         },

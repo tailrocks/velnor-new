@@ -7,9 +7,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use velnor_runner_host::{
-    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, PullRequestRule,
-    RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent, connect_plan,
-    import_secret,
+    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, LaunchMode,
+    PullRequestRule, RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent,
+    connect_plan, import_secret,
 };
 
 use super::connect_authority as authority;
@@ -45,6 +45,7 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) organization: Option<&'a str>,
     pub(super) runner_group: Option<&'a str>,
     pub(super) platform: &'a str,
+    pub(super) launch_mode: LaunchMode,
     pub(super) max_jobs: Option<u32>,
     pub(super) docker_context: Option<&'a str>,
     pub(super) endpoint: &'a str,

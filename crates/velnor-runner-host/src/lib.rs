@@ -47,6 +47,7 @@ mod readiness;
 mod readiness_scan;
 mod reconcile;
 pub mod resource_probe_release;
+mod rust_runner;
 mod scale_set;
 mod stage;
 mod worker;
@@ -55,9 +56,9 @@ pub use assign::{Offer, offer};
 pub use completion_admin::{CompletionAdminClient, CompletionAdminSession};
 pub use config::{
     ApprovedJobAuthorityPolicy, ConnectionId, DeveloperImages, DockerConfig, HostConfig,
-    HostLimits, JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection,
-    RunnerPlatform, ScaleSetSelector, SourcePolicy, SourcePolicyMode, WorkflowEvent,
-    build_job_authority_policy_json,
+    HostLimits, JobAuthorityRole, KeychainReference, LaunchMode, PullRequestRule,
+    RepositoryConnection, RunnerPlatform, ScaleSetSelector, SourcePolicy, SourcePolicyMode,
+    WorkflowEvent, build_job_authority_policy_json,
 };
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use controller_ipc::{
@@ -73,7 +74,7 @@ pub use docker_client::connect_unix;
 pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
-pub use error::{ErrorDetail, HostError, PreparationCause};
+pub use error::{ErrorDetail, HostError, PreparationCause, RustRunnerFailure};
 pub use host_controller::run_host_blocking;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
@@ -103,6 +104,7 @@ pub use readiness_scan::{READINESS_BUDGET, controller_readiness};
 pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
+pub use rust_runner::{RunningJob, RustRunnerLauncher};
 pub use scale_set::{EnsureError, EnsuredSet, product_runner_groups};
 pub use stage::remove_recorded;
 pub use worker::{
