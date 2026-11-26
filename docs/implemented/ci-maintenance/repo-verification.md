@@ -22,7 +22,9 @@ evidence to confirm that it ran.
 
 ## The Verification Suite
 
-No single script runs the full gate. The full local gate is the set of commands that the CI jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` run. Run each command from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a command only when the change cannot affect it, and run every command when you are unsure.
+No single script runs the full gate. The full local gate is the `run:` steps of the jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` that the changed paths select. Read the steps from the workflow files: they are the source of truth, and `velnor-gen` generates `ci.yml`. Run them from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a job only when the changed paths do not select it, and run every job when you are unsure.
+
+The table is a quick reference for the common commands. It is not the gate and it can fall behind the workflows. When the table and a workflow step differ, the workflow step wins.
 
 | CI job | Local command |
 |---|---|
@@ -31,6 +33,9 @@ No single script runs the full gate. The full local gate is the set of commands 
 | `rust`, docs | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'` |
 | `rust`, tests | `cargo nextest run --workspace --locked --profile ci --no-fail-fast --no-tests=fail` |
 | `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
+| `rust`, lint with the `local-mode` feature | `cargo clippy --workspace --all-targets --locked --features local-mode -- -D warnings` |
+| `rust`, docs with the `local-mode` feature | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features local-mode` |
+| `rust`, per-package check | `cargo check -p <pkg> --locked`, once for each selected package |
 | `policy`, dependencies | `cargo deny --config deny.toml --locked check` |
 | `policy`, unused dependencies | `cargo machete` |
 | `lint-alint` | `alint validate-config && alint check --fail-on-warning`, then `bash scripts/alint-line-cap-probe.sh` |
@@ -40,7 +45,8 @@ No single script runs the full gate. The full local gate is the set of commands 
 | `lint-mise-binary-digests` | `mise run test-mise-binary-digests` |
 | `lint-validate-hk` | `mise run validate-hk` |
 | `lint-generated-check` | `cargo run --locked -p velnor-gen --bin velnor-gen -- --root . check --verify-release` |
-| `helper-gates` and the secret scans in `repository-checks.yml` | The scripts named in that workflow's steps |
+| `helper-gates` | `bash scripts/check-helper-gates.sh origin/main` |
+| Secret scans in `repository-checks.yml` | The scripts named in that workflow's steps |
 
 `cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
 
