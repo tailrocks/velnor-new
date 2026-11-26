@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::checks::{acquire_ids, assert_clean, deleted_messages, reservation, runner_name};
+use super::events::Event;
 use super::fixtures::{
     OTHER_WORKFLOW, TestResult, WORKFLOW, pull_offer, push_offer, sha, with_acquire_none,
 };
-use super::harness::{Event, World};
+use super::harness::World;
 
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T2", 1, true)?;

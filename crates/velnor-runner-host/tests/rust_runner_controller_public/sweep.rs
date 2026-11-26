@@ -8,8 +8,9 @@ use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{assert_clean, reservation, snapshot};
+use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
-use super::harness::{Event, World, wait_for};
+use super::harness::World;
 
 const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/99.jit --work-dir /var/lib/velnor/work/99\n4343 sleep 600\n";
 

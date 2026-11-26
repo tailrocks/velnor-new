@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use super::harness::{Event, World, wait_for};
+use super::events::{Event, wait_for};
+use super::harness::World;
 
 pub(super) struct Snapshot {
     pub(super) jit: Vec<String>,

@@ -4,8 +4,9 @@
 use std::time::Instant;
 
 use super::checks::{assert_clean, deleted_messages, jit_name, reservation, runner_name};
+use super::events::{process_exists, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
-use super::harness::{World, process_exists, wait_for};
+use super::harness::World;
 
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T5", 1, true)?;

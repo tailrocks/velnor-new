@@ -10,8 +10,9 @@ use super::checks::{
     acquire_ids, assert_clean, call_number, deleted_messages, heartbeat_advances, orb_calls_after,
     runner_name, snapshot,
 };
+use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
-use super::harness::{Event, World, wait_for};
+use super::harness::World;
 
 const HOLD_A: &str = "FAKE_RUNNER_PS_PID=7001\nFAKE_ORB_PS_IMMORTAL=7001\nFAKE_ORB_PS_FAIL=2\n";
 
