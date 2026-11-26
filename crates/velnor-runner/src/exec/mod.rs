@@ -13,6 +13,7 @@ mod host_env;
 mod inputs;
 mod issues;
 mod job;
+mod lines;
 mod mask;
 mod output;
 mod preflight;

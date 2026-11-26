@@ -72,6 +72,8 @@ mod expr_unsupported;
 mod expr_vars;
 #[path = "exec_extra.rs"]
 mod extra;
+#[path = "exec_failures.rs"]
+mod failures;
 #[path = "exec_followup.rs"]
 mod followup;
 #[path = "exec_hardening.rs"]
@@ -96,6 +98,8 @@ mod redaction;
 mod review;
 #[path = "exec_semantics.rs"]
 mod semantics;
+#[path = "exec_shells.rs"]
+mod shells;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

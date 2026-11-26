@@ -34,6 +34,18 @@ struct WorkflowCommand<'a> {
     data: String,
 }
 
+fn fold(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            let mut upper = character.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(single), None) => single,
+                _ => character,
+            }
+        })
+        .collect()
+}
+
 fn unescape_data(value: &str) -> String {
     value
         .replace("%0D", "\r")
@@ -99,7 +111,7 @@ fn registered(name: &str, resume: Option<&str>) -> bool {
         && (RESERVED_TOKENS
             .iter()
             .any(|known| known.eq_ignore_ascii_case(name))
-            || resume.is_some_and(|token| token == name.to_uppercase()))
+            || resume.is_some_and(|token| token == fold(name)))
 }
 
 fn parse<'a>(line: &'a str, resume: Option<&str>) -> Option<WorkflowCommand<'a>> {
@@ -209,7 +221,7 @@ fn stop(token: &str, out: &mut Output<'_>) {
     if token.chars().count() > 6 {
         out.masker.add(token);
     }
-    out.issues.stop(token.to_uppercase());
+    out.issues.stop(fold(token));
 }
 
 pub(super) fn apply(line: &str, out: &mut Output<'_>) {
@@ -218,7 +230,7 @@ pub(super) fn apply(line: &str, out: &mut Output<'_>) {
     };
     let name = command.name.to_ascii_lowercase();
     if let Some(token) = out.issues.stop_token() {
-        if command.name.to_uppercase() == token {
+        if fold(command.name) == token {
             out.issues.resume();
         }
         return;

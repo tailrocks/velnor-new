@@ -160,19 +160,21 @@ impl JobContext {
         }
     }
 
+    pub(super) fn default_run_token(&self, name: &str) -> Option<&Json> {
+        self.defaults.iter().rev().find_map(|defaults| {
+            token::find(defaults, "run").and_then(|run| token::find(run, name))
+        })
+    }
+
     pub(super) fn default_run_value(
         &self,
         name: &str,
         env: &ExprEnv,
     ) -> Result<Option<String>, ExecError> {
-        let mut found = None;
-        for defaults in &self.defaults {
-            if let Some(value) = token::find(defaults, "run").and_then(|run| token::find(run, name))
-            {
-                found = Some(token::scalar(value, env)?);
-            }
-        }
-        Ok(found)
+        Ok(self
+            .default_run_token(name)
+            .map(|value| token::scalar(value, env))
+            .transpose()?)
     }
 
     pub(super) fn process_env(

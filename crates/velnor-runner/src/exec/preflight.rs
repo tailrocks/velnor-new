@@ -4,8 +4,6 @@
 use super::adapter::AdapterRegistry;
 use super::context::JobContext;
 use super::shell;
-use super::step_info::step_environment;
-use crate::expr::JobStatus;
 use crate::job_message::{ActionReferenceType, ActionStep, ActionStepKind, AgentJobRequestMessage};
 
 pub(super) fn reference(step: &ActionStep) -> Option<String> {
@@ -37,20 +35,8 @@ fn present(value: Option<&serde_json::Value>) -> bool {
 }
 
 fn shell_problem(step: &ActionStep, context: &JobContext) -> Option<String> {
-    if shell::depends_on_steps(step) {
-        return None;
-    }
-    let step_env =
-        step_environment(step, &context.expr_env(JobStatus::Success, &[])).unwrap_or_default();
-    match shell::resolve(
-        step,
-        context,
-        &context.expr_env(JobStatus::Success, &step_env),
-    ) {
-        Ok(spec) if shell::is_supported(&spec) => None,
-        Ok(spec) => Some(format!("shell {spec}")),
-        Err(error) => Some(format!("shell {error}")),
-    }
+    let spec = shell::admission_spec(step, context)?;
+    (!shell::is_supported(&spec)).then(|| format!("shell {spec}"))
 }
 
 fn step_problem(

@@ -64,9 +64,9 @@ fn expr_length_limit_counts_utf16_code_units() -> Result<()> {
 #[test]
 fn expr_length_limit_counts_utf16_units() -> Result<()> {
     let env = empty_env();
-    let within = format!("'{}' == ''", "😀".repeat(10_495));
+    let within = format!("'{}' == ''", "😀".repeat(10_496));
     assert!(!truthy(&within, &env)?);
-    let beyond = format!("'{}' == ''", "😀".repeat(10_501));
+    let beyond = format!("'{}' == ''", "😀".repeat(10_497));
     assert_eq!(
         error_text(&beyond, &env)?,
         "Exceeded max expression length 21000"
