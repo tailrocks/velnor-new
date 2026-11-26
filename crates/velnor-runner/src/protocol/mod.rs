@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod broker;
-pub mod distributed_task;
 pub mod error;
 pub mod feed;
 pub mod http;
@@ -15,12 +14,11 @@ pub mod session;
 pub mod timeline;
 
 pub use broker::{BrokerClient, BrokerPoll};
-pub use distributed_task::DistributedTaskClient;
 pub use error::{
     BrokerErrorCategory, GitHubApiError, ServiceErrorKind, broker_error_category,
     service_error_kind,
 };
-pub use feed::{FeedLines, FeedStreamClient, FeedWebSocket};
+pub use feed::{FeedStreamClient, FeedWebSocket};
 pub use http::{
     GithubHttpResponse, RUNNER_USER_AGENT, github_json_http_response, github_json_request,
 };
@@ -37,8 +35,6 @@ pub use run_service::{
 };
 pub use session::{
     RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus, TaskAgentMessage, TaskAgentReference,
-    TaskAgentSession, TaskAgentSessionKey,
+    TaskAgentSession,
 };
-pub use timeline::{
-    TaskResult, TimelineRecord, TimelineRecordFeedLines, TimelineRecordState, TimelineRecordType,
-};
+pub use timeline::{TaskResult, TimelineRecordState};

@@ -27,25 +27,20 @@ const FEED_HOSTS: &[&str] = &[
     "results-receiver.actions.githubusercontent.com",
 ];
 
-#[derive(Debug, Clone, Serialize)]
-pub struct FeedLines {
-    pub count: usize,
-    pub value: Vec<String>,
+#[derive(Serialize)]
+struct FeedLines {
+    count: usize,
+    value: Vec<String>,
     #[serde(rename = "stepId")]
-    pub step_id: String,
-    #[serde(rename = "startLine", skip_serializing_if = "Option::is_none")]
-    pub start_line: Option<i64>,
-    #[serde(rename = "planId", skip_serializing_if = "Option::is_none")]
-    pub plan_id: Option<String>,
-    #[serde(rename = "jobId", skip_serializing_if = "Option::is_none")]
-    pub job_id: Option<String>,
+    step_id: String,
+    #[serde(rename = "startLine")]
+    start_line: i64,
 }
 
 #[derive(Debug, Clone)]
 pub struct FeedStreamClient {
     url: Url,
     token: Secret<String>,
-    route: Option<(String, String)>,
 }
 
 impl FeedStreamClient {
@@ -53,14 +48,7 @@ impl FeedStreamClient {
         Ok(Self {
             url: validate_feed_url(feed_stream_url)?,
             token: Secret::new(token.into()),
-            route: None,
         })
-    }
-
-    #[must_use]
-    pub fn with_context(mut self, plan_id: &str, job_id: &str) -> Self {
-        self.route = Some((plan_id.to_owned(), job_id.to_owned()));
-        self
     }
 
     #[must_use]
@@ -73,13 +61,8 @@ impl FeedStreamClient {
     }
 
     pub async fn connect(&self) -> Result<FeedWebSocket> {
-        let mut url = self.url.clone();
-        if let Some((plan_id, job_id)) = &self.route {
-            url.query_pairs_mut()
-                .append_pair("planId", plan_id)
-                .append_pair("jobId", job_id);
-        }
-        let mut request = url
+        let mut request = self
+            .url
             .as_str()
             .into_client_request()
             .context("build WebSocket request")?;
@@ -101,30 +84,19 @@ impl FeedStreamClient {
         socket: &mut FeedWebSocket,
         step_id: &str,
         lines: Vec<String>,
-        start_line: Option<i64>,
-        plan_id: Option<&str>,
-        job_id: Option<&str>,
+        start_line: i64,
     ) -> Result<()> {
         let feed = FeedLines {
             count: lines.len(),
             value: lines,
             step_id: step_id.to_owned(),
             start_line,
-            plan_id: plan_id.map(ToOwned::to_owned),
-            job_id: job_id.map(ToOwned::to_owned),
         };
         let json = serde_json::to_string(&feed).context("serialize feed lines")?;
         socket
             .send(Message::Text(json.into()))
             .await
             .context("send WebSocket log lines")
-    }
-
-    pub async fn send_ping(socket: &mut FeedWebSocket) -> Result<()> {
-        socket
-            .send(Message::Ping(Vec::new().into()))
-            .await
-            .context("send WebSocket keepalive ping")
     }
 }
 

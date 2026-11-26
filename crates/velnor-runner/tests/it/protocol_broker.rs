@@ -92,8 +92,8 @@ fn assert_recorded_bodies(server: &TestServer) -> Result<()> {
     assert_eq!(session_body["ownerName"], "host (PID: 1)");
     assert_eq!(session_body["agent"]["id"], 42);
     assert_eq!(session_body["agent"]["name"], "velnor-test");
-    assert_eq!(session_body["useFipsEncryption"], false);
     assert_eq!(session_body["brokerSession"], true);
+    assert!(session_body.get("useFipsEncryption").is_none());
 
     let polls = server.requests_to("GET", "/broker/message")?;
     assert_eq!(polls.len(), 2);
@@ -221,7 +221,6 @@ fn job_message(run_service_url: &str) -> TaskAgentMessage {
             "billing_owner_id": "42"
         })
         .to_string(),
-        iv_base64: None,
     }
 }
 

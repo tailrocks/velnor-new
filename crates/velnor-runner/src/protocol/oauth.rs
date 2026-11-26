@@ -24,6 +24,7 @@ const JWT_HEADER: &[u8] = br#"{"alg":"RS256","typ":"JWT"}"#;
 pub struct OAuthJwtCredentials {
     pub client_id: String,
     pub authorization_url: String,
+    pub token_url: String,
     pub private_key_pem: String,
 }
 
@@ -35,6 +36,7 @@ impl fmt::Debug for OAuthJwtCredentials {
                 "authorization_url",
                 &redacted_authenticated_url(&self.authorization_url),
             )
+            .field("token_url", &redacted_authenticated_url(&self.token_url))
             .field("private_key_pem", &"<redacted>")
             .finish()
     }
@@ -99,7 +101,7 @@ impl OAuthClient {
             .append_pair("client_assertion", &assertion)
             .finish();
         let (status, text) =
-            oauth_form_request(&credentials.authorization_url, body, OAUTH_TIMEOUT).await?;
+            oauth_form_request(&credentials.token_url, body, OAUTH_TIMEOUT).await?;
         parse_oauth_token_response(status, &text)
     }
 }
