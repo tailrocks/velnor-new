@@ -244,6 +244,11 @@ fn token_cases() -> Vec<(&'static str, Scripted, TokenOutcome)> {
             TokenOutcome::Failed("invalid_grant"),
         ),
         (
+            "an HTTP 400 never establishes credentials, even with an access token",
+            Scripted::Json(400, json!({"access_token": "sentinel-access-token"})),
+            TokenOutcome::Failed("HTTP status 400"),
+        ),
+        (
             "server error",
             Scripted::Text(500, "temporary"),
             TokenOutcome::Failed("HTTP status 500"),

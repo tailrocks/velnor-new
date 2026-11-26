@@ -150,13 +150,13 @@ fn is_json_body(response: &GithubHttpResponse) -> bool {
 
 fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, serde_json::Error> {
     if !is_json_body(response) || response.body.expose().trim().is_empty() {
-        return Ok(acquired(Secret::new(Value::Null), None));
+        return Err(serde::de::Error::custom("response carries no JSON body"));
     }
     let raw: Value = serde_json::from_str(response.body.expose())?;
-    let message = raw
-        .is_object()
-        .then(|| serde_json::from_str::<AgentJobRequestMessage>(response.body.expose()).ok())
-        .flatten();
+    if !raw.is_object() {
+        return Err(serde::de::Error::custom("response is not a JSON object"));
+    }
+    let message = serde_json::from_str::<AgentJobRequestMessage>(response.body.expose()).ok();
     Ok(acquired(Secret::new(raw), message))
 }
 

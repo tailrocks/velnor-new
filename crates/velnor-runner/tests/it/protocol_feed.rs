@@ -4,6 +4,7 @@
 use anyhow::{Context, Result, bail};
 use futures_util::StreamExt;
 use serde_json::Value;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::server::{
@@ -131,5 +132,28 @@ async fn feed_stream_handshake_authenticates_and_routes_by_plan_and_job() -> Res
             ("jobId".to_owned(), "job-1".to_owned())
         ]
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn feed_stream_connect_gives_up_when_the_handshake_stalls() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let held = tokio::spawn(async move {
+        let accepted = listener.accept().await;
+        std::future::pending::<()>().await;
+        accepted
+    });
+
+    let client = FeedStreamClient::new(&format!("http://{address}/feed"), TOKEN)?
+        .with_connect_timeout(Duration::from_millis(200));
+    let error = tokio::time::timeout(Duration::from_secs(10), client.connect())
+        .await
+        .context("connect must give up on its own")?
+        .err()
+        .context("a stalled handshake must fail")?;
+
+    assert!(format!("{error:#}").contains("timed out"), "{error:#}");
+    held.abort();
     Ok(())
 }

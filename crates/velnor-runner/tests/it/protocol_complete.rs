@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result, bail};
+use serde_json::json;
 use std::time::{Duration, Instant};
 use velnor_runner::protocol::{
-    BrokerErrorCategory, RetryDelays, RunServiceClient, ServiceErrorKind, broker_error_category,
-    service_error_kind,
+    BrokerErrorCategory, RetryDelays, RunServiceClient, RunServiceStepResult, ServiceErrorKind,
+    TaskResult, TimelineRecordState, broker_error_category, service_error_kind,
 };
 
 use super::support::{
@@ -225,5 +226,119 @@ async fn complete_job_waits_at_least_the_minimum_delay_between_attempts() -> Res
         .await?;
 
     assert!(started.elapsed() >= MIN * 2, "two gaps of at least {MIN:?}");
+    Ok(())
+}
+
+fn step_result(name: &str) -> RunServiceStepResult {
+    RunServiceStepResult {
+        external_id: None,
+        number: Some(1),
+        name: name.to_owned(),
+        action_name: None,
+        reference: None,
+        kind: None,
+        status: TimelineRecordState::Completed,
+        conclusion: TaskResult::Succeeded,
+        started_at: None,
+        completed_at: None,
+        completed_log_url: None,
+        completed_log_lines: 0,
+        annotations: Vec::new(),
+        is_background: false,
+        background_control_type: None,
+        background_control_step_ids: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn complete_job_sends_action_identity_log_url_and_background_metadata() -> Result<()> {
+    let server = TestServer::start().await?;
+    server.respond(
+        "POST",
+        COMPLETE_PATH,
+        scripted(vec![Scripted::Text(204, "")]),
+    )?;
+    let mut completion = complete_job();
+    completion.step_results = vec![
+        RunServiceStepResult {
+            action_name: Some("actions/checkout".to_owned()),
+            reference: Some("v4".to_owned()),
+            kind: Some("repository".to_owned()),
+            completed_log_url: Some("https://logs.example/1".to_owned()),
+            completed_log_lines: 7,
+            is_background: true,
+            background_control_type: Some("wait".to_owned()),
+            background_control_step_ids: vec!["step-0".to_owned()],
+            ..step_result("Run actions/checkout@v4")
+        },
+        step_result("Run echo"),
+    ];
+
+    immediate_run_service()?
+        .complete_job(&run_service_url(&server), &completion)
+        .await?;
+
+    let body = server.only_request("POST", COMPLETE_PATH)?.json()?;
+    let first = &body["stepResults"][0];
+    assert_eq!(first["action_name"], "actions/checkout");
+    assert_eq!(first["ref"], "v4");
+    assert_eq!(first["type"], "repository");
+    assert_eq!(first["completed_log_url"], "https://logs.example/1");
+    assert_eq!(first["completed_log_lines"], 7);
+    assert_eq!(first["is_background"], true);
+    assert_eq!(first["background_control_type"], "wait");
+    assert_eq!(first["background_control_step_ids"], json!(["step-0"]));
+    for absent in [
+        "action_name",
+        "ref",
+        "type",
+        "completed_log_url",
+        "is_background",
+        "background_control_type",
+        "background_control_step_ids",
+    ] {
+        assert!(body["stepResults"][1].get(absent).is_none(), "{absent}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn complete_job_serializes_annotation_coordinates_in_camel_case() -> Result<()> {
+    let server = TestServer::start().await?;
+    server.respond(
+        "POST",
+        COMPLETE_PATH,
+        scripted(vec![Scripted::Text(204, "")]),
+    )?;
+    let mut completion = complete_job();
+    completion.annotations = vec![velnor_runner::protocol::RunServiceAnnotation {
+        level: velnor_runner::protocol::RunServiceAnnotationLevel::Failure,
+        message: "boom".to_owned(),
+        title: None,
+        path: Some("a.yml".to_owned()),
+        start_line: Some(1),
+        end_line: Some(2),
+        start_column: Some(3),
+        end_column: Some(4),
+        step_number: Some(5),
+        is_infrastructure_issue: true,
+    }];
+
+    immediate_run_service()?
+        .complete_job(&run_service_url(&server), &completion)
+        .await?;
+
+    let body = server.only_request("POST", COMPLETE_PATH)?.json()?;
+    let annotation = &body["annotations"][0];
+    for (name, value) in [
+        ("startLine", 1),
+        ("endLine", 2),
+        ("startColumn", 3),
+        ("endColumn", 4),
+        ("stepNumber", 5),
+    ] {
+        assert_eq!(annotation[name], value, "{name}");
+    }
+    assert_eq!(annotation["isInfrastructureIssue"], true);
     Ok(())
 }

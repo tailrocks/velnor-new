@@ -35,6 +35,7 @@ pub(super) enum Measure {
 pub(super) struct SignedUrlResponse {
     pub(super) logs_url: Option<String>,
     pub(super) summary_url: Option<String>,
+    pub(super) blob_storage_type: Option<String>,
     #[serde(default, deserialize_with = "deserialize_int64")]
     pub(super) soft_size_limit: Option<i64>,
 }

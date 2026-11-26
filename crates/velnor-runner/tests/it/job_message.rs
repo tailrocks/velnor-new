@@ -237,3 +237,79 @@ fn insert_expression_reads_its_directive() -> Result<()> {
     assert_eq!(template_token_context_value(&mapping)?, expected);
     Ok(())
 }
+
+#[test]
+fn job_message_keeps_file_table_snapshot_debugger_and_endpoint_ids() -> Result<()> {
+    for casing in [Casing::Camel, Casing::Pascal] {
+        let message =
+            AgentJobRequestMessage::from_value(casing.message()).context("parse job message")?;
+
+        assert_eq!(
+            message.file_table,
+            vec![Some("ci.yml".to_owned()), Some("action.yml".to_owned())]
+        );
+        assert_eq!(message.snapshot, Some(json!({"type": 0, "lit": "image"})));
+        assert!(message.enable_debugger);
+        assert_eq!(
+            message.debugger_welcome_message.as_deref(),
+            Some("connect now")
+        );
+        let tunnel = message.debugger_tunnel.context("debugger tunnel")?;
+        assert_eq!(tunnel.tunnel_id.as_deref(), Some("t1"));
+        assert_eq!(tunnel.cluster_id.as_deref(), Some("c1"));
+        assert_eq!(
+            tunnel
+                .host_token
+                .as_ref()
+                .map(|token| token.expose().as_str()),
+            Some("host-token")
+        );
+        assert_eq!(tunnel.port, Some(8080));
+        assert_eq!(
+            message.resources.endpoints[0].id.as_deref(),
+            Some("00000000-0000-0000-0000-0000000000aa")
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn job_message_defaults_the_new_fields_when_absent_or_null() -> Result<()> {
+    let message = AgentJobRequestMessage::from_value(
+        json!({"FileTable": null, "EnableDebugger": null, "Snapshot": null}),
+    )?;
+
+    assert_eq!(message.file_table, Vec::<Option<String>>::new());
+    assert!(message.snapshot.is_none());
+    assert!(!message.enable_debugger);
+    assert!(message.debugger_tunnel.is_none());
+    Ok(())
+}
+
+enum Casing {
+    Camel,
+    Pascal,
+}
+
+impl Casing {
+    fn message(&self) -> serde_json::Value {
+        match self {
+            Self::Camel => json!({
+                "fileTable": ["ci.yml", "action.yml"],
+                "snapshot": {"type": 0, "lit": "image"},
+                "enableDebugger": true,
+                "debuggerTunnel": {"tunnelId": "t1", "clusterId": "c1", "hostToken": "host-token", "port": 8080},
+                "debuggerWelcomeMessage": "connect now",
+                "resources": {"endpoints": [{"id": "00000000-0000-0000-0000-0000000000aa", "name": "SystemVssConnection"}]},
+            }),
+            Self::Pascal => json!({
+                "FileTable": ["ci.yml", "action.yml"],
+                "Snapshot": {"type": 0, "lit": "image"},
+                "EnableDebugger": true,
+                "DebuggerTunnel": {"TunnelId": "t1", "ClusterId": "c1", "HostToken": "host-token", "Port": 8080},
+                "DebuggerWelcomeMessage": "connect now",
+                "Resources": {"Endpoints": [{"Id": "00000000-0000-0000-0000-0000000000aa", "Name": "SystemVssConnection"}]},
+            }),
+        }
+    }
+}

@@ -120,6 +120,9 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
         }
         bail!("OAuth token request failed: error={error}, description={description}");
     }
+    if !(200..300).contains(&status) {
+        bail!("OAuth token request failed: HTTP status {status}");
+    }
     let token = response
         .access_token
         .filter(|value| !value.is_empty())

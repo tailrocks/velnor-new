@@ -74,15 +74,29 @@ pub struct RunServiceStepResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<i64>,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action_name: Option<String>,
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
     pub status: TimelineRecordState,
     pub conclusion: TaskResult,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_log_url: Option<String>,
     pub completed_log_lines: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<RunServiceAnnotation>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_background: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_control_type: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub background_control_step_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

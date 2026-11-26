@@ -98,6 +98,32 @@ pub struct AgentJobRequestMessage {
     pub billing_owner_id: Option<String>,
     #[serde(deserialize_with = "deserialize_null_default", alias = "dependencies")]
     pub actions_dependencies: Vec<Option<String>>,
+    #[serde(deserialize_with = "deserialize_null_default", alias = "FileTable")]
+    pub file_table: Vec<Option<String>>,
+    #[serde(alias = "Snapshot")]
+    pub snapshot: Option<Value>,
+    #[serde(
+        deserialize_with = "deserialize_null_default",
+        alias = "EnableDebugger"
+    )]
+    pub enable_debugger: bool,
+    #[serde(alias = "DebuggerTunnel")]
+    pub debugger_tunnel: Option<DebuggerTunnel>,
+    #[serde(alias = "DebuggerWelcomeMessage")]
+    pub debugger_welcome_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DebuggerTunnel {
+    #[serde(alias = "TunnelId")]
+    pub tunnel_id: Option<String>,
+    #[serde(alias = "ClusterId")]
+    pub cluster_id: Option<String>,
+    #[serde(alias = "HostToken")]
+    pub host_token: Option<Secret<String>>,
+    #[serde(alias = "Port")]
+    pub port: Option<u16>,
 }
 
 impl AgentJobRequestMessage {

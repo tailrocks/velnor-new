@@ -72,6 +72,20 @@ async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
             vec![Scripted::Json(409, foreign_source_error(409))],
         ),
         ("a dropped connection", vec![Scripted::Hangup]),
+        ("a 204 without a body", vec![Scripted::Text(204, "")]),
+        ("a 200 with an empty body", vec![Scripted::Text(200, "")]),
+        (
+            "a 200 with a plain-text body",
+            vec![Scripted::Text(200, "ok")],
+        ),
+        (
+            "a 200 with a JSON array",
+            vec![Scripted::Json(200, json!([]))],
+        ),
+        (
+            "a 200 with a JSON null",
+            vec![Scripted::Json(200, json!(null))],
+        ),
     ] {
         server.reset()?;
         server.respond("POST", ACQUIRE_PATH, scripted(script))?;

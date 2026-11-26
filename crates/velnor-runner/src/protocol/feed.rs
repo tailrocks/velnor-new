@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use futures_util::SinkExt;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -16,6 +17,8 @@ use url::Url;
 
 use super::http::{RUNNER_USER_AGENT, validate_known_service_url};
 use crate::secret::Secret;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type FeedWebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -43,6 +46,7 @@ pub struct FeedStreamClient {
     url: Url,
     token: Secret<String>,
     route: Option<(String, String)>,
+    connect_timeout: Duration,
 }
 
 impl FeedStreamClient {
@@ -51,7 +55,14 @@ impl FeedStreamClient {
             url: validate_feed_url(feed_stream_url)?,
             token: Secret::new(token.into()),
             route: None,
+            connect_timeout: CONNECT_TIMEOUT,
         })
+    }
+
+    #[must_use]
+    pub const fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = timeout;
+        self
     }
 
     #[must_use]
@@ -87,8 +98,9 @@ impl FeedStreamClient {
                 .context("encode feed stream authorization")?,
         );
         headers.insert(USER_AGENT, HeaderValue::from_static(RUNNER_USER_AGENT));
-        let (socket, _) = connect_async(request)
+        let (socket, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
             .await
+            .context("connect to feed stream WebSocket timed out")?
             .context("connect to feed stream WebSocket")?;
         Ok(socket)
     }

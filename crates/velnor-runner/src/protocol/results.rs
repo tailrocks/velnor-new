@@ -27,11 +27,13 @@ const STEPS_UPDATE: &str =
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const ATTEMPTS: u64 = 3;
 const RETRY_STEP: Duration = Duration::from_millis(200);
+const AZURE_BLOB_STORAGE: &str = "BLOB_STORAGE_TYPE_AZURE";
 const KNOWN_HOSTS: &[&str] = &["results-receiver.actions.githubusercontent.com"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepStatus {
     InProgress = 3,
+    Pending = 5,
     Completed = 6,
 }
 
@@ -268,10 +270,11 @@ impl TwirpResultsClient {
                 }
                 .into());
             }
+            let azure = response.blob_storage_type.as_deref() == Some(AZURE_BLOB_STORAGE);
             let blob_url = (kind.signed_url)(response)
                 .filter(|url| !url.is_empty())
                 .with_context(|| format!("{} returned an empty URL", kind.signed_url_method))?;
-            put_blob(&blob_url, &content, kind.label).await?;
+            put_blob(&blob_url, &content, kind.label, azure).await?;
             self.twirp_acknowledged(
                 &self.receiver_url(kind.metadata_method),
                 &metadata_body,
@@ -316,15 +319,18 @@ impl TwirpResultsClient {
     }
 }
 
-async fn put_blob(blob_url: &str, content: &[u8], label: &str) -> Result<()> {
+async fn put_blob(blob_url: &str, content: &[u8], label: &str, azure: bool) -> Result<()> {
     validate_authenticated_url(blob_url)
         .with_context(|| format!("validate {label} signed blob URL"))?;
-    let response = http_client()?
+    let mut request = http_client()?
         .put(blob_url)
         .header(CONTENT_TYPE, "text/plain")
-        .header("x-ms-blob-type", "BlockBlob")
         .timeout(REQUEST_TIMEOUT)
-        .body(content.to_vec())
+        .body(content.to_vec());
+    if azure {
+        request = request.header("x-ms-blob-type", "BlockBlob");
+    }
+    let response = request
         .send()
         .await
         .map_err(|error| anyhow::anyhow!("{label} PUT: {}", redacted_reqwest_error(&error)))?;

@@ -18,4 +18,4 @@ pub use resources::{
 pub use step::{ActionReferenceType, ActionStep, ActionStepDefinitionReference, ActionStepKind};
 pub use template_token::template_token_context_value;
 pub use variables::{MaskHint, MaskKind, VariableValue};
-pub use wire::{AgentJobRequestMessage, PIPELINE_AGENT_JOB_REQUEST};
+pub use wire::{AgentJobRequestMessage, DebuggerTunnel, PIPELINE_AGENT_JOB_REQUEST};
