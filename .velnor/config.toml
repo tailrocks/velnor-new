@@ -46,6 +46,11 @@ packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velno
 complete = true
 
 [[stacks.rust.inputs]]
+globs = ["crates/velnor-runner/**", "generator/samples/**", ".github/workflows/**"]
+packages = ["velnor-runner"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = [".mise-version"]
 packages = ["velnor-gen"]
 complete = true

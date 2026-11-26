@@ -7,18 +7,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use velnor_runner::expr::{ExprEnv, ExprError, evaluate_condition, evaluate_template};
 
-const OUT_OF_SCOPE: [(&str, &str); 3] = [
+const OUT_OF_SCOPE: [(&str, &[&str]); 3] = [
     (
-        "generator/samples/declared-workflows/",
-        "unsupported expression context matrix",
+        "generator/samples/declared-workflows/expected/.github/workflows/build-assets.yml",
+        &[
+            "unsupported expression context matrix",
+            "unsupported expression context jobs",
+        ],
     ),
     (
-        "generator/samples/declared-workflows/",
-        "unsupported expression context jobs",
+        "generator/samples/declared-workflows/expected/.github/workflows/tools-build.yml",
+        &["unsupported expression context matrix"],
     ),
     (
-        "generator/samples/reusable-workflows/",
-        "unsupported expression context matrix",
+        "generator/samples/reusable-workflows/expected/.github/workflows/native-checks.yml",
+        &["unsupported expression context matrix"],
     ),
 ];
 
@@ -30,10 +33,13 @@ fn repository_root() -> PathBuf {
 
 fn workflow_files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut found = Vec::new();
-    let mut pending = vec![
-        root.join("generator/samples"),
-        root.join(".github/workflows"),
-    ];
+    let mut pending = vec![root.join(".github/workflows")];
+    for sample in fs::read_dir(root.join("generator/samples"))? {
+        let expected = sample?.path().join("expected");
+        if expected.is_dir() {
+            pending.push(expected);
+        }
+    }
     while let Some(directory) = pending.pop() {
         for entry in fs::read_dir(&directory).with_context(|| directory.display().to_string())? {
             let path = entry?.path();
@@ -103,8 +109,8 @@ fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
         collect(&document, &[], &mut sources);
         for (is_condition, source) in sources {
             if let Some(error) = parse_error(is_condition, &source, &env) {
-                let known = OUT_OF_SCOPE.iter().position(|(prefix, message)| {
-                    relative.starts_with(prefix) && error.contains(message)
+                let known = OUT_OF_SCOPE.iter().position(|(file, messages)| {
+                    relative == *file && messages.iter().any(|message| error.contains(message))
                 });
                 match known {
                     Some(index) => {
