@@ -43,7 +43,6 @@ where
         workflow_ref: input.workflow_ref.clone(),
         workflow_sha: input.workflow_sha.clone(),
         job_workflow_ref: input.job_workflow_ref.clone(),
-        workflow_job_id: input.workflow_job_id.clone(),
         job_workflow_sha,
         pull_request: pull,
     })

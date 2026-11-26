@@ -75,7 +75,7 @@ impl AuthorizedSourceReceipt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SourceBlock {
+pub(crate) enum SourceBlock {
     Missing,
 
     ApiUnavailable,
@@ -92,7 +92,7 @@ pub(super) enum SourceBlock {
 }
 
 impl SourceBlock {
-    pub(super) const fn code(self) -> &'static str {
+    pub(crate) const fn code(self) -> &'static str {
         match self {
             Self::Missing => "source_metadata_missing",
             Self::ApiUnavailable => "source_api_unavailable",
@@ -118,6 +118,25 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     if request_id <= 0 || message_id < 0 {
         return Err(SourceBlock::Missing);
     }
+    let verified = authorize_source(connection, source, token, transport)?;
+    Ok(AuthorizedSourceReceipt {
+        connection_id: binding.connection_id().clone(),
+        scale_set_id: binding.scale_set_id(),
+        binding_digest: binding.binding_digest().to_owned(),
+        request_id,
+        message_id,
+        source: verified,
+        policy_mode: connection.source_policy.mode,
+        already_assigned: false,
+    })
+}
+
+pub(crate) fn authorize_source<T: Transport + ?Sized>(
+    connection: &RepositoryConnection,
+    source: &SourceMetadata,
+    token: &str,
+    transport: &mut T,
+) -> Result<VerifiedWorkflowSource, SourceBlock> {
     let complete = source.complete().ok_or(SourceBlock::Missing)?;
     let (owner, repository) = split_repository(&connection.repository)?;
     let run = get_workflow_run(
@@ -144,16 +163,7 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     {
         verify_pull(connection, transport, token, &run, &verified)?;
     }
-    Ok(AuthorizedSourceReceipt {
-        connection_id: binding.connection_id().clone(),
-        scale_set_id: binding.scale_set_id(),
-        binding_digest: binding.binding_digest().to_owned(),
-        request_id,
-        message_id,
-        source: verified,
-        policy_mode: connection.source_policy.mode,
-        already_assigned: false,
-    })
+    Ok(verified)
 }
 
 fn verify_binding(

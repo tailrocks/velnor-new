@@ -342,8 +342,7 @@ fn compare_hook_source_matches_unqualified_branch_run_paths_and_rejects_ambiguou
             "workflow_ref": workflow_ref,
             "workflow_sha": sha,
             "tested_sha": sha,
-            "job_workflow_ref": job_workflow_ref,
-            "workflow_job_id": "verify__local"
+            "job_workflow_ref": job_workflow_ref
         }))
         .expect("input bytes");
         let input = UntrustedHookSourceInput::decode(&input_bytes).expect("decode hook input");
