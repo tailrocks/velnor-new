@@ -188,14 +188,12 @@ fn a_target_the_workspace_features_enable_must_have_a_unit_before_the_inputs_loc
     assert!(lock.exists());
 }
 
-fn forwarding_repo(ci: &str) -> crate::io::Repo {
+fn app_and_lib(app: &str, config: &str) -> crate::io::Repo {
     let repo = workspace_below_the_root();
     unit(
         &repo,
         "rust/app/Cargo.toml",
-        &format!(
-            "[package]\nname = \"app\"\nedition = \"2024\"\n\n[features]\nci = [\"{ci}\"]\n\n[dependencies]\nlib = {{ path = \"../lib\", optional = true }}\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"lib\"]\n"
-        ),
+        &format!("[package]\nname = \"app\"\nedition = \"2024\"\n\n{app}"),
     );
     unit(
         &repo,
@@ -203,14 +201,19 @@ fn forwarding_repo(ci: &str) -> crate::io::Repo {
         "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[features]\ny = []\n\n[[bin]]\nname = \"lg\"\npath = \"src/lg.rs\"\nrequired-features = [\"y\"]\n",
     );
     unit(&repo, "rust/lib/src/lg.rs", "fn main() {}\n");
-    unit(
-        &repo,
-        ".velnor/rust-ci.toml",
-        "workspace_features = ['ci']\n",
-    );
+    unit(&repo, ".velnor/rust-ci.toml", config);
     repo.git(&["add", "--all"]);
     own_units(&repo, "rust/target/debug", &[]);
     repo
+}
+
+fn forwarding_repo(ci: &str) -> crate::io::Repo {
+    app_and_lib(
+        &format!(
+            "[features]\nci = [\"{ci}\"]\n\n[dependencies]\nlib = {{ path = \"../lib\", optional = true }}\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"lib\"]\n"
+        ),
+        "workspace_features = ['ci']\n",
+    )
 }
 
 fn forwarded_units(repo: &crate::io::Repo, bins: &[&str]) {
@@ -266,6 +269,34 @@ fn a_dependency_feature_selector_of_a_workspace_feature_enables_the_optional_dep
 #[test]
 fn a_weak_dependency_feature_selector_requires_no_unit_while_the_dependency_is_inactive() {
     let repo = forwarding_repo("lib?/y");
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}
+
+#[test]
+fn a_workspace_feature_selector_reaches_a_renamed_optional_member_dependency() {
+    let repo = app_and_lib(
+        "[dependencies]\nalias = { package = \"lib\", path = \"../lib\", optional = true }\n",
+        "workspace_features = ['alias/y']\n",
+    );
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("target lg (rust/lib/src/lg.rs"),
+        "{refused:?}"
+    );
+    forwarded_units(&repo, &["lg"]);
+    let accepted = audit(&repo, &["--write"]);
+    assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
+}
+
+#[test]
+fn only_a_target_the_workspace_features_newly_enable_needs_a_unit_and_an_inactive_optional_edge_enables_nothing()
+ {
+    let repo = app_and_lib(
+        "[features]\ndefault = [\"d\"]\nd = []\nother = []\n\n[dependencies]\nlib = { path = \"../lib\", optional = true, features = [\"y\"] }\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"d\"]\n",
+        "workspace_features = ['other']\n",
+    );
     let accepted = audit(&repo, &["--write"]);
     assert_eq!(accepted.status.code(), Some(0), "{accepted:?}");
 }

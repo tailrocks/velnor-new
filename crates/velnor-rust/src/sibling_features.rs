@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage, TargetKind, TargetName};
+use velnor_model::{
+    DependencyKind, RepoPath, RepoView, RustPackage, Target, TargetKind, TargetName,
+};
 
 use crate::harness::{dependency_specs, enabled_features, implicit_features};
 use crate::toml_file::table;
@@ -81,7 +83,15 @@ pub(crate) fn requested_by_siblings(
                     if keys.is_empty() {
                         keys.insert(dependency.name.to_string());
                     }
+                    if dependency.optional
+                        && !keys.iter().any(|key| activated(parsed, enabled, key))
+                    {
+                        continue;
+                    }
                     wanted.extend(forwarded_features(parsed, enabled, &keys));
+                    if !root_only || member.manifest == *workspace {
+                        wanted.extend(workspace_forwards(workspace_features, &keys));
+                    }
                 }
                 let slot = requested.entry(target).or_default();
                 for feature in wanted {
@@ -115,19 +125,22 @@ pub(crate) fn gated_targets_built(
     else {
         return Vec::new();
     };
-    let enabled = enabled_features(
-        &manifest,
-        &requested_by_siblings(view, package, workspace_features),
-    );
+    let closure = |names: &[String]| {
+        enabled_features(&manifest, &requested_by_siblings(view, package, names))
+    };
+    let enabled = closure(workspace_features);
+    let before = closure(&[]);
+    let built = |features: &BTreeSet<String>, target: &Target| {
+        target
+            .required_features
+            .iter()
+            .all(|required| features.contains(&required.name))
+    };
     package
         .targets
         .iter()
         .filter(|target| {
-            target.requires_features
-                && target
-                    .required_features
-                    .iter()
-                    .all(|required| enabled.contains(&required.name))
+            target.requires_features && built(&enabled, target) && !built(&before, target)
         })
         .flat_map(|target| target.kinds.iter().map(|kind| (target.name.clone(), *kind)))
         .collect()
@@ -233,6 +246,15 @@ fn dependency_keys(
                 == package
         })
         .map(|(key, _)| key.clone())
+        .collect()
+}
+
+fn workspace_forwards(names: &[String], keys: &BTreeSet<String>) -> Vec<String> {
+    names
+        .iter()
+        .filter_map(|name| name.split_once('/'))
+        .filter(|(owner, _)| keys.contains(*owner))
+        .map(|(_, feature)| feature.to_owned())
         .collect()
 }
 
