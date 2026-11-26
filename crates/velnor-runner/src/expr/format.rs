@@ -211,10 +211,26 @@ fn read_format_specifiers(chars: &[char], start: usize) -> Option<(String, usize
     }
 }
 
-pub(crate) fn to_json(value: &Value) -> String {
-    let mut out = String::new();
-    write_json(value, &mut out, 0, JsonPrefix::Root);
-    out
+pub(crate) fn to_json(value: &Value) -> Result<String, ExprError> {
+    let mut writer = JsonWriter {
+        out: String::new(),
+        memory: MemoryCounter::new("toJSON"),
+    };
+    write_json(value, &mut writer, 0, JsonPrefix::Root)?;
+    Ok(writer.out)
+}
+
+struct JsonWriter {
+    out: String,
+    memory: MemoryCounter,
+}
+
+impl JsonWriter {
+    fn push(&mut self, piece: &str) -> Result<(), ExprError> {
+        self.memory.add(piece)?;
+        self.out.push_str(piece);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -224,7 +240,12 @@ enum JsonPrefix {
     Element(bool),
 }
 
-fn write_json(value: &Value, out: &mut String, level: usize, prefix: JsonPrefix) {
+fn write_json(
+    value: &Value,
+    writer: &mut JsonWriter,
+    level: usize,
+    prefix: JsonPrefix,
+) -> Result<(), ExprError> {
     let indent = "  ".repeat(level);
     let prefix = match prefix {
         JsonPrefix::Root => String::new(),
@@ -236,37 +257,31 @@ fn write_json(value: &Value, out: &mut String, level: usize, prefix: JsonPrefix)
 
     match value {
         Value::Object(object) if !object.entries().is_empty() => {
-            out.push_str(&prefix);
-            out.push('{');
+            writer.push(&format!("{prefix}{{"))?;
             for (position, (key, entry)) in object.entries().iter().enumerate() {
                 let key = Value::String(key.clone());
-                write_json(&key, out, level + 1, JsonPrefix::Element(position == 0));
-                write_json(entry, out, level + 1, JsonPrefix::MappingValue);
+                write_json(&key, writer, level + 1, JsonPrefix::Element(position == 0))?;
+                write_json(entry, writer, level + 1, JsonPrefix::MappingValue)?;
             }
-            out.push('\n');
-            out.push_str(&indent);
-            out.push('}');
+            writer.push(&format!("\n{indent}}}"))
         }
         Value::Array(array) if !array.items().is_empty() => {
-            out.push_str(&prefix);
-            out.push('[');
+            writer.push(&format!("{prefix}["))?;
             for (position, item) in array.items().iter().enumerate() {
-                write_json(item, out, level + 1, JsonPrefix::Element(position == 0));
+                write_json(item, writer, level + 1, JsonPrefix::Element(position == 0))?;
             }
-            out.push('\n');
-            out.push_str(&indent);
-            out.push(']');
+            writer.push(&format!("\n{indent}]"))
         }
         other => {
-            out.push_str(&prefix);
-            out.push_str(&match other {
+            let text = match other {
                 Value::Null => "null".to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Number(value) => format_number(*value),
                 Value::String(value) => serde_json::Value::String(value.clone()).to_string(),
                 Value::Array(_) => "[]".to_string(),
                 Value::Object(_) => "{}".to_string(),
-            });
+            };
+            writer.push(&format!("{prefix}{text}"))
         }
     }
 }

@@ -84,7 +84,7 @@ fn evaluate_function(function: Function, args: &[Node], env: &ExprEnv) -> Result
             let [value] = args else {
                 return Err(arity_error());
             };
-            Ok(Value::String(to_json(&evaluate_node(value, env)?)))
+            to_json(&evaluate_node(value, env)?).map(Value::String)
         }
         Function::FromJson => {
             let [value] = args else {

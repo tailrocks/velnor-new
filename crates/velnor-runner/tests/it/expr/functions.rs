@@ -160,3 +160,17 @@ fn expr_format_validates_the_format_string_before_resolving_arguments() -> Resul
     );
     Ok(())
 }
+
+#[test]
+fn expr_to_json_stops_at_the_memory_budget() -> Result<()> {
+    let items = |count: usize| format!(r#"{{"LIST":[{}0]}}"#, "1,".repeat(count));
+    let within = env_with(&[(RootContext::Env, &items(100_000))])?;
+    let beyond = env_with(&[(RootContext::Env, &items(400_000))])?;
+
+    assert!(text("toJSON(env.LIST)", &within)?.starts_with("[\n  1,\n  1,"));
+    assert!(
+        error_text("toJSON(env.LIST)", &beyond)?
+            .starts_with("The maximum allowed memory size was exceeded")
+    );
+    Ok(())
+}
