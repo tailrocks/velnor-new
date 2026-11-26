@@ -19,6 +19,23 @@ use super::support::{
     RecordedRequest, Reply, TOKEN, TestServer, assert_bearer, assert_github_status,
 };
 
+const UPSTREAM_OS: &str = if cfg!(target_os = "linux") {
+    "Linux"
+} else if cfg!(target_os = "macos") {
+    "macOS"
+} else {
+    "Windows"
+};
+const UPSTREAM_ARCHITECTURE: &str = if cfg!(target_arch = "x86_64") {
+    "X64"
+} else if cfg!(target_arch = "aarch64") {
+    "ARM64"
+} else if cfg!(target_arch = "x86") {
+    "X86"
+} else {
+    "ARM"
+};
+
 const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
 const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
 
@@ -64,8 +81,8 @@ fn assert_poll_query(request: &RecordedRequest, status: &str, disable_update: &s
     assert_eq!(request.query("sessionId"), Some("session-1"));
     assert_eq!(request.query("status"), Some(status));
     assert_eq!(request.query("runnerVersion"), Some(RUNNER_VERSION));
-    assert_eq!(request.query("os"), Some(std::env::consts::OS));
-    assert_eq!(request.query("architecture"), Some(std::env::consts::ARCH));
+    assert_eq!(request.query("os"), Some(UPSTREAM_OS));
+    assert_eq!(request.query("architecture"), Some(UPSTREAM_ARCHITECTURE));
     assert_eq!(request.query("disableUpdate"), Some(disable_update));
 }
 
@@ -135,8 +152,8 @@ async fn broker_run_service_happy_path_acquires_and_completes_job() -> Result<()
     let AcquireJobOutcome::Acquired(job) = acquired else {
         bail!("expected acquired job");
     };
-    assert_eq!(job.raw["planId"], PLAN_ID);
-    assert_eq!(job.raw["jobId"], JOB_ID);
+    assert_eq!(job.raw.expose()["planId"], PLAN_ID);
+    assert_eq!(job.raw.expose()["jobId"], JOB_ID);
 
     run_service
         .complete_job(&run_service_url, &complete_job())

@@ -9,6 +9,7 @@ pub mod http;
 pub mod jit;
 pub mod oauth;
 pub mod results;
+mod results_wire;
 pub mod run_service;
 pub mod session;
 pub mod timeline;

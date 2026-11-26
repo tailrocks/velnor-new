@@ -15,26 +15,33 @@ const NUMBER: i64 = 4;
 const CASE_SENSITIVE_DICTIONARY: i64 = 5;
 
 pub(super) fn member<'a>(object: &'a Map<String, Value>, name: &str) -> Option<&'a Value> {
-    object
-        .get(name)
-        .or_else(|| {
-            object
-                .iter()
-                .find(|(key, _)| key.eq_ignore_ascii_case(name))
-                .map(|(_, value)| value)
-        })
-        .filter(|value| !value.is_null())
+    member_or_null(object, name).filter(|value| !value.is_null())
+}
+
+fn member_or_null<'a>(object: &'a Map<String, Value>, name: &str) -> Option<&'a Value> {
+    object.get(name).or_else(|| {
+        object
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value)
+    })
 }
 
 pub fn pipeline_context_value(value: &Value) -> Result<ContextValue> {
     let object = match value {
-        Value::Null => return Ok(ContextValue::Null),
+        Value::String(text) => return Ok(ContextValue::String(text.clone())),
+        Value::Bool(flag) => return Ok(ContextValue::Bool(*flag)),
+        Value::Number(number) => return Ok(ContextValue::Number(number.clone())),
+        Value::Null | Value::Array(_) => return Ok(ContextValue::Null),
         Value::Object(object) => object,
-        _ => bail!("PipelineContextData must be an object"),
     };
-    let kind = member(object, "t")
-        .and_then(Value::as_i64)
-        .context("PipelineContextData has no integer type discriminator")?;
+    let kind = match member_or_null(object, "t") {
+        None => STRING,
+        Some(Value::Number(number)) if !number.is_f64() => number
+            .as_i64()
+            .context("PipelineContextData type discriminator out of range")?,
+        Some(_) => return Ok(ContextValue::Null),
+    };
     match kind {
         STRING => Ok(ContextValue::String(
             member(object, "s")

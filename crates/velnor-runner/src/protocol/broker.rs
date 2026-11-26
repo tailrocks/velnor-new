@@ -11,8 +11,12 @@ use url::Url;
 use super::error::{
     BrokerErrorCategory, github_api_error, github_api_error_categorized, is_retriable_status,
 };
-use super::http::{RUNNER_VERSION, github_json_request, slash_url, validate_authenticated_url};
+use super::http::{
+    RUNNER_VERSION, github_json_request, runner_architecture, runner_os, slash_url,
+    validate_authenticated_url,
+};
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
+use crate::secret::Secret;
 
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
@@ -26,7 +30,7 @@ pub struct BrokerPoll {
 #[derive(Debug, Clone)]
 pub struct BrokerClient {
     base_url: Url,
-    bearer_token: String,
+    bearer_token: Secret<String>,
 }
 
 impl BrokerClient {
@@ -34,7 +38,7 @@ impl BrokerClient {
         let url = validate_authenticated_url(server_url_v2)?;
         Ok(Self {
             base_url: slash_url(&url),
-            bearer_token: bearer_token.into(),
+            bearer_token: Secret::new(bearer_token.into()),
         })
     }
 
@@ -79,7 +83,7 @@ impl BrokerClient {
         disable_update: bool,
     ) -> Result<BrokerPoll> {
         let mut url = self.endpoint("message")?;
-        append_runner_query(&mut url, session_id, status);
+        append_runner_query(&mut url, session_id, status)?;
         url.query_pairs_mut().append_pair(
             "disableUpdate",
             if disable_update { "true" } else { "false" },
@@ -113,7 +117,7 @@ impl BrokerClient {
         status: RunnerStatus,
     ) -> Result<()> {
         let mut url = self.endpoint("acknowledge")?;
-        append_runner_query(&mut url, session_id, status);
+        append_runner_query(&mut url, session_id, status)?;
         let body = json!({ "runnerRequestId": runner_request_id }).to_string();
         let (http_status, text) = self
             .send(Method::POST, &url, Some(body), SESSION_TIMEOUT)
@@ -142,7 +146,14 @@ impl BrokerClient {
         body: Option<String>,
         timeout: Duration,
     ) -> Result<(u16, String)> {
-        github_json_request(method, url.as_str(), &self.bearer_token, body, timeout).await
+        github_json_request(
+            method,
+            url.as_str(),
+            self.bearer_token.expose(),
+            body,
+            timeout,
+        )
+        .await
     }
 }
 
@@ -154,11 +165,12 @@ fn session_error_category(status: u16) -> BrokerErrorCategory {
     }
 }
 
-fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) {
+fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) -> Result<()> {
     url.query_pairs_mut()
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
         .append_pair("runnerVersion", RUNNER_VERSION)
-        .append_pair("os", std::env::consts::OS)
-        .append_pair("architecture", std::env::consts::ARCH);
+        .append_pair("os", runner_os()?)
+        .append_pair("architecture", runner_architecture()?);
+    Ok(())
 }

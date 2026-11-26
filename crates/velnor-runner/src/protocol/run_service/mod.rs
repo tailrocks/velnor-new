@@ -9,6 +9,7 @@ use url::Url;
 use uuid::Uuid;
 
 use super::http::{slash_url, validate_known_service_url};
+use crate::secret::Secret;
 
 mod acquire;
 mod complete;
@@ -78,14 +79,14 @@ impl Default for RetryDelays {
 
 #[derive(Debug, Clone)]
 pub struct RunServiceClient {
-    bearer_token: String,
+    bearer_token: Secret<String>,
     delays: RetryDelays,
 }
 
 impl RunServiceClient {
     pub fn new(bearer_token: impl Into<String>) -> Result<Self> {
         Ok(Self {
-            bearer_token: bearer_token.into(),
+            bearer_token: Secret::new(bearer_token.into()),
             delays: RetryDelays::default(),
         })
     }

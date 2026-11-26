@@ -178,7 +178,7 @@ rules:
         - "scripts/generator-release/**"
         - "scripts/test-native-hk-fmt.sh"
         - "scripts/test-secret-scan-config.sh"
-    pattern: 'ci-helper/crates|generator/crates|local/crates|crates/velnor-runner/crates|crates/test_support'
+    pattern: 'ci-helper/crates|generator/crates|local/crates|crates/velnor-runner/(crates|Cargo\.lock|deny\.toml|release-plz\.toml|\.config)|crates/test_support'
     level: error
     message: "Crates live in crates/velnor-* under the root workspace; use the new path"
 

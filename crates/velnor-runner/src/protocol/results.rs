@@ -5,7 +5,7 @@
 use anyhow::{Context, Result, bail};
 use reqwest::Method;
 use reqwest::header::CONTENT_TYPE;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -15,6 +15,11 @@ use super::http::{
     github_json_request, http_client, redacted_reqwest_error, validate_authenticated_url,
     validate_known_service_url,
 };
+use super::results_wire::{
+    Measure, MetadataRequest, MetadataResponse, ScopeRequest, SignedUrlResponse,
+    SoftSizeLimitExceeded,
+};
+use crate::secret::Secret;
 
 const RECEIVER: &str = "twirp/results.services.receiver.Receiver";
 const STEPS_UPDATE: &str =
@@ -72,63 +77,37 @@ struct WorkflowStepsUpdateRequest<'a> {
     workflow_run_backend_id: &'a str,
 }
 
-#[derive(Serialize)]
-struct ScopeRequest<'a> {
-    #[serde(rename = "workflow_run_backend_id")]
-    run: &'a str,
-    #[serde(rename = "workflow_job_run_backend_id")]
-    job: &'a str,
-    #[serde(rename = "step_backend_id", skip_serializing_if = "Option::is_none")]
-    step: Option<&'a str>,
-}
-
-#[derive(Serialize)]
-struct MetadataRequest<'a> {
-    #[serde(flatten)]
-    scope: &'a ScopeRequest<'a>,
-    uploaded_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    line_count: Option<i64>,
-}
-
-#[derive(Deserialize)]
-struct SignedUrlResponse {
-    logs_url: Option<String>,
-    blob_url: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct MetadataResponse {
-    ok: Option<bool>,
-}
-
 #[derive(Clone, Copy)]
 struct BlobKind {
     label: &'static str,
     signed_url_method: &'static str,
     metadata_method: &'static str,
+    signed_url: fn(SignedUrlResponse) -> Option<String>,
 }
 
 const STEP_LOG: BlobKind = BlobKind {
     label: "step log",
     signed_url_method: "GetStepLogsSignedBlobURL",
     metadata_method: "CreateStepLogsMetadata",
+    signed_url: |response| response.logs_url,
 };
 const JOB_LOG: BlobKind = BlobKind {
     label: "job log",
     signed_url_method: "GetJobLogsSignedBlobURL",
     metadata_method: "CreateJobLogsMetadata",
+    signed_url: |response| response.logs_url,
 };
 const STEP_SUMMARY: BlobKind = BlobKind {
     label: "step summary",
     signed_url_method: "GetStepSummarySignedBlobURL",
     metadata_method: "CreateStepSummaryMetadata",
+    signed_url: |response| response.summary_url,
 };
 
 #[derive(Debug, Clone)]
 pub struct TwirpResultsClient {
     results_service_url: String,
-    token: String,
+    token: Secret<String>,
 }
 
 impl TwirpResultsClient {
@@ -137,7 +116,7 @@ impl TwirpResultsClient {
             validate_known_service_url(results_service_url, "ResultsServiceUrl", KNOWN_HOSTS)?;
         Ok(Self {
             results_service_url: url.as_str().trim_end_matches('/').to_owned(),
-            token: token.into(),
+            token: Secret::new(token.into()),
         })
     }
 
@@ -193,8 +172,8 @@ impl TwirpResultsClient {
             job: job_id,
             step: Some(step_id),
         };
-        let line_count = i64::try_from(lines.len()).ok();
-        self.upload_blob(STEP_LOG, &scope, content, line_count)
+        let line_count = i64::try_from(lines.len()).context("step log line count")?;
+        self.upload_blob(STEP_LOG, &scope, content, Measure::Lines(line_count))
             .await
     }
 
@@ -210,8 +189,13 @@ impl TwirpResultsClient {
             job: job_id,
             step: None,
         };
-        self.upload_blob(JOB_LOG, &scope, content.to_vec(), Some(line_count))
-            .await
+        self.upload_blob(
+            JOB_LOG,
+            &scope,
+            content.to_vec(),
+            Measure::Lines(line_count),
+        )
+        .await
     }
 
     pub async fn upload_step_summary(
@@ -226,8 +210,13 @@ impl TwirpResultsClient {
             job: job_id,
             step: Some(step_id),
         };
-        self.upload_blob(STEP_SUMMARY, &scope, content.as_bytes().to_vec(), None)
-            .await
+        self.upload_blob(
+            STEP_SUMMARY,
+            &scope,
+            content.as_bytes().to_vec(),
+            Measure::Bytes,
+        )
+        .await
     }
 
     async fn upload_blob(
@@ -235,14 +224,20 @@ impl TwirpResultsClient {
         kind: BlobKind,
         scope: &ScopeRequest<'_>,
         content: Vec<u8>,
-        line_count: Option<i64>,
+        measure: Measure,
     ) -> Result<()> {
+        let size = i64::try_from(content.len()).context("blob size")?;
+        let (line_count, size_field) = match measure {
+            Measure::Lines(count) => (Some(count), None),
+            Measure::Bytes => (None, Some(size)),
+        };
         let signed_body = serde_json::to_string(scope)
             .with_context(|| format!("serialize {}", kind.signed_url_method))?;
         let metadata_body = serde_json::to_string(&MetadataRequest {
             scope,
             uploaded_at: now_rfc3339(),
             line_count,
+            size: size_field,
         })
         .with_context(|| format!("serialize {}", kind.metadata_method))?;
         retrying(kind.label, || async {
@@ -255,9 +250,17 @@ impl TwirpResultsClient {
                 .await?;
             let response: SignedUrlResponse = serde_json::from_str(&signed)
                 .with_context(|| format!("parse {}", kind.signed_url_method))?;
-            let blob_url = response
-                .logs_url
-                .or(response.blob_url)
+            if let (Measure::Bytes, Some(limit)) = (measure, response.soft_size_limit)
+                && size > limit
+            {
+                return Err(SoftSizeLimitExceeded {
+                    label: kind.label,
+                    size,
+                    limit,
+                }
+                .into());
+            }
+            let blob_url = (kind.signed_url)(response)
                 .filter(|url| !url.is_empty())
                 .with_context(|| format!("{} returned an empty URL", kind.signed_url_method))?;
             put_blob(&blob_url, &content, kind.label).await?;
@@ -286,7 +289,7 @@ impl TwirpResultsClient {
         let (status, text) = github_json_request(
             Method::POST,
             url,
-            &self.token,
+            self.token.expose(),
             Some(body.to_owned()),
             REQUEST_TIMEOUT,
         )
@@ -334,6 +337,9 @@ where
     for number in 0..ATTEMPTS {
         match attempt().await {
             Ok(()) => return Ok(()),
+            Err(error) if error.is::<SoftSizeLimitExceeded>() => {
+                return Err(error.context(format!("{label} failed")));
+            }
             Err(error) => last_error = format!("{error:#}"),
         }
         if number + 1 < ATTEMPTS {
