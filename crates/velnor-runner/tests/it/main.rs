@@ -6,6 +6,8 @@
 mod expr_format_allocation;
 #[path = "expr/functions.rs"]
 mod expr_functions;
+#[path = "expr/generated_workflow.rs"]
+mod expr_generated_workflow;
 #[path = "expr/hash_files.rs"]
 mod expr_hash_files;
 #[path = "expr/hash_files_depth.rs"]
@@ -52,6 +54,8 @@ mod expr_support;
 mod expr_template;
 #[path = "expr/unsupported.rs"]
 mod expr_unsupported;
+#[path = "expr/vars.rs"]
+mod expr_vars;
 mod job_message;
 mod protocol_acquire_renew;
 mod protocol_broker;

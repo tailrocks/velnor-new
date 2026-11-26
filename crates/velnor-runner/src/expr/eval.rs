@@ -10,7 +10,8 @@ use super::index::evaluate_index;
 use super::node::{BinaryOperator, Node};
 use super::parser::parse;
 use super::value::{
-    ArrayValue, ObjectValue, Value, ordinal_ignore_case_contains, ordinal_ignore_case_starts_with,
+    ArrayValue, ObjectValue, Value, ordinal_ignore_case_contains, ordinal_ignore_case_ends_with,
+    ordinal_ignore_case_starts_with,
 };
 use crate::context_value::{ContextValue, NonFinite};
 
@@ -83,8 +84,9 @@ fn evaluate_function(
 ) -> Result<Value, ExprError> {
     match function {
         Function::Contains => evaluate_contains(args, env),
-        Function::StartsWith => evaluate_starts_with(args, env),
         Function::Format => evaluate_format(node, args, env),
+        Function::StartsWith => evaluate_affix(args, env, ordinal_ignore_case_starts_with),
+        Function::EndsWith => evaluate_affix(args, env, ordinal_ignore_case_ends_with),
         Function::ToJson => {
             let [value] = args else {
                 return Err(arity_error());
@@ -117,6 +119,7 @@ fn evaluate_function(
         Function::Success => Ok(Value::Boolean(env.status == JobStatus::Success)),
         Function::Always => Ok(Value::Boolean(true)),
         Function::Cancelled => Ok(Value::Boolean(env.status == JobStatus::Cancelled)),
+        Function::Failure => Ok(Value::Boolean(env.status == JobStatus::Failure)),
     }
 }
 
@@ -146,7 +149,11 @@ fn evaluate_contains(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
     Ok(Value::Boolean(false))
 }
 
-fn evaluate_starts_with(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError> {
+fn evaluate_affix(
+    args: &[Node],
+    env: &ExprEnv,
+    matches_affix: fn(&str, &str) -> bool,
+) -> Result<Value, ExprError> {
     let [left, right] = args else {
         return Err(arity_error());
     };
@@ -157,10 +164,7 @@ fn evaluate_starts_with(args: &[Node], env: &ExprEnv) -> Result<Value, ExprError
     let right = evaluate_node(right, env)?;
     Ok(Value::Boolean(
         right.is_primitive()
-            && ordinal_ignore_case_starts_with(
-                &left.convert_to_string(),
-                &right.convert_to_string(),
-            ),
+            && matches_affix(&left.convert_to_string(), &right.convert_to_string()),
     ))
 }
 

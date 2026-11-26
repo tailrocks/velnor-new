@@ -61,14 +61,6 @@ impl ParseError {
         Self { kind, message }
     }
 
-    pub(crate) fn unsupported_function(name: &str) -> Self {
-        let kind = ParseErrorKind::UnsupportedFunction;
-        Self {
-            kind,
-            message: format!("{} {name}", kind.description()),
-        }
-    }
-
     pub(crate) fn without_token(kind: ParseErrorKind) -> Self {
         Self {
             kind,
