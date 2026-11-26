@@ -128,7 +128,7 @@ pub enum Command {
     )]
     RevokeToken,
     #[command(
-        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps the per-job store that the generated `Private mbx store` step sets before this one. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps the per-job store that the generated `Private mbx store` step sets before this one. Whenever the variable is set, every event appends the same pod-private MBX_SHIMS_DIR under $RUNNER_TEMP, because mbx names its compiler shims in HOST_CC and a different path recompiles build scripts. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,
     #[command(
