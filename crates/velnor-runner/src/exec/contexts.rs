@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::{ExecError, RunOptions, private, token};
-use crate::context_value::ContextValue;
+use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::ExprEnv;
 use crate::job_message::AgentJobRequestMessage;
 use crate::protocol::http::runner_architecture;
@@ -63,7 +63,7 @@ pub(super) fn set_pair(pairs: &mut Vec<(String, String)>, name: &str, value: &st
 pub(super) fn set_output(outputs: &mut Vec<(String, String)>, name: &str, value: &str) {
     match outputs
         .iter_mut()
-        .find(|(known, _)| known.eq_ignore_ascii_case(name))
+        .find(|(known, _)| ordinal_ignore_case_eq(known, name))
     {
         Some((_, known)) => value.clone_into(known),
         None => outputs.push((name.to_owned(), value.to_owned())),
@@ -214,9 +214,11 @@ pub(super) fn runner_context(
         ),
         ("environment".to_owned(), environment.to_owned()),
     ];
-    if variable(message, STEP_DEBUG_VARIABLE)
-        .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"))
-    {
+    if variable(message, STEP_DEBUG_VARIABLE).is_some_and(|value| {
+        value
+            .trim_matches(|character: char| character.is_whitespace() || character == '\0')
+            .eq_ignore_ascii_case("true")
+    }) {
         pairs.push(("debug".to_owned(), "1".to_owned()));
     }
     Ok(object(&pairs, false))
