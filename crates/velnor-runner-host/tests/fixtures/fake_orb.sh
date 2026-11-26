@@ -21,6 +21,14 @@ call=$(cat "$seen/calls.count" 2>/dev/null || echo 0)
 call=$((call + 1))
 echo "$call" > "$seen/calls.count"
 unlock
+if [ -n "$FAKE_REQUESTS" ]; then
+  lock
+  seq=$(cat "$seen/seq" 2>/dev/null || echo 0)
+  seq=$((seq + 1))
+  echo "$seq" > "$seen/seq"
+  printf '%s - ORB %s %s\n' "$seq" "$call" "$*" >> "$FAKE_REQUESTS"
+  unlock
+fi
 env > "$seen/calls/$call.env"
 trap 'echo $? > "$seen/calls/$call.status"' EXIT
 
