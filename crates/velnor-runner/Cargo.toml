@@ -38,6 +38,7 @@ futures-util = { workspace = true }
 globset = { workspace = true }
 reqwest = { workspace = true }
 ring = { workspace = true }
+regex-automata = { workspace = true }
 rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

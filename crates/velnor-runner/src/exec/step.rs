@@ -11,7 +11,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use super::cancel::terminate;
+use super::cancel::{Groups, terminate};
 use super::commands;
 use super::mask::Masker;
 use super::shell;
@@ -54,6 +54,7 @@ pub(super) struct ProcessSpec<'a> {
 pub(super) struct Limits<'a> {
     pub(super) minutes: Option<f64>,
     pub(super) cancel: Option<&'a JobCancel>,
+    pub(super) groups: &'a Groups,
 }
 
 pub(super) struct ScriptStep {
@@ -61,7 +62,6 @@ pub(super) struct ScriptStep {
     pub(super) shell: String,
     pub(super) dir: PathBuf,
     pub(super) env: Vec<(String, String)>,
-    pub(super) minutes: Option<f64>,
 }
 
 enum Ending {
@@ -74,6 +74,7 @@ fn spawn(spec: &ProcessSpec<'_>) -> std::io::Result<Child> {
     Command::new(spec.program)
         .args(spec.args)
         .current_dir(spec.dir)
+        .env_clear()
         .envs(spec.env.iter().map(|(name, value)| (name, value)))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -117,9 +118,7 @@ async fn supervise(
     limits: &Limits<'_>,
     out: &mut Output<'_>,
 ) -> Result<Ending, ExecError> {
-    let deadline = limits
-        .minutes
-        .and_then(|minutes| Duration::try_from_secs_f64(minutes * 60.0).ok());
+    let deadline = deadline(limits.minutes);
     let timer = async {
         match deadline {
             Some(duration) => tokio::time::sleep(duration).await,
@@ -157,6 +156,18 @@ async fn supervise(
     }
 }
 
+pub(super) fn deadline(minutes: Option<f64>) -> Option<Duration> {
+    minutes.and_then(|minutes| Duration::try_from_secs_f64(minutes * 60.0).ok())
+}
+
+pub(super) fn report_timeout(out: &mut Output<'_>, minutes: Option<f64>) {
+    let minutes = minutes.unwrap_or_default();
+    out.message(&format!(
+        "step {} timed out after {minutes} minutes",
+        out.number
+    ));
+}
+
 fn exit_code(status: ExitStatus) -> i32 {
     status
         .code()
@@ -175,6 +186,7 @@ pub(super) async fn run(
             source,
         )
     })?;
+    limits.groups.track(&child);
     let (sender, mut lines) = mpsc::channel(LINE_BUFFER);
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
@@ -206,11 +218,7 @@ pub(super) async fn run(
             StepResult::Failed
         }
         Ending::TimedOut => {
-            let minutes = limits.minutes.unwrap_or_default();
-            out.message(&format!(
-                "step {} timed out after {minutes} minutes",
-                out.number
-            ));
+            report_timeout(out, limits.minutes);
             StepResult::Failed
         }
         Ending::Cancelled => StepResult::Cancelled,
@@ -220,7 +228,7 @@ pub(super) async fn run(
 pub(super) async fn run_script(
     step: &ScriptStep,
     temp: &Path,
-    cancel: Option<&JobCancel>,
+    limits: &Limits<'_>,
     out: &mut Output<'_>,
 ) -> Result<StepResult, ExecError> {
     if !shell::is_supported(&step.shell) {
@@ -239,11 +247,7 @@ pub(super) async fn run_script(
         dir: &step.dir,
         env: &step.env,
     };
-    let limits = Limits {
-        minutes: step.minutes,
-        cancel,
-    };
-    let result = run(&spec, &limits, out).await;
+    let result = run(&spec, limits, out).await;
     let _ = tokio::fs::remove_file(&path).await;
     result
 }

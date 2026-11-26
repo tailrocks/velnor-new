@@ -4288,6 +4288,7 @@ dependencies = [
  "clap",
  "futures-util",
  "globset",
+ "regex-automata",
  "reqwest",
  "ring",
  "rustix 1.1.6",

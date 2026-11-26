@@ -27,6 +27,7 @@ pub(super) struct Collected {
     pub(super) outputs: Vec<(String, String)>,
     pub(super) path: Vec<String>,
     pub(super) summary: String,
+    pub(super) failures: Vec<String>,
 }
 
 async fn create_file(directory: &Path, kind: &str) -> Result<PathBuf, ExecError> {
@@ -38,11 +39,35 @@ async fn create_file(directory: &Path, kind: &str) -> Result<PathBuf, ExecError>
 }
 
 async fn read_text(path: &Path) -> Result<String, ExecError> {
-    let bytes = tokio::fs::read(path)
-        .await
-        .map_err(|source| ExecError::io(format!("read {}", path.display()), source))?;
+    let read = tokio::fs::read(path).await;
     let _ = tokio::fs::remove_file(path).await;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    match read {
+        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(source) => Err(ExecError::io(format!("read {}", path.display()), source)),
+    }
+}
+
+fn failure(context: &str, error: &ExecError) -> [String; 2] {
+    [
+        format!("Unable to process file command '{context}' successfully."),
+        error.to_string(),
+    ]
+}
+
+async fn pairs(path: &Path, context: &str, failures: &mut Vec<String>) -> Vec<(String, String)> {
+    let text = match read_text(path).await {
+        Ok(text) => text,
+        Err(error) => {
+            failures.extend(failure(context, &error));
+            return Vec::new();
+        }
+    };
+    let (commands, error) = parse(&text);
+    if let Some(error) = error {
+        failures.extend(failure(context, &error));
+    }
+    commands
 }
 
 impl FileCommands {
@@ -71,19 +96,36 @@ impl FileCommands {
         ]
     }
 
-    pub(super) async fn collect(self) -> Result<Collected, ExecError> {
-        Ok(Collected {
-            env: parse(&read_text(&self.env).await?)?,
-            outputs: parse(&read_text(&self.output).await?)?,
-            path: read_text(&self.path)
-                .await?
+    pub(super) async fn collect(self) -> Collected {
+        let mut failures = Vec::new();
+        let env = pairs(&self.env, "env", &mut failures).await;
+        let outputs = pairs(&self.output, "output", &mut failures).await;
+        let path = match read_text(&self.path).await {
+            Ok(text) => text
                 .lines()
                 .map(str::trim)
                 .filter(|line| !line.is_empty())
                 .map(str::to_owned)
                 .collect(),
-            summary: read_text(&self.summary).await?,
-        })
+            Err(error) => {
+                failures.extend(failure("path", &error));
+                Vec::new()
+            }
+        };
+        let summary = match read_text(&self.summary).await {
+            Ok(text) => text,
+            Err(error) => {
+                failures.extend(failure("step_summary", &error));
+                String::new()
+            }
+        };
+        Collected {
+            env,
+            outputs,
+            path,
+            summary,
+            failures,
+        }
     }
 }
 
@@ -174,9 +216,14 @@ fn read_line<'a>(contents: &'a str, index: &mut usize) -> Option<(&'a str, bool)
     }
 }
 
-fn parse(contents: &str) -> Result<Vec<(String, String)>, ExecError> {
-    let contents = contents.strip_prefix('\u{feff}').unwrap_or(contents);
+fn parse(contents: &str) -> (Vec<(String, String)>, Option<ExecError>) {
     let mut commands = Vec::new();
+    let error = parse_into(contents, &mut commands).err();
+    (commands, error)
+}
+
+fn parse_into(contents: &str, commands: &mut Vec<(String, String)>) -> Result<(), ExecError> {
+    let contents = contents.strip_prefix('\u{feff}').unwrap_or(contents);
     let mut index = 0;
     while let Some((line, _)) = read_line(contents, &mut index) {
         if line.is_empty() {
@@ -196,5 +243,5 @@ fn parse(contents: &str) -> Result<Vec<(String, String)>, ExecError> {
             return Err(ExecError::FileCommand(format!("Invalid format '{line}'")));
         }
     }
-    Ok(commands)
+    Ok(())
 }

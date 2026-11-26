@@ -1,60 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use serde_json::Value as Json;
 
+use super::contexts::{
+    EVENT_DIRECTORY, exported_variables, github_context, object, runner_context, secrets_context,
+    set_pair, string, write_event,
+};
+use super::host_env::host_env;
 use super::token;
 use super::{ExecError, RunOptions, StepResult};
 use crate::context_value::ContextValue;
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::AgentJobRequestMessage;
-
-const GITHUB_EXPORTS: [&str; 37] = [
-    "action",
-    "action_path",
-    "action_ref",
-    "action_repository",
-    "actor",
-    "actor_id",
-    "api_url",
-    "base_ref",
-    "env",
-    "event_name",
-    "event_path",
-    "graphql_url",
-    "head_ref",
-    "job",
-    "output",
-    "path",
-    "ref_name",
-    "ref_protected",
-    "ref_type",
-    "ref",
-    "repository",
-    "repository_id",
-    "repository_owner",
-    "repository_owner_id",
-    "retention_days",
-    "run_attempt",
-    "run_id",
-    "run_number",
-    "server_url",
-    "sha",
-    "state",
-    "step_summary",
-    "triggering_actor",
-    "workflow",
-    "workflow_ref",
-    "workflow_sha",
-    "workspace",
-];
-
-const SELF_HOSTED: &str = "self-hosted";
-const EVENT_DIRECTORY: &str = "_github_workflow";
-const GITHUB_TOKEN_VARIABLE: &str = "system.github.token";
-const ACCESS_TOKEN_VARIABLE: &str = "system.accesstoken";
 
 #[derive(Debug, Clone)]
 pub(super) struct StepEntry {
@@ -66,161 +24,12 @@ pub(super) struct StepEntry {
 #[derive(Debug)]
 pub(super) struct JobContext {
     base: ExprEnv,
+    host: Vec<(String, String)>,
     runtime: Vec<(String, String)>,
     env: Vec<(String, String)>,
     defaults: Vec<Json>,
     path_prepend: Vec<String>,
     steps: Vec<(String, StepEntry)>,
-}
-
-pub(super) fn set_pair(pairs: &mut Vec<(String, String)>, name: &str, value: &str) {
-    pairs.retain(|(known, _)| !known.eq_ignore_ascii_case(name));
-    pairs.push((name.to_owned(), value.to_owned()));
-}
-
-fn string(value: &str) -> ContextValue {
-    ContextValue::String(value.to_owned())
-}
-
-fn object(pairs: &[(String, String)]) -> ContextValue {
-    ContextValue::Object {
-        case_sensitive: false,
-        entries: pairs
-            .iter()
-            .map(|(name, value)| (name.clone(), string(value)))
-            .collect(),
-    }
-}
-
-fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a str> {
-    message
-        .variables
-        .iter()
-        .find(|(known, _)| known.eq_ignore_ascii_case(name))
-        .and_then(|(_, variable)| variable.value.as_ref().map(|value| value.expose().as_str()))
-}
-
-fn upsert(entries: &mut Vec<(String, ContextValue)>, name: &str, value: ContextValue) {
-    entries.retain(|(known, _)| !known.eq_ignore_ascii_case(name));
-    entries.push((name.to_owned(), value));
-}
-
-fn secrets_context(message: &AgentJobRequestMessage) -> ContextValue {
-    let pairs: Vec<(String, String)> = message
-        .variables
-        .iter()
-        .filter(|(name, variable)| {
-            variable.is_secret
-                && !name.eq_ignore_ascii_case(ACCESS_TOKEN_VARIABLE)
-                && !name.eq_ignore_ascii_case(GITHUB_TOKEN_VARIABLE)
-        })
-        .filter_map(|(name, variable)| {
-            Some((name.clone(), variable.value.as_ref()?.expose().clone()))
-        })
-        .collect();
-    object(&pairs)
-}
-
-fn github_context(
-    message: &AgentJobRequestMessage,
-    source: Option<&ContextValue>,
-    options: &RunOptions,
-    event_path: &Path,
-) -> ContextValue {
-    let mut entries = source
-        .and_then(ContextValue::entries)
-        .map_or_default(<[_]>::to_vec);
-    if let Some(value) = variable(message, GITHUB_TOKEN_VARIABLE) {
-        upsert(&mut entries, "token", string(value));
-    }
-    if let Some(value) = variable(message, "system.github.job") {
-        upsert(&mut entries, "job", string(value));
-    }
-    upsert(
-        &mut entries,
-        "workspace",
-        string(&options.workspace.to_string_lossy()),
-    );
-    upsert(
-        &mut entries,
-        "event_path",
-        string(&event_path.to_string_lossy()),
-    );
-    ContextValue::Object {
-        case_sensitive: false,
-        entries,
-    }
-}
-
-fn runner_context(message: &AgentJobRequestMessage, options: &RunOptions) -> ContextValue {
-    let arch = if cfg!(target_arch = "aarch64") {
-        "ARM64"
-    } else {
-        "X64"
-    };
-    let environment = variable(message, "system.runnerEnvironment").unwrap_or(SELF_HOSTED);
-    object(&[
-        ("os".to_owned(), "Linux".to_owned()),
-        ("arch".to_owned(), arch.to_owned()),
-        ("name".to_owned(), options.runner_name.clone()),
-        (
-            "temp".to_owned(),
-            options.temp.to_string_lossy().into_owned(),
-        ),
-        (
-            "tool_cache".to_owned(),
-            options
-                .temp
-                .join("tool_cache")
-                .to_string_lossy()
-                .into_owned(),
-        ),
-        ("environment".to_owned(), environment.to_owned()),
-    ])
-}
-
-fn exported_variables(github: &ContextValue, runner: &ContextValue) -> Vec<(String, String)> {
-    let mut variables = vec![("GITHUB_ACTIONS".to_owned(), "true".to_owned())];
-    let github_entries = github.entries().unwrap_or_default();
-    let allowed = github_entries.iter().filter(|(name, _)| {
-        GITHUB_EXPORTS
-            .iter()
-            .any(|key| key.eq_ignore_ascii_case(name))
-    });
-    let runner_entries = runner.entries().unwrap_or_default();
-    let prefixed = allowed
-        .map(|entry| ("GITHUB_", entry))
-        .chain(runner_entries.iter().map(|entry| ("RUNNER_", entry)));
-    for (prefix, (name, value)) in prefixed {
-        let text = match value {
-            ContextValue::String(text) => text.clone(),
-            ContextValue::Bool(flag) => flag.to_string(),
-            _ => continue,
-        };
-        set_pair(
-            &mut variables,
-            &format!("{prefix}{}", name.to_ascii_uppercase()),
-            &text,
-        );
-    }
-    variables
-}
-
-async fn write_event(path: &Path, github: &ContextValue) -> Result<(), ExecError> {
-    let body = github
-        .get("event")
-        .map(ContextValue::to_github_json)
-        .transpose()
-        .map_err(|error| ExecError::Invalid(format!("github.event: {error}")))?
-        .unwrap_or_else(|| "{}".to_owned());
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|source| ExecError::io(format!("create {}", parent.display()), source))?;
-    }
-    tokio::fs::write(path, body)
-        .await
-        .map_err(|source| ExecError::io(format!("write {}", path.display()), source))
 }
 
 impl JobContext {
@@ -262,6 +71,7 @@ impl JobContext {
             }
         }
         Ok(Self {
+            host: host_env(),
             runtime: exported_variables(&github, &runner),
             base,
             env,
@@ -282,7 +92,7 @@ impl JobContext {
         for (name, value) in step_env {
             set_pair(&mut merged, name, value);
         }
-        env.set_context(RootContext::Env, &object(&merged));
+        env.set_context(RootContext::Env, &object(&merged, true));
         env.set_context(RootContext::Steps, &self.steps_value());
         env
     }
@@ -295,7 +105,7 @@ impl JobContext {
                 .iter()
                 .map(|(id, entry)| {
                     let fields = vec![
-                        ("outputs".to_owned(), object(&entry.outputs)),
+                        ("outputs".to_owned(), object(&entry.outputs, false)),
                         ("outcome".to_owned(), string(entry.outcome.status_name())),
                         (
                             "conclusion".to_owned(),
@@ -334,22 +144,21 @@ impl JobContext {
         step_env: &[(String, String)],
         file_variables: &[(&'static str, String)],
     ) -> Vec<(String, String)> {
-        let mut env = self.env.clone();
-        for (name, value) in step_env.iter().chain(&self.runtime) {
+        let mut env = self.host.clone();
+        for (name, value) in self.env.iter().chain(step_env).chain(&self.runtime) {
             set_pair(&mut env, name, value);
         }
         for (name, value) in file_variables {
             set_pair(&mut env, name, value);
         }
-        if std::env::var_os("CI").is_none() && !env.iter().any(|(name, _)| name == "CI") {
+        if !env.iter().any(|(name, _)| name == "CI") {
             set_pair(&mut env, "CI", "true");
         }
         if !self.path_prepend.is_empty() {
             let base = env
                 .iter()
                 .find(|(name, _)| name == "PATH")
-                .map(|(_, value)| value.clone())
-                .or_else(|| std::env::var("PATH").ok());
+                .map(|(_, value)| value.clone());
             let mut entries = self.path_prepend.clone();
             entries.extend(base);
             set_pair(&mut env, "PATH", &entries.join(":"));

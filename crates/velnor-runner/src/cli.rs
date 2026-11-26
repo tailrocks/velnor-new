@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
+use tokio::signal::unix::{SignalKind, signal};
 use uuid::Uuid;
 
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job};
@@ -34,9 +35,17 @@ pub enum Command {
 pub struct ExecArgs {
     #[arg(long, value_name = "FILE", help = "JSON file with the job message")]
     pub job: PathBuf,
-    #[arg(long, value_name = "DIR", help = "Workspace directory of the job")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Workspace directory of the job (default: a fresh directory removed after the run)"
+    )]
     pub workspace: Option<PathBuf>,
-    #[arg(long, value_name = "DIR", help = "Runner temp directory of the job")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Runner temp directory of the job (default: a fresh directory removed after the run)"
+    )]
     pub temp: Option<PathBuf>,
 }
 
@@ -44,35 +53,64 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     std::path::absolute(path).with_context(|| format!("resolve {}", path.display()))
 }
 
-fn options(args: &ExecArgs) -> Result<RunOptions> {
+struct Scratch(Option<PathBuf>);
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        if let Some(root) = &self.0
+            && let Err(error) = std::fs::remove_dir_all(root)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            eprintln!("warning: remove {}: {error}", root.display());
+        }
+    }
+}
+
+fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
+    let root = std::env::temp_dir().join(format!("velnor-exec-{}", Uuid::new_v4()));
+    let scratch = Scratch((args.workspace.is_none() || args.temp.is_none()).then(|| root.clone()));
     let workspace = match &args.workspace {
         Some(workspace) => absolute(workspace)?,
-        None => std::env::temp_dir()
-            .join(format!("velnor-exec-{}", Uuid::new_v4()))
-            .join("workspace"),
+        None => root.join("workspace"),
     };
     let temp = match &args.temp {
         Some(temp) => absolute(temp)?,
-        None => workspace.with_file_name("temp"),
+        None => root.join("temp"),
     };
-    Ok(RunOptions {
+    let options = RunOptions {
         workspace,
         temp,
         runner_name: "velnor-exec".to_owned(),
-    })
+    };
+    Ok((options, scratch))
+}
+
+fn cancel_on_signal() -> Result<JobCancel> {
+    let mut terminate = signal(SignalKind::terminate()).context("listen for SIGTERM")?;
+    let mut interrupt = signal(SignalKind::interrupt()).context("listen for SIGINT")?;
+    let cancel = JobCancel::new();
+    let trigger = cancel.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = terminate.recv() => {}
+            _ = interrupt.recv() => {}
+        }
+        trigger.cancel();
+    });
+    Ok(cancel)
 }
 
 async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     let body = std::fs::read_to_string(&args.job)
         .with_context(|| format!("read {}", args.job.display()))?;
     let message = AgentJobRequestMessage::parse_json(&body)?;
-    let options = options(args)?;
+    let (options, _scratch) = options(args)?;
     let run = run_job(
         &message,
         &options,
         &AdapterRegistry::empty(),
         &mut StdoutSink,
-        JobCancel::new(),
+        cancel_on_signal()?,
     )
     .await;
     Ok(match run.result {

@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use rustix::process::{Pid, Signal, kill_process_group};
+use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
 use tokio::process::Child;
 use tokio::sync::watch;
 
@@ -49,13 +49,36 @@ impl Default for JobCancel {
     }
 }
 
-fn signal_group(child: &Child, signal: Signal) {
-    let pid = child
+fn group_of(child: &Child) -> Option<Pid> {
+    child
         .id()
         .and_then(|id| i32::try_from(id).ok())
-        .and_then(Pid::from_raw);
-    if let Some(pid) = pid {
+        .and_then(Pid::from_raw)
+}
+
+fn signal_group(child: &Child, signal: Signal) {
+    if let Some(pid) = group_of(child) {
         let _ = kill_process_group(pid, signal);
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Groups {
+    live: Mutex<Vec<Pid>>,
+}
+
+impl Groups {
+    pub(super) fn track(&self, child: &Child) {
+        let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
+        live.retain(|group| test_kill_process_group(*group).is_ok());
+        live.extend(group_of(child));
+    }
+
+    pub(super) fn kill_all(&self) {
+        let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
+        for group in live.drain(..) {
+            let _ = kill_process_group(group, Signal::KILL);
+        }
     }
 }
 
