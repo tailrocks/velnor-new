@@ -244,9 +244,14 @@ fn token_cases() -> Vec<(&'static str, Scripted, TokenOutcome)> {
             TokenOutcome::Failed("invalid_grant"),
         ),
         (
-            "an HTTP 400 never establishes credentials, even with an access token",
+            "an HTTP 400 carrying an access token is refused, deviating from upstream",
             Scripted::Json(400, json!({"access_token": "sentinel-access-token"})),
             TokenOutcome::Failed("HTTP status 400"),
+        ),
+        (
+            "an HTTP 201 carrying an access token is refused",
+            Scripted::Json(201, json!({"access_token": "sentinel-access-token"})),
+            TokenOutcome::Failed("HTTP status 201"),
         ),
         (
             "server error",

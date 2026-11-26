@@ -43,7 +43,7 @@ impl AcquireJobSkipReason {
 #[derive(Debug)]
 pub struct AcquiredJobPayload {
     pub raw: Secret<Value>,
-    pub message: Option<AgentJobRequestMessage>,
+    pub message: AgentJobRequestMessage,
 }
 
 #[derive(Debug)]
@@ -156,10 +156,10 @@ fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, s
     if !raw.is_object() {
         return Err(serde::de::Error::custom("response is not a JSON object"));
     }
-    let message = serde_json::from_str::<AgentJobRequestMessage>(response.body.expose()).ok();
+    let message = serde_json::from_str::<AgentJobRequestMessage>(response.body.expose())?;
     Ok(acquired(Secret::new(raw), message))
 }
 
-fn acquired(raw: Secret<Value>, message: Option<AgentJobRequestMessage>) -> AcquireJobOutcome {
+fn acquired(raw: Secret<Value>, message: AgentJobRequestMessage) -> AcquireJobOutcome {
     AcquireJobOutcome::Acquired(Box::new(AcquiredJobPayload { raw, message }))
 }

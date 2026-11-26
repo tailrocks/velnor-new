@@ -1179,6 +1179,22 @@
               "features": [
                 "v4"
               ]
+            },
+            {
+              "name": "tokio",
+              "kind": "dev",
+              "manifest": null,
+              "features": [
+                "rt-multi-thread",
+                "macros",
+                "time",
+                "io-util",
+                "sync",
+                "net",
+                "process",
+                "fs",
+                "test-util"
+              ]
             }
           ],
           "targets": [
@@ -2216,7 +2232,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "c3dcea480f90272849ece114d29f06c01413519a7fbba1a165b4e934890c5144",
+    "crates/velnor-runner/Cargo.toml": "d0a8b7801606a24d53ee3d2d31da4488d267a959701ce301a27acd74ecba60c1",
     "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"

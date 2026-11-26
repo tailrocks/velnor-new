@@ -135,8 +135,9 @@ async fn feed_stream_handshake_authenticates_and_routes_by_plan_and_job() -> Res
     Ok(())
 }
 
-#[tokio::test]
-async fn feed_stream_connect_gives_up_when_the_handshake_stalls() -> Result<()> {
+#[tokio::test(start_paused = true)]
+async fn feed_stream_connect_gives_up_after_thirty_seconds_when_the_handshake_stalls() -> Result<()>
+{
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let held = tokio::spawn(async move {
@@ -144,16 +145,26 @@ async fn feed_stream_connect_gives_up_when_the_handshake_stalls() -> Result<()> 
         std::future::pending::<()>().await;
         accepted
     });
+    let client = FeedStreamClient::new(&format!("http://{address}/feed"), TOKEN)?;
 
-    let client = FeedStreamClient::new(&format!("http://{address}/feed"), TOKEN)?
-        .with_connect_timeout(Duration::from_millis(200));
-    let error = tokio::time::timeout(Duration::from_secs(10), client.connect())
+    let started = tokio::time::Instant::now();
+    let error = client
+        .connect()
         .await
-        .context("connect must give up on its own")?
         .err()
         .context("a stalled handshake must fail")?;
+    let elapsed = started.elapsed();
 
-    assert!(format!("{error:#}").contains("timed out"), "{error:#}");
+    assert!(
+        error
+            .downcast_ref::<tokio::time::error::Elapsed>()
+            .is_some(),
+        "{error:#}"
+    );
+    assert!(
+        elapsed >= Duration::from_secs(30) && elapsed < Duration::from_secs(31),
+        "{elapsed:?}"
+    );
     held.abort();
     Ok(())
 }

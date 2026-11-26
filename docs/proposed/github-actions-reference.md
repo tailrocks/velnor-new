@@ -77,6 +77,8 @@ upstream mechanism the code copies.
 | A broker error is typed only when its body has `source` equal to `actions-broker-listener`. Poll types `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned` and `RunnerSessionInvalid`. Acknowledge types `AcknowledgeJobNotFound` and `RunnerNotFound`. Every other broker error is untyped. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
 | Session creation maps 403 to access denied and 409 to a session conflict, and does not retry. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 157-167 |
 | The worker applies only Regex mask hints. It logs and skips every other type, including Variable, and the job still runs. A `type` that is not an integer, a numeric string or a known name fails the job message. | `src/Runner.Worker/Worker.cs` lines 176-190; `src/Sdk/WebApi/WebApi/VssJsonMediaTypeFormatter.cs` line 87; `src/Runner.Sdk/Util/StringUtil.cs` lines 12-18, 35-38 |
+| A feed stream WebSocket connect is cancelled after 30 seconds. | `src/Runner.Common/JobServer.cs` lines 207-208 |
+| A blob upload sets `x-ms-blob-type: BlockBlob` only when the blob storage type is Azure. | `src/Sdk/WebApi/WebApi/ResultsHttpClient.cs` lines 268-271 |
 
 Deliberate deviations:
 
@@ -104,6 +106,24 @@ Deliberate deviations:
   raises the unauthorized exception only when that fails
   (`src/Sdk/Common/Common/RawHttpMessageHandler.cs` lines 175-217). The crate
   has no token provider, so refreshing the token belongs to its caller.
+- An acquire whose 2xx response has no JSON object (an empty body, a
+  non-JSON body, `null` or an array) or whose JSON object fails the typed
+  `AgentJobRequestMessage` parse is a transient failure, and is retried under
+  the acquire policy. Upstream's `ReadContentAsAsync` returns `null` for a
+  body that is not JSON or does not lex as JSON, so `GetJobMessageAsync`
+  returns `null` and `JobDispatcher.Run` fails on its first dereference of the
+  message. Upstream's `RetryRequest` retries any other exception, including a
+  parse error (`src/Sdk/WebApi/WebApi/RawHttpClientBase.cs` lines 261-285;
+  `src/Runner.Common/RunServer.cs` lines 63-71; `src/Runner.Common/RunnerService.cs`
+  lines 71-110; `src/Runner.Listener/JobDispatcher.cs` lines 89-91).
+- An OAuth token exchange yields a token only for HTTP 200. Upstream treats a
+  200, or a 400 with a JSON body, as a valid response and issues a token
+  whenever `access_token` is non-empty, so a 400 that carries an access token
+  succeeds there. Velnor refuses that response, and refuses a 201 and every
+  other 2xx (`src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenHttpClient.cs` lines
+  99-102, `IsValidTokenResponse`; `src/Sdk/WebApi/WebApi/OAuth/VssOAuthTokenProvider.cs`
+  lines 138-170, `OnGetTokenAsync`). A 400 carrying `error` still maps to the
+  token error, and `invalid_client` still means the registration is gone.
 - Step-update and blob uploads to the results service make 3 attempts with a
   200 ms step between them. This is Velnor's policy; it is not copied from
   upstream.

@@ -46,7 +46,6 @@ pub struct FeedStreamClient {
     url: Url,
     token: Secret<String>,
     route: Option<(String, String)>,
-    connect_timeout: Duration,
 }
 
 impl FeedStreamClient {
@@ -55,14 +54,7 @@ impl FeedStreamClient {
             url: validate_feed_url(feed_stream_url)?,
             token: Secret::new(token.into()),
             route: None,
-            connect_timeout: CONNECT_TIMEOUT,
         })
-    }
-
-    #[must_use]
-    pub const fn with_connect_timeout(mut self, timeout: Duration) -> Self {
-        self.connect_timeout = timeout;
-        self
     }
 
     #[must_use]
@@ -98,7 +90,7 @@ impl FeedStreamClient {
                 .context("encode feed stream authorization")?,
         );
         headers.insert(USER_AGENT, HeaderValue::from_static(RUNNER_USER_AGENT));
-        let (socket, _) = tokio::time::timeout(self.connect_timeout, connect_async(request))
+        let (socket, _) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request))
             .await
             .context("connect to feed stream WebSocket timed out")?
             .context("connect to feed stream WebSocket")?;

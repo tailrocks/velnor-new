@@ -108,7 +108,7 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
     if body.len() > OAUTH_MAX_RESPONSE_BYTES {
         bail!("OAuth token response exceeded {OAUTH_MAX_RESPONSE_BYTES} bytes");
     }
-    if !(200..300).contains(&status) && status != 400 {
+    if status != 200 && status != 400 {
         bail!("OAuth token request failed: HTTP status {status}");
     }
     let response: OAuthTokenResponse =
@@ -120,7 +120,7 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
         }
         bail!("OAuth token request failed: error={error}, description={description}");
     }
-    if !(200..300).contains(&status) {
+    if status != 200 {
         bail!("OAuth token request failed: HTTP status {status}");
     }
     let token = response

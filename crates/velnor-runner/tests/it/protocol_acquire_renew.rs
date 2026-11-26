@@ -86,6 +86,10 @@ async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
             "a 200 with a JSON null",
             vec![Scripted::Json(200, json!(null))],
         ),
+        (
+            "a 200 JSON object that fails the typed parse",
+            vec![Scripted::Json(200, json!({"steps": "not-a-list"}))],
+        ),
     ] {
         server.reset()?;
         server.respond("POST", ACQUIRE_PATH, scripted(script))?;
