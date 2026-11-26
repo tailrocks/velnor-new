@@ -8,7 +8,8 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use super::{
-    GUEST_RUNNER, GUEST_STORE, HOST_DIRECTORIES, JIT_DIRECTORY, MACHINE_NAME, RustRunnerLauncher,
+    GUEST_RUNNER, GUEST_STORE, HOST_DIRECTORIES, JIT_DIRECTORY, MAC_MOUNT, MACHINE_ARCH,
+    MACHINE_DISTRO, MACHINE_NAME, RustRunnerLauncher,
 };
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -45,7 +46,7 @@ impl RustRunnerLauncher {
 
     fn create_machine(&self) -> Result<(), HostError> {
         let mut command = self.orb();
-        command.args(["create", "-a", "arm64", "ubuntu", MACHINE_NAME]);
+        command.args(["create", "-a", MACHINE_ARCH, MACHINE_DISTRO, MACHINE_NAME]);
         succeeds(&mut command, RustRunnerFailure::MachineCreate)
     }
 
@@ -76,7 +77,7 @@ impl RustRunnerLauncher {
     }
 
     fn link_store(&self) -> Result<(), HostError> {
-        let target = format!("/mnt/mac{}", self.host_store.display());
+        let target = format!("{MAC_MOUNT}{}", self.host_store.display());
         let mut command = self.as_root();
         command.args(["ln", "-sfn", &target, GUEST_STORE]);
         succeeds(&mut command, RustRunnerFailure::MachineLink)

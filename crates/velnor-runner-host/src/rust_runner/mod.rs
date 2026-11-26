@@ -20,6 +20,9 @@ pub(crate) use controller::{heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
+const MAC_MOUNT: &str = "/mnt/mac";
+const MACHINE_ARCH: &str = "arm64";
+const MACHINE_DISTRO: &str = "ubuntu";
 const GUEST_STORE: &str = "/var/lib/velnor";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
