@@ -59,6 +59,18 @@ pub enum RustRunnerFailure {
 
     #[error("the host controller cannot start runners in rust-runner launch mode yet")]
     ControllerUnavailable,
+
+    #[error("the jit directory of the host store is readable by other users")]
+    JitDirectoryAccessible,
+
+    #[error("the processes of the velnor machine could not be listed")]
+    ProcessList,
+
+    #[error("processes of the velnor machine could not be killed")]
+    ProcessKill,
+
+    #[error("runner processes of the velnor machine survived a kill")]
+    ProcessesSurvive,
 }
 
 const ERROR_DETAIL_BYTES: u8 = 64;
