@@ -93,7 +93,7 @@ fn exec_unsupported_shell_fails_job() -> Result<()> {
 fn exec_unsupported_expression_function_fails_step() -> Result<()> {
     let ran = run_fixture("unsupported-expression", &Scratch::new()?)?;
     assert!(
-        ran.has_line("unsupported expression function join"),
+        ran.has_line("unsupported expression function fromJSON"),
         "{}",
         ran.stdout
     );

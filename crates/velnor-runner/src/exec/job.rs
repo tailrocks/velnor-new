@@ -3,20 +3,23 @@
 
 use std::collections::BTreeMap;
 
-use super::adapter::{AdapterRegistry, StepContext};
-use super::context::{JobContext, StepEntry, set_pair};
+use super::adapter::{AdapterCall, AdapterRegistry, invoke};
+use super::cancel::Groups;
+use super::context::{JobContext, StepEntry};
+use super::contexts::set_pair;
 use super::env_files::{Collected, FileCommands, save_summary};
 use super::mask;
 use super::preflight::{problems, reference};
 use super::shell;
 use super::sink::LogSink;
-use super::step::{Output, ScriptStep, run_script};
+use super::step::{Limits, Output, ScriptStep, run_script};
+use super::step_info::{context_id, continue_on_error, step_name};
 use super::token;
 use super::{
     Annotation, AnnotationLevel, ExecError, JobCancel, JobResult, JobRun, RunOptions, StepRecord,
     StepResult,
 };
-use crate::expr::{ExprEnv, JobStatus, evaluate_condition, evaluate_template};
+use crate::expr::{ExprEnv, JobStatus, evaluate_condition};
 use crate::job_message::{ActionStep, AgentJobRequestMessage};
 
 struct Job<'a> {
@@ -24,6 +27,7 @@ struct Job<'a> {
     options: &'a RunOptions,
     adapters: &'a AdapterRegistry,
     cancel: JobCancel,
+    groups: Groups,
     ctx: JobContext,
     status: JobStatus,
 }
@@ -32,39 +36,6 @@ struct Executed {
     result: StepResult,
     outputs: Vec<(String, String)>,
     summary: Option<std::path::PathBuf>,
-}
-
-fn context_id(step: &ActionStep) -> Option<&str> {
-    step.context_name
-        .as_deref()
-        .filter(|name| !name.is_empty() && !name.starts_with("__"))
-}
-
-fn step_name(step: &ActionStep, env: &ExprEnv) -> String {
-    step.display_name_template()
-        .and_then(|template| evaluate_template(&template, env).ok())
-        .filter(|name| !name.is_empty())
-        .or_else(|| {
-            step.script_text()
-                .and_then(|script| script.lines().next())
-                .map(|line| format!("Run {line}"))
-        })
-        .or_else(|| reference(step))
-        .or_else(|| step.name.clone())
-        .unwrap_or_else(|| "step".to_owned())
-}
-
-fn continue_on_error(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_>) -> bool {
-    let Some(token) = step.continue_on_error.as_ref() else {
-        return false;
-    };
-    match token::scalar(token, env) {
-        Ok(value) => value.eq_ignore_ascii_case("true"),
-        Err(error) => {
-            out.message(&error.to_string());
-            false
-        }
-    }
 }
 
 fn reject(out: &mut Output<'_>, run: &mut JobRun, lines: &[String]) {
@@ -109,6 +80,7 @@ pub async fn run_job(
                     options,
                     adapters,
                     cancel,
+                    groups: Groups::default(),
                     ctx,
                     status: JobStatus::Success,
                 };
@@ -131,6 +103,7 @@ impl Job<'_> {
             run.steps.push(record);
         }
         self.collect_outputs(out, run);
+        self.groups.kill_all();
         run.result = match self.status {
             JobStatus::Success => JobResult::Succeeded,
             JobStatus::Failure => JobResult::Failed,
@@ -142,13 +115,20 @@ impl Job<'_> {
         let Some(token) = self.message.job_outputs.as_ref() else {
             return;
         };
+        out.number = 0;
         let env = self.ctx.expr_env(self.status, &[]);
         match token::mapping(token, &env) {
             Ok(outputs) => {
-                run.outputs = outputs
-                    .into_iter()
-                    .filter(|(_, value)| !out.masker.reveals(value))
-                    .collect();
+                for (name, value) in outputs.into_iter().filter(|(_, value)| !value.is_empty()) {
+                    if out.masker.reveals(&value) {
+                        let warning = format!("Skip output '{name}' since it may contain secret.");
+                        out.message(&warning);
+                        out.annotations
+                            .push(Annotation::new(AnnotationLevel::Warning, warning));
+                    } else {
+                        run.outputs.insert(name, value);
+                    }
+                }
             }
             Err(error) => {
                 out.message(&error.to_string());
@@ -255,11 +235,16 @@ impl Job<'_> {
         let cancel = (!self.cancel.is_cancelled()).then(|| self.cancel.clone());
         let files = FileCommands::create(&self.options.temp).await?;
         let process_env = self.ctx.process_env(&step_env, &files.variables());
+        let limits = Limits {
+            minutes,
+            cancel: cancel.as_ref(),
+            groups: &self.groups,
+        };
         let ran = if let Some(reference) = reference(step) {
-            self.run_adapter(step, &reference, &env, &process_env, cancel, out)
+            self.run_adapter(step, &reference, &env, &process_env, &limits, out)
                 .await
         } else {
-            self.run_script_step(step, &env, process_env, minutes, cancel.as_ref(), out)
+            self.run_script_step(step, &env, process_env, &limits, out)
                 .await
         };
         let collected = files.collect().await;
@@ -272,8 +257,7 @@ impl Job<'_> {
         step: &ActionStep,
         env: &ExprEnv,
         process_env: Vec<(String, String)>,
-        minutes: Option<f64>,
-        cancel: Option<&JobCancel>,
+        limits: &Limits<'_>,
         out: &mut Output<'_>,
     ) -> Result<(StepResult, BTreeMap<String, String>), ExecError> {
         let script = ScriptStep {
@@ -281,9 +265,8 @@ impl Job<'_> {
             shell: shell::resolve(step, &self.ctx, env)?,
             dir: self.working_directory(step, env)?,
             env: process_env,
-            minutes,
         };
-        let result = run_script(&script, &self.options.temp, cancel, out).await?;
+        let result = run_script(&script, &self.options.temp, limits, out).await?;
         Ok((result, BTreeMap::new()))
     }
 
@@ -315,7 +298,7 @@ impl Job<'_> {
         reference: &str,
         env: &ExprEnv,
         process_env: &[(String, String)],
-        cancel: Option<JobCancel>,
+        limits: &Limits<'_>,
         out: &mut Output<'_>,
     ) -> Result<(StepResult, BTreeMap<String, String>), ExecError> {
         let adapter = self
@@ -326,39 +309,34 @@ impl Job<'_> {
             Some(inputs) => token::mapping(inputs, env)?.into_iter().collect(),
             None => BTreeMap::new(),
         };
-        let mut log = |text: &str| out.line(text);
-        let mut context = StepContext {
+        let call = AdapterCall {
             reference: reference.to_owned(),
             inputs,
             env: process_env.iter().cloned().collect(),
             workspace: &self.options.workspace,
             temp: &self.options.temp,
-            cancel,
-            outputs: BTreeMap::new(),
-            log: &mut log,
+            cancel: limits.cancel.cloned(),
+            minutes: limits.minutes,
         };
-        let result = adapter.run(&mut context).await?;
-        Ok((result, context.outputs))
+        invoke(adapter, call, out).await
     }
 
     async fn finish(
         &mut self,
         result: StepResult,
         adapter_outputs: BTreeMap<String, String>,
-        collected: Result<Collected, ExecError>,
+        collected: Collected,
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
-        let collected = match collected {
-            Ok(collected) => collected,
-            Err(error) => {
-                out.message(&error.to_string());
-                return Ok(Executed {
-                    result: StepResult::Failed,
-                    outputs: adapter_outputs.into_iter().collect(),
-                    summary: None,
-                });
-            }
-        };
+        let mut result = result;
+        if !collected.failures.is_empty() && result == StepResult::Succeeded {
+            result = StepResult::Failed;
+        }
+        for failure in &collected.failures {
+            out.message(failure);
+            out.annotations
+                .push(Annotation::new(AnnotationLevel::Error, failure.clone()));
+        }
         let mut writes = Vec::new();
         for (name, value) in collected.env {
             if name.eq_ignore_ascii_case("NODE_OPTIONS") {

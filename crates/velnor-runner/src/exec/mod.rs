@@ -5,13 +5,16 @@ mod adapter;
 mod cancel;
 mod commands;
 mod context;
+mod contexts;
 mod env_files;
+mod host_env;
 mod job;
 mod mask;
 mod preflight;
 mod shell;
 mod sink;
 mod step;
+mod step_info;
 mod token;
 
 use std::collections::BTreeMap;

@@ -40,10 +40,14 @@ fn github_context_exports_env_and_event_file() -> Result<()> {
         "{}",
         ran.stdout
     );
-    assert!(
-        ran.has_line("{\"pull_request\":{\"number\":7}}"),
-        "{}",
-        ran.stdout
+    let event = ran
+        .lines()
+        .into_iter()
+        .find(|line| line.starts_with('{'))
+        .context("the printed event.json")?;
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(event)?,
+        serde_json::json!({"pull_request": {"number": 7}})
     );
     let workspace = scratch.workspace();
     let expected = format!(

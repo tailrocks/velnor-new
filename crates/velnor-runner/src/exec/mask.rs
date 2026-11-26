@@ -6,14 +6,17 @@ use std::borrow::Cow;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use regex_automata::meta::Regex;
 
-use crate::job_message::AgentJobRequestMessage;
+use crate::job_message::{AgentJobRequestMessage, MaskType};
 
 const MASK: &str = "***";
+const BASE64_SHIFTS: [usize; 3] = [0, 1, 2];
 
 #[derive(Debug, Default, Clone)]
 pub(super) struct Masker {
     values: Vec<String>,
+    patterns: Vec<Regex>,
 }
 
 impl Masker {
@@ -25,7 +28,18 @@ impl Masker {
         let forms: Vec<&str> = std::iter::once(value).chain(lines).collect();
         for form in forms {
             self.insert(form);
-            self.insert(&STANDARD.encode(form));
+            for shift in BASE64_SHIFTS {
+                let bytes = form.as_bytes();
+                let shifted = bytes.get(shift..).filter(|rest| !rest.is_empty());
+                self.insert(&STANDARD.encode(shifted.unwrap_or(bytes)));
+            }
+        }
+    }
+
+    pub(super) fn add_pattern(&mut self, pattern: &str) {
+        self.add(pattern);
+        if let Ok(regex) = Regex::new(pattern) {
+            self.patterns.push(regex);
         }
     }
 
@@ -50,6 +64,9 @@ impl Masker {
                 masked = Cow::Owned(masked.replace(value.as_str(), MASK));
             }
         }
+        for regex in &self.patterns {
+            masked = replace_matches(masked, regex);
+        }
         masked
     }
 
@@ -58,11 +75,34 @@ impl Masker {
     }
 }
 
+fn replace_matches<'a>(text: Cow<'a, str>, regex: &Regex) -> Cow<'a, str> {
+    let mut replaced = String::new();
+    let mut last = 0;
+    for found in regex
+        .find_iter(text.as_ref())
+        .filter(|found| !found.is_empty())
+    {
+        replaced.push_str(&text[last..found.start()]);
+        replaced.push_str(MASK);
+        last = found.end();
+    }
+    if last == 0 {
+        return text;
+    }
+    replaced.push_str(&text[last..]);
+    Cow::Owned(replaced)
+}
+
 pub(super) fn for_job(message: &AgentJobRequestMessage) -> Masker {
     let mut masker = Masker::default();
     for hint in &message.mask {
-        if let Some(value) = &hint.value {
-            masker.add(value.expose());
+        let Some(value) = hint.value.as_ref().map(|value| value.expose().as_str()) else {
+            continue;
+        };
+        if hint.kind == Some(MaskType::Regex) {
+            masker.add_pattern(value);
+        } else {
+            masker.add(value);
         }
     }
     for (name, variable) in &message.variables {

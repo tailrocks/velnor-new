@@ -3,6 +3,8 @@
 
 #[path = "exec_cancel.rs"]
 mod cancel;
+#[path = "exec_builder.rs"]
+mod exec_builder;
 #[path = "exec_cli.rs"]
 mod exec_cli;
 #[path = "exec_support.rs"]
@@ -66,6 +68,8 @@ mod expr_unsupported;
 mod expr_vars;
 #[path = "exec_extra.rs"]
 mod extra;
+#[path = "exec_hardening.rs"]
+mod hardening;
 mod job_message;
 mod protocol_acquire_renew;
 mod protocol_broker;
@@ -76,4 +80,6 @@ mod protocol_oauth;
 mod protocol_results;
 mod protocol_timeline;
 mod redaction;
+#[path = "exec_semantics.rs"]
+mod semantics;
 mod support;

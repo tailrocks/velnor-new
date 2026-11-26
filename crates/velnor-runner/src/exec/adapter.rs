@@ -6,6 +6,7 @@ use std::path::Path;
 
 use futures_util::future::BoxFuture;
 
+use super::step::{Output, deadline, report_timeout};
 use super::{ExecError, JobCancel, StepResult};
 
 pub type StepFuture<'a> = BoxFuture<'a, Result<StepResult, ExecError>>;
@@ -77,4 +78,46 @@ impl StepContext<'_> {
     pub fn set_output(&mut self, name: impl Into<String>, value: impl Into<String>) {
         self.outputs.insert(name.into(), value.into());
     }
+}
+
+pub(super) struct AdapterCall<'a> {
+    pub(super) reference: String,
+    pub(super) inputs: BTreeMap<String, String>,
+    pub(super) env: BTreeMap<String, String>,
+    pub(super) workspace: &'a Path,
+    pub(super) temp: &'a Path,
+    pub(super) cancel: Option<JobCancel>,
+    pub(super) minutes: Option<f64>,
+}
+
+pub(super) async fn invoke(
+    adapter: &dyn StepAdapter,
+    call: AdapterCall<'_>,
+    out: &mut Output<'_>,
+) -> Result<(StepResult, BTreeMap<String, String>), ExecError> {
+    let minutes = call.minutes;
+    let mut log = |text: &str| out.line(text);
+    let mut context = StepContext {
+        reference: call.reference,
+        inputs: call.inputs,
+        env: call.env,
+        workspace: call.workspace,
+        temp: call.temp,
+        cancel: call.cancel,
+        outputs: BTreeMap::new(),
+        log: &mut log,
+    };
+    let ran = match deadline(minutes) {
+        Some(limit) => tokio::time::timeout(limit, adapter.run(&mut context))
+            .await
+            .ok(),
+        None => Some(adapter.run(&mut context).await),
+    };
+    let outputs = std::mem::take(&mut context.outputs);
+    drop(context);
+    let Some(result) = ran else {
+        report_timeout(out, minutes);
+        return Ok((StepResult::Failed, outputs));
+    };
+    Ok((result?, outputs))
 }
