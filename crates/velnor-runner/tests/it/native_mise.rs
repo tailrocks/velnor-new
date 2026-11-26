@@ -180,6 +180,33 @@ fn mise_action_keeps_an_inherited_entry_that_mise_promotes() -> Result<()> {
 }
 
 #[test]
+fn mise_action_promotes_an_entry_mise_drops_from_its_inherited_position() -> Result<()> {
+    let world = World::new()?;
+    let binary = world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+    let ran = world.run(
+        &job,
+        &[
+            ("PATH", "/a:/b:/usr/bin:/bin"),
+            ("MISE_DOUBLE_PROMOTE", "/b"),
+            ("MISE_DOUBLE_DROP_PROMOTED", "1"),
+        ],
+    )?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    let expected = format!(
+        "path={}/tool-bin:/b:{}/tools/data/shims:{}:/a:/b:/usr/bin:/bin",
+        world.binary_dir().display(),
+        world.store.display(),
+        binary
+            .parent()
+            .map_or_else(String::new, |dir| dir.display().to_string())
+    );
+    assert!(ran.has_line(&expected), "{expected}\n{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
 fn mise_action_publishes_cache_hit_false_when_caching_is_disabled() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;

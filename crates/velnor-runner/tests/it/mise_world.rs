@@ -12,6 +12,17 @@ use sha2::{Digest, Sha256};
 
 use crate::exec_support::{Ran, Scratch};
 
+const HERMETIC_UNSET: [&str; 9] = [
+    "XDG_CONFIG_HOME",
+    "MISE_CONFIG_DIR",
+    "MISE_SYSTEM_DIR",
+    "MISE_CONFIG_FILE",
+    "MISE_GLOBAL_CONFIG_FILE",
+    "MISE_SYSTEM_CONFIG_FILE",
+    "MISE_OVERRIDE_CONFIG_FILENAMES",
+    "MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES",
+    "MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS",
+];
 pub(crate) const VERSION: &str = "2026.11.10";
 pub(crate) const SHA_PLACEHOLDER: &str = "__SETUP_VELNOR_SHA__";
 pub(crate) const CONFIG: &str = "[settings]\nlockfile = true\n\n[tools]\nnode = \"26.13.1\"\n";
@@ -99,6 +110,14 @@ impl World {
 
     pub(crate) fn workspace(&self) -> PathBuf {
         self.scratch.workspace()
+    }
+
+    pub(crate) fn home(&self) -> PathBuf {
+        self.root.join("home")
+    }
+
+    pub(crate) fn system_config(&self) -> PathBuf {
+        self.root.join("system")
     }
 
     pub(crate) fn temp(&self) -> PathBuf {
@@ -255,6 +274,16 @@ impl World {
         Ok(patched)
     }
 
+    pub(crate) fn with_final_condition(&self, job: &Path, condition: &str) -> Result<PathBuf> {
+        let mut message: Value =
+            serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
+                .context("parse the job fixture")?;
+        message["Steps"][1]["Condition"] = condition.into();
+        let patched = self.root.join("with-condition.json");
+        std::fs::write(&patched, serde_json::to_vec(&message)?).context("write the job")?;
+        Ok(patched)
+    }
+
     pub(crate) fn with_leading_script(&self, job: &Path, script: &str) -> Result<PathBuf> {
         let mut message: Value =
             serde_json::from_slice(&std::fs::read(job).context("read the job fixture")?)
@@ -294,7 +323,11 @@ impl World {
     }
 
     pub(crate) fn start(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
-        Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+        for name in HERMETIC_UNSET {
+            command.env_remove(name);
+        }
+        command
             .arg("exec")
             .arg("--job")
             .arg(job)
@@ -306,6 +339,12 @@ impl World {
             .env("MISE_DOUBLE_LOG", self.log())
             .env_remove("MISE_TRUSTED_CONFIG_PATHS")
             .env_remove("MISE_YES")
+            .env("HOME", self.home())
+            .env("MISE_SYSTEM_CONFIG_DIR", self.system_config())
+            .env(
+                "MISE_CEILING_PATHS",
+                self.root.parent().unwrap_or(&self.root),
+            )
             .envs(extra_env.iter().copied())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

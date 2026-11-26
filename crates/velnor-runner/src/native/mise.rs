@@ -10,6 +10,11 @@ use ring::digest;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
+mod config_scan;
+mod pin;
+
+use self::config_scan::require_workspace_config_only;
+use self::pin::require_pinned_revision;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, is_valid_mise_version, require_sole_config};
 use crate::exec::{
@@ -35,7 +40,6 @@ const BOOLEAN_INPUTS: [&str; 11] = [
     "add_shims_to_path",
     "monorepo",
 ];
-const VERSION_POLICY: &str = include_str!("../../../../.velnor/version-policy.toml");
 
 pub(super) fn register(registry: &mut AdapterRegistry, setup: SetupVelnor) {
     registry.register(Box::new(MiseAction));
@@ -320,6 +324,7 @@ pub(crate) async fn mise_action(
     inputs: &MiseInputs,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
+    require_workspace_config_only(&ctx.env, ctx.workspace).await?;
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
     let lock = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
@@ -344,40 +349,7 @@ pub(crate) async fn mise_action(
         }
     }
     export(ctx, &install).await?;
-    ctx.set_output("cache-hit", "false");
     Ok(StepResult::Succeeded)
-}
-
-fn pinned_revision() -> Result<String, ExecError> {
-    let policy: toml::Table = VERSION_POLICY.parse().map_err(|error| {
-        ExecError::Invalid(format!(
-            ".velnor/version-policy.toml is not valid TOML: {error}"
-        ))
-    })?;
-    policy
-        .get("actions")
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(toml::Value::as_table)
-        .find(|action| action.get("name").and_then(toml::Value::as_str) == Some(ACTION))
-        .and_then(|action| action.get("sha")?.as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| {
-            ExecError::Invalid(format!(
-                ".velnor/version-policy.toml pins no revision of {ACTION}"
-            ))
-        })
-}
-
-fn require_pinned_revision(reference: &str) -> Result<(), ExecError> {
-    let pinned = pinned_revision()?;
-    if reference.strip_prefix(PREFIX) == Some(pinned.as_str()) {
-        return Ok(());
-    }
-    Err(ExecError::Unsupported(format!(
-        "{reference} is not the {ACTION} revision {pinned} pinned in .velnor/version-policy.toml"
-    )))
 }
 
 #[derive(Debug)]
@@ -392,6 +364,7 @@ impl StepAdapter for MiseAction {
         async move {
             require_pinned_revision(&ctx.reference)?;
             let inputs = MiseInputs::parse(&ctx.inputs)?;
+            ctx.set_output("cache-hit", "false");
             mise_action(&inputs, ctx).await
         }
         .boxed()

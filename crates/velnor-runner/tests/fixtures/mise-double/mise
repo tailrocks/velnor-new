@@ -1,4 +1,8 @@
-#!/bin/sh
+    parent=$(cd "$PWD/.." && pwd -P)
+    ceiling=$(cd "${MISE_CEILING_PATHS:-/nonexistent}" 2>/dev/null && pwd -P)
+    [ "$ceiling" != "$parent" ] || parent=/nonexistent
+      sed -n "s/.*{{ *exec(command='\([^']*\)') *}}.*/\1/p" "$path" | while read -r command; do (cd "$(dirname "$path")" && sh -c "$command" </dev/null) >&2; done
+$1#!/bin/sh
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 printf 'argv=%s data=%s cache=%s auto=%s trusted=%s yes=%s\n' "$*" "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_AUTO_INSTALL" "$MISE_TRUSTED_CONFIG_PATHS" "$MISE_YES" >> "${MISE_DOUBLE_LOG:-/dev/null}"
@@ -10,11 +14,14 @@ case "$1" in
     fi
     ;;
   config)
-    parent=$(cd "$PWD/.." && pwd)
+    parent=$(cd "$PWD/.." && pwd -P)
+    ceiling=$(cd "${MISE_CEILING_PATHS:-/nonexistent}" 2>/dev/null && pwd -P)
+    [ "$ceiling" != "$parent" ] || parent=/nonexistent
     printf '['
     separator=''
-    for path in "$PWD/mise.toml" "$PWD/.mise.toml" "$PWD/mise/config.toml" "$PWD/.mise/config.toml" "$PWD/.config/mise.toml" "$PWD/.config/mise/config.toml" "$PWD/mise.local.toml" "$PWD/.mise.local.toml" "$PWD/.tool-versions" "$PWD/mise/conf.d"/*.toml "$PWD/.mise/conf.d"/*.toml "$PWD/.config/mise/conf.d"/*.toml "$parent/mise.toml" ${MISE_ENV:+"$PWD/mise.$MISE_ENV.toml"}; do
+    for path in "$PWD/mise.toml" "$PWD/.mise.toml" "$PWD/mise/config.toml" "$PWD/.mise/config.toml" "$PWD/.config/mise.toml" "$PWD/.config/mise/config.toml" "$PWD/mise.local.toml" "$PWD/.mise.local.toml" "$PWD/.tool-versions" "$PWD/mise/conf.d"/*.toml "$PWD/.mise/conf.d"/*.toml "$PWD/.config/mise/conf.d"/*.toml "$parent/mise.toml" ${MISE_ENV:+"$PWD/mise.$MISE_ENV.toml"} ${MISE_DOUBLE_EXTRA_CONFIG:+"$MISE_DOUBLE_EXTRA_CONFIG"}; do
       [ -f "$path" ] || continue
+      sed -n "s/.*{{ *exec(command='\([^']*\)') *}}.*/\1/p" "$path" | while read -r command; do (cd "$(dirname "$path")" && sh -c "$command" </dev/null) >&2; done
       [ "$MISE_NO_ENV" = 1 ] || sed -n 's/^_\.source = "\(.*\)"$/\1/p' "$path" | while read -r script; do (cd "$(dirname "$path")" && sh "$script") >&2; done
       printf '%s{"path":"%s","tools":[],"override":false}' "$separator" "$path"
       separator=','
@@ -29,7 +36,16 @@ case "$1" in
         printf '%s\n' "$(dirname "$0")/tool-bin" ${MISE_DOUBLE_EXTRA_DIR:+"$MISE_DOUBLE_EXTRA_DIR"} ${MISE_DOUBLE_PROMOTE:+"$MISE_DOUBLE_PROMOTE"}
         ;;
       --redacted) printf '{"SECRET":"%s"}\n' "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
-      *) printf '{"PATH":"%s/tool-bin:%s%s","FOO":"bar","SECRET":"%s"}\n' "$(dirname "$0")" "${MISE_DOUBLE_EXTRA_DIR:+$MISE_DOUBLE_EXTRA_DIR:}${MISE_DOUBLE_PROMOTE:+$MISE_DOUBLE_PROMOTE:}" "$PATH" "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
+      *)
+        inherited=$PATH
+        if [ -n "$MISE_DOUBLE_DROP_PROMOTED" ] && [ -n "$MISE_DOUBLE_PROMOTE" ]; then
+          inherited=''
+          old_ifs=$IFS
+          IFS=:
+          for entry in $PATH; do [ "$entry" = "$MISE_DOUBLE_PROMOTE" ] || inherited="$inherited${inherited:+:}$entry"; done
+          IFS=$old_ifs
+        fi
+        printf '{"PATH":"%s/tool-bin:%s%s","FOO":"bar","SECRET":"%s"}\n' "$(dirname "$0")" "${MISE_DOUBLE_EXTRA_DIR:+$MISE_DOUBLE_EXTRA_DIR:}${MISE_DOUBLE_PROMOTE:+$MISE_DOUBLE_PROMOTE:}" "$inherited" "${MISE_DOUBLE_SECRET:-s3cr3t-value}" ;;
     esac
     ;;
 esac

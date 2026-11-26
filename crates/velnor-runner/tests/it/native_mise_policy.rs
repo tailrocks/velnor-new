@@ -80,23 +80,25 @@ fn mise_action_requires_the_lockfile_setting_to_be_true() -> Result<()> {
 }
 
 #[test]
-fn mise_action_evaluates_no_env_before_it_accepts_the_config() -> Result<()> {
+fn mise_action_cross_check_evaluates_no_env_before_it_accepts_the_config() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
     let marker = world.temp().join("sourced");
-    let workspace = world.workspace();
+    let extra = world.temp().join("extra");
+    std::fs::create_dir_all(&extra).context("create the extra directory")?;
+    std::fs::write(extra.join("mise.toml"), "[env]\n_.source = \"./x.sh\"\n")
+        .context("plant the extra config")?;
     std::fs::write(
-        workspace.join("mise.local.toml"),
-        "[env]\n_.source = \"./x.sh\"\n",
-    )
-    .context("plant mise.local.toml")?;
-    std::fs::write(
-        workspace.join("x.sh"),
+        extra.join("x.sh"),
         format!("echo ran > {}\n", marker.display()),
     )
     .context("plant x.sh")?;
-    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    let listed = extra.join("mise.toml").display().to_string();
+    let ran = world.run(
+        &job_fixture("mise_action_ok"),
+        &[("MISE_DOUBLE_EXTRA_CONFIG", &listed)],
+    )?;
     assert!(
         ran.lines()
             .iter()
@@ -111,7 +113,7 @@ fn mise_action_evaluates_no_env_before_it_accepts_the_config() -> Result<()> {
 }
 
 #[test]
-fn mise_action_rejects_every_other_config_mise_loads() -> Result<()> {
+fn mise_action_rejects_every_other_config_before_it_runs_mise() -> Result<()> {
     let cases: [(&str, &[(&str, &str)]); 11] = [
         ("mise/config.toml", &[]),
         (".mise.toml", &[]),
@@ -137,7 +139,7 @@ fn mise_action_rejects_every_other_config_mise_loads() -> Result<()> {
         let line = ran
             .lines()
             .into_iter()
-            .find(|line| line.starts_with("unsupported: mise policy: mise loads ["))
+            .find(|line| line.starts_with("unsupported: mise policy: mise would load ["))
             .with_context(|| format!("{planted}\n{}", ran.stdout))?;
         assert!(
             line.contains(&loaded.display().to_string()),
@@ -145,7 +147,7 @@ fn mise_action_rejects_every_other_config_mise_loads() -> Result<()> {
         );
         assert!(ran.has_line("step 1 failed"), "{planted}\n{}", ran.stdout);
         assert_eq!(ran.code, Some(1), "{planted}");
-        assert_eq!(world.mise_installs(), Vec::<String>::new(), "{planted}");
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{planted}");
     }
     Ok(())
 }

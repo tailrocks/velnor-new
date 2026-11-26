@@ -149,3 +149,19 @@ fn mise_action_accepts_every_false_spelling_of_cache() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn mise_action_publishes_cache_hit_false_when_the_install_fails() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_final_script(
+        &job_fixture("mise_action_ok"),
+        "echo \"hit=${{ steps.mise.outputs.cache-hit }}\"",
+    )?;
+    let job = world.with_final_condition(&job, "always()")?;
+    let ran = world.run(&job, &[("MISE_DOUBLE_INSTALL_EXIT", "1")])?;
+    assert!(ran.has_line("step 1 failed"), "{}", ran.stdout);
+    assert!(ran.has_line("hit=false"), "{}", ran.stdout);
+    Ok(())
+}
