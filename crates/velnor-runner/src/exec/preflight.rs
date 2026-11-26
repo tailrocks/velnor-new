@@ -83,7 +83,7 @@ pub(super) fn problems(
     if present(message.job_service_containers.as_ref()) || sidecars {
         found.push("job services".to_owned());
     }
-    for step in &message.steps {
+    for step in message.steps.iter().filter(|step| step.enabled) {
         if let Some(problem) = step_problem(step, adapters, context)
             && !found.contains(&problem)
         {

@@ -33,7 +33,7 @@ fn secrets(message: &mut Value, pairs: &[(&str, &str)]) {
 async fn workflow_command_property_names_are_case_insensitive() -> Result<()> {
     let message = job(vec![run(
         "a",
-        "echo '::error Title=T,File=src/main.rs,Line=3,EndLine=4,Col=5,EndColumn=6::boom'",
+        "echo '::error Title=T,File=src/main.rs,Line=3,EndLine=3,Col=5,EndColumn=6::boom'",
     )]);
     let (finished, _) = execute(
         &message,
@@ -56,7 +56,7 @@ async fn workflow_command_property_names_are_case_insensitive() -> Result<()> {
             annotation.column,
             annotation.end_column
         ),
-        (Some(3), Some(4), Some(5), Some(6))
+        (Some(3), Some(3), Some(5), Some(6))
     );
     Ok(())
 }

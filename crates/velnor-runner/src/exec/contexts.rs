@@ -143,9 +143,22 @@ pub(super) fn github_context(
     }
 }
 
-pub(super) fn with_action(github: &ContextValue, action: &str) -> ContextValue {
+pub(super) fn with_action(
+    github: &ContextValue,
+    action: &str,
+    repository: Option<(&str, &str)>,
+) -> ContextValue {
     let mut entries = github.entries().unwrap_or_default().to_vec();
     upsert(&mut entries, "action", string(action));
+    entries.retain(|(name, _)| {
+        !name.eq_ignore_ascii_case("action_repository") && !name.eq_ignore_ascii_case("action_ref")
+    });
+    if let Some((name, git_ref)) = repository {
+        upsert(&mut entries, "action_repository", string(name));
+        if !git_ref.is_empty() {
+            upsert(&mut entries, "action_ref", string(git_ref));
+        }
+    }
     ContextValue::Object {
         case_sensitive: false,
         entries,

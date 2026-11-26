@@ -14,7 +14,7 @@ use super::{ExecError, RunOptions, StepResult};
 use super::{private, token};
 use crate::context_value::ContextValue;
 use crate::expr::{ExprEnv, JobStatus, RootContext};
-use crate::job_message::AgentJobRequestMessage;
+use crate::job_message::{ActionReferenceType, ActionStep, AgentJobRequestMessage};
 
 #[derive(Debug, Clone)]
 pub(super) struct StepEntry {
@@ -43,6 +43,14 @@ impl JobContext {
         message: &AgentJobRequestMessage,
         options: &RunOptions,
     ) -> Result<Self, ExecError> {
+        for (name, path) in [("workspace", &options.workspace), ("temp", &options.temp)] {
+            if path.to_str().is_none() {
+                return Err(ExecError::Invalid(format!(
+                    "the {name} path is not valid UTF-8: {}",
+                    path.display()
+                )));
+            }
+        }
         private::create_dir(&options.temp).await?;
         private::create_dir(&options.workspace).await?;
         let contexts = message
@@ -69,6 +77,7 @@ impl JobContext {
             for (name, value) in token::mapping(token, &base)? {
                 set_pair(&mut env, &name, &value);
             }
+            base.set_context(RootContext::Env, &object(&env, true));
         }
         Ok(Self {
             host: host_env(),
@@ -85,8 +94,28 @@ impl JobContext {
         })
     }
 
-    pub(super) async fn begin_step(&mut self, action: Option<&str>) -> Result<(), ExecError> {
-        self.github = with_action(&self.github, action.unwrap_or_default());
+    pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {
+        let repository = step
+            .reference
+            .as_ref()
+            .filter(|reference| {
+                reference.kind == ActionReferenceType::Repository
+                    && !reference
+                        .repository_type
+                        .as_deref()
+                        .is_some_and(|kind| kind.eq_ignore_ascii_case("self"))
+            })
+            .and_then(|reference| {
+                Some((
+                    reference.name.as_deref()?,
+                    reference.git_ref.as_deref().unwrap_or_default(),
+                ))
+            });
+        self.github = with_action(
+            &self.github,
+            step.name.as_deref().unwrap_or_default(),
+            repository,
+        );
         self.base.set_context(RootContext::Github, &self.github);
         self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await

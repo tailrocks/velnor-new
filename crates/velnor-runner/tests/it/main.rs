@@ -37,6 +37,8 @@ mod expr_template;
 mod expr_unsupported;
 #[path = "exec_extra.rs"]
 mod extra;
+#[path = "exec_followup.rs"]
+mod followup;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;

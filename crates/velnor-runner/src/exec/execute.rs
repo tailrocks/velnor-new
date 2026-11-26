@@ -56,7 +56,14 @@ impl Job<'_> {
                 .await
         };
         let collected = files.collect().await;
-        let (result, adapter_outputs) = ran?;
+        let (result, adapter_outputs) = match ran {
+            Ok(done) => done,
+            Err(error) => {
+                out.message(&error.to_string());
+                out.annotate(AnnotationLevel::Error, error.to_string());
+                (StepResult::Failed, Vec::new())
+            }
+        };
         self.finish(result, adapter_outputs, collected, out).await
     }
 
