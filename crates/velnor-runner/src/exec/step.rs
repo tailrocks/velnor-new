@@ -12,36 +12,16 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use super::cancel::{Groups, terminate};
-use super::commands;
-use super::mask::Masker;
+use super::output::Output;
+use super::private;
 use super::shell;
-use super::sink::LogSink;
-use super::{Annotation, AnnotationLevel, ExecError, JobCancel, StepResult};
+use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
 const LINE_BUFFER: usize = 64;
 const LINE_LIMIT: usize = 1 << 20;
 const READ_PIECE: usize = 64 << 10;
 const CAPTURE_LIMIT: usize = 8 << 20;
-
-pub(super) struct Output<'a> {
-    pub(super) number: u32,
-    pub(super) sink: &'a mut dyn LogSink,
-    pub(super) masker: &'a mut Masker,
-    pub(super) annotations: &'a mut Vec<Annotation>,
-}
-
-impl Output<'_> {
-    pub(super) fn line(&mut self, text: &str) {
-        commands::apply(text, self.masker, self.annotations);
-        self.message(text);
-    }
-
-    pub(super) fn message(&mut self, text: &str) {
-        let masked = self.masker.mask(text);
-        self.sink.line(self.number, &masked);
-    }
-}
 
 pub(super) struct ProcessSpec<'a> {
     pub(super) program: &'a str,
@@ -272,10 +252,10 @@ pub(super) async fn run(
     Ok(match ending {
         Ending::Exited(status) if status.success() => StepResult::Succeeded,
         Ending::Exited(status) => {
-            out.annotations.push(Annotation::new(
+            out.annotate(
                 AnnotationLevel::Error,
                 format!("Process completed with exit code {}.", exit_code(status)),
-            ));
+            );
             StepResult::Failed
         }
         Ending::TimedOut => {
@@ -343,9 +323,7 @@ pub(super) async fn run_script(
         return Err(ExecError::Unsupported(format!("shell {}", step.shell)));
     }
     let path = temp.join(format!("{}.sh", Uuid::new_v4()));
-    tokio::fs::write(&path, &step.script)
-        .await
-        .map_err(|source| ExecError::io(format!("write {}", path.display()), source))?;
+    private::write_new(&path, step.script.as_bytes()).await?;
     let Some((program, args)) = shell::command(&step.shell, &path) else {
         return Err(ExecError::Unsupported(format!("shell {}", step.shell)));
     };

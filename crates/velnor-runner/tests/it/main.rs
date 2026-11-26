@@ -3,6 +3,8 @@
 
 #[path = "exec_cancel.rs"]
 mod cancel;
+#[path = "exec_commands.rs"]
+mod commands;
 #[path = "exec_builder.rs"]
 mod exec_builder;
 #[path = "exec_cli.rs"]
@@ -46,3 +48,5 @@ mod review;
 #[path = "exec_semantics.rs"]
 mod semantics;
 mod support;
+#[path = "exec_threads.rs"]
+mod threads;

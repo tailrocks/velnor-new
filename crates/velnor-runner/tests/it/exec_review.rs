@@ -8,48 +8,21 @@ use anyhow::{Context, Result};
 use futures_util::FutureExt;
 use serde_json::{Value, json};
 use velnor_runner::exec::{
-    AdapterRegistry, Annotation, JobCancel, JobResult, JobRun, StepAdapter, StepContext,
-    StepFuture, StepResult, run_job,
+    AdapterRegistry, Annotation, JobCancel, JobResult, StepAdapter, StepContext, StepFuture,
+    StepResult, run_job,
 };
-use velnor_runner::job_message::AgentJobRequestMessage;
 
 use crate::exec_builder::{
-    Recorder, assert_gone, expression, job, mapping, pid_from, run, run_message, step,
-    wait_for_file,
+    Recorder, assert_gone, execute, expression, job, mapping, parse, pid_from, run, run_message,
+    step, wait_for_file,
 };
 use crate::exec_support::Scratch;
 
 const SECRET: &str = "annot-secret-91";
 
-fn parse(message: &Value) -> Result<AgentJobRequestMessage> {
-    AgentJobRequestMessage::parse_json(&serde_json::to_string(message)?)
-}
-
 fn with_secret(mut message: Value) -> Value {
     message["Variables"] = json!({"S": {"Value": SECRET, "IsSecret": true}});
     message
-}
-
-async fn execute(
-    message: &Value,
-    scratch: &Scratch,
-    adapters: &AdapterRegistry,
-    cancel: JobCancel,
-) -> Result<(JobRun, Vec<String>)> {
-    let mut recorder = Recorder::default();
-    let run = tokio::time::timeout(
-        Duration::from_secs(30),
-        run_job(
-            &parse(message)?,
-            &scratch.options(),
-            adapters,
-            &mut recorder,
-            cancel,
-        ),
-    )
-    .await
-    .context("run_job returns")?;
-    Ok((run, recorder.lines))
 }
 
 fn leaks(annotations: &[Annotation], value: &str) -> bool {

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{ExecError, RunOptions};
+use super::{ExecError, RunOptions, private};
 use crate::context_value::ContextValue;
 use crate::job_message::AgentJobRequestMessage;
 
@@ -142,6 +142,38 @@ pub(super) fn github_context(
     }
 }
 
+pub(super) fn with_action(github: &ContextValue, action: &str) -> ContextValue {
+    let mut entries = github.entries().unwrap_or_default().to_vec();
+    upsert(&mut entries, "action", string(action));
+    ContextValue::Object {
+        case_sensitive: false,
+        entries,
+    }
+}
+
+pub(super) fn service_variables(message: &AgentJobRequestMessage) -> Vec<(String, String)> {
+    let Ok(connection) = message.system_connection() else {
+        return Vec::new();
+    };
+    let url = connection
+        .data_string("GenerateIdTokenUrl")
+        .filter(|url| !url.is_empty());
+    let token = connection
+        .authorization
+        .as_ref()
+        .and_then(|authorization| authorization.parameter_string("AccessToken"));
+    match (url, token) {
+        (Some(url), Some(token)) => vec![
+            ("ACTIONS_ID_TOKEN_REQUEST_URL".to_owned(), url.to_owned()),
+            (
+                "ACTIONS_ID_TOKEN_REQUEST_TOKEN".to_owned(),
+                token.to_owned(),
+            ),
+        ],
+        _ => Vec::new(),
+    }
+}
+
 pub(super) fn runner_context(
     message: &AgentJobRequestMessage,
     options: &RunOptions,
@@ -213,11 +245,7 @@ pub(super) async fn write_event(path: &Path, github: &ContextValue) -> Result<()
         .map_err(|error| ExecError::Invalid(format!("github.event: {error}")))?
         .unwrap_or_else(|| "{}".to_owned());
     if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|source| ExecError::io(format!("create {}", parent.display()), source))?;
+        private::create_dir(parent).await?;
     }
-    tokio::fs::write(path, body)
-        .await
-        .map_err(|source| ExecError::io(format!("write {}", path.display()), source))
+    private::write_replacing(path, body.as_bytes()).await
 }

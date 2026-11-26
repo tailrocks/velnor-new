@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use rustix::process::{Pid, Signal, kill_process, test_kill_process};
 use serde_json::{Value, json};
-use velnor_runner::exec::{JobRun, LogSink, StepResult};
+use velnor_runner::exec::{AdapterRegistry, JobCancel, JobRun, LogSink, StepResult, run_job};
+use velnor_runner::job_message::AgentJobRequestMessage;
 
 use crate::exec_support::{Ran, Scratch};
 
@@ -152,4 +153,30 @@ impl LogSink for Recorder {
     fn step_finished(&mut self, _number: u32, _result: StepResult) {}
 
     fn job_finished(&mut self, _run: &JobRun) {}
+}
+
+pub(crate) fn parse(message: &Value) -> Result<AgentJobRequestMessage> {
+    AgentJobRequestMessage::parse_json(&serde_json::to_string(message)?)
+}
+
+pub(crate) async fn execute(
+    message: &Value,
+    scratch: &Scratch,
+    adapters: &AdapterRegistry,
+    cancel: JobCancel,
+) -> Result<(JobRun, Vec<String>)> {
+    let mut recorder = Recorder::default();
+    let run = tokio::time::timeout(
+        Duration::from_secs(30),
+        run_job(
+            &parse(message)?,
+            &scratch.options(),
+            adapters,
+            &mut recorder,
+            cancel,
+        ),
+    )
+    .await
+    .context("run_job returns")?;
+    Ok((run, recorder.lines))
 }

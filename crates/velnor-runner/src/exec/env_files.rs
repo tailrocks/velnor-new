@@ -4,10 +4,12 @@
 
 use std::path::{Path, PathBuf};
 
+use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
-use super::mask::Masker;
-use super::{Annotation, AnnotationLevel, ExecError};
+use super::output::Output;
+use super::private;
+use super::{AnnotationLevel, ExecError};
 
 const DIRECTORY: &str = "_runner_file_commands";
 const SUMMARY_DIRECTORY: &str = "step_summary";
@@ -32,14 +34,22 @@ pub(super) struct Collected {
 
 async fn create_file(directory: &Path, kind: &str) -> Result<PathBuf, ExecError> {
     let path = directory.join(format!("{kind}_{}", Uuid::new_v4()));
-    tokio::fs::write(&path, b"")
-        .await
-        .map_err(|source| ExecError::io(format!("create {}", path.display()), source))?;
+    private::write_new(&path, b"").await?;
     Ok(path)
 }
 
-async fn read_text(path: &Path) -> Result<String, ExecError> {
-    let read = tokio::fs::read(path).await;
+async fn read_bounded(path: &Path, limit: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    tokio::fs::File::open(path)
+        .await?
+        .take(limit)
+        .read_to_end(&mut bytes)
+        .await?;
+    Ok(bytes)
+}
+
+async fn read_text(path: &Path, limit: u64) -> Result<String, ExecError> {
+    let read = read_bounded(path, limit).await;
     let _ = tokio::fs::remove_file(path).await;
     match read {
         Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
@@ -56,7 +66,7 @@ fn failure(context: &str, error: &ExecError) -> [String; 2] {
 }
 
 async fn pairs(path: &Path, context: &str, failures: &mut Vec<String>) -> Vec<(String, String)> {
-    let text = match read_text(path).await {
+    let text = match read_text(path, u64::MAX).await {
         Ok(text) => text,
         Err(error) => {
             failures.extend(failure(context, &error));
@@ -73,9 +83,7 @@ async fn pairs(path: &Path, context: &str, failures: &mut Vec<String>) -> Vec<(S
 impl FileCommands {
     pub(super) async fn create(temp: &Path) -> Result<Self, ExecError> {
         let directory = temp.join(DIRECTORY);
-        tokio::fs::create_dir_all(&directory)
-            .await
-            .map_err(|source| ExecError::io(format!("create {}", directory.display()), source))?;
+        private::create_dir(&directory).await?;
         Ok(Self {
             env: create_file(&directory, "env").await?,
             output: create_file(&directory, "output").await?,
@@ -100,7 +108,7 @@ impl FileCommands {
         let mut failures = Vec::new();
         let env = pairs(&self.env, "env", &mut failures).await;
         let outputs = pairs(&self.output, "output", &mut failures).await;
-        let path = match read_text(&self.path).await {
+        let path = match read_text(&self.path, u64::MAX).await {
             Ok(text) => text
                 .lines()
                 .map(str::trim)
@@ -112,7 +120,7 @@ impl FileCommands {
                 Vec::new()
             }
         };
-        let summary = match read_text(&self.summary).await {
+        let summary = match read_text(&self.summary, MAX_SUMMARY_BYTES as u64 + 1).await {
             Ok(text) => text,
             Err(error) => {
                 failures.extend(failure("step_summary", &error));
@@ -131,33 +139,27 @@ impl FileCommands {
 
 pub(super) async fn save_summary(
     temp: &Path,
-    number: u32,
     summary: &str,
-    masker: &Masker,
-    annotations: &mut Vec<Annotation>,
+    out: &mut Output<'_>,
 ) -> Result<Option<PathBuf>, ExecError> {
     if summary.trim().is_empty() {
         return Ok(None);
     }
     if summary.len() > MAX_SUMMARY_BYTES {
-        annotations.push(Annotation::new(
+        out.annotate(
             AnnotationLevel::Error,
             format!("Step summary exceeds the {MAX_SUMMARY_BYTES} byte limit and was dropped."),
-        ));
+        );
         return Ok(None);
     }
     let directory = temp.join(SUMMARY_DIRECTORY);
-    tokio::fs::create_dir_all(&directory)
-        .await
-        .map_err(|source| ExecError::io(format!("create {}", directory.display()), source))?;
-    let path = directory.join(format!("{number}.md"));
+    private::create_dir(&directory).await?;
+    let path = directory.join(format!("{}.md", out.number));
     let body: String = summary
         .split_inclusive('\n')
-        .map(|line| masker.mask(line))
+        .map(|line| out.masker.mask(line))
         .collect();
-    tokio::fs::write(&path, body)
-        .await
-        .map_err(|source| ExecError::io(format!("write {}", path.display()), source))?;
+    private::write_replacing(&path, body.as_bytes()).await?;
     Ok(Some(path))
 }
 

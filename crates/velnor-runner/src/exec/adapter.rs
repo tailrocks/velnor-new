@@ -9,7 +9,8 @@ use futures_util::future::BoxFuture;
 
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
-use super::step::{Limits, Output, ProcessSpec, capture, deadline, report_timeout, run};
+use super::output::Output;
+use super::step::{Limits, ProcessSpec, capture, deadline, report_timeout, run};
 use super::{ExecError, JobCancel, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
@@ -181,7 +182,7 @@ pub(super) async fn invoke(
         number: out.number,
         sink: &mut *out.sink,
         masker: &mut *out.masker,
-        annotations: &mut *out.annotations,
+        issues: &mut *out.issues,
     };
     let mut context = StepContext {
         reference: call.reference,

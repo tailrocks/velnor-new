@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use serde_json::Value as Json;
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, runner_context, secrets_context,
-    set_pair, string, write_event,
+    service_variables, set_pair, string, with_action, write_event,
 };
 use super::host_env::host_env;
-use super::token;
 use super::{ExecError, RunOptions, StepResult};
+use super::{private, token};
 use crate::context_value::ContextValue;
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::AgentJobRequestMessage;
@@ -24,8 +26,12 @@ pub(super) struct StepEntry {
 #[derive(Debug)]
 pub(super) struct JobContext {
     base: ExprEnv,
+    github: ContextValue,
+    runner: ContextValue,
+    event_path: PathBuf,
     host: Vec<(String, String)>,
     runtime: Vec<(String, String)>,
+    service: Vec<(String, String)>,
     env: Vec<(String, String)>,
     defaults: Vec<Json>,
     path_prepend: Vec<String>,
@@ -37,20 +43,18 @@ impl JobContext {
         message: &AgentJobRequestMessage,
         options: &RunOptions,
     ) -> Result<Self, ExecError> {
-        for directory in [&options.workspace, &options.temp] {
-            tokio::fs::create_dir_all(directory)
-                .await
-                .map_err(|source| {
-                    ExecError::io(format!("create {}", directory.display()), source)
-                })?;
-        }
+        private::create_dir(&options.temp).await?;
+        tokio::fs::create_dir_all(&options.workspace)
+            .await
+            .map_err(|source| {
+                ExecError::io(format!("create {}", options.workspace.display()), source)
+            })?;
         let contexts = message
             .materialize_context_values()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?
             .into_inner();
         let event_path = options.temp.join(EVENT_DIRECTORY).join("event.json");
         let github = github_context(message, contexts.get("github"), options, &event_path);
-        write_event(&event_path, &github).await?;
         let runner = runner_context(message, options);
         let mut base = ExprEnv::new(options.workspace.clone());
         base.set_context(RootContext::Github, &github);
@@ -73,6 +77,10 @@ impl JobContext {
         Ok(Self {
             host: host_env(),
             runtime: exported_variables(&github, &runner),
+            service: service_variables(message),
+            github,
+            runner,
+            event_path,
             base,
             env,
             defaults: message.defaults.clone(),
@@ -81,8 +89,11 @@ impl JobContext {
         })
     }
 
-    pub(super) fn base_env(&self) -> &ExprEnv {
-        &self.base
+    pub(super) async fn begin_step(&mut self, action: Option<&str>) -> Result<(), ExecError> {
+        self.github = with_action(&self.github, action.unwrap_or_default());
+        self.base.set_context(RootContext::Github, &self.github);
+        self.runtime = exported_variables(&self.github, &self.runner);
+        write_event(&self.event_path, &self.github).await
     }
 
     pub(super) fn expr_env(&self, status: JobStatus, step_env: &[(String, String)]) -> ExprEnv {
@@ -145,7 +156,13 @@ impl JobContext {
         file_variables: &[(&'static str, String)],
     ) -> Vec<(String, String)> {
         let mut env = self.host.clone();
-        for (name, value) in self.env.iter().chain(step_env).chain(&self.runtime) {
+        for (name, value) in self
+            .env
+            .iter()
+            .chain(step_env)
+            .chain(&self.runtime)
+            .chain(&self.service)
+        {
             set_pair(&mut env, name, value);
         }
         for (name, value) in file_variables {
