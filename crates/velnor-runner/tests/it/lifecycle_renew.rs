@@ -10,9 +10,9 @@ use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 use super::exec_support::Scratch;
 use super::lifecycle_cancel::cancelled_with_cleanup;
 use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run_with};
-use super::support::mock_github::{Behavior, MockGithub, Renew, STEP_LOG_BLOB};
+use super::support::mock_github::{Behavior, Cancel, MockGithub, Renew, STEP_LOG_BLOB};
 
-fn assert_forced_failure(mock: &MockGithub) -> Result<()> {
+fn assert_forced_failure(mock: &MockGithub, status: &str) -> Result<()> {
     let complete = mock.complete_request()?;
     assert_eq!(complete["conclusion"], "failed");
     assert!(
@@ -24,10 +24,10 @@ fn assert_forced_failure(mock: &MockGithub) -> Result<()> {
     assert_eq!(annotations.len(), 1);
     assert_eq!(annotations[0]["level"], "failure");
     assert!(
-        annotations[0]["message"]
-            .as_str()
-            .is_some_and(|message| message
-                .starts_with("The runner could not run the job: renew the job lock:")),
+        annotations[0]["message"].as_str().is_some_and(|message| {
+            message.starts_with("The runner could not run the job: renew the job lock:")
+                && message.contains(status)
+        }),
         "{annotations:?}"
     );
     assert!(mock.requests_to("PUT", STEP_LOG_BLOB)?.is_empty());
@@ -35,7 +35,7 @@ fn assert_forced_failure(mock: &MockGithub) -> Result<()> {
     Ok(())
 }
 
-async fn first_renew_ends_with(renew: Renew) -> Result<()> {
+async fn first_renew_ends_with(renew: Renew, status: &str) -> Result<()> {
     let behavior = Behavior {
         renew,
         ..Behavior::default()
@@ -56,17 +56,17 @@ async fn first_renew_ends_with(renew: Renew) -> Result<()> {
         matches!(outcome, Err(LifecycleError::Renew(_))),
         "{outcome:?}"
     );
-    assert_forced_failure(&mock)
+    assert_forced_failure(&mock, status)
 }
 
 #[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_finds_it_gone() -> Result<()> {
-    first_renew_ends_with(Renew::JobGone).await
+    first_renew_ends_with(Renew::JobGone, "status=404").await
 }
 
 #[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_never_succeeds() -> Result<()> {
-    first_renew_ends_with(Renew::ServerError).await
+    first_renew_ends_with(Renew::ServerError, "status=500").await
 }
 
 #[tokio::test]
@@ -118,6 +118,42 @@ async fn lifecycle_cancels_the_job_when_a_shutdown_arrives_before_the_first_rene
             .is_none_or(|steps| steps.as_array().is_some_and(Vec::is_empty))
     );
     assert!(mock.requests_to("PUT", STEP_LOG_BLOB)?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_cancel_message_that_arrives_before_the_first_renew_answers_keeps_the_job_from_starting()
+-> Result<()> {
+    let behavior = Behavior {
+        renew: Renew::RenewedAfter(Duration::from_millis(1500)),
+        cancel: Cancel::After(Duration::from_millis(300)),
+        ..Behavior::default()
+    };
+    let scratch = Scratch::new()?;
+    let marker = scratch.work_dir().with_file_name("started");
+    let script = format!("touch {}", marker.display());
+    let mock = MockGithub::start(
+        super::lifecycle_support::job_replacing("hello", Some(("echo hello", &script)))?,
+        behavior,
+    )
+    .await?;
+
+    let outcome = run_in(&mock, &scratch, Settings::new().within(CANCEL_BUDGET)).await??;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
+    assert!(!marker.exists(), "a canceled job ran its step");
+    let complete = mock.complete_request()?;
+    assert_eq!(complete["conclusion"], "canceled");
+    assert!(
+        complete["annotations"]
+            .as_array()
+            .context("annotations")?
+            .iter()
+            .any(|note| note["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("before it started"))),
+        "{complete}"
+    );
     Ok(())
 }
 

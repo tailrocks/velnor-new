@@ -4,10 +4,12 @@
 
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use time::OffsetDateTime;
+use tokio::sync::Semaphore;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::{Instant, MissedTickBehavior, interval, timeout};
@@ -15,6 +17,7 @@ use uuid::Uuid;
 
 use super::acquire::JobConnection;
 use super::logs::{Event, LogFiles, iso_millis};
+use super::status::StatusQueue;
 use super::tail::StepState;
 use crate::exec::{JobRun, StepResult};
 use crate::job_message::AgentJobRequestMessage;
@@ -23,7 +26,7 @@ use crate::protocol::{
 };
 
 const CONNECT_BUDGET: Duration = Duration::from_secs(5);
-const UPDATE_BUDGET: Duration = Duration::from_secs(10);
+const UPLOAD_SLOTS: usize = 4;
 const FAST_FLUSH: Duration = Duration::from_millis(250);
 const SLOW_FLUSH: Duration = Duration::from_millis(500);
 const FAST_WINDOW: Duration = Duration::from_secs(60);
@@ -50,7 +53,9 @@ pub(super) struct Reporter {
     steps: BTreeMap<u32, StepState>,
     times: BTreeMap<u32, StepTimes>,
     files: LogFiles,
-    change_order: i64,
+    budget: Duration,
+    status: Option<StatusQueue>,
+    upload_slots: Arc<Semaphore>,
     uploads: JoinSet<()>,
 }
 
@@ -60,17 +65,6 @@ where
 {
     if let Err(error) = future.await {
         eprintln!("warning: {label}: {error:#}");
-    }
-}
-
-async fn best_effort<F>(label: &str, budget: Duration, future: F)
-where
-    F: Future<Output = anyhow::Result<()>>,
-{
-    match timeout(budget, future).await {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => eprintln!("warning: {label}: {error:#}"),
-        Err(_) => eprintln!("warning: {label}: timed out"),
     }
 }
 
@@ -88,13 +82,19 @@ impl Reporter {
         connection: &JobConnection,
         message: &AgentJobRequestMessage,
         files: LogFiles,
+        budget: Duration,
     ) -> Self {
+        let plan_id = message.plan.plan_id.clone();
+        let job_id = message.job_id.clone();
         Self {
+            status: connection.results.clone().map(|results| {
+                StatusQueue::spawn(results, plan_id.clone(), job_id.clone(), budget)
+            }),
             results: connection.results.clone(),
             feed_client: connection.feed.clone(),
             feed: None,
-            plan_id: message.plan.plan_id.clone(),
-            job_id: message.job_id.clone(),
+            plan_id,
+            job_id,
             step_ids: message
                 .steps
                 .iter()
@@ -107,7 +107,8 @@ impl Reporter {
             steps: BTreeMap::new(),
             times: BTreeMap::new(),
             files,
-            change_order: 0,
+            budget,
+            upload_slots: Arc::new(Semaphore::new(UPLOAD_SLOTS)),
             uploads: JoinSet::new(),
         }
     }
@@ -186,11 +187,11 @@ impl Reporter {
                         completed_at: None,
                     },
                 );
-                self.update_steps(vec![step]).await;
+                self.update_steps(vec![step]);
             }
             Event::StepFinished { number, result, at } => {
                 self.flush_step(number, true).await;
-                self.finish_step(number, result, at).await;
+                self.finish_step(number, result, at);
             }
             Event::JobFinished(_) => {}
         }
@@ -220,21 +221,25 @@ impl Reporter {
         }
     }
 
-    async fn update_steps(&mut self, steps: Vec<TwirpStep>) {
-        let Some(results) = self.results.clone() else {
-            return;
-        };
-        self.change_order += 1;
-        let plan_id = self.plan_id.clone();
-        let job_id = self.job_id.clone();
-        let order = self.change_order;
-        best_effort("update step status", UPDATE_BUDGET, async move {
-            results.update_steps(&steps, &plan_id, &job_id, order).await
-        })
-        .await;
+    fn update_steps(&self, steps: Vec<TwirpStep>) {
+        if let Some(status) = &self.status {
+            status.push(steps);
+        }
     }
 
-    async fn finish_step(&mut self, number: u32, result: StepResult, at: OffsetDateTime) {
+    fn spawn_upload(
+        &mut self,
+        label: &'static str,
+        upload: impl Future<Output = anyhow::Result<()>> + Send + 'static,
+    ) {
+        let slots = Arc::clone(&self.upload_slots);
+        self.uploads.spawn(async move {
+            let _slot = slots.acquire_owned().await;
+            warn_on_error(label, upload).await;
+        });
+    }
+
+    fn finish_step(&mut self, number: u32, result: StepResult, at: OffsetDateTime) {
         let completed_at = iso_millis(at);
         let started_at = self.times.get_mut(&number).and_then(|times| {
             times.completed_at = Some(completed_at.clone());
@@ -251,20 +256,17 @@ impl Reporter {
             Some(&completed_at),
             Some(result),
         );
-        self.update_steps(vec![step]).await;
+        self.update_steps(vec![step]);
         let Some(results) = self.results.clone() else {
             return;
         };
         let plan_id = self.plan_id.clone();
         let job_id = self.job_id.clone();
         let step_id = self.step_id(number);
-        self.uploads.spawn(async move {
-            warn_on_error("upload step log", async move {
-                results
-                    .upload_step_log(&plan_id, &job_id, &step_id, &state.path)
-                    .await
-            })
-            .await;
+        self.spawn_upload("upload step log", async move {
+            results
+                .upload_step_log(&plan_id, &job_id, &step_id, &state.path)
+                .await
         });
     }
 
@@ -295,7 +297,7 @@ impl Reporter {
             };
             for batch in lines.chunks(FEED_BATCH_LINES) {
                 let sent = timeout(
-                    UPDATE_BUDGET,
+                    self.budget,
                     FeedStreamClient::send_log_lines(&mut socket, &step_id, batch.to_vec(), start),
                 )
                 .await;
@@ -340,7 +342,7 @@ impl Reporter {
             self.upload_summary(record.number, record.summary_path.as_deref());
         }
         if !late.is_empty() {
-            self.update_steps(late).await;
+            self.update_steps(late);
         }
     }
 
@@ -352,13 +354,10 @@ impl Reporter {
         let plan_id = self.plan_id.clone();
         let job_id = self.job_id.clone();
         let step_id = self.step_id(number);
-        self.uploads.spawn(async move {
-            warn_on_error("upload step summary", async move {
-                results
-                    .upload_step_summary(&plan_id, &job_id, &step_id, &path)
-                    .await
-            })
-            .await;
+        self.spawn_upload("upload step summary", async move {
+            results
+                .upload_step_summary(&plan_id, &job_id, &step_id, &path)
+                .await
         });
     }
 
@@ -381,6 +380,9 @@ impl Reporter {
         }
         if let Some(mut socket) = self.feed.take() {
             let _ = timeout(CONNECT_BUDGET, socket.close(None)).await;
+        }
+        if let Some(status) = self.status.take() {
+            status.finish().await;
         }
         ReportSummary { times: self.times }
     }

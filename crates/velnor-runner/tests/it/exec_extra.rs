@@ -14,6 +14,13 @@ use velnor_runner::job_message::AgentJobRequestMessage;
 
 use crate::exec_builder::{job, run};
 use crate::exec_support::{Scratch, fixture_message, run_fixture, run_path};
+use crate::lifecycle_support::job_replacing;
+
+const HOST_OS: &str = if cfg!(target_os = "macos") {
+    "macOS"
+} else {
+    "Linux"
+};
 
 #[test]
 fn shell_forms_expand_like_github() -> Result<()> {
@@ -38,7 +45,9 @@ fn github_context_exports_env_and_event_file() -> Result<()> {
     let ran = run_fixture("github-context", &scratch)?;
     assert!(
         ran.has_line(
-            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os=Linux run=42"
+            &format!(
+                "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os={HOST_OS} run=42"
+            )
         ),
         "{}",
         ran.stdout
@@ -218,5 +227,33 @@ async fn annotation_title_and_file_are_masked_like_the_message() -> Result<()> {
     assert_eq!(annotation.message, "***");
     assert_eq!(annotation.title.as_deref(), Some("***"));
     assert_eq!(annotation.file.as_deref(), Some("***"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn preflight_annotations_are_masked_like_the_log() -> Result<()> {
+    const SECRET: &str = "s3cr3t-Value-12345";
+    let scratch = Scratch::new()?;
+    let mut job = job_replacing(
+        "unsupported-shell",
+        Some(("pwsh {0}", "pwsh-s3cr3t-Value-12345 {0}")),
+    )?;
+    job["Variables"] = json!({"MY_SECRET": {"Value": SECRET, "IsSecret": true}});
+    let message: AgentJobRequestMessage = serde_json::from_value(job)?;
+
+    let ran = run_job(
+        &message,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let annotation = ran
+        .annotations
+        .first()
+        .context("the preflight annotation")?;
+    assert_eq!(annotation.message, "unsupported: shell pwsh-*** {0}");
     Ok(())
 }

@@ -149,6 +149,32 @@ async fn run_cli_deletes_the_jit_file_once_it_is_read() -> Result<()> {
 }
 
 #[tokio::test]
+async fn run_cli_refuses_to_start_when_the_jit_file_cannot_be_deleted() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if rustix::process::geteuid().is_root() {
+        bail!("the directory permission below does not bind root; run the test as a normal user");
+    }
+    let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+    let directory = scratch.work_dir().join("sealed");
+    std::fs::create_dir_all(&directory)?;
+    let jit_file = directory.join("jit.txt");
+    std::fs::write(&jit_file, mock.jit())?;
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o555))?;
+
+    let output = velnor_runner(&["run", "--jit", &format!("@{}", jit_file.display())]).await;
+
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755))?;
+    let output = output?;
+    assert_ne!(output.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("remove the JIT file"), "{stderr}");
+    assert!(mock.server.requests()?.is_empty(), "the runner went on");
+    Ok(())
+}
+
+#[tokio::test]
 async fn run_cli_exits_1_and_deletes_the_session_when_the_job_cannot_be_acquired() -> Result<()> {
     let behavior = Behavior {
         unusable_job: true,

@@ -25,6 +25,8 @@ const RENEW_INTERVAL: Duration = Duration::from_secs(60);
 const RENEW_LOCK_GRACE: Duration = Duration::from_secs(300);
 const CANCEL_TIMEOUT_FLOOR: Duration = Duration::from_secs(60);
 const CANCEL_POLL_ERROR_DELAY: Duration = Duration::from_secs(2);
+const SESSION_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+const REPORT_BUDGET: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Parser)]
 #[command(
@@ -185,9 +187,7 @@ fn jit_value(raw: &str) -> Result<String> {
         return Ok(raw.to_owned());
     };
     let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
-    if let Err(error) = std::fs::remove_file(path) {
-        eprintln!("warning: remove the JIT file {path}: {error}");
-    }
+    std::fs::remove_file(path).with_context(|| format!("remove the JIT file {path}"))?;
     Ok(text.trim().to_owned())
 }
 
@@ -202,6 +202,8 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
         cancel_timeout_floor: CANCEL_TIMEOUT_FLOOR,
         upload_block_budget: BLOCK_BUDGET,
         cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
+        session_retry_interval: SESSION_RETRY_INTERVAL,
+        report_budget: REPORT_BUDGET,
         adapters: build_adapters(),
     };
     Ok(match run_jit(options).await {

@@ -143,6 +143,8 @@ fn run_jit_options_debug_output_hides_the_jit_configuration() {
         cancel_timeout_floor: Duration::from_secs(60),
         upload_block_budget: Duration::from_secs(60),
         cancel_poll_error_delay: Duration::from_secs(2),
+        session_retry_interval: Duration::from_secs(30),
+        report_budget: Duration::from_secs(10),
         adapters: AdapterRegistry::empty(),
     };
 
