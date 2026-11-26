@@ -161,7 +161,7 @@ impl RunServiceClient {
             let outcome = github_json_request(
                 Method::POST,
                 url.as_str(),
-                &self.bearer_token,
+                self.bearer_token.expose(),
                 Some(body.clone()),
                 REQUEST_TIMEOUT,
             )

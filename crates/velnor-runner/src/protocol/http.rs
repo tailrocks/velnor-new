@@ -9,16 +9,37 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use url::Url;
 
+use crate::secret::Secret;
+
 pub const RUNNER_VERSION: &str = "2.338.2";
 pub const RUNNER_USER_AGENT: &str = "actions-runner/2.338.2 (velnor)";
+
+pub(crate) fn runner_os() -> Result<&'static str> {
+    match std::env::consts::OS {
+        "linux" => Ok("Linux"),
+        "macos" => Ok("macOS"),
+        "windows" => Ok("Windows"),
+        other => bail!("unsupported runner operating system: {other}"),
+    }
+}
+
+pub(crate) fn runner_architecture() -> Result<&'static str> {
+    match std::env::consts::ARCH {
+        "x86" => Ok("X86"),
+        "x86_64" => Ok("X64"),
+        "arm" => Ok("ARM"),
+        "aarch64" => Ok("ARM64"),
+        other => bail!("unsupported runner architecture: {other}"),
+    }
+}
 
 const ACTIONS_SERVICE_SUFFIX: &str = ".actions.githubusercontent.com";
 
 #[derive(Debug)]
 pub struct GithubHttpResponse {
     pub status: u16,
-    pub body: String,
-    pub headers: HeaderMap,
+    pub body: Secret<String>,
+    pub headers: Secret<HeaderMap>,
 }
 
 pub(crate) fn http_client() -> Result<Client> {
@@ -68,8 +89,8 @@ pub async fn github_json_http_response(
     })?;
     Ok(GithubHttpResponse {
         status,
-        body,
-        headers,
+        body: Secret::new(body),
+        headers: Secret::new(headers),
     })
 }
 
@@ -81,7 +102,7 @@ pub async fn github_json_request(
     timeout: Duration,
 ) -> Result<(u16, String)> {
     let response = github_json_http_response(method, url, bearer_token, json_body, timeout).await?;
-    Ok((response.status, response.body))
+    Ok((response.status, response.body.into_inner()))
 }
 
 pub(crate) async fn oauth_form_request(
@@ -151,7 +172,7 @@ pub(crate) fn is_github_actions_service_host(host: &str) -> bool {
 pub(crate) fn validate_known_service_url(raw: &str, field: &str, hosts: &[&str]) -> Result<Url> {
     let url = validate_authenticated_url(raw)?;
     let host = url.host_str().unwrap_or_default();
-    let loopback = is_loopback_host(host);
+    let loopback = cfg!(feature = "test-support") && is_loopback_host(host);
     let allowed_host = loopback
         || hosts.iter().any(|allowed| {
             host.eq_ignore_ascii_case(allowed)

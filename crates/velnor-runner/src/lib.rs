@@ -5,3 +5,4 @@ pub mod context_value;
 pub mod job_message;
 pub mod protocol;
 pub mod runner_json;
+pub mod secret;

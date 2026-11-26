@@ -27,6 +27,15 @@
     }
   ],
   "Resources": {
+    "Containers": [
+      {
+        "Alias": "build",
+        "Properties": {
+          "image": "ghcr.io/tailrocks/build",
+          "options": "--label velnor-redaction-marker-registry"
+        }
+      }
+    ],
     "Endpoints": [
       {
         "Name": "SystemVssConnection",
@@ -79,17 +88,51 @@
       "d": [
         {
           "k": "repository",
-          "v": {
-            "t": 0,
-            "s": "tailrocks/velnor-new"
-          }
+          "v": "tailrocks/velnor-new"
         },
         {
           "k": "run_attempt",
+          "v": 1
+        },
+        {
+          "k": "token",
+          "v": "github-context-token"
+        },
+        {
+          "k": "event",
           "v": {
-            "t": 4,
-            "n": 1
+            "t": 2,
+            "d": [
+              {
+                "k": "forced",
+                "v": false
+              },
+              {
+                "k": "ratio",
+                "v": 0.5
+              },
+              {
+                "k": "labels",
+                "v": {
+                  "t": 1,
+                  "a": [
+                    "bug",
+                    true,
+                    3
+                  ]
+                }
+              }
+            ]
           }
+        }
+      ]
+    },
+    "secrets": {
+      "t": 2,
+      "d": [
+        {
+          "k": "DEPLOY_KEY",
+          "v": "context-secret-value"
         }
       ]
     }

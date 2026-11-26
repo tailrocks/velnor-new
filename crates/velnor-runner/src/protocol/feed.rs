@@ -15,6 +15,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use url::Url;
 
 use super::http::{RUNNER_USER_AGENT, validate_known_service_url};
+use crate::secret::Secret;
 
 pub type FeedWebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -40,7 +41,7 @@ pub struct FeedLines {
 #[derive(Debug, Clone)]
 pub struct FeedStreamClient {
     url: Url,
-    token: String,
+    token: Secret<String>,
     route: Option<(String, String)>,
 }
 
@@ -48,7 +49,7 @@ impl FeedStreamClient {
     pub fn new(feed_stream_url: &str, token: impl Into<String>) -> Result<Self> {
         Ok(Self {
             url: validate_feed_url(feed_stream_url)?,
-            token: token.into(),
+            token: Secret::new(token.into()),
             route: None,
         })
     }
@@ -82,7 +83,7 @@ impl FeedStreamClient {
         let headers = request.headers_mut();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", self.token))
+            HeaderValue::from_str(&format!("Bearer {}", self.token.expose()))
                 .context("encode feed stream authorization")?,
         );
         headers.insert(USER_AGENT, HeaderValue::from_static(RUNNER_USER_AGENT));
@@ -124,16 +125,18 @@ impl FeedStreamClient {
 }
 
 fn validate_feed_url(raw: &str) -> Result<Url> {
-    let url = Url::parse(raw).context("parse feed stream URL")?;
-    let http_scheme = match url.scheme() {
-        "wss" => "https",
-        "ws" => "http",
-        other => bail!("feed stream URL must use wss, not {other}"),
+    let mut url = Url::parse(raw).context("parse feed stream URL")?;
+    let (http_scheme, ws_scheme) = match url.scheme() {
+        "https" | "wss" => ("https", "wss"),
+        "http" | "ws" => ("http", "ws"),
+        other => bail!("feed stream URL must use https or wss, not {other}"),
     };
     let mut probe = url.clone();
     probe
         .set_scheme(http_scheme)
         .map_err(|()| anyhow::anyhow!("feed stream URL scheme cannot be validated"))?;
     validate_known_service_url(probe.as_str(), "FeedStreamUrl", FEED_HOSTS)?;
+    url.set_scheme(ws_scheme)
+        .map_err(|()| anyhow::anyhow!("feed stream URL scheme cannot be rewritten"))?;
     Ok(url)
 }

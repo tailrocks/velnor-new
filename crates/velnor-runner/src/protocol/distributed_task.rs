@@ -11,6 +11,7 @@ use url::Url;
 use super::error::github_api_error;
 use super::http::{github_json_request, slash_url, validate_known_service_url};
 use super::timeline::{TimelineRecord, TimelineRecordFeedLines};
+use crate::secret::Secret;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const API_VERSION: &str = "5.1-preview.1";
@@ -19,12 +20,20 @@ const KNOWN_HOSTS: &[&str] = &["pipelines.actions.githubusercontent.com"];
 #[derive(Debug, Clone)]
 pub struct DistributedTaskClient {
     server_root_url: Url,
-    bearer_token: String,
+    bearer_token: Secret<String>,
 }
 
 #[derive(Serialize)]
 struct CollectionRequest<'a> {
+    count: usize,
     value: &'a [TimelineRecord],
+}
+
+#[derive(Serialize)]
+struct CountedFeed<'a> {
+    count: usize,
+    #[serde(flatten)]
+    feed: &'a TimelineRecordFeedLines,
 }
 
 #[derive(Deserialize)]
@@ -39,7 +48,7 @@ impl DistributedTaskClient {
         let url = validate_known_service_url(server_url, "SystemVssConnection", KNOWN_HOSTS)?;
         Ok(Self {
             server_root_url: slash_url(&url),
-            bearer_token: bearer_token.into(),
+            bearer_token: Secret::new(bearer_token.into()),
         })
     }
 
@@ -52,12 +61,15 @@ impl DistributedTaskClient {
         records: &[TimelineRecord],
     ) -> Result<Vec<TimelineRecord>> {
         let url = self.timeline_url(scope_identifier, hub_name, plan_id, timeline_id, "records")?;
-        let body = serde_json::to_string(&CollectionRequest { value: records })
-            .context("serialize timeline records")?;
+        let body = serde_json::to_string(&CollectionRequest {
+            count: records.len(),
+            value: records,
+        })
+        .context("serialize timeline records")?;
         let (status, text) = github_json_request(
             Method::PATCH,
             url.as_str(),
-            &self.bearer_token,
+            self.bearer_token.expose(),
             Some(body),
             REQUEST_TIMEOUT,
         )
@@ -86,11 +98,15 @@ impl DistributedTaskClient {
             timeline_id,
             &format!("records/{record_id}/feed"),
         )?;
-        let body = serde_json::to_string(feed).context("serialize timeline record feed")?;
+        let body = serde_json::to_string(&CountedFeed {
+            count: feed.value.len(),
+            feed,
+        })
+        .context("serialize timeline record feed")?;
         let (status, text) = github_json_request(
             Method::POST,
             url.as_str(),
-            &self.bearer_token,
+            self.bearer_token.expose(),
             Some(body),
             REQUEST_TIMEOUT,
         )

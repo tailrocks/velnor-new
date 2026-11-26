@@ -11,6 +11,7 @@ use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::{GithubHttpResponse, github_json_http_response};
 use super::{REQUEST_TIMEOUT, RunServiceClient, run_service_error_code};
 use crate::job_message::AgentJobRequestMessage;
+use crate::secret::Secret;
 
 const MAX_ATTEMPTS: u32 = 5;
 const ACTION: &str = "acquire run-service job";
@@ -42,7 +43,7 @@ impl AcquireJobSkipReason {
 
 #[derive(Debug)]
 pub struct AcquiredJobPayload {
-    pub raw: Value,
+    pub raw: Secret<Value>,
     pub message: Option<AgentJobRequestMessage>,
 }
 
@@ -111,7 +112,7 @@ impl RunServiceClient {
         let response = github_json_http_response(
             Method::POST,
             url,
-            &self.bearer_token,
+            self.bearer_token.expose(),
             Some(body.to_owned()),
             REQUEST_TIMEOUT,
         )
@@ -128,18 +129,18 @@ impl RunServiceClient {
                 )
             });
         }
-        if let Some(reason) = AcquireJobSkipReason::from_body(&response.body) {
+        if let Some(reason) = AcquireJobSkipReason::from_body(response.body.expose()) {
             return Ok(AcquireJobOutcome::Skipped {
                 status: StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 category: reason.category(),
                 reason,
-                body: response.body,
+                body: response.body.into_inner(),
             });
         }
         Err(github_api_error_categorized(
             ACTION,
             status,
-            &response.body,
+            response.body.expose(),
             BrokerErrorCategory::Transient,
         ))
     }
@@ -148,6 +149,7 @@ impl RunServiceClient {
 fn is_json_body(response: &GithubHttpResponse) -> bool {
     let media_type = response
         .headers
+        .expose()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split(';').next())
@@ -157,17 +159,17 @@ fn is_json_body(response: &GithubHttpResponse) -> bool {
 }
 
 fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, serde_json::Error> {
-    if !is_json_body(response) || response.body.trim().is_empty() {
-        return Ok(acquired(Value::Null, None));
+    if !is_json_body(response) || response.body.expose().trim().is_empty() {
+        return Ok(acquired(Secret::new(Value::Null), None));
     }
-    let raw: Value = serde_json::from_str(&response.body)?;
+    let raw: Value = serde_json::from_str(response.body.expose())?;
     let message = raw
         .is_object()
-        .then(|| serde_json::from_str::<AgentJobRequestMessage>(&response.body).ok())
+        .then(|| serde_json::from_str::<AgentJobRequestMessage>(response.body.expose()).ok())
         .flatten();
-    Ok(acquired(raw, message))
+    Ok(acquired(Secret::new(raw), message))
 }
 
-fn acquired(raw: Value, message: Option<AgentJobRequestMessage>) -> AcquireJobOutcome {
+fn acquired(raw: Secret<Value>, message: Option<AgentJobRequestMessage>) -> AcquireJobOutcome {
     AcquireJobOutcome::Acquired(Box::new(AcquiredJobPayload { raw, message }))
 }

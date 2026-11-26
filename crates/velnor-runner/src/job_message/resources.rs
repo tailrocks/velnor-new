@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use super::wire::deserialize_null_default;
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::runner_json::ordered::OrderedJsonValue;
+use crate::secret::Secret;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -36,7 +37,7 @@ pub struct ServiceEndpoint {
 impl ServiceEndpoint {
     #[must_use]
     pub fn data_string(&self, name: &str) -> Option<&str> {
-        find_ignore_case(&self.data, name)
+        find_ignore_case(&self.data, name)?.as_deref()
     }
 }
 
@@ -50,13 +51,15 @@ pub struct EndpointAuthorization {
         deserialize_with = "deserialize_null_default",
         alias = "Parameters"
     )]
-    pub parameters: BTreeMap<String, Option<String>>,
+    pub parameters: BTreeMap<String, Option<Secret<String>>>,
 }
 
 impl EndpointAuthorization {
     #[must_use]
     pub fn parameter_string(&self, name: &str) -> Option<&str> {
-        find_ignore_case(&self.parameters, name)
+        find_ignore_case(&self.parameters, name)?
+            .as_ref()
+            .map(|value| value.expose().as_str())
     }
 }
 
@@ -90,24 +93,24 @@ pub struct ContainerResource {
     #[serde(default, alias = "Endpoint")]
     pub endpoint: Option<serde_json::Value>,
     #[serde(
-        default = "empty_properties",
-        deserialize_with = "deserialize_properties",
+        default = "empty_secret_properties",
+        deserialize_with = "deserialize_secret_properties",
         alias = "Properties"
     )]
-    pub properties: ContextValue,
+    pub properties: Secret<ContextValue>,
 }
 
 impl ContainerResource {
     #[must_use]
     pub fn property_str(&self, name: &str) -> Option<&str> {
-        property_str(&self.properties, name)
+        property_str(self.properties.expose(), name)
     }
 }
 
-fn find_ignore_case<'a>(map: &'a BTreeMap<String, Option<String>>, name: &str) -> Option<&'a str> {
+fn find_ignore_case<'a, V>(map: &'a BTreeMap<String, V>, name: &str) -> Option<&'a V> {
     map.iter()
         .find(|(key, _)| ordinal_ignore_case_eq(key, name))
-        .and_then(|(_, value)| value.as_deref())
+        .map(|(_, value)| value)
 }
 
 fn property_str<'a>(properties: &'a ContextValue, name: &str) -> Option<&'a str> {
@@ -122,6 +125,17 @@ fn empty_properties() -> ContextValue {
         case_sensitive: false,
         entries: Vec::new(),
     }
+}
+
+fn empty_secret_properties() -> Secret<ContextValue> {
+    Secret::new(empty_properties())
+}
+
+fn deserialize_secret_properties<'de, D>(deserializer: D) -> Result<Secret<ContextValue>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_properties(deserializer).map(Secret::new)
 }
 
 fn deserialize_properties<'de, D>(deserializer: D) -> Result<ContextValue, D::Error>

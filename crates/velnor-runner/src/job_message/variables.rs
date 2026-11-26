@@ -5,12 +5,13 @@
 use serde::Deserialize;
 
 use super::wire::deserialize_null_default;
+use crate::secret::Secret;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VariableValue {
     #[serde(default, alias = "Value")]
-    pub value: Option<String>,
+    pub value: Option<Secret<String>>,
     #[serde(
         default,
         deserialize_with = "deserialize_null_default",
@@ -25,5 +26,5 @@ pub struct MaskHint {
     #[serde(default, rename = "type", alias = "Type")]
     pub kind: Option<String>,
     #[serde(default, alias = "Value")]
-    pub value: Option<String>,
+    pub value: Option<Secret<String>>,
 }

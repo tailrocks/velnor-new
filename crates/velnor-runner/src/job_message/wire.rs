@@ -14,6 +14,7 @@ use super::resources::{JobResources, ServiceEndpoint};
 use super::step::ActionStep;
 use super::variables::{MaskHint, VariableValue};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
+use crate::secret::Secret;
 
 pub const PIPELINE_AGENT_JOB_REQUEST: &str = "PipelineAgentJobRequest";
 
@@ -90,7 +91,7 @@ pub struct AgentJobRequestMessage {
     #[serde(alias = "Workspace")]
     pub workspace: Option<Value>,
     #[serde(deserialize_with = "deserialize_null_default", alias = "ContextData")]
-    pub context_data: OrderedContextData<Value>,
+    pub context_data: Secret<OrderedContextData<Value>>,
     #[serde(alias = "ActionsEnvironment")]
     pub actions_environment: Option<Value>,
     #[serde(alias = "BillingOwnerId")]
@@ -108,18 +109,24 @@ impl AgentJobRequestMessage {
         serde_json::from_value(value).context("parse AgentJobRequestMessage value")
     }
 
-    pub fn materialize_context_values(&self) -> Result<BTreeMap<String, ContextValue>> {
-        Ok(self
-            .materialize_context_values_ordered()?
-            .into_iter()
-            .collect())
+    pub fn materialize_context_values(&self) -> Result<Secret<BTreeMap<String, ContextValue>>> {
+        Ok(Secret::new(
+            self.materialize_context_values_ordered()?
+                .into_inner()
+                .into_iter()
+                .collect(),
+        ))
     }
 
-    pub fn materialize_context_values_ordered(&self) -> Result<Vec<(String, ContextValue)>> {
+    pub fn materialize_context_values_ordered(
+        &self,
+    ) -> Result<Secret<Vec<(String, ContextValue)>>> {
         self.context_data
+            .expose()
             .iter()
             .map(|(name, value)| Ok((name.clone(), pipeline_context_value(value)?)))
-            .collect()
+            .collect::<Result<_>>()
+            .map(Secret::new)
     }
 
     pub fn system_connection(&self) -> Result<&ServiceEndpoint> {
