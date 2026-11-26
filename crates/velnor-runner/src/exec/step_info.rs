@@ -9,6 +9,7 @@ use crate::job_message::ActionStep;
 
 use super::preflight::reference;
 
+const TIMEOUT_FAILED: &str = "An error occurred when attempting to determine the step timeout.";
 const CONTINUE_ON_ERROR_FAILED: &str = "The step failed and an error occurred when attempting to determine whether to continue on error.";
 
 pub(super) fn context_id(step: &ActionStep) -> Option<&str> {
@@ -41,6 +42,33 @@ pub(super) fn step_environment(
     }
 }
 
+fn report_pair(out: &mut Output<'_>, headline: &str, detail: &str) {
+    for line in [headline, detail] {
+        out.message(line);
+        out.annotate(AnnotationLevel::Error, line);
+    }
+}
+
+pub(super) fn step_timeout(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_>) -> Option<f64> {
+    let token = step.timeout_in_minutes.as_ref()?;
+    let text = match token::scalar(token, env) {
+        Ok(text) => text,
+        Err(error) => {
+            report_pair(out, TIMEOUT_FAILED, &error.to_string());
+            return None;
+        }
+    };
+    match text.trim().parse::<f64>() {
+        Ok(minutes) if minutes.is_finite() => Some(minutes).filter(|minutes| *minutes > 0.0),
+        _ => {
+            if !text.trim().is_empty() {
+                report_pair(out, TIMEOUT_FAILED, &format!("'{text}' is not a number"));
+            }
+            None
+        }
+    }
+}
+
 pub(super) fn continue_on_error(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_>) -> bool {
     let Some(token) = step.continue_on_error.as_ref() else {
         return false;
@@ -48,10 +76,7 @@ pub(super) fn continue_on_error(step: &ActionStep, env: &ExprEnv, out: &mut Outp
     match token::scalar(token, env) {
         Ok(value) => value.eq_ignore_ascii_case("true"),
         Err(error) => {
-            for line in [CONTINUE_ON_ERROR_FAILED, &error.to_string()] {
-                out.message(line);
-                out.annotate(AnnotationLevel::Error, line);
-            }
+            report_pair(out, CONTINUE_ON_ERROR_FAILED, &error.to_string());
             false
         }
     }

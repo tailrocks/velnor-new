@@ -32,6 +32,57 @@ async fn a_timeout_that_is_not_a_number_is_annotated_and_the_step_runs() -> Resu
 }
 
 #[tokio::test]
+async fn a_timeout_that_does_not_evaluate_is_annotated_and_the_step_runs() -> Result<()> {
+    let timed = with(
+        run("a", "echo ran"),
+        "TimeoutInMinutes",
+        expression("fromJSON('{bad')"),
+    );
+    let (finished, lines) = execute(
+        &job(vec![timed]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    assert_eq!(finished.result, JobResult::Succeeded);
+    assert_eq!(finished.steps[0].outcome, StepResult::Succeeded);
+    assert!(lines.iter().any(|line| line == "ran"), "{lines:?}");
+    let errors: Vec<&str> = finished
+        .annotations
+        .iter()
+        .filter(|annotation| annotation.level == AnnotationLevel::Error)
+        .map(|annotation| annotation.message.as_str())
+        .collect();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert_eq!(
+        errors[0],
+        "An error occurred when attempting to determine the step timeout."
+    );
+    assert!(errors[1].contains("Error parsing fromJson"), "{errors:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn stop_tokens_are_matched_one_character_at_a_time() -> Result<()> {
+    let script = "echo '::stop-commands::straße-token'\necho '::error::paused'\necho '::strasse-token::'\necho '::error::still-paused'\necho '::STRAßE-TOKEN::'\necho '::error::resumed'";
+    let (finished, _) = execute(
+        &job(vec![run("a", script)]),
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    let messages: Vec<&str> = finished
+        .annotations
+        .iter()
+        .map(|annotation| annotation.message.as_str())
+        .collect();
+    assert_eq!(messages, vec!["resumed"]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn stop_commands_resume_with_unicode_case_folding() -> Result<()> {
     let script = "echo '::stop-commands::ÄBCDEFG'\necho '::error::paused'\necho '::äbcdefg::'\necho '::error::resumed'";
     let (finished, _) = execute(

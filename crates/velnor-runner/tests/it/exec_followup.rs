@@ -1,26 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
-
 use anyhow::{Context, Result};
 use futures_util::FutureExt;
 use serde_json::{Value, json};
 use velnor_runner::exec::{
-    AdapterRegistry, AnnotationLevel, ExecError, JobCancel, JobResult, RunOptions, StepAdapter,
-    StepContext, StepFuture, StepResult, run_job,
+    AdapterRegistry, AnnotationLevel, ExecError, JobCancel, JobResult, StepAdapter, StepContext,
+    StepFuture, StepResult,
 };
 
-use crate::exec_builder::{
-    Recorder, execute, expression, job, literal, mapping, parse, run, step, with,
-};
+use crate::exec_builder::{execute, expression, job, literal, mapping, run, step, with};
 use crate::exec_support::Scratch;
 
-fn repository(mut uses: Value, name: &str) -> Value {
+fn repository(mut uses: Value, name: &str, kind: &str) -> Value {
     uses["Reference"] =
-        json!({"Type": "repository", "Name": name, "Ref": "v1", "RepositoryType": "GitHub"});
+        json!({"Type": "repository", "Name": name, "Ref": "v1", "RepositoryType": kind});
     uses
 }
 
@@ -42,19 +36,28 @@ impl StepAdapter for Failing {
     }
 }
 
-struct Reporter;
+struct Reporter {
+    reference: &'static str,
+    repository: Option<&'static str>,
+    git_ref: Option<&'static str>,
+}
 
 impl StepAdapter for Reporter {
     fn handles(&self, reference: &str) -> bool {
-        reference == "actions/ctx@v1"
+        reference == self.reference
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
-            let seen = ctx.env.get("GITHUB_ACTION_REPOSITORY").map(String::as_str)
-                == Some("actions/ctx")
-                && ctx.env.get("GITHUB_ACTION_REF").map(String::as_str) == Some("v1");
-            Ok(if seen {
+            let seen = |name: &str| {
+                ctx.env
+                    .get(name)
+                    .map(String::as_str)
+                    .filter(|value| !value.is_empty())
+            };
+            let matches = seen("GITHUB_ACTION_REPOSITORY") == self.repository
+                && seen("GITHUB_ACTION_REF") == self.git_ref;
+            Ok(if matches {
                 StepResult::Succeeded
             } else {
                 StepResult::Failed
@@ -67,10 +70,20 @@ impl StepAdapter for Reporter {
 #[tokio::test]
 async fn repository_action_variables_follow_the_step() -> Result<()> {
     let mut registry = AdapterRegistry::empty();
-    registry.register(Box::new(Reporter));
+    registry.register(Box::new(Reporter {
+        reference: "actions/ctx@v1",
+        repository: Some("actions/ctx"),
+        git_ref: Some("v1"),
+    }));
+    registry.register(Box::new(Reporter {
+        reference: "actions/own@v1",
+        repository: None,
+        git_ref: None,
+    }));
     let (finished, lines) = execute(
         &job(vec![
-            repository(step("a", literal("unused")), "actions/ctx"),
+            repository(step("a", literal("unused")), "actions/ctx", "GitHub"),
+            repository(step("own", literal("unused")), "actions/own", "self"),
             run(
                 "b",
                 "echo \"repo=[$GITHUB_ACTION_REPOSITORY] ref=[$GITHUB_ACTION_REF]\"",
@@ -82,6 +95,7 @@ async fn repository_action_variables_follow_the_step() -> Result<()> {
     )
     .await?;
     assert_eq!(finished.steps[0].outcome, StepResult::Succeeded);
+    assert_eq!(finished.steps[1].outcome, StepResult::Succeeded);
     assert!(
         lines.iter().any(|line| line == "repo=[] ref=[]"),
         "{lines:?}"
@@ -100,7 +114,7 @@ async fn a_failed_adapter_still_has_its_file_commands_applied() -> Result<()> {
     );
     let (finished, lines) = execute(
         &job(vec![
-            repository(step("a", literal("unused")), "actions/foo"),
+            repository(step("a", literal("unused")), "actions/foo", "GitHub"),
             after,
         ]),
         &Scratch::new()?,
@@ -124,7 +138,7 @@ async fn a_failed_adapter_still_has_its_file_commands_applied() -> Result<()> {
 
 #[tokio::test]
 async fn annotation_files_are_relative_and_ranges_are_validated() -> Result<()> {
-    let script = "echo \"::error file=$GITHUB_WORKSPACE/src/main.rs,line=5,endLine=3,col=2::reversed\"\necho '::error endLine=7,col=3::promoted'\necho '::error file=/elsewhere/a.rs::outside'";
+    let script = "echo \"::error file=$GITHUB_WORKSPACE/src/main.rs,line=5,endLine=3,col=2::reversed\"\necho '::error endLine=7,col=3::promoted'\necho '::error file=/elsewhere/a.rs::outside'\necho '::error line=1,col=5,endColumn=3::columns'";
     let (finished, _) = execute(
         &job(vec![run("a", script)]),
         &Scratch::new()?,
@@ -151,6 +165,11 @@ async fn annotation_files_are_relative_and_ranges_are_validated() -> Result<()> 
         (Some(7), Some(7), Some(3))
     );
     assert_eq!(find("outside")?.file.as_deref(), Some("/elsewhere/a.rs"));
+    let columns = find("columns")?;
+    assert_eq!(
+        (columns.line, columns.column, columns.end_column),
+        (Some(1), None, None)
+    );
     Ok(())
 }
 
@@ -169,7 +188,6 @@ async fn an_unregistered_modern_prefix_does_not_hide_a_legacy_command() -> Resul
     assert!(
         !lines
             .iter()
-            .skip(1)
             .any(|line| line.contains("legacy-hidden-value")),
         "{lines:?}"
     );
@@ -221,9 +239,7 @@ async fn a_lone_carriage_return_ends_an_output_line() -> Result<()> {
     .await?;
     assert!(lines.iter().any(|line| line == "ordinary"), "{lines:?}");
     assert!(
-        !lines
-            .iter()
-            .any(|line| line.contains("lone-cr-secret") && !line.starts_with("::")),
+        !lines.iter().any(|line| line.contains("lone-cr-secret")),
         "{lines:?}"
     );
     Ok(())
@@ -270,62 +286,23 @@ async fn job_outputs_differing_by_case_keep_the_last_value() -> Result<()> {
 }
 
 #[tokio::test]
-async fn paths_that_are_not_utf8_fail_the_job_before_any_step() -> Result<()> {
-    let scratch = Scratch::new()?;
-    let mut options: RunOptions = scratch.options();
-    options.workspace = PathBuf::from(OsStr::from_bytes(b"/tmp/not-\xff-utf8"));
-    let mut recorder = Recorder::default();
-    let finished = run_job(
-        &parse(&job(vec![run("a", "echo never")]))?,
-        &options,
-        &AdapterRegistry::empty(),
-        &mut recorder,
-        JobCancel::new(),
-    )
-    .await;
-    assert_eq!(finished.result, JobResult::Failed);
-    assert!(finished.steps.is_empty());
-    assert!(
-        recorder
-            .lines
-            .iter()
-            .any(|line| line.contains("not valid UTF-8")),
-        "{:?}",
-        recorder.lines
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn evaluation_errors_of_a_step_are_annotated() -> Result<()> {
-    let broken_condition = with(
-        run("b", "echo never"),
-        "Condition",
-        json!("fromJSON(env.Y)"),
-    );
-    let (finished, _) = execute(
+async fn github_path_entries_end_at_a_lone_carriage_return() -> Result<()> {
+    let (finished, lines) = execute(
         &job(vec![
-            step("a", expression("fromJSON(env.X)")),
-            broken_condition,
+            run("a", "printf '/opt/one\\r/opt/two\\n' >> \"$GITHUB_PATH\""),
+            run("b", "echo \"path=$PATH\""),
         ]),
         &Scratch::new()?,
         &AdapterRegistry::empty(),
         JobCancel::new(),
     )
     .await?;
-    let errors: Vec<&str> = finished
-        .annotations
+    assert_eq!(finished.result, JobResult::Succeeded);
+    let path = lines
         .iter()
-        .filter(|annotation| annotation.level == AnnotationLevel::Error)
-        .map(|annotation| annotation.message.as_str())
-        .collect();
-    assert!(
-        errors
-            .iter()
-            .filter(|text| text.contains("unsupported expression function fromJSON"))
-            .count()
-            >= 2,
-        "{errors:?}"
-    );
+        .find_map(|line| line.strip_prefix("path="))
+        .context("the PATH line")?;
+    let entries: Vec<&str> = path.split(':').take(2).collect();
+    assert_eq!(entries, ["/opt/two", "/opt/one"], "{path}");
     Ok(())
 }

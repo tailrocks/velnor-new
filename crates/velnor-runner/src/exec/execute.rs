@@ -11,6 +11,7 @@ use super::output::Output;
 use super::preflight::reference;
 use super::shell;
 use super::step::{Limits, ScriptStep, run_script};
+use super::step_info::step_timeout;
 use super::token;
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::expr::ExprEnv;
@@ -34,28 +35,7 @@ impl Job<'_> {
         cancel: Option<&JobCancel>,
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
-        let minutes = match step.timeout_in_minutes.as_ref() {
-            Some(token) => {
-                let text = token::scalar(token, env)?;
-                match text.trim().parse::<f64>() {
-                    Ok(minutes) if minutes.is_finite() => Some(minutes).filter(|m| *m > 0.0),
-                    _ => {
-                        if !text.trim().is_empty() {
-                            for line in [
-                                "An error occurred when attempting to determine the step timeout."
-                                    .to_owned(),
-                                format!("'{text}' is not a number"),
-                            ] {
-                                out.message(&line);
-                                out.annotate(AnnotationLevel::Error, line);
-                            }
-                        }
-                        None
-                    }
-                }
-            }
-            None => None,
-        };
+        let minutes = step_timeout(step, env, out);
         let files = FileCommands::create(&self.options.temp).await?;
         let process_env = self.ctx.process_env(&step_env, &files.variables());
         let limits = Limits {

@@ -74,6 +74,15 @@ fn overlapping_secrets_are_masked_as_one_range() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn touching_secrets_are_masked_as_one_range() -> Result<()> {
+    let mut message = job(vec![run("a", "echo ABCDEF")]);
+    secrets(&mut message, &[("ONE", "ABC"), ("TWO", "DEF")]);
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("***"), "{}", ran.stdout);
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_secret_across_the_line_limit_is_masked_before_the_cut() -> Result<()> {
     let hidden = "Zq9xK2mW7pQ4";
@@ -102,6 +111,34 @@ async fn a_secret_across_the_line_limit_is_masked_before_the_cut() -> Result<()>
     Ok(())
 }
 
+#[tokio::test]
+async fn a_secret_split_by_the_read_bound_leaves_no_fragment() -> Result<()> {
+    let hidden = "Zq9xK2mW7pQ4vN8t";
+    let script = format!(
+        "for _ in $(seq 6000); do printf '%s' '{hidden}'; done\nhead -c 1018104 /dev/zero | tr '\\0' a\nprintf '%s' '{hidden}'\necho"
+    );
+    let mut message = job(vec![run("a", &script)]);
+    secrets(&mut message, &[("KEY", hidden)]);
+    let (finished, lines) = execute(
+        &message,
+        &Scratch::new()?,
+        &AdapterRegistry::empty(),
+        JobCancel::new(),
+    )
+    .await?;
+    assert_eq!(finished.result, JobResult::Succeeded);
+    let long = lines
+        .iter()
+        .find(|line| line.starts_with("***"))
+        .context("the long line")?;
+    assert!(long.ends_with(" [line truncated at 1048576 bytes]"));
+    assert!(
+        !lines.iter().any(|line| line.contains("Zq9")),
+        "a secret fragment reached the log"
+    );
+    Ok(())
+}
+
 struct Reader;
 
 impl StepAdapter for Reader {
@@ -111,8 +148,10 @@ impl StepAdapter for Reader {
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
-            let found = ctx.inputs.get("token").map(String::as_str) == Some("abc")
-                && ctx.inputs.get("enablecrossosarchive").map(String::as_str) == Some("yes");
+            let found = ctx.inputs.contains_key("TOKEN")
+                && ctx.inputs.contains_key("EnableCrossOSArchive")
+                && ctx.inputs.get("TOKEN").map(String::as_str) == Some("abc")
+                && ctx.inputs.get("EnableCrossOSArchive").map(String::as_str) == Some("yes");
             Ok(if found {
                 StepResult::Succeeded
             } else {
@@ -134,10 +173,7 @@ async fn adapter_inputs_are_found_whatever_their_case() -> Result<()> {
     let mut registry = AdapterRegistry::empty();
     registry.register(Box::new(Reader));
     let (finished, _) = execute(
-        &job(vec![
-            uses,
-            run("show", "echo seen=${{ steps.foo.outputs.seen }}"),
-        ]),
+        &job(vec![uses]),
         &Scratch::new()?,
         &registry,
         JobCancel::new(),

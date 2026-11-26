@@ -231,7 +231,7 @@ fn background_steps_are_rejected_before_any_step_runs() -> Result<()> {
 }
 
 #[test]
-fn a_shell_chosen_by_the_environment_is_checked_before_any_step_runs() -> Result<()> {
+fn a_shell_chosen_by_the_environment_is_checked_when_its_step_runs() -> Result<()> {
     let scratch = Scratch::new()?;
     let chosen = with(
         with_shell(run("b", "echo hi"), &expression("env.SH")),
@@ -239,17 +239,21 @@ fn a_shell_chosen_by_the_environment_is_checked_before_any_step_runs() -> Result
         mapping(&[("SH", literal("pwsh"))]),
     );
     let ran = run_message(&scratch, &job(vec![run("a", "echo side-effect"), chosen]))?;
+    assert!(ran.has_line("side-effect"), "{}", ran.stdout);
     assert!(ran.has_line("unsupported: shell pwsh"), "{}", ran.stdout);
-    assert!(!has_prefix_line(&ran, "step "), "{}", ran.stdout);
-    assert!(!ran.stdout.contains("side-effect"));
+    assert!(ran.has_line("step 2 failed"), "{}", ran.stdout);
+    assert!(!ran.has_line("hi"), "{}", ran.stdout);
+    assert_eq!(ran.code, Some(1));
 
     let unresolved = with_shell(run("c", "echo hi"), &expression("vars.X"));
     let ran = run_message(&scratch, &job(vec![unresolved]))?;
     assert!(
-        ran.has_line("unsupported: shell unsupported expression context vars"),
+        ran.has_line("unsupported expression context vars"),
         "{}",
         ran.stdout
     );
+    assert!(ran.has_line("step 1 failed"), "{}", ran.stdout);
+    assert!(!ran.has_line("hi"), "{}", ran.stdout);
     Ok(())
 }
 

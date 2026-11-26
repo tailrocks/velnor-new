@@ -15,6 +15,7 @@ use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::cancel::{Groups, group_of, terminate};
+use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
@@ -74,13 +75,7 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn text(mut self) -> (String, bool) {
-        if self.bytes.last() == Some(&b'\n') {
-            self.bytes.pop();
-        }
-        if self.bytes.last() == Some(&b'\r') {
-            self.bytes.pop();
-        }
+    fn text(self) -> (String, bool) {
         (
             String::from_utf8_lossy(&self.bytes).into_owned(),
             self.overflow,
@@ -302,7 +297,7 @@ pub(super) async fn run(
 ) -> Result<StepResult, ExecError> {
     let ending = drive(spec, limits, true, |chunk| {
         let (text, overflow) = chunk.text();
-        let mut lines = text.split('\r').peekable();
+        let mut lines = split_lines(&text).peekable();
         while let Some(line) = lines.next() {
             out.bounded_line(line, overflow && lines.peek().is_none());
         }

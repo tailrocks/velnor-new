@@ -54,7 +54,7 @@ impl Masker {
         self.values.push(value.to_owned());
     }
 
-    pub(super) fn mask<'a>(&self, text: &'a str) -> Cow<'a, str> {
+    pub(super) fn ranges(&self, text: &str) -> Vec<(usize, usize)> {
         let mut spans = Vec::new();
         for value in &self.values {
             value_spans(text, value, &mut spans);
@@ -67,31 +67,42 @@ impl Masker {
                     .map(|found| (found.start(), found.end())),
             );
         }
-        if spans.is_empty() {
+        spans.sort_unstable();
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(spans.len());
+        for (start, end) in spans {
+            match merged.last_mut() {
+                Some(last) if start <= last.1 => last.1 = last.1.max(end),
+                _ => merged.push((start, end)),
+            }
+        }
+        merged
+    }
+
+    pub(super) fn mask<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        let ranges = self.ranges(text);
+        if ranges.is_empty() {
             return Cow::Borrowed(text);
         }
-        spans.sort_unstable();
-        let mut masked = String::with_capacity(text.len());
-        let mut copied = 0;
-        let mut spans = spans.into_iter();
-        let mut current = spans.next().unwrap_or_default();
-        for (start, end) in spans.chain(std::iter::once((usize::MAX, usize::MAX))) {
-            if start <= current.1 {
-                current.1 = current.1.max(end);
-                continue;
-            }
-            masked.push_str(&text[copied..current.0]);
-            masked.push_str(MASK);
-            copied = current.1;
-            current = (start, end);
-        }
-        masked.push_str(&text[copied..]);
-        Cow::Owned(masked)
+        Cow::Owned(redact(text, &ranges, text.len()))
     }
 
     pub(super) fn reveals(&self, text: &str) -> bool {
         matches!(self.mask(text), Cow::Owned(_))
     }
+}
+
+pub(super) fn redact(text: &str, ranges: &[(usize, usize)], end: usize) -> String {
+    let mut masked = String::with_capacity(end);
+    let mut copied = 0;
+    for &(start, stop) in ranges.iter().take_while(|(start, _)| *start < end) {
+        masked.push_str(&text[copied..start]);
+        masked.push_str(MASK);
+        copied = stop;
+    }
+    if copied < end {
+        masked.push_str(&text[copied..end]);
+    }
+    masked
 }
 
 fn value_spans(text: &str, value: &str, spans: &mut Vec<(usize, usize)>) {

@@ -8,6 +8,7 @@ use rustix::fs::OFlags;
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
+use super::lines::split_lines;
 use super::output::Output;
 use super::private;
 use super::{AnnotationLevel, ExecError};
@@ -133,8 +134,7 @@ impl FileCommands {
         let env = pairs(&self.env, "env", &mut failures).await;
         let outputs = pairs(&self.output, "output", &mut failures).await;
         let path = match read_text(&self.path, Kind::Command).await {
-            Ok(text) => text
-                .lines()
+            Ok(text) => split_lines(&text)
                 .filter(|line| !line.is_empty())
                 .map(str::to_owned)
                 .collect(),

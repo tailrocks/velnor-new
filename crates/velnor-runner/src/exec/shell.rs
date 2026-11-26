@@ -4,10 +4,13 @@
 
 use std::path::Path;
 
+use serde_json::Value as Json;
+
 use super::context::JobContext;
 use super::{ExecError, token};
 use crate::expr::ExprEnv;
 use crate::job_message::ActionStep;
+use crate::job_message::template_token::token_literal;
 
 pub(super) const DEFAULT_SHELL: &str = "bash -e {0}";
 
@@ -106,12 +109,23 @@ pub(super) fn resolve(
         .unwrap_or_else(|| DEFAULT_SHELL.to_owned()))
 }
 
-pub(super) fn depends_on_steps(step: &ActionStep) -> bool {
-    step.inputs
+fn plain(token: &Json) -> Option<&str> {
+    token_literal(token).filter(|text| !text.contains("${{") && !text.trim().is_empty())
+}
+
+pub(super) fn admission_spec(step: &ActionStep, context: &JobContext) -> Option<String> {
+    let own = step
+        .inputs
         .as_ref()
-        .and_then(|inputs| token::find(inputs, "shell"))
-        .is_some_and(|shell| {
-            let text = shell.to_string().to_ascii_lowercase();
-            text.contains("steps.") || text.contains("steps[")
-        })
+        .and_then(|inputs| token::find(inputs, "shell"));
+    if let Some(token) = own {
+        match token_literal(token) {
+            Some(text) if text.trim().is_empty() => {}
+            _ => return plain(token).map(str::to_owned),
+        }
+    }
+    context
+        .default_run_token("shell")
+        .and_then(plain)
+        .map(str::to_owned)
 }

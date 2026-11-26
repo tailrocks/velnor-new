@@ -3,7 +3,7 @@
 
 use super::commands;
 use super::issues::Issues;
-use super::mask::Masker;
+use super::mask::{self, Masker};
 use super::sink::LogSink;
 use super::{Annotation, AnnotationLevel};
 
@@ -29,16 +29,16 @@ impl Output<'_> {
 
     pub(super) fn bounded_line(&mut self, text: &str, overflow: bool) {
         commands::apply(text, self);
-        let masked = self.masker.mask(text);
-        if !overflow && masked.len() <= LINE_LIMIT {
-            self.sink.line(self.number, &masked);
+        if !overflow && text.len() <= LINE_LIMIT {
+            self.message(text);
             return;
         }
-        let mut end = LINE_LIMIT.min(masked.len());
-        while !masked.is_char_boundary(end) {
+        let ranges = self.masker.ranges(text);
+        let mut end = LINE_LIMIT.min(text.len());
+        while !text.is_char_boundary(end) {
             end -= 1;
         }
-        let kept = &masked[..end];
+        let kept = mask::redact(text, &ranges, end);
         self.sink.line(
             self.number,
             &format!("{kept} [line truncated at {LINE_LIMIT} bytes]"),
