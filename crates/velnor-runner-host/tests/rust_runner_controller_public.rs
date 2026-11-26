@@ -7,6 +7,8 @@ mod admission;
 mod checks;
 #[path = "rust_runner_controller_public/child.rs"]
 mod child;
+#[path = "rust_runner_controller_public/events.rs"]
+mod events;
 #[path = "rust_runner_controller_public/fixtures.rs"]
 mod fixtures;
 #[path = "rust_runner_controller_public/harness.rs"]

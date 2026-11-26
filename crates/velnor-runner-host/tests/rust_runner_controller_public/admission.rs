@@ -6,8 +6,9 @@ use velnor_runner_host::{Readiness, controller_readiness};
 use super::checks::{
     acquire_ids, assert_clean, deleted_messages, jit_name, reservation, runner_name,
 };
+use super::events::wait_for;
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
-use super::harness::{World, wait_for};
+use super::harness::World;
 
 fn polls_returning(world: &World, id: &str, after: u64) -> usize {
     world

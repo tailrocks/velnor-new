@@ -8,8 +8,9 @@ use velnor_runner_host::{Readiness, controller_readiness};
 use super::checks::{
     acquire_ids, assert_clean, deleted_messages, jit_name, reservation, runner_name, snapshot,
 };
+use super::events::{Event, files_containing, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
-use super::harness::{Event, World, files_containing, wait_for};
+use super::harness::World;
 
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T1", 1, false)?;
