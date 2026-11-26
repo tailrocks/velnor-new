@@ -100,6 +100,18 @@ async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
 
     for (status, reason, expected_category, wire_code) in [
         (
+            StatusCode::BAD_REQUEST,
+            AcquireJobSkipReason::NotFound,
+            BrokerErrorCategory::Terminal,
+            json!(404),
+        ),
+        (
+            StatusCode::NOT_FOUND,
+            AcquireJobSkipReason::AlreadyAcquired,
+            BrokerErrorCategory::Conflict,
+            json!(409),
+        ),
+        (
             StatusCode::NOT_FOUND,
             AcquireJobSkipReason::NotFound,
             BrokerErrorCategory::Terminal,
@@ -201,6 +213,18 @@ async fn renew_job_reports_gone_only_for_a_typed_404() -> Result<()> {
             vec![Scripted::Json(404, token_bearing_404)],
             1,
             true,
+        ),
+        (
+            "typed 404 body under HTTP 400",
+            vec![Scripted::Json(400, run_service_error(404))],
+            1,
+            true,
+        ),
+        (
+            "typed 409 body under HTTP 404",
+            vec![Scripted::Json(404, run_service_error(409))],
+            UPSTREAM_ATTEMPTS,
+            false,
         ),
         (
             "persistent 500",

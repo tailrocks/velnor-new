@@ -9,8 +9,8 @@ use std::time::Duration;
 use url::Url;
 
 use super::error::{
-    BrokerErrorCategory, broker_error_kind, github_api_error, github_api_error_categorized,
-    github_api_error_with, is_retriable_status,
+    BrokerErrorCategory, ServiceErrorKind, broker_error_kind, github_api_error,
+    github_api_error_categorized, github_api_error_with, is_retriable_status,
 };
 use super::http::{
     RUNNER_VERSION, github_json_request, runner_architecture, runner_os, slash_url,
@@ -97,6 +97,7 @@ impl BrokerClient {
                 http_status,
                 text.trim(),
                 None,
+                POLL_KINDS,
             ));
         }
         if http_status == 204 || text.trim().is_empty() {
@@ -131,6 +132,7 @@ impl BrokerClient {
                 http_status,
                 &text,
                 Some(session_error_category(http_status)),
+                ACKNOWLEDGE_KINDS,
             ));
         }
         Ok(())
@@ -160,13 +162,34 @@ impl BrokerClient {
     }
 }
 
+/// Kinds upstream types on the poll endpoint (`BrokerHttpClient.cs` lines 116-133).
+const POLL_KINDS: &[ServiceErrorKind] = &[
+    ServiceErrorKind::RunnerNotFound,
+    ServiceErrorKind::RunnerVersionTooOld,
+    ServiceErrorKind::HostedRunnerDeprovisioned,
+    ServiceErrorKind::RunnerSessionInvalid,
+];
+
+/// Kinds upstream types on the acknowledge endpoint (`BrokerHttpClient.cs` lines 274-279).
+const ACKNOWLEDGE_KINDS: &[ServiceErrorKind] = &[
+    ServiceErrorKind::AcknowledgeJobNotFound,
+    ServiceErrorKind::RunnerNotFound,
+];
+
 fn broker_api_error(
     action: &str,
     status: u16,
     body: &str,
     category: Option<BrokerErrorCategory>,
+    kinds: &[ServiceErrorKind],
 ) -> anyhow::Error {
-    github_api_error_with(action, status, body, category, broker_error_kind(body))
+    github_api_error_with(
+        action,
+        status,
+        body,
+        category,
+        broker_error_kind(body, kinds),
+    )
 }
 
 fn session_error_category(status: u16) -> BrokerErrorCategory {

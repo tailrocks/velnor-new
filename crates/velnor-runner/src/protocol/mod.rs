@@ -32,10 +32,9 @@ pub use oauth::{OAuthAccessToken, OAuthClient, OAuthJwtCredentials, OAuthRegistr
 pub use results::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 pub use run_service::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
-    CompletionAcknowledgement, RenewJobResponse, RetryDelays, RunServiceAnnotation,
-    RunServiceAnnotationLevel, RunServiceClient, RunServiceCompleteJob, RunServiceStepResult,
-    RunServiceTelemetry, RunServiceVariableValue, is_transient_acquire_error,
-    renew_failure_is_job_gone,
+    RenewJobResponse, RetryDelays, RunServiceAnnotation, RunServiceAnnotationLevel,
+    RunServiceClient, RunServiceCompleteJob, RunServiceStepResult, RunServiceTelemetry,
+    RunServiceVariableValue, is_transient_acquire_error, renew_failure_is_job_gone,
 };
 pub use session::{
     RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus, TaskAgentMessage, TaskAgentReference,

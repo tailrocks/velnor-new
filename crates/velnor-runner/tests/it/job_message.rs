@@ -146,14 +146,13 @@ fn mask_hints_accept_integers_numeric_strings_and_names() -> Result<()> {
 }
 
 #[test]
-fn mask_hints_with_unsupported_types_are_kept_for_the_worker_to_skip() -> Result<()> {
+fn mask_hints_with_unknown_integer_or_missing_types_are_kept_for_the_worker_to_skip() -> Result<()>
+{
     let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
     wire["Mask"] = json!([
         {"Type": 3, "Value": "integer"},
         {"Type": 0, "Value": "zero"},
         {"Type": "7", "Value": "numeric string"},
-        {"Type": "Bogus", "Value": "name"},
-        {"Type": null, "Value": "null"},
         {"Value": "absent"},
         {"Type": 1, "Value": "kept"},
     ]);
@@ -167,20 +166,38 @@ fn mask_hints_with_unsupported_types_are_kept_for_the_worker_to_skip() -> Result
             unsupported("3"),
             unsupported("0"),
             unsupported("7"),
-            unsupported("Bogus"),
-            unsupported("null"),
             unsupported("0"),
             MaskKind::Variable,
         ]
     );
     assert_eq!(
-        message.mask[6]
+        message.mask[4]
             .value
             .as_ref()
             .map(|value| value.expose().as_str()),
         Some("kept")
     );
     assert_eq!(message.steps.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn mask_hints_with_a_malformed_type_fail_the_job_message() -> Result<()> {
+    for bad in [
+        json!("Bogus"),
+        json!(null),
+        json!(1.5),
+        json!(true),
+        json!({"a": 1}),
+        json!([1]),
+    ] {
+        let mut wire: serde_json::Value = serde_json::from_str(FIXTURE)?;
+        wire["Mask"] = json!([{"Type": bad, "Value": "secret"}]);
+        assert!(
+            AgentJobRequestMessage::from_value(wire).is_err(),
+            "{bad} must fail closed"
+        );
+    }
     Ok(())
 }
 

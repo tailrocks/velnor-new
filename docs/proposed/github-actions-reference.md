@@ -73,10 +73,10 @@ upstream mechanism the code copies.
 | Behavior | Upstream source |
 | --- | --- |
 | Every run-service call makes at most 5 attempts with a random 5 to 15 second back-off. Acquire does not retry a typed 404, 409 or 422. Completion does not retry a 401 or a typed 404. Renew does not retry a typed 404. Everything else is retried, including a 400 and a dropped connection. | `src/Runner.Common/RunServer.cs` lines 63-102, `src/Runner.Common/RunnerService.cs` lines 71-110 |
-| A run-service error is typed only when its body has `source` equal to `actions-run-service`. A completion that gets a typed 404 reports that the service already observed the job as terminal. A 404 with another or no `source` is an ordinary retried error. | `src/Sdk/RSWebApi/RunServiceHttpClient.cs` lines 100-112, 165-172, 212-219, 237-256 |
-| A broker error is typed only when its body has `source` equal to `actions-broker-listener`. The kinds are `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned`, `RunnerSessionInvalid` and `AcknowledgeJobNotFound`. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
+| A run-service error is typed only when its body has `source` equal to `actions-run-service`. The body `statusCode`, not the HTTP status, decides. A completion that gets a typed 404 fails as job not found, as upstream records the job-not-found exception and fails. A 404 with another or no `source` is an ordinary retried error. | `src/Sdk/RSWebApi/RunServiceHttpClient.cs` lines 100-112, 165-172, 212-219, 237-256 |
+| A broker error is typed only when its body has `source` equal to `actions-broker-listener`. Poll types `RunnerNotFound`, `RunnerVersionTooOld`, `HostedRunnerDeprovisioned` and `RunnerSessionInvalid`. Acknowledge types `AcknowledgeJobNotFound` and `RunnerNotFound`. Every other broker error is untyped. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 116-133, 268-276, 285-304; `src/Sdk/RSWebApi/Contracts/BrokerErrorKind.cs` |
 | Session creation maps 403 to access denied and 409 to a session conflict, and does not retry. | `src/Sdk/WebApi/WebApi/BrokerHttpClient.cs` lines 157-167 |
-| A mask hint with a type other than variable or regex is logged and skipped. The job still runs. Integer and numeric-string types are accepted. | `src/Runner.Worker/Worker.cs` lines 176-190 |
+| The worker applies only Regex mask hints. It logs and skips every other type, including Variable, and the job still runs. A `type` that is not an integer, a numeric string or a known name fails the job message. | `src/Runner.Worker/Worker.cs` lines 176-190 |
 
 Deliberate deviations:
 
@@ -84,10 +84,13 @@ Deliberate deviations:
   `MaskKind::Unsupported` and carries the spelling from the wire. The worker
   that consumes the job message writes the "Unsupported mask type" line and
   skips the hint.
-- A mask `type` that is a float, boolean, object or null, or a missing `type`,
-  parses to `MaskKind::Unsupported`. Upstream treats a missing `type` as the
-  enum default (0, unsupported). The crate has not verified what upstream
-  does with the other token kinds.
+- A mask `type` that is a float, boolean, null, object, array or an unknown
+  name fails the job message, as upstream's string-enum converter does. An
+  unknown integer or numeric string parses to `MaskKind::Unsupported`, and a
+  missing `type` parses to `Unsupported("0")`, the enum default. The names
+  Variable and Regex match case-insensitively.
+- The worker masks Variable hints. Upstream skips every type except Regex.
+  Over-masking is safe, so Velnor keeps it.
 - A completion treats the first HTTP 401 as fatal. Upstream's HTTP handler
   first invalidates the token and repeats the request with a fresh one, and
   raises the unauthorized exception only when that fails

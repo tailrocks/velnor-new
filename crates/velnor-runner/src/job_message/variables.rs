@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/job_message.rs
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 
 use super::wire::deserialize_null_default;
 use crate::secret::Secret;
@@ -48,26 +48,25 @@ impl MaskKind {
 enum WireMaskType {
     Number(i64),
     Text(String),
-    Other(serde_json::Value),
 }
 
 impl<'de> Deserialize<'de> for MaskKind {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(match WireMaskType::deserialize(deserializer)? {
-            WireMaskType::Number(number) => Self::from_number(number),
+        match WireMaskType::deserialize(deserializer)? {
+            WireMaskType::Number(number) => Ok(Self::from_number(number)),
             WireMaskType::Text(text) => {
                 let name = text.trim();
                 if name.eq_ignore_ascii_case("variable") {
-                    Self::Variable
+                    Ok(Self::Variable)
                 } else if name.eq_ignore_ascii_case("regex") {
-                    Self::Regex
+                    Ok(Self::Regex)
                 } else {
                     name.parse()
-                        .map_or(Self::Unsupported(text), Self::from_number)
+                        .map(Self::from_number)
+                        .map_err(|_| de::Error::custom(format!("unknown mask type name `{text}`")))
                 }
             }
-            WireMaskType::Other(value) => Self::Unsupported(value.to_string()),
-        })
+        }
     }
 }
 

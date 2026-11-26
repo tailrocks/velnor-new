@@ -8,18 +8,14 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
+use super::super::error::{
+    BrokerErrorCategory, ServiceErrorKind, github_api_error_categorized, github_api_error_with,
+};
 use super::super::http::github_json_request;
 use super::super::timeline::{TaskResult, TimelineRecordState};
 use super::{Failure, REQUEST_TIMEOUT, RunServiceClient, is_run_service_job_not_found};
 
 const ACTION: &str = "complete run-service job";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompletionAcknowledgement {
-    Accepted,
-    RemoteObservedTerminal,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,32 +116,20 @@ pub enum RunServiceAnnotationLevel {
 }
 
 impl RunServiceClient {
+    /// A typed 404 fails with `ServiceErrorKind::JobNotFound`, as upstream
+    /// records `TaskOrchestrationJobNotFoundException` and fails the job.
     pub async fn complete_job(
         &self,
         run_service_url: &str,
         completion: &RunServiceCompleteJob,
     ) -> Result<()> {
-        self.complete_job_with_acknowledgement(run_service_url, completion)
-            .await
-            .map(|_| ())
-    }
-
-    pub async fn complete_job_with_acknowledgement(
-        &self,
-        run_service_url: &str,
-        completion: &RunServiceCompleteJob,
-    ) -> Result<CompletionAcknowledgement> {
         let url = Self::job_url(run_service_url, "completejob")?;
         let body = serde_json::to_string(completion).context("serialize complete job request")?;
         self.with_retries(|| self.complete_once(url.as_str(), &body))
             .await
     }
 
-    async fn complete_once(
-        &self,
-        url: &str,
-        body: &str,
-    ) -> Result<CompletionAcknowledgement, Failure> {
+    async fn complete_once(&self, url: &str, body: &str) -> Result<(), Failure> {
         let (status, text) = github_json_request(
             Method::POST,
             url,
@@ -156,10 +140,16 @@ impl RunServiceClient {
         .await
         .map_err(|error| Failure::Retry(error.context("complete run-service job request")))?;
         if (200..300).contains(&status) {
-            return Ok(CompletionAcknowledgement::Accepted);
+            return Ok(());
         }
         if is_run_service_job_not_found(&text) {
-            return Ok(CompletionAcknowledgement::RemoteObservedTerminal);
+            return Err(Failure::Fatal(github_api_error_with(
+                ACTION,
+                status,
+                &text,
+                Some(BrokerErrorCategory::Terminal),
+                Some(ServiceErrorKind::JobNotFound),
+            )));
         }
         let (category, failure): (_, fn(anyhow::Error) -> Failure) = if status == 401 {
             (BrokerErrorCategory::Terminal, Failure::Fatal)

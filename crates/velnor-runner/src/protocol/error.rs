@@ -44,12 +44,16 @@ struct BrokerError {
     error_kind: Option<String>,
 }
 
-pub(crate) fn broker_error_kind(body: &str) -> Option<ServiceErrorKind> {
+pub(crate) fn broker_error_kind(
+    body: &str,
+    typed_by_endpoint: &[ServiceErrorKind],
+) -> Option<ServiceErrorKind> {
     let error: BrokerError = serde_json::from_str(body).ok()?;
     if error.source.as_deref() != Some(BROKER_ERROR_SOURCE) {
         return None;
     }
     ServiceErrorKind::from_broker_name(error.error_kind.as_deref()?)
+        .filter(|kind| typed_by_endpoint.contains(kind))
 }
 
 #[derive(thiserror::Error)]

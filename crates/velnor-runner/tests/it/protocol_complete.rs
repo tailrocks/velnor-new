@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result, bail};
+use std::time::{Duration, Instant};
 use velnor_runner::protocol::{
-    BrokerErrorCategory, CompletionAcknowledgement, broker_error_category,
+    BrokerErrorCategory, RetryDelays, RunServiceClient, ServiceErrorKind, broker_error_category,
+    service_error_kind,
 };
 
 use super::support::{
@@ -16,7 +18,8 @@ const COMPLETE_ACTION: &str = "complete run-service job";
 const UPSTREAM_ATTEMPTS: usize = 5;
 
 enum Expected {
-    Acknowledged(CompletionAcknowledgement),
+    Accepted,
+    JobNotFound(u16),
     Rejected(u16, BrokerErrorCategory),
     Transport,
 }
@@ -46,7 +49,7 @@ fn complete_cases() -> Vec<CompleteCase> {
                 Scripted::Text(204, ""),
             ],
             requests: UPSTREAM_ATTEMPTS,
-            expected: Expected::Acknowledged(CompletionAcknowledgement::Accepted),
+            expected: Expected::Accepted,
         },
         CompleteCase {
             name: "a 400 is retried like every other error",
@@ -56,7 +59,7 @@ fn complete_cases() -> Vec<CompleteCase> {
                 Scripted::Text(204, ""),
             ],
             requests: 3,
-            expected: Expected::Acknowledged(CompletionAcknowledgement::Accepted),
+            expected: Expected::Accepted,
         },
         CompleteCase {
             name: "a persistent 400 exhausts the attempts",
@@ -71,10 +74,22 @@ fn complete_cases() -> Vec<CompleteCase> {
             expected: Expected::Rejected(401, BrokerErrorCategory::Terminal),
         },
         CompleteCase {
-            name: "a typed 404 means the service already observed the job as terminal",
+            name: "a typed 404 fails the completion as job not found without a retry",
             script: vec![Scripted::Json(404, run_service_error(404))],
             requests: 1,
-            expected: Expected::Acknowledged(CompletionAcknowledgement::RemoteObservedTerminal),
+            expected: Expected::JobNotFound(404),
+        },
+        CompleteCase {
+            name: "the typed body decides, not the HTTP status: 400 with a typed 404",
+            script: vec![Scripted::Json(400, run_service_error(404))],
+            requests: 1,
+            expected: Expected::JobNotFound(400),
+        },
+        CompleteCase {
+            name: "the typed body decides, not the HTTP status: 404 with a typed 409",
+            script: vec![Scripted::Json(404, run_service_error(409))],
+            requests: UPSTREAM_ATTEMPTS,
+            expected: Expected::Rejected(404, BrokerErrorCategory::Transient),
         },
         CompleteCase {
             name: "a 404 from another source is retried",
@@ -107,12 +122,20 @@ async fn complete_job_follows_the_upstream_retry_policy() -> Result<()> {
         server.respond("POST", COMPLETE_PATH, scripted(case.script))?;
 
         let outcome = run_service
-            .complete_job_with_acknowledgement(&run_service_url(&server), &complete_job())
+            .complete_job(&run_service_url(&server), &complete_job())
             .await;
 
         match (case.expected, outcome) {
-            (Expected::Acknowledged(expected), Ok(actual)) => {
-                assert_eq!(actual, expected, "{}", case.name);
+            (Expected::Accepted, Ok(())) => {}
+            (Expected::JobNotFound(status), Err(error)) => {
+                assert_github_status(&error, status, COMPLETE_ACTION)
+                    .with_context(|| case.name.to_owned())?;
+                assert_eq!(
+                    service_error_kind(&error),
+                    Some(ServiceErrorKind::JobNotFound),
+                    "{}",
+                    case.name
+                );
             }
             (Expected::Rejected(status, category), Err(error)) => {
                 assert_github_status(&error, status, COMPLETE_ACTION)
@@ -166,5 +189,41 @@ async fn complete_job_resends_the_identical_body_on_every_attempt() -> Result<()
     assert_eq!(requests[1].json()?["planId"], PLAN_ID);
     assert_eq!(requests[1].json()?["jobId"], JOB_ID);
     assert_bearer(&requests[1]);
+    Ok(())
+}
+
+#[test]
+fn default_retry_delays_match_upstream() {
+    assert_eq!(
+        RetryDelays::default(),
+        RetryDelays {
+            min: Duration::from_secs(5),
+            max: Duration::from_secs(15),
+        }
+    );
+}
+
+#[tokio::test]
+async fn complete_job_waits_at_least_the_minimum_delay_between_attempts() -> Result<()> {
+    const MIN: Duration = Duration::from_millis(100);
+    let server = TestServer::start().await?;
+    server.respond(
+        "POST",
+        COMPLETE_PATH,
+        scripted(vec![
+            Scripted::Text(500, "temporary"),
+            Scripted::Text(500, "temporary"),
+            Scripted::Text(204, ""),
+        ]),
+    )?;
+    let run_service =
+        RunServiceClient::new("token")?.with_retry_delays(RetryDelays { min: MIN, max: MIN });
+
+    let started = Instant::now();
+    run_service
+        .complete_job(&run_service_url(&server), &complete_job())
+        .await?;
+
+    assert!(started.elapsed() >= MIN * 2, "two gaps of at least {MIN:?}");
     Ok(())
 }
