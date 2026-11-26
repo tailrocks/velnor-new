@@ -43,6 +43,7 @@ pub(crate) enum Function {
     Contains,
     StartsWith,
     ToJson,
+    FromJson,
     HashFiles,
     Success,
     Always,
@@ -50,11 +51,12 @@ pub(crate) enum Function {
 }
 
 impl Function {
-    const ALL: [(&'static str, Self, usize, usize); 8] = [
+    const ALL: [(&'static str, Self, usize, usize); 9] = [
         ("format", Self::Format, 1, 255),
         ("contains", Self::Contains, 2, 2),
         ("startsWith", Self::StartsWith, 2, 2),
         ("toJSON", Self::ToJson, 1, 1),
+        ("fromJSON", Self::FromJson, 1, 1),
         ("hashFiles", Self::HashFiles, 1, 255),
         ("success", Self::Success, 0, 0),
         ("always", Self::Always, 0, 0),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/parser.rs
 
-use super::env::ParseEnvironment;
+use super::env::{Function, ParseEnvironment};
 use super::error::{ParseError, ParseErrorKind};
 use super::lexer::LexicalAnalyzer;
 use super::node::{BinaryOperator, Node};
@@ -83,7 +83,6 @@ pub(crate) fn parse(
             expression,
         ));
     };
-    check_max_depth(&result, 1)?;
     Ok(Some(result))
 }
 
@@ -99,6 +98,7 @@ fn push_operand(context: &mut ParseContext<'_>, token: &Token) -> Result<(), Par
             };
             Node::Function {
                 function,
+                name: token.raw_value.clone(),
                 args: Vec::new(),
             }
         }
@@ -191,6 +191,11 @@ fn flush_top_operator(context: &mut ParseContext<'_>) -> Result<(), ParseError> 
             ));
         }
     };
+    push_checked(context, node)
+}
+
+fn push_checked(context: &mut ParseContext<'_>, node: Node) -> Result<(), ParseError> {
+    check_max_depth(&node)?;
     context.operands.push(node);
     Ok(())
 }
@@ -252,10 +257,7 @@ fn flush_top_end_index(context: &mut ParseContext<'_>) -> Result<(), ParseError>
     let operator = pop_operator(context, TokenKind::StartIndex)?;
     let operands = pop_operands(context, operator.operand_count())?;
     let (left, right) = operand_pair(context.expression, operands)?;
-    context
-        .operands
-        .push(Node::Index(Box::new(left), Box::new(right)));
-    Ok(())
+    push_checked(context, Node::Index(Box::new(left), Box::new(right)))
 }
 
 fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseError> {
@@ -274,7 +276,12 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
         pop_operands(context, parameter_count)?
     };
 
-    let Some(Node::Function { function, args }) = context.operands.last_mut() else {
+    let Some(Node::Function {
+        function,
+        name,
+        args,
+    }) = context.operands.last_mut()
+    else {
         return Err(ParseError::internal(
             context.expression,
             "expected a function node on the operand stack",
@@ -283,6 +290,9 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
     args.extend(parameters);
     let (min, max) = function.arity();
     let arg_count = args.len();
+    let non_literal_from_json = *function == Function::FromJson
+        && !matches!(args.as_slice(), [Node::Literal(Value::String(_))]);
+    let name = name.clone();
 
     let start = pop_operator(context, TokenKind::StartParameters)?;
     if arg_count < min {
@@ -299,7 +309,10 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
             context.expression,
         ));
     }
-    Ok(())
+    if non_literal_from_json {
+        return Err(ParseError::unsupported_function(&name));
+    }
+    context.operands.last().map_or(Ok(()), check_max_depth)
 }
 
 fn pop_operands(context: &mut ParseContext<'_>, count: usize) -> Result<Vec<Node>, ParseError> {
@@ -332,12 +345,9 @@ fn pop_operator(context: &mut ParseContext<'_>, expected: TokenKind) -> Result<T
     Ok(token)
 }
 
-fn check_max_depth(node: &Node, depth: usize) -> Result<(), ParseError> {
-    if depth > MAX_DEPTH {
+fn check_max_depth(node: &Node) -> Result<(), ParseError> {
+    if node.depth() > MAX_DEPTH {
         return Err(ParseError::without_token(ParseErrorKind::ExceededMaxDepth));
-    }
-    for child in node.children() {
-        check_max_depth(child, depth + 1)?;
     }
     Ok(())
 }

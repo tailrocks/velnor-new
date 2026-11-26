@@ -67,7 +67,7 @@ pub(crate) fn evaluate_node(node: &Node, env: &ExprEnv) -> Result<Value, ExprErr
             }))
         }
         Node::Index(target, index) => evaluate_index(target, index, env),
-        Node::Function { function, args } => evaluate_function(*function, args, env),
+        Node::Function { function, args, .. } => evaluate_function(*function, args, env),
     }
 }
 
@@ -85,6 +85,15 @@ fn evaluate_function(function: Function, args: &[Node], env: &ExprEnv) -> Result
                 return Err(arity_error());
             };
             Ok(Value::String(to_json(&evaluate_node(value, env)?)))
+        }
+        Function::FromJson => {
+            let [value] = args else {
+                return Err(arity_error());
+            };
+            let json = evaluate_node(value, env)?.convert_to_string();
+            ContextValue::from_json_str(&json)
+                .map(|parsed| from_context_value(&parsed))
+                .map_err(|error| ExprError::evaluation(format!("Error parsing fromJson: {error}")))
         }
         Function::HashFiles => {
             let values = args

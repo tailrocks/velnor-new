@@ -15,10 +15,23 @@ pub(crate) enum Node {
     And(Vec<Node>),
     Or(Vec<Node>),
     Binary(BinaryOperator, Box<Node>, Box<Node>),
-    Function { function: Function, args: Vec<Node> },
+    Function {
+        function: Function,
+        name: String,
+        args: Vec<Node>,
+    },
 }
 
 impl Node {
+    pub(crate) fn depth(&self) -> usize {
+        1 + self
+            .children()
+            .into_iter()
+            .map(Node::depth)
+            .max()
+            .unwrap_or(0)
+    }
+
     pub(crate) fn children(&self) -> Vec<&Node> {
         match self {
             Node::Literal(_) | Node::Wildcard | Node::NamedValue(_) => Vec::new(),

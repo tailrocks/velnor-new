@@ -10,7 +10,7 @@ fn expr_unsupported_function_is_error() -> Result<()> {
     let env = empty_env();
 
     assert_eq!(
-        error_text("fromJSON('{}')", &env)?,
+        error_text("fromJSON(env.PAYLOAD)", &env)?,
         "unsupported expression function fromJSON"
     );
     assert_eq!(

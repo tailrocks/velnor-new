@@ -12,6 +12,7 @@ mod lexer;
 mod node;
 mod number;
 mod parser;
+mod pattern;
 mod template;
 mod token;
 mod value;
