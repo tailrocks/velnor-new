@@ -246,3 +246,80 @@ async fn lifecycle_stops_a_cleanup_step_that_outlives_the_floor_after_a_shutdown
 
     assert_stopped_at_the_deadline(&mock, &scratch, outcome)
 }
+
+#[tokio::test]
+async fn lifecycle_warns_about_dropped_logs_when_a_job_is_stopped_at_the_cancel_deadline()
+-> Result<()> {
+    let scratch = Scratch::new()?;
+    let behavior = Behavior {
+        blob_delay: Duration::from_secs(30),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(hanging_cleanup(&scratch)?, behavior).await?;
+    let shutdown = JobCancel::new();
+    let signal = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        signal.cancel();
+    });
+    let mut settings = Settings::new()
+        .killing_after_cancel_floor(Duration::from_secs(16))
+        .renewing_every(Duration::from_secs(60))
+        .draining_uploads_within(Duration::from_secs(1))
+        .within(CANCEL_BUDGET);
+    settings.shutdown = shutdown;
+
+    let outcome = run_in(&mock, &scratch, settings).await??;
+
+    assert_stopped_at_the_deadline(&mock, &scratch, outcome)?;
+    let complete = mock.complete_request()?;
+    let notes = complete["annotations"].as_array().context("annotations")?;
+    assert!(
+        notes.iter().any(|note| note["message"]
+            .as_str()
+            .is_some_and(|text| text.contains("not uploaded in time"))),
+        "{notes:?}"
+    );
+    Ok(())
+}
+
+fn leave_a_large_workspace(scratch: &Scratch) -> Result<std::path::PathBuf> {
+    let workspace = scratch.work_dir().join("workspace");
+    for directory in 0..200 {
+        let path = workspace.join(format!("directory-{directory}"));
+        std::fs::create_dir_all(&path)?;
+        for file in 0..100 {
+            std::fs::write(path.join(format!("file-{file}")), b"x")?;
+        }
+    }
+    Ok(workspace)
+}
+
+#[tokio::test]
+async fn lifecycle_stops_clearing_a_leftover_workspace_when_shutdown_arrives() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let workspace = leave_a_large_workspace(&scratch)?;
+    let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
+    let shutdown = JobCancel::new();
+    let signal = shutdown.clone();
+    let watched = workspace.clone();
+    tokio::spawn(async move {
+        while std::fs::read_dir(&watched).is_ok_and(|entries| entries.count() == 200) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        signal.cancel();
+    });
+    let mut settings = Settings::new().within(CANCEL_BUDGET);
+    settings.shutdown = shutdown;
+
+    let outcome = run_in(&mock, &scratch, settings).await??;
+
+    assert_eq!(outcome, LifecycleOutcome::NoJob);
+    assert!(
+        std::fs::read_dir(&workspace).is_ok_and(|entries| entries.count() > 0),
+        "the run returned before the leftover workspace was gone"
+    );
+    assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
+    mock.server.only_request("DELETE", "/broker/session")?;
+    Ok(())
+}

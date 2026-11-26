@@ -42,7 +42,11 @@ fn assert_no_secret(label: &str, debug: &str) {
 
 #[test]
 fn client_debug_output_contains_no_bearer_token() -> Result<()> {
-    let broker = BrokerClient::new("https://broker.actions.githubusercontent.com/", BEARER)?;
+    let broker = BrokerClient::new(
+        "https://broker.actions.githubusercontent.com/",
+        RunnerOs::Linux,
+        BEARER,
+    )?;
     let run_service = RunServiceClient::new(BEARER)?;
     let feed = FeedStreamClient::new(
         "https://pipelines.actions.githubusercontent.com/feed",

@@ -85,6 +85,26 @@ async fn lifecycle_step_and_job_logs_use_seven_digit_timestamps() -> Result<()> 
     Ok(())
 }
 
+fn numbered_lines(frames: &[Value]) -> Result<Vec<(usize, String)>> {
+    let mut lines = Vec::new();
+    for frame in frames {
+        let start = frame["startLine"].as_u64().context("startLine")?;
+        let start = usize::try_from(start)?;
+        for (offset, line) in frame["value"]
+            .as_array()
+            .context("frame lines")?
+            .iter()
+            .enumerate()
+        {
+            lines.push((
+                start + offset,
+                line.as_str().context("frame line")?.to_owned(),
+            ));
+        }
+    }
+    Ok(lines)
+}
+
 #[tokio::test]
 async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
     let behavior = Behavior {
@@ -110,7 +130,8 @@ async fn lifecycle_streams_step_lines_to_the_live_feed() -> Result<()> {
 }
 
 #[tokio::test]
-async fn lifecycle_keeps_every_line_of_a_step_that_prints_far_more_than_the_buffer() -> Result<()> {
+async fn lifecycle_keeps_every_logged_line_and_feeds_only_the_tail_left_when_a_step_ends()
+-> Result<()> {
     const LINES: usize = 200_000;
     let behavior = Behavior {
         feed: true,
@@ -133,9 +154,24 @@ async fn lifecycle_keeps_every_line_of_a_step_that_prints_far_more_than_the_buff
     assert_eq!(numbers(&step_log), expected);
     assert_eq!(numbers(&job_log), expected);
     let frames = mock.feed.as_ref().context("feed")?.frames().await?;
-    assert!(frames.len() > 100, "{} frames", frames.len());
-    let lines = frame_lines(&frames)?;
-    assert_eq!(lines, texts(&step_log), "the feed lost no line");
+    let sent = numbered_lines(&frames)?;
+    let logged = texts(&step_log);
+    assert!(
+        sent.len() < logged.len(),
+        "the final drain skips the lines before the last 200, as the upstream runner does: {} of {}",
+        sent.len(),
+        logged.len()
+    );
+    for (number, text) in &sent {
+        assert_eq!(
+            logged.get(number - 1),
+            Some(&text.as_str()),
+            "line {number}"
+        );
+    }
+    let tail = &sent[sent.len().saturating_sub(200)..];
+    assert_eq!(tail.last().map(|(number, _)| *number), Some(logged.len()));
+    assert!(tail.windows(2).all(|pair| pair[1].0 == pair[0].0 + 1));
     Ok(())
 }
 

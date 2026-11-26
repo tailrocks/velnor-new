@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/runner.rs
 
+use std::future::Future;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -12,8 +13,8 @@ use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::JobCancel;
 use crate::protocol::{
     Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
-    OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerStatus,
-    TaskAgentMessage, TaskAgentSession, broker_error_category,
+    OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerOs,
+    RunnerStatus, TaskAgentMessage, TaskAgentSession, broker_error_category,
 };
 use crate::secret::Secret;
 
@@ -59,6 +60,7 @@ pub(super) struct Session {
     oauth: OAuthClient,
     credentials: OAuthJwtCredentials,
     base_url: String,
+    os: RunnerOs,
     id: String,
     auth: Mutex<Auth>,
 }
@@ -127,6 +129,7 @@ pub(super) fn backoff(base: Duration, streak: u32) -> Duration {
 impl Session {
     pub(super) async fn open(
         config: &DecodedJitConfig,
+        os: RunnerOs,
         retry_interval: Duration,
     ) -> Result<Self, LifecycleError> {
         let credentials = oauth_credentials(config).map_err(LifecycleError::Config)?;
@@ -148,7 +151,7 @@ impl Session {
             .map_err(LifecycleError::SignIn)?
             .token;
         let broker =
-            BrokerClient::new(&base_url, token.clone()).map_err(LifecycleError::Session)?;
+            BrokerClient::new(&base_url, os, token.clone()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());
         let created = create_session(
             &broker,
@@ -165,6 +168,7 @@ impl Session {
             oauth,
             credentials,
             base_url,
+            os,
             id,
             auth: Mutex::new(Auth {
                 token: Secret::new(token),
@@ -194,7 +198,7 @@ impl Session {
             .exchange_client_credentials(&self.credentials)
             .await?
             .token;
-        let broker = BrokerClient::new(&self.base_url, token.clone())?;
+        let broker = BrokerClient::new(&self.base_url, self.os, token.clone())?;
         *self.auth() = Auth {
             token: Secret::new(token),
             broker,
@@ -202,40 +206,45 @@ impl Session {
         Ok(())
     }
 
+    async fn with_fresh_token<T, F, Fut>(&self, call: F) -> anyhow::Result<T>
+    where
+        F: Fn(BrokerClient) -> Fut,
+        Fut: Future<Output = anyhow::Result<T>>,
+    {
+        let broker = self.auth().broker.clone();
+        match call(broker).await {
+            Err(error) if is_auth_failure(&error) => {
+                self.refresh().await?;
+                let broker = self.auth().broker.clone();
+                call(broker).await
+            }
+            other => other,
+        }
+    }
+
     pub(super) async fn poll(
         &self,
         status: RunnerStatus,
     ) -> anyhow::Result<Option<TaskAgentMessage>> {
-        let broker = self.auth().broker.clone();
-        let polled = match broker.get_runner_message(&self.id, status, true).await {
-            Err(error) if is_auth_failure(&error) => {
-                self.refresh().await?;
-                let broker = self.auth().broker.clone();
-                broker.get_runner_message(&self.id, status, true).await
-            }
-            other => other,
-        };
-        polled.map(|poll| poll.message)
+        let id = &self.id;
+        self.with_fresh_token(
+            |broker| async move { broker.get_runner_message(id, status, true).await },
+        )
+        .await
+        .map(|poll| poll.message)
     }
 
     pub(super) async fn acknowledge(
         &self,
         runner_request_id: &str,
     ) -> anyhow::Result<Acknowledgement> {
-        let broker = self.auth().broker.clone();
-        match broker
-            .acknowledge_runner_request(&self.id, runner_request_id, RunnerStatus::Busy)
-            .await
-        {
-            Err(error) if is_auth_failure(&error) => {
-                self.refresh().await?;
-                let broker = self.auth().broker.clone();
-                broker
-                    .acknowledge_runner_request(&self.id, runner_request_id, RunnerStatus::Busy)
-                    .await
-            }
-            other => other,
-        }
+        let id = &self.id;
+        self.with_fresh_token(|broker| async move {
+            broker
+                .acknowledge_runner_request(id, runner_request_id, RunnerStatus::Busy)
+                .await
+        })
+        .await
     }
 
     pub(super) async fn wait_for_job(
@@ -285,8 +294,11 @@ impl Session {
     }
 
     pub(super) async fn close(&self) {
-        let broker = self.auth().broker.clone();
-        if let Err(error) = broker.delete_session(&self.id).await {
+        let id = &self.id;
+        let deleted = self
+            .with_fresh_token(|broker| async move { broker.delete_session(id).await })
+            .await;
+        if let Err(error) = deleted {
             eprintln!("warning: delete broker session: {error:#}");
         }
     }
