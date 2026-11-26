@@ -57,6 +57,7 @@ impl RecordedRequest {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Reply {
     status: u16,
     content_type: &'static str,

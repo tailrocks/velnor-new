@@ -51,6 +51,31 @@ pub struct DecodedJitRunnerSettings {
     pub ephemeral: bool,
     #[serde(default, alias = "DisableUpdate", deserialize_with = "lenient_bool")]
     pub disable_update: bool,
+    #[serde(
+        default,
+        rename = "skipSessionRecover",
+        alias = "SkipSessionRecover",
+        deserialize_with = "session_recovery"
+    )]
+    pub session_recovery: SessionRecovery,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SessionRecovery {
+    #[default]
+    Recreate,
+    Skip,
+}
+
+fn session_recovery<'de, D>(deserializer: D) -> Result<SessionRecovery, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(if lenient_bool(deserializer)? {
+        SessionRecovery::Skip
+    } else {
+        SessionRecovery::Recreate
+    })
 }
 
 #[derive(Deserialize)]

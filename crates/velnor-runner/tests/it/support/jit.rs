@@ -10,6 +10,7 @@ use rsa::pkcs1::EncodeRsaPrivateKey;
 use rsa::rand_core::{TryCryptoRng, TryRng};
 use rsa::{Generate, PrivateKey};
 use serde_json::{Value, json};
+use velnor_runner::protocol::SessionRecovery;
 
 const KEY_SEED: u64 = 0x2894_0000_0000_0001;
 
@@ -92,17 +93,21 @@ fn rsa_parameters() -> Result<Value> {
     }))
 }
 
-pub(super) fn jit_config(base: &str) -> Result<String> {
+pub(super) fn jit_config(base: &str, recovery: SessionRecovery) -> Result<String> {
+    let mut runner = json!({
+        "AgentId": "42",
+        "AgentName": "velnor-test",
+        "PoolId": "1",
+        "Ephemeral": "True",
+        "DisableUpdate": "True",
+        "ServerUrlV2": format!("{base}/broker"),
+        "UseV2Flow": "true",
+    });
+    if recovery == SessionRecovery::Skip {
+        runner["SkipSessionRecover"] = json!("True");
+    }
     let files = json!({
-        ".runner": json!({
-            "AgentId": "42",
-            "AgentName": "velnor-test",
-            "PoolId": "1",
-            "Ephemeral": "True",
-            "DisableUpdate": "True",
-            "ServerUrlV2": format!("{base}/broker"),
-            "UseV2Flow": "true",
-        }),
+        ".runner": runner,
         ".credentials": json!({
             "Scheme": "OAuth",
             "Data": {

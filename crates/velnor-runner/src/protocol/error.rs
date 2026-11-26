@@ -9,6 +9,7 @@ pub enum BrokerErrorCategory {
     Transient,
     Terminal,
     Conflict,
+    Expired,
 }
 
 #[derive(thiserror::Error)]

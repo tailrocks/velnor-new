@@ -24,6 +24,12 @@ const POLL_TIMEOUT: Duration = Duration::from_secs(70);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(5);
 const BROKER_ERROR_SOURCE: &str = "actions-broker-listener";
 const ACKNOWLEDGE_JOB_NOT_FOUND: &str = "AcknowledgeJobNotFound";
+const RUNNER_SESSION_INVALID: &str = "RunnerSessionInvalid";
+const POLL_TERMINAL_KINDS: [&str; 3] = [
+    "RunnerNotFound",
+    "RunnerVersionTooOld",
+    "HostedRunnerDeprovisioned",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Acknowledgement {
@@ -38,11 +44,26 @@ struct BrokerError {
     error_kind: Option<String>,
 }
 
+fn broker_error_kind(body: &str) -> Option<String> {
+    serde_json::from_str::<BrokerError>(body)
+        .ok()
+        .filter(|error| error.source.as_deref() == Some(BROKER_ERROR_SOURCE))
+        .and_then(|error| error.error_kind)
+}
+
 fn is_job_not_found(body: &str) -> bool {
-    serde_json::from_str::<BrokerError>(body).is_ok_and(|error| {
-        error.source.as_deref() == Some(BROKER_ERROR_SOURCE)
-            && error.error_kind.as_deref() == Some(ACKNOWLEDGE_JOB_NOT_FOUND)
-    })
+    broker_error_kind(body).as_deref() == Some(ACKNOWLEDGE_JOB_NOT_FOUND)
+}
+
+fn poll_error_category(body: &str) -> Option<BrokerErrorCategory> {
+    let kind = broker_error_kind(body)?;
+    if kind == RUNNER_SESSION_INVALID {
+        Some(BrokerErrorCategory::Expired)
+    } else if POLL_TERMINAL_KINDS.contains(&kind.as_str()) {
+        Some(BrokerErrorCategory::Terminal)
+    } else {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -116,11 +137,13 @@ impl BrokerClient {
         );
         let (http_status, text) = self.send(Method::GET, &url, None, POLL_TIMEOUT).await?;
         if !(200..300).contains(&http_status) {
-            return Err(github_api_error(
-                "get broker message",
-                http_status,
-                text.trim(),
-            ));
+            let action = "get broker message";
+            return Err(match poll_error_category(&text) {
+                Some(category) => {
+                    github_api_error_categorized(action, http_status, text.trim(), category)
+                }
+                None => github_api_error(action, http_status, text.trim()),
+            });
         }
         if http_status == 204 || text.trim().is_empty() {
             return Ok(BrokerPoll {
