@@ -65,3 +65,35 @@ fn expr_to_json_pretty_prints_object() -> Result<()> {
     assert_eq!(text("toJSON(github.b)", &env)?, "[\n  \"x\"\n]");
     Ok(())
 }
+
+#[test]
+fn expr_from_json_accepts_only_a_string_literal() -> Result<()> {
+    let env = env_with(&[(RootContext::Env, r#"{"PAYLOAD":"{}"}"#)])?;
+
+    assert_eq!(text(r#"fromJSON('"\u007b"')"#, &env)?, "{");
+    assert_eq!(
+        text(r#"format('{0}{1}', 'a', fromJSON('"\u007d"'))"#, &env)?,
+        "a}"
+    );
+    assert_eq!(
+        text(r#"toJSON(fromJSON('[1,"x",{"k":null}]'))"#, &env)?,
+        text(r#"toJSON(fromJSON('[1, "x", {"k": null}]'))"#, &env)?
+    );
+    assert!(truthy(r#"fromJSON('{"a":[true]}').a[0]"#, &env)?);
+    assert!(truthy("fromJSON('true')", &env)?);
+    assert_eq!(
+        error_text("fromJSON(env.PAYLOAD)", &env)?,
+        "unsupported expression function fromJSON"
+    );
+    assert_eq!(
+        error_text("FROMJSON(format('{0}', 'x'))", &env)?,
+        "unsupported expression function FROMJSON"
+    );
+    assert_eq!(
+        error_text("fromJSON('a' && 'b')", &env)?,
+        "unsupported expression function fromJSON"
+    );
+    assert!(error_text("fromJSON('a', 'b')", &env)?.contains("Too many parameters"));
+    assert!(error_text("fromJSON('{')", &env)?.contains("Error parsing fromJson"));
+    Ok(())
+}

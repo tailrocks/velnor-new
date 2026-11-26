@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -40,6 +42,20 @@ pub(crate) fn error_text(expression: &str, env: &ExprEnv) -> Result<String> {
     }
 }
 
+pub(crate) fn expected_digest(contents: &[&[u8]]) -> String {
+    let mut aggregate = Sha256::new();
+    for content in contents {
+        aggregate.update(Sha256::digest(content));
+    }
+    aggregate
+        .finalize()
+        .iter()
+        .fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
+}
+
 #[derive(Debug)]
 pub(crate) struct TempDir {
     root: PathBuf,
@@ -54,6 +70,22 @@ impl TempDir {
 
     pub(crate) fn path(&self) -> &Path {
         &self.root
+    }
+
+    pub(crate) fn workspace(&self) -> Result<PathBuf> {
+        fs::canonicalize(self.root.join("ws")).context("canonicalize workspace")
+    }
+
+    pub(crate) fn env(&self) -> ExprEnv {
+        ExprEnv::new(self.root.join("ws"))
+    }
+
+    pub(crate) fn symlink(&self, link: &str, target: &Path) -> Result<()> {
+        let path = self.root.join(link);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).context("create parent")?;
+        }
+        std::os::unix::fs::symlink(target, path).context("create symlink")
     }
 
     pub(crate) fn write(&self, relative: &str, contents: &str) -> Result<()> {

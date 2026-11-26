@@ -5,8 +5,14 @@
 mod expr_functions;
 #[path = "expr/hash_files.rs"]
 mod expr_hash_files;
+#[path = "expr/hash_files_fs.rs"]
+mod expr_hash_files_fs;
+#[path = "expr/hash_files_patterns.rs"]
+mod expr_hash_files_patterns;
 #[path = "expr/indexing.rs"]
 mod expr_indexing;
+#[path = "expr/limits.rs"]
+mod expr_limits;
 #[path = "expr/operators.rs"]
 mod expr_operators;
 #[path = "expr/status.rs"]

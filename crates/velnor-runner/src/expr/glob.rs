@@ -2,134 +2,254 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
-use globset::{GlobBuilder, GlobMatcher};
-use std::collections::BTreeSet;
+use super::pattern::{GlobError, Pattern, Seg, align};
+use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::io;
+use std::path::{Component, Path, PathBuf};
 
-pub(crate) struct OrderedGlobs {
-    matchers: Vec<(bool, GlobMatcher)>,
+struct Entry {
+    negate: bool,
+    files: bool,
+    segs: Vec<Seg>,
 }
 
-impl OrderedGlobs {
-    pub(crate) fn new(patterns: &[String]) -> Result<Self, globset::Error> {
-        let matchers = patterns
-            .iter()
-            .map(|pattern| {
-                let (negative, pattern) = pattern
-                    .strip_prefix('!')
-                    .map_or((false, pattern.as_str()), |pattern| (true, pattern));
-                GlobBuilder::new(pattern)
-                    .literal_separator(true)
-                    .build()
-                    .map(|glob| (negative, glob.compile_matcher()))
-            })
-            .collect::<Result<_, _>>()?;
-        Ok(Self { matchers })
-    }
-
-    pub(crate) fn is_match(&self, path: &str) -> bool {
-        self.matchers
-            .iter()
-            .fold(false, |matched, (negative, matcher)| {
-                if matcher.is_match(path) {
-                    !negative
-                } else {
-                    matched
-                }
-            })
-    }
+pub(crate) struct PatternSet {
+    workspace: Vec<String>,
+    entries: Vec<Entry>,
 }
 
-fn static_prefix(workspace: &Path, pattern: &str) -> Option<PathBuf> {
-    let pattern = pattern.strip_prefix('!').unwrap_or(pattern);
-    if pattern.is_empty() {
-        return None;
-    }
-    let mut root = workspace.to_path_buf();
-    for segment in pattern.split('/') {
-        if segment.contains(['*', '?', '[', ']', '{', '}']) {
-            break;
-        }
-        if segment == ".." {
-            return None;
-        }
-        if !segment.is_empty() && segment != "." {
-            root.push(segment);
-        }
-    }
-    Some(root)
-}
-
-pub(crate) fn search_roots(workspace: &Path, patterns: &[String]) -> Vec<PathBuf> {
-    let candidates: Vec<PathBuf> = patterns
-        .iter()
-        .filter_map(|pattern| static_prefix(workspace, pattern))
-        .collect();
-    let candidate_set: BTreeSet<PathBuf> = candidates.iter().cloned().collect();
-    let mut selected = BTreeSet::new();
-    candidates
-        .into_iter()
-        .filter(|candidate| {
-            !candidate
-                .ancestors()
-                .skip(1)
-                .any(|ancestor| candidate_set.contains(ancestor))
-                && selected.insert(candidate.clone())
+pub(crate) fn components_of(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
         })
         .collect()
 }
 
-enum Kind {
-    File,
-    Dir,
-    Other,
-}
-
-fn kind_of(path: &Path, file_type: fs::FileType) -> Kind {
-    if file_type.is_dir() {
-        Kind::Dir
-    } else if file_type.is_file() {
-        Kind::File
-    } else if file_type.is_symlink() {
-        match fs::metadata(path) {
-            Ok(target) if target.is_file() => Kind::File,
-            Ok(_) => Kind::Other,
-            Err(_) => Kind::File,
+impl PatternSet {
+    pub(crate) fn new<'a>(
+        workspace: &Path,
+        lines: impl Iterator<Item = &'a str>,
+    ) -> Result<Self, GlobError> {
+        let workspace = components_of(workspace);
+        let mut entries = Vec::new();
+        for line in lines {
+            let Some(pattern) = Pattern::parse(line, &workspace)? else {
+                continue;
+            };
+            if pattern.trailing || !matches!(pattern.segs.last(), Some(Seg::GlobStar)) {
+                let mut segs = pattern.segs.clone();
+                segs.push(Seg::GlobStar);
+                entries.push(Entry {
+                    negate: pattern.negate,
+                    files: true,
+                    segs,
+                });
+            }
+            entries.push(Entry {
+                negate: pattern.negate,
+                files: !pattern.trailing,
+                segs: pattern.segs,
+            });
         }
-    } else {
-        Kind::Other
+        Ok(Self { workspace, entries })
+    }
+
+    fn matches_file(&self, path: &[String]) -> bool {
+        self.entries.iter().fold(false, |matched, entry| {
+            if entry.files && align(&entry.segs, path).last() == Some(&true) {
+                !entry.negate
+            } else {
+                matched
+            }
+        })
+    }
+
+    fn may_contain(&self, path: &[String]) -> bool {
+        self.entries
+            .iter()
+            .filter(|entry| !entry.negate)
+            .any(|entry| align(&entry.segs, path).iter().any(|alive| *alive))
+    }
+
+    fn roots(&self) -> Vec<Vec<String>> {
+        let candidates: Vec<Vec<String>> = self
+            .entries
+            .iter()
+            .filter(|entry| !entry.negate)
+            .map(|entry| {
+                entry
+                    .segs
+                    .iter()
+                    .map_while(|seg| seg.literal().map(str::to_owned))
+                    .collect()
+            })
+            .collect();
+        let known: HashSet<&[String]> = candidates.iter().map(Vec::as_slice).collect();
+        let mut included: Vec<Vec<String>> = Vec::new();
+        for candidate in &candidates {
+            let shadowed = (0..candidate.len()).any(|length| known.contains(&candidate[..length]));
+            if !shadowed && !included.contains(candidate) {
+                included.push(candidate.clone());
+            }
+        }
+        let mut roots: Vec<Vec<String>> = Vec::new();
+        for root in included {
+            let clamped = if root.starts_with(&self.workspace) {
+                root
+            } else if self.workspace.starts_with(&root) {
+                self.workspace.clone()
+            } else {
+                continue;
+            };
+            if !roots.contains(&clamped) {
+                roots.push(clamped);
+            }
+        }
+        roots
+    }
+
+    pub(crate) fn walk<'a>(&'a self, workspace: &'a Path) -> Walk<'a> {
+        Walk {
+            patterns: self,
+            workspace,
+            roots: self.roots().into_iter(),
+            stack: Vec::new(),
+        }
     }
 }
 
-fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
+struct Visit {
+    path: PathBuf,
+    comps: Vec<String>,
+    kind: fs::FileType,
+    matched: bool,
+    partial: bool,
+}
+
+pub(crate) struct Walk<'a> {
+    patterns: &'a PatternSet,
+    workspace: &'a Path,
+    roots: std::vec::IntoIter<Vec<String>>,
+    stack: Vec<Visit>,
+}
+
+fn skip_missing<T>(result: io::Result<T>, path: &Path) -> Result<Option<T>, GlobError> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(GlobError::io(path, error)),
+    }
+}
+
+impl Iterator for Walk<'_> {
+    type Item = Result<PathBuf, GlobError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let visit = match self.next_visit()? {
+                Ok(visit) => visit,
+                Err(error) => return Some(Err(error)),
+            };
+            match self.visit(visit) {
+                Ok(Some(path)) => return Some(Ok(path)),
+                Ok(None) => {}
+                Err(error) => return Some(Err(error)),
+            }
+        }
+    }
+}
+
+impl Walk<'_> {
+    fn next_visit(&mut self) -> Option<Result<Visit, GlobError>> {
+        while self.stack.is_empty() {
+            let root = self.roots.next()?;
+            match self.start(&root) {
+                Ok(Some(visit)) => return Some(Ok(visit)),
+                Ok(None) => {}
+                Err(error) => return Some(Err(error)),
+            }
+        }
+        self.stack.pop().map(Ok)
+    }
+
+    fn classify(&self, path: PathBuf, comps: Vec<String>, kind: fs::FileType) -> Option<Visit> {
+        let matched = self.patterns.matches_file(&comps);
+        let partial = self.patterns.may_contain(&comps);
+        (matched || partial).then_some(Visit {
+            path,
+            comps,
+            kind,
+            matched,
+            partial,
+        })
+    }
+
+    fn start(&self, root: &[String]) -> Result<Option<Visit>, GlobError> {
+        let relative = &root[self.patterns.workspace.len()..];
+        let path = relative
+            .iter()
+            .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
+        let Some(real) = skip_missing(fs::canonicalize(&path), &path)? else {
+            return Ok(None);
         };
-        match kind_of(&path, file_type) {
-            Kind::File => files.push(path),
-            Kind::Dir => walk(&path, files),
-            Kind::Other => {}
+        if !real.starts_with(self.workspace) {
+            return Ok(None);
         }
+        let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
+            return Ok(None);
+        };
+        Ok(self.classify(path, root.to_vec(), metadata.file_type()))
     }
-}
 
-pub(crate) fn collect_files(root: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    let kind = fs::symlink_metadata(root)
-        .map_or(Kind::Other, |metadata| kind_of(root, metadata.file_type()));
-    match kind {
-        Kind::File => files.push(root.to_path_buf()),
-        Kind::Dir => {
-            walk(root, &mut files);
-            files.sort();
+    fn visit(&mut self, visit: Visit) -> Result<Option<PathBuf>, GlobError> {
+        if visit.kind.is_dir() {
+            if visit.partial {
+                self.push_children(&visit)?;
+            }
+            return Ok(None);
         }
-        Kind::Other => {}
+        if !visit.matched {
+            return Ok(None);
+        }
+        if visit.kind.is_file() {
+            return Ok(Some(visit.path));
+        }
+        if !visit.kind.is_symlink() {
+            return Ok(None);
+        }
+        let Some(real) = skip_missing(fs::canonicalize(&visit.path), &visit.path)? else {
+            return Ok(None);
+        };
+        if !real.starts_with(self.workspace) {
+            return Ok(None);
+        }
+        let metadata = skip_missing(fs::metadata(&real), &real)?;
+        Ok(metadata.filter(fs::Metadata::is_file).map(|_| real))
     }
-    files
+
+    fn push_children(&mut self, parent: &Visit) -> Result<(), GlobError> {
+        let Some(reader) = skip_missing(fs::read_dir(&parent.path), &parent.path)? else {
+            return Ok(());
+        };
+        let mut children = Vec::new();
+        for item in reader {
+            let item = item.map_err(|error| GlobError::io(&parent.path, error))?;
+            let path = item.path();
+            if let Some(kind) = skip_missing(item.file_type(), &path)? {
+                children.push((item.file_name(), kind));
+            }
+        }
+        children.sort_unstable_by(|left, right| right.0.cmp(&left.0));
+        for (name, kind) in children {
+            let mut comps = parent.comps.clone();
+            comps.push(name.to_string_lossy().into_owned());
+            if let Some(visit) = self.classify(parent.path.join(&name), comps, kind) {
+                self.stack.push(visit);
+            }
+        }
+        Ok(())
+    }
 }
