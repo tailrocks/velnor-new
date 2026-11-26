@@ -136,3 +136,16 @@ fn mise_action_requires_cache_to_be_explicitly_false() -> Result<()> {
     assert_eq!(world.mise_calls(), Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn mise_action_accepts_every_false_spelling_of_cache() -> Result<()> {
+    for spelling in ["false", "False", "FALSE"] {
+        let world = World::new()?;
+        world.install_mise()?;
+        world.init_workspace(true)?;
+        let job = world.with_input(&job_fixture("mise_action_ok"), "cache", spelling)?;
+        let ran = world.run(&job, &[])?;
+        assert!(ran.has_line("job succeeded"), "{spelling}\n{}", ran.stdout);
+    }
+    Ok(())
+}

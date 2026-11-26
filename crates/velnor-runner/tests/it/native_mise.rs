@@ -144,6 +144,53 @@ fn mise_action_prepends_tool_dirs_in_mise_order_without_duplicating_the_inherite
 }
 
 #[test]
+fn mise_action_keeps_an_inherited_entry_that_mise_promotes() -> Result<()> {
+    for no_paths in ["0", "1"] {
+        let world = World::new()?;
+        let binary = world.install_mise()?;
+        world.init_workspace(true)?;
+        let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+        let ran = world.run(
+            &job,
+            &[
+                ("PATH", "/zz-inherited:/usr/bin:/bin"),
+                ("MISE_DOUBLE_PROMOTE", "/usr/bin"),
+                ("MISE_DOUBLE_NO_PATHS", no_paths),
+            ],
+        )?;
+        assert!(ran.has_line("job succeeded"), "{no_paths}\n{}", ran.stdout);
+        let expected = format!(
+            "path={}/tool-bin:/usr/bin:{}/tools/data/shims:{}:/zz-inherited:/usr/bin:/bin",
+            world.binary_dir().display(),
+            world.store.display(),
+            binary
+                .parent()
+                .map_or_else(String::new, |dir| dir.display().to_string())
+        );
+        assert!(
+            ran.has_line(&expected),
+            "{no_paths}\n{expected}\n{}",
+            ran.stdout
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn mise_action_publishes_cache_hit_false_when_caching_is_disabled() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let job = world.with_final_script(
+        &job_fixture("mise_action_ok"),
+        "echo \"hit=${{ steps.mise.outputs.cache-hit }}\"",
+    )?;
+    let ran = world.run(&job, &[])?;
+    assert!(ran.has_line("hit=false"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[test]
 fn mise_action_puts_the_store_shims_on_the_path() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;

@@ -62,7 +62,9 @@ impl MiseInputs {
                 "version" => value.trim().clone_into(&mut parsed.version),
                 "sha256" => value.trim().clone_into(&mut parsed.sha256),
                 "install_args" => value.trim().clone_into(&mut parsed.install_args),
-                "cache" if value.trim() == "false" => cache_disabled = true,
+                "cache" if matches!(value.trim(), "false" | "False" | "FALSE") => {
+                    cache_disabled = true;
+                }
                 "cache" => return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned())),
                 other if value.trim().is_empty() && BOOLEAN_INPUTS.contains(&other) => {
                     return Err(ExecError::Invalid(format!(
@@ -170,12 +172,46 @@ async fn mise_json(
 }
 
 fn path_additions(computed: &str, current: &str, binary_dir: &str) -> Vec<String> {
-    let known: Vec<&str> = current.split(':').chain([binary_dir]).collect();
-    computed
-        .split(':')
-        .filter(|entry| !entry.is_empty() && !known.contains(entry))
-        .map(str::to_owned)
+    let entries = |path: &str| -> Vec<String> {
+        path.split(':')
+            .filter(|entry| !entry.is_empty())
+            .map(str::to_owned)
+            .collect()
+    };
+    let computed = entries(computed);
+    let current = entries(current);
+    let prefix = (!current.is_empty())
+        .then(|| {
+            computed
+                .windows(current.len())
+                .position(|window| window == current)
+        })
+        .flatten();
+    let additions: Vec<String> = match prefix {
+        Some(index) => computed[..index].to_vec(),
+        None => computed
+            .into_iter()
+            .filter(|entry| !current.contains(entry))
+            .collect(),
+    };
+    additions
+        .into_iter()
+        .filter(|entry| entry != binary_dir)
         .collect()
+}
+
+async fn managed_paths(ctx: &mut StepContext<'_>, install: &Install) -> Option<Vec<String>> {
+    let process_env = install.process_env(ctx);
+    let output = mise_capture(ctx, install, &["env", "--paths"], &process_env)
+        .await
+        .ok()?;
+    Some(
+        output
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
 }
 
 struct Install {
@@ -254,6 +290,7 @@ async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), Exec
         ctx.add_mask(value);
     }
     let computed = mise_json(ctx, install, &["env", "--json"]).await?;
+    let managed = managed_paths(ctx, install).await;
     let github_path = ctx.env.get("GITHUB_PATH").cloned().unwrap_or_default();
     let github_env = ctx.env.get("GITHUB_ENV").cloned().unwrap_or_default();
     let mut paths = vec![install.dir.clone(), format!("{}/shims", install.data)];
@@ -264,7 +301,9 @@ async fn export(ctx: &mut StepContext<'_>, install: &Install) -> Result<(), Exec
         .collect();
     for (name, value) in &computed {
         if name.eq_ignore_ascii_case("PATH") {
-            let mut added = path_additions(value, &current_path(ctx), &install.dir);
+            let mut added = managed
+                .clone()
+                .unwrap_or_else(|| path_additions(value, &current_path(ctx), &install.dir));
             added.reverse();
             paths.extend(added);
         } else {
@@ -303,6 +342,7 @@ pub(crate) async fn mise_action(
         }
     }
     export(ctx, &install).await?;
+    ctx.set_output("cache-hit", "false");
     Ok(StepResult::Succeeded)
 }
 
