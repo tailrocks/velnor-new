@@ -43,6 +43,7 @@ pub(crate) use readiness::assess as heartbeat_readiness;
 pub(crate) use run_blocking::run_blocking;
 
 const TICK: Duration = Duration::from_secs(2);
+const POLL_WAKE: Duration = Duration::from_millis(500);
 const JOB_STOP_WAIT: Duration = Duration::from_secs(15);
 const PROOF_WAIT: Duration = Duration::from_secs(30);
 
@@ -185,6 +186,8 @@ impl Run<'_> {
     async fn serve(&mut self, shutdown: &mut Shutdown<'_>) -> Result<RustRunnerExit, ListenFault> {
         let mut tick = tokio::time::interval(TICK);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut polls = tokio::time::interval(POLL_WAKE);
+        polls.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             self.spawn_polls();
             tokio::select! {
@@ -194,6 +197,7 @@ impl Run<'_> {
                     return Ok(RustRunnerExit::Shutdown);
                 }
                 Some(joined) = self.tasks.join_next() => self.handle(joined)?,
+                _ = polls.tick() => {}
                 _ = tick.tick() => {
                     self.on_tick()?;
                     if self.config_changed() && self.slots.is_empty() && self.idle() {
