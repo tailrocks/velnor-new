@@ -184,3 +184,22 @@ fn an_external_dependency_that_shares_a_member_name_is_not_read_as_that_member()
     )?)?;
     Ok(())
 }
+
+#[test]
+fn a_selector_reaching_a_member_only_through_a_target_table_is_refused() -> TestResult {
+    let root = |tables: &str| {
+        format!(
+            "[package]\nname = \"package-0\"\nedition = \"2021\"\n[features]\nlocal-mode = []\n{tables}member = {{ package = \"package-0\", path = \".\" }}\n"
+        )
+    };
+    let config = "workspace_features = ['member/local-mode']\n";
+    detect(&root_and_member(&root("[dependencies]\n"), config)?)?;
+    assert_eq!(
+        refusal(&root_and_member(
+            &root("[target.'cfg(windows)'.dependencies]\n"),
+            config
+        )?)?,
+        (".".to_owned(), "member/local-mode".to_owned())
+    );
+    Ok(())
+}

@@ -63,12 +63,16 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
     let Some((package, feature)) = name.split_once('/') else {
         return confined().any(|member| defined_features(view, member).contains(name));
     };
-    let aliased: Vec<Option<String>> = confined()
+    let aliased: Vec<Option<(String, bool)>> = confined()
         .filter_map(|member| Some((member, manifest(view, member)?)))
         .flat_map(|(member, manifest)| {
+            let targeted = only_in_target_tables(&manifest, package);
             feature_dependency_specs(&manifest)
                 .filter(|(key, _)| *key == package)
-                .map(|(_, spec)| dependency_directory(view, root, member, spec, package))
+                .map(|(_, spec)| {
+                    dependency_directory(view, root, member, spec, package)
+                        .map(|directory| (directory, targeted))
+                })
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -77,14 +81,32 @@ fn root_accepts(view: &RepoView, root: &RustRoot, name: &str) -> bool {
             member.name.as_str() == package && defined_features(view, member).contains(feature)
         });
     }
-    aliased.iter().all(|directory| {
-        directory.as_ref().is_none_or(|directory| {
+    aliased.iter().all(|resolved| {
+        resolved.as_ref().is_none_or(|(directory, targeted)| {
             root.members
                 .iter()
                 .find(|member| member_directory(member) == *directory)
-                .is_none_or(|member| defined_features(view, member).contains(feature))
+                .is_none_or(|member| !targeted && defined_features(view, member).contains(feature))
         })
     })
+}
+
+fn only_in_target_tables(manifest: &toml::Table, key: &str) -> bool {
+    const TABLES: [&str; 3] = ["dependencies", "build-dependencies", "dev-dependencies"];
+    let declared = |scope: &toml::Table| {
+        TABLES
+            .iter()
+            .filter_map(|table| scope.get(*table)?.as_table())
+            .any(|table| table.contains_key(key))
+    };
+    !declared(manifest)
+        && manifest
+            .get("target")
+            .and_then(toml::Value::as_table)
+            .into_iter()
+            .flat_map(toml::Table::values)
+            .filter_map(toml::Value::as_table)
+            .any(declared)
 }
 
 fn manifest(view: &RepoView, member: &RustMember) -> Option<toml::Table> {
