@@ -191,11 +191,18 @@ fn connect_writes_launch_mode_rust_runner() -> Result<(), Box<dyn std::error::Er
     let temp = tempfile::tempdir()?;
     let state = temp.path().canonicalize()?;
     let keychain = FakeKeychain::default();
+    let inventory = state.join("inventory.json");
+    std::fs::write(&inventory, INVENTORY)?;
+    let artifact = "b".repeat(64);
     let request = ConnectRequest {
         scale_set: "velnor-mac",
         scale_set_labels: vec!["velnor".to_owned(), "velnor-mac".to_owned()],
         platform: "linux/arm64",
         launch_mode: LaunchMode::RustRunner,
+        job_authority_inventory: Some(&inventory),
+        job_authority_generator_source_sha: Some(SOURCE_SHA),
+        job_authority_generator_artifact_sha256: Some(&artifact),
+        job_authority_generation: Some(1),
         ..request(&state, None)
     };
     assert_eq!(connect(&keychain, &request, "token-0"), Ok(()));

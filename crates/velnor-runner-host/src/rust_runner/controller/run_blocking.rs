@@ -13,19 +13,15 @@ use super::{Context, RustRunnerExit, Shutdown, host_toml_sha256, run_rust_runner
 use crate::config::{HostConfig, LaunchMode};
 use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
-use crate::host_controller::config_watch::read_host_config;
 use crate::launch_blocking::ListenFault;
+use crate::readiness_scan::controller_config;
 use crate::rust_runner::RustRunnerLauncher;
 
 const CREDENTIAL_RETRY: Duration = Duration::from_secs(30);
 const CREDENTIAL_BUDGET: Duration = Duration::from_secs(30);
 const CONFIG_RETRY: Duration = Duration::from_secs(5);
 
-pub(crate) fn run_blocking(
-    config: &HostConfig,
-    state: &Path,
-    daemon_lock: &DaemonLock,
-) -> Result<(), ListenFault> {
+pub(crate) fn run_blocking(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenFault> {
     let _controller_run = daemon_lock.begin_controller_run()?;
     let state = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
@@ -35,7 +31,7 @@ pub(crate) fn run_blocking(
         .enable_all()
         .build()
         .map_err(|_| HostError::Journal)?;
-    let result = runtime.block_on(supervise(config.clone(), &state, daemon_lock));
+    let result = runtime.block_on(supervise(&state, daemon_lock));
     runtime.shutdown_background();
     result
 }
@@ -61,25 +57,33 @@ impl Signals {
     }
 }
 
-async fn supervise(
-    mut config: HostConfig,
-    state: &Path,
-    daemon_lock: &DaemonLock,
-) -> Result<(), ListenFault> {
+async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenFault> {
     let mut signals = Signals::install()?;
+    let mut snapshot = Some(controller_config(state).ok_or(HostError::Config)?);
     loop {
-        let sha = host_toml_sha256(state).ok_or(HostError::Config)?;
+        let (config, config_sha256) = match snapshot.take() {
+            Some(current) => current,
+            None => match reread(state, &mut signals).await {
+                Some(next) => next,
+                None => return Ok(()),
+            },
+        };
+        if config.host.launch_mode != LaunchMode::RustRunner {
+            return Ok(());
+        }
         let cx = Context {
             state: state.to_path_buf(),
-            config_sha256: sha,
+            config_sha256,
             launcher: RustRunnerLauncher::from_environment(),
         };
         let mut shutdown = Shutdown(Box::pin(signals.received()));
-        let Some(pats) = load_pats(&cx, &config, &mut shutdown).await else {
-            return Ok(());
+        let pats = match load_pats(&cx, &config, &mut shutdown).await {
+            Credentials::Loaded(pats) => pats,
+            Credentials::ConfigChanged => continue,
+            Credentials::Stopped => return Ok(()),
         };
         let exit = run_rust_runner_host(
-            config.clone(),
+            config,
             pats,
             state,
             daemon_lock,
@@ -89,25 +93,22 @@ async fn supervise(
         .await?;
         match exit {
             RustRunnerExit::Shutdown => return Ok(()),
-            RustRunnerExit::ConfigChanged => {
-                let Some(next) = reread(state, &mut signals).await else {
-                    return Ok(());
-                };
-                if next.host.launch_mode != LaunchMode::RustRunner {
-                    return Ok(());
-                }
-                config = next;
-            }
+            RustRunnerExit::ConfigChanged => {}
         }
     }
 }
 
-async fn load_pats(
-    cx: &Context,
-    config: &HostConfig,
-    shutdown: &mut Shutdown<'_>,
-) -> Option<ConnectionPats> {
+enum Credentials {
+    Loaded(ConnectionPats),
+    ConfigChanged,
+    Stopped,
+}
+
+async fn load_pats(cx: &Context, config: &HostConfig, shutdown: &mut Shutdown<'_>) -> Credentials {
     loop {
+        if host_toml_sha256(&cx.state).as_deref() != Some(cx.config_sha256.as_str()) {
+            return Credentials::ConfigChanged;
+        }
         let deadline = tokio::time::Instant::now() + CREDENTIAL_BUDGET;
         let loaded = guarded(
             cx,
@@ -118,9 +119,9 @@ async fn load_pats(
         )
         .await;
         match loaded.value {
-            Some(Ok(pats)) => return Some(pats),
+            Some(Ok(pats)) => return Credentials::Loaded(pats),
             Some(Err(error)) => eprintln!("rust-runner credentials unavailable: {error}"),
-            None => return None,
+            None => return Credentials::Stopped,
         }
         let wait = guarded(
             cx,
@@ -131,17 +132,17 @@ async fn load_pats(
         )
         .await;
         if wait.stopped {
-            return None;
+            return Credentials::Stopped;
         }
     }
 }
 
-async fn reread(state: &Path, signals: &mut Signals) -> Option<HostConfig> {
+async fn reread(state: &Path, signals: &mut Signals) -> Option<(HostConfig, String)> {
     loop {
-        match read_host_config(&state.join("host.toml")) {
-            Ok(Some(config)) => return Some(config),
-            Ok(None) | Err(_) => eprintln!("rust-runner config reload held"),
+        if let Some(current) = controller_config(state) {
+            return Some(current);
         }
+        eprintln!("rust-runner config reload held");
         tokio::select! {
             () = signals.received() => return None,
             () = tokio::time::sleep(CONFIG_RETRY) => {}

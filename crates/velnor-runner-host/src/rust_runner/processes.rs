@@ -10,6 +10,7 @@ use crate::error::{HostError, RustRunnerFailure};
 mod tests;
 
 const WORK_DIR_PREFIX: &str = "--work-dir=";
+const INIT_PID: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MachineProcess {
@@ -74,7 +75,12 @@ impl RustRunnerLauncher {
         }
         let text = String::from_utf8(output.stdout)
             .map_err(|_| HostError::RustRunner(RustRunnerFailure::ProcessList))?;
-        parse_ps(&text).map_err(HostError::RustRunner)
+        let processes = parse_ps(&text).map_err(HostError::RustRunner)?;
+        if processes.iter().any(|process| process.pid == INIT_PID) {
+            Ok(processes)
+        } else {
+            Err(HostError::RustRunner(RustRunnerFailure::ProcessList))
+        }
     }
 
     pub fn kill_processes(&self, pids: &[u32]) -> Result<(), HostError> {

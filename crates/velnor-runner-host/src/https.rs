@@ -16,6 +16,7 @@ mod process;
 mod retry_after;
 
 const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024;
+const SCRATCH_ATTEMPTS: u32 = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpsTransport {
@@ -258,15 +259,27 @@ impl Scratch {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| CurlFail::Reset)?
             .as_nanos();
-        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "velnor-https-{}-{sequence}-{nanos}",
-            std::process::id()
-        ));
-        fs::create_dir(&dir).map_err(|_| CurlFail::Reset)?;
-        let perms = std::os::unix::fs::PermissionsExt::from_mode(0o700);
-        fs::set_permissions(&dir, perms).map_err(|_| CurlFail::Reset)?;
-        Ok(Self { dir })
+        Self::create_in(&std::env::temp_dir(), nanos, &NEXT)
+    }
+
+    fn create_in(root: &Path, nanos: u128, next: &AtomicU64) -> Result<Self, CurlFail> {
+        for _ in 0..SCRATCH_ATTEMPTS {
+            let sequence = next.fetch_add(1, Ordering::Relaxed);
+            let dir = root.join(format!(
+                "velnor-https-{}-{sequence}-{nanos}",
+                std::process::id()
+            ));
+            match fs::create_dir(&dir) {
+                Ok(()) => {
+                    let perms = std::os::unix::fs::PermissionsExt::from_mode(0o700);
+                    fs::set_permissions(&dir, perms).map_err(|_| CurlFail::Reset)?;
+                    return Ok(Self { dir });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return Err(CurlFail::Reset),
+            }
+        }
+        Err(CurlFail::Reset)
     }
 
     fn path(&self, name: &str) -> PathBuf {
@@ -283,6 +296,19 @@ impl Drop for Scratch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scratch_folders_made_in_one_clock_tick_do_not_collide()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = tempfile::tempdir()?;
+        let first = Scratch::create_in(root.path(), 7, &AtomicU64::new(0))
+            .map_err(|_| "the first scratch folder")?;
+        let second = Scratch::create_in(root.path(), 7, &AtomicU64::new(0))
+            .map_err(|_| "the second scratch folder")?;
+        assert_ne!(first.dir, second.dir);
+        assert!(first.dir.is_dir() && second.dir.is_dir());
+        Ok(())
+    }
 
     #[test]
     fn admin_service_url_rejects_userinfo() {

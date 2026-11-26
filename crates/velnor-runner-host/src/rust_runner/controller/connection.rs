@@ -18,7 +18,7 @@ const ADMIN_RETRY: Duration = Duration::from_secs(30);
 pub(super) struct Pending {
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
-    pub(super) policy: Option<ApprovedJobAuthorityPolicy>,
+    pub(super) policy: ApprovedJobAuthorityPolicy,
     pub(super) set: Option<(Admin, i64)>,
     pub(super) session: Option<QueueSession>,
     pub(super) cleared: bool,
@@ -27,7 +27,8 @@ pub(super) struct Pending {
 pub(super) struct Live {
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
-    pub(super) policy: Option<ApprovedJobAuthorityPolicy>,
+    pub(super) policy: ApprovedJobAuthorityPolicy,
+    pub(super) default_branch: Option<String>,
     pub(super) admin: Admin,
     pub(super) scale_set_id: i64,
     pub(super) session: QueueSession,
@@ -53,6 +54,7 @@ impl Pending {
             binding: self.binding,
             pat: self.pat,
             policy: self.policy,
+            default_branch: None,
             admin,
             scale_set_id,
             session,

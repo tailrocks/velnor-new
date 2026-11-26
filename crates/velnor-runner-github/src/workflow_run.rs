@@ -214,6 +214,19 @@ where
     get_json(transport, path, token)
 }
 
+pub fn get_repository<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    token: &str,
+) -> Result<GitHubRepository, WorkflowRunError>
+where
+    T: Transport + ?Sized,
+{
+    let path = repository_path(owner, repository, "")?;
+    get_json(transport, path, token)
+}
+
 pub fn get_repository_scope<T>(
     transport: &mut T,
     expected: RepositoryTarget<'_>,

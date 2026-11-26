@@ -102,6 +102,21 @@ The claim takes its event ref and tested SHA from the values GitHub documents fo
 
 `GITHUB_WORKFLOW_REF` is the repository, the run's root workflow path and the event ref, and `GITHUB_WORKFLOW_SHA` equals the tested SHA, as in the official path. The host takes the root path from `GET /repos/{owner}/{repo}/actions/runs/{run}/attempts/{attempt}`. An offer whose job workflow ref is not a branch or tag ref of the event (a commit-pinned reusable workflow, for instance) cannot be reduced to an event ref this way and is refused, which fails closed.
 
+The host admits a source only when the run's repository and, for a pull request, the head repository of the pull request are the connected repository. Any other source is refused with the reason `cross_repository`: the job-level grant, and the sandbox that enforces it, belong to the launch-grant work, and until then a job from another repository would run with the host's reach.
+
+### GitHub REST response shapes read by the rust-runner host
+
+Observed from public repositories with `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2026-03-10` (`GET /repos/actions/runner`, `GET /repos/actions/runner/actions/runs?per_page=1`, and, for a same-repository pull request run, `GET /repos/oven-sh/bun/actions/runs/{run}/attempts/1` and `GET /repos/oven-sh/bun/pulls/{number}`). The fake GitHub (`crates/velnor-runner-host/tests/fixtures/fake_github_shapes.ts`) serves these key sets.
+
+| Endpoint | Keys | Fields the host reads | Absent from the response |
+|---|---|---|---|
+| `GET /repos/{owner}/{repo}` | 85 to 86 | `id`, `name`, `full_name`, `owner.login`, `private`, `default_branch` | none of those |
+| `GET /repos/{owner}/{repo}/actions/runs/{run}/attempts/{attempt}` | 35 | `id`, `event`, `path`, `head_branch`, `head_sha`, `workflow_id`, `run_attempt`, `repository`, `head_repository`, `pull_requests`, `referenced_workflows` | `repository` and `head_repository` are minimal repositories of 46 keys (`id`, `node_id`, `name`, `full_name`, `private`, `owner`, `html_url`, `description`, `fork`, `url` and 36 `*_url` templates) and carry no `default_branch`. `head_repository` is present for `push` runs too. |
+| `pull_requests[]` of a run | 5 | `number`, `head.ref`, `head.sha`, `head.repo.id`, `base.ref`, `base.sha`, `base.repo.id` | `head.repo` and `base.repo` hold `id`, `url`, `name` only, never `full_name`. The array is empty for a run of a pull request from a fork. |
+| `GET /repos/{owner}/{repo}/pulls/{number}` | 48 | `number`, `state`, `merged`, `merge_commit_sha`, `head`, `base` | `head` and `base` hold `label`, `ref`, `repo`, `sha`, `user`; `repo` is a full repository of 81 keys that includes `default_branch`. |
+
+The host reads the default branch from `GET /repos/{owner}/{repo}` once per connection and keeps it until the controller restarts. It never takes it from a run, whose repository objects do not carry it.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:

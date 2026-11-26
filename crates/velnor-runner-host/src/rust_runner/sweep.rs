@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use super::machine::failure;
-use super::{JIT_DIRECTORY, MachineProcess, RustRunnerLauncher};
+use super::store::Store;
+use super::{MachineProcess, RustRunnerLauncher};
 use crate::error::{HostError, RustRunnerFailure};
 
 impl RustRunnerLauncher {
@@ -16,10 +15,7 @@ impl RustRunnerLauncher {
                 return Err(failure(RustRunnerFailure::ProcessesSurvive));
             }
         }
-        for name in [JIT_DIRECTORY, "work"] {
-            empty_directory(&self.host_store.join(name))?;
-        }
-        Ok(())
+        Store::open(&self.host_store)?.empty_jit_and_work()
     }
 
     fn runner_pids(&self) -> Result<Vec<u32>, HostError> {
@@ -30,26 +26,4 @@ impl RustRunnerLauncher {
             .map(|process: &MachineProcess| process.pid)
             .collect())
     }
-}
-
-fn empty_directory(directory: &Path) -> Result<(), HostError> {
-    let entries = match std::fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
-    };
-    for entry in entries {
-        let entry = entry.map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        let path = entry.path();
-        let kind = entry
-            .file_type()
-            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        let removed = if kind.is_dir() {
-            std::fs::remove_dir_all(&path)
-        } else {
-            std::fs::remove_file(&path)
-        };
-        removed.map_err(|_| failure(RustRunnerFailure::HostStore))?;
-    }
-    Ok(())
 }

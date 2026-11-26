@@ -234,8 +234,8 @@ fn candidate_config(
     request: &ConnectRequest<'_>,
     connection: &RepositoryConnection,
 ) -> Result<String, ConnectError> {
-    let requested =
-        HostConfig::parse(&sample_config(request, connection)).map_err(|_| ConnectError::Config)?;
+    let requested = HostConfig::parse_draft(&sample_config(request, connection))
+        .map_err(|_| ConnectError::Config)?;
     let candidate = match existing {
         None => requested,
         Some(current) => {
@@ -394,6 +394,7 @@ pub(super) fn same_shared_settings(
         .resource_budget()
         .map_err(|_| ConnectError::Config)?;
     Ok(current.host.max_jobs == requested.host.max_jobs
+        && current.host.launch_mode == requested.host.launch_mode
         && current_resources == requested_resources
         && current.docker == requested.docker)
 }

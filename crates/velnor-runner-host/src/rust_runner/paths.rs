@@ -3,7 +3,6 @@
 
 use std::fmt;
 use std::num::NonZeroU64;
-use std::path::{Path, PathBuf};
 
 use super::{GUEST_STORE, JIT_DIRECTORY};
 
@@ -30,30 +29,28 @@ impl fmt::Display for ReservationId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct JobPaths {
-    jit_file: PathBuf,
-    work_dir: PathBuf,
+    jit_name: String,
+    work_name: String,
     guest_jit_file: String,
     guest_work_dir: String,
 }
 
 impl JobPaths {
-    pub(crate) fn of(host_store: &Path, reservation: ReservationId) -> Self {
+    pub(crate) fn of(reservation: ReservationId) -> Self {
         Self {
-            jit_file: host_store
-                .join(JIT_DIRECTORY)
-                .join(format!("{reservation}.jit")),
-            work_dir: host_store.join("work").join(reservation.to_string()),
+            jit_name: format!("{reservation}.jit"),
+            work_name: reservation.to_string(),
             guest_jit_file: format!("{GUEST_STORE}/{JIT_DIRECTORY}/{reservation}.jit"),
             guest_work_dir: format!("{GUEST_STORE}/work/{reservation}"),
         }
     }
 
-    pub(crate) fn jit_file(&self) -> &Path {
-        &self.jit_file
+    pub(crate) fn jit_name(&self) -> &str {
+        &self.jit_name
     }
 
-    pub(crate) fn work_dir(&self) -> &Path {
-        &self.work_dir
+    pub(crate) fn work_name(&self) -> &str {
+        &self.work_name
     }
 
     pub(crate) fn guest_jit_file(&self) -> &str {

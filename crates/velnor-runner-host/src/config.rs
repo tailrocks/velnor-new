@@ -80,6 +80,12 @@ const fn default_max_jobs() -> u32 {
 
 impl HostConfig {
     pub fn parse(text: &str) -> Result<Self, HostError> {
+        let config = Self::parse_draft(text)?;
+        config.require_policies()?;
+        Ok(config)
+    }
+
+    pub fn parse_draft(text: &str) -> Result<Self, HostError> {
         let mut config: Self = toml::from_str(text).map_err(|_| HostError::Config)?;
         for connection in &mut config.connections {
             connection.canonicalize()?;
@@ -92,6 +98,21 @@ impl HostConfig {
             .sort_by(|left, right| left.connection_id().cmp(right.connection_id()));
         config.validate()?;
         Ok(config)
+    }
+
+    fn require_policies(&self) -> Result<(), HostError> {
+        let uncovered = self.host.launch_mode == LaunchMode::RustRunner
+            && self.connections.iter().any(|connection| {
+                !self
+                    .job_authority_policies
+                    .iter()
+                    .any(|policy| policy.connection_id() == &connection.connection_id)
+            });
+        if uncovered {
+            Err(HostError::Config)
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn validate(&self) -> Result<(), HostError> {
@@ -196,6 +217,7 @@ impl HostConfig {
 
     pub fn to_toml(&self) -> Result<String, HostError> {
         self.validate()?;
+        self.require_policies()?;
         let document = HostToml {
             schema: self.schema,
             connections: &self.connections,
