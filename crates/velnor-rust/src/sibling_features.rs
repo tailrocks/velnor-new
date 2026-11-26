@@ -151,8 +151,22 @@ fn resolver_splits_build(view: &RepoView, workspace: &RepoPath) -> bool {
     };
     match text("workspace", "resolver").or_else(|| text("package", "resolver")) {
         Some(resolver) => resolver != "1",
-        None => text("package", "edition").is_some_and(|edition| edition.as_str() >= "2021"),
+        None => edition(&manifest).is_some_and(|edition| edition.as_str() >= "2021"),
     }
+}
+
+fn edition(manifest: &toml::Table) -> Option<String> {
+    let declared = manifest.get("package")?.get("edition")?;
+    let inherited = declared
+        .get("workspace")
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false);
+    let value = if inherited {
+        manifest.get("workspace")?.get("package")?.get("edition")?
+    } else {
+        declared
+    };
+    value.as_str().map(str::to_owned)
 }
 
 fn dependency_keys(

@@ -46,6 +46,16 @@ fn a_plain_name_a_member_alone_defines_is_refused_for_a_root_package_under_resol
             detect(&repo)?;
         }
     }
+    let inherited = |edition: &str| {
+        format!(
+            "[package]\nname = \"package-0\"\nedition.workspace = true\n[workspace.package]\nedition = \"{edition}\"\n"
+        )
+    };
+    assert_eq!(
+        refusal(&root_and_member(&inherited("2018"), FEATURES)?)?,
+        (".".to_owned(), "local-mode".to_owned())
+    );
+    detect(&root_and_member(&inherited("2021"), FEATURES)?)?;
     let explicit = format!("{ROOT_WITHOUT_FEATURE}edition = \"2018\"\nresolver = \"2\"\n");
     detect(&root_and_member(&explicit, FEATURES)?)?;
     let defined =
@@ -91,5 +101,12 @@ fn a_member_harness_gated_on_the_feature_runs_directly_only_when_the_root_packag
     };
     assert_eq!(member_gate(&root("2018"))?.len(), 0);
     assert_eq!(member_gate(&root("2021"))?.len(), 1);
+    let inherited = |edition: &str| {
+        format!(
+            "[package]\nname = \"package-0\"\nedition.workspace = true\n[workspace.package]\nedition = \"{edition}\"\n[features]\nlocal-mode = []\n"
+        )
+    };
+    assert_eq!(member_gate(&inherited("2018"))?.len(), 0);
+    assert_eq!(member_gate(&inherited("2021"))?.len(), 1);
     Ok(())
 }
