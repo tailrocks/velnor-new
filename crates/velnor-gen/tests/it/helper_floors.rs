@@ -135,3 +135,30 @@ fn generated_check_lint_renders_on_the_first_helper_that_reads_its_kind()
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }
+
+const SELECTED_DOCS: &str = "docs = \"selected\"\n";
+const ALWAYS_DOCS: &str = "docs = \"always\"\n";
+
+#[test]
+fn selected_docs_are_refused_before_the_helper_plans_them() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(SELECTED_DOCS, "0.1.116")?;
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
+    assert!(refused.contains("key: \"docs\""), "{refused}");
+    assert!(refused.contains("Some(\"selected\")"), "{refused}");
+    assert!(refused.contains("first: (0, 1, 117)"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn selected_docs_render_on_the_first_helper_that_plans_them() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(SELECTED_DOCS, "0.1.117")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn always_docs_still_render_before_the_helper_plans_selected_docs() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(ALWAYS_DOCS, "0.1.116")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
+    Ok(())
+}

@@ -155,11 +155,6 @@ fn post_merge_documentation_skips_pull_requests_and_merge_groups() -> TestResult
 }
 
 #[test]
-fn an_unknown_docs_mode_is_refused() {
-    assert!(documentation_conditions("docs = \"never\"\n").is_err());
-}
-
-#[test]
 fn a_post_merge_mode_needs_a_helper_that_knows_its_key() -> TestResult {
     for (key, floor, too_old) in [
         ("docs", "0.1.97", "0.1.96"),
@@ -263,6 +258,8 @@ const AFTER_MERGE: [EventKind; 3] = [
 fn selected_docs_facts() -> RepoFacts {
     let members = vec![
         with_targets("lib", &[TargetKind::Lib]),
+        with_targets("cli", &[TargetKind::Bin]),
+        with_targets("macros", &[TargetKind::ProcMacro]),
         with_targets("fixtures", &[TargetKind::Test, TargetKind::Example]),
     ];
     let mut repo = facts(vec![("Cargo.toml", members)]);
@@ -309,6 +306,8 @@ fn selected_docs_run_on_a_pull_request_that_selects_a_documented_package() -> Te
     let repo = selected_docs_facts();
     let selections = [
         some(&[("lib", changed("lib/src/lib.rs"))]),
+        some(&[("cli", changed("cli/src/main.rs"))]),
+        some(&[("macros", changed("macros/src/lib.rs"))]),
         some(&[
             ("fixtures", changed("fixtures/tests/a.rs")),
             ("lib", changed("lib/src/lib.rs")),
@@ -352,7 +351,11 @@ fn selected_docs_always_run_on_push() -> TestResult {
 
 #[test]
 fn an_unknown_docs_value_is_refused() -> TestResult {
-    for (key, value) in [("docs", "sometimes"), ("check_alone", "selected")] {
+    for (key, value) in [
+        ("docs", "sometimes"),
+        ("docs", "never"),
+        ("check_alone", "selected"),
+    ] {
         let config = format!("{key} = \"{value}\"\n");
         let repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
         match detect(&repo) {

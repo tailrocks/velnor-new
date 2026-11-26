@@ -12,9 +12,11 @@ fn doc_flags(repo: &Repo, event: Option<&str>) -> String {
 }
 
 fn doc_flags_of(repo: &Repo, event: Option<&str>, changed: &str) -> String {
-    let outputs = repo
-        .root()
-        .join(format!("doc-flags-{}", event.unwrap_or("none")));
+    let outputs = repo.root().join(format!(
+        "doc-flags-{}-{}",
+        event.unwrap_or("none"),
+        changed.replace('/', "_")
+    ));
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
     command
@@ -148,4 +150,52 @@ fn plan_reads_no_source_of_a_root_that_selects_nothing() {
         doc_flags_of(&repo, None, "tools/src/main.rs"),
         "rust_root_mode=none rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
+}
+
+fn selected_docs_repo() -> Repo {
+    let repo = plan_repo("doc-flags-selected");
+    repo.write_all(&[
+        (".velnor/rust-ci.toml", "docs = \"selected\"\n"),
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"a\", \"b\", \"fixtures\"]\nexclude = [\"tools\"]\nresolver = \"3\"\n",
+        ),
+        (
+            "fixtures/Cargo.toml",
+            "[package]\nname = \"fixtures\"\nedition = \"2024\"\n",
+        ),
+        ("fixtures/build.rs", "fn main() {}\n"),
+        ("fixtures/tests/a.rs", "#[test]\nfn t() {}\n"),
+        ("fixtures/examples/e.rs", "fn main() {}\n"),
+        ("a/src/lib.rs", "//! The a crate.\n"),
+    ]);
+    repo
+}
+
+fn root_docs(repo: &Repo, event: &str, changed: &str) -> String {
+    doc_flags_of(repo, Some(event), changed)
+        .split(' ')
+        .filter(|flag| flag.starts_with("rust_root_docs="))
+        .collect()
+}
+
+#[test]
+fn plan_defers_documentation_only_on_a_pull_request_that_selects_no_documented_package() {
+    let repo = selected_docs_repo();
+    let (pull_request, push, documented, documented_push) = std::thread::scope(|scope| {
+        let push = scope.spawn(|| root_docs(&repo, "push", "fixtures/tests/a.rs"));
+        let documented = scope.spawn(|| root_docs(&repo, "pull_request", "a/src/lib.rs"));
+        let documented_push = scope.spawn(|| root_docs(&repo, "push", "a/src/lib.rs"));
+        let pull_request = root_docs(&repo, "pull_request", "fixtures/tests/a.rs");
+        (
+            pull_request,
+            push.join().unwrap_or_else(|_| unreachable!()),
+            documented.join().unwrap_or_else(|_| unreachable!()),
+            documented_push.join().unwrap_or_else(|_| unreachable!()),
+        )
+    });
+    assert_eq!(pull_request, "rust_root_docs=skip");
+    assert_eq!(push, "rust_root_docs=run");
+    assert_eq!(documented, "rust_root_docs=run");
+    assert_eq!(documented_push, "rust_root_docs=run");
 }
