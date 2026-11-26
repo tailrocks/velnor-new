@@ -16,7 +16,7 @@ use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 use crate::store::store_root;
 use crate::lifecycle::{RunJitOptions, run_jit};
-use crate::protocol::BLOCK_BUDGET;
+use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
 use crate::secret::Secret;
 
 const USAGE_ERROR: u8 = 2;
@@ -140,6 +140,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
         workspace,
         temp,
         runner_name: "velnor-exec".to_owned(),
+        os: RunnerOs::detect()?,
     };
     Ok((options, scratch))
 }
@@ -216,6 +217,7 @@ fn jit_value(raw: &str) -> Result<String> {
 }
 
 async fn run_command(args: &RunArgs) -> Result<ExitCode> {
+    let os = RunnerOs::detect()?;
     let shutdown = cancel_on_signal()?;
     let options = RunJitOptions {
         jit: Secret::new(jit_value(&args.jit)?),
@@ -229,6 +231,8 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
         session_retry_interval: SESSION_RETRY_INTERVAL,
         report_budget: REPORT_BUDGET,
         upload_drain_budget: UPLOAD_DRAIN_BUDGET,
+        retry_delays: RetryDelays::default(),
+        os,
         adapters: build_adapters(),
     };
     Ok(match run_jit(options).await {

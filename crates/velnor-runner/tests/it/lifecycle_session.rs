@@ -6,17 +6,23 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use velnor_runner::exec::{JobCancel, JobResult};
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
+use velnor_runner::protocol::RunnerOs;
 
 use super::exec_support::Scratch;
-use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in, run_with};
+use super::lifecycle_support::{
+    CANCEL_BUDGET, Settings, fixture_job, job_replacing, run, run_in, run_with,
+};
+use super::support::RecordedRequest;
 use super::support::mock_github::{
-    Acknowledge, Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, Online, SESSION_ID, SessionCreate,
+    Acknowledge, Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, Online, SESSION_ID,
+    STALE_OAUTH_TOKEN, SessionCreate,
 };
 
 #[tokio::test]
-async fn lifecycle_refreshes_the_token_after_a_401_poll_and_still_runs_the_job() -> Result<()> {
+async fn lifecycle_polls_again_with_the_refreshed_token_after_a_401_poll() -> Result<()> {
     let behavior = Behavior {
-        online: Online::JobAfterOneUnauthorized,
+        online: Online::JobForFreshTokenOnly,
+        oauth: OAuthTokens::StaleFirst,
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
@@ -24,12 +30,22 @@ async fn lifecycle_refreshes_the_token_after_a_401_poll_and_still_runs_the_job()
     let outcome = run(&mock, Duration::from_millis(200)).await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let online: Vec<RecordedRequest> = mock
+        .requests_to("GET", "/broker/message")?
+        .into_iter()
+        .filter(|poll| poll.query("status") == Some("Online"))
+        .collect();
+    let tokens: Vec<Option<&str>> = online
+        .iter()
+        .map(|poll| poll.header("authorization"))
+        .collect();
     assert_eq!(
-        mock.requests_to("POST", "/oauth/token")?.len(),
-        3,
-        "the sign-in, the refresh after the 401 and the one before the acquire"
+        tokens,
+        [
+            Some(format!("Bearer {STALE_OAUTH_TOKEN}").as_str()),
+            Some(format!("Bearer {OAUTH_TOKEN}").as_str()),
+        ]
     );
-    assert_eq!(mock.polls("Online")?, 2, "the 401 poll was retried");
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
     Ok(())
 }
@@ -220,7 +236,9 @@ async fn lifecycle_stops_waiting_for_a_session_when_shutdown_arrives() -> Result
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-    let mut settings = Settings::new().within(CANCEL_BUDGET);
+    let mut settings = Settings::new()
+        .within(CANCEL_BUDGET)
+        .retrying_sessions_every(Duration::from_millis(200));
     settings.shutdown = shutdown_after(Duration::from_millis(500));
 
     let outcome = run_with(&mock, settings).await?;
@@ -285,6 +303,65 @@ async fn lifecycle_acquires_with_a_fresh_token_when_the_job_request_needs_no_ack
     assert_eq!(
         acquire.header("authorization"),
         Some(format!("Bearer {OAUTH_TOKEN}").as_str())
+    );
+    Ok(())
+}
+
+async fn session_creation_ends_with_a_session_error_after(
+    create: SessionCreate,
+    attempts: usize,
+) -> Result<()> {
+    let behavior = Behavior {
+        session: create,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let scratch = Scratch::new()?;
+
+    let outcome = run_in(
+        &mock,
+        &scratch,
+        Settings::new().within(Duration::from_secs(5)),
+    )
+    .await?;
+
+    assert!(
+        matches!(outcome, Err(LifecycleError::Session(_))),
+        "{outcome:?}"
+    );
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), attempts);
+    assert!(mock.requests_to("DELETE", "/broker/session")?.is_empty());
+    assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_gives_up_on_a_session_conflict_after_eight_attempts() -> Result<()> {
+    session_creation_ends_with_a_session_error_after(SessionCreate::ConflictsAlways, 8).await
+}
+
+#[tokio::test]
+async fn lifecycle_gives_up_on_a_session_that_is_unavailable_after_three_attempts() -> Result<()> {
+    session_creation_ends_with_a_session_error_after(SessionCreate::UnavailableAlways, 3).await
+}
+
+#[tokio::test]
+async fn lifecycle_acquires_and_runs_the_job_as_the_injected_os() -> Result<()> {
+    let job = job_replacing(
+        "hello",
+        Some(("echo hello", "echo \"::notice::$RUNNER_OS\"")),
+    )?;
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+
+    let outcome = run_with(&mock, Settings::new().on(RunnerOs::MacOs)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let acquire = mock.server.only_request("POST", "/run/acquirejob")?;
+    assert_eq!(acquire.json()?["runnerOS"], "macOS");
+    let complete = mock.complete_request()?;
+    assert_eq!(
+        complete["stepResults"][0]["annotations"][0]["message"],
+        "macOS"
     );
     Ok(())
 }

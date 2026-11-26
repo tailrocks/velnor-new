@@ -213,7 +213,7 @@ pub(super) fn runner_context(
     let arch = runner_architecture().map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
     let environment = variable(message, "system.runnerEnvironment").unwrap_or(SELF_HOSTED);
     let mut pairs = vec![
-        ("os".to_owned(), "Linux".to_owned()),
+        ("os".to_owned(), options.os.as_str().to_owned()),
         ("arch".to_owned(), arch.to_owned()),
         ("name".to_owned(), options.runner_name.clone()),
         (

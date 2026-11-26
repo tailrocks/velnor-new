@@ -18,7 +18,7 @@ mod renew;
 
 pub use acquire::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
-    is_transient_acquire_error,
+    acquire_job, is_transient_acquire_error,
 };
 pub use complete::{
     RunServiceAnnotation, RunServiceAnnotationLevel, RunServiceCompleteJob, RunServiceStepResult,
@@ -67,6 +67,24 @@ enum Failure {
     Retry(anyhow::Error),
 }
 
+async fn retry<T, F, Fut>(delays: RetryDelays, mut once: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, Failure>>,
+{
+    let mut attempt = 1;
+    loop {
+        match once().await {
+            Ok(value) => return Ok(value),
+            Err(Failure::Fatal(error)) => return Err(error),
+            Err(Failure::Retry(error)) if attempt >= MAX_ATTEMPTS => return Err(error),
+            Err(Failure::Retry(_)) => {}
+        }
+        tokio::time::sleep(delays.delay()).await;
+        attempt += 1;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RunServiceClient {
     bearer_token: Secret<String>,
@@ -87,22 +105,12 @@ impl RunServiceClient {
         self
     }
 
-    async fn with_retries<T, F, Fut>(&self, mut once: F) -> Result<T>
+    async fn with_retries<T, F, Fut>(&self, once: F) -> Result<T>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<T, Failure>>,
     {
-        let mut attempt = 1;
-        loop {
-            match once().await {
-                Ok(value) => return Ok(value),
-                Err(Failure::Fatal(error)) => return Err(error),
-                Err(Failure::Retry(error)) if attempt >= MAX_ATTEMPTS => return Err(error),
-                Err(Failure::Retry(_)) => {}
-            }
-            tokio::time::sleep(self.delays.delay()).await;
-            attempt += 1;
-        }
+        retry(self.delays, once).await
     }
 
     fn job_url(run_service_url: &str, action: &str) -> Result<Url> {

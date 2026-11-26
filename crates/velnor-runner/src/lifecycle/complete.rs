@@ -14,6 +14,9 @@ use crate::protocol::{
     RunServiceVariableValue, TaskResult, TimelineRecordState,
 };
 
+const LOGS_DROPPED: &str =
+    "Some logs were not uploaded in time and were dropped; the job result is not affected.";
+
 fn task_result(result: JobResult) -> TaskResult {
     match result {
         JobResult::Succeeded => TaskResult::Succeeded,
@@ -96,6 +99,18 @@ pub(super) fn build(
             )
         })
         .collect();
+    let mut annotations: Vec<RunServiceAnnotation> = run
+        .annotations
+        .iter()
+        .filter(|annotation| annotation.step.is_none())
+        .map(annotation)
+        .collect();
+    if report.logs_dropped {
+        annotations.push(annotation(&Annotation::new(
+            AnnotationLevel::Warning,
+            LOGS_DROPPED.to_owned(),
+        )));
+    }
     RunServiceCompleteJob {
         plan_id: message.plan.plan_id.clone(),
         job_id: message.job_id.clone(),
@@ -106,12 +121,7 @@ pub(super) fn build(
             .iter()
             .map(|record| step_result(message, run, record, report))
             .collect(),
-        annotations: run
-            .annotations
-            .iter()
-            .filter(|annotation| annotation.step.is_none())
-            .map(annotation)
-            .collect(),
+        annotations,
         telemetry: Vec::new(),
         environment_url: None,
         billing_owner_id: message.billing_owner_id.clone(),

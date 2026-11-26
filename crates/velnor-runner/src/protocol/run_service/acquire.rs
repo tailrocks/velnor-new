@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/protocol.rs
 
+use std::future::Future;
+
 use anyhow::{Context, Result};
 use reqwest::{Method, StatusCode};
 use serde::Serialize;
@@ -9,7 +11,7 @@ use serde_json::Value;
 
 use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::{GithubHttpResponse, github_json_http_response};
-use super::{Failure, REQUEST_TIMEOUT, RunServiceClient, run_service_error_code};
+use super::{Failure, REQUEST_TIMEOUT, RetryDelays, RunServiceClient, retry, run_service_error_code};
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 
@@ -78,62 +80,71 @@ struct AcquireJobRequest<'a> {
     billing_owner_id: Option<&'a str>,
 }
 
-impl RunServiceClient {
-    pub async fn acquire_job(
-        &self,
-        run_service_url: &str,
-        job_message_id: &str,
-        runner_os: &str,
-        billing_owner_id: Option<&str>,
-    ) -> Result<AcquireJobOutcome> {
-        let url = Self::job_url(run_service_url, "acquirejob")?;
-        let body = serde_json::to_string(&AcquireJobRequest {
-            job_message_id,
-            runner_os,
-            billing_owner_id,
-        })
-        .context("serialize acquire job request")?;
-        self.with_retries(|| self.acquire_once(url.as_str(), &body))
+pub async fn acquire_job<F, Fut>(
+    delays: RetryDelays,
+    run_service_url: &str,
+    job_message_id: &str,
+    runner_os: &str,
+    billing_owner_id: Option<&str>,
+    fresh_token: F,
+) -> Result<AcquireJobOutcome>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<String>>,
+{
+    let url = RunServiceClient::job_url(run_service_url, "acquirejob")?;
+    let body = serde_json::to_string(&AcquireJobRequest {
+        job_message_id,
+        runner_os,
+        billing_owner_id,
+    })
+    .context("serialize acquire job request")?;
+    retry(delays, || async {
+        let token = fresh_token()
             .await
-            .map_err(|error| AcquireRetriesExhausted(error).into())
-    }
+            .context("sign in before the acquire")
+            .map_err(Failure::Retry)?;
+        acquire_once(url.as_str(), &body, &token).await
+    })
+    .await
+    .map_err(|error| AcquireRetriesExhausted(error).into())
+}
 
-    async fn acquire_once(&self, url: &str, body: &str) -> Result<AcquireJobOutcome, Failure> {
-        let response = github_json_http_response(
-            Method::POST,
-            url,
-            self.bearer_token.expose(),
-            Some(body.to_owned()),
-            REQUEST_TIMEOUT,
-        )
-        .await
-        .map_err(|error| Failure::Retry(error.context("acquire run-service job request")))?;
-        let status = response.status;
-        if (200..300).contains(&status) {
-            return decode_acquired(&response).map_err(|error| {
-                Failure::Retry(github_api_error_categorized(
-                    ACTION,
-                    status,
-                    &format!("parse AgentJobRequestMessage response: {error}"),
-                    BrokerErrorCategory::Transient,
-                ))
-            });
-        }
-        if let Some(reason) = AcquireJobSkipReason::from_body(response.body.expose()) {
-            return Ok(AcquireJobOutcome::Skipped {
-                status: StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                category: reason.category(),
-                reason,
-                body: response.body.into_inner(),
-            });
-        }
-        Err(Failure::Retry(github_api_error_categorized(
-            ACTION,
-            status,
-            response.body.expose(),
-            BrokerErrorCategory::Transient,
-        )))
+async fn acquire_once(url: &str, body: &str, token: &str) -> Result<AcquireJobOutcome, Failure> {
+    let response = github_json_http_response(
+        Method::POST,
+        url,
+        token,
+        Some(body.to_owned()),
+        REQUEST_TIMEOUT,
+    )
+    .await
+    .map_err(|error| Failure::Retry(error.context("acquire run-service job request")))?;
+    let status = response.status;
+    if (200..300).contains(&status) {
+        return decode_acquired(&response).map_err(|error| {
+            Failure::Retry(github_api_error_categorized(
+                ACTION,
+                status,
+                &format!("parse AgentJobRequestMessage response: {error}"),
+                BrokerErrorCategory::Transient,
+            ))
+        });
     }
+    if let Some(reason) = AcquireJobSkipReason::from_body(response.body.expose()) {
+        return Ok(AcquireJobOutcome::Skipped {
+            status: StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            category: reason.category(),
+            reason,
+            body: response.body.into_inner(),
+        });
+    }
+    Err(Failure::Retry(github_api_error_categorized(
+        ACTION,
+        status,
+        response.body.expose(),
+        BrokerErrorCategory::Transient,
+    )))
 }
 
 fn is_json_body(response: &GithubHttpResponse) -> bool {

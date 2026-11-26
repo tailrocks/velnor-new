@@ -10,10 +10,9 @@ use super::LifecycleError;
 use super::session::Session;
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::job_message::AgentJobRequestMessage;
-use crate::protocol::http::runner_os;
 use crate::protocol::{
-    Acknowledgement, AcquireJobOutcome, FeedStreamClient, RunServiceClient, RunnerJobRequestRef,
-    TwirpResultsClient,
+    Acknowledgement, AcquireJobOutcome, FeedStreamClient, RetryDelays, RunServiceClient,
+    RunnerJobRequestRef, RunnerOs, TwirpResultsClient, acquire_job,
 };
 
 const ACKNOWLEDGE_BUDGET: Duration = Duration::from_secs(5);
@@ -46,6 +45,8 @@ async fn acknowledge(session: &Session, runner_request_id: &str) -> Acknowledgem
 pub(super) async fn acquire(
     session: &Session,
     request: &RunnerJobRequestRef,
+    os: RunnerOs,
+    delays: RetryDelays,
 ) -> Result<Option<AgentJobRequestMessage>, LifecycleError> {
     if request.should_acknowledge
         && acknowledge(session, &request.runner_request_id).await == Acknowledgement::JobNotFound
@@ -57,20 +58,16 @@ pub(super) async fn acquire(
         .as_deref()
         .filter(|url| !url.is_empty())
         .ok_or_else(|| LifecycleError::Acquire(anyhow!("job request has no run_service_url")))?;
-    let token = session
-        .fresh_access_token()
-        .await
-        .map_err(LifecycleError::SignIn)?;
-    let client = RunServiceClient::new(token).map_err(LifecycleError::Acquire)?;
-    let outcome = client
-        .acquire_job(
-            run_service_url,
-            &request.runner_request_id,
-            runner_os().map_err(LifecycleError::Acquire)?,
-            request.billing_owner_id.as_deref(),
-        )
-        .await
-        .map_err(LifecycleError::Acquire)?;
+    let outcome = acquire_job(
+        delays,
+        run_service_url,
+        &request.runner_request_id,
+        os.as_str(),
+        request.billing_owner_id.as_deref(),
+        || session.fresh_access_token(),
+    )
+    .await
+    .map_err(LifecycleError::Acquire)?;
     match outcome {
         AcquireJobOutcome::Acquired(payload) => payload.message.map(Some).ok_or_else(|| {
             LifecycleError::Acquire(anyhow!("acquired job is not a valid job message"))
@@ -94,6 +91,7 @@ fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a s
 pub(super) fn connect(
     message: &AgentJobRequestMessage,
     block_budget: Duration,
+    delays: RetryDelays,
 ) -> Result<JobConnection, LifecycleError> {
     let endpoint = message
         .system_connection()
@@ -127,7 +125,9 @@ pub(super) fn connect(
                 .ok()
         });
     Ok(JobConnection {
-        run_service: RunServiceClient::new(token).map_err(LifecycleError::Acquire)?,
+        run_service: RunServiceClient::new(token)
+            .map_err(LifecycleError::Acquire)?
+            .with_retry_delays(delays),
         run_service_url,
         results,
         feed,

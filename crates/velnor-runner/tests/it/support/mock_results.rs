@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use serde_json::json;
 
 use super::mock_github::{
@@ -19,9 +21,13 @@ pub(super) fn mount_results(server: &TestServer, base: &str, behavior: &Behavior
         let sealing = request.query("seal").is_some();
         Reply::status(seal_status.filter(|_| sealing).unwrap_or(blob_status)).after(delay)
     };
-    let status_stalls = matches!(behavior.status, StepStatus::Stalls);
+    let status = behavior.status;
+    let updates = AtomicUsize::new(0);
     server.respond("POST", RESULTS_STEPS_UPDATE, move |_| {
-        if status_stalls {
+        let first = updates.fetch_add(1, Ordering::SeqCst) == 0;
+        if matches!(status, StepStatus::Stalls)
+            || (first && matches!(status, StepStatus::StallsFirst))
+        {
             Reply::stall()
         } else {
             Reply::json(200, &json!({"ok": true}))

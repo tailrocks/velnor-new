@@ -6,11 +6,13 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use futures_util::FutureExt;
 use serde_json::json;
+use velnor_runner::exec::RunOptions;
 use velnor_runner::exec::{
     AdapterRegistry, AnnotationLevel, JobCancel, JobResult, StdoutSink, StepAdapter, StepContext,
     StepFuture, StepResult, run_job,
 };
 use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::protocol::RunnerOs;
 
 use crate::exec_builder::{job, run};
 use crate::exec_support::{Scratch, fixture_message, fixture_path, run_fixture, run_path};
@@ -309,5 +311,43 @@ async fn preflight_annotations_are_masked_like_the_log() -> Result<()> {
         .first()
         .context("the preflight annotation")?;
     assert_eq!(annotation.message, "unsupported: shell pwsh-*** {0}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_injected_os_is_what_runner_os_and_the_runner_context_report() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let message: AgentJobRequestMessage = serde_json::from_value(job(vec![run(
+        "s",
+        "echo \"::notice::env=$RUNNER_OS ctx=${{ runner.os }}\"",
+    )]))?;
+    let options = RunOptions {
+        os: RunnerOs::MacOs,
+        ..scratch.options()
+    };
+
+    let ran = run_job(
+        &message,
+        &options,
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let notice = ran.annotations.first().context("the notice annotation")?;
+    assert_eq!(notice.message, "env=macOS ctx=macOS");
+    Ok(())
+}
+
+#[test]
+fn only_linux_macos_and_windows_are_supported_hosts() -> Result<()> {
+    assert_eq!(RunnerOs::parse("linux")?, RunnerOs::Linux);
+    assert_eq!(RunnerOs::parse("macos")?, RunnerOs::MacOs);
+    assert_eq!(RunnerOs::parse("windows")?, RunnerOs::Windows);
+    let error = RunnerOs::parse("freebsd")
+        .err()
+        .context("freebsd is refused")?;
+    assert!(error.to_string().contains("freebsd"), "{error}");
     Ok(())
 }

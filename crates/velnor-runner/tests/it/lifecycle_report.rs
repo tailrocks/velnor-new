@@ -221,6 +221,51 @@ async fn lifecycle_completes_the_job_when_the_uploads_do_not_finish_within_the_d
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
     assert!(started.elapsed() < Duration::from_secs(10));
-    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    let complete = mock.complete_request()?;
+    assert_eq!(complete["conclusion"], "succeeded");
+    let annotations = array(&complete, "annotations")?;
+    assert_eq!(annotations.len(), 1);
+    assert_eq!(annotations[0]["level"], "warning");
+    assert!(
+        annotations[0]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("not uploaded in time")),
+        "{annotations:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_sends_the_later_step_updates_in_order_when_the_first_one_never_answers()
+-> Result<()> {
+    let behavior = Behavior {
+        status: StepStatus::StallsFirst,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", Some("sleep 1"))?, behavior).await?;
+
+    let outcome = run_with(
+        &mock,
+        Settings::new()
+            .reporting_within(Duration::from_millis(300))
+            .within(CANCEL_BUDGET),
+    )
+    .await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let orders: Vec<i64> = mock
+        .requests_to("POST", RESULTS_STEPS_UPDATE)?
+        .iter()
+        .map(|update| {
+            update.json()?["change_order"]
+                .as_i64()
+                .context("change_order")
+        })
+        .collect::<Result<_>>()?;
+    assert!(orders.len() >= 2, "{orders:?}");
+    assert!(
+        orders.windows(2).all(|pair| pair[0] < pair[1]),
+        "{orders:?}"
+    );
     Ok(())
 }

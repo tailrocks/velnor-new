@@ -146,9 +146,15 @@ async fn broker_run_service_happy_path_acquires_and_completes_job() -> Result<()
     assert_eq!(message.message_id, 99);
     assert_eq!(message.message_type, RUNNER_JOB_REQUEST);
 
-    let acquired = run_service
-        .acquire_job(&run_service_url, "broker-message", "Linux", Some("42"))
-        .await?;
+    let acquired = acquire_job(
+        RetryDelays::IMMEDIATE,
+        &run_service_url,
+        "broker-message",
+        "Linux",
+        Some("42"),
+        fresh_token,
+    )
+    .await?;
     let AcquireJobOutcome::Acquired(job) = acquired else {
         bail!("expected acquired job");
     };
@@ -207,6 +213,10 @@ async fn broker_acknowledgement_gives_up_after_five_seconds() -> Result<()> {
     let request = server.only_request("POST", "/broker/acknowledge")?;
     assert_eq!(request.json()?["runnerRequestId"], "request-1");
     Ok(())
+}
+
+async fn fresh_token() -> Result<String> {
+    Ok(TOKEN.to_owned())
 }
 
 fn job_message(run_service_url: &str) -> TaskAgentMessage {

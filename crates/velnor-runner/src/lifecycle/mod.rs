@@ -23,7 +23,9 @@ use tokio::task::JoinHandle;
 
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, JobRun, RunOptions, run_job};
 use crate::job_message::AgentJobRequestMessage;
-use crate::protocol::{AcquireJobSkipReason, RunnerJobRequestRef, decode_jit_config};
+use crate::protocol::{
+    AcquireJobSkipReason, RetryDelays, RunnerJobRequestRef, RunnerOs, decode_jit_config,
+};
 use crate::secret::Secret;
 use acquire::JobConnection;
 use cancel_poll::CancelGrace;
@@ -45,6 +47,8 @@ pub struct RunJitOptions {
     pub session_retry_interval: Duration,
     pub report_budget: Duration,
     pub upload_drain_budget: Duration,
+    pub retry_delays: RetryDelays,
+    pub os: RunnerOs,
     pub adapters: AdapterRegistry,
 }
 
@@ -135,6 +139,7 @@ async fn serve(
         workspace: root.join("workspace"),
         temp: root.join("temp"),
         runner_name: agent_name.to_owned(),
+        os: options.os,
     };
     let outcome = match prepare_work_dirs(&run_options).await {
         Ok(()) => acquire_and_run(options, session, &run_options, &request).await,
@@ -153,12 +158,12 @@ async fn acquire_and_run(
     let acquired = tokio::select! {
         biased;
         () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
-        acquired = acquire::acquire(session, request) => acquired?,
+        acquired = acquire::acquire(session, request, run_options.os, options.retry_delays) => acquired?,
     };
     let Some(message) = acquired else {
         return Ok(LifecycleOutcome::NoJob);
     };
-    let connection = acquire::connect(&message, options.upload_block_budget)?;
+    let connection = acquire::connect(&message, options.upload_block_budget, options.retry_delays)?;
     let (completion, failure) =
         match run_and_report(options, session, run_options, &message, &connection).await {
             Ok(Finish::Ran(run, report)) => {

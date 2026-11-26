@@ -16,8 +16,9 @@ use velnor_runner::lifecycle::RunJitOptions;
 use velnor_runner::protocol::{
     BrokerClient, DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings,
     FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken,
-    OAuthJwtCredentials, RetryDelays, RunServiceClient, RunServiceVariableValue, TaskAgentMessage,
-    TaskAgentSession, TaskAgentSessionKey, TwirpResultsClient, github_json_http_response,
+    OAuthJwtCredentials, RetryDelays, RunServiceClient, RunServiceVariableValue, RunnerOs,
+    TaskAgentMessage, TaskAgentSession, TaskAgentSessionKey, TwirpResultsClient, acquire_job,
+    github_json_http_response,
 };
 use velnor_runner::secret::Secret;
 
@@ -145,14 +146,15 @@ async fn response_and_acquired_job_debug_output_contains_no_secret_value() -> Re
     .await?;
     assert_no_secret("GithubHttpResponse", &format!("{response:?}"));
 
-    let outcome = RunServiceClient::new(BEARER)?
-        .acquire_job(
-            &format!("{}/run/jobs/1", server.uri()),
-            "message",
-            "Linux",
-            None,
-        )
-        .await?;
+    let outcome = acquire_job(
+        RetryDelays::IMMEDIATE,
+        &format!("{}/run/jobs/1", server.uri()),
+        "message",
+        "Linux",
+        None,
+        || async { Ok(BEARER.to_owned()) },
+    )
+    .await?;
     assert_no_secret("AcquireJobOutcome", &format!("{outcome:?}"));
     Ok(())
 }
@@ -349,6 +351,8 @@ fn run_jit_options_debug_output_hides_the_jit_configuration() {
         session_retry_interval: Duration::from_secs(30),
         report_budget: Duration::from_secs(10),
         upload_drain_budget: Duration::from_secs(600),
+        retry_delays: RetryDelays::default(),
+        os: RunnerOs::Linux,
         adapters: AdapterRegistry::empty(),
     };
 

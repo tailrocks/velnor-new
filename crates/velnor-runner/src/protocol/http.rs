@@ -17,12 +17,34 @@ pub const RUNNER_USER_AGENT: &str = concat!(
     " (velnor)"
 );
 
-pub(crate) fn runner_os() -> Result<&'static str> {
-    match std::env::consts::OS {
-        "linux" => Ok("Linux"),
-        "macos" => Ok("macOS"),
-        "windows" => Ok("Windows"),
-        other => bail!("unsupported runner operating system: {other}"),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerOs {
+    Linux,
+    MacOs,
+    Windows,
+}
+
+impl RunnerOs {
+    pub fn parse(os: &str) -> Result<Self> {
+        match os {
+            "linux" => Ok(Self::Linux),
+            "macos" => Ok(Self::MacOs),
+            "windows" => Ok(Self::Windows),
+            other => bail!("unsupported runner operating system: {other}"),
+        }
+    }
+
+    pub fn detect() -> Result<Self> {
+        Self::parse(std::env::consts::OS)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Linux => "Linux",
+            Self::MacOs => "macOS",
+            Self::Windows => "Windows",
+        }
     }
 }
 
