@@ -15,7 +15,7 @@ use crate::exec_support::{Ran, Scratch};
 
 const TOKEN: &str = "checkout-token-value";
 
-fn git(dir: &Path, args: &[&str]) -> Result<String> {
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -37,22 +37,22 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-fn commit(work: &Path, file: &str) -> Result<String> {
+pub(crate) fn commit(work: &Path, file: &str) -> Result<String> {
     std::fs::write(work.join(file), file)?;
     git(work, &["add", file])?;
     git(work, &["commit", "-q", "-m", file])?;
     git(work, &["rev-parse", "HEAD"])
 }
 
-struct Rig {
-    root: PathBuf,
-    head: String,
+pub(crate) struct Rig {
+    pub(crate) root: PathBuf,
+    pub(crate) head: String,
     parent: String,
     merge: String,
 }
 
 impl Rig {
-    fn new() -> Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         let root =
             Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("checkout-{}", Uuid::new_v4()));
         let work = root.join("work");
@@ -84,35 +84,65 @@ impl Rig {
         })
     }
 
-    fn server_url(&self) -> String {
+    pub(crate) fn advance(&self, file: &str) -> Result<String> {
+        let work = self.root.join("work");
+        let sha = commit(&work, file)?;
+        let upstream = self.root.join("up/tailrocks/velnor-new.git");
+        git(&work, &["push", "-q", &upstream.to_string_lossy(), "main"])?;
+        Ok(sha)
+    }
+
+    pub(crate) fn server_url(&self) -> String {
         format!("file://{}", self.root.join("up").display())
     }
 
-    fn store(&self) -> PathBuf {
+    pub(crate) fn store(&self) -> PathBuf {
         self.root.join("store")
     }
 
-    fn mirror(&self) -> PathBuf {
-        self.store().join("git/velnor-new.git")
+    pub(crate) fn mirror(&self) -> PathBuf {
+        self.store().join("git/_local/tailrocks/velnor-new.git")
     }
 
-    fn trace(&self) -> PathBuf {
+    pub(crate) fn trace(&self) -> PathBuf {
         self.root.join("trace.json")
     }
 
-    fn job(&self, fixture: &str, sha: &str, server_url: &str) -> Result<PathBuf> {
+    pub(crate) fn job(&self, fixture: &str, sha: &str, server_url: &str) -> Result<PathBuf> {
+        self.job_edit(fixture, sha, server_url, &[])
+    }
+
+    pub(crate) fn job_edit(
+        &self,
+        fixture: &str,
+        sha: &str,
+        server_url: &str,
+        edits: &[(&str, &str)],
+    ) -> Result<PathBuf> {
         let source = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("fixtures/exec")
             .join(format!("{fixture}.json"));
-        let body = std::fs::read_to_string(source)?
+        let mut body = std::fs::read_to_string(source)?
             .replace("@SHA@", sha)
             .replace("@SERVER_URL@", server_url);
+        for (from, to) in edits {
+            body = body.replace(from, to);
+        }
         let path = self.root.join(format!("{fixture}-{}.json", Uuid::new_v4()));
         std::fs::write(&path, body)?;
         Ok(path)
     }
 
-    fn start(&self, job: &Path, scratch: &Scratch) -> Result<Child> {
+    pub(crate) fn start(&self, job: &Path, scratch: &Scratch) -> Result<Child> {
+        self.start_env(job, scratch, &[])
+    }
+
+    pub(crate) fn start_env(
+        &self,
+        job: &Path,
+        scratch: &Scratch,
+        env: &[(&str, &str)],
+    ) -> Result<Child> {
         Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
             .args(["exec", "--job"])
             .arg(job)
@@ -124,13 +154,14 @@ impl Rig {
             .env("GIT_TRACE2_EVENT", self.trace())
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .envs(env.iter().copied())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .context("start velnor-runner exec")
     }
 
-    fn run(&self, fixture: &str, sha: &str, scratch: &Scratch) -> Result<Ran> {
+    pub(crate) fn run(&self, fixture: &str, sha: &str, scratch: &Scratch) -> Result<Ran> {
         finish(self.start(&self.job(fixture, sha, &self.server_url())?, scratch)?)
     }
 
@@ -151,7 +182,7 @@ impl Drop for Rig {
     }
 }
 
-fn finish(child: Child) -> Result<Ran> {
+pub(crate) fn finish(child: Child) -> Result<Ran> {
     let started = Instant::now();
     let output = child.wait_with_output().context("wait for velnor-runner")?;
     Ok(Ran {

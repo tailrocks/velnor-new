@@ -40,7 +40,15 @@ fn validate_inputs(inputs: &Inputs) -> Result<(), ExecError> {
                     )));
                 }
             }
-            "persist-credentials" => persist_false = value.eq_ignore_ascii_case("false"),
+            "persist-credentials" => match value.as_str() {
+                "false" | "False" | "FALSE" => persist_false = true,
+                "" | "true" | "True" | "TRUE" => {}
+                _ => {
+                    return Err(ExecError::Invalid(format!(
+                        "actions/checkout input 'persist-credentials' must be a boolean, got '{value}'"
+                    )));
+                }
+            },
             _ => return Err(unsupported_input(name)),
         }
     }

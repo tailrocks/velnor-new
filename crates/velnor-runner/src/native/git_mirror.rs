@@ -48,17 +48,34 @@ impl MirrorWant {
     }
 }
 
-pub(crate) fn mirror_name(repository: &str) -> Result<String> {
-    let name = repository.rsplit('/').next().unwrap_or_default();
-    let valid = !name.is_empty()
-        && !name.starts_with('.')
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
-    if !valid {
-        bail!("checkout: repository '{repository}' has no usable name");
+pub(crate) fn mirror_path(store: &Path, url: &Url, repository: &str) -> Result<PathBuf> {
+    let bad = || anyhow::anyhow!("checkout: repository '{repository}' is not owner/name");
+    let (owner, name) = repository.split_once('/').ok_or_else(bad)?;
+    let host = url
+        .host_str()
+        .map(|host| host.trim_matches(['[', ']']).replace(':', "+"))
+        .filter(|host| !host.is_empty())
+        .map_or_else(
+            || "_local".to_owned(),
+            |host| match url.port() {
+                Some(port) => format!("{host}+{port}"),
+                None => host,
+            },
+        );
+    let mut path = store.to_owned();
+    for part in [host.as_str(), owner, name] {
+        let valid = !part.is_empty()
+            && !part.starts_with('.')
+            && part.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
+            });
+        if !valid {
+            return Err(bad());
+        }
+        path.push(part.to_ascii_lowercase());
     }
-    Ok(name.to_owned())
+    path.as_mut_os_string().push(".git");
+    Ok(path)
 }
 
 fn auth_env(url: &Url, token: Option<&str>) -> Vec<(String, String)> {
@@ -84,7 +101,10 @@ fn auth_env(url: &Url, token: Option<&str>) -> Vec<(String, String)> {
 
 async fn git(args: &[&str], env: &[(String, String)]) -> Result<String> {
     let output = Command::new("git")
+        .args(["-c", "core.hooksPath=/dev/null"])
         .args(args)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .envs(env.iter().map(|(name, value)| (name, value)))
         .stdin(Stdio::null())
         .kill_on_drop(true)
@@ -127,6 +147,42 @@ async fn lock(path: &Path) -> Result<std::fs::File> {
     .context("wait for the mirror lock")?
 }
 
+const MIRROR_CONFIG: &str = "[core]\n\trepositoryformatversion = 0\n\tbare = true\n";
+
+async fn reset_config(mirror: &Path) -> Result<()> {
+    let config = mirror.join("config");
+    let staged = mirror.join("config.velnor");
+    tokio::fs::write(&staged, MIRROR_CONFIG)
+        .await
+        .with_context(|| format!("write {}", staged.display()))?;
+    tokio::fs::rename(&staged, &config)
+        .await
+        .with_context(|| format!("replace {}", config.display()))
+}
+
+async fn remove_ref_locks(mirror: &Path) -> Result<()> {
+    let mut pending = vec![mirror.join("refs")];
+    while let Some(dir) = pending.pop() {
+        let mut entries = match tokio::fs::read_dir(&dir).await {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error).with_context(|| format!("read {}", dir.display())),
+        };
+        while let Some(entry) = entries.next_entry().await? {
+            let kind = entry.file_type().await?;
+            let path = entry.path();
+            if kind.is_dir() {
+                pending.push(path);
+            } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "lock") {
+                tokio::fs::remove_file(&path)
+                    .await
+                    .with_context(|| format!("remove {}", path.display()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) async fn update_mirror(
     root: &Path,
     clone_url: &str,
@@ -140,16 +196,24 @@ pub(crate) async fn update_mirror(
     tokio::fs::create_dir_all(&store)
         .await
         .with_context(|| format!("create {}", store.display()))?;
-    let name = mirror_name(repository)?;
-    let mirror = store.join(format!("{name}.git"));
-    let _lock = lock(&store.join(format!("{name}.git.lock"))).await?;
+    let mirror = mirror_path(&store, &url, repository)?;
+    let mut lock_file = mirror.clone().into_os_string();
+    lock_file.push(".lock");
+    if let Some(parent) = mirror.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("create {}", parent.display()))?;
+    }
+    let _lock = lock(Path::new(&lock_file)).await?;
     let mirror_arg = text(&mirror)?;
     if !mirror.join("config").is_file() {
         git(&["init", "-q", "--bare", mirror_arg], &[]).await?;
     }
+    reset_config(&mirror).await?;
     if has_commit(mirror_arg, want.sha()).await {
         return Ok(mirror);
     }
+    remove_ref_locks(&mirror).await?;
     let specs = want.refspecs();
     let mut args = vec![
         "-C",
@@ -166,11 +230,12 @@ pub(crate) async fn update_mirror(
         clone_url,
     ];
     args.extend(specs.iter().map(String::as_str));
-    git(&args, &auth_env(&url, token)).await?;
-    if !has_commit(mirror_arg, want.sha()).await {
-        bail!("checkout: commit {} not found in {clone_url}", want.sha());
+    let fetched = git(&args, &auth_env(&url, token)).await;
+    if has_commit(mirror_arg, want.sha()).await {
+        return Ok(mirror);
     }
-    Ok(mirror)
+    fetched?;
+    bail!("checkout: commit {} not found in {clone_url}", want.sha())
 }
 
 pub(crate) async fn materialize(
