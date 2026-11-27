@@ -201,7 +201,7 @@ fn attempt(
         return Err(match withdraw(layout, &scope, &entry) {
             Ok(()) => error,
             Err(left) => error.context(format!(
-                "the failed publication could not be withdrawn: {left:#}"
+                "the failed publication was not fully withdrawn: {left:#}"
             )),
         });
     }

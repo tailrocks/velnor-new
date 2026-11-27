@@ -127,6 +127,6 @@ async fn a_publication_that_cannot_be_withdrawn_says_so() -> Result<()> {
     private(&aside)?;
     fs::set_permissions(&aside, fs::Permissions::from_mode(0o755))?;
     let response = swapped_upload(&fixture).await?;
-    failed(&response, "the failed publication could not be withdrawn");
+    failed(&response, "the failed publication was not fully withdrawn");
     Ok(())
 }

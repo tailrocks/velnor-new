@@ -104,7 +104,8 @@ pub(crate) fn remove_entry(
     }
     let target = uuid::Uuid::new_v4().to_string();
     match renameat(from, name, aside, target.as_str()) {
-        Ok(()) => purge(aside, OsStr::new(&target)),
+        Ok(()) => purge(aside, OsStr::new(&target))
+            .context("the entry left its scope but could not be purged"),
         Err(Errno::NOENT) => Ok(()),
         Err(error) => Err(error.into()),
     }
