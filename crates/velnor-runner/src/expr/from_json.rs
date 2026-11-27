@@ -11,23 +11,20 @@ use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 pub(super) fn parse_from_json(json: &str) -> Result<Value, String> {
-    let Some(split) = split_overflow(json) else {
-        return parse(json, None);
-    };
-    let twin = parse_ordered_json(&split.twin).map_err(|error| syntax_error(&error))?;
-    parse(&split.primary, Some(twin))
-}
-
-fn parse(json: &str, twin: Option<OrderedJsonValue>) -> Result<Value, String> {
-    if let Some(exceeded) = exceeded(json) {
+    let split = split_overflow(json);
+    let primary = split.as_ref().map_or(json, |split| split.primary.as_str());
+    if let Some(exceeded) = exceeded(primary) {
         return Err(match parse_ordered_json(&exceeded.probe) {
             Ok(_) => exceeded.message,
             Err(error) => syntax_error(&error),
         });
     }
-    parse_ordered_json(json)
-        .map(|value| convert(value, twin))
-        .map_err(|error| syntax_error(&error))
+    let value = parse_ordered_json(primary).map_err(|error| syntax_error(&error))?;
+    let twin = split
+        .map(|split| parse_ordered_json(&split.twin))
+        .transpose()
+        .map_err(|error| syntax_error(&error))?;
+    Ok(convert(value, twin))
 }
 
 fn syntax_error(error: &serde_json::Error) -> String {

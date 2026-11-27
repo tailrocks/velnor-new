@@ -146,7 +146,7 @@ fn report(root: &Path) -> Result<Report> {
             if let Some(error) = parse_error(is_condition, &source, &env) {
                 let known = OUT_OF_SCOPE
                     .iter()
-                    .position(|(file, message)| relative == *file && error.contains(message));
+                    .position(|(file, message)| relative == *file && error == *message);
                 match known {
                     Some(index) => {
                         report.known_hit.insert(index);
