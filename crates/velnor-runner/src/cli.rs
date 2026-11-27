@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
@@ -59,7 +59,7 @@ pub struct RunArgs {
     #[arg(
         long,
         value_name = "VALUE",
-        help = "The encoded_jit_config string, or @FILE to read it from a file"
+        help = "Where to read the encoded_jit_config from: @FILE (deleted after it is read) or - for standard input"
     )]
     pub jit: Secret<String>,
     #[arg(
@@ -208,12 +208,19 @@ fn build_adapters() -> AdapterRegistry {
     AdapterRegistry::empty()
 }
 
-fn jit_value(raw: &str) -> Result<String> {
-    let Some(path) = raw.strip_prefix('@') else {
-        return Ok(raw.to_owned());
+fn jit_value(source: &str) -> Result<String> {
+    let text = if source == "-" {
+        std::io::read_to_string(std::io::stdin())
+            .context("read the JIT configuration from standard input")?
+    } else if let Some(path) = source.strip_prefix('@') {
+        let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
+        std::fs::remove_file(path).with_context(|| format!("remove the JIT file {path}"))?;
+        text
+    } else {
+        bail!(
+            "--jit takes @FILE or - for standard input; an inline value would show the key in the process list"
+        );
     };
-    let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
-    std::fs::remove_file(path).with_context(|| format!("remove the JIT file {path}"))?;
     Ok(text.trim().to_owned())
 }
 

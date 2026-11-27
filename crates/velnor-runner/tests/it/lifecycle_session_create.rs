@@ -10,7 +10,9 @@ use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 use super::exec_support::Scratch;
 use super::lifecycle_support::shutdown_after;
 use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in, run_with};
-use super::support::mock_github::{Behavior, MockGithub, SessionCreate, SessionFault};
+use super::support::mock_github::{
+    Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, STALE_OAUTH_TOKEN, SessionCreate, SessionFault,
+};
 
 #[tokio::test]
 async fn lifecycle_keeps_retrying_a_session_conflict_until_the_old_session_expires() -> Result<()> {
@@ -117,4 +119,115 @@ async fn lifecycle_gives_up_on_a_session_conflict_after_eight_attempts() -> Resu
 async fn lifecycle_gives_up_at_once_on_a_session_the_broker_forbids() -> Result<()> {
     let forbidden = SessionCreate::failing(SessionFault::Forbidden, usize::MAX);
     session_creation_ends_with_a_session_error_after(forbidden, 1).await
+}
+
+const EXCHANGES_WITHOUT_REFRESH: usize = 2;
+
+fn bearer(token: &str) -> String {
+    format!("Bearer {token}")
+}
+
+async fn session_is_created_through(
+    answers: &'static [u16],
+    oauth: OAuthTokens,
+) -> Result<MockGithub> {
+    let behavior = Behavior {
+        session: SessionCreate::Answers(answers),
+        oauth,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    Ok(mock)
+}
+
+#[tokio::test]
+async fn lifecycle_signs_in_again_when_the_token_expires_while_the_session_is_unavailable()
+-> Result<()> {
+    let mock = session_is_created_through(&[503, 503, 503, 401], OAuthTokens::StaleFirst).await?;
+
+    let creations = mock.requests_to("POST", "/broker/session")?;
+    let tokens: Vec<_> = creations
+        .iter()
+        .map(|request| request.header("authorization"))
+        .collect();
+    let (stale, fresh) = (bearer(STALE_OAUTH_TOKEN), bearer(OAUTH_TOKEN));
+    assert_eq!(
+        tokens,
+        [
+            Some(stale.as_str()),
+            Some(stale.as_str()),
+            Some(stale.as_str()),
+            Some(stale.as_str()),
+            Some(fresh.as_str())
+        ]
+    );
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        EXCHANGES_WITHOUT_REFRESH + 1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_signs_in_again_for_every_run_of_unauthorized_answers_to_the_session()
+-> Result<()> {
+    let mock = session_is_created_through(&[401, 503, 401], OAuthTokens::Fresh).await?;
+
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 4);
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        EXCHANGES_WITHOUT_REFRESH + 2
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_retries_a_failed_sign_in_while_the_session_is_unauthorized() -> Result<()> {
+    let mock = session_is_created_through(&[401], OAuthTokens::UnavailableAfterSignIn(1)).await?;
+
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 2);
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        EXCHANGES_WITHOUT_REFRESH + 1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_retries_a_session_creation_the_broker_answers_with_404_and_400() -> Result<()> {
+    let mock = session_is_created_through(&[404, 400], OAuthTokens::Fresh).await?;
+
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 3);
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_gives_up_on_a_session_that_stays_unauthorized_after_signing_in_again()
+-> Result<()> {
+    let behavior = Behavior {
+        session: SessionCreate::Answers(&[401, 401]),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let scratch = Scratch::new()?;
+
+    let outcome = run_in(
+        &mock,
+        &scratch,
+        Settings::new().within(Duration::from_secs(5)),
+    )
+    .await?;
+
+    assert!(
+        matches!(outcome, Err(LifecycleError::Session(_))),
+        "{outcome:?}"
+    );
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 2);
+    assert_eq!(mock.requests_to("POST", "/oauth/token")?.len(), 2);
+    assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
+    Ok(())
 }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/runner.rs
 
+mod create;
+
 use std::future::Future;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -112,12 +114,12 @@ fn api_status(error: &anyhow::Error) -> Option<u16> {
 }
 
 fn is_auth_failure(error: &anyhow::Error) -> bool {
-    matches!(api_status(error), Some(401 | 403))
+    api_status(error) == Some(401)
 }
 
 fn refused(mut error: anyhow::Error) -> anyhow::Error {
     if let Some(api) = error.downcast_mut::<GitHubApiError>()
-        && matches!(api.status, 401 | 403)
+        && api.status == 401
     {
         api.category.get_or_insert(BrokerErrorCategory::Terminal);
     }
@@ -179,11 +181,7 @@ impl Session {
             BrokerClient::new(&base_url, os, token.clone()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());
         let template = TaskAgentSession::new(owner, agent_id, agent_name);
-        let created = create_session(&broker, template.clone(), retry_interval)
-            .await
-            .map_err(LifecycleError::Session)?;
-        let id = session_id(created).map_err(LifecycleError::Session)?;
-        Ok(Self {
+        let session = Self {
             oauth,
             credentials,
             base_url,
@@ -194,9 +192,11 @@ impl Session {
             auth: Mutex::new(Auth {
                 token: Secret::new(token),
                 broker,
-                id,
+                id: String::new(),
             }),
-        })
+        };
+        session.establish().await.map_err(LifecycleError::Session)?;
+        Ok(session)
     }
 
     fn auth(&self) -> MutexGuard<'_, Auth> {
@@ -259,7 +259,7 @@ impl Session {
                 Err(error)
                     if self.recovery == SessionRecovery::Recreate && is_session_expired(&error) =>
                 {
-                    if let Err(failure) = self.recreate().await {
+                    if let Err(failure) = self.establish().await {
                         return Err(error
                             .context(format!("recreate the expired broker session: {failure:#}")));
                     }
@@ -268,16 +268,6 @@ impl Session {
                 other => return other.map(|poll| poll.message),
             }
         }
-    }
-
-    async fn recreate(&self) -> anyhow::Result<()> {
-        let created = self
-            .with_fresh_token(|broker| async move {
-                create_session(&broker, self.template.clone(), self.retry_interval).await
-            })
-            .await?;
-        self.auth().id = session_id(created)?;
-        Ok(())
     }
 
     pub(super) async fn acknowledge(
@@ -363,29 +353,4 @@ pub(super) async fn retry_poll(
     eprintln!("warning: polling the broker failed, retrying: {error:#}");
     tokio::time::sleep(backoff(error_delay, streak)).await;
     Ok(())
-}
-
-async fn create_session(
-    broker: &BrokerClient,
-    session: TaskAgentSession,
-    interval: Duration,
-) -> anyhow::Result<TaskAgentSession> {
-    let mut conflicts = 0_u32;
-    loop {
-        let error = match broker.create_session(&session).await {
-            Ok(created) => return Ok(created),
-            Err(error) => error,
-        };
-        let retry = match broker_error_category(&error) {
-            Some(BrokerErrorCategory::Conflict) => {
-                conflicts += 1;
-                conflicts < SESSION_CONFLICT_ATTEMPTS
-            }
-            _ => is_retriable(&error),
-        };
-        if !retry {
-            return Err(error);
-        }
-        tokio::time::sleep(interval).await;
-    }
 }

@@ -143,6 +143,7 @@ mod redaction;
 #[path = "exec_review.rs"]
 mod review;
 mod run_cli;
+mod run_cli_jit;
 mod run_cli_shutdown;
 #[path = "exec_semantics.rs"]
 mod semantics;

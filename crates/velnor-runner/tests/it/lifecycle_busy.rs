@@ -49,37 +49,30 @@ async fn lifecycle_cancels_the_job_when_the_busy_poll_finds_the_runner_gone() ->
     Ok(())
 }
 
-async fn refused_busy_poll_cancels_the_job_after_the_refresh(status: u16) -> Result<()> {
+async fn failing_busy_poll_cancels_the_job_after(status: u16, polls: usize) -> Result<()> {
     let mock = lost_poll_cancels_the_job(Behavior {
         cancel: Cancel::BusyPollFails(status),
         ..Behavior::default()
     })
     .await?;
-    assert_eq!(busy_polls(&mock)?, 2);
+    assert_eq!(busy_polls(&mock)?, polls);
     Ok(())
 }
 
 #[tokio::test]
 async fn lifecycle_cancels_the_job_when_the_busy_poll_stays_unauthorized_after_the_refresh()
 -> Result<()> {
-    refused_busy_poll_cancels_the_job_after_the_refresh(401).await
+    failing_busy_poll_cancels_the_job_after(401, 2).await
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_when_the_busy_poll_stays_forbidden_after_the_refresh()
--> Result<()> {
-    refused_busy_poll_cancels_the_job_after_the_refresh(403).await
+async fn lifecycle_retries_a_busy_poll_that_answers_403_until_the_tenth_error() -> Result<()> {
+    failing_busy_poll_cancels_the_job_after(403, 10).await
 }
 
 #[tokio::test]
 async fn lifecycle_retries_a_busy_poll_that_answers_404_until_the_tenth_error() -> Result<()> {
-    let mock = lost_poll_cancels_the_job(Behavior {
-        cancel: Cancel::BusyPollFails(404),
-        ..Behavior::default()
-    })
-    .await?;
-    assert_eq!(busy_polls(&mock)?, 10);
-    Ok(())
+    failing_busy_poll_cancels_the_job_after(404, 10).await
 }
 
 #[tokio::test]
@@ -90,7 +83,7 @@ async fn lifecycle_cancels_the_job_when_the_expired_session_is_refused_a_new_one
         ..Behavior::default()
     })
     .await?;
-    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 3);
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 2);
     assert_eq!(busy_polls(&mock)?, 1);
     Ok(())
 }

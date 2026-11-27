@@ -99,6 +99,7 @@ pub(crate) enum SessionCreate {
     Created,
     ConflictsFirst(usize),
     ConflictsAlways,
+    Answers(&'static [u16]),
     Fails {
         fault: SessionFault,
         after: usize,
