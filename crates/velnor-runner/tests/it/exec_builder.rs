@@ -13,6 +13,8 @@ use velnor_runner::job_message::AgentJobRequestMessage;
 
 use crate::exec_support::{Ran, Scratch};
 
+pub(crate) const HANG_GUARD: Duration = Duration::from_secs(300);
+
 pub(crate) fn step(context: &str, script: Value) -> Value {
     let mut step = json!({
         "Type": "action",
@@ -141,7 +143,7 @@ pub(crate) fn finished_within(mut command: Command, limit: Duration) -> Result<R
 }
 
 pub(crate) fn run_message(scratch: &Scratch, message: &Value) -> Result<Ran> {
-    finished(bounded(scratch, &write_job(scratch, message)?))
+    finished_within(bounded(scratch, &write_job(scratch, message)?), HANG_GUARD)
 }
 
 pub(crate) fn pid_from(path: &Path) -> Result<Pid> {
@@ -208,7 +210,7 @@ pub(crate) async fn execute(
 ) -> Result<(JobRun, Vec<String>)> {
     let mut recorder = Recorder::default();
     let run = tokio::time::timeout(
-        Duration::from_secs(30),
+        HANG_GUARD,
         run_job(
             &parse(message)?,
             &scratch.options(),

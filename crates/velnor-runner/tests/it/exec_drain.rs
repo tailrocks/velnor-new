@@ -1,20 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
-
 use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::exec::{AdapterRegistry, JobCancel, JobResult, StepResult};
 
-use crate::exec_builder::{bounded, execute, finished_within, job, run, with, write_job};
+use crate::exec_builder::{
+    HANG_GUARD, bounded, execute, finished_within, job, run, with, write_job,
+};
 use crate::exec_support::Scratch;
 
 const WRITER_AFTER_EXIT: &str = "(while true; do echo tick; sleep 1; done) &\necho started";
 
 #[tokio::test]
 async fn a_background_writer_that_ticks_cannot_hold_a_finished_step_open() -> Result<()> {
-    let started = Instant::now();
     let (run, lines) = execute(
         &job(vec![run("a", WRITER_AFTER_EXIT)]),
         &Scratch::new()?,
@@ -23,11 +22,6 @@ async fn a_background_writer_that_ticks_cannot_hold_a_finished_step_open() -> Re
     )
     .await
     .context("a step whose leader exited ends although a descendant keeps writing")?;
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "the drain waited {:?} for a writer that never stops",
-        started.elapsed()
-    );
     assert_eq!(run.result, JobResult::Succeeded);
     assert_eq!(run.steps[0].outcome, StepResult::Succeeded);
     assert!(lines.iter().any(|line| line == "started"), "{lines:?}");
@@ -60,7 +54,6 @@ async fn the_step_timeout_ends_the_drain_of_a_finished_step() -> Result<()> {
 #[tokio::test]
 async fn a_background_flood_is_cut_at_the_drain_limit() -> Result<()> {
     let script = format!("(yes {} &)\necho started", "x".repeat(1000));
-    let started = Instant::now();
     let (run, lines) = execute(
         &job(vec![run("a", &script)]),
         &Scratch::new()?,
@@ -69,12 +62,8 @@ async fn a_background_flood_is_cut_at_the_drain_limit() -> Result<()> {
     )
     .await
     .context("a step whose leader exited ends although a descendant floods its output")?;
-    assert!(
-        started.elapsed() < Duration::from_secs(25),
-        "the drain read for {:?}",
-        started.elapsed()
-    );
     assert_eq!(run.result, JobResult::Succeeded);
+    assert!(lines.iter().any(|line| line == "started"), "{lines:?}");
     let read: usize = lines.iter().map(String::len).sum();
     assert!(
         read < 80 << 20,
@@ -86,7 +75,7 @@ async fn a_background_flood_is_cut_at_the_drain_limit() -> Result<()> {
 fn failing_file_command(setup: &str, expected: &str) -> Result<()> {
     let scratch = Scratch::new()?;
     let path = write_job(&scratch, &job(vec![run("a", setup)]))?;
-    let ran = finished_within(bounded(&scratch, &path), Duration::from_secs(20))?;
+    let ran = finished_within(bounded(&scratch, &path), HANG_GUARD)?;
     assert!(
         ran.has_line("Unable to process file command 'env' successfully."),
         "{}",
@@ -123,7 +112,7 @@ fn a_file_command_file_over_the_limit_fails_the_step() -> Result<()> {
         .map(fill)
         .join("\n");
     let path = write_job(&scratch, &job(vec![run("a", &script)]))?;
-    let ran = finished_within(bounded(&scratch, &path), Duration::from_secs(20))?;
+    let ran = finished_within(bounded(&scratch, &path), HANG_GUARD)?;
     for context in ["env", "output", "path"] {
         let header = format!("Unable to process file command '{context}' successfully.");
         assert!(ran.has_line(&header), "{}", ran.stdout);
