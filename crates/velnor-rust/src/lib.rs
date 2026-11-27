@@ -78,6 +78,7 @@ mod lock_affected;
 mod lock_check;
 mod lock_key;
 mod lock_scope;
+mod macro_names;
 mod manifest_diff;
 mod mbx_layout;
 mod mbx_pin;

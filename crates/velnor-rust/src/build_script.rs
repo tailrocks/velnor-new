@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PackageName, RepoPath, RepoView, TargetKind};
+use velnor_model::{PackageName, RepoPath, RepoView, RustMember, TargetKind};
 
 use crate::doc_steps::tokens::{Token, tokens};
 
@@ -10,6 +10,13 @@ const PREFIXES: &[&str] = &[
     "cargo::rerun-if-changed",
     "cargo:rerun-if-env-changed",
     "cargo::rerun-if-env-changed",
+];
+const CHANGED: &[&str] = &["cargo:rerun-if-changed", "cargo::rerun-if-changed"];
+const OVERRIDES: &[&str] = &[
+    "cargo:rustc-env=CARGO_MANIFEST_DIR=",
+    "cargo::rustc-env=CARGO_MANIFEST_DIR=",
+    "cargo:rustc-env=OUT_DIR=",
+    "cargo::rustc-env=OUT_DIR=",
 ];
 const PRINTING: &[&str] = &["println", "print", "write", "writeln"];
 const LINE_TO_ADD: &str = "println!(\"cargo:rerun-if-changed=build.rs\");";
@@ -28,6 +35,29 @@ impl SilentBuildScript {
             self.source, self.package
         )
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Declared {
+    pub(crate) tracks_changes: bool,
+    pub(crate) overrides_environment: bool,
+}
+
+#[must_use]
+pub(crate) fn declared(view: &RepoView, member: &RustMember) -> Declared {
+    let mut found = Declared::default();
+    for bytes in member
+        .targets
+        .iter()
+        .filter(|target| target.kinds.contains(&TargetKind::BuildScript))
+        .filter_map(|target| target.source.as_ref())
+        .filter_map(|source| view.files.get(source))
+    {
+        let text = String::from_utf8_lossy(bytes);
+        found.tracks_changes |= prints(&text, CHANGED);
+        found.overrides_environment |= prints(&text, OVERRIDES);
+    }
+    found
 }
 
 #[must_use]
@@ -65,7 +95,7 @@ pub fn silent_build_scripts(view: &RepoView) -> Vec<SilentBuildScript> {
         .filter(|script| {
             view.files
                 .get(&script.source)
-                .is_some_and(|bytes| !emits_rerun_directive(&String::from_utf8_lossy(bytes)))
+                .is_some_and(|bytes| !prints(&String::from_utf8_lossy(bytes), PREFIXES))
         })
         .collect();
     found.sort();
@@ -73,7 +103,7 @@ pub fn silent_build_scripts(view: &RepoView) -> Vec<SilentBuildScript> {
     found
 }
 
-fn emits_rerun_directive(source: &str) -> bool {
+fn prints(source: &str, prefixes: &[&str]) -> bool {
     let found = tokens(source);
     let mut at = 0;
     while at < found.len() {
@@ -91,7 +121,7 @@ fn emits_rerun_directive(source: &str) -> bool {
                         }
                     }
                     Token::Str(text)
-                        if depth > 0 && PREFIXES.iter().any(|p| text.starts_with(p)) =>
+                        if depth > 0 && prefixes.iter().any(|p| text.starts_with(p)) =>
                     {
                         return true;
                     }

@@ -3,8 +3,10 @@
 
 use velnor_rust::{dep_info_paths, rerun_if_changed};
 
+mod build_output;
 mod embed;
 mod lock;
+mod macro_path;
 mod unresolved;
 
 #[test]

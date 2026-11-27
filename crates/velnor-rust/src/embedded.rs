@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use std::ops::Range;
 
 use velnor_model::{
     CompileInputs, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot, TargetKind,
 };
 
+use crate::build_script::{Declared, declared};
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
+use crate::macro_names::{macro_bodies, names_builtin, shadows};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
-const SHADOWABLE: &[&str] = &["env", "concat", "include_str", "include_bytes", "include"];
 
 #[must_use]
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
@@ -41,6 +41,7 @@ enum Embedded<'t> {
 struct Scan<'a> {
     view: &'a RepoView,
     directory: Option<&'a RepoPath>,
+    declared: Declared,
     emits_tokens: bool,
     reads: BTreeSet<InputKey>,
     seen: BTreeSet<&'a RepoPath>,
@@ -81,6 +82,7 @@ impl<'a> Scan<'a> {
         Self {
             view,
             directory: member.directory.as_ref(),
+            declared: declared(view, member),
             emits_tokens: member
                 .targets
                 .iter()
@@ -92,6 +94,9 @@ impl<'a> Scan<'a> {
     }
 
     fn run(mut self) -> BTreeSet<InputKey> {
+        if self.declared.overrides_environment {
+            self.reads.insert(InputKey::Unresolved);
+        }
         while let Some(file) = self.pending.pop() {
             if !self.seen.insert(file) {
                 continue;
@@ -126,17 +131,18 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
-            let expands_elsewhere =
-                self.emits_tokens || bodies.iter().any(|body| body.contains(&at));
+            let foreign_expansion = self.emits_tokens
+                || !names_builtin(&tokens[..at])
+                || bodies.iter().any(|body| body.contains(&at));
             let resolved = match embedded(argument) {
-                _ if expands_elsewhere => None,
+                _ if foreign_expansion => None,
                 Embedded::Literal(literal) => literal_path(literal)
                     .and_then(|path| resolve(self.view, &directory_of(file), path)),
                 Embedded::ManifestDir(joined) => joined
                     .strip_prefix('/')
                     .and_then(|path| resolve(self.view, &self.directory_parts(), path)),
-                Embedded::Output => continue,
-                Embedded::Unresolved => None,
+                Embedded::Output if self.declared.tracks_changes => continue,
+                Embedded::Output | Embedded::Unresolved => None,
             };
             let Some(resolved) = resolved else {
                 self.reads.insert(InputKey::Unresolved);
@@ -216,58 +222,6 @@ fn literals(rest: &[Token<'_>]) -> Option<String> {
     }
 }
 
-fn shadows(tokens: &[Token<'_>]) -> bool {
-    let mut in_use = false;
-    tokens.iter().enumerate().any(|(at, token)| match token {
-        Token::Ident("use") => {
-            in_use = true;
-            false
-        }
-        Token::Punct(';') => {
-            in_use = false;
-            false
-        }
-        Token::Ident("macro_rules") => matches!(
-            tokens[at + 1..],
-            [Token::Punct('!'), Token::Ident(name), ..] if SHADOWABLE.contains(&name)
-        ),
-        Token::Ident("macro") => matches!(
-            tokens.get(at + 1),
-            Some(Token::Ident(name)) if SHADOWABLE.contains(name)
-        ),
-        Token::Ident(name) if in_use && SHADOWABLE.contains(name) => {
-            !from_std(&tokens[..at])
-                && !matches!(
-                    tokens[at + 1..],
-                    [Token::Punct(':'), Token::Punct(':'), ..] | [Token::Ident("as"), ..]
-                )
-                && invoked(tokens, name)
-        }
-        _ => false,
-    })
-}
-
-fn invoked(tokens: &[Token<'_>], name: &str) -> bool {
-    tokens.windows(3).any(|window| {
-        matches!(
-            window,
-            [Token::Ident(found), Token::Punct('!'), Token::Punct('(' | '[' | '{')] if *found == name
-        )
-    })
-}
-
-fn from_std(before: &[Token<'_>]) -> bool {
-    matches!(
-        before,
-        [
-            ..,
-            Token::Ident("std" | "core"),
-            Token::Punct(':'),
-            Token::Punct(':')
-        ]
-    )
-}
-
 fn directory_of(file: &RepoPath) -> Vec<&str> {
     let mut parts: Vec<&str> = file.as_str().split('/').collect();
     parts.pop();
@@ -299,42 +253,6 @@ fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
 fn is_linked(view: &RepoView, parts: &[&str]) -> bool {
     RepoPath::new(parts.join("/"))
         .is_ok_and(|prefix| view.symlinks.contains(&prefix) || view.gitlinks.contains(&prefix))
-}
-
-fn macro_bodies(tokens: &[Token<'_>]) -> Vec<Range<usize>> {
-    let mut bodies = Vec::new();
-    for (at, token) in tokens.iter().enumerate() {
-        let (open, has_arguments) = match (token, &tokens[at + 1..]) {
-            (Token::Ident("macro_rules"), [Token::Punct('!'), Token::Ident(_), ..]) => {
-                (at + 3, false)
-            }
-            (Token::Ident("macro"), [Token::Ident(_), ..]) => (at + 2, true),
-            _ => continue,
-        };
-        let mut end = group_end(tokens, open);
-        if has_arguments && tokens.get(open) == Some(&Token::Punct('(')) {
-            end = group_end(tokens, end);
-        }
-        bodies.push(at..end);
-    }
-    bodies
-}
-
-fn group_end(tokens: &[Token<'_>], open: usize) -> usize {
-    let mut depth = 0_usize;
-    for (at, token) in tokens.iter().enumerate().skip(open) {
-        match token {
-            Token::Punct('(' | '[' | '{') => depth += 1,
-            Token::Punct(')' | ']' | '}') => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    return at + 1;
-                }
-            }
-            _ => {}
-        }
-    }
-    tokens.len()
 }
 
 fn literal_path(literal: &str) -> Option<&str> {

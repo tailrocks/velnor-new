@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{RepoPath, RepoView, TargetKind};
 
+use super::build_output::{DECLARES, with_build_script};
 use super::embed::{selected, unresolved, view_of};
 use crate::facts::{TestResult, lib, package, repo};
 use crate::select::path;
@@ -111,7 +112,7 @@ fn an_include_inside_a_macro_body_is_unresolved() -> TestResult {
         "macro m() { include_str!(\"data.txt\") }",
         "macro m($x: expr) { include_str!(\"data.txt\") }",
     ] {
-        let view = view_of(
+        let mut view = view_of(
             &MEMBERS,
             &[
                 ("crates/c/src/lib.rs", source),
@@ -122,6 +123,7 @@ fn an_include_inside_a_macro_body_is_unresolved() -> TestResult {
                 ("crates/c/src/d.txt", ""),
             ],
         )?;
+        with_build_script(&mut view, "c", DECLARES)?;
         assert_eq!(
             selected(&view, "docs/other.md")?,
             [("c".to_owned(), "unresolved-include".to_owned())],

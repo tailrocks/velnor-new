@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{InputKey, InputOwner, RepoView, RustSelection};
 use velnor_rust::detect;
 
+use super::build_output::{DECLARES, with_build_script};
 use crate::facts::{TestResult, lib, repo};
 use crate::select::{name, path};
 
@@ -66,12 +67,18 @@ fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
 }
 
 pub(super) fn unresolved(source: &str) -> TestResult {
-    let files = [
-        ("crates/c/src/lib.rs", source),
-        ("crates/app/src/lib.rs", ""),
-    ];
+    let mut view = view_of(
+        &["app", "c", "tool", "left"],
+        &[
+            ("crates/c/src/lib.rs", source),
+            ("crates/app/src/lib.rs", ""),
+            ("crates/c/src/x.md", ""),
+            ("x.md", ""),
+        ],
+    )?;
+    with_build_script(&mut view, "c", DECLARES)?;
     assert_eq!(
-        selections(&["app", "c", "tool", "left"], &files, "docs/other.md")?,
+        selected(&view, "docs/other.md")?,
         [("c".to_owned(), "unresolved-include".to_owned())],
         "{source}"
     );
@@ -131,24 +138,6 @@ fn a_manifest_dir_include_resolves_to_the_file_it_reads() -> TestResult {
 }
 
 #[test]
-fn an_out_dir_include_is_a_build_output_with_no_input() -> TestResult {
-    embedding(
-        &[
-            (
-                "crates/reader/src/lib.rs",
-                "use std::env;\nuse std::fs;\nuse crate::io::env::Engine;\nuse crate::gate::{env as base_env, policy};\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
-            ),
-            (
-                "crates/reader/src/util.rs",
-                "use crate::helpers::{concat, env, include_str};",
-            ),
-            ("crates/app/src/lib.rs", ""),
-        ],
-        &[("docs/other.md", &[])],
-    )
-}
-
-#[test]
 fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reason_unresolved_include()
 -> TestResult {
     let files = [
@@ -168,7 +157,7 @@ fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reaso
     );
     for source in [
         "include_str!(env!(\"OTHER\"));",
-        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/\", suffix()));",
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.md\", suffix()));",
         "include_str!(path_of!());",
         "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../../../x.md\"));",
         "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"src/x.md\"));",
@@ -240,13 +229,19 @@ fn a_file_an_included_file_embeds_selects_the_crate() -> TestResult {
 
 #[test]
 fn an_included_file_the_view_cannot_read_fails_closed() -> TestResult {
-    embedding(
+    let mut view = view_of(
+        &["app", "tool"],
         &[
             ("crates/app/src/lib.rs", "include!(\"body.inc\");"),
             ("crates/tool/src/lib.rs", ""),
         ],
-        &[("docs/other.md", &["app"])],
-    )
+    )?;
+    view.tracked_paths.insert(path("crates/app/src/body.inc"));
+    assert_eq!(
+        selected(&view, "docs/other.md")?,
+        [("app".to_owned(), "unresolved-include".to_owned())]
+    );
+    Ok(())
 }
 
 #[test]
