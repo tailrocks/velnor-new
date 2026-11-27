@@ -132,7 +132,7 @@ fn an_out_dir_include_is_a_build_output_with_no_input() -> TestResult {
         &[
             (
                 "crates/reader/src/lib.rs",
-                "use std::env;\nuse std::fs;\nuse crate::io::env::Engine;\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
+                "use std::env;\nuse std::fs;\nuse crate::io::env::Engine;\nuse crate::gate::{env as base_env, policy};\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
             ),
             (
                 "crates/reader/src/util.rs",

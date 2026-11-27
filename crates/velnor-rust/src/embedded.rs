@@ -225,7 +225,10 @@ fn shadows(tokens: &[Token<'_>]) -> bool {
         ),
         Token::Ident(name) if in_use && SHADOWABLE.contains(name) => {
             !from_std(&tokens[..at])
-                && !matches!(tokens[at + 1..], [Token::Punct(':'), Token::Punct(':'), ..])
+                && !matches!(
+                    tokens[at + 1..],
+                    [Token::Punct(':'), Token::Punct(':'), ..] | [Token::Ident("as"), ..]
+                )
                 && invoked(tokens, name)
         }
         _ => false,
