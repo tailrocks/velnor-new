@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::expr_support::{TempDir, expected_digest, text};
+use crate::expr_support::{TempDir, expected_digest, hash_outcome, text};
 use anyhow::Result;
 
 #[test]
@@ -66,5 +66,17 @@ fn expr_hash_files_matches_literal_and_star_patterns_against_non_ascii_names() -
         text("hashFiles('*.txt')", &env)?,
         expected_digest(&[b"a", b"e"])
     );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reads_a_class_of_one_astral_character_as_two_units() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+
+    assert_eq!(hash_outcome(&mut env, "a.txt/[😀]/x")?, "ok: ");
+    let one_unit = hash_outcome(&mut env, "a.txt/[b]/x")?;
+    assert!(one_unit.contains("Not a directory"), "{one_unit}");
     Ok(())
 }

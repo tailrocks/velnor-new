@@ -13,6 +13,8 @@ mod expr_hash_files_length;
 mod expr_hash_files_minimatch;
 #[path = "expr/hash_files_patterns.rs"]
 mod expr_hash_files_patterns;
+#[path = "expr/hash_files_regex_limits.rs"]
+mod expr_hash_files_regex_limits;
 #[path = "expr/hash_files_relative.rs"]
 mod expr_hash_files_relative;
 #[path = "expr/hash_files_unicode.rs"]

@@ -31,6 +31,6 @@ pub use value::{ArrayValue, ObjectValue, Value};
 #[cfg(feature = "test-support")]
 pub fn segment_matches(pattern: &str, name: &str) -> Result<bool, String> {
     pattern::Seg::compile(pattern)
-        .map(|segment| segment.is_match(name))
+        .and_then(|segment| segment.is_match(name))
         .map_err(|error| error.to_string())
 }

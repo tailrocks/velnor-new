@@ -52,6 +52,14 @@ const BOUNDARY_NAMES = [
 ];
 const FIXED_NAMES = ["x[undefined", "[undefined", "a", "é", "😀", "\n", "\nx", "x\n", " a", "ab", "a-c", "-", "]", "[", "!", "^", "\\", "é-", "a.b", ".a"];
 
+const FORMAT_CHARACTER = /\p{Cf}/gu;
+
+function escapeFormatCharacters(json: string): string {
+  return json.replace(FORMAT_CHARACTER, (character) =>
+    Array.from({ length: character.length }, (_, index) => `\\u${character.charCodeAt(index).toString(16).padStart(4, "0")}`).join(""),
+  );
+}
+
 function generator(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -217,7 +225,7 @@ if (minimatchDirectory === undefined || output === undefined) {
 }
 const Minimatch = loadMinimatch(minimatchDirectory);
 const random = generator(seed === undefined ? DEFAULT_SEED : Number(seed));
-const entries = patterns(random, requested === undefined ? PATTERN_COUNT : Number(requested)).map((pattern) => JSON.stringify(entry(random, Minimatch, pattern)));
+const entries = patterns(random, requested === undefined ? PATTERN_COUNT : Number(requested)).map((pattern) => escapeFormatCharacters(JSON.stringify(entry(random, Minimatch, pattern))));
 const lines: string[] = [];
 for (let start = 0; start < entries.length; start += ENTRIES_PER_LINE) {
   lines.push(entries.slice(start, start + ENTRIES_PER_LINE).join(","));

@@ -83,3 +83,26 @@ fn expr_hash_files_starts_a_search_at_a_leading_one_character_class() -> Result<
     hashes_only("[]]", &["]", "a"], &[])?;
     Ok(())
 }
+
+#[test]
+fn expr_hash_files_doubles_the_trailing_backslash_after_an_unclosed_class() -> Result<()> {
+    hashes_only("*[\\", &["a[\\", "a[\\\\", "a["], &["a[\\\\"])?;
+    hashes_only("a[\\", &["a[\\", "a[\\\\"], &["a[\\"])?;
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_puts_the_lookahead_before_each_wildcard_run_after_an_unclosed_class()
+-> Result<()> {
+    hashes_only(
+        "[*b[",
+        &[
+            "[xb[undefined",
+            "[b[undefined",
+            "[\nb[undefined",
+            "[xb[",
+            "xb[undefined",
+        ],
+        &["[b[undefined", "[xb[undefined"],
+    )
+}

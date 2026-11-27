@@ -11,6 +11,10 @@ const STAR: &str = "[^/]*?";
 const ANY: &str = "[^/]";
 const UNDEFINED: &str = "undefined";
 pub(super) const AHEAD: &str = "(?=.)";
+const MAX_CLASS_NESTING: usize = 4_096;
+const CLOSE: u16 = b']' as u16;
+const AT: u16 = b'@' as u16;
+const BACKSLASH: u16 = b'\\' as u16;
 
 pub(super) struct Translation {
     pub(super) re: Vec<u16>,
@@ -30,27 +34,119 @@ fn character(unit: u16) -> char {
     char::from_u32(u32::from(unit)).unwrap_or(char::REPLACEMENT_CHARACTER)
 }
 
+struct Closers {
+    last: Option<usize>,
+    escaping: bool,
+}
+
+impl Closers {
+    fn scan(pattern: &[u16]) -> Self {
+        let mut closers = Self {
+            last: None,
+            escaping: false,
+        };
+        for (index, &unit) in pattern.iter().enumerate() {
+            if unit == CLOSE && !closers.escaping {
+                closers.last = Some(index);
+            }
+            closers.escaping = if closers.escaping {
+                unit == AT
+            } else {
+                unit == BACKSLASH
+            };
+        }
+        closers
+    }
+}
+
 struct Translator<'a> {
     pattern: &'a [u16],
     source: &'a str,
+    closers: &'a Closers,
+    base: usize,
     re: Vec<u16>,
     magic: bool,
     escaping: bool,
     open: Option<OpenClass>,
+    settled: bool,
+}
+
+struct Level {
+    re: Vec<u16>,
+    magic: bool,
+    escaping: bool,
 }
 
 pub(super) fn translate(pattern: &[u16], source: &str) -> Result<Translation, GlobError> {
-    Translator::new(pattern, source).run()
+    let closers = Closers::scan(pattern);
+    let mut levels: Vec<Level> = Vec::new();
+    let mut rest = pattern;
+    let tail = loop {
+        let mut translator = Translator::new(rest, source, &closers, pattern.len() - rest.len());
+        translator.walk()?;
+        let Some(class) = translator.open.take() else {
+            break translator.finish();
+        };
+        if levels.len() >= MAX_CLASS_NESTING {
+            return Err(GlobError::ClassNestingTooDeep(MAX_CLASS_NESTING));
+        }
+        translator.re.truncate(class.re_start);
+        translator.re.shrink_to_fit();
+        levels.push(Level {
+            re: translator.re,
+            magic: translator.magic,
+            escaping: translator.escaping,
+        });
+        rest = &rest[class.start + 1..];
+        if is_empty_or_globstar(rest) {
+            break undefined();
+        }
+    };
+    Ok(assemble(&levels, tail))
+}
+
+fn undefined() -> Translation {
+    Translation {
+        re: units(UNDEFINED).collect(),
+        magic: false,
+    }
+}
+
+fn is_empty_or_globstar(pattern: &[u16]) -> bool {
+    pattern.is_empty() || pattern.iter().copied().eq(units("**"))
+}
+
+fn assemble(levels: &[Level], tail: Translation) -> Translation {
+    if levels.is_empty() {
+        return tail;
+    }
+    let last_magic = levels.iter().rposition(|level| level.magic);
+    let mut re = Vec::new();
+    for (index, level) in levels.iter().enumerate() {
+        if index > 0 && (tail.magic || last_magic.is_some_and(|last| last >= index)) {
+            re.extend(units(AHEAD));
+        }
+        re.extend_from_slice(&level.re);
+        re.extend(units("\\["));
+    }
+    if tail.magic && !tail.re.is_empty() {
+        re.extend(units(AHEAD));
+    }
+    re.extend_from_slice(&tail.re);
+    for _ in levels.iter().filter(|level| level.escaping) {
+        re.extend(units("\\\\"));
+    }
+    Translation {
+        re,
+        magic: tail.magic || last_magic.is_some(),
+    }
 }
 
 fn translate_inner(pattern: &[u16], source: &str) -> Result<Translation, GlobError> {
-    if pattern.is_empty() || pattern.iter().copied().eq(units("**")) {
-        return Ok(Translation {
-            re: units(UNDEFINED).collect(),
-            magic: false,
-        });
+    if is_empty_or_globstar(pattern) {
+        return Ok(undefined());
     }
-    let inner = Translator::new(pattern, source).run()?;
+    let inner = translate(pattern, source)?;
     if !inner.magic || inner.re.is_empty() {
         return Ok(inner);
     }
@@ -61,35 +157,38 @@ fn translate_inner(pattern: &[u16], source: &str) -> Result<Translation, GlobErr
 }
 
 impl<'a> Translator<'a> {
-    fn new(pattern: &'a [u16], source: &'a str) -> Self {
+    fn new(pattern: &'a [u16], source: &'a str, closers: &'a Closers, base: usize) -> Self {
         Self {
             pattern,
             source,
-            re: Vec::with_capacity(pattern.len() * 2),
+            closers,
+            base,
+            re: Vec::new(),
             magic: false,
             escaping: false,
             open: None,
+            settled: false,
         }
     }
 
-    fn run(mut self) -> Result<Translation, GlobError> {
+    fn walk(&mut self) -> Result<(), GlobError> {
         for (index, &unit) in self.pattern.iter().enumerate() {
             self.step(index, unit)?;
+            if self.settled {
+                break;
+            }
         }
-        if let Some(class) = self.open.take() {
-            let inner = translate_inner(&self.pattern[class.start + 1..], self.source)?;
-            self.re.truncate(class.re_start);
-            self.re.extend(units("\\["));
-            self.re.extend(inner.re);
-            self.magic |= inner.magic;
-        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> Translation {
         if self.escaping {
             self.re.extend(units("\\\\"));
         }
-        Ok(Translation {
+        Translation {
             re: self.re,
             magic: self.magic,
-        })
+        }
     }
 
     fn escaped(&mut self, unit: u16) {
@@ -152,6 +251,11 @@ impl<'a> Translator<'a> {
                 re_start: self.re.len(),
             });
             self.re.push(unit);
+            let first_closer = self.base + index + 2;
+            if self.closers.last.is_none_or(|last| last < first_closer) {
+                self.escaping = self.closers.escaping;
+                self.settled = true;
+            }
         }
     }
 

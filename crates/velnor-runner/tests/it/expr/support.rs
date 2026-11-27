@@ -78,6 +78,12 @@ pub(crate) fn outcome(expression: &str, env: &ExprEnv) -> String {
     }
 }
 
+pub(crate) fn hash_outcome(env: &mut ExprEnv, pattern: &str) -> Result<String> {
+    let json = serde_json::json!({ "p": pattern }).to_string();
+    env.set_context(RootContext::Env, &ContextValue::from_json_str(&json)?);
+    Ok(outcome("hashFiles(env.p)", env))
+}
+
 pub(crate) fn template_error_text(source: &str, env: &ExprEnv) -> Result<String> {
     match evaluate_template(source, env) {
         Ok(rendered) => bail!(

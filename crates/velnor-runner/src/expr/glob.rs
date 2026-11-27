@@ -48,21 +48,23 @@ impl PatternSet {
         Ok(Self { workspace, entries })
     }
 
-    fn matches_file(&self, path: &[String]) -> bool {
+    fn matches_file(&self, path: &[String]) -> Result<bool, GlobError> {
         let mut matched = false;
         for entry in &self.entries {
-            if entry.files && align(&entry.segs, path).last() == Some(&true) {
+            if entry.files && align(&entry.segs, path)?.last() == Some(&true) {
                 matched = !entry.negate;
             }
         }
-        matched
+        Ok(matched)
     }
 
-    fn may_contain(&self, path: &[String]) -> bool {
-        self.entries
-            .iter()
-            .filter(|entry| !entry.negate)
-            .any(|entry| align(&entry.segs, path).iter().any(|alive| *alive))
+    fn may_contain(&self, path: &[String]) -> Result<bool, GlobError> {
+        for entry in self.entries.iter().filter(|entry| !entry.negate) {
+            if align(&entry.segs, path)?.iter().any(|alive| *alive) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn roots(&self) -> Vec<Vec<String>> {
@@ -172,16 +174,21 @@ impl Walk<'_> {
         self.stack.pop().map(Ok)
     }
 
-    fn classify(&self, path: PathBuf, comps: Vec<String>, kind: fs::FileType) -> Option<Visit> {
-        let matched = self.patterns.matches_file(&comps);
-        let partial = self.patterns.may_contain(&comps);
-        (matched || partial).then_some(Visit {
+    fn classify(
+        &self,
+        path: PathBuf,
+        comps: Vec<String>,
+        kind: fs::FileType,
+    ) -> Result<Option<Visit>, GlobError> {
+        let matched = self.patterns.matches_file(&comps)?;
+        let partial = self.patterns.may_contain(&comps)?;
+        Ok((matched || partial).then_some(Visit {
             path,
             comps,
             kind,
             matched,
             partial,
-        })
+        }))
     }
 
     fn start(&self, root: &[String]) -> Result<Option<Visit>, GlobError> {
@@ -204,7 +211,7 @@ impl Walk<'_> {
         let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
             return Ok(None);
         };
-        Ok(self.classify(path, root.to_vec(), metadata.file_type()))
+        self.classify(path, root.to_vec(), metadata.file_type())
     }
 
     fn visit(&mut self, visit: Visit) -> Result<Option<PathBuf>, GlobError> {
@@ -253,7 +260,7 @@ impl Walk<'_> {
         for (name, kind) in children {
             let mut comps = parent.comps.clone();
             comps.push(name.to_string_lossy().into_owned());
-            if let Some(visit) = self.classify(parent.path.join(&name), comps, kind) {
+            if let Some(visit) = self.classify(parent.path.join(&name), comps, kind)? {
                 self.stack.push(visit);
             }
         }

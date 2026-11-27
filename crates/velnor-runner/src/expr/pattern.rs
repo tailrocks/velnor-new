@@ -20,6 +20,12 @@ pub(crate) enum GlobError {
     UnsupportedClass(String),
     #[error("pattern is too long")]
     PatternTooLong,
+    #[error("pattern holds more than {0} nested unclosed character classes")]
+    ClassNestingTooDeep(usize),
+    #[error(
+        "pattern segment '{0}' compiles to a regular expression that V8 rejects: Regular expression too large"
+    )]
+    RegexTooLarge(String),
     #[error("{0}: not a regular file")]
     NotRegularFile(String),
     #[error("path '{0}' is not valid UTF-8")]
@@ -74,10 +80,10 @@ pub(crate) enum Seg {
 }
 
 impl Seg {
-    pub(crate) fn is_match(&self, name: &str) -> bool {
+    pub(crate) fn is_match(&self, name: &str) -> Result<bool, GlobError> {
         match self {
-            Seg::GlobStar | Seg::Any => true,
-            Seg::Literal(literal) => literal == name,
+            Seg::GlobStar | Seg::Any => Ok(true),
+            Seg::Literal(literal) => Ok(literal == name),
             Seg::Glob { matcher, .. } => matcher.is_match(name),
         }
     }
@@ -236,14 +242,14 @@ fn home_segments(home: Option<&Path>) -> Result<Vec<Seg>, GlobError> {
     Ok(components_of(home)?.into_iter().map(Seg::Literal).collect())
 }
 
-pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {
+pub(crate) fn align(segs: &[Seg], path: &[String]) -> Result<Vec<bool>, GlobError> {
     let mut live = vec![false; segs.len() + 1];
     live[0] = true;
     skip_globstars(segs, &mut live);
     for name in path {
         let mut next = vec![false; segs.len() + 1];
         for (index, seg) in segs.iter().enumerate() {
-            if live[index] && seg.is_match(name) {
+            if live[index] && seg.is_match(name)? {
                 next[if matches!(seg, Seg::GlobStar) {
                     index
                 } else {
@@ -257,7 +263,7 @@ pub(crate) fn align(segs: &[Seg], path: &[String]) -> Vec<bool> {
             break;
         }
     }
-    live
+    Ok(live)
 }
 
 fn skip_globstars(segs: &[Seg], live: &mut [bool]) {
@@ -296,8 +302,25 @@ fn collapse_slashes(text: &str) -> String {
     collapsed
 }
 
+fn class_closers(chars: &[char]) -> Vec<usize> {
+    let mut closers = Vec::new();
+    let mut backslashes = 0_usize;
+    for (index, &character) in chars.iter().enumerate() {
+        if character == ']' && backslashes.is_multiple_of(2) {
+            closers.push(index);
+        }
+        backslashes = if character == '\\' {
+            backslashes + 1
+        } else {
+            0
+        };
+    }
+    closers
+}
+
 pub(crate) fn literal_of(segment: &str) -> String {
     let chars: Vec<char> = segment.chars().collect();
+    let closers = class_closers(&chars);
     let mut literal = String::new();
     let mut index = 0;
     while index < chars.len() {
@@ -311,27 +334,10 @@ pub(crate) fn literal_of(segment: &str) -> String {
             return String::new();
         }
         if character == '[' && index + 1 < chars.len() {
-            let mut set = String::new();
-            let mut closed = None;
-            let mut cursor = index + 1;
-            while cursor < chars.len() {
-                match chars[cursor] {
-                    '\\' if cursor + 1 < chars.len() => {
-                        set.push(chars[cursor + 1]);
-                        cursor += 2;
-                    }
-                    ']' => {
-                        closed = Some(cursor);
-                        break;
-                    }
-                    other => {
-                        set.push(other);
-                        cursor += 1;
-                    }
-                }
-            }
-            if let Some(end) = closed {
-                if set.chars().count() > 1 {
+            let first = closers.partition_point(|&closer| closer <= index);
+            if let Some(&end) = closers.get(first) {
+                let set = class_set(&chars[index + 1..end]);
+                if set.encode_utf16().count() > 1 {
                     return String::new();
                 }
                 if !set.is_empty() {
@@ -345,4 +351,19 @@ pub(crate) fn literal_of(segment: &str) -> String {
         index += 1;
     }
     literal
+}
+
+fn class_set(body: &[char]) -> String {
+    let mut set = String::new();
+    let mut cursor = 0;
+    while cursor < body.len() {
+        if body[cursor] == '\\' && cursor + 1 < body.len() {
+            set.push(body[cursor + 1]);
+            cursor += 2;
+        } else {
+            set.push(body[cursor]);
+            cursor += 1;
+        }
+    }
+    set
 }

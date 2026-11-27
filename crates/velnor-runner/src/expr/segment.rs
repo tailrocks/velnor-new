@@ -13,6 +13,8 @@ const CLOSE: u16 = b']' as u16;
 const OPEN_GROUP: u16 = b'(' as u16;
 const STAR: u16 = b'*' as u16;
 const QUESTION: u16 = b'?' as u16;
+const V8_MAX_TEXT_RUN: usize = 32_767;
+const REPORTED_PREFIX_CHARS: usize = 20;
 
 #[derive(Debug, Clone)]
 enum Item {
@@ -29,6 +31,7 @@ pub(crate) struct Segment(Kind);
 enum Kind {
     Literal(Vec<u16>),
     Never,
+    TooLarge(String),
     Wild(Vec<Item>),
 }
 
@@ -100,22 +103,32 @@ impl Segment {
             return Ok(Segment(Kind::Literal(unescape(&pattern))));
         }
         Ok(Segment(match items(&translation.re) {
+            Some(items) if exceeds_text_run(&items) => {
+                Kind::TooLarge(part.chars().take(REPORTED_PREFIX_CHARS).collect())
+            }
             Some(items) => Kind::Wild(items),
             None => Kind::Never,
         }))
     }
 
-    pub(crate) fn is_match(&self, name: &str) -> bool {
+    pub(crate) fn is_match(&self, name: &str) -> Result<bool, GlobError> {
         match &self.0 {
-            Kind::Literal(literal) => name.encode_utf16().eq(literal.iter().copied()),
-            Kind::Never => false,
+            Kind::Literal(literal) => Ok(name.encode_utf16().eq(literal.iter().copied())),
+            Kind::Never => Ok(false),
+            Kind::TooLarge(prefix) => Err(GlobError::RegexTooLarge(prefix.clone())),
             Kind::Wild(items) => {
                 let name: Vec<u16> = name.encode_utf16().collect();
-                name.first().is_some_and(|&unit| !is_line_terminator(unit))
-                    && wildcard(items, &name)
+                Ok(name.first().is_some_and(|&unit| !is_line_terminator(unit))
+                    && wildcard(items, &name))
             }
         }
     }
+}
+
+fn exceeds_text_run(items: &[Item]) -> bool {
+    items
+        .split(|item| matches!(item, Item::Star | Item::Ahead))
+        .any(|run| run.len() > V8_MAX_TEXT_RUN)
 }
 
 fn accepts(item: &Item, unit: u16) -> bool {

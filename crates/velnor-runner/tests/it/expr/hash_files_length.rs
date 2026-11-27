@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::expr_support::{TempDir, outcome};
+use crate::expr_support::{TempDir, hash_outcome};
 use anyhow::Result;
-use velnor_runner::context_value::ContextValue;
-use velnor_runner::expr::{ExprEnv, RootContext};
+use velnor_runner::expr::ExprEnv;
 
 const LIMIT: usize = 65_536;
-const IMPLICIT_SUFFIX: usize = "/**".len();
+const EXPLICIT_SUFFIX: &str = "/**";
+const SEGMENT_UNITS: usize = 1_000;
 const SPECIAL_WORKSPACE: &str = "w[a]*?\\";
 const SPECIAL_WORKSPACE_ESCAPES: usize = 7;
+const UNCLOSED_BRACKET_WORKSPACE: &str = "w[]x[y/z]";
 const FITS: &str = "ok: ";
 const TOO_LONG: &str = "pattern is too long";
 
@@ -34,20 +35,34 @@ impl Room {
     }
 
     fn hash(&mut self, pattern: &str) -> Result<String> {
-        let json = serde_json::json!({ "p": pattern }).to_string();
-        self.env
-            .set_context(RootContext::Env, &ContextValue::from_json_str(&json)?);
-        Ok(outcome("hashFiles(env.p)", &self.env))
+        hash_outcome(&mut self.env, pattern)
     }
 
     fn fits_explicitly(&mut self, units: usize) -> Result<String> {
-        let wildcard = "a".repeat(units - "*/**".len());
-        self.hash(&format!("*{wildcard}/**"))
+        self.hash(&format!(
+            "{}{EXPLICIT_SUFFIX}",
+            spread(units - EXPLICIT_SUFFIX.len())
+        ))
     }
 
     fn fits_implicitly(&mut self, units: usize) -> Result<String> {
-        self.hash(&format!("*{}", "a".repeat(units - "*".len())))
+        self.hash(&spread(units))
     }
+}
+
+fn spread(units: usize) -> String {
+    let mut text = String::from("*");
+    let mut left = units - text.len();
+    while left > 0 {
+        let mut length = (left - 1).min(SEGMENT_UNITS);
+        if left - length - 1 == 1 {
+            length -= 1;
+        }
+        text.push('/');
+        text.push_str(&"b".repeat(length));
+        left -= length + 1;
+    }
+    text
 }
 
 #[test]
@@ -58,10 +73,6 @@ fn expr_hash_files_limits_the_whole_rooted_pattern_not_one_segment() -> Result<(
     assert_eq!(room.fits_explicitly(units)?, FITS);
     let over = room.fits_explicitly(units + 1)?;
     assert!(over.ends_with(TOO_LONG), "{over}");
-
-    let short_segments = vec!["b".repeat(1_000); 70].join("/");
-    let spread = room.hash(&format!("{short_segments}/**"))?;
-    assert!(spread.ends_with(TOO_LONG), "{spread}");
     Ok(())
 }
 
@@ -77,12 +88,24 @@ fn expr_hash_files_counts_the_escaped_working_directory_in_the_limit() -> Result
 }
 
 #[test]
+fn expr_hash_files_leaves_a_working_directory_bracket_unescaped_when_no_class_closes() -> Result<()>
+{
+    let mut room = Room::new(UNCLOSED_BRACKET_WORKSPACE, 0)?;
+    let units = room.units;
+
+    assert_eq!(room.fits_explicitly(units)?, FITS);
+    let over = room.fits_explicitly(units + 1)?;
+    assert!(over.ends_with(TOO_LONG), "{over}");
+    Ok(())
+}
+
+#[test]
 fn expr_hash_files_limits_the_descendant_pattern_the_runner_adds() -> Result<()> {
     let mut room = Room::new("ws", 0)?;
     let units = room.units;
 
-    assert_eq!(room.fits_implicitly(units - IMPLICIT_SUFFIX)?, FITS);
-    let over = room.fits_implicitly(units - IMPLICIT_SUFFIX + 1)?;
+    assert_eq!(room.fits_implicitly(units - EXPLICIT_SUFFIX.len())?, FITS);
+    let over = room.fits_implicitly(units - EXPLICIT_SUFFIX.len() + 1)?;
     assert!(over.ends_with(TOO_LONG), "{over}");
     assert_eq!(room.fits_explicitly(units)?, FITS);
     Ok(())
