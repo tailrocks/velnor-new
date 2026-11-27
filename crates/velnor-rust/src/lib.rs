@@ -61,6 +61,7 @@ mod error_test_groups;
 mod excluded_lock;
 mod external_config;
 mod generator_inputs;
+mod generator_lock;
 mod generator_sources;
 mod group_runs;
 mod groups;

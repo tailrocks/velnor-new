@@ -11,6 +11,7 @@ use crate::plan_api::event;
 
 mod merges;
 mod oracle;
+mod registry;
 mod render;
 
 pub(super) const FLAT: &str = "";
@@ -150,18 +151,19 @@ pub(super) fn plan(repo: &Repo) -> (Output, BTreeMap<String, String>) {
 }
 
 pub(super) fn decision(repo: &Repo) -> String {
-    let (_, values) = plan(repo);
-    values
-        .get("lint_generated_check")
-        .cloned()
-        .unwrap_or_else(|| "absent".to_owned())
+    decided(repo).0
 }
 
-pub(super) fn explanation(repo: &Repo) -> String {
-    let (output, _) = plan(repo);
-    format!(
+pub(super) fn decided(repo: &Repo) -> (String, String) {
+    let (output, values) = plan(repo);
+    let decision = values
+        .get("lint_generated_check")
+        .cloned()
+        .unwrap_or_else(|| "absent".to_owned());
+    let explanation = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
-    )
+    );
+    (decision, explanation)
 }

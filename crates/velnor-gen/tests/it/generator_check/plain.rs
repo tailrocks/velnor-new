@@ -87,7 +87,6 @@ fn every_regular_rust_file_of_the_repository_that_is_plain_has_no_read() -> Test
     let plain: Vec<(String, String)> = found
         .into_iter()
         .filter(|(_, text)| is_plain_source(&source, text.as_bytes()))
-        .step_by(4)
         .collect();
     assert!(plain.len() > 200, "{}", plain.len());
     let files: Vec<(String, &str)> = plain

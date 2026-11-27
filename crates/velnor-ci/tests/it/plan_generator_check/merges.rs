@@ -4,7 +4,7 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 
-use super::{FLAT, PINNED, decision, git, merge, plan, remove, world, world_over};
+use super::{FLAT, PINNED, decision, merge, plan, remove, world, world_over};
 use crate::io::Repo;
 use crate::io_plan::plan_command;
 use crate::plan_api::event;
@@ -215,5 +215,36 @@ fn an_in_place_edit_inside_a_vendored_source_runs_the_generated_check() {
         repo.write("vendor/foo/src/lib.rs", "pub fn foo() -> u32 { 2 }\n");
     });
     assert_eq!(decision(&control), "skip");
-    git(&control, &["status", "--short"]);
+}
+
+#[test]
+fn an_in_place_edit_of_a_program_the_cargo_config_names_runs_the_generated_check() {
+    let configs = [
+        ("wrapper", "[build]\nrustc-wrapper = \"tools/wrap.rs\"\n"),
+        (
+            "workspace-wrapper",
+            "[build]\nrustc-workspace-wrapper = \"tools/wrap.rs\"\n",
+        ),
+        (
+            "runner",
+            "[target.'cfg(all())']\nrunner = \"tools/wrap.rs\"\n",
+        ),
+    ];
+    for (name, config) in configs {
+        let repo = world_over(&format!("gc-program-{name}"), FLAT, PINNED, |repo| {
+            repo.write_unstaged(".cargo/config.toml", config);
+            repo.write_unstaged("tools/wrap.rs", "#!/bin/sh\nexec \"$@\"\n");
+        });
+        merge(&repo, |repo| {
+            repo.write("tools/wrap.rs", "#!/bin/sh\nexec \"$@\" --cfg probe\n");
+        });
+        assert_eq!(decision(&repo), "run", "{name}");
+    }
+    let control = world_over("gc-program-control", FLAT, PINNED, |repo| {
+        repo.write_unstaged("tools/wrap.rs", "#!/bin/sh\nexec \"$@\"\n");
+    });
+    merge(&control, |repo| {
+        repo.write("tools/wrap.rs", "#!/bin/sh\nexec \"$@\" --cfg probe\n");
+    });
+    assert_eq!(decision(&control), "skip");
 }

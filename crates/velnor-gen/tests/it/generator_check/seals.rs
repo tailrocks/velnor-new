@@ -5,12 +5,10 @@ use velnor_model::{RepoView, Target, TargetKind, TargetName};
 use velnor_rust::detect;
 
 use super::world::{
-    CONFIG, CORE, ENGINE, GEN, OTHER, PINNED, decide, decide_in_place, manifest, put, runs_every,
-    set_config, skips_every, world,
+    CONFIG, CORE, ENGINE, GEN, OTHER, PINNED, QUIET, decide, decide_in_place, manifest, put,
+    runs_every, set_config, skips_every, world,
 };
 use crate::facts::{TestResult, path};
-
-const QUIET: [&str; 3] = ["docs/goals.md", "README.md", "crates/other/src/lib.rs"];
 
 fn with_target(view: &mut RepoView, root: &str, member: usize, kind: TargetKind) -> TestResult {
     let metadata = view.rust_metadata.get_mut(&path(root)?).ok_or("no root")?;

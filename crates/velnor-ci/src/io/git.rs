@@ -18,21 +18,13 @@ const MERGED: &str = "HEAD^2";
 const SHA_VARIABLE: &str = "GITHUB_SHA";
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, CiError> {
-    run(root, args, &[0])
-}
-
-fn run(root: &Path, args: &[&str], accepted: &[i32]) -> Result<Vec<u8>, CiError> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
         .map_err(|error| CiError::new(format!("cannot run git: {error}")))?;
-    if output
-        .status
-        .code()
-        .is_some_and(|code| accepted.contains(&code))
-    {
+    if output.status.success() {
         Ok(output.stdout)
     } else {
         Err(CiError::new(format!(

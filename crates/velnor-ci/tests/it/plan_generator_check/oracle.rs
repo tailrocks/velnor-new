@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 
-use super::{FLAT, PINNED, decision, git, merge, revision, world_over};
+use super::{FLAT, PINNED, decided, git, merge, revision, world_over};
 use crate::io::Repo;
 use crate::toolchain::pinned_channel;
 
@@ -33,17 +34,29 @@ fn vendor(repo: &Repo, library: &str) {
 
 const FOO_MANIFEST: &str = "[package]\nname = \"foo\"\nversion = \"1.0.0\"\nedition = \"2024\"\n";
 
-fn isolated(program: &str) -> Command {
+const INHERITED: [&str; 5] = [
+    "HOME",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "TMPDIR",
+];
+
+pub(super) fn isolated(program: &str, home: Option<&Path>) -> Command {
     let mut command = Command::new(program);
-    command
-        .env_remove("CARGO_TARGET_DIR")
-        .env_remove("CARGO_BUILD_TARGET_DIR")
-        .env_remove("CARGO_BUILD_BUILD_DIR")
-        .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
+    command.env_clear();
+    for name in INHERITED {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    if let Some(home) = home {
+        command.env("CARGO_HOME", home);
+    }
     command
 }
 
-fn toolchain_path() -> String {
+pub(super) fn toolchain_path() -> String {
     let found = Command::new("rustup")
         .args(["which", "--toolchain", pinned_channel(), "cargo"])
         .output()
@@ -59,8 +72,8 @@ fn toolchain_path() -> String {
     )
 }
 
-fn cargo(repo: &Repo, args: &[&str]) {
-    let output = isolated("cargo")
+fn cargo(repo: &Repo, home: Option<&Path>, args: &[&str]) {
+    let output = isolated("cargo", home)
         .current_dir(repo.root())
         .env("PATH", toolchain_path())
         .args(args)
@@ -122,14 +135,18 @@ fn audit_world(repo: &Repo, vendored: bool) {
         "crates/other/src/borrowed_from_other.rs",
         "pub fn m() -> u32 { 1 }\n",
     );
+    lock_and_audit(repo, None);
+}
+
+pub(super) fn lock_and_audit(repo: &Repo, home: Option<&Path>) {
     repo.git(&["add", "--all"]);
-    cargo(repo, &["generate-lockfile"]);
+    cargo(repo, home, &["generate-lockfile"]);
     repo.git(&["add", "--all"]);
     for command in [
         ["clippy", "--workspace", "--all-targets"],
         ["build", "--workspace", "--all-targets"],
     ] {
-        let output = isolated(env!("CARGO_BIN_EXE_velnor-ci"))
+        let output = isolated(env!("CARGO_BIN_EXE_velnor-ci"), home)
             .current_dir(repo.root())
             .env("PATH", toolchain_path())
             .args(["inputs", "build", "--", "cargo"])
@@ -143,7 +160,7 @@ fn audit_world(repo: &Repo, vendored: bool) {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let written = isolated(env!("CARGO_BIN_EXE_velnor-ci"))
+    let written = isolated(env!("CARGO_BIN_EXE_velnor-ci"), home)
         .current_dir(repo.root())
         .env("PATH", toolchain_path())
         .args(["inputs", "audit", "--write"])
@@ -152,14 +169,16 @@ fn audit_world(repo: &Repo, vendored: bool) {
     assert!(written.status.success(), "{written:?}");
 }
 
-fn digest(repo: &Repo, revision: &str, name: &str) -> String {
+pub(super) fn digest(repo: &Repo, revision: &str, name: &str, home: Option<&Path>) -> String {
     git(repo, &["checkout", "--quiet", "--detach", revision]);
     let target = Repo::empty(name);
-    let built = isolated("cargo")
+    let built = isolated("cargo", home)
         .current_dir(repo.root())
         .args(["build", "--offline", "-p", "velnor-gen"])
         .env("CARGO_TARGET_DIR", target.root())
         .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
+        .env("ZERO_AR_DATE", "1")
         .env("PATH", toolchain_path())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -211,13 +230,13 @@ fn corpus() -> Vec<(&'static str, bool, Edit)> {
     ]
 }
 
-fn compare(repo: &Repo, name: &str) -> (String, String, String) {
-    let decided = decision(repo);
+fn compare(repo: &Repo, name: &str) -> (String, String, String, String) {
+    let (decided, why) = decided(repo);
     let merged = revision(repo, "HEAD");
-    let before = digest(repo, "HEAD^1", &format!("gc-oracle-before-{name}"));
-    let after = digest(repo, &merged, &format!("gc-oracle-after-{name}"));
+    let before = digest(repo, "HEAD^1", &format!("gc-oracle-before-{name}"), None);
+    let after = digest(repo, &merged, &format!("gc-oracle-after-{name}"), None);
     assert_ne!(before, "build failed", "{name}: the base builds");
-    (decided, before, after)
+    (decided, why, before, after)
 }
 
 #[test]
@@ -226,7 +245,7 @@ fn a_skip_implies_the_generator_artifact_is_fresh() {
     for (name, changes, edit) in corpus() {
         let repo = world_over(&format!("gc-oracle-{name}"), FLAT, PINNED, audited);
         merge(&repo, edit);
-        let (decided, before, after) = compare(&repo, name);
+        let (decided, why, before, after) = compare(&repo, name);
         if changes {
             assert_ne!(before, after, "{name}: the control changes the artifact");
         }
@@ -237,10 +256,7 @@ fn a_skip_implies_the_generator_artifact_is_fresh() {
             );
             skipped.push(name);
         }
-        if !changes && decided != "skip" {
-            let why = super::explanation(&repo);
-            assert_eq!(decided, "skip", "{name} should skip: {why}");
-        }
+        assert!(changes || decided == "skip", "{name} should skip: {why}");
     }
     assert_eq!(skipped, ["goals", "readme", "plain-rs"]);
 }
@@ -259,8 +275,7 @@ fn an_edit_inside_a_vendored_source_never_skips_and_breaks_the_cold_build() {
     ] {
         let repo = world_over(&format!("gc-oracle-{name}"), FLAT, PINNED, audited_vendored);
         merge(&repo, edit);
-        let decided = decision(&repo);
-        assert_eq!(decided, "run", "{name}");
+        assert_eq!(decided(&repo).0, "run", "{name}");
     }
     let repo = world_over("gc-oracle-vendored-build", FLAT, PINNED, audited_vendored);
     merge(&repo, |repo| {
@@ -268,11 +283,25 @@ fn an_edit_inside_a_vendored_source_never_skips_and_breaks_the_cold_build() {
     });
     let merged = revision(&repo, "HEAD");
     assert_ne!(
-        digest(&repo, "HEAD^1", "gc-oracle-vendored-before"),
+        digest(&repo, "HEAD^1", "gc-oracle-vendored-before", None),
         "build failed"
     );
     assert_eq!(
-        digest(&repo, &merged, "gc-oracle-vendored-after"),
+        digest(&repo, &merged, "gc-oracle-vendored-after", None),
         "build failed"
     );
+}
+
+#[test]
+fn the_nested_cargo_inherits_only_the_named_variables() {
+    let output = isolated("env", None)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let text = String::from_utf8_lossy(&output.stdout);
+    let names: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.split_once('=').map(|(name, _)| name))
+        .filter(|name| !INHERITED.contains(name))
+        .collect();
+    assert_eq!(names, Vec::<&str>::new());
 }

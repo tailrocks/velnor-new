@@ -308,3 +308,11 @@ fn each_generated_header_names_its_own_config() {
         first.contains(".velnor/rust-ci.toml") && first.contains("velnor-gen generate")
     }));
 }
+
+#[test]
+fn the_externals_list_of_this_repository_covers_the_generator_closure() -> TestResult {
+    let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
+    let facts = velnor_rust::detect(&committed_view(&root)?)?;
+    assert!(!facts.generator_unmodelled);
+    Ok(())
+}

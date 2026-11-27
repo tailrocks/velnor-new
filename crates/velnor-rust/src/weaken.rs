@@ -20,7 +20,7 @@ use crate::weaken_targets::targets;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
-const COMPILER_KEYS: &[&str] = &[
+pub(crate) const COMPILER_KEYS: &[&str] = &[
     "rustc-wrapper",
     "rustc-workspace-wrapper",
     "rustc",

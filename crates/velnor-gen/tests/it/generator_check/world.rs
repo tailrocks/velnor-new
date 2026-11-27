@@ -17,6 +17,7 @@ pub(crate) const ENGINE: &str = "crates/engine/Cargo.toml";
 pub(crate) const CORE: &str = "crates/core/Cargo.toml";
 pub(crate) const OTHER: &str = "crates/other/Cargo.toml";
 pub(crate) const PINNED: &str = "0.1.117";
+pub(crate) const QUIET: [&str; 3] = ["docs/goals.md", "README.md", "crates/other/src/lib.rs"];
 
 const LOCK: &str = "shared/borrowed.rs\tcore\tcrates/core/Cargo.toml\ndocs/embedded.md\tcore\tcrates/core/Cargo.toml\ndata/dir\tcore\tcrates/core/Cargo.toml\nshared/other.rs\tother\tcrates/other/Cargo.toml\ndata/other.md\tother\tcrates/other/Cargo.toml\n";
 const REGISTRY_LOCK: &str = "version = 4\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.7\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"sum\"\n";

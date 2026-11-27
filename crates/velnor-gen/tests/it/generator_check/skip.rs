@@ -27,8 +27,7 @@ fn a_change_outside_the_generator_closure_does_not_reach_the_generated_check() -
 }
 
 #[test]
-fn a_change_in_a_dependency_of_the_generator_reaches_the_generated_check_at_any_depth() -> TestResult
-{
+fn a_change_in_a_generator_dependency_reaches_the_generated_check() -> TestResult {
     let view = world()?;
     assert!(runs_every(&view, &INSIDE)?, "{INSIDE:?}");
     assert!(runs(&view, &[".velnor/rust-ci.toml"])?);
