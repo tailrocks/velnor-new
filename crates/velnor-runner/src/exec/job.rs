@@ -159,6 +159,21 @@ impl Job<'_> {
         }
     }
 
+    async fn forgives(
+        &self,
+        step: &ActionStep,
+        vars: &[(String, String)],
+        out: &mut Output<'_>,
+    ) -> bool {
+        match self.ctx.expr_env(self.status, vars) {
+            Ok(env) => continue_on_error(step, &env, out).await,
+            Err(error) => {
+                out.message(&error.to_string());
+                false
+            }
+        }
+    }
+
     async fn run_step(
         &mut self,
         number: u32,
@@ -222,16 +237,13 @@ impl Job<'_> {
             record.outcome = executed.result;
             let forgiven = executed.result == StepResult::Failed
                 && !condition_failed
-                && match self.ctx.expr_env(
-                    self.status,
-                    &[step_vars.as_slice(), executed.env.as_slice()].concat(),
-                ) {
-                    Ok(env) => continue_on_error(step, &env, out).await,
-                    Err(error) => {
-                        out.message(&error.to_string());
-                        false
-                    }
-                };
+                && self
+                    .forgives(
+                        step,
+                        &[step_vars.as_slice(), executed.env.as_slice()].concat(),
+                        out,
+                    )
+                    .await;
             record.conclusion = if forgiven {
                 StepResult::Succeeded
             } else {
