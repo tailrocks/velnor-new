@@ -5,6 +5,7 @@
 use std::ffi::OsString;
 use std::fs::TryLockError;
 use std::io::{Read, Write};
+use std::num::NonZeroU64;
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -249,6 +250,10 @@ async fn refetch(
         })
 }
 
+fn refused_by_the_server(error: &anyhow::Error) -> bool {
+    format!("{error:#}").contains("upload-pack: not our ref ")
+}
+
 pub(crate) async fn fetch(
     root: &Path,
     facts: &TrustedFacts,
@@ -265,8 +270,14 @@ pub(crate) async fn fetch(
     let env = fetch_env(facts.server_url.url(), token);
     let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
     if !has_tree(&mirror, sha).await {
-        let scan = quarantine_corrupt(&mirror, sha).await?;
-        if scan == Scan::Quarantined || !notices.is_empty() || holds_commit(&mirror, sha).await {
+        let scan = quarantine_corrupt(&mirror, sha, NonZeroU64::MIN).await?;
+        if scan == Scan::Quarantined
+            || !notices.is_empty()
+            || holds_commit(&mirror, sha).await
+            || fetched
+                .as_ref()
+                .is_err_and(|error| !refused_by_the_server(error))
+        {
             fetched = refetch(&mirror, &clone_url, facts, &env).await;
         }
     }
@@ -289,9 +300,10 @@ pub(crate) async fn repair(
     root: &Path,
     facts: &TrustedFacts,
     token: Option<&str>,
+    window: NonZeroU64,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
-    if quarantine_corrupt(&mirror, facts.sha.as_str()).await? == Scan::Sound {
+    if quarantine_corrupt(&mirror, facts.sha.as_str(), window).await? == Scan::Sound {
         return Ok(Repair::Sound);
     }
     remove_ref_locks(&mirror).await?;

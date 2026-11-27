@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroU64;
+
 use serde::{Deserialize, Serialize};
 
 use super::facts::TrustedFacts;
@@ -28,8 +30,13 @@ impl std::fmt::Debug for Token {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Request {
-    FetchMirror { token: Option<Token> },
-    RepairMirror { token: Option<Token> },
+    FetchMirror {
+        token: Option<Token>,
+    },
+    RepairMirror {
+        token: Option<Token>,
+        window: NonZeroU64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

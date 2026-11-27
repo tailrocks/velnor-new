@@ -8,7 +8,7 @@ use crate::native_checkout::{Rig, git};
 use crate::native_checkout_env::wrapper_env;
 use crate::native_checkout_repair::{assert_workspace_intact, object_path, overwrite};
 
-fn quarantined(rig: &Rig) -> Vec<String> {
+pub(crate) fn quarantined(rig: &Rig) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(rig.mirror().join("quarantine")) else {
         return Vec::new();
     };

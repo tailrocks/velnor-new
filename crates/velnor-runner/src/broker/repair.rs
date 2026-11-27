@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -97,14 +98,18 @@ pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
     Ok(notices)
 }
 
-async fn verify(mirror: &Path, sha: &str) -> Result<Output> {
+async fn verify(mirror: &Path, sha: &str, window: NonZeroU64) -> Result<Output> {
+    let walk = match window.get() {
+        1 => "--no-walk".to_owned(),
+        count => format!("--max-count={count}"),
+    };
     let args = git_args(
         Some(mirror),
         &[
             "rev-list",
             "--objects",
             "--verify-objects",
-            "--no-walk",
+            &walk,
             "--quiet",
             sha,
         ],
@@ -201,7 +206,7 @@ async fn confirmed_loose(mirror: &Path, found: &[Damage]) -> Result<Vec<(String,
         if !is_file {
             continue;
         }
-        let alone = verify(mirror, id).await?;
+        let alone = verify(mirror, id, NonZeroU64::MIN).await?;
         let again = reported(&alone.stderr)
             .iter()
             .any(|found| matches!(found, Damage::Loose(again) if again == id));
@@ -233,10 +238,27 @@ pub(super) enum Scan {
     Quarantined,
 }
 
-pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<Scan> {
+async fn was_quarantined(mirror: &Path, id: &str) -> bool {
+    let Ok(mut entries) = tokio::fs::read_dir(mirror.join("quarantine")).await else {
+        return false;
+    };
+    let prefix = format!("{id}.");
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+pub(super) async fn quarantine_corrupt(
+    mirror: &Path,
+    sha: &str,
+    window: NonZeroU64,
+) -> Result<Scan> {
     let mut scan = Scan::Sound;
     for _ in 0..MAX_ROUNDS {
-        let verified = verify(mirror, sha).await?;
+        let verified = verify(mirror, sha, window).await?;
         let found = reported(&verified.stderr);
         if verified.succeeded && found.is_empty() {
             return Ok(scan);
@@ -255,6 +277,9 @@ pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<Scan>
         for (id, path) in files {
             quarantine(mirror, &id, &path).await?;
         }
+    }
+    if scan == Scan::Unsound && was_quarantined(mirror, sha).await {
+        scan = Scan::Quarantined;
     }
     Ok(scan)
 }

@@ -3,6 +3,7 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/checkout.rs
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
@@ -134,6 +135,13 @@ impl Depth {
     fn fetches_through_the_mirror_refs(self) -> bool {
         matches!(self, Self::Last(count) if count > 1)
     }
+
+    fn window(self) -> NonZeroU64 {
+        match self {
+            Self::Last(count) => NonZeroU64::new(count).unwrap_or(NonZeroU64::MIN),
+            Self::Full => NonZeroU64::MIN,
+        }
+    }
 }
 
 fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
@@ -156,6 +164,14 @@ enum Materialized {
     Done,
     Ended(StepResult),
     CheckoutFailed,
+}
+
+async fn step(ctx: &mut StepContext<'_>, args: &[&str]) -> Result<Option<Materialized>, ExecError> {
+    Ok(match git(ctx, None, args, false).await? {
+        ProcessOutcome::Succeeded => None,
+        ProcessOutcome::Cancelled => Some(Materialized::Ended(StepResult::Cancelled)),
+        ProcessOutcome::Failed => Some(Materialized::CheckoutFailed),
+    })
 }
 
 async fn materialize(
@@ -213,8 +229,8 @@ async fn materialize(
                 source.as_str(),
                 sha,
             ];
-            if let Some(ended) = require(ctx, &fetch).await? {
-                return Ok(Materialized::Ended(ended));
+            if let Some(ended) = step(ctx, &fetch).await? {
+                return Ok(ended);
             }
         }
     }
@@ -223,11 +239,9 @@ async fn materialize(
         &["-C", dest_arg, "checkout-index", "-a", "-f", "-u"],
         &["-C", dest_arg, "update-ref", "--no-deref", "HEAD", sha],
     ];
-    for step in steps {
-        match git(ctx, None, step, false).await? {
-            ProcessOutcome::Succeeded => {}
-            ProcessOutcome::Cancelled => return Ok(Materialized::Ended(StepResult::Cancelled)),
-            ProcessOutcome::Failed => return Ok(Materialized::CheckoutFailed),
+    for args in steps {
+        if let Some(ended) = step(ctx, args).await? {
+            return Ok(ended);
         }
     }
     Ok(Materialized::Done)
@@ -236,7 +250,7 @@ async fn materialize(
 async fn ask(
     store: &StoreWriter,
     ctx: &mut StepContext<'_>,
-    request: fn(Option<Token>) -> Request,
+    request: impl FnOnce(Option<Token>) -> Request,
 ) -> Result<bool, ExecError> {
     let token = ctx.github_token.clone().map(Token::new);
     match store.request(request(token)).await {
@@ -281,7 +295,11 @@ async fn populate(
     empty_directory(ctx.workspace).await.map_err(invalid)?;
     let mut state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     if matches!(state, Materialized::CheckoutFailed)
-        && ask(store, ctx, |token| Request::RepairMirror { token }).await?
+        && ask(store, ctx, |token| Request::RepairMirror {
+            token,
+            window: depth.window(),
+        })
+        .await?
     {
         empty_directory(ctx.workspace).await.map_err(invalid)?;
         state = materialize(ctx, &mirror, facts, &dest, depth).await?;

@@ -39,9 +39,9 @@ impl Broker {
                     .await
                     .map(|notices| Response::Done { notices })
             }
-            Request::RepairMirror { token } => {
+            Request::RepairMirror { token, window } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::repair(&self.root, &self.facts, token)
+                mirror::repair(&self.root, &self.facts, token, window)
                     .await
                     .map(|repair| match repair {
                         Repair::Sound => Response::Sound,
