@@ -13,7 +13,6 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -23,6 +22,7 @@ import { basename } from "node:path";
 
 const RUNNER = "/var/lib/velnor/bin/velnor-runner";
 const GUEST = "/var/lib/velnor";
+const GUEST_SHARE = "/var/lib/velnor-host";
 const root = import.meta.dir;
 const settings = new Map<string, string>();
 for (const line of readFileSync(`${root}/fake_orb.env`, "utf8").split("\n")) {
@@ -153,7 +153,7 @@ function inGuest(args: string[]): never {
   if (rest[0] === "-u") rest = rest.slice(2);
   switch (rest[0]) {
     case "sh":
-      writeSync(1, "501 501 /home/live\n");
+      writeSync(1, `${setting("FAKE_ORB_USER") || "501 501 /home/live"}\n`);
       return finish(0);
     case "ln":
       return finish(0);
@@ -207,18 +207,43 @@ function escapeGroup(): void {
   libc.symbols.setpgid(0, libc.symbols.getpgid(process.ppid));
 }
 
+function guestWork(reservation: string): string {
+  return `${seen}/guest/gen/work/${reservation}`;
+}
+
+function cleanup(rest: string[]): never {
+  appendFileSync(`${seen}/cleanups`, `${rest.slice(2).join(" ")}\n`);
+  if (setting("FAKE_CLEANUP_FAIL") !== "" && rest[2] === "--reservation") finish(1);
+  const root = `${seen}/guest/gen/work`;
+  Bun.spawnSync(["chmod", "-R", "u+rwx", rest[2] === "--all" ? root : guestWork(text(rest[3]))], {
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  try {
+    if (rest[2] === "--all") {
+      rmSync(root, { recursive: true, force: true });
+    } else {
+      rmSync(guestWork(text(rest[3])), { recursive: true, force: true });
+    }
+  } catch {
+    finish(1);
+  }
+  return finish(0);
+}
+
 function runner(rest: string[]): never {
   if (setting("FAKE_RUNNER_ESCAPE") !== "") escapeGroup();
+  if (rest[1] === "sandbox-cleanup") return cleanup(rest);
   if (rest[1] !== "sandbox") finish(64);
   const option = (flag: string): string => text(rest[rest.indexOf(flag) + 1]);
-  const jit = `${setting("FAKE_ORB_STORE")}${option("--jit").replace(GUEST, "")}`;
-  const trusted = `${setting("FAKE_ORB_STORE")}${option("--trusted").replace(GUEST, "")}`;
-  const work = `${setting("FAKE_ORB_STORE")}/work/${basename(option("--work-dir"))}`;
-  const name = basename(jit);
-  copyFileSync(jit, `${seen}/${name}`);
+  const reservation = option("--reservation");
+  const trusted = `${setting("FAKE_ORB_STORE")}${option("--trusted").replace(GUEST_SHARE, "")}`;
+  const work = guestWork(reservation);
+  const name = `${reservation}.jit`;
+  writeFileSync(`${seen}/${name}`, readFileSync(0));
   copyFileSync(trusted, `${seen}/${basename(trusted)}`);
   writeFileSync(`${seen}/${name}.env`, environment());
-  writeFileSync(`${seen}/${name}.mode`, `${(statSync(jit).mode & 0o777).toString(8)}\n`);
+  writeFileSync(`${seen}/${name}.argv`, `${rest.join("\n")}\n`);
   mkdirSync(work, { recursive: true });
   const standIn = setting("FAKE_RUNNER_PS_PID");
   addToTable(`${standIn === "" ? process.pid : standIn} ${rest.join(" ")}`);

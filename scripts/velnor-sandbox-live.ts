@@ -12,6 +12,9 @@ const PROVISION = [
   "chmod 755 /srv /srv/velnor /srv/velnor/gen /srv/velnor/gen/work /srv/velnor/gen/stage /var/lib /var/lib/velnor /var/lib/velnor/bin /var/lib/velnor/tools /var/lib/velnor/crates",
   "chmod 700 /var/lib/velnor/locks",
   "touch /var/lib/velnor/tools/key/.ready",
+  "command -v ip >/dev/null && command -v nsenter >/dev/null || { echo 'iproute2 and nsenter are required' >&2; exit 1; }",
+  "command -v nft >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nftables",
+  "command -v nft >/dev/null || { echo 'nftables is required' >&2; exit 1; }",
 ].join("\n");
 const RUN = [
   "set -eu",

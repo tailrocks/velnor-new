@@ -1,24 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::Infallible;
+use std::fs::File;
 use std::os::unix::process::CommandExt;
-use std::process::Command;
+use std::process::{Child, Command, ExitCode};
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, ensure};
 use landlock::{CompatLevel, Compatible, Ruleset, RulesetAttr, RulesetStatus, Scope};
-use rustix::process::{Resource, Rlimit, setrlimit};
-use seccompiler::{
-    BpfProgram, SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter,
-    SeccompRule,
-};
+use rustix::io::Errno;
+use rustix::process::{Pid, Resource, Rlimit, WaitOptions, setrlimit, wait};
+use rustix::thread::{CapabilitySet, capabilities, capability_is_in_bounding_set};
+use rustix::thread::{remove_capability_from_bounding_set, set_capabilities};
 
-use super::Layout;
+use super::{Layout, seccomp};
 
 const PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const FILE_SIZE_LIMIT: u64 = 16 << 30;
-
-type Rules = Vec<(i64, Vec<SeccompRule>)>;
+const KILLED_BASE: i32 = 128;
 
 fn limit_file_size() -> Result<()> {
     setrlimit(
@@ -29,6 +27,28 @@ fn limit_file_size() -> Result<()> {
         },
     )
     .context("limit the size of one file")
+}
+
+fn drop_capability_sets() -> Result<()> {
+    for bit in 0..u64::BITS {
+        let capability = CapabilitySet::from_bits_retain(1_u64 << bit);
+        match capability_is_in_bounding_set(capability) {
+            Ok(true) => remove_capability_from_bounding_set(capability)
+                .context("drop a capability from the bounding set")?,
+            Ok(false) => {}
+            Err(Errno::INVAL) => break,
+            Err(error) => return Err(error).context("read the bounding set"),
+        }
+    }
+    let held = capabilities(None).context("read the capabilities")?;
+    set_capabilities(
+        None,
+        rustix::thread::CapabilitySets {
+            inheritable: CapabilitySet::empty(),
+            ..held
+        },
+    )
+    .context("clear the inheritable capabilities")
 }
 
 fn scope_abstract_sockets() -> Result<()> {
@@ -47,84 +67,22 @@ fn scope_abstract_sockets() -> Result<()> {
     Ok(())
 }
 
-fn argument(
-    index: u8,
-    width: SeccompCmpArgLen,
-    operation: SeccompCmpOp,
-    value: u64,
-) -> Result<SeccompRule> {
-    let condition = SeccompCondition::new(index, width, operation, value)
-        .context("build a seccomp condition")?;
-    SeccompRule::new(vec![condition]).context("build a seccomp rule")
-}
-
-fn refuse(rules: Rules, errno: i32) -> Result<BpfProgram> {
-    SeccompFilter::new(
-        rules.into_iter().collect(),
-        SeccompAction::Allow,
-        SeccompAction::Errno(u32::try_from(errno).context("read the errno")?),
-        std::env::consts::ARCH
-            .try_into()
-            .map_err(|error| anyhow!("seccomp does not support this architecture: {error}"))?,
-    )
-    .context("build a seccomp filter")?
-    .try_into()
-    .context("compile a seccomp filter")
-}
-
-pub(super) fn filters() -> Result<Vec<BpfProgram>> {
-    let vsock = u64::try_from(libc::AF_VSOCK).context("read AF_VSOCK")?;
-    let new_user = u64::try_from(libc::CLONE_NEWUSER).context("read CLONE_NEWUSER")?;
-    let mut sockets = Rules::new();
-    for call in [libc::SYS_socket, libc::SYS_socketpair] {
-        sockets.push((
-            call,
-            vec![argument(
-                0,
-                SeccompCmpArgLen::Dword,
-                SeccompCmpOp::Eq,
-                vsock,
-            )?],
-        ));
-    }
-    let namespaces: Rules = vec![
-        (
-            libc::SYS_clone,
-            vec![argument(
-                0,
-                SeccompCmpArgLen::Qword,
-                SeccompCmpOp::MaskedEq(new_user),
-                new_user,
-            )?],
-        ),
-        (
-            libc::SYS_unshare,
-            vec![argument(
-                0,
-                SeccompCmpArgLen::Dword,
-                SeccompCmpOp::MaskedEq(new_user),
-                new_user,
-            )?],
-        ),
-    ];
-    Ok(vec![
-        refuse(sockets, libc::EAFNOSUPPORT)?,
-        refuse(namespaces, libc::EPERM)?,
-        refuse(vec![(libc::SYS_clone3, Vec::new())], libc::ENOSYS)?,
-    ])
-}
-
-pub(super) fn exec(layout: &Layout, command: &[String]) -> Result<Infallible> {
+fn restrict() -> Result<()> {
     limit_file_size()?;
+    drop_capability_sets()?;
     rustix::thread::set_no_new_privs(true).context("set no_new_privs")?;
     scope_abstract_sockets()?;
-    for filter in filters()? {
+    for filter in seccomp::filters()? {
         seccompiler::apply_filter(&filter).context("install a seccomp filter")?;
     }
+    Ok(())
+}
+
+fn start(layout: &Layout, command: &[String]) -> Result<Child> {
     let (program, arguments) = command
         .split_first()
         .context("the sandbox has no command")?;
-    let error = Command::new(program)
+    Command::new(program)
         .args(arguments)
         .env_clear()
         .env("PATH", PATH)
@@ -133,6 +91,33 @@ pub(super) fn exec(layout: &Layout, command: &[String]) -> Result<Infallible> {
         .current_dir(&layout.work_dir)
         .gid(layout.gid)
         .uid(layout.uid)
-        .exec();
-    Err(error).with_context(|| format!("start {program}"))
+        .spawn()
+        .with_context(|| format!("start {program}"))
+}
+
+fn reap(main: Pid) -> Result<i32> {
+    loop {
+        match wait(WaitOptions::empty()) {
+            Ok(Some((pid, status))) if pid == main => {
+                return Ok(status.exit_status().unwrap_or_else(|| {
+                    KILLED_BASE.saturating_add(status.terminating_signal().unwrap_or(0))
+                }));
+            }
+            Ok(_) | Err(Errno::INTR) => {}
+            Err(error) => return Err(error).context("wait for the command"),
+        }
+    }
+}
+
+pub(super) fn supervise(layout: &Layout, command: &[String]) -> Result<ExitCode> {
+    restrict()?;
+    let child = start(layout, command)?;
+    let null = File::open("/dev/null").context("open /dev/null")?;
+    rustix::stdio::dup2_stdin(&null).context("release the standard input of the init")?;
+    let main = i32::try_from(child.id())
+        .ok()
+        .and_then(Pid::from_raw)
+        .context("read the pid of the command")?;
+    let code = reap(main)?;
+    Ok(ExitCode::from(u8::try_from(code).unwrap_or(u8::MAX)))
 }

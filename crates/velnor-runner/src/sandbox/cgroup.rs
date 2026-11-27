@@ -8,8 +8,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use rustix::process::{Pid, Signal, kill_process};
 
+use super::{MEMORY_PERCENT, PIDS_MAX};
+
 const POLL: Duration = Duration::from_millis(5);
 const EMPTY_WITHIN: Duration = Duration::from_secs(10);
+const CONTROLLERS: &str = "+pids +memory";
 
 #[derive(Debug)]
 pub(super) struct Cgroup {
@@ -24,7 +27,7 @@ fn populated(path: &Path) -> Result<bool> {
     }
 }
 
-fn kill_and_remove(path: &Path) -> Result<()> {
+pub(super) fn kill_and_remove(path: &Path) -> Result<()> {
     match std::fs::write(path.join("cgroup.kill"), "1") {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
@@ -46,15 +49,46 @@ fn kill_and_remove(path: &Path) -> Result<()> {
     }
 }
 
+pub(super) fn limit_hit(events: &str) -> bool {
+    events
+        .lines()
+        .filter_map(|line| line.strip_prefix("max "))
+        .any(|count| count.trim().parse::<u64>().is_ok_and(|count| count > 0))
+}
+
+pub(super) fn memory_max_bytes() -> Result<u64> {
+    let meminfo =
+        std::fs::read_to_string("/proc/meminfo").context("read the memory of the machine")?;
+    let kib = meminfo
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|value| value.parse::<u64>().ok())
+        .context("find MemTotal in /proc/meminfo")?;
+    Ok(kib.saturating_mul(1024) / 100 * MEMORY_PERCENT)
+}
+
+fn write(path: &Path, file: &str, value: &str) -> Result<()> {
+    std::fs::write(path.join(file), value)
+        .with_context(|| format!("write {value} to {}", path.join(file).display()))
+}
+
 impl Cgroup {
     pub(super) fn create(path: PathBuf) -> Result<Self> {
         kill_and_remove(&path)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("create {}", parent.display()))?;
-        }
+        let parent = path.parent().context("the cgroup has no parent")?;
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        write(parent, "cgroup.subtree_control", CONTROLLERS)?;
         std::fs::create_dir(&path).with_context(|| format!("create {}", path.display()))?;
-        Ok(Self { path })
+        let cgroup = Self { path };
+        cgroup.limit()?;
+        Ok(cgroup)
+    }
+
+    fn limit(&self) -> Result<()> {
+        write(&self.path, "pids.max", &PIDS_MAX.to_string())?;
+        write(&self.path, "memory.max", &memory_max_bytes()?.to_string())?;
+        write(&self.path, "memory.oom.group", "1")
     }
 
     pub(super) fn path(&self) -> &Path {
@@ -78,13 +112,13 @@ impl Cgroup {
         let _ = std::fs::write(self.path.join("cgroup.kill"), "1");
     }
 
-    pub(super) fn remove(&self) -> Result<()> {
-        kill_and_remove(&self.path)
+    pub(super) fn exhausted_processes(&self) -> bool {
+        std::fs::read_to_string(self.path.join("pids.events"))
+            .is_ok_and(|events| limit_hit(&events))
     }
 }
 
 #[cfg(target_os = "linux")]
 pub(super) fn enter(path: &Path) -> Result<()> {
-    std::fs::write(path.join("cgroup.procs"), "0")
-        .with_context(|| format!("join the cgroup {}", path.display()))
+    write(path, "cgroup.procs", "0")
 }

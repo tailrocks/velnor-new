@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{GUEST_RUNNER, RustRunnerLauncher, orb};
+use super::{GUEST_RUNNER, ReservationId, RustRunnerLauncher, orb};
 use crate::error::{HostError, RustRunnerFailure};
 
 #[cfg(test)]
 mod tests;
 
-const WORK_DIR_PREFIX: &str = "--work-dir=";
 const INIT_PID: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,11 +16,6 @@ pub struct MachineProcess {
 }
 
 impl MachineProcess {
-    #[must_use]
-    pub fn names_work_dir(&self, work_dir: &str) -> bool {
-        names_work_dir(&self.args, work_dir)
-    }
-
     #[must_use]
     pub fn is_runner(&self) -> bool {
         self.args
@@ -51,15 +45,31 @@ pub(crate) fn parse_ps(output: &str) -> Result<Vec<MachineProcess>, RustRunnerFa
     Ok(processes)
 }
 
-pub(crate) fn names_work_dir(args: &str, work_dir: &str) -> bool {
-    args.split_whitespace().any(|token| {
-        let path = token.strip_prefix(WORK_DIR_PREFIX).unwrap_or(token);
-        path.strip_prefix(work_dir)
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
-    })
-}
-
 impl RustRunnerLauncher {
+    pub(super) fn clean_job(&self, reservation: ReservationId) -> Result<(), HostError> {
+        let mut command = self.as_root();
+        command
+            .arg(GUEST_RUNNER)
+            .args(["sandbox-cleanup", "--reservation"])
+            .arg(reservation.to_string());
+        self.cleaned(command)
+    }
+
+    pub(super) fn clean_all_jobs(&self) -> Result<(), HostError> {
+        let mut command = self.as_root();
+        command.arg(GUEST_RUNNER).args(["sandbox-cleanup", "--all"]);
+        self.cleaned(command)
+    }
+
+    fn cleaned(&self, command: std::process::Command) -> Result<(), HostError> {
+        let finished = orb::run(command, self.deadline, false).map_err(HostError::RustRunner)?;
+        if finished.status.success() {
+            Ok(())
+        } else {
+            Err(HostError::RustRunner(RustRunnerFailure::JobFilesLeft))
+        }
+    }
+
     pub fn list_processes(&self) -> Result<Vec<MachineProcess>, HostError> {
         let mut command = self.as_root();
         command.args(["ps", "-eo", "pid=,args="]);

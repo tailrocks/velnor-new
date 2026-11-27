@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
+use rustix::fs::{CWD, FileType, Mode, OFlags, fstat, openat};
 use serde::Deserialize;
 
 const LIMIT: u64 = 64 * 1024;
@@ -40,8 +42,22 @@ impl Header {
     }
 
     pub(super) fn read(path: &Path) -> Result<Self> {
-        let file = std::fs::File::open(path)
-            .with_context(|| format!("open the trusted facts {}", path.display()))?;
+        let descriptor = openat(
+            CWD,
+            path,
+            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .with_context(|| format!("open the trusted facts {}", path.display()))?;
+        let stat = fstat(&descriptor)
+            .with_context(|| format!("inspect the trusted facts {}", path.display()))?;
+        ensure!(
+            FileType::from_raw_mode(stat.st_mode) == FileType::RegularFile
+                && u64::try_from(stat.st_size).is_ok_and(|size| size <= LIMIT),
+            "the trusted facts {} are not a regular file of at most {LIMIT} bytes",
+            path.display()
+        );
+        let file = File::from(descriptor);
         let mut bytes = Vec::new();
         file.take(LIMIT + 1)
             .read_to_end(&mut bytes)

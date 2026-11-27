@@ -1,20 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{DirBuilder, remove_dir_all};
+use std::fs::DirBuilder;
 use std::io::ErrorKind;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt, chown};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
 
-use super::args::{SandboxArgs, stage_dir_of, work_dir_of};
-use super::{CGROUP_ROOT, Layout, RootLink, SANDBOX_ROOTS};
+use super::args::SandboxArgs;
+use super::layout::{cgroup_of, root_of, stage_dir_of, work_dir_of};
+use super::{GEN_ROOT, Layout, RootLink, net, tree};
 
 const LINK_NAMES: [&str; 6] = ["bin", "sbin", "lib", "lib32", "lib64", "libx32"];
 const PRIVATE: u32 = 0o700;
-const PUBLIC: u32 = 0o755;
 const STICKY: u32 = 0o1777;
+const WRITABLE_BY_OTHERS: u32 = 0o022;
 
 fn root_links() -> Vec<RootLink> {
     LINK_NAMES
@@ -40,13 +41,29 @@ fn real_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(super) fn provisioned(path: &Path) -> Result<()> {
+    real_directory(path).with_context(|| {
+        format!(
+            "{} is missing or unsafe; provision the machine before starting a job",
+            path.display()
+        )
+    })?;
+    ensure!(
+        std::fs::symlink_metadata(path)?.mode() & WRITABLE_BY_OTHERS == 0,
+        "{} is writable by group or others",
+        path.display()
+    );
+    Ok(())
+}
+
 pub(super) fn layout(args: &SandboxArgs) -> Result<Layout> {
     for path in &args.store_read_only {
         real_directory(path)?;
     }
     Ok(Layout {
-        root: Path::new(SANDBOX_ROOTS).join(args.reservation.to_string()),
-        cgroup: Path::new(CGROUP_ROOT).join(format!("job-{}", args.reservation)),
+        root: root_of(args.reservation),
+        cgroup: cgroup_of(args.reservation),
+        netns: net::netns_path(args.reservation),
         uid: args.uid,
         gid: args.gid,
         home: args.home.clone(),
@@ -73,7 +90,8 @@ fn create(path: &Path, mode: u32, owner: Option<(u32, u32)>) -> Result<()> {
 }
 
 pub(super) fn remove(path: &Path) -> Result<()> {
-    match remove_dir_all(path) {
+    tree::walk(path, true, |_| true).with_context(|| format!("empty {}", path.display()))?;
+    match std::fs::remove_dir(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("remove {}", path.display())),
@@ -81,26 +99,20 @@ pub(super) fn remove(path: &Path) -> Result<()> {
 }
 
 pub(super) fn prepare(layout: &Layout) -> Result<()> {
-    let owner = Some((layout.uid, layout.gid));
+    let generations = Path::new(GEN_ROOT);
+    for directory in [generations.join("work"), generations.join("stage")] {
+        provisioned(&directory)?;
+    }
     for stale in [&layout.work_dir, &layout.stage_dir, &layout.root] {
         remove(stale)?;
     }
-    for parent in [&layout.work_dir, &layout.stage_dir, &layout.root] {
-        if let Some(parent) = parent.parent() {
-            create(parent, PUBLIC, None)?;
-        }
+    if let Some(parent) = layout.root.parent() {
+        create(parent, PRIVATE, None)?;
     }
+    let owner = Some((layout.uid, layout.gid));
     create(&layout.root, PRIVATE, None)?;
     create(&layout.work_dir, PRIVATE, owner)?;
     create(&layout.work_dir.join("home"), PRIVATE, owner)?;
     create(&layout.work_dir.join("tmp"), STICKY, owner)?;
     create(&layout.stage_dir, PRIVATE, owner)
-}
-
-pub(super) fn discard(layout: &Layout) -> Vec<PathBuf> {
-    [&layout.work_dir, &layout.stage_dir, &layout.root]
-        .into_iter()
-        .filter(|path| remove(path).is_err())
-        .cloned()
-        .collect()
 }

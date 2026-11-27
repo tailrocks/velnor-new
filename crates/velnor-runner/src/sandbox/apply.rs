@@ -16,7 +16,7 @@ pub fn apply(args: &ApplyArgs) -> Result<ExitCode> {
     let layout: Layout = serde_json::from_str(&args.layout).context("parse the sandbox layout")?;
     cgroup::enter(&layout.cgroup)?;
     mounts::build(&layout, &plan(Profile::Job, &layout))?;
-    match seal::exec(&layout, &args.command)? {}
+    seal::supervise(&layout, &args.command)
 }
 
 #[cfg(not(target_os = "linux"))]

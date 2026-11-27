@@ -17,7 +17,7 @@ use crate::exec::{
 use crate::job_message::AgentJobRequestMessage;
 use crate::lifecycle::{RunJitOptions, run_jit};
 use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
-use crate::sandbox::{ApplyArgs, SandboxArgs};
+use crate::sandbox::{ApplyArgs, CleanupArgs, SandboxArgs};
 use crate::secret::Secret;
 
 const USAGE_ERROR: u8 = 2;
@@ -59,6 +59,12 @@ pub enum Command {
         after_help = "Linux only, as root. The exit code is the one of the command.\n\nExit codes:\n  2    the sandbox could not start the command"
     )]
     Sandbox(SandboxArgs),
+    #[command(
+        name = "sandbox-cleanup",
+        about = "Remove the cgroup and the directories of one job, or of every job, after killing what still runs in them",
+        after_help = "Linux only, as root. Exit code 0 means nothing of the job is left."
+    )]
+    SandboxCleanup(CleanupArgs),
     #[command(name = "sandbox-apply", hide = true)]
     SandboxApply(ApplyArgs),
 }
@@ -214,8 +220,11 @@ fn build_adapters() -> AdapterRegistry {
 
 fn jit_value(source: &str) -> Result<String> {
     let text = if source == "-" {
-        std::io::read_to_string(std::io::stdin())
-            .context("read the JIT configuration from standard input")?
+        let text = std::io::read_to_string(std::io::stdin())
+            .context("read the JIT configuration from standard input")?;
+        let null = std::fs::File::open("/dev/null").context("open /dev/null")?;
+        rustix::stdio::dup2_stdin(&null).context("close the standard input after the read")?;
+        text
     } else if let Some(path) = source.strip_prefix('@') {
         let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
         std::fs::remove_file(path).with_context(|| format!("remove the JIT file {path}"))?;
@@ -260,20 +269,25 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
     })
 }
 
-fn run(cli: &Cli) -> Result<ExitCode> {
+fn with_runtime(task: impl Future<Output = Result<ExitCode>>) -> Result<ExitCode> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .context("start the async runtime")?;
-    let code = match &cli.command {
-        Command::Exec(args) => runtime.block_on(exec(args)),
-        Command::Run(args) => runtime.block_on(run_command(args)),
-        Command::Sandbox(args) => runtime.block_on(crate::sandbox::run(args)),
-        Command::SandboxApply(args) => crate::sandbox::apply(args),
-    };
+    let code = runtime.block_on(task);
     runtime.shutdown_background();
     code
+}
+
+fn run(cli: &Cli) -> Result<ExitCode> {
+    match &cli.command {
+        Command::Exec(args) => with_runtime(exec(args)),
+        Command::Run(args) => with_runtime(run_command(args)),
+        Command::Sandbox(args) => with_runtime(crate::sandbox::run(args)),
+        Command::SandboxCleanup(args) => crate::sandbox::cleanup(args),
+        Command::SandboxApply(args) => crate::sandbox::apply(args),
+    }
 }
 
 pub fn main() -> ExitCode {

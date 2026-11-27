@@ -3,10 +3,15 @@
 
 use std::path::{Path, PathBuf};
 
-use super::args::{normalized, stage_dir_of, work_dir_of};
+use super::args::normalized;
+use super::layout::{stage_dir_of, work_dir_of};
 use super::parent::chain;
 use super::trusted::Header;
-use super::{Layout, MountOp, Profile, RootLink, SandboxArgs, disk, plan};
+use super::{Layout, MountOp, Profile, RootLink, SandboxArgs, plan};
+
+mod accounting;
+mod invocation;
+mod network;
 
 const TRUSTED_PULL_REQUEST: &str = include_str!("../../tests/fixtures/trusted/pull_request.json");
 
@@ -14,6 +19,7 @@ fn layout() -> Layout {
     Layout {
         root: PathBuf::from("/run/velnor-sandbox/7"),
         cgroup: PathBuf::from("/sys/fs/cgroup/velnor/job-7"),
+        netns: PathBuf::from("/run/netns/velnor-job-7"),
         uid: 1000,
         gid: 1001,
         home: PathBuf::from("/home/user"),
@@ -170,23 +176,28 @@ fn job_plan_never_mounts_the_host_share_or_the_orbstack_runtime() {
 }
 
 #[test]
-fn sandbox_chain_runs_unshare_under_a_death_signal() {
+fn sandbox_chain_enters_the_job_netns_then_unshares_under_a_death_signal() {
     let argv = chain(
         &layout(),
         Path::new("/var/lib/velnor/bin/velnor-runner"),
         &["/bin/true".to_owned()],
     )
     .unwrap_or_default();
-    let head: Vec<&str> = argv.iter().take(11).map(String::as_str).collect();
+    let head: Vec<&str> = argv.iter().take(16).map(String::as_str).collect();
     assert_eq!(
         head,
         [
             "--pdeathsig",
             "KILL",
             "--",
+            "/usr/bin/nsenter",
+            "--net=/run/netns/velnor-job-7",
+            "--",
             "/usr/bin/unshare",
             "--mount",
             "--pid",
+            "--ipc",
+            "--uts",
             "--fork",
             "--kill-child",
             "--propagation",
@@ -194,13 +205,13 @@ fn sandbox_chain_runs_unshare_under_a_death_signal() {
             "--",
         ]
     );
-    assert_eq!(argv[11], "/var/lib/velnor/bin/velnor-runner");
-    assert_eq!(argv[12], "sandbox-apply");
-    assert_eq!(argv[13], "--layout");
-    assert_eq!(argv[15], "--");
-    assert_eq!(argv[16], "/bin/true");
+    assert_eq!(argv[16], "/var/lib/velnor/bin/velnor-runner");
+    assert_eq!(argv[17], "sandbox-apply");
+    assert_eq!(argv[18], "--layout");
+    assert_eq!(argv[20], "--");
+    assert_eq!(argv[21], "/bin/true");
     assert_eq!(
-        serde_json::from_str::<Layout>(&argv[14]).ok().as_ref(),
+        serde_json::from_str::<Layout>(&argv[19]).ok().as_ref(),
         Some(&layout())
     );
 }
@@ -216,7 +227,8 @@ fn arguments(adjust: impl FnOnce(&mut SandboxArgs)) -> SandboxArgs {
         home: PathBuf::from("/home/user"),
         work_dir: work_dir_of(7),
         disk_limit_gib: 64,
-        jit: None,
+        machine_floor_gib: 4,
+        jit_stdin: false,
         trusted: None,
         store_read_only: vec![PathBuf::from("/var/lib/velnor/git/github.com/o/n/42.git")],
         command: vec!["/bin/true".to_owned()],
@@ -280,49 +292,12 @@ fn normalized_paths_have_no_dots_and_start_at_the_root() {
     assert!(!normalized(Path::new("/home/user/")));
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("velnor-sandbox-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&path);
-    assert!(std::fs::create_dir_all(&path).is_ok());
-    path
-}
-
-#[test]
-fn disk_use_counts_allocated_blocks_of_every_file_once() {
-    let root = scratch("disk");
-    assert!(std::fs::create_dir_all(root.join("a/b")).is_ok());
-    assert!(std::fs::write(root.join("a/b/data"), vec![1_u8; 1 << 20]).is_ok());
-    assert!(std::fs::hard_link(root.join("a/b/data"), root.join("a/link")).is_ok());
-    assert!(std::fs::write(root.join("small"), b"x").is_ok());
-    let used = disk::used(&[root.as_path()], Path::new("/nonexistent"));
-    assert!(used >= 1 << 20, "{used}");
-    assert!(
-        used < (1 << 20) + (1 << 18),
-        "the hard link was counted twice: {used}"
-    );
-    let twice = disk::used(&[root.as_path(), root.as_path()], Path::new("/nonexistent"));
-    assert!(
-        twice < (1 << 20) + (1 << 18),
-        "a directory named twice was counted twice: {twice}"
-    );
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn disk_overage_names_the_use_and_the_limit() {
-    assert_eq!(disk::overage(64 << 30, 64), None);
-    assert_eq!(
-        disk::overage((65 << 30) + 5, 64).as_deref(),
-        Some("velnor: job used 65 GiB of disk; the limit is 64 GiB")
-    );
-}
-
 #[cfg(target_os = "linux")]
 #[test]
-fn seccomp_programs_compile_for_vsock_user_namespaces_and_clone3() {
+fn seccomp_programs_compile_for_vsock_user_namespaces_absent_calls_and_xattrs() {
     assert_eq!(
-        super::seal::filters().map(|filters| filters.len()).ok(),
-        Some(3)
+        super::seccomp::filters().map(|filters| filters.len()).ok(),
+        Some(5)
     );
 }
 

@@ -28,7 +28,7 @@ pub(super) struct ProofInputs {
 
 pub(super) fn prove(inputs: &ProofInputs) -> Result<CleanupProof, ListenFault> {
     let paths = JobPaths::of(inputs.reservation);
-    end_processes(&inputs.launcher, paths.guest_work_dir())?;
+    inputs.launcher.clean_job(inputs.reservation)?;
     remove_files(&inputs.launcher, &paths)?;
     remove_runner_named(&inputs.admin, inputs.scale_set_id, &inputs.runner_name)?;
     Ok(CleanupProof {
@@ -36,37 +36,13 @@ pub(super) fn prove(inputs: &ProofInputs) -> Result<CleanupProof, ListenFault> {
     })
 }
 
-fn end_processes(launcher: &RustRunnerLauncher, guest_work_dir: &str) -> Result<(), ListenFault> {
-    let survivors = naming(launcher, guest_work_dir)?;
-    if survivors.is_empty() {
-        return Ok(());
-    }
-    launcher.kill_processes(&survivors)?;
-    if naming(launcher, guest_work_dir)?.is_empty() {
-        Ok(())
-    } else {
-        Err(HostError::RustRunner(RustRunnerFailure::ProcessesSurvive).into())
-    }
-}
-
-fn naming(launcher: &RustRunnerLauncher, guest_work_dir: &str) -> Result<Vec<u32>, HostError> {
-    Ok(launcher
-        .list_processes()?
-        .iter()
-        .filter(|process| process.names_work_dir(guest_work_dir))
-        .map(|process| process.pid)
-        .collect())
-}
-
 fn remove_files(launcher: &RustRunnerLauncher, paths: &JobPaths) -> Result<(), ListenFault> {
     let left = || HostError::RustRunner(RustRunnerFailure::JobFilesLeft);
     let store = Store::open(launcher.host_store()).map_err(|_| left())?;
-    store.remove_jit(paths.jit_name()).map_err(|_| left())?;
-    store.remove_work(paths.work_name())?;
-    if store
-        .leftovers(paths.jit_name(), paths.work_name())
-        .map_err(|_| left())?
-    {
+    store
+        .remove_trusted(paths.trusted_name())
+        .map_err(|_| left())?;
+    if store.leftovers(paths.trusted_name()).map_err(|_| left())? {
         return Err(left().into());
     }
     Ok(())

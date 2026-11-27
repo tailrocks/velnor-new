@@ -57,7 +57,11 @@ impl Run<'_> {
             self.begin_proof(reservation, JobExit::SpawnFailed);
             return;
         };
-        match self.cx.launcher.start_job(reservation, jit, &facts) {
+        match self
+            .cx
+            .launcher
+            .start_job(reservation, jit, &facts, &self.guest)
+        {
             Ok(job) => {
                 let (stop, stopped) = oneshot::channel();
                 if self.slots.start_running(reservation, stop) {

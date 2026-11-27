@@ -7,6 +7,7 @@ use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{
     acquire_ids, assert_clean, deleted_messages, jit_name, reservation, runner_name, snapshot,
+    trusted_name,
 };
 use super::events::{Event, files_containing, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
@@ -87,7 +88,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
     std::thread::sleep(Duration::from_millis(2200));
     assert!(world.heartbeat_ms().ok_or("no heartbeat")? > before);
     assert_eq!(acquire_ids(world), ["1"]);
-    let jit_file = world.store.join("jit").join(&name);
+    let jit_file = world.seen.join(&name);
     assert_eq!(
         std::fs::read_to_string(&jit_file)?,
         std::fs::read_to_string(world.github.join("jits").join(runner_name(first)))?
@@ -99,7 +100,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
         .ok_or("no runner start")?;
     assert!(
         runner_line.text.contains(&format!(
-            "--jit /var/lib/velnor/jit/{first}.jit --trusted /var/lib/velnor/jit/{first}.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/{first}"
+            "--disk-limit-gib 64 --jit-stdin --trusted /var/lib/velnor-host/trusted/{first}.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/{first}"
         )),
         "{}",
         runner_line.text
@@ -156,8 +157,19 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
             && event.field("returned") == "11"),
         "M1 was not redelivered after the proof"
     );
+    assert!(
+        world
+            .events()
+            .iter()
+            .any(|event| event.is_orb(&format!("sandbox-cleanup --reservation {first}"))),
+        "the proof did not clean the job in the machine"
+    );
     let state = snapshot(world, acquires[1]);
-    assert!(!state.jit.contains(&jit_name(first)), "{:?}", state.jit);
+    assert!(
+        !state.trusted.contains(&trusted_name(first)),
+        "{:?}",
+        state.trusted
+    );
     assert!(!state.work.contains(&first.to_string()), "{:?}", state.work);
     Ok(())
 }

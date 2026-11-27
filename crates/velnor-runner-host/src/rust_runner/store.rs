@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 
 use self::remove::BOUNDS;
 use super::machine::failure;
-use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
+use super::{HOST_DIRECTORIES, TRUSTED_DIRECTORY};
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -76,17 +76,12 @@ impl Store {
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         let store = Self::open(path)?;
         for name in HOST_DIRECTORIES {
-            let forbidden = if name == WORK_DIRECTORY {
-                others_can_reach()
-            } else {
-                others_can_write()
-            };
-            store.ensure_directory(name, forbidden, RustRunnerFailure::StoreUnsafe)?;
+            store.ensure_directory(name, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
         }
         store.ensure_directory(
-            JIT_DIRECTORY,
+            TRUSTED_DIRECTORY,
             others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
+            RustRunnerFailure::TrustedDirectoryAccessible,
         )?;
         Ok(store)
     }
@@ -163,18 +158,18 @@ impl Store {
         }
     }
 
-    pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
+    pub(super) fn write_trusted(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
         self.ensure_directory(
-            JIT_DIRECTORY,
+            TRUSTED_DIRECTORY,
             others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
+            RustRunnerFailure::TrustedDirectoryAccessible,
         )?;
-        let jit = self.jit_directory()?;
+        let trusted = self.trusted_directory()?;
         let staging = format!(".{name}.tmp");
         let write = || -> Result<(), Errno> {
-            remove_entry(&jit, &staging)?;
+            remove_entry(&trusted, &staging)?;
             let descriptor = openat(
-                &jit,
+                &trusted,
                 staging.as_str(),
                 OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
                 Mode::RUSR | Mode::WUSR,
@@ -182,50 +177,33 @@ impl Store {
             let mut file = File::from(descriptor);
             file.write_all(bytes).map_err(|_| Errno::IO)?;
             fsync(&file)?;
-            renameat(&jit, staging.as_str(), &jit, name)
+            renameat(&trusted, staging.as_str(), &trusted, name)
         };
         write().map_err(|_| {
-            let _ = remove_entry(&jit, &staging);
-            failure(RustRunnerFailure::JitFile)
+            let _ = remove_entry(&trusted, &staging);
+            failure(RustRunnerFailure::TrustedFile)
         })
     }
 
-    pub(super) fn remove_jit(&self, name: &str) -> Result<(), HostError> {
-        let jit = self.jit_directory()?;
-        remove_entry(&jit, name).map_err(|_| failure(RustRunnerFailure::HostStore))
+    pub(super) fn remove_trusted(&self, name: &str) -> Result<(), HostError> {
+        let trusted = self.trusted_directory()?;
+        remove_entry(&trusted, name).map_err(|_| failure(RustRunnerFailure::HostStore))
     }
 
-    pub(super) fn remove_work(&self, name: &str) -> Result<(), HostError> {
-        let work = self.work_directory()?;
-        remove::tree(&work, name, BOUNDS).map_err(|error| failure(error.failure()))
+    pub(super) fn leftovers(&self, trusted_name: &str) -> Result<bool, HostError> {
+        exists(&self.trusted_directory()?, trusted_name)
     }
 
-    pub(super) fn leftovers(&self, jit_name: &str, work_name: &str) -> Result<bool, HostError> {
-        let jit = self.jit_directory()?;
-        let work = self.work_directory()?;
-        Ok(exists(&jit, jit_name)? || exists(&work, work_name)?)
+    pub(super) fn empty_trusted(&self) -> Result<(), HostError> {
+        remove::contents(&self.trusted_directory()?, BOUNDS)
+            .map_err(|error| failure(error.failure()))
     }
 
-    pub(super) fn empty_jit_and_work(&self) -> Result<(), HostError> {
-        for directory in [self.jit_directory()?, self.work_directory()?] {
-            remove::contents(&directory, BOUNDS).map_err(|error| failure(error.failure()))?;
-        }
-        Ok(())
-    }
-
-    fn jit_directory(&self) -> Result<OwnedFd, HostError> {
+    fn trusted_directory(&self) -> Result<OwnedFd, HostError> {
         self.directory(
-            JIT_DIRECTORY,
+            TRUSTED_DIRECTORY,
             others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )
-    }
-
-    fn work_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            WORK_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::StoreUnsafe,
+            RustRunnerFailure::TrustedDirectoryAccessible,
         )
     }
 

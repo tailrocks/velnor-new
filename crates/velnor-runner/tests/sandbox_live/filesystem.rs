@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::support::{Sandbox, failed, succeeded, text};
+use super::support::{Sandbox, failed, succeeded};
 
 const HIDDEN: [&str; 10] = [
     "/var/lib/velnor-host",
@@ -93,52 +93,6 @@ fn another_jobs_work_dir_is_invisible_and_this_ones_is_present() {
     let read = failed(&sandbox.shell("cat /srv/velnor/gen/work/424242/secret/token 2>&1"));
     assert!(read.contains("No such file or directory"), "{read}");
     let _ = std::fs::remove_dir_all(other);
-}
-
-#[test]
-fn one_file_past_16_gib_ends_the_write_with_sigxfsz() {
-    let sandbox = Sandbox::new("file-size");
-    let below = sandbox.shell("fallocate -l 1G \"$PWD/below\" && echo ok");
-    assert!(succeeded(&below).contains("ok"), "{}", text(&below));
-    let above = sandbox.shell("fallocate -l 17G \"$PWD/above\"");
-    assert_eq!(above.status.code(), Some(153), "{}", text(&above));
-}
-
-fn killed_for_disk(sandbox: &Sandbox, script: &str) {
-    let output = sandbox.shell(script);
-    let log = text(&output);
-    assert_eq!(output.status.code(), Some(125), "{log}");
-    assert!(
-        log.contains("velnor: job used ") && log.contains("GiB of disk; the limit is 1 GiB"),
-        "{log}"
-    );
-    assert!(!sandbox.work_dir().exists());
-    assert!(
-        !Path::new(&format!(
-            "/sys/fs/cgroup/velnor/job-{}",
-            sandbox.reservation
-        ))
-        .exists(),
-        "the cgroup of the killed job survived"
-    );
-}
-
-#[test]
-fn a_write_loop_is_killed_once_the_job_uses_more_than_its_limit() {
-    let sandbox = Sandbox::new("disk-loop").with("--disk-limit-gib", "1");
-    killed_for_disk(
-        &sandbox,
-        "i=0; while [ $i -lt 12 ]; do dd if=/dev/zero of=\"$PWD/f$i\" bs=1M count=256 2>/dev/null; i=$((i+1)); done",
-    );
-}
-
-#[test]
-fn an_unlinked_file_held_open_counts_against_the_limit() {
-    let sandbox = Sandbox::new("disk-deleted").with("--disk-limit-gib", "1");
-    killed_for_disk(
-        &sandbox,
-        "exec 3>\"$PWD/hidden\"; rm \"$PWD/hidden\"; dd if=/dev/zero bs=1M count=3000 >&3 2>/dev/null; sleep 30",
-    );
 }
 
 #[test]

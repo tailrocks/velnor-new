@@ -16,7 +16,7 @@ use crate::launch::execution_authorization::{
     PullClaim, SourceClaim, SourceFault, VerifiedWorkflowIdentity, verify_source_claim,
 };
 use crate::launch::steps::source::{SourceBlock, authorize_source};
-use crate::rust_runner::{PullRequestHead, TrustedEvent, TrustedFacts};
+use crate::rust_runner::{PullRequestHead, TrustedEvent, TrustedFacts, Verified};
 
 const GITHUB_API: &str = "https://api.github.com";
 const GITHUB_SERVER_URL: &str = "https://github.com";
@@ -114,7 +114,7 @@ impl LaunchGrant {
                 (None, None) => return None,
             },
         };
-        Some(TrustedFacts {
+        Some(TrustedFacts::new(Verified {
             repository_id: self.repository_id,
             repository: self.repository.clone(),
             server_url: self.server_url.to_owned(),
@@ -124,7 +124,7 @@ impl LaunchGrant {
             run_attempt: self.run_attempt,
             event_name: self.event.clone(),
             event,
-        })
+        }))
     }
 
     pub(super) fn describe(&self) -> String {

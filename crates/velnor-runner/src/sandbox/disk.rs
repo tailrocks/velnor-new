@@ -2,90 +2,126 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
-use std::fs::Metadata;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use super::tree;
 
 const BLOCK_BYTES: u64 = 512;
 const GIB: u64 = 1 << 30;
+const HELD_DIRECTORIES: [&str; 2] = ["fd", "map_files"];
 
-type Seen = HashSet<(u64, u64)>;
+type Seen = HashSet<tree::Identity>;
 
-fn counted(metadata: &Metadata, seen: &mut Seen) -> u64 {
-    if metadata.nlink() > 1 && !seen.insert((metadata.dev(), metadata.ino())) {
-        return 0;
-    }
-    metadata.blocks() * BLOCK_BYTES
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Usage {
+    pub(super) bytes: u64,
+    pub(super) hidden: bool,
+    pub(super) foreign: bool,
 }
 
-fn tree(root: &Path, seen: &mut Seen) -> u64 {
-    let Ok(metadata) = std::fs::symlink_metadata(root) else {
-        return 0;
-    };
-    let mut total = counted(&metadata, seen);
-    let mut pending: Vec<PathBuf> = vec![root.to_path_buf()];
-    while let Some(directory) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&directory) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let Ok(metadata) = entry.metadata() else {
+struct Tally<'a> {
+    seen: Seen,
+    usage: Usage,
+    stop: &'a AtomicBool,
+}
+
+impl Tally<'_> {
+    fn count(&mut self, identity: tree::Identity, blocks: u64) {
+        if self.seen.insert(identity) {
+            self.usage.bytes = self.usage.bytes.saturating_add(blocks * BLOCK_BYTES);
+        }
+    }
+
+    fn tree(&mut self, root: &Path) {
+        let stop = self.stop;
+        let mut device = None;
+        let outcome = tree::walk(root, false, |stat| {
+            if *device.get_or_insert(tree::identity(stat).0) != tree::identity(stat).0 {
+                self.usage.foreign = true;
+                return false;
+            }
+            self.count(
+                tree::identity(stat),
+                u64::try_from(stat.st_blocks).unwrap_or(0),
+            );
+            !stop.load(Ordering::Relaxed)
+        });
+        if outcome.is_err() {
+            self.usage.hidden = true;
+        }
+    }
+
+    fn held(&mut self, process: &Path) {
+        for directory in HELD_DIRECTORIES {
+            let Ok(entries) = std::fs::read_dir(process.join(directory)) else {
                 continue;
             };
-            total += counted(&metadata, seen);
-            if metadata.is_dir() {
-                pending.push(entry.path());
+            for entry in entries.flatten() {
+                let Ok(target) = std::fs::read_link(entry.path()) else {
+                    continue;
+                };
+                if !target.to_string_lossy().ends_with(" (deleted)") {
+                    continue;
+                }
+                match std::fs::metadata(entry.path()) {
+                    Ok(metadata) if metadata.is_file() && metadata.nlink() == 0 => {
+                        self.count(
+                            (i128::from(metadata.dev()), i128::from(metadata.ino())),
+                            metadata.blocks(),
+                        );
+                    }
+                    Err(_)
+                        if target.is_absolute()
+                            && !target.to_string_lossy().starts_with("/memfd:") =>
+                    {
+                        self.usage.hidden = true;
+                    }
+                    _ => {}
+                }
             }
         }
     }
-    total
-}
 
-fn deleted_and_open(cgroup: &Path, seen: &mut Seen) -> u64 {
-    let Ok(members) = std::fs::read_to_string(cgroup.join("cgroup.procs")) else {
-        return 0;
-    };
-    let mut total = 0;
-    for pid in members.lines() {
-        let descriptors = Path::new("/proc").join(pid).join("fd");
-        let Ok(entries) = std::fs::read_dir(&descriptors) else {
-            continue;
+    fn deleted_and_open(&mut self, cgroup: &Path) {
+        let Ok(members) = std::fs::read_to_string(cgroup.join("cgroup.procs")) else {
+            return;
         };
-        for entry in entries.flatten() {
-            let held_deleted = std::fs::read_link(entry.path())
-                .is_ok_and(|target| target.to_string_lossy().ends_with(" (deleted)"));
-            if !held_deleted {
-                continue;
-            }
-            if let Ok(metadata) = std::fs::metadata(entry.path())
-                && metadata.is_file()
-                && metadata.nlink() == 0
-            {
-                total += counted(&metadata, seen);
-            }
+        for pid in members.lines() {
+            self.held(&Path::new("/proc").join(pid));
         }
     }
-    total
 }
 
-pub(super) fn used(directories: &[&Path], cgroup: &Path) -> u64 {
-    let mut seen = Seen::new();
-    directories
-        .iter()
-        .map(|directory| tree(directory, &mut seen))
-        .sum::<u64>()
-        + deleted_and_open(cgroup, &mut seen)
+pub(super) fn used(directories: &[&Path], cgroup: &Path, stop: &AtomicBool) -> Usage {
+    let mut tally = Tally {
+        seen: Seen::new(),
+        usage: Usage::default(),
+        stop,
+    };
+    for directory in directories {
+        tally.tree(directory);
+    }
+    tally.deleted_and_open(cgroup);
+    tally.usage
 }
 
 pub(super) fn limit_bytes(limit_gib: u64) -> u64 {
     limit_gib.saturating_mul(GIB)
 }
 
-pub(super) fn overage(used: u64, limit_gib: u64) -> Option<String> {
-    (used > limit_bytes(limit_gib)).then(|| {
-        format!(
-            "velnor: job used {} GiB of disk; the limit is {limit_gib} GiB",
-            used / GIB
-        )
-    })
+pub(super) fn overage(usage: Usage, limit_gib: u64) -> Option<String> {
+    let gib = usage.bytes / GIB;
+    if usage.bytes > limit_bytes(limit_gib) {
+        Some(format!(
+            "velnor: job used {gib} GiB of disk; the limit is {limit_gib} GiB"
+        ))
+    } else {
+        usage.hidden.then(|| {
+            format!(
+                "velnor: job used {gib} GiB of disk and hid files from its accounting; the limit is {limit_gib} GiB"
+            )
+        })
+    }
 }

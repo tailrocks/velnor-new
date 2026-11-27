@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 
 pub(crate) const UID: u32 = 5001;
 pub(crate) const GID: u32 = 5002;
@@ -14,6 +15,8 @@ pub(crate) const RUNNER: &str = env!("CARGO_BIN_EXE_velnor-runner");
 pub(crate) struct Sandbox {
     pub(crate) reservation: u64,
     arguments: Vec<String>,
+    jit: Option<String>,
+    user: (u32, u32, String),
 }
 
 pub(crate) fn require_live_environment() {
@@ -34,13 +37,29 @@ impl Sandbox {
             }) % 1_000_000;
         Self {
             reservation,
-            arguments: Vec::new(),
+            arguments: vec!["--machine-floor-gib".to_owned(), "0".to_owned()],
+            jit: None,
+            user: (UID, GID, HOME.to_owned()),
         }
     }
 
+    pub(crate) fn running_as(mut self, uid: u32, gid: u32, home: &str) -> Self {
+        self.user = (uid, gid, home.to_owned());
+        self
+    }
+
+    pub(crate) fn with_jit(mut self, jit: &str) -> Self {
+        self.jit = Some(jit.to_owned());
+        self
+    }
+
     pub(crate) fn with(mut self, flag: &str, value: &str) -> Self {
-        self.arguments.push(flag.to_owned());
-        self.arguments.push(value.to_owned());
+        if let Some(at) = self.arguments.iter().position(|argument| argument == flag) {
+            value.clone_into(&mut self.arguments[at + 1]);
+        } else {
+            self.arguments.push(flag.to_owned());
+            self.arguments.push(value.to_owned());
+        }
         self
     }
 
@@ -55,19 +74,39 @@ impl Sandbox {
         process
             .args(["sandbox", "--profile", "job", "--reservation"])
             .arg(self.reservation.to_string())
-            .args(["--uid", &UID.to_string(), "--gid", &GID.to_string()])
-            .args(["--home", HOME])
+            .args(["--uid", &self.user.0.to_string()])
+            .args(["--gid", &self.user.1.to_string()])
+            .args(["--home", &self.user.2])
             .arg("--work-dir")
             .arg(self.work_dir())
             .args(&self.arguments)
+            .args(self.jit.iter().map(|_| "--jit-stdin"))
             .arg("--")
             .args(command)
-            .stdin(Stdio::null());
+            .stdin(if self.jit.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         process
     }
 
+    pub(crate) fn spawn(&self, command: &[&str]) -> Option<Child> {
+        let mut child = self.command(command).spawn().ok()?;
+        if let (Some(jit), Some(mut stdin)) = (&self.jit, child.stdin.take()) {
+            stdin.write_all(jit.as_bytes()).ok()?;
+        }
+        Some(child)
+    }
+
     pub(crate) fn run(&self, command: &[&str]) -> Output {
-        unstarted(self.command(command).output())
+        unstarted(
+            self.spawn(command)
+                .ok_or_else(|| std::io::Error::other("the sandbox did not start"))
+                .and_then(Child::wait_with_output),
+        )
     }
 
     pub(crate) fn shell(&self, script: &str) -> Output {
@@ -104,3 +143,61 @@ pub(crate) fn failed(output: &Output) -> String {
     );
     text(output)
 }
+
+pub(crate) fn cgroup(sandbox: &Sandbox) -> PathBuf {
+    PathBuf::from(format!("/sys/fs/cgroup/velnor/job-{}", sandbox.reservation))
+}
+
+pub(crate) fn processes_running(program: &str, argument: &str) -> usize {
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            std::fs::read(entry.path().join("cmdline")).is_ok_and(|bytes| {
+                let mut parts = bytes.split(|byte| *byte == 0);
+                parts.next() == Some(program.as_bytes())
+                    && parts.next() == Some(argument.as_bytes())
+            })
+        })
+        .count()
+}
+
+pub(crate) fn wait_until(mut condition: impl FnMut() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !condition() {
+        if std::time::Instant::now() > deadline {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    true
+}
+
+pub(crate) fn joined(sandbox: &Sandbox) -> bool {
+    wait_until(|| {
+        std::fs::read_to_string(cgroup(sandbox).join("cgroup.procs"))
+            .is_ok_and(|procs| !procs.trim().is_empty())
+    })
+}
+
+pub(crate) fn cleanup(sandbox: &Sandbox) -> Output {
+    unstarted(
+        Command::new(RUNNER)
+            .args(["sandbox-cleanup", "--reservation"])
+            .arg(sandbox.reservation.to_string())
+            .output(),
+    )
+}
+
+pub(crate) fn nothing_left(sandbox: &Sandbox) -> bool {
+    !cgroup(sandbox).exists()
+        && !Path::new(&format!("/run/netns/velnor-job-{}", sandbox.reservation)).exists()
+        && !sandbox.work_dir().exists()
+        && !Path::new(GENERATIONS)
+            .join("stage")
+            .join(sandbox.reservation.to_string())
+            .exists()
+}
+
+pub(crate) const BTRFS_IOCTL: &str = "import ctypes, os, struct, sys\nlibc = ctypes.CDLL(None, use_errno=True)\nfd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)\nbuffer = ctypes.create_string_buffer(struct.pack('q4088s', 0, sys.argv[3].encode()))\nstatus = libc.ioctl(fd, ctypes.c_ulong(int(sys.argv[2], 16)), buffer)\nprint('created' if status == 0 else ctypes.get_errno())\n";

@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{jit_name, reservation};
+use super::checks::{guest_work_entries, jit_name, reservation};
 use super::events::{process_exists, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -74,7 +74,7 @@ pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
         !world.gh("session.delete").is_empty(),
         "the session was never closed"
     );
-    assert_eq!(std::fs::read_dir(world.store.join("work"))?.count(), 0);
+    assert_eq!(guest_work_entries(&world), 0);
     Ok(())
 }
 

@@ -43,17 +43,33 @@ fn a_scope_outside_the_cache_and_git_stores_is_refused_before_anything_starts() 
 }
 
 #[test]
-fn the_jit_file_is_standard_input_and_no_other_descriptor_leaks() {
-    let jit = Path::new("/run/velnor-live-jit");
-    assert!(std::fs::write(jit, "jit-secret\n").is_ok());
-    let sandbox = Sandbox::new("jit").with("--jit", "/run/velnor-live-jit");
+fn the_jit_reaches_the_command_once_through_a_pipe_and_leaves_no_file() {
+    let sandbox = Sandbox::new("jit").with_jit("jit-secret\n");
     let read = succeeded(&sandbox.run(&["/bin/cat"]));
     assert_eq!(read, "jit-secret\n");
+    let again = succeeded(&sandbox.shell("cat; cat /proc/$$/fd/0; echo end"));
+    assert_eq!(
+        again, "jit-secret\nend\n",
+        "a second read found the JIT again"
+    );
     let descriptors = succeeded(&sandbox.shell("ls /proc/self/fd | sort -n | tr '\\n' ' '"));
     assert_eq!(descriptors.trim(), "0 1 2 3", "{descriptors}");
-    let process = succeeded(&sandbox.shell("cat /proc/1/environ | tr '\\0' '\\n'"));
-    assert!(!process.contains("jit-secret"), "{process}");
-    let _ = std::fs::remove_file(jit);
+    let init = succeeded(&sandbox.shell(
+        "cat /proc/1/fd/0 2>&1; cat /proc/1/environ 2>&1; cat /proc/1/cmdline | tr '\\0' ' '",
+    ));
+    assert!(!init.contains("jit-secret"), "{init}");
+    assert!(
+        !std::path::Path::new("/run/velnor-live-jit").exists(),
+        "a JIT file exists"
+    );
+}
+
+#[test]
+fn a_jit_larger_than_the_bound_is_refused_before_anything_starts() {
+    let sandbox = Sandbox::new("jit-large").with_jit(&"x".repeat(70 * 1024));
+    let refusal = failed(&sandbox.run(&["/bin/true"]));
+    assert!(refusal.contains("empty or larger than"), "{refusal}");
+    assert!(!sandbox.work_dir().exists());
 }
 
 #[test]

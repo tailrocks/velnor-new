@@ -105,7 +105,7 @@ fn failed_jit(world: &World) -> TestResult<()> {
         events
             .iter()
             .filter(|event| event.is_runner_start())
-            .all(|event| !event.text.contains("/jit/1.jit")),
+            .all(|event| !event.text.contains("--reservation 1 ")),
         "a runner was started for offer A"
     );
     wait_for(

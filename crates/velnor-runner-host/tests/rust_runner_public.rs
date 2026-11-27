@@ -3,6 +3,8 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/jobs.rs"]
+mod jobs;
 #[path = "rust_runner_public/orb_calls.rs"]
 mod orb_calls;
 #[path = "rust_runner_public/removal.rs"]
@@ -13,13 +15,10 @@ mod store;
 mod support;
 
 use std::error::Error;
-use std::time::{Duration, Instant};
 
-use velnor_runner_host::{HostConfig, HostError, LaunchMode, RunningJob, RustRunnerFailure};
+use velnor_runner_host::{HostConfig, HostError, LaunchMode, RustRunnerFailure};
 
-use support::{
-    Fixture, SECRET_JIT, facts, jit, process_exists, reservation, runner_lines, wait_for,
-};
+use support::Fixture;
 
 #[test]
 fn rust_runner_creates_missing_machine() -> Result<(), Box<dyn Error>> {
@@ -88,144 +87,9 @@ fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>
     );
     assert!(fixture.log()?.contains(&expected), "{:?}", fixture.log()?);
     for name in [
-        "bin", "crates", "tools", "git", "gen", "cache", "records", "jit", "work",
+        "bin", "crates", "tools", "git", "gen", "cache", "records", "trusted",
     ] {
         assert!(fixture.store.join(name).is_dir(), "{name}");
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    let launcher = fixture.launcher();
-    let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"), &facts())?;
-    let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"), &facts())?;
-    assert!(first.wait().await?.success());
-    assert!(second.wait().await?.success());
-
-    let log = fixture.log()?;
-    let lines = runner_lines(&log);
-    assert_eq!(lines.len(), 2, "{log:?}");
-    assert!(
-        lines.contains(
-            &&"-m velnor -u root /var/lib/velnor/bin/velnor-runner sandbox --profile job --reservation 11 --uid 501 --gid 501 --home /home/live --work-dir /srv/velnor/gen/work/11 --jit /var/lib/velnor/jit/11.jit --trusted /var/lib/velnor/jit/11.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/11"
-                .to_owned()
-        ),
-        "{lines:?}"
-    );
-    assert!(
-        lines.contains(
-            &&"-m velnor -u root /var/lib/velnor/bin/velnor-runner sandbox --profile job --reservation 12 --uid 501 --gid 501 --home /home/live --work-dir /srv/velnor/gen/work/12 --jit /var/lib/velnor/jit/12.jit --trusted /var/lib/velnor/jit/12.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/12"
-                .to_owned()
-        ),
-        "{lines:?}"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.seen("11.jit"))?,
-        "first-jit"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.seen("12.jit"))?,
-        "second-jit"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.seen("11.jit.mode"))?.trim(),
-        "600"
-    );
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn rust_runner_writes_the_trusted_facts_the_runner_parses() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    let mut job = fixture
-        .launcher()
-        .start_job(reservation(13)?, &jit("jit"), &facts())?;
-    assert!(job.wait().await?.success());
-    assert_eq!(
-        std::fs::read(fixture.seen("13.trusted.json"))?,
-        std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../velnor-runner/tests/fixtures/trusted/pull_request.json"
-        ))?
-    );
-    assert!(!fixture.store.join("jit/13.trusted.json").exists());
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    let mut job = fixture
-        .launcher()
-        .start_job(reservation(21)?, &jit(SECRET_JIT), &facts())?;
-    assert!(job.wait().await?.success());
-
-    assert_eq!(std::fs::read_to_string(fixture.seen("21.jit"))?, SECRET_JIT);
-    assert!(
-        fixture.log()?.iter().all(|line| !line.contains(SECRET_JIT)),
-        "{:?}",
-        fixture.log()?
-    );
-    assert!(!std::fs::read_to_string(fixture.seen("21.jit.env"))?.contains(SECRET_JIT));
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>> {
-    let fixture =
-        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
-    fixture.configure("FAKE_RUNNER_EXIT=3\n")?;
-    let mut job = fixture
-        .launcher()
-        .start_job(reservation(31)?, &jit(SECRET_JIT), &facts())?;
-    let status = job.wait().await?;
-    assert_eq!(status.code(), Some(3));
-    assert!(!fixture.jit_file(31).exists());
-
-    fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
-    let job: RunningJob =
-        fixture
-            .launcher()
-            .start_job(reservation(32)?, &jit(SECRET_JIT), &facts())?;
-    let child_file = fixture.seen("32.jit.child");
-    wait_for(&child_file).await?;
-    let child = std::fs::read_to_string(&child_file)?.trim().to_owned();
-    assert!(fixture.jit_file(32).exists());
-    assert!(process_exists(&child));
-    job.stop().await?;
-    assert!(!fixture.jit_file(32).exists());
-    wait_until_dead(&child).await?;
-
-    let job = fixture
-        .launcher()
-        .start_job(reservation(33)?, &jit(SECRET_JIT), &facts())?;
-    let pid_file = fixture.seen("33.jit.pid");
-    wait_for(&pid_file).await?;
-    wait_for(&fixture.seen("33.jit.child")).await?;
-    let pid = std::fs::read_to_string(&pid_file)?.trim().to_owned();
-    assert!(fixture.jit_file(33).exists());
-    drop(job);
-    wait_until_dead(&pid).await?;
-    assert!(!fixture.jit_file(33).exists());
-    let orphan = std::fs::read_to_string(fixture.seen("33.jit.child"))?
-        .trim()
-        .to_owned();
-    std::process::Command::new("kill").arg(&orphan).status()?;
-    wait_until_dead(&orphan).await
-}
-
-async fn wait_until_dead(pid: &str) -> Result<(), Box<dyn Error>> {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while process_exists(pid) {
-        if Instant::now() > deadline {
-            return Err(format!("process {pid} survived").into());
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
     }
     Ok(())
 }
@@ -373,16 +237,6 @@ fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
         .err(),
         Some(HostError::PlatformSelector)
     );
-}
-
-#[test]
-fn rust_runner_removes_a_tree_deeper_than_its_descriptor_limit() -> Result<(), Box<dyn Error>> {
-    removal::deep_tree_under_a_small_descriptor_limit()
-}
-
-#[test]
-fn rust_runner_removes_directories_its_owner_cannot_open() -> Result<(), Box<dyn Error>> {
-    removal::directories_the_owner_cannot_open()
 }
 
 #[test]

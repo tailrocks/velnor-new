@@ -155,7 +155,7 @@ fn assert_outcome(world: &World) {
     assert!(
         runners[0]
             .text
-            .contains(&format!("/var/lib/velnor/jit/{sentinel}.jit")),
+            .contains(&format!("--reservation {sentinel} ")),
         "{}",
         runners[0].text
     );

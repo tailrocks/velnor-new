@@ -1,44 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::File;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::{ExitCode, ExitStatus, Stdio};
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use tokio::signal::unix::{Signal, SignalKind, signal};
-use tokio::time::{MissedTickBehavior, interval};
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
 
 use super::args::SandboxArgs;
 use super::cgroup::Cgroup;
+use super::jit::Jit;
 use super::trusted::Header;
-use super::{Layout, dirs, disk};
+use super::watch::{Breach, Limits, WATCH_EVERY, Watch};
+use super::{Layout, cleanup, dirs, net};
 
 const SETPRIV: &str = "/usr/bin/setpriv";
+const NSENTER: &str = "/usr/bin/nsenter";
 const UNSHARE: &str = "/usr/bin/unshare";
 const KILLED_BASE: u8 = 128;
-const DISK_LIMIT_EXIT: u8 = 125;
-const WATCH_EVERY: Duration = Duration::from_secs(1);
+const BREACH_EXIT: u8 = 125;
 
 pub(super) fn chain(layout: &Layout, runner: &Path, command: &[String]) -> Result<Vec<String>> {
-    let mut argv: Vec<String> = [
-        "--pdeathsig",
-        "KILL",
-        "--",
-        UNSHARE,
-        "--mount",
-        "--pid",
-        "--fork",
-        "--kill-child",
-        "--propagation",
-        "private",
-        "--",
-    ]
-    .iter()
-    .map(|part| (*part).to_owned())
-    .collect();
+    let mut argv: Vec<String> = ["--pdeathsig", "KILL", "--", NSENTER]
+        .iter()
+        .map(|part| (*part).to_owned())
+        .collect();
+    argv.push(format!("--net={}", layout.netns.display()));
+    argv.extend(
+        [
+            "--",
+            UNSHARE,
+            "--mount",
+            "--pid",
+            "--ipc",
+            "--uts",
+            "--fork",
+            "--kill-child",
+            "--propagation",
+            "private",
+            "--",
+        ]
+        .iter()
+        .map(|part| (*part).to_owned()),
+    );
     argv.push(runner.display().to_string());
     argv.extend(["sandbox-apply".to_owned(), "--layout".to_owned()]);
     argv.push(serde_json::to_string(layout).context("serialize the sandbox layout")?);
@@ -82,32 +88,21 @@ impl Interrupts {
     }
 }
 
-async fn watch(layout: &Layout, cgroup: &Cgroup, limit_gib: u64) -> Option<u64> {
-    let directories = [layout.work_dir.clone(), layout.stage_dir.clone()];
-    let held = cgroup.path().to_path_buf();
-    let used = tokio::task::spawn_blocking(move || {
-        let directories: Vec<&Path> = directories
-            .iter()
-            .map(std::path::PathBuf::as_path)
-            .collect();
-        disk::used(&directories, &held)
-    })
-    .await
-    .ok()?;
-    (used > disk::limit_bytes(limit_gib)).then_some(used)
-}
-
 struct Finished {
     status: ExitStatus,
-    overage: Option<u64>,
+    breach: Option<Breach>,
 }
 
-async fn launch(args: &SandboxArgs, layout: &Layout, cgroup: &Cgroup) -> Result<Finished> {
+async fn launch(
+    args: &SandboxArgs,
+    layout: &Layout,
+    cgroup: &Cgroup,
+    jit: Option<Jit>,
+) -> Result<Finished> {
     dirs::prepare(layout)?;
-    let stdin = match &args.jit {
-        Some(path) => Stdio::from(
-            File::open(path).with_context(|| format!("open the JIT file {}", path.display()))?,
-        ),
+    net::up(args.reservation)?;
+    let stdin = match jit {
+        Some(jit) => Stdio::from(jit.pipe()?),
         None => Stdio::null(),
     };
     let runner = std::env::current_exe().context("find the runner binary")?;
@@ -119,14 +114,19 @@ async fn launch(args: &SandboxArgs, layout: &Layout, cgroup: &Cgroup) -> Result<
         .kill_on_drop(true)
         .spawn()
         .context("start the sandbox")?;
-    let mut ticker = interval(WATCH_EVERY);
+    let limits = Limits {
+        disk_gib: args.disk_limit_gib,
+        floor_gib: args.machine_floor_gib,
+    };
+    let mut ticker = interval_at(Instant::now() + WATCH_EVERY, WATCH_EVERY);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut watch = Watch::new();
     let mut asked = false;
-    let mut overage = None;
+    let mut breach = None;
     loop {
         tokio::select! {
             status = child.wait() => {
-                return Ok(Finished { status: status.context("wait for the sandbox")?, overage });
+                return Ok(Finished { status: status.context("wait for the sandbox")?, breach });
             }
             () = interrupts.next() => {
                 if asked {
@@ -136,9 +136,11 @@ async fn launch(args: &SandboxArgs, layout: &Layout, cgroup: &Cgroup) -> Result<
                     cgroup.terminate();
                 }
             }
-            _ = ticker.tick(), if overage.is_none() => {
-                overage = watch(layout, cgroup, args.disk_limit_gib).await;
-                if overage.is_some() {
+            _ = ticker.tick() => {
+                if breach.is_none() {
+                    breach = watch.poll(layout, cgroup, &limits);
+                }
+                if breach.is_some() {
                     cgroup.kill();
                 }
             }
@@ -155,20 +157,18 @@ pub async fn run(args: &SandboxArgs) -> Result<ExitCode> {
             Header::read(path)?.describe()
         );
     }
+    let jit = args
+        .jit_stdin
+        .then(|| Jit::read(std::io::stdin().lock()))
+        .transpose()?;
     let layout = dirs::layout(args)?;
     let cgroup = Cgroup::create(layout.cgroup.clone())?;
-    let outcome = launch(args, &layout, &cgroup).await;
-    let removed = cgroup.remove();
-    for left in dirs::discard(&layout) {
-        eprintln!("velnor sandbox: could not remove {}", left.display());
-    }
-    removed?;
+    let outcome = launch(args, &layout, &cgroup, jit).await;
+    cleanup::reservation(args.reservation)?;
     let finished = outcome?;
-    if let Some(used) = finished.overage
-        && let Some(message) = disk::overage(used, args.disk_limit_gib)
-    {
-        eprintln!("{message}");
-        return Ok(ExitCode::from(DISK_LIMIT_EXIT));
+    if let Some(breach) = finished.breach {
+        eprintln!("{}", breach.message(args.disk_limit_gib));
+        return Ok(ExitCode::from(BREACH_EXIT));
     }
     Ok(exit_code(finished.status))
 }

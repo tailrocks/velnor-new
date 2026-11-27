@@ -54,8 +54,8 @@ pub enum RustRunnerFailure {
     #[error("velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine")]
     BinaryMissing,
 
-    #[error("the JIT file could not be written")]
-    JitFile,
+    #[error("the JIT could not be sent to the velnor machine")]
+    JitDelivery,
 
     #[error("the trusted facts of the job could not be written")]
     TrustedFile,
@@ -69,8 +69,8 @@ pub enum RustRunnerFailure {
     #[error("velnor-runner could not be waited for or stopped")]
     Wait,
 
-    #[error("the jit directory of the host store is readable by other users")]
-    JitDirectoryAccessible,
+    #[error("the trusted directory of the host store is readable by other users")]
+    TrustedDirectoryAccessible,
 
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,
@@ -93,7 +93,9 @@ pub enum RustRunnerFailure {
     #[error("a runner is still registered after its removal")]
     RunnerStillRegistered,
 
-    #[error("the job directory is still on the host store after its removal")]
+    #[error(
+        "files of the job are still on the host store or in the velnor machine after their removal"
+    )]
     JobFilesLeft,
 
     #[error(

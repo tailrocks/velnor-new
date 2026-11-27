@@ -1,36 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{MachineProcess, names_work_dir, parse_ps};
+use super::{MachineProcess, parse_ps};
 use crate::error::RustRunnerFailure;
-
-const WORK_DIR: &str = "/var/lib/velnor/work/1";
-
-#[test]
-fn processes_naming_work_dir() {
-    let matching = [
-        WORK_DIR,
-        "/var/lib/velnor/work/1/repo",
-        "--work-dir=/var/lib/velnor/work/1/x",
-        "--work-dir=/var/lib/velnor/work/1",
-        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/1.jit --work-dir /var/lib/velnor/work/1",
-        "sh -c cd /var/lib/velnor/work/1/repo",
-    ];
-    for args in matching {
-        assert!(names_work_dir(args, WORK_DIR), "{args}");
-    }
-    let other = [
-        "--work-dir=/var/lib/velnor/work/12",
-        "/var/lib/velnor/work/12",
-        "/var/lib/velnor/work/1x",
-        "/var/lib/velnor/bin/velnor-runner",
-        "/x/var/lib/velnor/work/1",
-        "",
-    ];
-    for args in other {
-        assert!(!names_work_dir(args, WORK_DIR), "{args}");
-    }
-}
 
 #[test]
 fn the_ps_parse_accepts_padded_pids_and_crlf_and_fails_closed() {

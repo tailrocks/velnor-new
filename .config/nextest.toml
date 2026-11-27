@@ -18,9 +18,23 @@ docker-networks = { max-threads = 4 }
 velnor-ci-serial = { max-threads = 1 }
 probe-cleanup-observer-serial = { max-threads = 1 }
 setup-action = { max-threads = 2 }
+sandbox-disk = { max-threads = 1 }
+sandbox-net = { max-threads = 1 }
 
 [profile.default]
 default-filter = 'not test(=audit::bounds::limit_env::a_tree_above_100000_entries_passes_under_the_default_limit)'
+
+[[profile.default.overrides]]
+filter = 'binary(sandbox_live) and test(~limits::)'
+test-group = 'sandbox-disk'
+
+[[profile.default.overrides]]
+filter = 'binary(sandbox_live) and test(~network::)'
+test-group = 'sandbox-net'
+
+[[profile.default.overrides]]
+filter = 'binary(sandbox_live) and (test(=cleanup::every_dead_sandbox_is_swept_with_its_cgroup_and_directories) or test(=limits::a_fork_bomb_is_contained_and_the_job_is_killed_cleanly) or test(=limits::a_tree_nested_200000_levels_deep_is_killed_and_removed_without_a_trace) or test(=start::the_sandbox_starts_in_under_100_ms_at_the_median))'
+threads-required = "num-cpus"
 
 [profile.slow]
 default-filter = 'test(=audit::bounds::limit_env::a_tree_above_100000_entries_passes_under_the_default_limit)'

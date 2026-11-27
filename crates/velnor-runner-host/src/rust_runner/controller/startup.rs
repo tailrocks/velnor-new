@@ -17,12 +17,12 @@ use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
 use crate::launch_blocking::ListenFault;
-use crate::rust_runner::{HostHold, RustRunnerLauncher};
+use crate::rust_runner::{GuestUser, HostHold, RustRunnerLauncher};
 
 const STARTUP_RETRY: Duration = Duration::from_secs(30);
 
 pub(super) enum Started {
-    Ready(Vec<Live>, HostHold),
+    Ready(Vec<Live>, HostHold, GuestUser),
     Shutdown,
     ConfigChanged,
 }
@@ -53,7 +53,7 @@ fn renew_held(step: Step, admin_age: Duration) -> Option<usize> {
 
 enum Done {
     Held(HostHold),
-    Machine,
+    Machine(GuestUser),
     Swept,
     Set(usize, Admin, i64),
     Renewed(usize, Admin),
@@ -101,8 +101,8 @@ pub(super) async fn start(
     shutdown: &mut Shutdown<'_>,
 ) -> Result<Started, ListenFault> {
     let mut pending = pending_connections(config, pats)?;
-    let (mut store_lock, mut machine, mut swept) = (None, false, false);
-    while let Some(step) = next_step(&pending, store_lock.is_some(), machine, swept) {
+    let (mut store_lock, mut guest, mut swept) = (None, None, false);
+    while let Some(step) = next_step(&pending, store_lock.is_some(), guest.is_some(), swept) {
         if config_changed(cx) {
             close_pending(&pending).await;
             return Ok(Started::ConfigChanged);
@@ -114,7 +114,7 @@ pub(super) async fn start(
         match outcome.value {
             Some(Ok(done)) => match done {
                 Done::Held(acquired) => store_lock = Some(acquired),
-                Done::Machine => machine = true,
+                Done::Machine(user) => guest = Some(user),
                 Done::Swept => swept = true,
                 Done::Set(index, admin, id) => {
                     pending[index].set = Some((admin, id));
@@ -174,7 +174,8 @@ pub(super) async fn start(
         live.push(connection.into_live()?);
     }
     let store_lock = store_lock.ok_or(HostError::Config)?;
-    Ok(Started::Ready(live, store_lock))
+    let guest = guest.ok_or(HostError::Config)?;
+    Ok(Started::Ready(live, store_lock, guest))
 }
 
 fn config_changed(cx: &Context) -> bool {
@@ -248,7 +249,7 @@ fn prepare(
         Step::Machine => Box::new(move || {
             launcher
                 .ensure_machine()
-                .map(|()| Done::Machine)
+                .map(Done::Machine)
                 .map_err(Into::into)
         }),
         Step::Sweep => Box::new(move || launcher.sweep().map(|()| Done::Swept).map_err(Into::into)),

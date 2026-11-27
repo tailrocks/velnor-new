@@ -55,24 +55,6 @@ struct Frame {
     parent: Stat,
 }
 
-pub(super) fn tree(
-    directory: &impl AsFd,
-    name: impl Arg + Copy,
-    bounds: Bounds,
-) -> Result<(), Removal> {
-    let stat = match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(stat) => stat,
-        Err(Errno::NOENT) => return Ok(()),
-        Err(error) => return Err(error.into()),
-    };
-    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory {
-        return Ok(remove_entry(directory, name)?);
-    }
-    let child = open_directory(directory, name)?;
-    contents(&child, bounds)?;
-    Ok(unlinkat(directory, name, AtFlags::REMOVEDIR)?)
-}
-
 pub(super) fn contents(root: &impl AsFd, bounds: Bounds) -> Result<(), Removal> {
     let mut path: Vec<Frame> = Vec::new();
     let mut current: Option<OwnedFd> = None;

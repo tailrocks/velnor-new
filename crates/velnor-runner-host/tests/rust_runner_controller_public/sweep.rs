@@ -7,12 +7,12 @@ use std::time::Instant;
 use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{assert_capacity, assert_clean, jit_name, reservation, snapshot};
+use super::checks::{assert_capacity, assert_clean, jit_name, reservation, snapshot, trusted_name};
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
-const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/99.jit --work-dir /var/lib/velnor/work/99\n4343 sleep 600\n";
+const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner sandbox --profile job --reservation 99 --work-dir /srv/velnor/gen/work/99\n4343 sleep 600\n";
 
 fn move_logs_aside(world: &World, run: &str) -> TestResult<()> {
     for name in ["requests", "seq"] {
@@ -32,22 +32,18 @@ fn move_logs_aside(world: &World, run: &str) -> TestResult<()> {
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T4", 1, true)?;
     std::fs::write(world.root.join("ps.table"), STALE_RUNNER)?;
-    std::fs::create_dir_all(world.store.join("jit"))?;
+    std::fs::create_dir_all(world.store.join("trusted"))?;
     std::fs::set_permissions(
-        world.store.join("jit"),
+        world.store.join("trusted"),
         std::fs::Permissions::from_mode(0o700),
     )?;
-    std::fs::create_dir_all(world.store.join("work/99"))?;
+    std::fs::write(world.store.join("trusted/99.json"), "stale")?;
     std::fs::set_permissions(
-        world.store.join("work"),
-        std::fs::Permissions::from_mode(0o700),
-    )?;
-    std::fs::write(world.store.join("jit/99.jit"), "stale")?;
-    std::fs::set_permissions(
-        world.store.join("jit/99.jit"),
+        world.store.join("trusted/99.json"),
         std::fs::Permissions::from_mode(0o600),
     )?;
-    std::fs::write(world.store.join("work/99/leftover"), "stale")?;
+    std::fs::create_dir_all(world.seen.join("guest/gen/work/99"))?;
+    std::fs::write(world.seen.join("guest/gen/work/99/leftover"), "stale")?;
     world.write_state(true, &[("velnor-mac-99", 90)])?;
     world.configure_orb("FAKE_ORB_PS_IMMORTAL=4242\n")?;
     world.queue_message(41, &[push_offer(1041, 1041, "main", WORKFLOW)])?;
@@ -166,22 +162,36 @@ fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
         table.contains("4343 sleep 600") && !table.contains("4242 "),
         "{table}"
     );
+    assert_swept(world, &events, kill, acquire);
     let state = snapshot(world, acquire);
-    assert!(
-        state
-            .jit
-            .iter()
-            .chain(&state.work)
-            .all(|name| !name.contains("99")),
-        "{state_jit:?}",
-        state_jit = state.jit
-    );
     let own = reservation(&world.gh("jit")[0]);
-    assert!(state.jit.iter().all(|name| name == &format!("{own}.jit")) || state.jit.is_empty());
+    assert!(
+        state.trusted.iter().all(|name| name == &trusted_name(own)) || state.trusted.is_empty()
+    );
     assert_capacity(world, "1");
     world.stop()?;
     assert_eq!(world.finish(10)?, "Ok(Shutdown)");
     Ok(())
+}
+
+fn assert_swept(world: &World, events: &[Event], kill: &Event, acquire: &Event) {
+    assert!(
+        events
+            .iter()
+            .any(|event| event.is_orb("sandbox-cleanup --all") && event.seq > kill.seq),
+        "the sweep did not clean the jobs of the machine"
+    );
+    let state = snapshot(world, acquire);
+    assert!(
+        state
+            .trusted
+            .iter()
+            .chain(&state.work)
+            .all(|name| !name.contains("99")),
+        "{:?} {:?}",
+        state.trusted,
+        state.work
+    );
 }
 
 fn release_after_polls(world: &mut World, test: &str) -> TestResult<()> {

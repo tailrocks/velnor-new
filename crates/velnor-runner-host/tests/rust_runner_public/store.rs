@@ -182,27 +182,25 @@ fn symlinked_directories() -> Check {
     let victim = fixture.root.join("victim");
     std::fs::create_dir(&victim)?;
     chmod(&victim, 0o700)?;
-    symlink(&victim, fixture.store.join("work"))?;
+    symlink(&victim, fixture.store.join("trusted"))?;
     assert!(
         fixture.launcher().ensure_machine().is_err(),
-        "a symlinked work directory"
+        "a symlinked trusted directory"
     );
     assert_eq!(
         std::fs::read_dir(&victim)?.count(),
         0,
-        "the target of a symlinked work directory must stay untouched"
+        "the target of a symlinked trusted directory must stay untouched"
     );
-    for name in ["work", "jit"] {
-        let fixture = fixture_with_directories()?;
-        let victim = fixture.root.join("victim");
-        std::fs::create_dir(&victim)?;
-        std::fs::write(victim.join("keep"), "")?;
-        let directory = fixture.store.join(name);
-        std::fs::remove_dir(&directory)?;
-        symlink(&victim, &directory)?;
-        assert!(fixture.launcher().sweep().is_err(), "{name}");
-        assert!(victim.join("keep").exists(), "{name}");
-    }
+    let fixture = fixture_with_directories()?;
+    let victim = fixture.root.join("victim");
+    std::fs::create_dir(&victim)?;
+    std::fs::write(victim.join("keep"), "")?;
+    let directory = fixture.store.join("trusted");
+    std::fs::remove_dir(&directory)?;
+    symlink(&victim, &directory)?;
+    assert!(fixture.launcher().sweep().is_err());
+    assert!(victim.join("keep").exists());
     Ok(())
 }
 
@@ -215,12 +213,13 @@ fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
 async fn acl_after_a_started_job() -> Check {
     let fixture = fixture_with_directories()?;
     let launcher = fixture.launcher();
-    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT), &facts())?;
+    let user = launcher.ensure_machine()?;
+    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT), &facts(), &user)?;
     assert!(job.wait().await?.success());
     add_acl(&fixture.store.join("bin/velnor-runner"))?;
     assert_eq!(
         launcher
-            .start_job(reservation(52)?, &jit(SECRET_JIT), &facts())
+            .start_job(reservation(52)?, &jit(SECRET_JIT), &facts(), &user)
             .err(),
         Some(refused(RustRunnerFailure::StoreUnsafe))
     );
@@ -229,7 +228,7 @@ async fn acl_after_a_started_job() -> Check {
 
 fn sweep_without_init() -> Check {
     let fixture = fixture_with_directories()?;
-    let planted = fixture.store.join("jit/99.jit");
+    let planted = fixture.store.join("trusted/99.json");
     std::fs::write(&planted, "stale")?;
     chmod(&planted, 0o600)?;
     std::fs::write(fixture.root.join("ps.table"), "")?;
