@@ -117,14 +117,23 @@ fn header() -> Result<String> {
 
 #[test]
 fn setup_velnor_renders_the_shell_of_its_step() -> Result<()> {
-    let probe = format!(
-        "{}  steps:\n    - name: Probe\n      shell: ${{{{ env.CHOSEN }}}}\n      run: echo \"opts=$SHELLOPTS\"\n",
-        header()?
-    );
-    for (chosen, pipefail) in [("bash", true), ("sh", false)] {
+    let probe = |inner: &str| {
+        Ok::<_, anyhow::Error>(format!(
+            "{}  steps:\n    - name: Probe\n      shell: ${{{{ env.CHOSEN }}}}\n{inner}      run: echo \"opts=$SHELLOPTS\"\n",
+            header()?
+        ))
+    };
+    let inherited = probe("")?;
+    let inner = |chosen: &str| probe(&format!("      env:\n        CHOSEN: {chosen}\n"));
+    for (action, outer, chosen, pipefail) in [
+        (inherited.clone(), "bash", "bash", true),
+        (inherited, "sh", "sh", false),
+        (inner("sh")?, "bash", "sh", false),
+        (inner("bash")?, "sh", "bash", true),
+    ] {
         let world = World::new()?;
-        let sha = world.publish_action(&probe)?;
-        let ran = world.run(&job(&world, &sha, &[("CHOSEN", chosen)])?, &[])?;
+        let sha = world.publish_action(&action)?;
+        let ran = world.run(&job(&world, &sha, &[("CHOSEN", outer)])?, &[])?;
         let opts = ran
             .stdout
             .lines()
@@ -165,16 +174,40 @@ fn setup_velnor_merges_the_env_of_its_step_before_rendering_it() -> Result<()> {
 }
 
 #[test]
-fn setup_velnor_supplies_the_action_path() -> Result<()> {
-    let world = World::new()?;
-    let action = real_action()?.replace(STEP_NAME, "- name: ${{ github.action_path }}");
-    let sha = world.publish_action(&action)?;
-    let ran = world.run(&job(&world, &sha, &[])?, &[])?;
-    let expected = format!(
-        "setup-velnor step: {}/actions/tailrocks/velnor-new/{sha}",
-        world.store.display()
-    );
-    ensure!(ran.has_line(&expected), "{expected}\n{}", ran.stdout);
+fn setup_velnor_refuses_a_step_that_reads_the_action_path() -> Result<()> {
+    let rows = [
+        ("name", STEP_NAME, "- name: ${{ Github.ACTION_PATH }}"),
+        ("shell", "shell: bash", "shell: ${{ github.action_path }}"),
+        (
+            "run",
+            "set -euo pipefail\n",
+            "set -euo pipefail\n        echo \"$GITHUB_ACTION_PATH\"\n",
+        ),
+        (
+            "env",
+            "VERSION: ${{ inputs.version }}",
+            "VERSION: ${{ inputs.version }}\n        HERE: ${{ github.action_path }}",
+        ),
+    ];
+    for (label, from, to) in rows {
+        let world = World::new()?;
+        let action = real_action()?.replace(from, to);
+        ensure!(action != real_action()?, "{label}");
+        let sha = world.publish_action(&action)?;
+        let ran = world.run(&job(&world, &sha, &[])?, &[])?;
+        let expected =
+            "unsupported: setup-velnor step that reads github.action_path or GITHUB_ACTION_PATH";
+        ensure!(
+            ran.has_line(expected) && ran.has_line("step 1 failed"),
+            "{label}: {expected}\n{}",
+            ran.stdout
+        );
+        ensure!(
+            !ran.stdout.contains("setup-velnor step:"),
+            "{label}\n{}",
+            ran.stdout
+        );
+    }
     Ok(())
 }
 

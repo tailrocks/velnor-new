@@ -160,6 +160,7 @@ mod native_mise_reprobe;
 mod native_mise_store;
 mod native_mise_values;
 mod native_setup_velnor;
+mod native_setup_velnor_admission;
 mod native_setup_velnor_contexts;
 mod protocol_broker;
 mod protocol_complete;

@@ -103,16 +103,6 @@ fn setup_velnor_rejects_a_reference_that_is_not_a_commit_sha() -> Result<()> {
 }
 
 #[test]
-fn setup_velnor_requires_its_required_input() -> Result<()> {
-    let world = World::new()?;
-    let sha = world.publish_action(&real_action()?)?;
-    let ran = world.run(&real_job(&world, "setup_velnor_no_version", &sha)?, &[])?;
-    assert_failed(&ran, "setup-velnor input 'version' is required");
-    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
-    Ok(())
-}
-
-#[test]
 fn setup_velnor_rejects_a_nested_uses() -> Result<()> {
     let world = World::new()?;
     let action = format!("{}    - uses: actions/checkout@v4\n", real_action()?);
@@ -282,12 +272,7 @@ fn setup_velnor_rejects_an_input_key_it_does_not_implement() -> Result<()> {
 #[test]
 fn setup_velnor_matches_input_names_case_insensitively() -> Result<()> {
     let world = World::new()?;
-    let action = real_action()?.replacen(
-        "inputs:\n",
-        "inputs:\n  install-args:\n    description: Extra install arguments.\n    default: ''\n",
-        1,
-    );
-    let sha = world.publish_action(&action)?;
+    let sha = world.publish_action(&real_action()?)?;
     let job = world.with_text(
         &job_fixture("setup_velnor_real_action"),
         &[
@@ -295,7 +280,7 @@ fn setup_velnor_matches_input_names_case_insensitively() -> Result<()> {
             ("\"lit\": \"version\"", "\"lit\": \"Version\""),
             (
                 "\"lit\": \"sha256-macos-arm64\"",
-                "\"lit\": \"Install-Args\"",
+                "\"lit\": \"SHA256-MACOS-ARM64\"",
             ),
         ],
     )?;

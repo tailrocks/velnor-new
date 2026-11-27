@@ -378,20 +378,3 @@ fn setup_velnor_expands_the_real_action_into_its_run_step() -> Result<()> {
     assert!(!ran.stdout.contains("unsupported"), "{}", ran.stdout);
     Ok(())
 }
-
-#[test]
-fn setup_velnor_rejects_unknown_input() -> Result<()> {
-    let world = World::new()?;
-    let sha = world.publish_action(&real_action()?)?;
-    let job = world.with_text(
-        &job_fixture("setup_velnor_bad_input"),
-        &[(SHA_PLACEHOLDER, &sha)],
-    )?;
-    let ran = world.run(&job, &[])?;
-    assert_failed(
-        &ran,
-        "unsupported: setup-velnor input 'bogus' is not supported by velnor-runner",
-    );
-    assert!(!ran.stdout.contains("setup-velnor step:"), "{}", ran.stdout);
-    Ok(())
-}

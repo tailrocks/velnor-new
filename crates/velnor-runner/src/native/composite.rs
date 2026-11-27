@@ -16,6 +16,13 @@ use crate::store::store_root;
 const PREFIX: &str = "tailrocks/velnor-new/actions/setup-velnor@";
 const ACTION_PATH: &str = "actions/setup-velnor/action.yml";
 const OWNER_REPOSITORY: &str = "tailrocks/velnor-new";
+const INPUTS: [&str; 4] = [
+    "version",
+    "sha256-linux-x64",
+    "sha256-linux-arm64",
+    "sha256-macos-arm64",
+];
+const ACTION_PATH_NAME: &str = "action_path";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,7 +144,6 @@ pub(crate) fn expand(
     action_yml: &str,
     inputs: &BTreeMap<String, String>,
     outer: &ExprEnv,
-    action_path: &str,
 ) -> Result<Vec<ExpandedStep>, ExecError> {
     let action: Action = serde_saphyr::from_str(action_yml)
         .map_err(|error| ExecError::Invalid(format!("setup-velnor action.yml: {error}")))?;
@@ -157,10 +163,6 @@ pub(crate) fn expand(
         RootContext::Steps,
         &ContextValue::object(Vec::new()).map_err(|error| ExecError::Invalid(error.to_string()))?,
     );
-    env.merge_strings(
-        RootContext::Github,
-        &[("action_path".to_owned(), action_path.to_owned())],
-    );
     env.withhold(RootContext::Secrets);
     env.withhold(RootContext::Needs);
     let mut steps = Vec::new();
@@ -175,6 +177,16 @@ pub(crate) fn expand(
                 "a setup-velnor step needs both run and shell".to_owned(),
             ));
         };
+        let reads_action_path = [raw.name.as_deref(), Some(shell), Some(script)]
+            .into_iter()
+            .flatten()
+            .chain(raw.env.values().map(String::as_str))
+            .any(|text| text.to_ascii_lowercase().contains(ACTION_PATH_NAME));
+        if reads_action_path {
+            return Err(ExecError::Unsupported(
+                "setup-velnor step that reads github.action_path or GITHUB_ACTION_PATH".to_owned(),
+            ));
+        }
         let step_env: Vec<(String, String)> = raw
             .env
             .iter()
@@ -224,10 +236,31 @@ pub(super) struct SetupVelnor {
     pub(super) facts: Result<TrustedFacts, String>,
 }
 
+fn require_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), ExecError> {
+    if let Some(name) = inputs
+        .keys()
+        .find(|name| !INPUTS.contains(&name.to_ascii_lowercase().as_str()))
+    {
+        return Err(ExecError::Unsupported(format!(
+            "setup-velnor input '{name}' is not supported by velnor-runner"
+        )));
+    }
+    if !inputs
+        .keys()
+        .any(|name| name.eq_ignore_ascii_case("version"))
+    {
+        return Err(ExecError::Invalid(
+            "setup-velnor input 'version' is required".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 impl SetupVelnor {
     fn accepted<'a>(
         &'a self,
         reference: &'a str,
+        inputs: &BTreeMap<String, InputValue>,
     ) -> Result<(&'a TrustedFacts, &'a str), ExecError> {
         let facts = self
             .facts
@@ -245,6 +278,7 @@ impl SetupVelnor {
         }
         let sha = reference.strip_prefix(PREFIX).unwrap_or(reference);
         require_commit_sha(sha)?;
+        require_inputs(inputs)?;
         Ok((facts, sha))
     }
 }
@@ -254,30 +288,25 @@ impl StepAdapter for SetupVelnor {
         reference.starts_with(PREFIX)
     }
 
-    fn problem(&self, reference: &str, _inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        self.accepted(reference).err().map(super::reason)
+    fn problem(&self, reference: &str, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
+        self.accepted(reference, inputs).err().map(super::reason)
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
             let reference = ctx.reference.clone();
-            let (facts, sha) = self.accepted(&reference)?;
-            let given = ctx
+            let given: BTreeMap<String, String> = ctx
                 .inputs
                 .iter()
                 .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();
+            let admitted = given
+                .iter()
+                .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
+                .collect();
+            let (facts, sha) = self.accepted(&reference, &admitted)?;
             let yml = pinned_action_yml(ctx, facts, sha).await?;
-            let action_path = store_root()
-                .join("actions")
-                .join(OWNER_REPOSITORY)
-                .join(sha);
-            let steps = expand(
-                &yml,
-                &given,
-                &ctx.expressions,
-                &action_path.to_string_lossy(),
-            )?;
+            let steps = expand(&yml, &given, &ctx.expressions)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));
                 let result = ctx.run_script(&step.script, &step.shell, &step.env).await?;

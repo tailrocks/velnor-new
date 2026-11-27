@@ -29,7 +29,7 @@ use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
 use crate::exec::{
     AdapterRegistry, ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture,
-    StepResult,
+    StepResult, append,
 };
 use crate::store::store_root;
 
@@ -42,17 +42,6 @@ pub(super) fn register(registry: &mut AdapterRegistry, facts: Result<TrustedFact
         facts: facts.clone(),
     }));
     registry.register(Box::new(SetupVelnor { facts }));
-}
-
-async fn append(path: &str, text: &str) -> Result<(), ExecError> {
-    use tokio::io::AsyncWriteExt;
-    let io = |source| ExecError::io(format!("write {path}"), source);
-    let mut file = tokio::fs::OpenOptions::new()
-        .append(true)
-        .open(path)
-        .await
-        .map_err(io)?;
-    file.write_all(text.as_bytes()).await.map_err(io)
 }
 
 fn env_command(name: &str, value: &str) -> String {
@@ -274,8 +263,12 @@ async fn export(
         }
     }
     install.require_read_only(false).await?;
-    append(&github_path, &(paths.join("\n") + "\n")).await?;
-    append(&github_env, &variables).await
+    append(
+        Path::new(&github_path),
+        (paths.join("\n") + "\n").as_bytes(),
+    )
+    .await?;
+    append(Path::new(&github_env), variables.as_bytes()).await
 }
 
 async fn mise_action(
