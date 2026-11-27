@@ -39,7 +39,7 @@ kingfisher = "v2.20.0"
 betterleaks = "v1.10.1"
 gitleaks = "8.30.1"
 rumdl = "v0.3.6"
-cargo-deny = "0.22.1"
+cargo-deny = "0.22.2"
 "github:bnjbvr/cargo-machete" = "v0.10.1"
 opentofu = "1.13.10"
 # Release PRs and tags: release-plz.toml at the repository root (the tools and
