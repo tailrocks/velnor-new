@@ -43,6 +43,7 @@ fn runs_of(
         &tracked(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     )
     .into_iter()
     .map(|(slug, run)| (slug.to_string(), run))
@@ -127,6 +128,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
             &tracked(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -150,6 +152,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
         &tracked(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
@@ -168,6 +171,7 @@ fn the_declared_config_and_probe_of_a_lint_count_as_its_inputs() -> TestResult {
             &tracked(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -192,6 +196,7 @@ fn a_tracked_symlink_that_an_input_or_implicit_file_reaches_runs_the_lint() -> T
             &tracked(),
             &links,
             &BTreeMap::new(),
+            &BTreeSet::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
@@ -230,6 +235,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
             &tracked(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         );
         assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true], "{path}");
     }
@@ -241,6 +247,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
         &tracked(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
@@ -261,6 +268,7 @@ fn a_plain_path_input_covers_everything_below_it_and_a_dead_list_runs_the_lint()
                 tracked,
                 &BTreeSet::new(),
                 &BTreeMap::new(),
+                &BTreeSet::new(),
             );
             Ok(*runs.values().next().ok_or("no decision")?)
         };
@@ -283,6 +291,7 @@ fn a_file_named_like_the_prefix_of_a_trailing_glob_is_not_a_tracked_input() -> T
         &changed(&["cfg", "src/lib.rs"])?,
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true]);
     Ok(())

@@ -13,7 +13,7 @@ use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML};
 
-fn is_generator(member: &RustMember) -> bool {
+pub(crate) fn is_generator(member: &RustMember) -> bool {
     member.name.as_str() == GENERATOR_PACKAGE
         && member.targets.iter().any(|target| {
             target.name.as_str() == GENERATOR_PACKAGE

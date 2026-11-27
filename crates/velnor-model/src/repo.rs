@@ -120,6 +120,7 @@ pub struct RepoFacts {
     /// The inputs lock names packages by manifest, which only a velnor-ci that knows the third
     /// column can read.
     pub inputs_lock_identified: bool,
+    pub generator_unmodelled: bool,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,

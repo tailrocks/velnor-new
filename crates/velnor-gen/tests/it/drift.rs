@@ -308,3 +308,17 @@ fn each_generated_header_names_its_own_config() {
         first.contains(".velnor/rust-ci.toml") && first.contains("velnor-gen generate")
     }));
 }
+
+#[test]
+fn the_externals_list_of_this_repository_covers_the_generator_closure() -> TestResult {
+    let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
+    let view = committed_view(&root)?;
+    let (missing, stale) = velnor_rust::externals_drift(&view, &RepoPath::new("Cargo.toml")?)
+        .ok_or("Cargo.lock is missing or unreadable")?;
+    assert!(
+        missing.is_empty() && stale.is_empty(),
+        ".velnor/generator-externals.lock is out of date; missing: {missing:?}; stale: {stale:?}"
+    );
+    assert!(!velnor_rust::detect(&view)?.generator_unmodelled);
+    Ok(())
+}

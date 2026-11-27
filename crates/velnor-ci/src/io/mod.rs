@@ -19,6 +19,7 @@ pub mod cache_purge;
 mod cache_sources;
 mod cache_target_link;
 mod cache_upload;
+mod changes;
 mod cold;
 mod configurations;
 mod crates_mirror;
