@@ -177,11 +177,13 @@ fn setup_velnor_without_checkout_fetches_pinned_commit() -> Result<()> {
     assert!(cold.mirror_has(&pinned));
     assert_eq!(rig.fetches(), 1);
     assert_eq!(cold.trusted_refs()?, "");
+    assert_eq!(cold.mirror_refs()?, "");
     let next = rig.advance("third")?;
     let second = cold.run_job(&cold.job_at(&pinned, &next)?)?;
     assert_eq!(second.code, Some(0), "{}\n{}", second.stdout, second.stderr);
     assert!(second.has_line(RAN), "{}", second.stdout);
     assert_eq!(rig.fetches(), 2);
+    assert_eq!(cold.mirror_refs()?, "");
     Ok(())
 }
 
