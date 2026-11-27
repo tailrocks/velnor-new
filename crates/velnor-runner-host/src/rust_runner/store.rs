@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, chmodat, fchmod, flock, fstat, fsync, mkdirat,
-    openat, renameat, statat, unlinkat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, fchmod, flock, fstat, fsync, mkdirat, openat,
+    renameat, statat, unlinkat,
 };
 use rustix::io::Errno;
 use rustix::path::Arg;
@@ -138,7 +138,7 @@ impl Store {
             Ok(descriptor) => descriptor,
             Err(Errno::NOENT) => self.create_directory(name)?,
             Err(Errno::ACCESS) => {
-                chmodat(&self.root, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)
+                remove::make_owner_accessible(&self.root, name)
                     .map_err(|_| failure(RustRunnerFailure::HostStore))?;
                 openat(&self.root, name, directory_flags(), Mode::empty())
                     .map_err(|_| failure(RustRunnerFailure::HostStore))?

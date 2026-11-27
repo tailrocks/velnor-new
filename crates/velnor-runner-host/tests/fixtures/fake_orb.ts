@@ -198,6 +198,17 @@ function listProcesses(): never {
       finish(1);
     }
   }
+  if (setting("FAKE_ORB_PS_ENDLESS") !== "") {
+    const chunk = `${"x".repeat(262143)}\n`;
+    try {
+      for (;;) {
+        writeSync(1, chunk);
+        Bun.sleepSync(5);
+      }
+    } catch {
+      finish(1);
+    }
+  }
   const lines = [
     ...(setting("FAKE_ORB_PS_NO_INIT") === "" ? ["1 /sbin/init\n"] : []),
     ...(existsSync(table) ? [readFileSync(table, "utf8")] : []),
