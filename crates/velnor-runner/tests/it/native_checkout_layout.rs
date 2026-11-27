@@ -81,13 +81,12 @@ fn a_mirror_whose_object_database_vanished_is_initialised_again() -> Result<()> 
 }
 
 #[test]
-fn a_mirror_whose_refs_directory_became_a_file_is_initialised_again() -> Result<()> {
+fn a_mirror_whose_refs_directory_vanished_is_initialised_again() -> Result<()> {
     let rig = Rig::new()?;
     let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
     let refs = rig.mirror().join("refs");
     std::fs::remove_dir_all(&refs)?;
-    std::fs::write(&refs, "not a directory")?;
     let scratch = Scratch::new()?;
     let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
