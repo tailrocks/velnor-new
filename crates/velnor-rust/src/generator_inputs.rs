@@ -4,17 +4,44 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    CheckConfigurations, MemberDependency, PackageName, RepoFacts, RepoPath, RustCiConfig,
+    CheckConfigurations, MemberDependency, PackageName, RepoFacts, RepoPath, RustCiConfig, Target,
     TargetKind,
 };
 
 use crate::detect_checks::{generator_root, is_generator};
+use crate::select::relative;
 use crate::select_paths::contains;
 
 struct Node<'a> {
     name: &'a PackageName,
+    manifest: &'a RepoPath,
     directory: Option<RepoPath>,
     dependencies: &'a [MemberDependency],
+    targets: Option<&'a [Target]>,
+}
+
+impl Node<'_> {
+    fn is_opaque(&self) -> bool {
+        self.targets.is_none_or(|targets| {
+            targets.iter().any(|target| {
+                target
+                    .kinds
+                    .iter()
+                    .any(|kind| matches!(kind, TargetKind::BuildScript | TargetKind::ProcMacro))
+            })
+        })
+    }
+
+    fn directories(&self) -> impl Iterator<Item = Option<RepoPath>> + '_ {
+        let outside = self
+            .targets
+            .into_iter()
+            .flatten()
+            .filter_map(|target| target.source.as_ref())
+            .filter(|source| relative(self.directory.as_ref(), source).is_none())
+            .map(RepoPath::parent);
+        std::iter::once(self.directory.clone()).chain(outside)
+    }
 }
 
 fn nodes(facts: &RepoFacts) -> BTreeMap<&RepoPath, Node<'_>> {
@@ -27,8 +54,10 @@ fn nodes(facts: &RepoFacts) -> BTreeMap<&RepoPath, Node<'_>> {
                 &member.manifest,
                 Node {
                     name: &member.name,
+                    manifest: &member.manifest,
                     directory: member.directory.clone(),
                     dependencies: &member.dependencies,
+                    targets: Some(&member.targets),
                 },
             )
         });
@@ -37,8 +66,10 @@ fn nodes(facts: &RepoFacts) -> BTreeMap<&RepoPath, Node<'_>> {
             manifest,
             Node {
                 name: &package.name,
+                manifest,
                 directory: manifest.parent(),
                 dependencies: &package.dependencies,
+                targets: None,
             },
         )
     });
@@ -53,8 +84,10 @@ fn generator_manifest(facts: &RepoFacts) -> Option<&RepoPath> {
         .map(|member| &member.manifest)
 }
 
-pub(crate) fn generator_closure(facts: &RepoFacts) -> BTreeSet<PackageName> {
-    let nodes = nodes(facts);
+fn closure_of<'a>(
+    facts: &RepoFacts,
+    nodes: &'a BTreeMap<&RepoPath, Node<'a>>,
+) -> Vec<&'a Node<'a>> {
     let mut pending: Vec<&RepoPath> = generator_manifest(facts).into_iter().collect();
     let mut seen: BTreeSet<&RepoPath> = BTreeSet::new();
     while let Some(manifest) = pending.pop() {
@@ -71,11 +104,24 @@ pub(crate) fn generator_closure(facts: &RepoFacts) -> BTreeSet<PackageName> {
     }
     seen.iter()
         .filter_map(|manifest| nodes.get(*manifest))
-        .map(|node| node.name.clone())
         .collect()
 }
 
+fn owns_unresolved_input(facts: &RepoFacts, closure: &[&Node<'_>]) -> bool {
+    facts
+        .compile_inputs
+        .iter()
+        .filter(|(key, _)| key.is_none())
+        .flat_map(|(_, owners)| owners)
+        .any(|owner| {
+            closure
+                .iter()
+                .any(|node| owner.is(node.name, node.manifest))
+        })
+}
+
 pub(crate) struct Generator {
+    sealed: bool,
     directories: Vec<Option<RepoPath>>,
     files: BTreeSet<RepoPath>,
     named: Vec<String>,
@@ -83,26 +129,25 @@ pub(crate) struct Generator {
 
 impl Generator {
     pub(crate) fn of(facts: &RepoFacts) -> Self {
-        let closure = generator_closure(facts);
-        let mut directories: Vec<Option<RepoPath>> = nodes(facts)
-            .into_values()
-            .filter(|node| closure.contains(node.name))
-            .map(|node| node.directory)
-            .collect();
-        if closure.is_empty() {
-            directories.push(None);
-        }
+        let nodes = nodes(facts);
+        let closure = closure_of(facts, &nodes);
+        let sealed = closure.is_empty()
+            || closure.iter().any(|node| node.is_opaque())
+            || owns_unresolved_input(facts, &closure);
         Self {
-            directories,
+            sealed,
+            directories: closure.iter().flat_map(|node| node.directories()).collect(),
             files: files(facts),
             named: named(facts),
         }
     }
 
     pub(crate) fn reads(&self, path: &RepoPath) -> bool {
-        self.directories
-            .iter()
-            .any(|directory| contains(directory.as_ref(), path))
+        self.sealed
+            || self
+                .directories
+                .iter()
+                .any(|directory| contains(directory.as_ref(), path))
             || self.files.contains(path)
             || self.named.iter().any(|name| overlaps(name, path.as_str()))
     }
