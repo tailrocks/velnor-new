@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 
 use crate::mise_double::{cancel_during_paths, each_row, git_bytes, prepared, private_dirs};
+use crate::mise_repo::{REPO_MISE_LOCK, repo_config_without_wrappers};
 use crate::mise_world::{CONFIG, World, git, job_fixture};
 
 const CALLS: [&str; 5] = [
@@ -304,9 +305,7 @@ fn mise_action_rejects_unsupported_env_directives() -> Result<()> {
 fn mise_action_accepts_the_repository_mise_toml_settings() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
-    let config = std::fs::read_to_string(crate::mise_world::manifest("../../mise.toml"))?;
-    let lock = std::fs::read_to_string(crate::mise_world::manifest("../../mise.lock"))?;
-    world.init_workspace_with_lock(&config, &lock)?;
+    world.init_workspace_with_lock(&repo_config_without_wrappers()?, REPO_MISE_LOCK)?;
     let workspace = world.workspace();
     std::fs::write(
         workspace.join("rust-toolchain.toml"),

@@ -107,6 +107,7 @@ pub(crate) fn real_mise(world: &World) -> Result<RealMise> {
 
 impl World {
     pub(crate) fn install_real_mise(&self, real: &RealMise) -> Result<()> {
+        self.unseal_store()?;
         let directory = self.binary_dir();
         std::fs::create_dir_all(&directory).context("create the tools store")?;
         std::os::unix::fs::symlink(&real.binary, directory.join("mise"))
@@ -120,7 +121,9 @@ impl World {
     }
 
     pub(crate) fn start_clean(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
+        self.unseal_store()?;
         let mut command = self.command(job)?;
+        self.seal_store()?;
         command
             .env_clear()
             .env("PATH", "/usr/bin:/bin")

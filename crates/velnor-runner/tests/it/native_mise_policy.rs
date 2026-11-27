@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 
 use crate::mise_double::{each_row, git_bytes};
+use crate::mise_repo::{REPO_MISE_CONFIG, REPO_MISE_LOCK, repo_config_without_wrappers};
 use crate::mise_world::{CONFIG, World, assert_failed, git, job_fixture, pinned_mise_action};
 
 const LISTED: &str = "jactionlint shellcheck node";
@@ -145,7 +146,6 @@ fn mise_action_rejects_a_symlinked_mise_config_or_lock() -> Result<()> {
     Ok(())
 }
 
-const REPO_MISE_CONFIG: &str = include_str!("../../../../mise.toml");
 const FOOTER: &str = "\n[settings]\nlockfile = true\n";
 
 #[test]
@@ -168,6 +168,7 @@ fn mise_action_refuses_every_top_level_key_outside_the_allowed_set() -> Result<(
             "[[watch_files]]\npatterns = [\"x\"]\nrun = \"true\"\n",
         ),
         ("secrets", "[secrets]\nTOKEN = { command = \"true\" }\n"),
+        ("wrappers", "[wrappers.cargo]\ncommand = \"mbx\"\n"),
     ];
     each_row(&rows, |(key, snippet)| {
         let world = World::new()?;
@@ -216,10 +217,24 @@ fn mise_action_refuses_every_setting_outside_the_allowed_set() -> Result<()> {
 }
 
 #[test]
-fn mise_action_accepts_the_repository_mise_config() -> Result<()> {
+fn mise_action_refuses_the_repository_mise_config_while_it_has_wrappers() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
-    world.init_workspace_with(REPO_MISE_CONFIG, true)?;
+    world.init_workspace_with_lock(REPO_MISE_CONFIG, REPO_MISE_LOCK)?;
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    assert_failed(
+        &ran,
+        "unsupported: mise policy: mise.toml key 'wrappers' is not supported by velnor-runner",
+    );
+    assert_eq!(world.mise_calls(), Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn mise_action_accepts_the_repository_mise_config_without_wrappers() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace_with_lock(&repo_config_without_wrappers()?, REPO_MISE_LOCK)?;
     let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert_eq!(world.mise_installs().len(), 1);

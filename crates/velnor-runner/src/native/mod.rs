@@ -8,6 +8,7 @@ mod depth;
 mod git;
 mod mise;
 mod mise_lock;
+mod mise_policy;
 mod umask;
 
 pub(crate) use umask::Umask;

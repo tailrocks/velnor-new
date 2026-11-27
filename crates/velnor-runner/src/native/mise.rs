@@ -13,10 +13,12 @@ use uuid::Uuid;
 mod inputs;
 mod isolation;
 mod pin;
+mod readonly;
 
 use self::inputs::MiseInputs;
 use self::isolation::{Isolation, StoreEnv};
 use self::pin::require_pinned_revision;
+use self::readonly::require_read_only_store;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
@@ -320,6 +322,7 @@ async fn mise_action(
         .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
+    require_read_only_store(&install.store.data, &store_root())?;
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;

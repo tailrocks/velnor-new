@@ -11,11 +11,12 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::exec_support::{Ran, Scratch};
+use crate::mise_store::StoreMode;
 
 pub(crate) const VERSION: &str = "2026.11.10";
 pub(crate) const SHA_PLACEHOLDER: &str = "__SETUP_VELNOR_SHA__";
 pub(crate) const CONFIG: &str = "[settings]\nlockfile = true\n\n[tools]\nnode = \"26.13.1\"\n";
-const LOCK: &str = "lockfile_version = 3\n\n[[tools.jactionlint]]\nversion = \"2.6.0\"\n\n[[tools.shellcheck]]\nversion = \"0.11.0\"\n\n[[tools.node]]\nversion = \"26.13.1\"\n";
+const LOCK: &str = "lockfile_version = 3\n\n[[tools.jactionlint]]\nversion = \"2.6.0\"\nbackend = \"github:jdx/jactionlint\"\n\n[[tools.shellcheck]]\nversion = \"0.11.0\"\nbackend = \"aqua:koalaman/shellcheck\"\n\n[[tools.node]]\nversion = \"26.13.1\"\nbackend = \"core:node\"\n";
 const TOOL: &str = "#!/bin/sh\necho tooly-ran\n";
 
 pub(crate) struct World {
@@ -23,6 +24,7 @@ pub(crate) struct World {
     pub(crate) store: PathBuf,
     pub(crate) root: PathBuf,
     temp: PathBuf,
+    pub(crate) store_mode: StoreMode,
 }
 
 pub(crate) fn pinned_mise_action() -> Result<String> {
@@ -97,6 +99,7 @@ impl World {
             store,
             root,
             temp,
+            store_mode: StoreMode::Sealed,
         })
     }
 
@@ -135,6 +138,7 @@ impl World {
     }
 
     pub(crate) fn install_mise(&self) -> Result<PathBuf> {
+        self.unseal_store()?;
         let directory = self.binary_dir();
         std::fs::create_dir_all(directory.join("tool-bin")).context("create the tools store")?;
         let binary = directory.join("mise");
@@ -181,6 +185,7 @@ impl World {
     }
 
     pub(crate) fn publish_action(&self, action: &str) -> Result<String> {
+        self.unseal_store()?;
         let source = self.root.join("action-source");
         let directory = source.join("actions/setup-velnor");
         std::fs::create_dir_all(&directory).context("create the action source")?;
@@ -334,7 +339,9 @@ impl World {
     }
 
     pub(crate) fn start(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
+        self.unseal_store()?;
         let mut command = self.command(job)?;
+        self.seal_store()?;
         command
             .env("VELNOR_STORE_ROOT", &self.store)
             .env_remove("MISE_TRUSTED_CONFIG_PATHS")

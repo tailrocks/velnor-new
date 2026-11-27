@@ -8,21 +8,14 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use super::git;
+use super::mise_policy::require_supported_values;
 use crate::broker::{TrustedFacts, mirror_path};
 use crate::exec::{ExecError, StepContext};
 use crate::store::store_root;
 
 const CONFIG: &str = "mise.toml";
 const LOCK: &str = "mise.lock";
-const TOP_LEVEL_KEYS: [&str; 7] = [
-    "env",
-    "min_version",
-    "settings",
-    "tasks",
-    "tools",
-    "vars",
-    "wrappers",
-];
+const TOP_LEVEL_KEYS: [&str; 6] = ["env", "min_version", "settings", "tasks", "tools", "vars"];
 const SETTINGS: [&str; 8] = [
     "cargo.binstall",
     "http_retries",
@@ -147,7 +140,7 @@ async fn read_committed(
     })
 }
 
-fn refuse(what: &str) -> ExecError {
+pub(super) fn refuse(what: &str) -> ExecError {
     ExecError::Unsupported(format!(
         "mise policy: {what} is not supported by velnor-runner"
     ))
@@ -228,6 +221,11 @@ async fn resolve_locked_mise_config(
     }
     require_supported_keys(&config)?;
     require_supported_directives(&config)?;
+    let lock: toml::Table = accepted
+        .lock
+        .parse()
+        .map_err(|error| invalid(format!("mise.lock is not valid TOML: {error}")))?;
+    require_supported_values(&config, &lock)?;
     Ok(accepted)
 }
 

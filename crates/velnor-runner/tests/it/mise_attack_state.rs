@@ -34,11 +34,17 @@ fn stub(marker: Option<&Path>) -> String {
 
 impl World {
     pub(crate) fn install_store_homes(&self) -> Result<()> {
+        self.unseal_store()?;
         let tools = self.store.join("tools");
         let bin = tools.join("cargo/bin");
         std::fs::create_dir_all(&bin).context("create the store cargo home")?;
         std::fs::create_dir_all(tools.join("rustup")).context("create the store rustup home")?;
         std::fs::write(tools.join("rustup/settings.toml"), "").context("write settings.toml")?;
+        let installs = tools.join("data/installs/rust");
+        std::fs::create_dir_all(&installs).context("create the rust installs")?;
+        let link = installs.join("1.90.0");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(&bin, &link).context("link the rust install")?;
         for name in ["rustup", "cargo", "rustc"] {
             let path = bin.join(name);
             std::fs::write(&path, stub(None)).context("write the store proxy")?;
