@@ -13,11 +13,11 @@ use super::error::{
     github_api_error_categorized, github_api_error_with, is_retriable_status,
 };
 use super::http::{
-    RUNNER_VERSION, github_json_request, runner_architecture, runner_os, slash_url,
-    validate_authenticated_url,
+    github_json_request, runner_architecture, runner_os, slash_url, validate_authenticated_url,
 };
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
 use crate::secret::Secret;
+use velnor_model::RUNNER_PROTOCOL_VERSION;
 
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
@@ -202,7 +202,7 @@ fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) ->
     url.query_pairs_mut()
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
-        .append_pair("runnerVersion", RUNNER_VERSION)
+        .append_pair("runnerVersion", RUNNER_PROTOCOL_VERSION)
         .append_pair("os", runner_os()?)
         .append_pair("architecture", runner_architecture()?);
     Ok(())

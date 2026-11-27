@@ -1186,6 +1186,11 @@
               ]
             },
             {
+              "name": "velnor-model",
+              "kind": "normal",
+              "manifest": "crates/velnor-model/Cargo.toml"
+            },
+            {
               "name": "tokio",
               "kind": "dev",
               "manifest": null,
@@ -2237,7 +2242,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "545f2842b2ceccf9e12d7549cf840c24989225b8434d8fcd9097cc818ec52862",
+    "crates/velnor-runner/Cargo.toml": "51643a85539b6ad3bc1be47d4e3e02d1e3250cc557cd89c397f2793ca98bf988",
     "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"

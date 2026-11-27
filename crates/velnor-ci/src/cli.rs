@@ -19,9 +19,9 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, BuildArgs, CheckConfigurationsArgs, CollectArgs,
-    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, MisePinArgs, PlanArgs, PlanMode,
-    PrepareArgs, QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
-    VerifyCandidateArgs,
+    CompareArgs, CratesMirrorArgs, ImageCommand, ImagePublishArgs, LaneGuardArgs, MisePinArgs,
+    PlanArgs, PlanMode, PrepareArgs, QualificationCommand, QualificationCompareArgs,
+    RunnerDriftArgs, ToolsLocalArgs, ToolsVerifyArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use crate::cli_image::{ImageStageArgs, ImageSysrootArgs, OpensslMode};
@@ -156,6 +156,10 @@ pub enum Command {
     )]
     LaneGuard(LaneGuardArgs),
     #[command(
+        about = "Compare RUNNER_PROTOCOL_VERSION, the actions/runner release that velnor-runner reports, with the newest release of actions/runner (GET /repos/actions/runner/releases/latest, or the tag --latest names, which makes no request) as three integers. Prints `runner protocol current: <v>` and exits 0, or `runner protocol behind: <reported> < <latest>` and exits 1, both versions without the leading v. A failed lookup or an unreadable version exits 2, never 1. Reads GITHUB_TOKEN, which needs only the default read access"
+    )]
+    RunnerDrift(RunnerDriftArgs),
+    #[command(
         subcommand,
         about = "Check the [[test_groups]] of .velnor/rust-ci.toml against the tests cargo-nextest lists"
     )]
@@ -257,32 +261,6 @@ pub struct FetchAssetsArgs {
         help = "owner/name,tag,asset,sha256,dest of one release asset; repeat for each asset"
     )]
     pub asset: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct LaneGuardArgs {
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "Comma-separated features the lane step passes to cargo"
-    )]
-    pub features: Option<String>,
-    #[arg(long, help = "The lane step passes --all-features to cargo")]
-    pub all_features: bool,
-    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
-    pub no_default_features: bool,
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "The lane's own nextest filter expression"
-    )]
-    pub filter: String,
-    #[arg(
-        long,
-        value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "Nextest binary id the lane never lists; repeatable"
-    )]
-    pub except_binary: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]

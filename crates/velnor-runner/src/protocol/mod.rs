@@ -13,6 +13,7 @@ mod results_wire;
 pub mod run_service;
 pub mod session;
 pub mod timeline;
+pub mod version;
 
 pub use broker::{BrokerClient, BrokerPoll};
 pub use distributed_task::DistributedTaskClient;
@@ -22,8 +23,7 @@ pub use error::{
 };
 pub use feed::{FeedLines, FeedStreamClient, FeedWebSocket};
 pub use http::{
-    GithubHttpResponse, RUNNER_USER_AGENT, RUNNER_VERSION, github_json_http_response,
-    github_json_request,
+    GithubHttpResponse, RUNNER_USER_AGENT, github_json_http_response, github_json_request,
 };
 pub use jit::{
     DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings, decode_jit_config,
