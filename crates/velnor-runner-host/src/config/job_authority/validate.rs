@@ -15,7 +15,7 @@ use super::{
     ApprovedEventContext, ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ApprovedWorkflow,
     JobAuthorityRole, MAX_CALLS, MAX_CONTEXTS, MAX_ENVIRONMENTS, MAX_JOBS, MAX_NEEDS,
     MAX_POLICY_BYTES, MAX_REFS, MAX_SECRETS, MAX_WORKFLOWS, POLICY_SCHEMA, PermissionLevel,
-    WorkflowEvent,
+    PullRequestAdmission, WorkflowEvent,
 };
 use crate::config::{RepositoryConnection, SourcePolicy, SourcePolicyMode};
 use crate::error::HostError;
@@ -233,12 +233,15 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
                             .contexts
                             .iter()
                             .filter(|context| context.event == WorkflowEvent::PullRequest)
-                            .any(|context| {
-                                context.pull_request_rules.is_empty()
-                                    || context.pull_request_rules.iter().any(|rule| {
+                            .any(|context| match &context.pull_request {
+                                Some(PullRequestAdmission::SameRepository { .. }) => false,
+                                Some(PullRequestAdmission::Rules(rules)) => {
+                                    rules.iter().any(|rule| {
                                         rule.number.is_none()
                                             || rule.head_repository_id != scope.repository_id
                                     })
+                                }
+                                None => true,
                             })))
             {
                 return Err(HostError::Config);
@@ -261,40 +264,17 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
 
 fn valid_context(context: &ApprovedEventContext, scope: Scope<'_>) -> bool {
     let source = scope.source_policy;
-    let repository_mode = source.is_some_and(|source| source.mode == SourcePolicyMode::Repository);
     if source.is_some_and(|source| !source.events.contains(&context.event)) {
         return false;
     }
     if context.event == WorkflowEvent::PullRequest {
         return context.refs.is_empty()
-            && (!context.pull_request_rules.is_empty() || repository_mode)
-            && context.pull_request_rules.len() <= MAX_REFS
             && context
-                .pull_request_rules
-                .windows(2)
-                .all(|pair| pair[0] < pair[1])
-            && context.pull_request_rules.iter().all(|rule| {
-                rule.base_repository_id == scope.repository_id
-                    && rule.head_repository_id > 0
-                    && rule.number.is_none_or(|number| number > 0)
-                    && valid_event_ref(
-                        WorkflowEvent::Push,
-                        &format!("refs/heads/{}", rule.base_branch),
-                    )
-                    && valid_event_ref(
-                        WorkflowEvent::Push,
-                        &format!("refs/heads/{}", rule.head_branch),
-                    )
-                    && source.is_none_or(|source| {
-                        source.mode != crate::config::SourcePolicyMode::Repository
-                            && source
-                                .pull_request_rules
-                                .iter()
-                                .any(|allowed| pr_rule_is_subset(rule, allowed))
-                    })
-            });
+                .pull_request
+                .as_ref()
+                .is_some_and(|admission| valid_admission(admission, scope));
     }
-    if !context.pull_request_rules.is_empty()
+    if context.pull_request.is_some()
         || context.refs.is_empty()
         || context.refs.len() > MAX_REFS
         || !unique_sorted(&context.refs)
@@ -306,4 +286,43 @@ fn valid_context(context: &ApprovedEventContext, scope: Scope<'_>) -> bool {
             && source
                 .is_none_or(|source| source_policy_allows_ref(source, context.event, event_ref))
     })
+}
+
+fn valid_admission(admission: &PullRequestAdmission, scope: Scope<'_>) -> bool {
+    let source = scope.source_policy;
+    match admission {
+        PullRequestAdmission::SameRepository { base_branches } => {
+            source.is_none_or(|source| source.mode == SourcePolicyMode::Repository)
+                && base_branches.len() <= MAX_REFS
+                && unique_sorted(base_branches)
+                && base_branches.iter().all(|branch| {
+                    valid_event_ref(WorkflowEvent::Push, &format!("refs/heads/{branch}"))
+                })
+        }
+        PullRequestAdmission::Rules(rules) => {
+            !rules.is_empty()
+                && rules.len() <= MAX_REFS
+                && rules.windows(2).all(|pair| pair[0] < pair[1])
+                && rules.iter().all(|rule| {
+                    rule.base_repository_id == scope.repository_id
+                        && rule.head_repository_id > 0
+                        && rule.number.is_none_or(|number| number > 0)
+                        && valid_event_ref(
+                            WorkflowEvent::Push,
+                            &format!("refs/heads/{}", rule.base_branch),
+                        )
+                        && valid_event_ref(
+                            WorkflowEvent::Push,
+                            &format!("refs/heads/{}", rule.head_branch),
+                        )
+                        && source.is_none_or(|source| {
+                            source.mode != SourcePolicyMode::Repository
+                                && source
+                                    .pull_request_rules
+                                    .iter()
+                                    .any(|allowed| pr_rule_is_subset(rule, allowed))
+                        })
+                })
+        }
+    }
 }

@@ -103,7 +103,15 @@ pub enum JobAuthorityRole {
 struct ApprovedEventContext {
     event: WorkflowEvent,
     refs: Vec<String>,
-    pull_request_rules: Vec<PullRequestRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pull_request: Option<PullRequestAdmission>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, PartialOrd, Ord)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
+enum PullRequestAdmission {
+    SameRepository { base_branches: Vec<String> },
+    Rules(Vec<PullRequestRule>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, PartialOrd, Ord)]
@@ -280,7 +288,13 @@ impl ApprovedJobAuthorityEntry {
     fn canonicalize(&mut self) {
         for context in &mut self.contexts {
             context.refs.sort();
-            context.pull_request_rules.sort();
+            match &mut context.pull_request {
+                Some(PullRequestAdmission::Rules(rules)) => rules.sort(),
+                Some(PullRequestAdmission::SameRepository { base_branches }) => {
+                    base_branches.sort();
+                }
+                None => {}
+            }
         }
         self.contexts.sort();
         self.secrets.sort();
@@ -296,20 +310,25 @@ impl ApprovedEventContext {
         }
         if lookup.event == WorkflowEvent::PullRequest {
             return lookup.event_ref.is_empty()
-                && lookup.pull_request.is_some_and(|actual| {
-                    if self.pull_request_rules.is_empty() {
-                        return actual.head_repository_id == actual.base_repository_id;
-                    }
-                    self.pull_request_rules.iter().any(|allowed| {
-                        allowed.base_repository_id == actual.base_repository_id
-                            && allowed.base_branch == actual.base_branch
-                            && allowed.head_repository_id == actual.head_repository_id
-                            && allowed.head_branch == actual.head_branch
-                            && allowed
-                                .number
-                                .is_none_or(|number| actual.number == Some(number))
-                    })
-                });
+                && lookup
+                    .pull_request
+                    .is_some_and(|actual| match &self.pull_request {
+                        Some(PullRequestAdmission::SameRepository { base_branches }) => {
+                            actual.head_repository_id == actual.base_repository_id
+                                && (base_branches.is_empty()
+                                    || base_branches.contains(&actual.base_branch))
+                        }
+                        Some(PullRequestAdmission::Rules(rules)) => rules.iter().any(|allowed| {
+                            allowed.base_repository_id == actual.base_repository_id
+                                && allowed.base_branch == actual.base_branch
+                                && allowed.head_repository_id == actual.head_repository_id
+                                && allowed.head_branch == actual.head_branch
+                                && allowed
+                                    .number
+                                    .is_none_or(|number| actual.number == Some(number))
+                        }),
+                        None => false,
+                    });
         }
         self.refs.iter().any(|allowed| allowed == lookup.event_ref)
     }

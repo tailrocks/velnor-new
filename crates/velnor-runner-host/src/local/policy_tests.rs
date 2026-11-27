@@ -15,7 +15,10 @@ const CONTENT: &str = "111111111111111111111111111111111111111111111111111111111
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn context(event: &str, refs: &[&str], rules: &Value) -> Value {
-    json!({"event": event, "refs": refs, "pull_request_rules": rules})
+    if rules.as_array().is_some_and(Vec::is_empty) {
+        return json!({"event": event, "refs": refs});
+    }
+    json!({"event": event, "refs": refs, "pull_request": {"rules": rules}})
 }
 
 fn entry(job: &str, contexts: &[Value]) -> Value {

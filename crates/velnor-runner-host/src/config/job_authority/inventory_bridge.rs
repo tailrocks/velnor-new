@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     ApprovedEventContext, ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ApprovedWorkflow,
     ConcurrencyControl, ConcurrencyScope, GeneratorIdentity, JobAuthorityRole, POLICY_SCHEMA,
-    PermissionLevel, WorkflowCall, WorkflowEvent, sha256,
+    PermissionLevel, PullRequestAdmission, WorkflowCall, WorkflowEvent, sha256,
 };
 use crate::config::{RepositoryConnection, SourcePolicyMode};
 use crate::error::HostError;
@@ -172,27 +172,36 @@ fn convert_context(
         if !context.branch_filters.is_empty() || !context.tag_filters.is_empty() {
             return Err(HostError::Config);
         }
-        let pull_request_rules = connection
-            .source_policy
-            .pull_request_rules
-            .iter()
-            .filter(|rule| {
-                context.pull_request_base_branches.is_empty()
-                    || context
-                        .pull_request_base_branches
-                        .contains(&rule.base_branch)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if pull_request_rules.is_empty()
-            && connection.source_policy.mode != SourcePolicyMode::Repository
-        {
-            return Err(HostError::Config);
-        }
+        let pull_request = match connection.source_policy.mode {
+            SourcePolicyMode::Repository => {
+                let mut base_branches = context.pull_request_base_branches.clone();
+                base_branches.sort();
+                base_branches.dedup();
+                PullRequestAdmission::SameRepository { base_branches }
+            }
+            SourcePolicyMode::BranchRestricted => {
+                let rules = connection
+                    .source_policy
+                    .pull_request_rules
+                    .iter()
+                    .filter(|rule| {
+                        context.pull_request_base_branches.is_empty()
+                            || context
+                                .pull_request_base_branches
+                                .contains(&rule.base_branch)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if rules.is_empty() {
+                    return Err(HostError::Config);
+                }
+                PullRequestAdmission::Rules(rules)
+            }
+        };
         return Ok(ApprovedEventContext {
             event,
             refs: Vec::new(),
-            pull_request_rules,
+            pull_request: Some(pull_request),
         });
     }
 
@@ -206,7 +215,7 @@ fn convert_context(
     Ok(ApprovedEventContext {
         event,
         refs,
-        pull_request_rules: Vec::new(),
+        pull_request: None,
     })
 }
 
