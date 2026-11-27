@@ -105,7 +105,7 @@ impl BrokerClient {
                 "create broker session",
                 status,
                 &text,
-                session_error_category(status),
+                creation_error_category(status),
             ));
         }
         serde_json::from_str(&text).context("parse create broker session response")
@@ -206,6 +206,14 @@ impl BrokerClient {
             timeout,
         )
         .await
+    }
+}
+
+fn creation_error_category(status: u16) -> BrokerErrorCategory {
+    match status {
+        403 => BrokerErrorCategory::Terminal,
+        409 => BrokerErrorCategory::Conflict,
+        _ => BrokerErrorCategory::Transient,
     }
 }
 

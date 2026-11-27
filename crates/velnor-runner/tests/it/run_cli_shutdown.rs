@@ -7,8 +7,9 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use rustix::process::Signal;
 
+use super::exec_builder::BACKGROUND_SLEEP;
 use super::exec_support::Scratch;
-use super::lifecycle_support::fixture_job;
+use super::lifecycle_support::{fixture_job, job_replacing};
 use super::run_cli::{signal_and_wait, start_runner, until};
 use super::support::mock_github::{Behavior, MockGithub};
 
@@ -74,5 +75,38 @@ async fn run_cli_exits_on_sigterm_without_waiting_for_a_leftover_workspace_to_be
     );
     let left = entries(&workspace);
     assert!(left > 0, "the removal had finished before the exit");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn run_cli_clears_the_temp_directory_on_shutdown_though_it_skips_the_workspace() -> Result<()>
+{
+    let job = job_replacing("cancel", Some(("sleep 60", BACKGROUND_SLEEP)))?;
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+    let started = start_runner(&mock, &scratch)?;
+    let work_dir = started.work_dir.clone();
+    until("the step started", || {
+        Ok(work_dir.join("temp").join("bg.pid").exists().then_some(()))
+    })
+    .await?;
+
+    let output = signal_and_wait(started, Signal::TERM).await?;
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(mock.complete_request()?["conclusion"], "canceled");
+    assert!(
+        !work_dir.join("temp").exists(),
+        "the temp directory holds the file commands of the job"
+    );
+    assert!(
+        work_dir.join("workspace").exists(),
+        "the workspace cleanup is skipped on shutdown"
+    );
     Ok(())
 }

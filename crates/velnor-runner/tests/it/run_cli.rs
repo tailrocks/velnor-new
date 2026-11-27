@@ -16,7 +16,7 @@ use super::support::mock_github::{Behavior, MockGithub, Online, SESSION_ID};
 
 const EXIT_BUDGET: Duration = Duration::from_secs(20);
 
-async fn velnor_runner(arguments: &[&str]) -> Result<Output> {
+pub(crate) async fn velnor_runner(arguments: &[&str]) -> Result<Output> {
     Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
         .args(arguments)
         .output()
@@ -81,16 +81,6 @@ pub(crate) async fn signal_and_wait(started: Started, signal: Signal) -> Result<
 
 fn pid_file(work_dir: &Path) -> PathBuf {
     work_dir.join("temp").join("bg.pid")
-}
-
-#[tokio::test]
-async fn run_cli_rejects_invalid_jit_config() -> Result<()> {
-    let output = velnor_runner(&["run", "--jit", "not-base64"]).await?;
-
-    assert_eq!(output.status.code(), Some(1));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("decode encoded_jit_config"), "{stderr}");
-    Ok(())
 }
 
 #[tokio::test]

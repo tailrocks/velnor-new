@@ -105,6 +105,11 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
         match create {
             SessionCreate::ConflictsFirst(count) if attempt < count => return conflict(),
             SessionCreate::ConflictsAlways => return conflict(),
+            SessionCreate::Answers(statuses) => {
+                if let Some(&status) = statuses.get(attempt) {
+                    return Reply::status(status);
+                }
+            }
             SessionCreate::Fails {
                 fault,
                 after,

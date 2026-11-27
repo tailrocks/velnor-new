@@ -150,7 +150,7 @@ async fn serve(
     };
     tokio::select! {
         biased;
-        () = options.shutdown.cancelled() => {}
+        () = options.shutdown.cancelled() => remove_temp(&run_options).await,
         () = remove_work_dirs(&root, &run_options) => {}
     }
     outcome
@@ -200,6 +200,12 @@ async fn remove_work_dirs(root: &Path, options: &RunOptions) {
     }
     if let Some(parent) = options.workspace.parent() {
         let _ = tokio::fs::remove_dir(parent).await;
+    }
+}
+
+async fn remove_temp(options: &RunOptions) {
+    if let Err(error) = remove_dir(&options.temp).await {
+        eprintln!("warning: remove {}: {error}", options.temp.display());
     }
 }
 
