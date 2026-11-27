@@ -6,13 +6,16 @@ use crate::exec::ExecError;
 
 const VERSION_POLICY: &str = include_str!("../../../../../.velnor/version-policy.toml");
 
-fn pinned_revision() -> Result<String, ExecError> {
-    let policy: toml::Table = VERSION_POLICY.parse().map_err(|error| {
+fn policy() -> Result<toml::Table, ExecError> {
+    VERSION_POLICY.parse().map_err(|error| {
         ExecError::Invalid(format!(
             ".velnor/version-policy.toml is not valid TOML: {error}"
         ))
-    })?;
-    policy
+    })
+}
+
+fn pinned_revision() -> Result<String, ExecError> {
+    policy()?
         .get("actions")
         .and_then(toml::Value::as_array)
         .into_iter()
@@ -35,5 +38,21 @@ pub(super) fn require_pinned_revision(reference: &str) -> Result<(), ExecError> 
     }
     Err(ExecError::Unsupported(format!(
         "{reference} is not the {ACTION} revision {pinned} pinned in .velnor/version-policy.toml"
+    )))
+}
+
+pub(super) fn require_pinned_version(version: &str) -> Result<(), ExecError> {
+    let pinned = policy()?
+        .get("tools")
+        .and_then(|tools| tools.get("mise")?.as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            ExecError::Invalid(".velnor/version-policy.toml pins no mise version".to_owned())
+        })?;
+    if version == pinned {
+        return Ok(());
+    }
+    Err(ExecError::Unsupported(format!(
+        "mise {version} is not the mise version {pinned} pinned in .velnor/version-policy.toml"
     )))
 }

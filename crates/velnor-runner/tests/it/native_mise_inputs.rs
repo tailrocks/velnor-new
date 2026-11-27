@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 
-use crate::mise_world::{World, assert_failed, job_fixture};
+use crate::mise_world::{VERSION, World, assert_failed, job_fixture};
 
 #[test]
 fn mise_action_rejects_inputs_it_does_not_implement() -> Result<()> {
@@ -102,6 +102,25 @@ fn mise_action_rejects_a_version_that_is_not_exact() -> Result<()> {
         assert_failed(
             &ran,
             &format!("mise version '{version}' is not an exact YYYY.M.D version"),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{version}");
+    }
+    Ok(())
+}
+
+#[test]
+fn mise_action_refuses_a_mise_version_other_than_the_pinned_one() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    for version in ["2026.11.14", "2026.11.9", "2026.12.1"] {
+        let job = world.with_input(&job_fixture("mise_action_ok"), "version", version)?;
+        let ran = world.run(&job, &[])?;
+        assert_failed(
+            &ran,
+            &format!(
+                "unsupported: mise {version} is not the mise version {VERSION} pinned in .velnor/version-policy.toml"
+            ),
         );
         assert_eq!(world.mise_calls(), Vec::<String>::new(), "{version}");
     }

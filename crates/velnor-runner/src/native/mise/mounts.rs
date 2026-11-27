@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::path::PathBuf;
 
+use super::walk::writable_directories;
 use crate::exec::ExecError;
 
 const MOUNTINFO: &str = "/proc/self/mountinfo";
-const MOUNT_COMMAND: &str = "/sbin/mount";
 
 struct Mount {
     point: PathBuf,
@@ -62,26 +61,11 @@ fn parse_mountinfo(text: &str) -> Result<Vec<Mount>, ExecError> {
         .ok_or_else(|| unreadable(MOUNTINFO))
 }
 
-fn parse_mount_output(text: &str) -> Result<Vec<Mount>, ExecError> {
-    let parse = |line: &str| {
-        let (_, rest) = line.split_once(" on ")?;
-        let (point, options) = rest.rsplit_once(" (")?;
-        let options = options.strip_suffix(')')?;
-        Some(Mount {
-            point: PathBuf::from(point),
-            writable: !options.split(", ").any(|option| option == "read-only"),
-        })
-    };
-    text.lines()
-        .filter(|line| !line.is_empty())
-        .map(parse)
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| unreadable(MOUNT_COMMAND))
-}
-
 #[cfg(feature = "test-support")]
 fn declared_table() -> Option<PathBuf> {
-    std::env::var_os("VELNOR_TEST_MOUNTINFO").map(PathBuf::from)
+    std::env::var_os("VELNOR_TEST_MOUNTINFO")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
 }
 
 #[cfg(not(feature = "test-support"))]
@@ -89,51 +73,33 @@ fn declared_table() -> Option<PathBuf> {
     None
 }
 
-async fn read_table() -> Result<Vec<Mount>, ExecError> {
-    let io = |what: &str| {
-        let what = what.to_owned();
-        move |source| ExecError::io(what, source)
+fn table_source() -> Option<PathBuf> {
+    declared_table().or_else(|| cfg!(target_os = "linux").then(|| PathBuf::from(MOUNTINFO)))
+}
+
+async fn writable_points(roots: &[(&str, PathBuf)]) -> Result<Vec<PathBuf>, ExecError> {
+    let Some(source) = table_source() else {
+        return writable_directories(roots.iter().map(|(_, root)| root.clone()).collect()).await;
     };
-    if let Some(declared) = declared_table() {
-        let text = tokio::fs::read_to_string(&declared)
-            .await
-            .map_err(io(&format!("read {}", declared.display())))?;
-        return parse_mountinfo(&text);
-    }
-    if cfg!(target_os = "linux") {
-        let text = tokio::fs::read_to_string(MOUNTINFO)
-            .await
-            .map_err(io(&format!("read {MOUNTINFO}")))?;
-        return parse_mountinfo(&text);
-    }
-    let output = tokio::process::Command::new(MOUNT_COMMAND)
-        .env_clear()
-        .stdin(Stdio::null())
-        .output()
+    let text = tokio::fs::read_to_string(&source)
         .await
-        .map_err(io(&format!("run {MOUNT_COMMAND}")))?;
-    if !output.status.success() {
-        return Err(unreadable(MOUNT_COMMAND));
-    }
-    parse_mount_output(&String::from_utf8_lossy(&output.stdout))
+        .map_err(|error| ExecError::io(format!("read {}", source.display()), error))?;
+    Ok(parse_mountinfo(&text)?
+        .into_iter()
+        .filter(|mount| mount.writable)
+        .map(|mount| mount.point)
+        .collect())
 }
 
 pub(super) async fn require_no_writable_mount_under(
-    directories: &[(&str, &Path)],
+    roots: &[(&str, PathBuf)],
 ) -> Result<(), ExecError> {
-    let mut roots = Vec::with_capacity(directories.len());
-    for (role, directory) in directories {
-        let real = tokio::fs::canonicalize(directory)
-            .await
-            .map_err(|source| ExecError::io(format!("resolve {}", directory.display()), source))?;
-        roots.push((*role, real));
-    }
-    for mount in read_table().await?.iter().filter(|mount| mount.writable) {
-        if let Some((role, root)) = roots.iter().find(|(_, root)| mount.point.starts_with(root)) {
+    for point in writable_points(roots).await? {
+        if let Some((role, root)) = roots.iter().find(|(_, root)| point.starts_with(root)) {
             return Err(ExecError::Invalid(format!(
                 "mise policy: {role} {} holds a writable mount at {}; the tools store must be one read-only mount",
                 root.display(),
-                mount.point.display()
+                point.display()
             )));
         }
     }

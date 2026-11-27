@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
 
+use crate::mise_real::canonical;
 use crate::mise_world::World;
 
 #[derive(Clone, Copy, Debug)]
@@ -29,8 +30,16 @@ impl Dir {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) enum Ancestor {
+    Root,
+    Store,
+    Tools,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum StoreMode {
     Sealed,
+    Loose(Ancestor, u32),
     Writable(Dir),
     Missing(Dir),
     Linked(Dir),
@@ -90,6 +99,19 @@ impl World {
             Dir::Cargo => self.cargo_dir(),
             Dir::Binary => self.binary_dir(),
         }
+    }
+
+    fn ancestor(&self, ancestor: Ancestor) -> PathBuf {
+        match ancestor {
+            Ancestor::Root => self.root.clone(),
+            Ancestor::Store => self.store.clone(),
+            Ancestor::Tools => self.store.join("tools"),
+        }
+    }
+
+    pub(crate) fn trust_declaration(&self) -> String {
+        let owner = std::fs::metadata(&self.root).map_or(0, |meta| meta.uid());
+        format!("{owner}:{}", canonical(&self.root).display())
     }
 
     fn homes(&self) -> [PathBuf; 3] {
@@ -156,12 +178,16 @@ impl World {
                 chmod(&directory, 0o555)?;
             }
         }
+        if let StoreMode::Loose(ancestor, mode) = self.store_mode {
+            chmod(&self.ancestor(ancestor), mode)?;
+        }
         Ok(())
     }
 
     pub(crate) fn unseal_store(&self) -> Result<()> {
         let tools = self.store.join("tools");
         for directory in [
+            self.root.clone(),
             self.store.clone(),
             tools.clone(),
             tools.join("mise"),
@@ -177,15 +203,27 @@ impl World {
         Ok(())
     }
 
+    fn real(&self, dir: Dir) -> PathBuf {
+        let relative = self.dir(dir);
+        let relative = relative.strip_prefix(&self.store).unwrap_or(&relative);
+        canonical(&self.store).join(relative)
+    }
+
     pub(crate) fn declare_read_only(&self, command: &mut Command) {
-        let mut declared: Vec<PathBuf> = self.homes().to_vec();
-        declared.push(self.binary_dir());
+        command.env("VELNOR_TEST_STORE_TRUST", self.trust_declaration());
+        let table = self.root.join("mountinfo-default");
+        if std::fs::write(&table, "1 0 0:1 / / rw - ext4 /dev/a rw\n").is_ok() {
+            command.env("VELNOR_TEST_MOUNTINFO", table);
+        }
+        let mut declared: Vec<PathBuf> = [Dir::Data, Dir::Rustup, Dir::Cargo, Dir::Binary]
+            .map(|dir| self.real(dir))
+            .to_vec();
         match self.store_mode {
             StoreMode::Real | StoreMode::Bits => return,
             StoreMode::Writable(dir) | StoreMode::Missing(dir) => {
-                declared.retain(|directory| *directory != self.dir(dir));
+                declared.retain(|directory| *directory != self.real(dir));
             }
-            StoreMode::Sealed | StoreMode::Linked(_) => {}
+            StoreMode::Sealed | StoreMode::Loose(..) | StoreMode::Linked(_) => {}
         }
         if let Ok(list) = std::env::join_paths(declared) {
             command.env("VELNOR_TEST_READ_ONLY_DIRS", list);

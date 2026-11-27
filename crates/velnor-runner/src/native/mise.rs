@@ -15,12 +15,14 @@ mod mounts;
 mod paths;
 mod pin;
 mod readonly;
+mod tools;
+mod walk;
 
 use self::binary::locate_binary;
 use self::inputs::MiseInputs;
 use self::isolation::{Isolation, StoreEnv};
 use self::paths::require_confined;
-use self::pin::require_pinned_revision;
+use self::pin::{require_pinned_revision, require_pinned_version};
 use self::readonly::require_read_only_store;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
@@ -158,6 +160,7 @@ async fn managed_paths(
 }
 
 struct Install {
+    tools: PathBuf,
     binary: PathBuf,
     store: StoreEnv,
     exports: Vec<(String, String)>,
@@ -223,10 +226,15 @@ impl Install {
             }
         }
         Self {
+            tools: tools.to_path_buf(),
             binary,
             store,
             exports,
         }
+    }
+
+    async fn require_read_only(&self) -> Result<(), ExecError> {
+        require_read_only_store(&self.tools, &self.store.directories()).await
     }
 }
 
@@ -268,6 +276,7 @@ async fn export(
             variables.push_str(&env_command(name, value));
         }
     }
+    install.require_read_only().await?;
     append(&github_path, &(paths.join("\n") + "\n")).await?;
     append(&github_env, &variables).await
 }
@@ -284,7 +293,7 @@ async fn mise_action(
         .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
-    require_read_only_store(&install.store.directories()).await?;
+    install.require_read_only().await?;
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;
@@ -305,6 +314,7 @@ async fn mise_action(
             return Ok(StepResult::Failed);
         }
     }
+    install.require_read_only().await?;
     export(ctx, &mise, &isolation, &install).await?;
     isolation.remove().await?;
     Ok(StepResult::Succeeded)
@@ -324,6 +334,7 @@ impl StepAdapter for MiseAction {
         async move {
             require_pinned_revision(&ctx.reference)?;
             let inputs = MiseInputs::parse(&ctx.inputs)?;
+            require_pinned_version(&inputs.version)?;
             ctx.set_output("cache-hit", "false");
             mise_action(&inputs, &self.facts, ctx).await
         }

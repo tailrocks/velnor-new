@@ -23,6 +23,8 @@ done
 in_copy=$(conf PATHS_IN_COPY)
 secret=$(conf SECRET)
 secret=${secret:-s3cr3t-value}
+hook=$(conf "HOOK_$1")
+[ -z "$hook" ] || sh "$hook"
 case "$1" in
   install)
     exit_code=$(conf INSTALL_EXIT)

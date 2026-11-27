@@ -144,6 +144,26 @@ fn mise_action_accepts_a_path_entry_whose_store_link_stays_in_the_store() -> Res
     Ok(())
 }
 
+#[test]
+fn mise_action_resolves_a_path_entry_named_by_the_real_path_of_a_linked_store_root() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    world.install_store_homes()?;
+    let resolved = outside(&world)?;
+    let entry = canonical(&world.store).join("tools/data/installs/evil");
+    std::os::unix::fs::symlink(&resolved, &entry).context("link out of the store")?;
+    let link = world.root.join("store-link");
+    std::os::unix::fs::symlink(&world.store, &link).context("link the store root")?;
+    let entry = entry.display().to_string();
+    world.configure_double(&[("EXTRA_DIR", &entry)])?;
+    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+    let root = link.display().to_string();
+    let ran = world.run(&job, &[("VELNOR_STORE_ROOT", &root)])?;
+    refused_entry(&ran, &entry, &resolved);
+    Ok(())
+}
+
 type Row<'a> = (&'a str, &'a str, &'a str);
 
 fn nested(role: &str, root: &str, point: &str) -> String {
@@ -242,4 +262,18 @@ fn mise_action_refuses_a_writable_mount_nested_under_the_tools_store() -> Result
         ),
     ];
     each_row(&rows, |row| attempt(row.0, row.1, row.2))
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn mise_action_reads_the_host_mount_table_on_linux() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    let ran = world.run(
+        &job_fixture("mise_action_ok"),
+        &[("VELNOR_TEST_MOUNTINFO", "")],
+    )?;
+    ensure!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    Ok(())
 }

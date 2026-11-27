@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
 
 use crate::exec_support::Ran;
-use crate::mise_world::{World, job_fixture};
+use crate::mise_world::{VERSION, World, job_fixture};
 
 pub(crate) const ACCEPTED_CONFIG: &str = "[settings]\nlockfile = true\n\n[env]\nACCEPTED = \"1\"\n";
 const MISSING: &str = "real mise binary required on PATH";
@@ -79,17 +79,8 @@ fn is_executable(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
-pub(crate) fn real_mise(world: &World) -> Result<RealMise> {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let Some(found) = std::env::split_paths(&path)
-        .map(|directory| directory.join("mise"))
-        .find(|candidate| is_executable(candidate))
-    else {
-        bail!(MISSING);
-    };
-    let binary = std::fs::canonicalize(&found).context("resolve the real mise binary")?;
-    std::fs::create_dir_all(world.home()).context("create the home directory")?;
-    let output = Command::new(&binary)
+fn version_of(binary: &Path, world: &World) -> Result<String> {
+    let output = Command::new(binary)
         .arg("--version")
         .current_dir(world.home())
         .env_clear()
@@ -99,10 +90,27 @@ pub(crate) fn real_mise(world: &World) -> Result<RealMise> {
         .output()
         .context("run mise --version")?;
     ensure!(output.status.success(), "mise --version failed");
-    Ok(RealMise {
-        binary,
-        version: String::from_utf8_lossy(&output.stdout).trim().to_owned(),
-    })
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+pub(crate) fn real_mise(world: &World) -> Result<RealMise> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    std::fs::create_dir_all(world.home()).context("create the home directory")?;
+    let mut seen = Vec::new();
+    for candidate in std::env::split_paths(&path)
+        .map(|directory| directory.join("mise"))
+        .filter(|candidate| is_executable(candidate))
+    {
+        let binary = std::fs::canonicalize(&candidate).context("resolve the real mise binary")?;
+        let version = version_of(&binary, world)?;
+        if version.split(' ').next() == Some(VERSION) {
+            return Ok(RealMise { binary, version });
+        }
+        seen.push(format!("{} is {version}", binary.display()));
+    }
+    bail!(
+        "{MISSING} at the version {VERSION} pinned in .velnor/version-policy.toml; found {seen:?}"
+    )
 }
 
 impl World {
@@ -116,9 +124,11 @@ impl World {
     }
 
     pub(crate) fn ceiling(&self) -> PathBuf {
-        self.root
-            .parent()
-            .map_or_else(|| self.root.clone(), Path::to_path_buf)
+        canonical(
+            self.root
+                .parent()
+                .map_or(self.root.as_path(), |parent| parent),
+        )
     }
 
     pub(crate) fn start_clean(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {

@@ -10,7 +10,7 @@ use anyhow::{Context, Result, ensure};
 
 use crate::exec_support::Ran;
 use crate::mise_real::{ACCEPTED_CONFIG, RealMise, canonical, real_mise};
-use crate::mise_world::{World, job_fixture};
+use crate::mise_world::{VERSION, World, job_fixture};
 
 struct Mounted {
     mountpoint: PathBuf,
@@ -71,7 +71,8 @@ fn run_on_mount(world: &World, mut command: Command, mounted: &Mounted) -> Resul
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", world.home())
         .env("VELNOR_STORE_ROOT", &mounted.mountpoint)
-        .env("MISE_CEILING_PATHS", world.ceiling());
+        .env("MISE_CEILING_PATHS", world.ceiling())
+        .env("VELNOR_TEST_STORE_TRUST", world.trust_declaration());
     World::finish(command.spawn().context("start velnor-runner exec")?)
 }
 
@@ -129,25 +130,71 @@ fn attach_writable(world: &World, mountpoint: PathBuf) -> Result<Mounted> {
     Ok(mounted)
 }
 
-#[test]
-fn mise_action_refuses_a_writable_mount_nested_under_a_read_only_store() -> Result<()> {
+#[derive(Debug)]
+struct Nested {
+    role: &'static str,
+    root: String,
+    point: String,
+}
+
+fn nested_rows() -> Vec<Nested> {
+    let binary = format!("tools/mise/{VERSION}");
+    let row = |role, root: &str, point: &str| Nested {
+        role,
+        root: root.to_owned(),
+        point: point.to_owned(),
+    };
+    vec![
+        row(
+            "MISE_DATA_DIR",
+            "tools/data",
+            "tools/data/installs/shellcheck/0.11.0",
+        ),
+        row(
+            "MISE_RUSTUP_HOME",
+            "tools/rustup",
+            "tools/rustup/toolchains",
+        ),
+        row(
+            "the mise binary directory",
+            &binary,
+            &format!("{binary}/lib"),
+        ),
+    ]
+}
+
+fn refuses_nested(row: &Nested) -> Result<()> {
     let (world, real, command) = prepared()?;
+    std::fs::create_dir_all(world.store.join(&row.point)).context("create the mount point")?;
     let mounted = mount_read_only(&world)?;
-    let nested = attach_writable(&world, mounted.mountpoint.join("tools/data/installs"))?;
+    let nested = attach_writable(&world, mounted.mountpoint.join(&row.point))?;
     let ran = run_on_mount(&world, command, &mounted)?;
-    let data = canonical(&mounted.mountpoint).join("tools/data");
+    let base = canonical(&mounted.mountpoint);
     let expected = format!(
-        "mise policy: MISE_DATA_DIR {} holds a writable mount at {}/installs; the tools store must be one read-only mount",
-        data.display(),
-        data.display()
+        "mise policy: {} {} holds a writable mount at {}; the tools store must be one read-only mount",
+        row.role,
+        base.join(&row.root).display(),
+        base.join(&row.point).display()
     );
     ensure!(
         ran.has_line(&expected) && ran.has_line("job failed") && !ran.has_line("job succeeded"),
-        "({}) {}",
+        "({}) {expected}\n{}",
         real.version,
         ran.stdout
     );
-    let planted = nested.mountpoint.join("shellcheck");
-    ensure!(!planted.exists(), "mise wrote into the nested mount");
+    ensure!(
+        !nested.mountpoint.join("shellcheck").exists(),
+        "mise wrote into the nested mount"
+    );
+    Ok(())
+}
+
+#[test]
+fn mise_action_refuses_a_writable_mount_nested_under_a_read_only_store() -> Result<()> {
+    let failed: Vec<String> = nested_rows()
+        .iter()
+        .filter_map(|row| Some(format!("row {row:?}: {:#}", refuses_nested(row).err()?)))
+        .collect();
+    ensure!(failed.is_empty(), "{}", failed.join("\n"));
     Ok(())
 }
