@@ -10,7 +10,7 @@ use tokio::time::Instant;
 use super::evaluate;
 use super::output::Output;
 use super::{AnnotationLevel, JobCancel, StepResult};
-use crate::expr::ExprEnv;
+use crate::expr::{ExprEnv, ExprError};
 
 #[derive(Clone, Copy)]
 pub(super) struct Timeout {
@@ -50,15 +50,10 @@ pub(super) async fn interrupted(cancel: Option<&JobCancel>, timeout: Option<Time
     }
 }
 
-enum Interruption {
-    Cancelled,
-    TimedOut,
-}
-
 pub(super) struct Survival<'a> {
     condition: &'a str,
     env: ExprEnv,
-    verdict: OnceCell<bool>,
+    verdict: OnceCell<Result<bool, ExprError>>,
 }
 
 impl<'a> Survival<'a> {
@@ -70,35 +65,14 @@ impl<'a> Survival<'a> {
         }
     }
 
-    async fn survives(&self) -> bool {
-        *self
-            .verdict
-            .get_or_init(|| async {
-                evaluate::condition(self.condition, &self.env).await == Ok(true)
-            })
+    async fn verdict(&self) -> &Result<bool, ExprError> {
+        self.verdict
+            .get_or_init(|| evaluate::condition(self.condition, &self.env))
             .await
     }
-}
 
-async fn interruption(
-    survival: Option<&Survival<'_>>,
-    job: &JobCancel,
-    timeout: Option<Timeout>,
-) -> Option<Interruption> {
-    let abandoned = match survival {
-        Some(survival) if job.is_cancelled() => !survival.survives().await,
-        _ => false,
-    };
-    if abandoned {
-        Some(Interruption::Cancelled)
-    } else if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
-        Some(if job.is_cancelled() {
-            Interruption::Cancelled
-        } else {
-            Interruption::TimedOut
-        })
-    } else {
-        None
+    async fn abandons(&self) -> bool {
+        !matches!(self.verdict().await, Ok(true))
     }
 }
 
@@ -117,17 +91,28 @@ pub(super) async fn settle(
     timeout: Option<Timeout>,
     out: &mut Output<'_>,
 ) -> StepResult {
-    match interruption(survival, job, timeout).await {
-        None => result,
-        Some(Interruption::Cancelled) => StepResult::Cancelled,
-        Some(Interruption::TimedOut) => {
-            let minutes = timeout.map_or(0.0, |timeout| timeout.minutes);
-            let text = format!("step {} timed out after {minutes} minutes", out.number);
+    if let Some(survival) = survival.filter(|_| job.is_cancelled()) {
+        if let Err(error) = survival.verdict().await {
+            let text = format!("failed to evaluate the step condition: {error}");
             out.message(&text);
             out.annotate(AnnotationLevel::Error, text);
-            StepResult::Failed
+            return StepResult::Cancelled;
+        }
+        if survival.abandons().await {
+            return StepResult::Cancelled;
         }
     }
+    if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
+        if job.is_cancelled() {
+            return StepResult::Cancelled;
+        }
+        let minutes = timeout.map_or(0.0, |timeout| timeout.minutes);
+        let text = format!("step {} timed out after {minutes} minutes", out.number);
+        out.message(&text);
+        out.annotate(AnnotationLevel::Error, text);
+        return StepResult::Failed;
+    }
+    result
 }
 
 pub(super) async fn stop_unless_surviving(
@@ -137,7 +122,7 @@ pub(super) async fn stop_unless_surviving(
 ) -> Infallible {
     if let Some(survival) = survival {
         job.cancelled().await;
-        if !survival.survives().await {
+        if survival.abandons().await {
             halt.cancel();
         }
     }
