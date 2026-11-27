@@ -257,23 +257,22 @@ pub(crate) async fn fetch(root: &Path, facts: &TrustedFacts, token: Option<&str>
     if has_tree(&mirror, sha).await {
         return Ok(());
     }
-    if has_commit(&mirror, sha).await {
-        remove_entry(&mirror).await?;
-        prepare(&mirror).await?;
-    }
     remove_ref_locks(&mirror).await?;
     let clone_url = facts.clone_url();
     let env = fetch_env(facts.server_url.url(), token);
-    let mut fetched = fetch_refs(&mirror, &clone_url, facts.refspecs(), &env).await;
-    if !has_tree(&mirror, sha).await
-        && let Some(spec) = facts.sha_refspec()
-    {
-        fetched = fetch_refs(&mirror, &clone_url, vec![spec], &env).await;
+    let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
+    if !has_tree(&mirror, sha).await {
+        fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Refetch)
+            .await
+            .context("repair the mirror with git fetch --refetch, which needs git 2.36 or newer");
     }
     if has_tree(&mirror, sha).await {
         return Ok(());
     }
     fetched?;
+    if has_commit(&mirror, sha).await {
+        bail!("checkout: commit {sha} from {clone_url} arrived without all of its objects");
+    }
     bail!("checkout: commit {sha} not found in {clone_url}")
 }
 
@@ -292,27 +291,53 @@ async fn prepare(mirror: &Path) -> Result<()> {
     reset_mirror(mirror).await
 }
 
+#[derive(Clone, Copy)]
+enum Transfer {
+    Incremental,
+    Refetch,
+}
+
+async fn fetch_wanted(
+    mirror: &Path,
+    clone_url: &str,
+    facts: &TrustedFacts,
+    env: &[(OsString, OsString)],
+    transfer: Transfer,
+) -> Result<()> {
+    let mut fetched = fetch_refs(mirror, clone_url, facts.refspecs(), env, transfer).await;
+    if !has_tree(mirror, facts.sha.as_str()).await
+        && let Some(spec) = facts.sha_refspec()
+    {
+        fetched = fetch_refs(mirror, clone_url, vec![spec], env, transfer).await;
+    }
+    fetched
+}
+
 async fn fetch_refs(
     mirror: &Path,
     clone_url: &str,
     specs: Vec<String>,
     env: &[(OsString, OsString)],
+    transfer: Transfer,
 ) -> Result<()> {
+    let refetch: &[&str] = match transfer {
+        Transfer::Incremental => &[],
+        Transfer::Refetch => &["--refetch"],
+    };
+    let base = [
+        "-c",
+        "protocol.version=2",
+        "-c",
+        "gc.auto=0",
+        "fetch",
+        "--no-auto-maintenance",
+        "--prune",
+        "--no-tags",
+        "--quiet",
+    ];
     let mut args = git_args(
         Some(mirror),
-        &[
-            "-c",
-            "protocol.version=2",
-            "-c",
-            "gc.auto=0",
-            "fetch",
-            "--no-auto-maintenance",
-            "--prune",
-            "--no-tags",
-            "--quiet",
-            "--",
-            clone_url,
-        ],
+        &[&base[..], refetch, &["--", clone_url]].concat(),
     );
     args.extend(specs);
     git(&args, env).await

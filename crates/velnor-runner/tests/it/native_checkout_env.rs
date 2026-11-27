@@ -10,12 +10,16 @@ use anyhow::{Context, Result};
 use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, finish, git};
 
-pub(crate) fn install_wrapper(root: &Path) -> Result<()> {
+pub(crate) fn real_git() -> Result<String> {
     let found = Command::new("sh")
         .args(["-c", "command -v git"])
         .output()
         .context("locate git")?;
-    let real = String::from_utf8_lossy(&found.stdout).trim().to_owned();
+    Ok(String::from_utf8_lossy(&found.stdout).trim().to_owned())
+}
+
+pub(crate) fn install_wrapper(root: &Path) -> Result<()> {
+    let real = real_git()?;
     let bin = root.join("bin");
     std::fs::create_dir_all(&bin)?;
     let wrapper = bin.join("git");

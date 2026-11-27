@@ -99,7 +99,7 @@ mod native_checkout_facts;
 mod native_checkout_inputs;
 mod native_checkout_links;
 mod native_checkout_mirror;
-mod native_checkout_rebuild;
+mod native_checkout_repair;
 mod native_checkout_sink;
 mod native_checkout_workspace;
 mod protocol_broker;
