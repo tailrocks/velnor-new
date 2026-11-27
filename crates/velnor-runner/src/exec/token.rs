@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde_json::Value as Json;
+use serde_json::{Map, Value as Json};
 
+use crate::context_value::ordinal_ignore_case_eq;
 use crate::expr::{ExprEnv, ExprError, Value, evaluate_expression, evaluate_template};
 use crate::job_message::context_data::member;
 use crate::job_message::template_token::token_literal;
 
 const LITERAL: i64 = 0;
+const MAPPING: i64 = 2;
 const BASIC_EXPRESSION: i64 = 3;
 const INSERT_EXPRESSION: i64 = 4;
 const BOOLEAN: i64 = 5;
@@ -31,10 +33,7 @@ pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
         Json::Array(_) => Err(invalid("array")),
         Json::Object(object) => {
             let text = |name: &str| member(object, name).and_then(Json::as_str);
-            match member(object, "type")
-                .and_then(Json::as_i64)
-                .unwrap_or(LITERAL)
-            {
+            match tag(object)? {
                 LITERAL => evaluate_template(text("lit").unwrap_or_default(), env),
                 BASIC_EXPRESSION | INSERT_EXPRESSION => {
                     Ok(evaluate_expression(text("expr").unwrap_or_default(), env)?
@@ -54,8 +53,27 @@ pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
     }
 }
 
+fn tag(object: &Map<String, Json>) -> Result<i64, ExprError> {
+    match member(object, "type") {
+        None => Ok(LITERAL),
+        Some(tag) => tag
+            .as_i64()
+            .ok_or_else(|| malformed("the token type must be an integer")),
+    }
+}
+
 fn malformed(what: &str) -> ExprError {
     ExprError::evaluation(format!("Unexpected template token: {what}"))
+}
+
+fn entry(pair: &Json) -> Result<(&Json, &Json), ExprError> {
+    let pair = pair
+        .as_object()
+        .ok_or_else(|| malformed("a mapping entry was expected"))?;
+    Ok((
+        member(pair, "key").ok_or_else(|| malformed("a mapping entry has no key"))?,
+        member(pair, "value").ok_or_else(|| malformed("a mapping entry has no value"))?,
+    ))
 }
 
 pub(super) fn pairs(token: &Json) -> Result<Vec<(&Json, &Json)>, ExprError> {
@@ -64,22 +82,52 @@ pub(super) fn pairs(token: &Json) -> Result<Vec<(&Json, &Json)>, ExprError> {
         Json::Object(object) => object,
         _ => return Err(malformed("a mapping was expected")),
     };
-    if member(object, "type").and_then(Json::as_i64) == Some(NULL) {
-        return Ok(Vec::new());
+    match tag(object)? {
+        NULL => Ok(Vec::new()),
+        MAPPING => member(object, "map").map_or_else(
+            || Ok(Vec::new()),
+            |entries| {
+                entries
+                    .as_array()
+                    .ok_or_else(|| malformed("a mapping was expected"))?
+                    .iter()
+                    .map(entry)
+                    .collect()
+            },
+        ),
+        _ => Err(malformed("a mapping was expected")),
     }
-    member(object, "map")
-        .and_then(Json::as_array)
-        .ok_or_else(|| malformed("a mapping was expected"))?
+}
+
+fn expression_of(token: &Json) -> Result<Option<&str>, ExprError> {
+    let Json::Object(object) = token else {
+        return Ok(None);
+    };
+    Ok(match tag(object)? {
+        BASIC_EXPRESSION | INSERT_EXPRESSION => Some(
+            member(object, "expr")
+                .and_then(Json::as_str)
+                .unwrap_or_default(),
+        ),
+        _ => None,
+    })
+}
+
+fn assert_string(value: &Value) -> Result<String, ExprError> {
+    match value {
+        Value::Array(_) | Value::Object(_) => Err(malformed("a string was expected")),
+        scalar => Ok(scalar.convert_to_string()),
+    }
+}
+
+fn evaluated_mapping(expression: &str, env: &ExprEnv) -> Result<Vec<(String, String)>, ExprError> {
+    let Value::Object(object) = evaluate_expression(expression, env)? else {
+        return Err(malformed("a mapping was expected"));
+    };
+    object
+        .entries()
         .iter()
-        .map(|pair| {
-            let pair = pair
-                .as_object()
-                .ok_or_else(|| malformed("a mapping entry was expected"))?;
-            Ok((
-                member(pair, "key").ok_or_else(|| malformed("a mapping entry has no key"))?,
-                member(pair, "value").ok_or_else(|| malformed("a mapping entry has no value"))?,
-            ))
-        })
+        .map(|(key, value)| Ok((key.clone(), assert_string(value)?)))
         .collect()
 }
 
@@ -91,10 +139,13 @@ pub(super) fn find<'a>(token: &'a Json, name: &str) -> Result<Option<&'a Json>, 
 }
 
 pub(super) fn mapping(token: &Json, env: &ExprEnv) -> Result<Vec<(String, String)>, ExprError> {
-    pairs(token)?
-        .into_iter()
-        .map(|(key, value)| Ok((scalar(key, env)?, scalar(value, env)?)))
-        .collect()
+    match expression_of(token)? {
+        Some(expression) => evaluated_mapping(expression, env),
+        None => pairs(token)?
+            .into_iter()
+            .map(|(key, value)| Ok((scalar(key, env)?, scalar(value, env)?)))
+            .collect(),
+    }
 }
 
 pub(super) fn input(
@@ -102,10 +153,16 @@ pub(super) fn input(
     name: &str,
     env: &ExprEnv,
 ) -> Result<Option<String>, ExprError> {
-    inputs
-        .map(|inputs| find(inputs, name))
-        .transpose()?
-        .flatten()
+    let Some(inputs) = inputs else {
+        return Ok(None);
+    };
+    if expression_of(inputs)?.is_some() {
+        return Ok(mapping(inputs, env)?
+            .into_iter()
+            .find(|(key, _)| ordinal_ignore_case_eq(key, name))
+            .map(|(_, value)| value));
+    }
+    find(inputs, name)?
         .map(|token| scalar(token, env))
         .transpose()
 }
