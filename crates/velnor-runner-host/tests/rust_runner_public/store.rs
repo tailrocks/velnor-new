@@ -71,7 +71,10 @@ fn add_acl(path: &Path) -> Check {
         rustix::fs::XattrFlags::empty(),
     )
     .map_err(|error| {
-        format!("the filesystem of {path:?} cannot hold a POSIX ACL for this test: {error}")
+        format!(
+            "the filesystem of {} cannot hold a POSIX ACL for this test: {error}",
+            path.display()
+        )
     })?;
     Ok(())
 }
@@ -133,6 +136,7 @@ fn unsafe_binaries() -> Check {
     std::fs::remove_file(&binary)?;
     symlink(&target, &binary)?;
     assert_refused(&linked, RustRunnerFailure::BinaryUnsafe, "a symlink")?;
+    #[cfg(target_os = "macos")]
     root_owned_binary()?;
     for (name, expected) in [
         ("bin", RustRunnerFailure::StoreUnsafe),
@@ -171,11 +175,6 @@ fn root_owned_binary() -> Check {
         RustRunnerFailure::BinaryUnsafe,
         "a root-owned binary hard-linked into the store",
     )
-}
-
-#[cfg(not(target_os = "macos"))]
-fn root_owned_binary() -> Check {
-    Ok(())
 }
 
 fn symlinked_directories() -> Check {
