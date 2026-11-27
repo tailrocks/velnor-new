@@ -275,3 +275,30 @@ fn a_macos_x64_runner_is_refused_because_no_x64_velnor_gen_archive_is_pinned() -
     }
     Ok(())
 }
+
+#[test]
+fn the_generated_check_job_saves_the_tools_it_restored() -> TestResult {
+    let text = crate::tools_saver::rendered(crate::events::DENY_MISE)?;
+    let steps = crate::tools_saver::steps_of(&text, ID)?;
+    let at = |matches: &dyn Fn(&Value) -> bool| steps.iter().position(matches);
+    let restore = at(&|step| step["id"] == "toolslocal" || step["id"] == "tools")
+        .ok_or("no tools restore")?;
+    let record = at(&crate::tools_saver::named("Record anchor")).ok_or("no Record anchor")?;
+    let save = at(&|step| crate::tools_saver::runs(step, "tools-local save"))
+        .ok_or("no tools-local save")?;
+    let check =
+        at(&|step| crate::tools_saver::runs(step, "velnor-gen")).ok_or("no generator check")?;
+    assert!(
+        restore < record && record < save && save < check,
+        "{steps:?}"
+    );
+    let restored = steps[restore + 1..record]
+        .iter()
+        .find(|step| step["name"] == "Verify tools")
+        .ok_or("no Verify tools")?;
+    assert_eq!(
+        steps[record]["env"]["VELNOR_TOOLS_ANCHOR"], restored["env"]["VELNOR_TOOLS_ANCHOR"],
+        "{steps:?}"
+    );
+    Ok(())
+}

@@ -138,3 +138,29 @@ fn a_project_with_no_policy_tool_gets_no_policy_job_and_required_does_not_wait_f
     }
     Ok(())
 }
+
+#[test]
+fn the_policy_job_saves_the_tools_it_restored() -> TestResult {
+    let text = crate::tools_saver::rendered(DENY_MISE)?;
+    let steps = crate::tools_saver::steps_of(&text, "policy")?;
+    let at = |matches: &dyn Fn(&serde_json::Value) -> bool| steps.iter().position(matches);
+    let restore = at(&|step| step["id"] == "toolslocal" || step["id"] == "tools")
+        .ok_or("no tools restore")?;
+    let record = at(&crate::tools_saver::named("Record anchor")).ok_or("no Record anchor")?;
+    let save = at(&|step| crate::tools_saver::runs(step, "tools-local save"))
+        .ok_or("no tools-local save")?;
+    let deny = at(&crate::tools_saver::named("Dependency policy")).ok_or("no deny step")?;
+    assert!(
+        restore < record && record < save && save < deny,
+        "{steps:?}"
+    );
+    let verify = steps[restore + 1..record]
+        .iter()
+        .find(|step| step["name"] == "Verify tools")
+        .ok_or("no Verify tools")?;
+    assert_eq!(
+        steps[record]["env"]["VELNOR_TOOLS_ANCHOR"], verify["env"]["VELNOR_TOOLS_ANCHOR"],
+        "{steps:?}"
+    );
+    Ok(())
+}

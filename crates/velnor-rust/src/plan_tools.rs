@@ -365,7 +365,7 @@ pub(crate) fn tools_tree(
     steps
 }
 
-pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
+fn tools_install(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 

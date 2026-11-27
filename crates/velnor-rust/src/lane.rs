@@ -9,7 +9,7 @@ use velnor_model::{
 };
 
 use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
-use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
+use crate::plan_tools::{mirror_step, tools_save, tools_tree};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 pub(crate) const POLICY_JOB: JobId = JobId::from_static("policy");
@@ -286,16 +286,9 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     }));
     if !facts.tools.tools.is_empty() {
         steps.extend(
-            tools_restore(facts, lane.plan.as_ref())
+            tools_tree(facts, lane.plan.as_ref(), facts.rust_roots.first())
                 .into_iter()
-                .chain(tools_install(facts))
-                .chain(mirror_step(facts))
-                .chain(
-                    (!crate::plan_tools::tools_verified(facts))
-                        .then(|| tools_save(facts, lane.plan.as_ref()))
-                        .into_iter()
-                        .flatten(),
-                )
+                .chain(tools_save(facts, lane.plan.as_ref()))
                 .map(|step| Step {
                     gate: policy_gate.clone(),
                     ..step
