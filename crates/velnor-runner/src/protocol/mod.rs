@@ -36,7 +36,7 @@ pub use oauth::{
 pub use results::{BLOCK_BUDGET, StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 pub use run_service::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
-    RenewJobResponse, RetryDelays, RunServiceAnnotation, RunServiceAnnotationLevel,
+    CompletionAcknowledgement, RenewJobResponse, RetryDelays, RunServiceAnnotation, RunServiceAnnotationLevel,
     RunServiceClient, RunServiceCompleteJob, RunServiceStepResult, RunServiceTelemetry,
     RunServiceVariableValue, acquire_job, is_transient_acquire_error, renew_failure_is_job_gone,
 };

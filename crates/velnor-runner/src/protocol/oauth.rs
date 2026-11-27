@@ -162,17 +162,9 @@ impl OAuthClient {
         &self,
         credentials: &OAuthJwtCredentials,
     ) -> Result<OAuthAccessToken> {
-        let assertion = build_client_assertion(credentials)?;
-        let body = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("grant_type", "client_credentials")
-            .append_pair(
-                "client_assertion_type",
-                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-            )
-            .append_pair("client_assertion", &assertion)
-            .finish();
         let mut retries = 0;
         loop {
+            let body = exchange_body(credentials)?;
             let response = oauth_form_request(&credentials.token_url, &body, OAUTH_TIMEOUT).await?;
             if retries < MAX_RETRIES && is_retryable(response.status) {
                 retries += 1;
@@ -183,6 +175,18 @@ impl OAuthClient {
             return parse_oauth_token_response(&response);
         }
     }
+}
+
+fn exchange_body(credentials: &OAuthJwtCredentials) -> Result<String> {
+    let assertion = build_client_assertion(credentials)?;
+    Ok(url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("grant_type", "client_credentials")
+        .append_pair(
+            "client_assertion_type",
+            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        )
+        .append_pair("client_assertion", &assertion)
+        .finish())
 }
 
 fn parse_oauth_token_response(reply: &OAuthResponse) -> Result<OAuthAccessToken> {

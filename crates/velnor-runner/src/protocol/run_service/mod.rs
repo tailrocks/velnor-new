@@ -21,7 +21,7 @@ pub use acquire::{
     acquire_job, is_transient_acquire_error,
 };
 pub use complete::{
-    RunServiceAnnotation, RunServiceAnnotationLevel, RunServiceCompleteJob, RunServiceStepResult,
+    CompletionAcknowledgement, RunServiceAnnotation, RunServiceAnnotationLevel, RunServiceCompleteJob, RunServiceStepResult,
     RunServiceTelemetry, RunServiceVariableValue,
 };
 pub use renew::{RenewJobResponse, renew_failure_is_job_gone};

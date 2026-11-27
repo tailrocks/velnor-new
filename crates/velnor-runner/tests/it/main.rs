@@ -127,6 +127,7 @@ mod protocol_acquire_renew;
 mod lifecycle;
 mod lifecycle_busy;
 mod lifecycle_cancel;
+mod lifecycle_cancel_timeout;
 mod lifecycle_logs;
 mod lifecycle_refresh;
 mod lifecycle_renew;
@@ -138,6 +139,7 @@ mod lifecycle_token;
 mod lifecycle_token_retry;
 mod protocol_broker;
 mod protocol_complete;
+mod protocol_complete_ack;
 mod protocol_feed;
 mod protocol_http_guard;
 mod protocol_oauth;
@@ -161,6 +163,8 @@ mod strict;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;
+#[path = "exec_tracking.rs"]
+mod tracking;
 #[path = "exec_triage.rs"]
 mod triage;
 #[path = "exec_unsettled.rs"]

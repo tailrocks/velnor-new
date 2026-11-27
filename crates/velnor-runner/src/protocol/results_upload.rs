@@ -207,13 +207,10 @@ impl TwirpResultsClient {
     }
 
     pub(super) async fn upload_summary(&self, scope: &ScopeRequest<'_>, path: &Path) -> Result<()> {
-        let size = i64::try_from(
-            tokio::fs::metadata(path)
-                .await
-                .with_context(|| format!("stat {}", path.display()))?
-                .len(),
-        )
-        .context("step summary size")?;
+        let content = tokio::fs::read(path)
+            .await
+            .with_context(|| format!("read {}", path.display()))?;
+        let size = i64::try_from(content.len()).context("step summary size")?;
         let kind = STEP_SUMMARY;
         retrying(kind.label, || async {
             let signed = self.signed(kind, scope).await?;
@@ -228,11 +225,8 @@ impl TwirpResultsClient {
                 .into());
             }
             let (url, azure) = Self::blob_url(kind, signed)?;
-            let content = tokio::fs::read(path)
-                .await
-                .with_context(|| format!("read {}", path.display()))?;
             let headers: &[(&str, &str)] = if azure { &[(BLOB_TYPE, "BlockBlob")] } else { &[] };
-            put(&url, kind.label, self.block_budget, content, headers).await?;
+            put(&url, kind.label, self.block_budget, content.clone(), headers).await?;
             self.create_metadata(kind, scope, None, Some(size)).await
         })
         .await

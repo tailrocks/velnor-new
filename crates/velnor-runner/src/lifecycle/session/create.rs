@@ -64,9 +64,13 @@ impl Session {
                 }
             }
             let broker = self.auth().broker.clone();
-            let error = match broker.create_session(&self.template).await {
-                Ok(created) => {
-                    self.auth().id = session_id(created)?;
+            let created = broker
+                .create_session(&self.template)
+                .await
+                .and_then(session_id);
+            let error = match created {
+                Ok(id) => {
+                    self.auth().id = id;
                     return Ok(());
                 }
                 Err(error) => error,

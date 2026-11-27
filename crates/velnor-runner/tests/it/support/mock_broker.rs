@@ -156,6 +156,10 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
                 return match fault {
                     SessionFault::Unavailable => Reply::status(503),
                     SessionFault::Unparsable => Reply::json(200, &json!("not a session")),
+                    SessionFault::NoSessionId => Reply::json(
+                        200,
+                        &json!({"ownerName": "host (PID: 1)", "agent": {"id": 42, "name": "velnor-test"}}),
+                    ),
                     SessionFault::Forbidden => Reply::status(403),
                 };
             }

@@ -104,6 +104,7 @@ pub(crate) enum StepStatus {
 pub(crate) enum SessionFault {
     Unavailable,
     Unparsable,
+    NoSessionId,
     Forbidden,
 }
 

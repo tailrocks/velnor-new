@@ -330,5 +330,10 @@ async fn lifecycle_fails_the_job_when_the_environment_url_cannot_be_evaluated() 
     let complete = mock.complete_request()?;
     assert_eq!(complete["conclusion"], "failed");
     assert!(complete.get("environmentUrl").is_none_or(Value::is_null));
+    let notes = array(&complete, "annotations")?;
+    assert!(
+        notes.iter().any(|note| note["level"] == "failure"),
+        "{notes:?}"
+    );
     Ok(())
 }

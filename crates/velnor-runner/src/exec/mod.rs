@@ -26,6 +26,7 @@ mod step_info;
 mod timeout;
 mod token;
 mod tool_cache;
+mod tracking;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

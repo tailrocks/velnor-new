@@ -3,13 +3,16 @@
 
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use velnor_runner::exec::JobResult;
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 use velnor_runner::protocol::TokenBackoff;
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::{Settings, fixture_job, run_in, run_with};
+use super::support::RecordedRequest;
 use super::support::mock_github::{Behavior, MockGithub, OAuthTokens, SessionCreate};
 
 const EXCHANGES_WITHOUT_FAILURE: usize = 2;
@@ -237,5 +240,47 @@ async fn lifecycle_ignores_a_retry_after_date_that_has_passed() -> Result<()> {
     let gaps = token_request_gaps(1, Some(PAST), backoff(0, 300, 10_000)).await?;
 
     assert_waited(gaps[0], 300);
+    Ok(())
+}
+
+fn assertion_id(request: &RecordedRequest) -> Result<String> {
+    let body = request.text();
+    let assertion = url::form_urlencoded::parse(body.as_bytes())
+        .find(|(name, _)| name == "client_assertion")
+        .map(|(_, value)| value.into_owned())
+        .context("the client assertion")?;
+    let payload = assertion
+        .split('.')
+        .nth(1)
+        .context("the assertion claims")?;
+    let claims: serde_json::Value = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload)?)?;
+    Ok(claims["jti"]
+        .as_str()
+        .context("the assertion id")?
+        .to_owned())
+}
+
+#[tokio::test]
+async fn lifecycle_signs_a_new_assertion_for_every_token_attempt() -> Result<()> {
+    let behavior = Behavior {
+        oauth: unavailable(429, 2, None),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run_with(&mock, Settings::new().within(BUDGET)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let ids = mock
+        .requests_to("POST", "/oauth/token")?
+        .iter()
+        .take(3)
+        .map(assertion_id)
+        .collect::<Result<Vec<_>>>()?;
+    assert_eq!(ids.len(), 3);
+    assert!(
+        ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2],
+        "{ids:?}"
+    );
     Ok(())
 }

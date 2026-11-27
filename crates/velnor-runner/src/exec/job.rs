@@ -81,7 +81,7 @@ pub async fn run_job(
                     options,
                     adapters,
                     cancel,
-                    groups: Groups::default(),
+                    groups: Groups::new(ctx.tracking()),
                     ctx,
                     status: JobStatus::Success,
                 };
@@ -118,7 +118,7 @@ impl Job<'_> {
         }
         self.collect_outputs(out, run).await;
         self.collect_environment_url(out, run).await;
-        self.groups.kill_all();
+        self.groups.finish().await;
         run.result = match self.status {
             JobStatus::Success => JobResult::Succeeded,
             JobStatus::Failure => JobResult::Failed,

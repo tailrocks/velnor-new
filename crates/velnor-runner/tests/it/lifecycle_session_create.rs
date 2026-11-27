@@ -252,6 +252,12 @@ async fn sign_in_ends_the_run_after(oauth: OAuthTokens, exchanges: usize) -> Res
 }
 
 #[tokio::test]
+async fn lifecycle_keeps_retrying_a_session_answer_without_an_id_until_it_is_created() -> Result<()>
+{
+    session_is_created_after(SessionFault::NoSessionId, 2).await
+}
+
+#[tokio::test]
 async fn lifecycle_gives_up_at_once_when_the_runner_registration_is_deleted() -> Result<()> {
     let deleted = OAuthTokens::Rejected("invalid_client", "The client was deleted");
     sign_in_ends_the_run_after(deleted, 1).await
