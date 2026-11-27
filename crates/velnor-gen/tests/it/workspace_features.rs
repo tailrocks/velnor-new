@@ -230,9 +230,8 @@ fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResul
 
 pub(crate) const UNGATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\n";
 
-#[test]
-fn a_direct_test_target_never_takes_the_features() -> TestResult {
-    let mut repo = repository(&["Cargo.toml"], FEATURES)?;
+fn with_direct_target(config: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let mut repo = repository(&["Cargo.toml"], config)?;
     repo.files
         .insert(RepoPath::new("Cargo.toml")?, UNGATED_HARNESS.to_vec());
     for metadata in repo.rust_metadata.values_mut() {
@@ -248,15 +247,28 @@ fn a_direct_test_target_never_takes_the_features() -> TestResult {
             });
         }
     }
-    let steps = steps_of(&repo)?;
-    assert_featured(&steps, "Lint", true);
-    assert_featured(&steps, "Test", true);
-    let direct: Vec<_> = steps
+    steps_of(&repo)
+}
+
+fn direct_steps(steps: &[(String, String)]) -> Vec<&(String, String)> {
+    steps
         .iter()
         .filter(|(_, run)| run.contains("--test=gate") || run.contains("--test gate"))
-        .collect();
-    assert_eq!(direct.len(), 1, "{steps:?}");
+        .collect()
+}
+
+#[test]
+fn a_direct_test_target_never_takes_the_features() -> TestResult {
+    let keyed = with_direct_target(FEATURES)?;
+    assert_featured(&keyed, "Lint", true);
+    assert_featured(&keyed, "Test", true);
+    let direct = direct_steps(&keyed);
+    assert_eq!(direct.len(), 1, "{keyed:?}");
     assert!(!direct[0].1.contains("--features"), "{direct:?}");
+    let plain = with_direct_target("")?;
+    assert_featured(&plain, "Lint", false);
+    assert_featured(&plain, "Test", false);
+    assert_eq!(direct_steps(&plain), direct, "{plain:?}");
     Ok(())
 }
 
