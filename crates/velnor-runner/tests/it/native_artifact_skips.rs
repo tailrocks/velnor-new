@@ -36,6 +36,21 @@ fn uploaded(fake: &FakeResults) -> Result<Vec<String>> {
         .collect())
 }
 
+const WARNING: &str = "::warning::A non-blocking warning has occurred during artifact zip creation: ENTRYNOTSUPPORTED";
+const INFO: &str = "Error: entry not supported";
+
+fn assert_skipped(ran: &Ran, times: usize) {
+    assert_eq!(ran.stdout.matches(WARNING).count(), times, "{}", ran.stdout);
+    assert_eq!(ran.stdout.matches(INFO).count(), times, "{}", ran.stdout);
+}
+
+fn mkfifo(path: &Path) -> Result<()> {
+    if !Command::new("mkfifo").arg(path).status()?.success() {
+        bail!("mkfifo failed");
+    }
+    Ok(())
+}
+
 fn real(path: &Path) -> Result<String> {
     Ok(fs::canonicalize(path)?.display().to_string())
 }
@@ -49,6 +64,7 @@ async fn a_dangling_link_is_skipped_and_the_other_files_upload() -> Result<()> {
     let ran = upload(&scratch, &fake, &[])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
+    assert_skipped(&ran, 0);
     Ok(())
 }
 
@@ -62,6 +78,7 @@ async fn a_file_that_vanishes_before_it_opens_is_skipped() -> Result<()> {
     let ran = upload(&scratch, &fake, &[(REMOVE, &gone)])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
+    assert_skipped(&ran, 0);
     Ok(())
 }
 
@@ -79,6 +96,7 @@ async fn a_link_target_that_vanishes_before_it_opens_is_skipped() -> Result<()> 
     let ran = upload(&scratch, &fake, &[(REMOVE, &target)])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
+    assert_skipped(&ran, 0);
     Ok(())
 }
 
@@ -101,6 +119,7 @@ async fn a_file_whose_name_is_not_utf8_is_skipped() -> Result<()> {
     let ran = upload(&scratch, &fake, &[])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
+    assert_skipped(&ran, 0);
     Ok(())
 }
 
@@ -110,13 +129,7 @@ async fn a_matched_pipe_socket_or_link_to_a_pipe_is_skipped() -> Result<()> {
     let scratch = Scratch::new()?;
     write_file(&scratch, "out/ok.txt", b"ok")?;
     let out = scratch.workspace().join("out");
-    if !Command::new("mkfifo")
-        .arg(out.join("pipe"))
-        .status()?
-        .success()
-    {
-        bail!("mkfifo failed");
-    }
+    mkfifo(&out.join("pipe"))?;
     symlink("pipe", out.join("pipe-link"))?;
     let short =
         std::env::temp_dir().join(format!("s{}", &Uuid::new_v4().simple().to_string()[..12]));
@@ -131,7 +144,31 @@ async fn a_matched_pipe_socket_or_link_to_a_pipe_is_skipped() -> Result<()> {
     let ran = upload(&scratch, &fake, &[])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
-    let warning = "::warning::A non-blocking warning has occurred during artifact zip creation: ENTRYNOTSUPPORTED";
-    assert_eq!(ran.stdout.matches(warning).count(), 3, "{}", ran.stdout);
+    assert_skipped(&ran, 3);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_path_matching_only_a_pipe_uploads_an_empty_archive_and_warns() -> Result<()> {
+    let fake = FakeResults::start().await?;
+    let scratch = Scratch::new()?;
+    fs::create_dir_all(scratch.workspace().join("out"))?;
+    mkfifo(&scratch.workspace().join("out/pipe"))?;
+    let ran = upload(&scratch, &fake, &[])?;
+    assert_eq!(ran.code, Some(0), "{}", ran.stdout);
+    assert!(
+        ran.stdout
+            .contains("With the provided path, there will be 1 file uploaded"),
+        "{}",
+        ran.stdout
+    );
+    assert!(
+        !ran.stdout.contains("No files were found"),
+        "{}",
+        ran.stdout
+    );
+    assert_skipped(&ran, 1);
+    assert_eq!(fake.artifacts()?.len(), 1);
+    assert_eq!(uploaded(&fake)?, Vec::<String>::new());
     Ok(())
 }

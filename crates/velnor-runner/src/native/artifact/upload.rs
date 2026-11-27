@@ -15,7 +15,10 @@ use super::tz;
 use super::{Blocking, client, escape, failed, search, validate_name, validate_path, zip};
 use crate::exec::{ExecError, StepContext, StepResult};
 
-const ENTRY_NOT_SUPPORTED: &str = "::warning::A non-blocking warning has occurred during artifact zip creation: ENTRYNOTSUPPORTED";
+const ENTRY_NOT_SUPPORTED: [&str; 2] = [
+    "::warning::A non-blocking warning has occurred during artifact zip creation: ENTRYNOTSUPPORTED",
+    "Error: entry not supported",
+];
 
 fn expiry(ctx: &mut StepContext<'_>, days: Option<i64>) -> Result<Option<String>, ExecError> {
     let Some(mut days) = days else {
@@ -139,16 +142,18 @@ pub(super) async fn run(
     let found = blocking
         .run(move |stop| search::find(&workspace, home.as_deref(), &text, stop))
         .await??;
-    if found.files.is_empty() {
+    if found.files.is_empty() && found.skipped == 0 {
         return Ok(report_no_files(ctx, &inputs, outcome));
     }
-    let count = found.files.len();
+    let count = found.files.len() + found.skipped;
     let plural = if count == 1 { "" } else { "s" };
     ctx.log(&format!(
         "With the provided path, there will be {count} file{plural} uploaded"
     ));
     for _ in 0..found.skipped {
-        ctx.log(ENTRY_NOT_SUPPORTED);
+        for line in ENTRY_NOT_SUPPORTED {
+            ctx.log(line);
+        }
     }
     let client = client(ctx);
     if inputs.overwrite

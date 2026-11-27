@@ -1051,24 +1051,29 @@ claimed to match.
     match and can select an artifact of another name. This is a deliberate
     departure.
 19. An upload's search skips a matched entry it cannot read as a regular file:
-    a dangling symlink, an entry that vanishes between the listing and the
-    open, and a FIFO, a socket or a device (a link to one included). The
-    toolkit's glob omits broken links and drops an entry that fails with
-    `ENOENT` (upload-artifact `cf430e03` `search.ts:103-108`). It returns a
-    FIFO, a socket or a device as a file and passes it to `archiver`, which
-    drops it and emits the toolkit warning `A non-blocking warning has occurred
-    during artifact zip creation: ENTRYNOTSUPPORTED` (archiver 7.0.1). Velnor
-    skips these only in the artifact search and prints that same warning line
-    once per skipped FIFO, socket or device, after the line that counts the
-    files; a dangling link or a vanished entry is skipped silently, as upstream
-    does. The count in `there will be N files uploaded` leaves the skipped
-    entries out, where upstream counts them. `hashFiles` keeps failing with
-    `<path>: not a regular file` and keeps its guarded opens.
+    a dangling symlink, an entry missing when the search looks at it, and a
+    FIFO, a socket or a device (a link to one included). The toolkit's glob
+    omits a broken link (`omitBrokenSymbolicLinks`) and drops an entry that
+    fails with `ENOENT`, silently, and Velnor does the same. The toolkit's
+    glob returns a FIFO, a socket or a device as a file, counts it in
+    `there will be N files uploaded` (upload-artifact `cf430e03`
+    `search.ts:103-108`) and passes it to `archiver`, which drops it and emits
+    the toolkit warning `A non-blocking warning has occurred during artifact
+    zip creation: ENTRYNOTSUPPORTED`, followed by the info line `Error: entry
+    not supported` (archiver 7.0.1). Velnor skips these only in the artifact
+    search, counts each one in the file count, leaves it out of the zip and
+    prints the same two lines once per entry, after the line that counts the
+    files. A path that matches only such entries therefore uploads an empty
+    archive and does not take the no-files branch, as upstream. An entry that
+    vanishes between the search and the zip is a recorded difference: Velnor
+    skips it silently, where upstream warns (and fails for a vanished link
+    target). `hashFiles` keeps failing with `<path>: not a regular file` and
+    keeps its guarded opens.
 
 The native steps claim only the pinned revisions: `actions/upload-artifact` at
 `cf430e030ddbb5b0abf93d22962f4752f3646cd9`, `v7` or `v7.0.2`, and
 `actions/download-artifact` at `9000827ccba6bdab643e8b6fd33ac0654aef8333`, `v8`
-or `v8.0.2`. Any other revision, and any input outside the supported set, is
+or `v8.0.2`. Any other revision, and any literal input outside the supported set, is
 refused as unsupported before the first step of the job runs. An input given
 as an expression is evaluated for that check with the contexts the runner holds
 when the job starts (`github` as its own step sees it, `runner`, `needs`,
@@ -1079,7 +1084,10 @@ result is unsupported. An expression that reads `steps` or `env` (which
 `success()`, `failure()`, `cancelled()` or `hashFiles`, or that cannot be evaluated at that
 point, such as one that names `matrix`, is not checked then: it is checked
 when its step runs, and an unsupported result fails that step with the same
-text before it lists any artifact. The download `pattern` is matched by a
+text before it lists any artifact. A `with:` that is itself an
+expression, and a `with:` key that is an expression, are not read at that
+check either: they are checked when the step runs, and an input outside the
+supported set fails that step with the same text before it lists any artifact. The download `pattern` is matched by a
 matcher of Velnor's own over the artifact name, and only a verified subset of minimatch 10.1.1 is accepted: literal characters, `*`,
 `?`, classes (`[abc]`, `[a-z]`, `[!a]`, `[^a]`) of ASCII letters, digits, `_` and
 `.`, and brace lists of at least two comma-separated alternatives, which may nest
