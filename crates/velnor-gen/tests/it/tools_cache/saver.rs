@@ -25,9 +25,20 @@ fn with_files(
 }
 
 pub(crate) fn rendered(mise: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let config = format!("mbx_shared_store = true\n{FROM_SOURCE}");
+    rendered_as("", None, mise)
+}
+
+fn rendered_as(
+    shape: &str,
+    toolchain: Option<&str>,
+    mise: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let config = format!("mbx_shared_store = true\n{shape}{FROM_SOURCE}");
     let mut repo = locked(&config, FIRST)?;
     with_files(&mut repo, &[("deny.toml", ""), ("mise.toml", mise)])?;
+    if let Some(toolchain) = toolchain {
+        with_files(&mut repo, &[("rust-toolchain.toml", toolchain)])?;
+    }
     crate::pipeline::workflow(&repo)
 }
 
@@ -54,6 +65,9 @@ fn without_condition(step: &Value) -> Value {
     let mut step = step.clone();
     if let Some(step) = step.as_object_mut() {
         step.remove("if");
+        if step.get("id").is_some_and(|id| id == "prepare") {
+            step.remove("run");
+        }
     }
     step
 }
@@ -67,20 +81,86 @@ fn tree(steps: &[Value]) -> Result<&[Value], Box<dyn std::error::Error>> {
     Ok(&steps[first..=record])
 }
 
+const COMPLETE: &str = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
+const ANCHOR: [&str; 2] = [
+    "needs.rust-plan.outputs.tools_anchor",
+    "steps.toolsread.outputs.anchor",
+];
+const ANCHOR_KEY: [&str; 3] = [
+    "needs.rust-plan.outputs.tools_anchor_key",
+    "steps.toolsread.outputs.anchor_key",
+    "steps.toolsanchor.outputs.cache-matched-key",
+];
+
+type Saver = (String, Vec<Value>);
+
+fn savers(text: &str) -> Result<Vec<Saver>, Box<dyn std::error::Error>> {
+    let document = crate::yaml_tree::document(text)?;
+    let jobs = document["jobs"].as_object().ok_or("no jobs")?;
+    let mut found = Vec::new();
+    for (id, job) in jobs {
+        let steps = job["steps"].as_array().cloned().unwrap_or_default();
+        if position(&steps, named(RECORD)).is_some() {
+            found.push((id.clone(), steps));
+        }
+    }
+    Ok(found)
+}
+
+fn belongs_to_the_tree(step: &Value) -> bool {
+    let text = step.to_string();
+    [
+        "tools-local",
+        "tools-verify",
+        "cache/",
+        "mise",
+        "rustup",
+        "crates mirror",
+        "anchor",
+    ]
+    .iter()
+    .any(|word| text.contains(word))
+        || step["id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("tools") || id == "prepare")
+}
+
 #[test]
 fn every_tools_saver_builds_the_same_tree() -> TestResult {
-    let text = rendered(DENY_MISE)?;
-    let mut trees = Vec::new();
-    for id in SAVERS {
-        let steps = steps_of(&text, id)?;
-        let tree = tree(&steps)?;
-        let project = tree.iter().find(|step| runs(step, "cargo "));
-        assert!(project.is_none(), "{id}: {project:?}");
-        trees.push((id, tree.iter().map(without_condition).collect::<Vec<_>>()));
-    }
-    let (first, expected) = &trees[0];
-    for (id, tree) in &trees[1..] {
-        assert_eq!(tree, expected, "{id} differs from {first}");
+    let fixtures = [
+        ("one job", "", None),
+        ("plan shape", "shape = \"lint-test\"\n", None),
+        ("complete profile", "", Some(COMPLETE)),
+        (
+            "complete profile in the plan shape",
+            "shape = \"lint-test\"\n",
+            Some(COMPLETE),
+        ),
+    ];
+    for (label, shape, toolchain) in fixtures {
+        let text = rendered_as(shape, toolchain, DENY_MISE)?;
+        let mut trees = Vec::new();
+        for (id, steps) in savers(&text)? {
+            let tree = tree(&steps)?;
+            let foreign = tree.iter().find(|step| !belongs_to_the_tree(step));
+            assert!(foreign.is_none(), "{label} {id}: {foreign:?}");
+            let normal = |step: &Value| {
+                let step = ANCHOR_KEY
+                    .iter()
+                    .fold(without_condition(step).to_string(), |text, form| {
+                        text.replace(form, "<anchor key>")
+                    });
+                ANCHOR
+                    .iter()
+                    .fold(step, |text, form| text.replace(form, "<anchor>"))
+            };
+            trees.push((id, tree.iter().map(normal).collect::<Vec<_>>()));
+        }
+        assert!(trees.len() >= SAVERS.len(), "{label}: {trees:?}");
+        let (first, expected) = &trees[0];
+        for (id, tree) in &trees[1..] {
+            assert_eq!(tree, expected, "{label}: {id} differs from {first}");
+        }
     }
     Ok(())
 }

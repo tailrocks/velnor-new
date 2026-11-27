@@ -215,6 +215,13 @@ pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: Option<&RustRoo
     steps
 }
 
+pub(crate) fn complete_profile(facts: &RepoFacts) -> bool {
+    facts
+        .toolchain
+        .as_ref()
+        .is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete"))
+}
+
 pub(crate) fn setup_units(
     facts: &RepoFacts,
     units: &[Unit],
@@ -251,14 +258,9 @@ pub(crate) fn setup_units(
         .into_iter()
         .chain(tools_tree(facts, lane.plan.as_ref(), Some(root)))
         .collect();
-    let declared = facts.toolchain.as_ref();
-    let prepare = step(StepKind::Prepare(PrepareLocks::All));
-    if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
-        toolchain.push(prepare);
-        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
-    } else {
-        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
-        toolchain.push(prepare);
+    toolchain.extend(tools_save(facts, lane.plan.as_ref()));
+    if !complete_profile(facts) {
+        toolchain.push(step(StepKind::Prepare(PrepareLocks::All)));
     }
     for (index, (unit, family)) in units.iter().zip(families).enumerate() {
         for member in &unit.roots {

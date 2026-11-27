@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, RepoFacts, RunnerLabel,
-    RustRoot, Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+    AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, PrepareLocks, RepoFacts,
+    RunnerLabel, RustRoot, Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
 };
 
-use crate::plan::{TOOLS_LOCAL_HELPER, rust_additions, step};
+use crate::plan::{TOOLS_LOCAL_HELPER, complete_profile, rust_additions, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
@@ -362,6 +362,9 @@ pub(crate) fn tools_tree(
         steps.extend(mirror_step(facts));
     }
     steps.extend(rust_additions(facts.toolchain.as_ref(), root));
+    if complete_profile(facts) {
+        steps.push(step(StepKind::Prepare(PrepareLocks::All)));
+    }
     steps
 }
 
