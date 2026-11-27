@@ -311,7 +311,6 @@ impl StepKind {
 pub struct GroupFilter {
     pub name: String,
     pub filter: String,
-    pub except: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

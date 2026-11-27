@@ -224,12 +224,7 @@ pub(crate) fn test_groups_step(groups: &[GroupFilter], features: &LaneFeatures) 
     );
     for group in groups {
         run.push_str(" --group ");
-        let filter = if group.except.is_empty() {
-            group.filter.clone()
-        } else {
-            crate::cargo::without_binaries(format!("({})", group.filter), &group.except)
-        };
-        run.push_str(&shell_word(&format!("{}={filter}", group.name)));
+        run.push_str(&shell_word(&format!("{}={}", group.name, group.filter)));
     }
     RenderedStep {
         name: "velnor-ci test-groups check".to_owned(),

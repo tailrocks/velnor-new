@@ -117,7 +117,6 @@ impl RootJobs<'_> {
                     .map(|group| GroupFilter {
                         name: group.name.to_string(),
                         filter: group.filter.clone(),
-                        except: self.member().direct_binaries(self.facts),
                     })
                     .collect(),
             ))

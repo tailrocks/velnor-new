@@ -68,7 +68,7 @@ fn gated_refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
 
 #[test]
 fn a_gated_harness_false_target_refuses_the_key_and_nothing_else_does() -> TestResult {
-    let manifest = |target: &str| format!("{}{target}", MANIFEST_TEXT);
+    let manifest = |target: &str| format!("{MANIFEST_TEXT}{target}");
     let mut repo = repository(&["Cargo.toml"], FEATURES)?;
     let gated = manifest(GATED);
     repo.files
