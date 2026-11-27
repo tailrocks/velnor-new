@@ -24,20 +24,19 @@ pub(crate) use location::mirror_path;
 pub(crate) use proto::{FailedStep, Request, Response, Token, Window};
 
 const REPAIR_CAP: Duration = Duration::from_mins(10);
+const FETCH_CAP: Duration = Duration::from_mins(30);
 
-async fn within<T>(cap: Duration, work: impl Future<Output = Result<T>>) -> Result<T> {
-    tokio::time::timeout(cap, work).await.unwrap_or_else(|_| {
-        Err(anyhow!(
-            "repairing the mirror took longer than {} seconds",
-            cap.as_secs()
-        ))
-    })
+async fn within<T>(what: &str, cap: Duration, work: impl Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout(cap, work)
+        .await
+        .unwrap_or_else(|_| Err(anyhow!("{what} took longer than {} seconds", cap.as_secs())))
 }
 
 pub(crate) struct Broker {
     facts: Box<TrustedFacts>,
     root: PathBuf,
     repair_cap: Duration,
+    fetch_cap: Duration,
 }
 
 impl Broker {
@@ -46,6 +45,7 @@ impl Broker {
             facts: Box::new(facts),
             root,
             repair_cap: REPAIR_CAP,
+            fetch_cap: FETCH_CAP,
         }
     }
 
@@ -55,11 +55,17 @@ impl Broker {
         self
     }
 
+    #[cfg(test)]
+    fn with_fetch_cap(mut self, cap: Duration) -> Self {
+        self.fetch_cap = cap;
+        self
+    }
+
     pub(crate) async fn handle(&self, request: Request) -> Response {
         let result = match request {
             Request::FetchMirror { token } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::fetch(&self.root, &self.facts, token)
+                mirror::fetch(&self.root, &self.facts, token, self.fetch_cap)
                     .await
                     .map(|notices| Response::Done { notices })
             }

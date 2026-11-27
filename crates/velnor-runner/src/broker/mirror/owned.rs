@@ -10,8 +10,11 @@ use std::time::SystemTime;
 
 use anyhow::{Context, Result};
 
+use super::dirty;
+use super::held::Held;
+
 const OBJECT_TEMPORARIES: [&[u8]; 1] = [b"tmp_obj_"];
-const PACK_TEMPORARIES: [&[u8]; 2] = [b"tmp_pack_", b"tmp_idx_"];
+const PACK_TEMPORARIES: [&[u8]; 3] = [b"tmp_pack_", b"tmp_idx_", b"tmp_rev_"];
 
 fn entries(dir: &Path) -> Result<Vec<DirEntry>> {
     match std::fs::read_dir(dir) {
@@ -69,40 +72,46 @@ fn stem_of(name: &[u8]) -> Option<&[u8]> {
     stem.starts_with(b"pack-").then_some(stem)
 }
 
-fn indexed_stems(pack: &Path) -> Result<BTreeSet<Vec<u8>>> {
-    let mut stems = BTreeSet::new();
+fn complete_packs(pack: &Path) -> Result<BTreeSet<Vec<u8>>> {
+    let mut indexes = BTreeSet::new();
+    let mut packs = BTreeSet::new();
     for entry in entries(pack)? {
         let name = entry.file_name();
-        if let Some(stem) = stem_of(name.as_bytes()).filter(|_| name.as_bytes().ends_with(b".idx"))
-        {
-            stems.insert(stem.to_vec());
+        let is_file = entry.file_type().is_ok_and(|kind| kind.is_file());
+        let Some(stem) = stem_of(name.as_bytes()).filter(|_| is_file) else {
+            continue;
+        };
+        if name.as_bytes().ends_with(b".idx") {
+            indexes.insert(stem.to_vec());
+        } else if name.as_bytes().ends_with(b".pack") {
+            packs.insert(stem.to_vec());
         }
     }
-    Ok(stems)
+    Ok(indexes.intersection(&packs).cloned().collect())
 }
 
 fn tidy_top(mirror: &Path) -> Result<()> {
     retain(mirror, |_, name, kind| match name {
         b"HEAD" | b"config" | b"packed-refs" => kind.is_file(),
+        _ if name == dirty::NAME.as_bytes() => kind.is_file(),
         b"objects" | b"refs" | b"quarantine" | b"sound" => kind.is_dir(),
         _ => false,
     })
 }
 
-fn tidy_objects(mirror: &Path, acquired: SystemTime) -> Result<()> {
-    let objects = mirror.join("objects");
-    retain(&objects, |entry, name, kind| match name {
-        b"pack" => kind.is_dir(),
-        _ if is_fan_out(name) => kind.is_dir(),
-        _ => is_temporary(name, &OBJECT_TEMPORARIES) && !predates(entry, acquired),
-    })?;
-    for fan_out in entries(&objects)? {
+fn tidy_loose(objects: &Path, acquired: SystemTime) -> Result<()> {
+    for fan_out in entries(objects)? {
         if is_fan_out(fan_out.file_name().as_bytes()) {
-            retain(&fan_out.path(), |entry, name, _| {
-                !(is_temporary(name, &OBJECT_TEMPORARIES) && predates(entry, acquired))
+            retain(&fan_out.path(), |entry, name, kind| {
+                kind.is_file()
+                    && !(is_temporary(name, &OBJECT_TEMPORARIES) && predates(entry, acquired))
             })?;
         }
     }
+    Ok(())
+}
+
+fn tidy_packs(objects: &Path, acquired: SystemTime) -> Result<()> {
     let pack = objects.join("pack");
     match std::fs::create_dir(&pack) {
         Err(error) if error.kind() != ErrorKind::AlreadyExists => {
@@ -110,26 +119,47 @@ fn tidy_objects(mirror: &Path, acquired: SystemTime) -> Result<()> {
         }
         Ok(()) | Err(_) => {}
     }
-    let indexed = indexed_stems(&pack)?;
+    let complete = complete_packs(&pack)?;
     retain(&pack, |entry, name, kind| {
         if is_temporary(name, &PACK_TEMPORARIES) {
             !predates(entry, acquired)
         } else {
-            kind.is_file() && stem_of(name).is_some_and(|stem| indexed.contains(stem))
+            kind.is_file() && stem_of(name).is_some_and(|stem| complete.contains(stem))
         }
     })
 }
 
-pub(super) async fn keep_only_owned(mirror: &Path) -> Result<()> {
-    let mirror = mirror.to_owned();
-    tokio::task::spawn_blocking(move || tidy_top(&mirror))
-        .await
-        .context("wait for the mirror tidy")?
+#[derive(Clone, Copy)]
+pub(super) enum Sweep {
+    Packs,
+    Everything,
 }
 
-pub(super) async fn sweep_objects(mirror: &Path, acquired: SystemTime) -> Result<()> {
+fn tidy_objects(mirror: &Path, acquired: SystemTime, sweep: Sweep) -> Result<()> {
+    let objects = mirror.join("objects");
+    retain(&objects, |entry, name, kind| match name {
+        b"pack" => kind.is_dir(),
+        _ if is_fan_out(name) => kind.is_dir(),
+        _ => is_temporary(name, &OBJECT_TEMPORARIES) && !predates(entry, acquired),
+    })?;
+    if matches!(sweep, Sweep::Everything) {
+        tidy_loose(&objects, acquired)?;
+    }
+    tidy_packs(&objects, acquired)
+}
+
+pub(super) async fn keep_only_owned(mirror: &Path, held: &Held) -> Result<()> {
     let mirror = mirror.to_owned();
-    tokio::task::spawn_blocking(move || tidy_objects(&mirror, acquired))
-        .await
-        .context("wait for the object store sweep")?
+    held.blocking(move || tidy_top(&mirror)).await?
+}
+
+pub(super) async fn sweep_objects(
+    mirror: &Path,
+    held: &Held,
+    acquired: SystemTime,
+    sweep: Sweep,
+) -> Result<()> {
+    let mirror = mirror.to_owned();
+    held.blocking(move || tidy_objects(&mirror, acquired, sweep))
+        .await?
 }

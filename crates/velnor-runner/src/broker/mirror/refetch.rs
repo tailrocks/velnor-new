@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::{missing_tree, remove_entry, sound};
+use super::{is_file, missing_tree, remove_entry, sound};
 use crate::broker::facts::TrustedFacts;
 use crate::broker::git::{git, git_args, has_tree, output};
 use crate::broker::repair::refs;
@@ -15,7 +15,7 @@ use crate::broker::transfer::{Transfer, fetch_wanted};
 
 const STAGE: &str = "refetch.velnor";
 
-async fn adopt_packs(stage: &Path, mirror: &Path) -> Result<()> {
+pub(super) async fn adopt_packs(stage: &Path, mirror: &Path) -> Result<()> {
     let from = stage.join("objects/pack");
     let to = mirror.join("objects/pack");
     tokio::fs::create_dir_all(&to)
@@ -35,13 +35,14 @@ async fn adopt_packs(stage: &Path, mirror: &Path) -> Result<()> {
     }
     for stem in stems {
         let index = format!("{stem}.idx");
-        if tokio::fs::symlink_metadata(to.join(&index)).await.is_ok() {
+        if is_file(&to.join(&index)).await && is_file(&to.join(format!("{stem}.pack"))).await {
             continue;
         }
         let sidecars = names
             .iter()
             .filter(|name| name.starts_with(&format!("{stem}.")) && **name != index);
         for name in sidecars.chain([&index]) {
+            remove_entry(&to.join(name)).await?;
             tokio::fs::rename(from.join(name), to.join(name))
                 .await
                 .with_context(|| format!("move {name} into {}", to.display()))?;
@@ -125,3 +126,6 @@ pub(super) async fn refetch(
     let _ = git(&git_args(Some(mirror), &["prune-packed", "-q"]), &[]).await;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

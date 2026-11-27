@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsString;
+use std::fs::File;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -22,6 +24,10 @@ use url::Url;
 mod batch;
 
 pub(crate) use batch::{Batch, Commit};
+
+tokio::task_local! {
+    pub(super) static HELD_LOCK: Arc<File>;
+}
 
 const GIT_ENV: [(&str, &str); 3] = [
     ("GIT_CONFIG_NOSYSTEM", "1"),
@@ -136,9 +142,14 @@ fn wait_for_exit(leader: Pid) -> Result<bool, Errno> {
 
 impl Leader {
     fn spawn(args: &[String], env: &[(OsString, OsString)], pipes: Pipes) -> Result<Self> {
+        let held = HELD_LOCK
+            .try_with(|lock| lock.try_clone())
+            .ok()
+            .and_then(Result::ok)
+            .map_or_else(Stdio::null, Stdio::from);
         let (stdin, stdout) = match pipes {
-            Pipes::Discard => (Stdio::null(), Stdio::null()),
-            Pipes::Capture { feed: false } => (Stdio::null(), Stdio::piped()),
+            Pipes::Discard => (held, Stdio::null()),
+            Pipes::Capture { feed: false } => (held, Stdio::piped()),
             Pipes::Capture { feed: true } => (Stdio::piped(), Stdio::piped()),
         };
         let mut command = Command::new("git");

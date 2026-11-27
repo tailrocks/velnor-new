@@ -2,66 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/git_mirror.rs
 
-use std::fs::TryLockError;
+use std::future::Future;
 use std::io::{Read, Write};
-use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context, Result, anyhow, bail};
-use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags};
-use rustix::io::Errno;
+use anyhow::{Context, Result, anyhow};
+use rustix::fs::OFlags;
 
 use super::facts::TrustedFacts;
-use super::git::{fetch_env, git, git_args, has_commit, has_tree};
+use super::git::{HELD_LOCK, fetch_env, git, git_args, has_commit, has_tree};
 use super::location::mirror_path;
 use super::proto::{FailedStep, Window};
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
 use super::within;
 
+mod dirty;
+mod held;
 mod owned;
 mod refetch;
+mod refs;
 mod sound;
 
+use held::Held;
+use owned::Sweep;
 use refetch::refetch;
-
-async fn lock(path: &Path) -> Result<std::fs::File> {
-    let file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .custom_flags(
-            (OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC)
-                .bits()
-                .cast_signed(),
-        )
-        .open(path)
-        .await
-        .with_context(|| format!("open {}", path.display()))?;
-    let meta = file
-        .metadata()
-        .await
-        .with_context(|| format!("inspect {}", path.display()))?;
-    if !meta.is_file() {
-        bail!("mirror lock {} is not a regular file", path.display());
-    }
-    let file = file.into_std().await;
-    let mut backoff = Duration::from_millis(5);
-    loop {
-        match file.try_lock() {
-            Ok(()) => return Ok(file),
-            Err(TryLockError::WouldBlock) => {
-                tokio::time::sleep(backoff).await;
-                backoff = (backoff * 2).min(Duration::from_millis(100));
-            }
-            Err(TryLockError::Error(error)) => {
-                return Err(error).with_context(|| format!("lock {}", path.display()));
-            }
-        }
-    }
-}
 
 const MIRROR_CONFIG: &str = "[core]\n\trepositoryformatversion = 0\n\tbare = true\n";
 const MIRROR_HEAD: &str = "ref: refs/heads/main\n";
@@ -116,7 +83,6 @@ fn valid_head(head: &str) -> bool {
 }
 
 const MAX_HEAD_BYTES: u64 = 512;
-const MAX_REF_DEPTH: usize = 32;
 
 fn read_head(path: &Path) -> Option<String> {
     let flags = OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
@@ -146,82 +112,16 @@ async fn reset_mirror(mirror: &Path) -> Result<()> {
     install(mirror, "config", MIRROR_CONFIG).await
 }
 
-#[derive(PartialEq, Eq)]
-enum Refs {
-    Sound,
-    Replace,
-}
-
-fn remove_locks_in(dir: &OwnedFd, depth: usize) -> Result<Refs> {
-    let entries = Dir::read_from(dir).context("read a refs directory")?;
-    for entry in entries {
-        let entry = entry.context("read a refs entry")?;
-        let name = entry.file_name();
-        if matches!(name.to_bytes(), b"." | b"..") {
-            continue;
-        }
-        let kind = rustix::fs::statat(dir, name, AtFlags::SYMLINK_NOFOLLOW)
-            .map(|stat| FileType::from_raw_mode(stat.st_mode));
-        match kind {
-            Ok(FileType::Directory) => {
-                if depth >= MAX_REF_DEPTH {
-                    return Ok(Refs::Replace);
-                }
-                let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
-                match rustix::fs::openat(dir, name, flags, Mode::empty()) {
-                    Ok(child) => {
-                        if remove_locks_in(&child, depth + 1)? == Refs::Replace {
-                            return Ok(Refs::Replace);
-                        }
-                    }
-                    Err(Errno::NOENT | Errno::LOOP | Errno::NOTDIR) => {}
-                    Err(error) => return Err(error).context("open a refs directory"),
-                }
-            }
-            Ok(FileType::RegularFile) if name.to_bytes().ends_with(b".lock") => {
-                match rustix::fs::unlinkat(dir, name, AtFlags::empty()) {
-                    Ok(()) | Err(Errno::NOENT) => {}
-                    Err(error) => return Err(error).context("remove a ref lock"),
-                }
-            }
-            Ok(_) | Err(Errno::NOENT) => {}
-            Err(error) => return Err(error).context("inspect a refs entry"),
-        }
-    }
-    Ok(Refs::Sound)
-}
-
-fn remove_ref_locks_blocking(mirror: &Path) -> Result<Refs> {
-    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
-    let mirror_fd = rustix::fs::openat(CWD, mirror, flags, Mode::empty())
-        .with_context(|| format!("open {}", mirror.display()))?;
-    match rustix::fs::openat(&mirror_fd, "refs", flags | OFlags::NOFOLLOW, Mode::empty()) {
-        Ok(refs) => remove_locks_in(&refs, 0),
-        Err(Errno::NOENT) => Ok(Refs::Sound),
-        Err(Errno::LOOP | Errno::NOTDIR) => Ok(Refs::Replace),
-        Err(error) => Err(error).context("open the mirror refs directory"),
-    }
-}
-
-async fn remove_ref_locks(mirror: &Path) -> Result<()> {
-    let mirror = mirror.to_owned();
-    let replace = {
-        let mirror = mirror.clone();
-        tokio::task::spawn_blocking(move || remove_ref_locks_blocking(&mirror))
-            .await
-            .context("wait for the ref lock cleanup")??
-    };
-    if replace == Refs::Replace {
-        let refs = mirror.join("refs");
-        remove_entry(&refs).await?;
-        tokio::fs::create_dir(&refs)
-            .await
-            .with_context(|| format!("create {}", refs.display()))?;
-    }
-    Ok(())
-}
-
-async fn open(root: &Path, facts: &TrustedFacts) -> Result<(PathBuf, std::fs::File)> {
+async fn locked<T, Work>(
+    root: &Path,
+    facts: &TrustedFacts,
+    cap: Duration,
+    what: &str,
+    work: impl FnOnce(PathBuf, Held) -> Work,
+) -> Result<T>
+where
+    Work: Future<Output = Result<T>>,
+{
     let mirror = mirror_path(root, facts)?;
     let mut lock_file = mirror.clone().into_os_string();
     lock_file.push(".lock");
@@ -233,10 +133,17 @@ async fn open(root: &Path, facts: &TrustedFacts) -> Result<(PathBuf, std::fs::Fi
             .await
             .with_context(|| format!("create {}", parent.display()))?;
     }
-    let lock = lock(Path::new(&lock_file)).await?;
-    let acquired = SystemTime::now();
-    prepare(&mirror, acquired).await?;
-    Ok((mirror, lock))
+    let held = Held::acquire(Path::new(&lock_file)).await?;
+    HELD_LOCK
+        .scope(held.file(), async {
+            prepare(&mirror, &held, SystemTime::now()).await?;
+            let done = within(what, cap, work(mirror.clone(), held.clone())).await;
+            if done.is_ok() {
+                dirty::clear(&mirror).await;
+            }
+            done
+        })
+        .await
 }
 
 fn refused_by_the_server(error: &anyhow::Error) -> bool {
@@ -247,34 +154,48 @@ pub(crate) async fn fetch(
     root: &Path,
     facts: &TrustedFacts,
     token: Option<&str>,
+    cap: Duration,
 ) -> Result<Vec<String>> {
-    let (mirror, _lock) = open(root, facts).await?;
+    let what = "fetching into the mirror";
+    locked(root, facts, cap, what, |mirror, held| {
+        fetch_locked(mirror, held, facts, token)
+    })
+    .await
+}
+
+async fn fetch_locked(
+    mirror: PathBuf,
+    held: Held,
+    facts: &TrustedFacts,
+    token: Option<&str>,
+) -> Result<Vec<String>> {
+    let mirror = mirror.as_path();
     let sha = facts.sha.as_str();
-    remove_ref_locks(&mirror).await?;
-    let notices = drop_broken_refs(&mirror).await?;
-    if has_tree(&mirror, sha).await {
+    refs::tidy(mirror, &held).await?;
+    let notices = drop_broken_refs(mirror).await?;
+    if has_tree(mirror, sha).await {
         return Ok(notices);
     }
     let clone_url = facts.clone_url();
     let env = fetch_env(facts.server_url.url(), token);
-    let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
-    if !has_tree(&mirror, sha).await {
-        let scan = quarantine_corrupt(&mirror, sha, Window::COMMIT).await?;
+    let mut fetched = fetch_wanted(mirror, &clone_url, facts, &env, Transfer::Incremental).await;
+    if !has_tree(mirror, sha).await {
+        let scan = quarantine_corrupt(mirror, sha, Window::COMMIT).await?;
         if scan == Scan::Quarantined
             || !notices.is_empty()
-            || holds_commit(&mirror, sha).await
+            || holds_commit(mirror, sha).await
             || fetched
                 .as_ref()
                 .is_err_and(|error| !refused_by_the_server(error))
         {
-            fetched = refetch(&mirror, &clone_url, facts, &env).await;
+            fetched = refetch(mirror, &clone_url, facts, &env).await;
         }
     }
-    if has_tree(&mirror, sha).await {
+    if has_tree(mirror, sha).await {
         return Ok(notices);
     }
     fetched?;
-    Err(missing_tree(&mirror, sha, &clone_url).await)
+    Err(missing_tree(mirror, sha, &clone_url).await)
 }
 
 async fn missing_tree(git_dir: &Path, sha: &str, clone_url: &str) -> anyhow::Error {
@@ -292,6 +213,7 @@ pub(crate) enum Repair {
 
 async fn repair_locked(
     mirror: &Path,
+    held: &Held,
     facts: &TrustedFacts,
     token: Option<&str>,
     window: Window,
@@ -307,7 +229,7 @@ async fn repair_locked(
         }
         return Ok(Repair::Sound);
     }
-    remove_ref_locks(mirror).await?;
+    refs::tidy(mirror, held).await?;
     let notices = drop_broken_refs(mirror).await?;
     let env = fetch_env(facts.server_url.url(), token);
     refetch(mirror, &facts.clone_url(), facts, &env).await?;
@@ -322,8 +244,11 @@ pub(crate) async fn repair(
     failed: FailedStep,
     cap: Duration,
 ) -> Result<Repair> {
-    let (mirror, _lock) = open(root, facts).await?;
-    within(cap, repair_locked(&mirror, facts, token, window, failed)).await
+    let what = "repairing the mirror";
+    locked(root, facts, cap, what, |mirror, held| async move {
+        repair_locked(&mirror, &held, facts, token, window, failed).await
+    })
+    .await
 }
 
 async fn is_dir(path: &Path) -> bool {
@@ -338,8 +263,14 @@ async fn is_file(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_file())
 }
 
-async fn prepare(mirror: &Path, acquired: SystemTime) -> Result<()> {
-    owned::keep_only_owned(mirror).await?;
+async fn prepare(mirror: &Path, held: &Held, acquired: SystemTime) -> Result<()> {
+    let sweep = if dirty::pending(mirror).await {
+        Sweep::Everything
+    } else {
+        Sweep::Packs
+    };
+    dirty::set(mirror).await?;
+    owned::keep_only_owned(mirror, held).await?;
     let present = is_file(&mirror.join("config")).await
         && is_dir(&mirror.join("objects")).await
         && is_dir(&mirror.join("refs")).await;
@@ -350,6 +281,6 @@ async fn prepare(mirror: &Path, acquired: SystemTime) -> Result<()> {
         let args = git_args(None, &["init", "-q", "--bare", "--template=", mirror_arg]);
         git(&args, &[]).await?;
     }
-    owned::sweep_objects(mirror, acquired).await?;
+    owned::sweep_objects(mirror, held, acquired, sweep).await?;
     reset_mirror(mirror).await
 }
