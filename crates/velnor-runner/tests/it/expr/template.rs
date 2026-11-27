@@ -23,7 +23,6 @@ fn expr_template_substitutes_every_span() -> Result<()> {
         "cache-deadbeef-velnor-v1"
     );
     assert_eq!(evaluate_template("[${{ github.missing }}]", &env)?, "[]");
-    assert_eq!(evaluate_template("[${{ }}]", &env)?, "[]");
     assert_eq!(
         evaluate_template(
             "${{ startsWith(github.ref, 'refs/heads/') && 'branch' || 'other' }}",
@@ -137,6 +136,64 @@ fn expr_template_parses_every_span_before_it_evaluates_any() -> Result<()> {
     assert_eq!(
         template_error_text(&source, &env)?,
         "unsupported expression context vars"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_template_rejects_an_empty_span() -> Result<()> {
+    let env = empty_env();
+
+    for source in ["${{}}", "${{ }}", "[${{ \t\n }}]", "${{ 'x' }}${{   }}"] {
+        assert_eq!(
+            template_error_text(source, &env)?,
+            "An expression was expected",
+            "{source:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn expr_template_rejects_a_collection_in_a_single_span_only() -> Result<()> {
+    let env = env_with(&[(RootContext::Github, r#"{"sha":"deadbeef"}"#)])?;
+
+    for source in [
+        "${{ github }}",
+        "${{ fromJSON('[1]') }}",
+        "${{ fromJSON('{}') }}",
+    ] {
+        assert_eq!(
+            template_error_text(source, &env)?,
+            "Expected a string",
+            "{source:?}"
+        );
+    }
+    assert_eq!(evaluate_template("a${{ github }}", &env)?, "aObject");
+    assert_eq!(
+        evaluate_template("${{ fromJSON('[1]') }}b", &env)?,
+        "Arrayb"
+    );
+    assert_eq!(evaluate_template("${{ github.sha }}", &env)?, "deadbeef");
+    assert_eq!(evaluate_template("${{ fromJSON('null') }}", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_template_limits_the_rebuilt_format_to_255_parameters() -> Result<()> {
+    let env = empty_env();
+    let spans = |count: usize| "${{ 1 }}".repeat(count);
+
+    assert_eq!(evaluate_template(&spans(254), &env)?, "1".repeat(254));
+    let error = template_error_text(&spans(255), &env)?;
+    assert!(
+        error.starts_with("Too many parameters supplied: '('"),
+        "{error}"
+    );
+    let with_text = template_error_text(&format!("a{}b", spans(255)), &env)?;
+    assert!(
+        with_text.starts_with("Too many parameters supplied: '('"),
+        "{with_text}"
     );
     Ok(())
 }

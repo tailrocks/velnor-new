@@ -1113,6 +1113,18 @@ sizes and the same 10 MiB limit, and print the same
   prints it. It evaluates the spans in order and charges one string overhead
   per literal run instead of one per escaped brace. A string without a span is
   returned unchanged and uncharged.
+- **A template follows the runner's span rules.** The
+  [template reader](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/WorkflowParser/ObjectTemplating/TemplateReader.cs#L630-L645)
+  rejects an empty or whitespace-only `${{ }}` span with `An expression was
+  expected`, and Velnor does the same. A scalar that is exactly one span stays
+  a basic expression, and the
+  [string-token evaluator](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/WorkflowParser/ObjectTemplating/Tokens/TemplateToken.cs#L70-L77)
+  fails an array or object result with `Expected a string`; Velnor fails the
+  same way, while a span among other segments is stringified by `format` as
+  `Array` or `Object`. The rebuilt `format` call takes at most
+  [255 parameters](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionConstants.cs#L15),
+  the format string included, so 255 spans fail with `Too many parameters
+  supplied`.
 
 ## Expression string comparison deviations from the runner
 

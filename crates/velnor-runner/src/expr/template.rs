@@ -13,10 +13,11 @@ use super::value::Value;
 
 const OPEN: &str = "${{";
 const CLOSE: &str = "}}";
+const FORMAT_MAX_PARAMETERS: usize = 255;
 
 pub(crate) enum Part<'a> {
     Text(&'a str),
-    Expression { source: &'a str, node: Option<Node> },
+    Expression { source: &'a str, node: Node },
 }
 
 fn find_close(source: &str) -> Option<usize> {
@@ -48,10 +49,10 @@ fn split<'a>(source: &'a str, env: &ExprEnv) -> Result<Vec<Part<'a>>, ExprError>
             )));
         };
         let source = expression[..end].trim();
-        parts.push(Part::Expression {
-            source,
-            node: parse(source, env)?,
-        });
+        let Some(node) = parse(source, env)? else {
+            return Err(ExprError::evaluation("An expression was expected"));
+        };
+        parts.push(Part::Expression { source, node });
         rest = &expression[end + CLOSE.len()..];
     }
     if !rest.is_empty() {
@@ -65,13 +66,18 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
     if parts.iter().all(|part| matches!(part, Part::Text(_))) {
         return Ok(source.to_owned());
     }
-    if template_expression(&parts, Argument::Source)
-        .encode_utf16()
-        .count()
-        > MAX_LENGTH
-    {
+    let expression = template_expression(&parts, Argument::Source);
+    if expression.encode_utf16().count() > MAX_LENGTH {
         return Err(ParseError::without_token(ParseErrorKind::ExceededMaxLength).into());
     }
+    let spans = parts
+        .iter()
+        .filter(|part| matches!(part, Part::Expression { .. }))
+        .count();
+    if spans >= FORMAT_MAX_PARAMETERS {
+        parse(&expression, env)?;
+    }
+    let single_span = spans == 1 && parts.len() == 1;
     let mut rendered = String::with_capacity(source.len());
     let mut memory = MemoryCounter::new(Subject::Template(&parts));
     for part in &parts {
@@ -81,11 +87,11 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
                 rendered.push_str(text);
             }
             Part::Expression { node, .. } => {
-                let value = match node {
-                    Some(node) => evaluate_node(node, env)?,
-                    None => Value::Null,
+                let value = evaluate_node(node, env)?;
+                if single_span && matches!(value, Value::Array(_) | Value::Object(_)) {
+                    return Err(ExprError::evaluation("Expected a string"));
                 }
-                .convert_to_string();
+                let value = value.convert_to_string();
                 memory.add(&value)?;
                 rendered.push_str(&value);
             }

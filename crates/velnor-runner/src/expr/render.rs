@@ -90,7 +90,7 @@ pub(crate) fn template_expression(parts: &[Part<'_>], argument: Argument) -> Str
                 let _ = write!(format, "{{{}}}", arguments.len());
                 arguments.push(match argument {
                     Argument::Source => (*source).to_owned(),
-                    Argument::Parsed => node.as_ref().map_or_default(Node::to_expression),
+                    Argument::Parsed => node.to_expression(),
                 });
             }
         }
