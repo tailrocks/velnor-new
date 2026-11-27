@@ -123,6 +123,28 @@ async fn require(
     }
 }
 
+#[derive(Clone, Copy)]
+enum Depth {
+    Full,
+    Last(u64),
+}
+
+fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
+    let given = inputs
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("fetch-depth"))
+        .map(|(_, value)| value.as_str())
+        .filter(|value| !value.is_empty());
+    match given.map(str::parse::<u64>) {
+        None => Ok(Depth::Last(1)),
+        Some(Ok(0)) => Ok(Depth::Full),
+        Some(Ok(depth)) => Ok(Depth::Last(depth)),
+        Some(Err(_)) => Err(ExecError::Unsupported(
+            "actions/checkout input 'fetch-depth' must be a number".to_owned(),
+        )),
+    }
+}
+
 enum Materialized {
     Done,
     Ended(StepResult),
@@ -134,14 +156,15 @@ async fn materialize(
     mirror: &Path,
     facts: &TrustedFacts,
     dest_arg: &str,
+    depth: Depth,
 ) -> Result<Materialized, ExecError> {
     if let Some(ended) = require(ctx, &["init", "-q", dest_arg]).await? {
         return Ok(Materialized::Ended(ended));
     }
-    let objects = std::path::absolute(mirror)
+    let mirror_abs = std::path::absolute(mirror)
         .with_context(|| format!("resolve {}", mirror.display()))
-        .map_err(invalid)?
-        .join("objects");
+        .map_err(invalid)?;
+    let objects = mirror_abs.join("objects");
     let alternates = Path::new(dest_arg).join(".git/objects/info/alternates");
     tokio::fs::write(&alternates, format!("{}\n", objects.display()))
         .await
@@ -153,6 +176,36 @@ async fn materialize(
         return Ok(Materialized::Ended(ended));
     }
     let sha = facts.sha.as_str();
+    match depth {
+        Depth::Full => {}
+        Depth::Last(1) => {
+            let shallow = Path::new(dest_arg).join(".git/shallow");
+            tokio::fs::write(&shallow, format!("{sha}\n"))
+                .await
+                .with_context(|| format!("write {}", shallow.display()))
+                .map_err(invalid)?;
+        }
+        Depth::Last(count) => {
+            let source = url::Url::from_file_path(mirror_abs)
+                .map_err(|()| invalid("mirror path is not absolute"))?;
+            let limit = format!("--depth={count}");
+            let fetch = [
+                "-C",
+                dest_arg,
+                "-c",
+                "protocol.version=2",
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                &limit,
+                source.as_str(),
+                sha,
+            ];
+            if let Some(ended) = require(ctx, &fetch).await? {
+                return Ok(Materialized::Ended(ended));
+            }
+        }
+    }
     let steps: [&[&str]; 3] = [
         &["-C", dest_arg, "read-tree", sha],
         &["-C", dest_arg, "checkout-index", "-a", "-f", "-u"],
@@ -192,6 +245,7 @@ async fn ask(
 async fn populate(
     store: &StoreWriter,
     facts: &TrustedFacts,
+    depth: Depth,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
     let dest = ctx
@@ -213,12 +267,12 @@ async fn populate(
         ensure_disjoint(ctx.workspace, guarded).map_err(invalid)?;
     }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
-    let mut state = materialize(ctx, &mirror, facts, &dest).await?;
+    let mut state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     if matches!(state, Materialized::CheckoutFailed)
         && ask(store, ctx, |token| Request::RepairMirror { token }).await?
     {
         empty_directory(ctx.workspace).await.map_err(invalid)?;
-        state = materialize(ctx, &mirror, facts, &dest).await?;
+        state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     }
     match state {
         Materialized::Done => Ok(StepResult::Succeeded),
@@ -236,9 +290,10 @@ async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<Step
         .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
         .collect();
     validate_inputs(&evaluated).map_err(ExecError::Unsupported)?;
+    let depth = fetch_depth(&ctx.inputs)?;
     let facts = store.facts().map_err(ExecError::Invalid)?;
     let cancel = ctx.cancel.clone();
-    let work = populate(store, facts, ctx);
+    let work = populate(store, facts, depth, ctx);
     let result = match cancel {
         Some(cancel) => tokio::select! {
             result = work => result,

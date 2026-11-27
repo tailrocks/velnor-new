@@ -94,6 +94,7 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod native_checkout_attack;
+mod native_checkout_depth;
 mod native_checkout_env;
 mod native_checkout_facts;
 mod native_checkout_inputs;
