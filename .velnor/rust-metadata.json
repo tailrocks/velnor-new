@@ -37,7 +37,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -194,7 +197,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -501,7 +507,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "toml",
@@ -637,7 +646,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "toml",
@@ -681,7 +693,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "velnor-model",
@@ -765,7 +780,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -1007,7 +1025,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -1153,7 +1174,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "serde_path_to_error",
@@ -1214,6 +1238,11 @@
               "name": "velnor-model",
               "kind": "normal",
               "manifest": "crates/velnor-model/Cargo.toml"
+            },
+            {
+              "name": "serde-saphyr",
+              "kind": "dev",
+              "manifest": null
             },
             {
               "name": "sha2",
@@ -1340,7 +1369,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -1449,7 +1481,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "tokio",
@@ -1700,7 +1735,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -2080,7 +2118,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha1_smol",
@@ -2190,7 +2231,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "thiserror",
@@ -2261,7 +2305,7 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "aa327374fabc3d283d09666bcdb7bdb24d816d668955e3031fcc116e7823aff6",
+    "Cargo.toml": "fb0a793f8b04f6ac64643e525390b5309cafa083596fe333e29334b37956f262",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "e20fd11899c56a7977fe6b5561fd962f80dca5177971f73d02fce5643643b28a",
@@ -2278,7 +2322,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "7a1be72e93780fb9b2f8e6fd5c7d18db3acbb27056a8da603af9b5c373caf7a2",
+    "crates/velnor-runner/Cargo.toml": "811ee90c7c31bd1e99ae18c16a82bfa7a3755ca3247d51a852507c5f27105ec0",
     "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"

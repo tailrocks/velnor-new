@@ -60,28 +60,3 @@ fn expr_length_limit_counts_utf16_code_units() -> Result<()> {
     assert!(truthy(&format!("'{}'", "x".repeat(20_998)), &env)?);
     Ok(())
 }
-
-#[test]
-fn expr_length_limit_counts_utf16_units() -> Result<()> {
-    let env = empty_env();
-    let within = format!("'{}' == ''", "😀".repeat(10_496));
-    assert!(!truthy(&within, &env)?);
-    let beyond = format!("'{}' == ''", "😀".repeat(10_497));
-    assert_eq!(
-        error_text(&beyond, &env)?,
-        "Exceeded max expression length 21000"
-    );
-    Ok(())
-}
-
-#[test]
-fn expr_length_limit_is_exactly_21000_units() -> Result<()> {
-    let env = empty_env();
-    let padded = |units: usize| format!("true{}", " ".repeat(units - 4));
-    assert!(truthy(&padded(21_000), &env)?);
-    assert_eq!(
-        error_text(&padded(21_001), &env)?,
-        "Exceeded max expression length 21000"
-    );
-    Ok(())
-}
