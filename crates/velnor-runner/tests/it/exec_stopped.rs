@@ -299,6 +299,51 @@ async fn a_step_condition_is_evaluated_against_the_workspace_when_the_cancel_fir
     Ok(())
 }
 
+#[tokio::test]
+async fn a_survive_condition_that_does_not_evaluate_cancels_the_step_with_the_error() -> Result<()>
+{
+    let guarded = with(
+        run("a", "touch locked\nchmod 000 locked\necho ready\nsleep 20"),
+        "Condition",
+        json!("always() && (!cancelled() || hashFiles('locked') != 'x')"),
+    );
+    let started = Instant::now();
+    let (finished, lines) = go(&job(vec![guarded]), false, Cancels::OnReady).await?;
+    assert_eq!(
+        finished.steps[0].outcome,
+        StepResult::Cancelled,
+        "{lines:?}"
+    );
+    assert!(started.elapsed() < Duration::from_secs(15), "{lines:?}");
+    let reported = |text: &str| text.contains("failed to evaluate the step condition");
+    assert_eq!(lines.iter().filter(|line| reported(line)).count(), 1);
+    assert!(
+        finished
+            .annotations
+            .iter()
+            .any(|annotation| reported(&annotation.message)),
+        "{:?}",
+        finished.annotations
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_survive_condition_is_evaluated_once_per_step() -> Result<()> {
+    let guarded = with(
+        run("a", "echo ready\nsleep 1\ntouch marker"),
+        "Condition",
+        json!("always() && hashFiles('marker') == ''"),
+    );
+    let (finished, lines) = go(&job(vec![guarded]), false, Cancels::OnReady).await?;
+    assert_eq!(
+        finished.steps[0].outcome,
+        StepResult::Succeeded,
+        "{lines:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn a_second_signal_ends_the_runner_while_an_always_step_runs() -> Result<()> {
     let scratch = Scratch::new()?;
