@@ -1,21 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-FileCopyrightText: Isaac Z. Schlueter and Contributors
 // SPDX-License-Identifier: Apache-2.0 AND ISC
-// SPDX-FileContributor: isaacs/minimatch@3.1.5 minimatch.js
+// SPDX-FileContributor: isaacs/minimatch@3.1.2 minimatch.js
 
 use super::js_class::{Class, parse_translated};
 use super::pattern::GlobError;
-use super::translate::translate;
+use super::translate::{AHEAD, translate};
 
-const MAX_PATTERN_UNITS: usize = 65_536;
 const BACKSLASH: u16 = b'\\' as u16;
 const OPEN: u16 = b'[' as u16;
 const CLOSE: u16 = b']' as u16;
+const OPEN_GROUP: u16 = b'(' as u16;
 const STAR: u16 = b'*' as u16;
 const QUESTION: u16 = b'?' as u16;
 
 #[derive(Debug, Clone)]
 enum Item {
+    Ahead,
     Star,
     Unit(u16),
     Class(Class),
@@ -51,6 +52,10 @@ fn unescape(pattern: &[u16]) -> Vec<u16> {
     literal
 }
 
+fn ahead() -> Vec<u16> {
+    AHEAD.encode_utf16().collect()
+}
+
 fn items(re: &[u16]) -> Option<Vec<Item>> {
     let mut items = Vec::with_capacity(re.len());
     let mut at = 0;
@@ -60,6 +65,10 @@ fn items(re: &[u16]) -> Option<Vec<Item>> {
             BACKSLASH => {
                 items.push(Item::Unit(*re.get(at)?));
                 at += 1;
+            }
+            OPEN_GROUP if re[at - 1..].starts_with(&ahead()) => {
+                items.push(Item::Ahead);
+                at += AHEAD.len() - 1;
             }
             OPEN => {
                 let mut end = at;
@@ -86,9 +95,6 @@ fn items(re: &[u16]) -> Option<Vec<Item>> {
 impl Segment {
     pub(crate) fn compile(part: &str) -> Result<Self, GlobError> {
         let pattern: Vec<u16> = part.encode_utf16().collect();
-        if pattern.len() > MAX_PATTERN_UNITS {
-            return Err(GlobError::PatternTooLong);
-        }
         let translation = translate(&pattern, part)?;
         if !translation.magic {
             return Ok(Segment(Kind::Literal(unescape(&pattern))));
@@ -114,7 +120,7 @@ impl Segment {
 
 fn accepts(item: &Item, unit: u16) -> bool {
     match item {
-        Item::Star => false,
+        Item::Star | Item::Ahead => false,
         Item::Unit(expected) => *expected == unit,
         Item::Class(class) => class.accepts(unit),
     }
@@ -129,6 +135,7 @@ fn wildcard(items: &[Item], name: &[u16]) -> bool {
                 resume = Some((item + 1, position));
                 item += 1;
             }
+            Some(Item::Ahead) if !is_line_terminator(name[position]) => item += 1,
             Some(current) if accepts(current, name[position]) => {
                 item += 1;
                 position += 1;

@@ -27,14 +27,16 @@ impl PatternSet {
         lines: impl Iterator<Item = &'a str>,
     ) -> Result<Self, GlobError> {
         let workspace = components_of(workspace)?;
+        let patterns = lines
+            .map(|line| Pattern::parse(line, &workspace, home))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut entries = Vec::new();
-        for line in lines {
-            let pattern = Pattern::parse(line, &workspace, home)?;
+        for pattern in patterns {
             if pattern.trailing || !matches!(pattern.segs.last(), Some(Seg::GlobStar)) {
                 entries.push(Entry {
                     negate: pattern.negate,
                     files: true,
-                    segs: pattern.implicit_descendants(),
+                    segs: pattern.implicit_descendants()?,
                 });
             }
             entries.push(Entry {
@@ -73,6 +75,7 @@ impl PatternSet {
                     .segs
                     .iter()
                     .map_while(|seg| seg.literal().map(str::to_owned))
+                    .filter(|literal| literal != ".")
                     .collect()
             })
             .collect();

@@ -3,8 +3,6 @@
 
 use crate::expr_support::{TempDir, error_text, expected_digest, text};
 use anyhow::Result;
-use velnor_runner::context_value::ContextValue;
-use velnor_runner::expr::RootContext;
 
 fn hashes_only(pattern: &str, files: &[&str], matching: &[&str]) -> Result<()> {
     let dir = TempDir::new()?;
@@ -71,18 +69,17 @@ fn expr_hash_files_refuses_a_class_minimatch_would_need_a_regular_expression_par
 }
 
 #[test]
-fn expr_hash_files_applies_the_minimatch_length_limit_to_a_segment() -> Result<()> {
-    let dir = TempDir::new()?;
-    dir.write("ws/a.txt", "a")?;
-    let mut env = dir.env();
-    let patterns = format!(
-        r#"{{"fits":"*{}","over":"*{}"}}"#,
-        "a".repeat(65_535),
-        "a".repeat(65_536)
-    );
-    env.set_context(RootContext::Env, &ContextValue::from_json_str(&patterns)?);
+fn expr_hash_files_keeps_the_lookahead_minimatch_puts_after_an_unclosed_class() -> Result<()> {
+    hashes_only("foo[*", &["foo[", "foo[x", "foo[\nx"], &["foo[x"])?;
+    hashes_only("x[?", &["x[", "x[a", "x[\n"], &["x[a"])?;
+    hashes_only("[😀?", &["[😀", "[😀\n", "[😀a"], &["[😀\n", "[😀a"])?;
+    hashes_only("*[*", &["[", "a[", "a[b", "a[\n"], &["a[b"])?;
+    Ok(())
+}
 
-    assert_eq!(text("hashFiles(env.fits)", &env)?, "");
-    assert!(error_text("hashFiles(env.over)", &env)?.ends_with("pattern is too long"));
+#[test]
+fn expr_hash_files_starts_a_search_at_a_leading_one_character_class() -> Result<()> {
+    hashes_only("[!]", &["!", "a", "b"], &["!"])?;
+    hashes_only("[]]", &["]", "a"], &[])?;
     Ok(())
 }

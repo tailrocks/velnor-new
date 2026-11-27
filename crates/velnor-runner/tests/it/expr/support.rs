@@ -15,6 +15,7 @@ use velnor_runner::expr::{ExprEnv, RootContext, Value, evaluate_expression, eval
 
 const LINEAR_TIME_LIMIT: Duration = Duration::from_secs(10);
 const MISMATCH_WINDOW_CHARS: usize = 100;
+const OUTCOME_TAIL_CHARS: usize = 100;
 
 pub(crate) fn env_with(contexts: &[(RootContext, &str)]) -> Result<ExprEnv> {
     let mut env = ExprEnv::new(PathBuf::from("/nonexistent-workspace"));
@@ -60,6 +61,20 @@ pub(crate) fn error_text(expression: &str, env: &ExprEnv) -> Result<String> {
     match evaluate_expression(expression, env) {
         Ok(value) => bail!("{expression:?} evaluated to {}", describe_success(&value)),
         Err(error) => Ok(error.to_string()),
+    }
+}
+
+pub(crate) fn outcome(expression: &str, env: &ExprEnv) -> String {
+    match evaluate_expression(expression, env) {
+        Ok(value) => format!("ok: {}", value.convert_to_string()),
+        Err(error) => {
+            let message = error.to_string();
+            let skipped = message.chars().count().saturating_sub(OUTCOME_TAIL_CHARS);
+            format!(
+                "error ending: {}",
+                message.chars().skip(skipped).collect::<String>()
+            )
+        }
     }
 }
 
@@ -200,4 +215,20 @@ fn support_same_text_shows_the_first_difference_far_from_the_start() {
         "{message}"
     );
     assert!(message.len() < 500, "{} bytes", message.len());
+}
+
+#[test]
+fn support_outcome_keeps_a_failure_about_a_long_pattern_short() -> Result<()> {
+    let mut env = empty_env();
+    let pattern = format!("*{}", "a".repeat(70_000));
+    env.set_context(
+        RootContext::Env,
+        &ContextValue::from_json_str(&serde_json::json!({ "p": pattern }).to_string())?,
+    );
+
+    let message = outcome("hashFiles(env.p)", &env);
+
+    assert!(message.len() < 300, "{} bytes", message.len());
+    assert!(message.starts_with("error ending: "), "{message}");
+    Ok(())
 }

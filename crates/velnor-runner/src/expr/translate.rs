@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-FileCopyrightText: Isaac Z. Schlueter and Contributors
 // SPDX-License-Identifier: Apache-2.0 AND ISC
-// SPDX-FileContributor: isaacs/minimatch@3.1.5 minimatch.js
+// SPDX-FileContributor: isaacs/minimatch@3.1.2 minimatch.js
 
 use super::js_class::{Raw, check_raw};
 use super::pattern::GlobError;
@@ -10,6 +10,7 @@ const RE_SPECIALS: &str = "().*{}+?[]^$\\!";
 const STAR: &str = "[^/]*?";
 const ANY: &str = "[^/]";
 const UNDEFINED: &str = "undefined";
+pub(super) const AHEAD: &str = "(?=.)";
 
 pub(super) struct Translation {
     pub(super) re: Vec<u16>,
@@ -49,7 +50,14 @@ fn translate_inner(pattern: &[u16], source: &str) -> Result<Translation, GlobErr
             magic: false,
         });
     }
-    Translator::new(pattern, source).run()
+    let inner = Translator::new(pattern, source).run()?;
+    if !inner.magic || inner.re.is_empty() {
+        return Ok(inner);
+    }
+    Ok(Translation {
+        re: units(AHEAD).chain(inner.re).collect(),
+        magic: true,
+    })
 }
 
 impl<'a> Translator<'a> {

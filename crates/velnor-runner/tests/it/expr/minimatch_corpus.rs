@@ -6,12 +6,12 @@ use velnor_runner::expr::segment_matches;
 
 const CORPUS: &str = include_str!("minimatch_corpus.json");
 const PATTERNS: usize = 2600;
-const CASES: usize = 31140;
-const REFUSED_PATTERNS: usize = 5;
+const CASES: usize = 52109;
+const REFUSED_PATTERNS: usize = 4;
 const REPORTED_MISMATCHES: usize = 10;
 
 #[test]
-fn expr_hash_files_segments_agree_with_minimatch_3_1_5_on_the_recorded_corpus() -> Result<()> {
+fn expr_hash_files_segments_agree_with_minimatch_3_1_2_on_the_recorded_corpus() -> Result<()> {
     let entries: Vec<Vec<String>> = serde_json::from_str(CORPUS).context("parse corpus")?;
     let (mut cases, mut refused) = (0, 0);
     let mut mismatches = Vec::new();

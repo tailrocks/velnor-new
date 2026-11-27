@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 
@@ -11,10 +12,18 @@ interface MinimatchModule {
   Minimatch: MatcherConstructor;
 }
 
+const MINIMATCH_VERSION = "3.1.2";
 const OPTIONS = { dot: true, nobrace: true, nocase: false, nocomment: true, noext: true, nonegate: true };
 const PATTERN_COUNT = 2600;
-const NAMES_PER_PATTERN = 12;
+const NAMES_PER_PATTERN = 20;
+const SAMPLED_BOUNDARY_NAMES = 4;
+const LONG_PREFIX_TAIL = 3;
 const ENTRIES_PER_LINE = 10;
+const DEFAULT_SEED = 0x2892;
+const PATH_PREFIX = "/r/";
+const PATH_SUFFIX = "/z";
+const MAX_CODE_POINT = 0x10ffff;
+const SURROGATES = [0xd800, 0xdfff] as const;
 const REFUSED = "refused";
 const NOT_INERT = /[()[{*+?|^$\\]/;
 
@@ -31,11 +40,16 @@ const HANDWRITTEN = [
   "[\\u0030-\\u0041]", "[\\cA-\\cZ]", "[\\cZ-\\cA]", "[\\060-\\101]", "[\\101-\\060]", "[\\8-\\9]", "[\\t-\\r]", "[\\r-\\t]",
   "[\\c1-\\c_]", "[\\c-]", "[\\x]", "[\\x4-a]", "[\\u00-a]", "[\\d-]", "[\\D-a]", "[\\s-\\w]", "[a\\d-z]", "a\\\u2028b", "a\\\nb", "a\\\rb",
   "[\\c-a]", "[\\b]", "[\\b-\\t]", "[z-a*]", "[z-a?]", "*[z-a]", "*[z-a]x",
+  "foo[*", "x[?", "[😀?", "foo[", "[*", "[?", "x[*y", "[a*", "[a?b", "[*[", "[*]", "[**", "x[**y", "[\\*", " ", "  ", "\t", " a", "a ", " a ", "a b", "[ ]", "[ a]", "* ", " *", "\u2028", "a\u2028", "[\u2028]", "[^\n]", "\r", "*\n*", "\u00a0", "\ufeff*", "[ -~]",
   "é", "é*", "*é", "?é", "é?", "[é]", "[!é]", "[é]?", "[a-é]", "[a-c-é]", "\\é", "\\😀", "[\\😀]", "*😀*",
 ];
 
-const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "1"];
+const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "1", " ", "\n", "\u2028"];
 const NAME_BAG = ["a", "b", "c", "e", "é", "x", "-", "!", "^", "[", "]", "\\", "*", "?", "@", "😀", ".", "1", "\n", " ", "d", "ü", "A", "{", "("];
+const BOUNDARY_NAMES = [
+  "\u0001", "\u0008", "\t", "\n", "\u000b", "\u000c", "\r", "\u001f", " ", "\u007f", "\u0080", "\u00a0", "\u2027", "\u2028", "\u2029", "\u202a",
+  "\ud7ff", "\ue000", "\ufeff", "\uffff", "\u{10000}", "\u{10ffff}", "a\u2028", "\u2028a", "a\n", "\na", "a\r", "\ra",
+];
 const FIXED_NAMES = ["x[undefined", "[undefined", "a", "é", "😀", "\n", "\nx", "x\n", " a", "ab", "a-c", "-", "]", "[", "!", "^", "\\", "é-", "a.b", ".a"];
 
 function generator(seed: number): () => number {
@@ -50,7 +64,12 @@ function generator(seed: number): () => number {
 }
 
 function loadMinimatch(directory: string): MatcherConstructor {
-  const require = createRequire(join(resolve(directory), "package.json"));
+  const root = resolve(directory);
+  const installed = JSON.parse(readFileSync(join(root, "node_modules", "minimatch", "package.json"), "utf8")) as { version?: string };
+  if (installed.version !== MINIMATCH_VERSION) {
+    throw new Error(`expected minimatch@${MINIMATCH_VERSION} (the version bundled in actions/runner v2.338.2), found ${installed.version ?? "none"}`);
+  }
+  const require = createRequire(join(root, "package.json"));
   const loaded: unknown = require("minimatch");
   if (typeof loaded !== "function" || !("Minimatch" in loaded)) throw new Error("minimatch did not load");
   return loaded.Minimatch as MatcherConstructor;
@@ -67,7 +86,7 @@ function refusedProbe(Minimatch: MatcherConstructor, pattern: string): boolean {
     },
   });
   try {
-    new Minimatch(pattern, OPTIONS);
+    new Minimatch(embedded(pattern), OPTIONS);
   } finally {
     globalThis.RegExp = native;
   }
@@ -79,7 +98,49 @@ function validName(name: string): boolean {
 }
 
 function validPattern(pattern: string): boolean {
-  return pattern !== "" && !pattern.includes("/") && !pattern.includes("\0") && !/\s/u.test(pattern);
+  return pattern !== "" && !pattern.includes("/") && !pattern.includes("\0");
+}
+
+function embedded(text: string): string {
+  return `${PATH_PREFIX}${text}${PATH_SUFFIX}`;
+}
+
+function compile(Minimatch: MatcherConstructor, pattern: string): (name: string) => boolean {
+  const matcher = new Minimatch(embedded(pattern), OPTIONS);
+  return (name) => matcher.match(embedded(name));
+}
+
+function neighbours(pattern: string): string[] {
+  const found: string[] = [];
+  for (const character of new Set(Array.from(pattern))) {
+    const code = character.codePointAt(0) as number;
+    for (const next of [code - 1, code + 1]) {
+      const surrogate = next >= SURROGATES[0] && next <= SURROGATES[1];
+      if (next >= 0 && next <= MAX_CODE_POINT && !surrogate) found.push(String.fromCodePoint(next));
+    }
+  }
+  return found;
+}
+
+function prefixes(text: string): string[] {
+  const characters = Array.from(text);
+  return characters.map((_, index) => characters.slice(0, index + 1).join(""));
+}
+
+function longPrefixes(text: string): string[] {
+  const all = prefixes(text);
+  return all.slice(Math.max(0, all.length - LONG_PREFIX_TAIL - 1), all.length - 1);
+}
+
+function boundaryNames(random: () => number, pattern: string): string[] {
+  const plain = pattern.replace(/\\(.)/gsu, "$1");
+  const tails = [...longPrefixes(plain), ...longPrefixes(plain.replaceAll("*", "b").replaceAll("?", "b"))].filter(validName);
+  const pool = [...new Set([...neighbours(pattern), ...BOUNDARY_NAMES])].filter(validName);
+  for (let index = pool.length - 1; index > 0; index--) {
+    const other = Math.floor(random() * (index + 1));
+    [pool[index], pool[other]] = [pool[other] as string, pool[index] as string];
+  }
+  return [...new Set([...tails, ...pool.slice(0, SAMPLED_BOUNDARY_NAMES)])];
 }
 
 function pick<T>(random: () => number, bag: readonly T[]): T {
@@ -110,7 +171,7 @@ function instantiate(random: () => number, pattern: string): string {
 }
 
 function namesFor(random: () => number, Minimatch: MatcherConstructor, pattern: string): string[] {
-  const matcher = new Minimatch(pattern, OPTIONS);
+  const matches = compile(Minimatch, pattern);
   const candidates = new Set<string>(FIXED_NAMES);
   candidates.add(pattern);
   candidates.add(pattern.replace(/\\(.)/g, "$1"));
@@ -120,10 +181,10 @@ function namesFor(random: () => number, Minimatch: MatcherConstructor, pattern: 
     candidates.add(randomText(random, NAME_BAG, 1, 5));
   }
   const pool = [...candidates].filter(validName);
-  const matching = pool.filter((name) => matcher.match(name));
-  const rejecting = pool.filter((name) => !matcher.match(name));
-  const half = NAMES_PER_PATTERN / 2;
-  const chosen = new Set<string>();
+  const matching = pool.filter((name) => matches(name));
+  const rejecting = pool.filter((name) => !matches(name));
+  const chosen = new Set<string>(boundaryNames(random, pattern));
+  const half = Math.ceil((NAMES_PER_PATTERN - chosen.size) / 2);
   for (const name of matching.slice(0, half)) chosen.add(name);
   for (const name of rejecting.slice(0, half)) chosen.add(name);
   for (const name of pool) {
@@ -145,17 +206,17 @@ function patterns(random: () => number, count: number): string[] {
 function entry(random: () => number, Minimatch: MatcherConstructor, pattern: string): string[] {
   const names = namesFor(random, Minimatch, pattern);
   if (refusedProbe(Minimatch, pattern)) return [pattern, REFUSED, ...names];
-  const matcher = new Minimatch(pattern, OPTIONS);
-  const bits = names.map((name) => (matcher.match(name) ? "1" : "0")).join("");
+  const matches = compile(Minimatch, pattern);
+  const bits = names.map((name) => (matches(name) ? "1" : "0")).join("");
   return [pattern, bits, ...names];
 }
 
-const [minimatchDirectory, output, requested] = process.argv.slice(2);
+const [minimatchDirectory, output, requested, seed] = process.argv.slice(2);
 if (minimatchDirectory === undefined || output === undefined) {
-  throw new Error("usage: bun scripts/minimatch-corpus.ts <directory holding node_modules/minimatch@3.1.5> <output.json> [pattern count]");
+  throw new Error("usage: bun scripts/minimatch-corpus.ts <directory holding node_modules/minimatch@3.1.2, the version bundled in actions/runner v2.338.2> <output.json> [pattern count] [seed]");
 }
 const Minimatch = loadMinimatch(minimatchDirectory);
-const random = generator(0x2892);
+const random = generator(seed === undefined ? DEFAULT_SEED : Number(seed));
 const entries = patterns(random, requested === undefined ? PATTERN_COUNT : Number(requested)).map((pattern) => JSON.stringify(entry(random, Minimatch, pattern)));
 const lines: string[] = [];
 for (let start = 0; start < entries.length; start += ENTRIES_PER_LINE) {

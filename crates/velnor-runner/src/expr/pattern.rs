@@ -6,6 +6,8 @@ use super::segment::Segment;
 use std::io;
 use std::path::{Component, Path};
 
+const MAX_PATTERN_UNITS: usize = 65_536;
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum GlobError {
     #[error("pattern cannot be empty")]
@@ -104,6 +106,8 @@ pub(crate) struct Pattern {
     pub(crate) negate: bool,
     pub(crate) trailing: bool,
     pub(crate) segs: Vec<Seg>,
+    rooted: String,
+    leading_dot: bool,
 }
 
 impl Pattern {
@@ -133,8 +137,8 @@ impl Pattern {
             return Err(GlobError::RelativePathing(text.to_owned()));
         }
         let first = parts.first().copied();
-        let (mut segs, rest): (Vec<Seg>, &[&str]) = if rooted {
-            (Vec::new(), &parts[..])
+        let (mut segs, rest, root): (Vec<Seg>, &[&str], String) = if rooted {
+            (Vec::new(), &parts[..], String::from("/"))
         } else if first == Some("~") {
             let segs = home_segments(home).map_err(|error| match (error, home) {
                 (GlobError::RelativePathing(_), Some(home)) => {
@@ -142,26 +146,84 @@ impl Pattern {
                 }
                 (error, _) => error,
             })?;
-            (segs, &parts[1..])
+            let root = home.map(|home| glob_escape(&home.display().to_string()));
+            (segs, &parts[1..], root.unwrap_or_default())
         } else {
             let anchored = workspace.iter().cloned().map(Seg::Literal).collect();
-            (anchored, &parts[usize::from(first == Some("."))..])
+            let cwd = format!("/{}", workspace.join("/"));
+            (
+                anchored,
+                &parts[usize::from(first == Some("."))..],
+                glob_escape(&cwd),
+            )
         };
+        let rooted_text = rooted_text(root, rest);
+        if units(&rooted_text) > MAX_PATTERN_UNITS {
+            return Err(GlobError::PatternTooLong);
+        }
         for part in rest {
             segs.push(Seg::compile(part)?);
         }
+        let leading_dot = !rooted
+            && first.is_some_and(|part| part != "." && part != "~" && literal_of(part) == ".");
         Ok(Self {
             negate,
             trailing,
             segs,
+            rooted: rooted_text,
+            leading_dot,
         })
     }
 
-    pub(crate) fn implicit_descendants(&self) -> Vec<Seg> {
+    pub(crate) fn implicit_descendants(&self) -> Result<Vec<Seg>, GlobError> {
+        let separator = if self.rooted.ends_with('/') { "" } else { "/" };
+        let rebuilt = format!("{}{separator}**", self.rooted);
+        if self.leading_dot {
+            return Err(GlobError::RelativePathing(rebuilt));
+        }
+        if units(&rebuilt) > MAX_PATTERN_UNITS {
+            return Err(GlobError::PatternTooLong);
+        }
         let mut segs = self.segs.clone();
         segs.extend([Seg::Any, Seg::GlobStar]);
-        segs
+        Ok(segs)
     }
+}
+
+fn units(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
+fn rooted_text(root: String, rest: &[&str]) -> String {
+    let mut text = root;
+    for part in rest {
+        if !text.ends_with('/') {
+            text.push('/');
+        }
+        text.push_str(part);
+    }
+    text
+}
+
+fn glob_escape(text: &str) -> String {
+    let chars: Vec<char> = text.replace('\\', "\\\\").chars().collect();
+    let mut escaped = String::with_capacity(chars.len());
+    for (index, &character) in chars.iter().enumerate() {
+        match character {
+            '[' if closes_in_segment(&chars[index + 1..]) => escaped.push_str("[[]"),
+            '?' => escaped.push_str("[?]"),
+            '*' => escaped.push_str("[*]"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
+}
+
+fn closes_in_segment(rest: &[char]) -> bool {
+    rest.iter()
+        .take_while(|&&character| character != '/')
+        .skip(1)
+        .any(|&character| character == ']')
 }
 
 fn home_segments(home: Option<&Path>) -> Result<Vec<Seg>, GlobError> {
