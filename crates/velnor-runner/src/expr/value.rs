@@ -263,6 +263,18 @@ pub(crate) fn ordinal_ignore_case_starts_with(value: &str, prefix: &str) -> bool
     ordinal_ignore_case_eq(&value[..end], prefix)
 }
 
+pub(crate) fn ordinal_ignore_case_ends_with(value: &str, suffix: &str) -> bool {
+    let start = match suffix.chars().count() {
+        0 => value.len(),
+        count => value
+            .char_indices()
+            .rev()
+            .nth(count - 1)
+            .map_or(0, |(index, _)| index),
+    };
+    ordinal_ignore_case_eq(&value[start..], suffix)
+}
+
 fn folded_bytes(value: &str) -> impl Iterator<Item = u8> + '_ {
     ordinal_ignore_case_fold(value).flat_map(|character| {
         let mut encoded = [0_u8; 4];

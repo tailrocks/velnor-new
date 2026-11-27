@@ -86,34 +86,48 @@ fn expr_to_json_pretty_prints_object() -> Result<()> {
 }
 
 #[test]
-fn expr_from_json_accepts_only_a_string_literal() -> Result<()> {
-    let env = env_with(&[(RootContext::Env, r#"{"PAYLOAD":"{}"}"#)])?;
+fn expr_ends_with_is_case_insensitive() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Github,
+        r#"{"actor":"Renovate[BOT]","ref":"refs/tags/V1","run_number":12345}"#,
+    )])?;
 
-    assert_eq!(text(r#"fromJSON('"\u007b"')"#, &env)?, "{");
+    assert!(truthy("endsWith(github.actor, '[bot]')", &env)?);
+    assert!(truthy("endsWith('dependabot[bot]', '[BOT]')", &env)?);
+    assert!(!truthy("endsWith(github.actor, 'renovate')", &env)?);
+    assert!(truthy("endsWith(github.ref, '/v1')", &env)?);
+    assert!(truthy("endsWith('abc', '')", &env)?);
+    assert!(truthy("endsWith('abc', 'abc')", &env)?);
+    assert!(!truthy("endsWith('ab', 'xab')", &env)?);
+    assert!(truthy("endsWith(github.run_number, 45)", &env)?);
+    assert!(truthy("endsWith('stra\u{df}e\u{c4}', '\u{e4}')", &env)?);
+    assert!(truthy("endsWith('x\u{2c6f}', '\u{250}')", &env)?);
+    assert!(!truthy("endsWith(github, 'Object')", &env)?);
+    assert!(!truthy("endsWith('anObject', github)", &env)?);
+    Ok(())
+}
+
+#[test]
+fn expr_from_json_parses_and_rejects() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        r#"{"PAYLOAD":"{\"a\":[true,{\"b\":\"c\"}],\"n\":2}","BAD":"{"}"#,
+    )])?;
+
+    assert!(truthy("fromJSON(env.PAYLOAD).a[0]", &env)?);
+    assert_eq!(text("fromJSON(env.PAYLOAD).a[1].b", &env)?, "c");
+    assert_eq!(text("fromJSON(env.PAYLOAD).N", &env)?, "2");
     assert_eq!(
-        text(r#"format('{0}{1}', 'a', fromJSON('"\u007d"'))"#, &env)?,
-        "a}"
+        text("toJSON(fromJSON('[1,\"x\",{\"k\":null}]'))", &env)?,
+        "[\n  1,\n  \"x\",\n  {\n    \"k\": null\n  }\n]"
     );
-    assert_eq!(
-        text(r#"toJSON(fromJSON('[1,"x",{"k":null}]'))"#, &env)?,
-        text(r#"toJSON(fromJSON('[1, "x", {"k": null}]'))"#, &env)?
-    );
-    assert!(truthy(r#"fromJSON('{"a":[true]}').a[0]"#, &env)?);
-    assert!(truthy("fromJSON('true')", &env)?);
-    assert_eq!(
-        error_text("fromJSON(env.PAYLOAD)", &env)?,
-        "unsupported expression function fromJSON"
-    );
-    assert_eq!(
-        error_text("FROMJSON(format('{0}', 'x'))", &env)?,
-        "unsupported expression function FROMJSON"
-    );
-    assert_eq!(
-        error_text("fromJSON('a' && 'b')", &env)?,
-        "unsupported expression function fromJSON"
-    );
+    assert_eq!(text("fromJSON(format('{0}', 'true'))", &env)?, "true");
+    assert_eq!(text("fromJSON('\"\\u007b\"')", &env)?, "{");
+    assert!(error_text("fromJSON(env.BAD)", &env)?.contains("Error parsing fromJson"));
+    assert!(error_text("fromJSON('')", &env)?.contains("Error parsing fromJson"));
+    assert!(error_text("fromJSON(env.MISSING)", &env)?.contains("Error parsing fromJson"));
+    assert!(error_text("fromJSON('{} x')", &env)?.contains("Error parsing fromJson"));
     assert!(error_text("fromJSON('a', 'b')", &env)?.contains("Too many parameters"));
-    assert!(error_text("fromJSON('{')", &env)?.contains("Error parsing fromJson"));
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/parser.rs
 
-use super::env::{Function, ParseEnvironment};
+use super::env::ParseEnvironment;
 use super::error::{ParseError, ParseErrorKind};
 use super::lexer::LexicalAnalyzer;
 use super::node::{BinaryOperator, Node};
@@ -276,12 +276,7 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
         pop_operands(context, parameter_count)?
     };
 
-    let Some(Node::Function {
-        function,
-        name,
-        args,
-    }) = context.operands.last_mut()
-    else {
+    let Some(Node::Function { function, args, .. }) = context.operands.last_mut() else {
         return Err(ParseError::internal(
             context.expression,
             "expected a function node on the operand stack",
@@ -290,9 +285,6 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
     args.extend(parameters);
     let (min, max) = function.arity();
     let arg_count = args.len();
-    let non_literal_from_json = *function == Function::FromJson
-        && !matches!(args.as_slice(), [Node::Literal(Value::String(_))]);
-    let name = name.clone();
 
     let start = pop_operator(context, TokenKind::StartParameters)?;
     if arg_count < min {
@@ -308,9 +300,6 @@ fn flush_top_end_parameters(context: &mut ParseContext<'_>) -> Result<(), ParseE
             &start,
             context.expression,
         ));
-    }
-    if non_literal_from_json {
-        return Err(ParseError::unsupported_function(&name));
     }
     context.operands.last().map_or(Ok(()), check_max_depth)
 }

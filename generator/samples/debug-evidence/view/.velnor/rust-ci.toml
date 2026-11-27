@@ -1,0 +1,11 @@
+cache_debug = true
+
+[[test_groups]]
+name = "evidence"
+filter = "all()"
+root = "."
+
+[[test_groups.artifacts]]
+name = "junit"
+paths = ["target/nextest/ci/junit.xml"]
+when = "failure"

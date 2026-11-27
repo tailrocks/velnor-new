@@ -55,10 +55,11 @@ fn expr_template_reports_unclosed_and_invalid_expressions() {
         unclosed,
         Err("The expression is not closed. An unescaped ${{ sequence was found, but the closing }} sequence was not found.".to_string())
     );
-    let unsupported = evaluate_template("x ${{ vars.a }}", &env).map_err(|error| error.to_string());
+    let unsupported =
+        evaluate_template("x ${{ matrix.a }}", &env).map_err(|error| error.to_string());
     assert_eq!(
         unsupported,
-        Err("unsupported expression context vars".to_string())
+        Err("unsupported expression context matrix".to_string())
     );
 }
 
@@ -148,11 +149,11 @@ fn expr_template_parses_every_span_before_it_evaluates_any() -> Result<()> {
         RootContext::Env,
         &format!(r#"{{"PAYLOAD":"{}"}}"#, "x".repeat(100_000)),
     )])?;
-    let source = format!("{}${{{{ vars.a }}}}", "${{ env.PAYLOAD }}".repeat(53));
+    let source = format!("{}${{{{ matrix.a }}}}", "${{ env.PAYLOAD }}".repeat(53));
 
     assert_eq!(
         template_error_text(&source, &env)?,
-        "unsupported expression context vars"
+        "unsupported expression context matrix"
     );
     Ok(())
 }

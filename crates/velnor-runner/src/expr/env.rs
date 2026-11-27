@@ -19,10 +19,11 @@ pub enum RootContext {
     Inputs,
     Secrets,
     Env,
+    Vars,
 }
 
 impl RootContext {
-    const ALL: [(&'static str, Self); 7] = [
+    const ALL: [(&'static str, Self); 8] = [
         ("github", Self::Github),
         ("runner", Self::Runner),
         ("needs", Self::Needs),
@@ -30,7 +31,10 @@ impl RootContext {
         ("inputs", Self::Inputs),
         ("secrets", Self::Secrets),
         ("env", Self::Env),
+        ("vars", Self::Vars),
     ];
+
+    const SERVICE_OWNED: [Self; 4] = [Self::Github, Self::Needs, Self::Inputs, Self::Vars];
 
     fn parse(name: &str) -> Option<Self> {
         Self::ALL
@@ -45,25 +49,29 @@ pub(crate) enum Function {
     Format,
     Contains,
     StartsWith,
+    EndsWith,
     ToJson,
     FromJson,
     HashFiles,
     Success,
     Always,
     Cancelled,
+    Failure,
 }
 
 impl Function {
-    const ALL: [(&'static str, Self, usize, usize); 9] = [
+    const ALL: [(&'static str, Self, usize, usize); 11] = [
         ("format", Self::Format, 1, 255),
         ("contains", Self::Contains, 2, 2),
         ("startsWith", Self::StartsWith, 2, 2),
+        ("endsWith", Self::EndsWith, 2, 2),
         ("toJSON", Self::ToJson, 1, 1),
         ("fromJSON", Self::FromJson, 1, 1),
         ("hashFiles", Self::HashFiles, 1, 255),
         ("success", Self::Success, 0, 0),
         ("always", Self::Always, 0, 0),
         ("cancelled", Self::Cancelled, 0, 0),
+        ("failure", Self::Failure, 0, 0),
     ];
 
     fn parse(name: &str) -> Option<Self> {
@@ -145,6 +153,20 @@ impl ExprEnv {
     #[cfg(feature = "test-support")]
     pub fn set_walk_seam(&mut self, hook: impl Fn(&std::path::Path) + Send + Sync + 'static) {
         self.walk_seam = Seam::new(hook);
+    }
+
+    pub fn set_job_contexts(
+        &mut self,
+        contexts: &BTreeMap<String, ContextValue>,
+    ) -> Result<(), ContextValueError> {
+        for (name, value) in contexts {
+            if let Some(root) =
+                RootContext::parse(name).filter(|root| RootContext::SERVICE_OWNED.contains(root))
+            {
+                self.set_context(root, value)?;
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn context(&self, root: RootContext) -> Value {
