@@ -58,5 +58,24 @@ async fn fetch_refs(
         &[&base[..], refetch, &["--", clone_url]].concat(),
     );
     args.extend(specs);
-    git(&args, env).await
+    let fetched = git(&args, env).await;
+    if fetched.is_err() {
+        remove_partial_packs(mirror).await;
+    }
+    fetched
+}
+
+async fn remove_partial_packs(mirror: &Path) {
+    let Ok(mut entries) = tokio::fs::read_dir(mirror.join("objects/pack")).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name();
+        let partial = ["tmp_pack_", "tmp_idx_"]
+            .iter()
+            .any(|prefix| name.to_string_lossy().starts_with(prefix));
+        if partial && entry.file_type().await.is_ok_and(|kind| kind.is_file()) {
+            let _ = tokio::fs::remove_file(entry.path()).await;
+        }
+    }
 }

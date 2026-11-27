@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use super::adapter::AdapterRegistry;
 use super::context::JobContext;
 use super::shell;
@@ -56,10 +58,13 @@ fn step_problem(
             return Some(format!("uses {reference}"));
         };
         let inputs = match step.inputs.as_ref() {
-            Some(inputs) => token::mapping(inputs, context.base_env()).ok()?,
-            None => Vec::new(),
+            Some(inputs) => match token::declared(inputs, context.base_env()) {
+                Some(declared) => declared,
+                None => return Some(format!("{reference} input name is not a literal")),
+            },
+            None => BTreeMap::new(),
         };
-        return adapter.problem(&inputs.into_iter().collect());
+        return adapter.problem(&inputs);
     }
     shell_problem(step, context)
 }

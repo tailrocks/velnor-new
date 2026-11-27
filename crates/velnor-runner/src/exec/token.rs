@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use serde_json::{Map, Value as Json};
 
+use super::InputValue;
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::expr::{ExprEnv, ExprError, Value, evaluate_expression, evaluate_template};
 use crate::job_message::context_data::member;
@@ -51,6 +54,51 @@ pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
             }
         }
     }
+}
+
+fn is_constant(token: &Json) -> bool {
+    match token {
+        Json::Array(_) => false,
+        Json::String(text) => !text.contains("${{"),
+        Json::Object(object) => match tag(object) {
+            Ok(LITERAL) => !text_of(object, "lit").contains("${{"),
+            Ok(BOOLEAN | NUMBER | NULL) => true,
+            _ => false,
+        },
+        Json::Bool(_) | Json::Number(_) | Json::Null => true,
+    }
+}
+
+fn text_of<'a>(object: &'a Map<String, Json>, name: &str) -> &'a str {
+    member(object, name)
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+}
+
+fn declared_value(token: &Json, env: &ExprEnv) -> InputValue {
+    if is_constant(token) {
+        scalar(token, env).map_or(InputValue::Deferred, InputValue::Literal)
+    } else {
+        InputValue::Deferred
+    }
+}
+
+pub(super) fn declared(token: &Json, env: &ExprEnv) -> Option<BTreeMap<String, InputValue>> {
+    let mut folded: Vec<(String, InputValue)> = Vec::new();
+    for (key, value) in pairs(token).ok()? {
+        let InputValue::Literal(name) = declared_value(key, env) else {
+            return None;
+        };
+        let value = declared_value(value, env);
+        match folded
+            .iter_mut()
+            .find(|(known, _)| ordinal_ignore_case_eq(known, &name))
+        {
+            Some(entry) => entry.1 = value,
+            None => folded.push((name, value)),
+        }
+    }
+    Some(folded.into_iter().collect())
 }
 
 fn tag(object: &Map<String, Json>) -> Result<i64, ExprError> {

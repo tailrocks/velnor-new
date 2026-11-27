@@ -360,17 +360,6 @@ impl TrustedFacts {
         }
         specs
     }
-
-    pub(crate) fn writes_ref(&self, name: &str) -> bool {
-        self.refspecs()
-            .into_iter()
-            .chain(self.sha_refspec())
-            .filter_map(|spec| spec.rsplit_once(':').map(|(_, target)| target.to_owned()))
-            .any(|target| match target.strip_suffix('*') {
-                Some(prefix) => name.starts_with(prefix),
-                None => name == target,
-            })
-    }
 }
 
 #[cfg(test)]

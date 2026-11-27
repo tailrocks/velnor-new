@@ -10,18 +10,18 @@ use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, git};
 use crate::native_checkout_env::{real_git, wrapper_env};
 
-fn object_path(repository: &Path, id: &str) -> PathBuf {
+pub(crate) fn object_path(repository: &Path, id: &str) -> PathBuf {
     repository.join("objects").join(&id[..2]).join(&id[2..])
 }
 
-fn checkout_pull_request(rig: &Rig) -> Result<Scratch> {
+pub(crate) fn checkout_pull_request(rig: &Rig) -> Result<Scratch> {
     let scratch = Scratch::new()?;
     let ran = rig.run("checkout_pull_request", &rig.merge, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     Ok(scratch)
 }
 
-fn assert_workspace_intact(scratch: &Scratch) -> Result<()> {
+pub(crate) fn assert_workspace_intact(scratch: &Scratch) -> Result<()> {
     let workspace = scratch.workspace();
     git(&workspace, &["status", "--porcelain"])?;
     git(&workspace, &["cat-file", "-e", "HEAD^{tree}"])?;
@@ -116,7 +116,7 @@ fn a_server_that_sends_the_commit_without_its_tree_fails_the_step() -> Result<()
     Ok(())
 }
 
-fn overwrite(object: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn overwrite(object: &Path, bytes: &[u8]) -> Result<()> {
     std::fs::set_permissions(object, std::fs::Permissions::from_mode(0o644))?;
     std::fs::write(object, bytes).with_context(|| format!("overwrite {}", object.display()))
 }

@@ -206,27 +206,3 @@ fn a_pull_request_head_is_the_base_repository_only_when_the_message_proves_it() 
     }
     Ok(())
 }
-
-#[test]
-fn a_job_writes_only_the_refs_its_refspecs_name() -> Result<()> {
-    let branch = facts_for("push", "refs/heads/main", None)?;
-    let sha_ref = format!("refs/velnor/sha/{SHA}");
-    let other_sha_ref = format!("refs/velnor/sha/{}", "f".repeat(40));
-    for (name, expected) in [
-        ("refs/heads/main", true),
-        ("refs/heads/feature/x", true),
-        (sha_ref.as_str(), true),
-        (other_sha_ref.as_str(), false),
-        ("refs/pull/7/merge", false),
-        ("refs/tags/v1", false),
-        ("refs/extra/x", false),
-    ] {
-        assert_eq!(branch.writes_ref(name), expected, "{name}");
-    }
-    let tag = facts_for("push", "refs/tags/v1", None)?;
-    assert!(tag.writes_ref("refs/tags/v1") && !tag.writes_ref("refs/tags/v2"));
-    let pull = facts_for("pull_request", "refs/pull/7/merge", SAME)?;
-    assert!(pull.writes_ref("refs/pull/7/merge") && !pull.writes_ref("refs/pull/8/merge"));
-    assert!(!pull.writes_ref(&sha_ref));
-    Ok(())
-}

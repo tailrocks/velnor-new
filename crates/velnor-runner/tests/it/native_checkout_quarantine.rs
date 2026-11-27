@@ -1,0 +1,73 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Result;
+
+use crate::exec_support::Scratch;
+use crate::native_checkout::{Rig, git};
+use crate::native_checkout_env::wrapper_env;
+use crate::native_checkout_repair::{assert_workspace_intact, object_path, overwrite};
+
+fn quarantined(rig: &Rig) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(rig.mirror().join("quarantine")) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn a_missing_ancestor_and_a_corrupt_blob_quarantine_only_the_blob() -> Result<()> {
+    let rig = Rig::new()?;
+    let live = Scratch::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &live)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let mirror = rig.mirror();
+    let parent = git(&mirror, &["rev-parse", &format!("{}~1", rig.head)])?;
+    std::fs::remove_file(object_path(&mirror, &parent))?;
+    let blob = git(&mirror, &["rev-parse", &format!("{}:second", rig.head)])?;
+    overwrite(&object_path(&mirror, &blob), b"not a zlib stream")?;
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    let moved = quarantined(&rig);
+    assert_eq!(moved.len(), 1, "{moved:?}");
+    assert!(moved[0].starts_with(&blob), "{moved:?}");
+    git(&mirror, &["cat-file", "-e", &rig.head])?;
+    assert_workspace_intact(&live)?;
+    assert_eq!(git(&live.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    Ok(())
+}
+
+#[test]
+fn a_sound_object_named_by_a_damage_report_is_not_quarantined() -> Result<()> {
+    let rig = Rig::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let blob = git(
+        &rig.mirror(),
+        &["rev-parse", &format!("{}:second", rig.head)],
+    )?;
+    let once = rig.root.join("refused-once");
+    wrapper_env(
+        &rig.root,
+        &format!(
+            "case \" $* \" in\n\
+             *\" checkout \"*) [ -f '{once}' ] || {{ : > '{once}'; echo checkout-refused >&2; exit 1; }};;\n\
+             *\" --verify-objects \"*\" {head} \"*) echo 'error: hash mismatch {blob}' >&2; exit 1;;\n\
+             esac\n",
+            once = once.display(),
+            head = rig.head
+        ),
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    assert_eq!(quarantined(&rig), Vec::<String>::new());
+    git(&rig.mirror(), &["cat-file", "blob", &blob])?;
+    Ok(())
+}

@@ -3,6 +3,7 @@
 
 pub(crate) mod facts;
 mod git;
+mod location;
 mod mirror;
 pub(crate) mod proto;
 mod repair;
@@ -14,7 +15,7 @@ use mirror::Repair;
 
 pub(crate) use facts::TrustedFacts;
 pub(crate) use git::{TREE_PROBE, git_args, isolate};
-pub(crate) use mirror::mirror_path;
+pub(crate) use location::mirror_path;
 pub(crate) use proto::{Request, Response, Token};
 
 pub(crate) struct Broker {

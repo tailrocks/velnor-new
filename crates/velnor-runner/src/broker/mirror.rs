@@ -16,37 +16,9 @@ use rustix::io::Errno;
 
 use super::facts::TrustedFacts;
 use super::git::{fetch_env, git, git_args, has_commit, has_tree};
-use super::repair::{drop_broken_refs, holds_commit, quarantine_corrupt};
+use super::location::mirror_path;
+use super::repair::{drop_broken_refs, holds_commit, quarantine_corrupt, refuse_packed};
 use super::transfer::{Transfer, fetch_wanted};
-
-pub(crate) fn mirror_path(root: &Path, facts: &TrustedFacts) -> Result<PathBuf> {
-    let url = facts.server_url.url();
-    let host = url
-        .host_str()
-        .map(|host| host.trim_matches(['[', ']']).replace(':', "+"))
-        .filter(|host| !host.is_empty())
-        .map_or_else(
-            || "_local".to_owned(),
-            |host| match url.port() {
-                Some(port) => format!("{host}+{port}"),
-                None => host,
-            },
-        );
-    let valid = !host.starts_with('.')
-        && host
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'));
-    if !valid {
-        bail!("mirror: server host '{host}' is not a valid path part");
-    }
-    let (owner, name) = facts.repository.owner_and_name();
-    let mut path = root.join("git");
-    for part in [host.as_str(), owner, name] {
-        path.push(part.to_ascii_lowercase());
-    }
-    path.push(format!("{}.git", facts.repository_id));
-    Ok(path)
-}
 
 async fn lock(path: &Path) -> Result<std::fs::File> {
     let file = tokio::fs::OpenOptions::new()
@@ -288,11 +260,12 @@ pub(crate) async fn fetch(
         return Ok(Vec::new());
     }
     remove_ref_locks(&mirror).await?;
-    let notices = drop_broken_refs(&mirror, facts).await?;
+    let notices = drop_broken_refs(&mirror).await?;
     let clone_url = facts.clone_url();
     let env = fetch_env(facts.server_url.url(), token);
     let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
-    if !has_tree(&mirror, sha).await && holds_commit(&mirror, sha).await {
+    if !has_tree(&mirror, sha).await && (!notices.is_empty() || holds_commit(&mirror, sha).await) {
+        refuse_packed(&mirror, sha).await?;
         fetched = refetch(&mirror, &clone_url, facts, &env).await;
     }
     if has_tree(&mirror, sha).await {
@@ -320,19 +293,32 @@ pub(crate) async fn repair(
         return Ok(Repair::Sound);
     }
     remove_ref_locks(&mirror).await?;
-    let notices = drop_broken_refs(&mirror, facts).await?;
+    let notices = drop_broken_refs(&mirror).await?;
     let env = fetch_env(facts.server_url.url(), token);
     refetch(&mirror, &facts.clone_url(), facts, &env).await?;
     Ok(Repair::Repaired(notices))
 }
 
+async fn is_dir(path: &Path) -> bool {
+    tokio::fs::symlink_metadata(path)
+        .await
+        .is_ok_and(|meta| meta.is_dir())
+}
+
 async fn prepare(mirror: &Path) -> Result<()> {
     let config = mirror.join("config");
+    let objects = mirror.join("objects");
     let config_is_file = tokio::fs::symlink_metadata(&config)
         .await
         .is_ok_and(|meta| meta.is_file());
-    if !config_is_file {
-        remove_entry(&config).await?;
+    let objects_is_dir = is_dir(&objects).await;
+    if !(config_is_file && objects_is_dir) {
+        if !config_is_file {
+            remove_entry(&config).await?;
+        }
+        if !objects_is_dir {
+            remove_entry(&objects).await?;
+        }
         let mirror_arg = mirror
             .to_str()
             .with_context(|| format!("path {} is not UTF-8", mirror.display()))?;

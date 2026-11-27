@@ -100,9 +100,7 @@ impl Rig {
     }
 
     pub(crate) fn mirror_of(&self, repository_id: u64) -> PathBuf {
-        self.store().join(format!(
-            "git/_local/tailrocks/velnor-new/{repository_id}.git"
-        ))
+        crate::native_checkout_layout::mirror_in(&self.store(), &self.server_url(), repository_id)
     }
 
     pub(crate) fn path(&self) -> String {

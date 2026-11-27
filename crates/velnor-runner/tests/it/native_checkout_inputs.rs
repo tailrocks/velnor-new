@@ -200,3 +200,99 @@ fn an_unsupported_input_refuses_the_job_before_its_first_step() -> Result<()> {
     assert!(!rig.trace().exists(), "git ran");
     Ok(())
 }
+
+const ENV_STEP: &str = r#""Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": { "Type": "script" },
+      "DisplayNameToken": { "type": 0, "lit": "Depth" },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": { "type": 0, "lit": "script" },
+            "value": { "type": 0, "lit": "echo DEPTH=1 >> $GITHUB_ENV" }
+          }
+        ]
+      }
+    },"#;
+
+#[test]
+fn an_input_that_is_empty_at_preflight_is_not_refused() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_depth1",
+        &rig.head,
+        &rig.server_url(),
+        &[
+            ("\"Steps\": [", ENV_STEP),
+            ("\"lit\": \"1\"", "\"lit\": \"${{ env.DEPTH }}\""),
+            ("\"lit\": \"false\"", "\"lit\": \"${{ 'false' }}\""),
+        ],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    Ok(())
+}
+
+#[test]
+fn an_input_name_is_checked_even_when_its_value_does_not_evaluate() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_unsupported_ref",
+        &rig.head,
+        &rig.server_url(),
+        &[
+            ("\"Steps\": [", MARKER_STEP),
+            ("\"lit\": \"refs/tags/v1\"", "\"lit\": \"${{ ( }}\""),
+        ],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(
+        ran.has_line("unsupported: actions/checkout input 'ref' is not supported by velnor-runner"),
+        "{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(
+        !ran.stdout.contains("step-one-marker") && !ran.stderr.contains("step-one-marker"),
+        "step 1 ran\n{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(!rig.trace().exists(), "git ran");
+    Ok(())
+}
+
+#[test]
+fn an_input_name_that_is_not_a_literal_refuses_the_job_before_its_first_step() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_unsupported_ref",
+        &rig.head,
+        &rig.server_url(),
+        &[
+            ("\"Steps\": [", MARKER_STEP),
+            ("\"lit\": \"ref\"", "\"lit\": \"${{ 'ref' }}\""),
+        ],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(
+        ran.stdout.contains("input name is not a literal"),
+        "{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(!ran.stdout.contains("step-one-marker"), "step 1 ran");
+    assert!(!rig.trace().exists(), "git ran");
+    Ok(())
+}

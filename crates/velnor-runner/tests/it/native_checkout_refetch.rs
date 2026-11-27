@@ -123,3 +123,57 @@ fn a_commit_only_an_annotated_tag_reaches_is_repaired_by_a_refetch() -> Result<(
     git(&mirror, &["cat-file", "-e", &id])?;
     Ok(())
 }
+
+fn packs(mirror: &std::path::Path) -> Result<usize> {
+    Ok(std::fs::read_dir(mirror.join("objects/pack"))?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "pack"))
+        .count())
+}
+
+fn warm_and_break_main(rig: &Rig) -> Result<()> {
+    let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    std::fs::write(
+        rig.mirror().join("refs/heads/main"),
+        format!("{}\n", "1".repeat(40)),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn a_broken_ref_the_job_fetches_is_removed_and_main_advances_without_new_packs() -> Result<()> {
+    let rig = Rig::new()?;
+    warm_and_break_main(&rig)?;
+    let mirror = rig.mirror();
+    let mut counts = Vec::new();
+    for file in ["third", "fourth"] {
+        let next = rig.advance(file)?;
+        let scratch = Scratch::new()?;
+        let ran = rig.run("checkout_depth1", &next, &scratch)?;
+        assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+        assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, next);
+        assert_eq!(git(&mirror, &["rev-parse", "refs/heads/main"])?, next);
+        counts.push((said(&ran, "removed refs/heads/main"), packs(&mirror)?));
+    }
+    assert!(counts[0].0 && !counts[1].0, "{counts:?}");
+    assert_eq!(counts[0].1, counts[1].1, "{counts:?}");
+    Ok(())
+}
+
+#[test]
+fn a_dropped_broken_ref_triggers_a_refetch_when_the_fetch_brought_nothing() -> Result<()> {
+    let rig = Rig::new()?;
+    warm_and_break_main(&rig)?;
+    let next = rig.advance("third")?;
+    wrapper_env(
+        &rig.root,
+        "case \" $* \" in *\" --refetch \"*) ;; *\" fetch \"*) exit 0;; esac\n",
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &next, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, next);
+    assert!(said(&ran, "removed refs/heads/main"));
+    Ok(())
+}

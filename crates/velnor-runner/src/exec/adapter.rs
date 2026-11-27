@@ -18,10 +18,16 @@ const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
 pub type StepFuture<'a> = BoxFuture<'a, Result<StepResult, ExecError>>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputValue {
+    Literal(String),
+    Deferred,
+}
+
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
-    fn problem(&self, _inputs: &BTreeMap<String, String>) -> Option<String> {
+    fn problem(&self, _inputs: &BTreeMap<String, InputValue>) -> Option<String> {
         None
     }
 

@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 pub(crate) use adapter::ProcessOutcome;
-pub use adapter::{AdapterRegistry, StepAdapter, StepContext, StepFuture};
+pub use adapter::{AdapterRegistry, InputValue, StepAdapter, StepContext, StepFuture};
 pub use cancel::JobCancel;
 pub use inputs::Inputs;
 pub use job::run_job;

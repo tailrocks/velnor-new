@@ -10,7 +10,9 @@ use anyhow::{Context, Result, bail};
 use crate::broker::{
     Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, git_args, mirror_path,
 };
-use crate::exec::{ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult};
+use crate::exec::{
+    ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
+};
 use crate::store::store_root;
 
 pub(super) struct Checkout {
@@ -22,7 +24,7 @@ impl StepAdapter for Checkout {
         reference.starts_with("actions/checkout@")
     }
 
-    fn problem(&self, inputs: &BTreeMap<String, String>) -> Option<String> {
+    fn problem(&self, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
         validate_inputs(inputs).err()
     }
 
@@ -35,18 +37,22 @@ fn unsupported_input(name: &str) -> String {
     format!("actions/checkout input '{name}' is not supported by velnor-runner")
 }
 
-fn validate_inputs(inputs: &BTreeMap<String, String>) -> Result<(), String> {
+fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> {
     let mut persist_false = false;
     for (name, value) in inputs {
-        match name.to_ascii_lowercase().as_str() {
-            "fetch-depth" => {
-                if value.parse::<u64>().is_err() {
+        match (name.to_ascii_lowercase().as_str(), value) {
+            ("fetch-depth", InputValue::Literal(depth)) => {
+                if depth.parse::<u64>().is_err() {
                     return Err(format!(
-                        "actions/checkout input 'fetch-depth' must be a number, got '{value}'"
+                        "actions/checkout input 'fetch-depth' must be a number, got '{depth}'"
                     ));
                 }
             }
-            "persist-credentials" => persist_false = !value.eq_ignore_ascii_case("true"),
+            ("fetch-depth", InputValue::Deferred) => {}
+            ("persist-credentials", InputValue::Literal(flag)) => {
+                persist_false = !flag.eq_ignore_ascii_case("true");
+            }
+            ("persist-credentials", InputValue::Deferred) => persist_false = true,
             _ => return Err(unsupported_input(name)),
         }
     }
@@ -225,7 +231,12 @@ async fn populate(
 }
 
 async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<StepResult, ExecError> {
-    validate_inputs(&ctx.inputs).map_err(ExecError::Unsupported)?;
+    let evaluated = ctx
+        .inputs
+        .iter()
+        .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
+        .collect();
+    validate_inputs(&evaluated).map_err(ExecError::Unsupported)?;
     let facts = store.facts().map_err(ExecError::Invalid)?;
     let cancel = ctx.cancel.clone();
     let work = populate(store, facts, ctx);
