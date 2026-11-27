@@ -11,6 +11,7 @@ mod report;
 mod session;
 mod status;
 mod tail;
+pub mod timespan;
 mod workdir;
 
 use std::future::Future;

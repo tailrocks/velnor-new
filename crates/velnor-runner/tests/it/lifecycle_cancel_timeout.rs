@@ -53,7 +53,7 @@ async fn lifecycle_cancel_with_sixty_minutes_in_the_timeout_uses_the_floor() -> 
 
 #[tokio::test]
 async fn lifecycle_cancel_with_twenty_four_hours_in_the_timeout_uses_the_floor() -> Result<()> {
-    out_of_range_timeout_falls_back_to_the_floor("24:00:00").await
+    out_of_range_timeout_falls_back_to_the_floor("24:00").await
 }
 
 #[tokio::test]
