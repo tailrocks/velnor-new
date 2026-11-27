@@ -27,7 +27,6 @@ fn world_with(mode: StoreMode) -> Result<World> {
 fn path_of(world: &World, ancestor: Ancestor) -> std::path::PathBuf {
     canonical(&match ancestor {
         Ancestor::Root => world.root.clone(),
-        Ancestor::Store => world.store.clone(),
         Ancestor::Tools => world.store.join("tools"),
     })
 }
@@ -53,10 +52,6 @@ fn mise_action_refuses_a_tools_store_below_a_directory_others_can_write() -> Res
         Row {
             ancestor: Ancestor::Root,
             mode: 0o775,
-        },
-        Row {
-            ancestor: Ancestor::Store,
-            mode: 0o757,
         },
         Row {
             ancestor: Ancestor::Tools,

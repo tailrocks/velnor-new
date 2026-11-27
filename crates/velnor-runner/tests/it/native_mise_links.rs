@@ -173,7 +173,7 @@ fn mise_action_accepts_a_store_root_reached_through_a_link_to_a_trusted_store() 
 #[test]
 fn mise_action_refuses_a_store_root_link_whose_target_is_not_trusted() -> Result<()> {
     let mut world = World::new()?;
-    world.store_mode = StoreMode::Loose(Ancestor::Store, 0o757);
+    world.store_mode = StoreMode::Loose(Ancestor::Root, 0o775);
     let root = linked_store(&world)?;
     let ran = world.run(
         &job_fixture("mise_action_ok"),
@@ -182,8 +182,8 @@ fn mise_action_refuses_a_store_root_link_whose_target_is_not_trusted() -> Result
     assert_failed(
         &ran,
         &format!(
-            "mise policy: {} is writable by its group or others (mode 757); no directory above the tools store may be",
-            canonical(&world.store).display()
+            "mise policy: {} is writable by its group or others (mode 775); no directory above the tools store may be",
+            canonical(&world.root).display()
         ),
     );
     assert_eq!(world.mise_calls(), Vec::<String>::new());

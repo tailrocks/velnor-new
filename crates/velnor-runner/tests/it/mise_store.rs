@@ -32,7 +32,6 @@ impl Dir {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Ancestor {
     Root,
-    Store,
     Tools,
 }
 
@@ -104,7 +103,6 @@ impl World {
     fn ancestor(&self, ancestor: Ancestor) -> PathBuf {
         match ancestor {
             Ancestor::Root => self.root.clone(),
-            Ancestor::Store => self.store.clone(),
             Ancestor::Tools => self.store.join("tools"),
         }
     }
