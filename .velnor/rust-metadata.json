@@ -2353,7 +2353,7 @@
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "8defb08ce340afdddfcd4b4438007c8ee4848e37b5e94cba7df0c5fd65130bb9",
+    "crates/velnor-runner/Cargo.toml": "7109a32b88492f1dd2a943a513213b1a4a684f82cc5bb5be363b31b07599ede0",
     "crates/velnor-rust/Cargo.toml": "c9be26a0cb2e638e019b6660a3a1204aea86063f479c1ea015724dd6957ba5d8",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
