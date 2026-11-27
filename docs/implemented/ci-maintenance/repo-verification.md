@@ -36,7 +36,7 @@ The table is a quick reference for the common commands. It is not the gate and i
 | `rust`, lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | `rust`, docs | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'` |
 | `rust`, tests | `cargo nextest run --workspace --locked --profile ci --no-fail-fast --ignore-default-filter --no-tests=fail` |
-| `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
+| `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast --ignore-default-filter -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
 | `rust`, lint with the `local-mode` feature | `cargo clippy --workspace --all-targets --locked --features local-mode -- -D warnings` |
 | `rust`, docs with the `local-mode` feature | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features local-mode` |
 | `rust`, per-package check | `cargo check -p <pkg> --locked`, once for each selected package |
