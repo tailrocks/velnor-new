@@ -38,7 +38,7 @@ fn a_symlinked_pack_directory_is_replaced_and_what_it_pointed_at_is_untouched() 
     let tip = warmed(&rig)?;
     let outside = rig.root.join("outside");
     std::fs::create_dir_all(&outside)?;
-    let victim = outside.join("victim.pack");
+    let victim = outside.join(format!("pack-{}.pack", "1".repeat(40)));
     std::fs::write(&victim, b"not a pack, only named like one")?;
     let packs = rig.mirror().join("objects/pack");
     std::fs::remove_dir_all(&packs)?;

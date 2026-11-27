@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, anyhow, bail};
 use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags};
@@ -21,7 +21,7 @@ use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
 use super::within;
 
-mod orphans;
+mod owned;
 mod refetch;
 mod sound;
 
@@ -134,9 +134,6 @@ fn read_head(path: &Path) -> Option<String> {
 }
 
 async fn reset_mirror(mirror: &Path) -> Result<()> {
-    remove_entry(&mirror.join("commondir")).await?;
-    remove_entry(&mirror.join("shallow")).await?;
-    remove_entry(&mirror.join(".git")).await?;
     let head = {
         let path = mirror.join("HEAD");
         tokio::task::spawn_blocking(move || read_head(&path))
@@ -237,7 +234,8 @@ async fn open(root: &Path, facts: &TrustedFacts) -> Result<(PathBuf, std::fs::Fi
             .with_context(|| format!("create {}", parent.display()))?;
     }
     let lock = lock(Path::new(&lock_file)).await?;
-    prepare(&mirror).await?;
+    let acquired = SystemTime::now();
+    prepare(&mirror, acquired).await?;
     Ok((mirror, lock))
 }
 
@@ -340,28 +338,18 @@ async fn is_file(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_file())
 }
 
-async fn prepare(mirror: &Path) -> Result<()> {
-    let config = mirror.join("config");
-    let objects = mirror.join("objects");
-    let refs = mirror.join("refs");
-    let mut broken = Vec::new();
-    if !is_file(&config).await {
-        broken.push(&config);
-    }
-    for dir in [&objects, &refs] {
-        if !is_dir(dir).await {
-            broken.push(dir);
-        }
-    }
-    if !broken.is_empty() {
-        for path in broken {
-            remove_entry(path).await?;
-        }
+async fn prepare(mirror: &Path, acquired: SystemTime) -> Result<()> {
+    owned::keep_only_owned(mirror).await?;
+    let present = is_file(&mirror.join("config")).await
+        && is_dir(&mirror.join("objects")).await
+        && is_dir(&mirror.join("refs")).await;
+    if !present {
         let mirror_arg = mirror
             .to_str()
             .with_context(|| format!("path {} is not UTF-8", mirror.display()))?;
-        git(&git_args(None, &["init", "-q", "--bare", mirror_arg]), &[]).await?;
+        let args = git_args(None, &["init", "-q", "--bare", "--template=", mirror_arg]);
+        git(&args, &[]).await?;
     }
-    orphans::remove_orphan_packs(mirror).await?;
+    owned::sweep_objects(mirror, acquired).await?;
     reset_mirror(mirror).await
 }

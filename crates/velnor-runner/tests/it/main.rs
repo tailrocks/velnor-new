@@ -104,6 +104,7 @@ mod native_checkout_layout;
 mod native_checkout_links;
 mod native_checkout_mirror;
 mod native_checkout_mirror_files;
+mod native_checkout_mirror_owned;
 mod native_checkout_packed;
 mod native_checkout_preflight;
 mod native_checkout_quarantine;
