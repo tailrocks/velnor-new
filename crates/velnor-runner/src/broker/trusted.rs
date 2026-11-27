@@ -13,7 +13,7 @@ pub(super) struct TrustedRef {
 impl TrustedRef {
     pub(super) fn of(facts: &TrustedFacts) -> Result<Self, String> {
         let remote = match (&facts.event, facts.event_name.as_str()) {
-            (TrustedEvent::Tag { name }, _) => format!("refs/tags/{name}"),
+            (TrustedEvent::Tag { name }, "push") => format!("refs/tags/{name}"),
             (TrustedEvent::Branch { branch }, "push") => format!("refs/heads/{branch}"),
             _ if facts.default_branch.is_empty() => {
                 return Err("the job has no trusted ref: its default branch is unknown".to_owned());

@@ -30,7 +30,7 @@ const FACTS_SHA: &str = "cccccccccccccccccccccccccccccccccccccccc";
 const SERVER_URL: &str = "file:///velnor-test";
 pub(crate) const RAN: &str = "pinned-action-ran";
 
-fn write_action(work: &Path) -> Result<String> {
+pub(crate) fn write_action(work: &Path) -> Result<String> {
     let directory = work.join("actions/setup-velnor");
     std::fs::create_dir_all(&directory).context("create the action directory")?;
     std::fs::write(directory.join("action.yml"), ACTION).context("write the action")?;

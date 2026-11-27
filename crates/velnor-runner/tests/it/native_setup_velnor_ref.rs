@@ -14,7 +14,7 @@ use crate::native_setup_velnor_fetch::{
 const MAIN: &str = r#"{"kind": "branch", "branch": "main"}"#;
 const QUEUE: &str = "refs/heads/gh-readonly-queue/main/pr-1";
 
-fn facts(rig: &Rig, event_name: &str, event: &str, sha: &str) -> Result<PathBuf> {
+pub(crate) fn facts(rig: &Rig, event_name: &str, event: &str, sha: &str) -> Result<PathBuf> {
     let path = rig.root.join(format!("facts-{event_name}-{sha}.json"));
     std::fs::write(
         &path,
@@ -72,6 +72,23 @@ fn a_pin_left_in_the_mirror_by_a_tag_deleted_upstream_is_not_trusted() -> Result
     let ran = cold.run_as(&tagged, &main)?;
     assert_unreachable(&ran, &tagged, "refs/heads/main");
     assert!(cold.mirror_has(&tagged));
+    Ok(())
+}
+
+#[test]
+fn a_dispatch_on_a_tag_trusts_the_default_branch_and_not_the_tag() -> Result<()> {
+    let rig = Rig::new()?;
+    let tagged = foreign_commit(&rig, "refs/tags/v1")?;
+    let cold = Cold::new(&rig)?;
+    let event = r#"{"kind": "tag", "name": "v1"}"#;
+    let dispatch = facts(&rig, "workflow_dispatch", event, &tagged)?;
+    assert_unreachable(
+        &cold.run_as(&tagged, &dispatch)?,
+        &tagged,
+        "refs/heads/main",
+    );
+    let push = facts(&rig, "push", event, &tagged)?;
+    assert_ran(&cold.run_as(&tagged, &push)?);
     Ok(())
 }
 
