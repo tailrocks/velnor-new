@@ -10,6 +10,8 @@ use velnor_model::{
 };
 
 use crate::config::CONFIG_PATH;
+use crate::embedded::is_rust_source;
+use crate::generator_inputs::Generator;
 use crate::lint_tasks::{TASK_FOLDERS, task_names};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
@@ -21,12 +23,9 @@ pub fn lint_runs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
+    observed: &BTreeSet<RepoPath>,
 ) -> BTreeMap<RootSlug, bool> {
-    let tree = Tree {
-        tracked,
-        symlinks,
-        base,
-    };
+    let tree = Tree::new(facts, tracked, symlinks, base, observed);
     facts
         .config
         .lint
@@ -40,9 +39,32 @@ struct Tree<'a> {
     tracked: &'a BTreeSet<RepoPath>,
     symlinks: &'a BTreeSet<RepoPath>,
     base: &'a BTreeMap<RepoPath, String>,
+    observed: &'a BTreeSet<RepoPath>,
+    generator: Option<Generator>,
 }
 
-impl Tree<'_> {
+impl<'a> Tree<'a> {
+    fn new(
+        facts: &RepoFacts,
+        tracked: &'a BTreeSet<RepoPath>,
+        symlinks: &'a BTreeSet<RepoPath>,
+        base: &'a BTreeMap<RepoPath, String>,
+        observed: &'a BTreeSet<RepoPath>,
+    ) -> Self {
+        let from_source = facts
+            .config
+            .lint
+            .iter()
+            .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { from_source: true }));
+        Self {
+            tracked,
+            symlinks,
+            base,
+            observed,
+            generator: from_source.then(|| Generator::of(facts)),
+        }
+    }
+
     fn edited(&self, path: &RepoPath) -> bool {
         self.tracked.contains(path) && self.base.contains_key(path) && !self.symlinks.contains(path)
     }
@@ -91,13 +113,10 @@ pub fn unmatched_inputs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
+    observed: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
     let changed = changed.filter(|_| event == EventKind::PullRequest);
-    let tree = Tree {
-        tracked,
-        symlinks,
-        base,
-    };
+    let tree = Tree::new(facts, tracked, symlinks, base, observed);
     let entries = facts
         .config
         .lint
@@ -222,13 +241,32 @@ fn inert(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
 }
 
+fn generated_check_reached(
+    from_source: bool,
+    facts: &RepoFacts,
+    path: &RepoPath,
+    tree: &Tree<'_>,
+) -> bool {
+    let Some(generator) = tree.generator.as_ref().filter(|_| from_source) else {
+        return from_source || !inert(facts, path, tree);
+    };
+    if read_by_the_generator(facts, path, tree) || generator.reads(path) {
+        return true;
+    }
+    if is_rust_source(path) {
+        tree.observed.contains(path)
+    } else {
+        !inert(facts, path, tree)
+    }
+}
+
 fn declared(lint: &LintJob, path: &RepoPath) -> bool {
     lint.inputs.iter().any(|glob| reaches(glob, path))
 }
 
 fn reached(facts: &RepoFacts, lint: &LintJob, path: &RepoPath, tree: &Tree<'_>) -> bool {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
-        return from_source || !inert(facts, path, tree);
+        return generated_check_reached(from_source, facts, path, tree);
     }
     declared(lint, path)
         || implicit(lint, path)

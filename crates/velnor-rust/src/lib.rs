@@ -60,6 +60,7 @@ mod error_reason;
 mod error_test_groups;
 mod excluded_lock;
 mod external_config;
+mod generator_inputs;
 mod group_runs;
 mod groups;
 mod harness;

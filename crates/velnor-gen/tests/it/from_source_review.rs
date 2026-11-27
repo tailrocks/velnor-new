@@ -41,6 +41,7 @@ fn selected(config: &str, paths: &[&str]) -> Result<bool, Box<dyn std::error::Er
         &BTreeSet::new(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     )
     .into_iter()
     .find(|(slug, _)| slug.as_str() == "generated_check")

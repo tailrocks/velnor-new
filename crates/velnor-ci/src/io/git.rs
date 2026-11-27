@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use velnor_model::RepoPath;
+use velnor_rust::is_rust_source;
 
 use crate::error::CiError;
 
@@ -16,13 +17,21 @@ const MERGED: &str = "HEAD^2";
 const SHA_VARIABLE: &str = "GITHUB_SHA";
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, CiError> {
+    run(root, args, &[0])
+}
+
+fn run(root: &Path, args: &[&str], accepted: &[i32]) -> Result<Vec<u8>, CiError> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
         .args(args)
         .output()
         .map_err(|error| CiError::new(format!("cannot run git: {error}")))?;
-    if output.status.success() {
+    if output
+        .status
+        .code()
+        .is_some_and(|code| accepted.contains(&code))
+    {
         Ok(output.stdout)
     } else {
         Err(CiError::new(format!(
@@ -124,4 +133,84 @@ pub(super) fn base_files(
         kept.insert(path.clone(), text);
     }
     kept
+}
+
+pub(super) fn observed_sources(
+    root: &Path,
+    base: &str,
+    changed: &BTreeSet<RepoPath>,
+) -> Result<BTreeSet<RepoPath>, CiError> {
+    let sources: Vec<&str> = changed
+        .iter()
+        .filter(|path| is_rust_source(path))
+        .map(RepoPath::as_str)
+        .collect();
+    if sources.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    let mut observed = structural(root, base, &sources)?;
+    for revision in [base, HEAD] {
+        observed.extend(including(root, revision, &sources)?);
+    }
+    Ok(observed)
+}
+
+fn with_paths<'a>(mut args: Vec<&'a str>, sources: &[&'a str]) -> Vec<&'a str> {
+    args.push("--");
+    args.extend_from_slice(sources);
+    args
+}
+
+fn structural(root: &Path, base: &str, sources: &[&str]) -> Result<BTreeSet<RepoPath>, CiError> {
+    let args = with_paths(
+        vec![
+            "--literal-pathspecs",
+            "diff",
+            "--no-renames",
+            "--name-status",
+            "-z",
+            base,
+            HEAD,
+        ],
+        sources,
+    );
+    let listing = git(root, &args)?;
+    let text = String::from_utf8(listing)
+        .map_err(|_| CiError::new("git listed a path that is not UTF-8"))?;
+    let fields: Vec<&str> = text.split_terminator('\0').collect();
+    fields
+        .chunks(2)
+        .filter(|entry| entry[0] != "M")
+        .map(|entry| {
+            let name = entry.get(1).copied().unwrap_or_default();
+            RepoPath::new(name).map_err(|error| CiError::new(format!("{name}: {error}")))
+        })
+        .collect()
+}
+
+fn including(root: &Path, revision: &str, sources: &[&str]) -> Result<Vec<RepoPath>, CiError> {
+    let args = with_paths(
+        vec![
+            "--literal-pathspecs",
+            "grep",
+            "--files-with-matches",
+            "--null",
+            "--text",
+            "--fixed-strings",
+            "-e",
+            "include",
+            revision,
+        ],
+        sources,
+    );
+    let listing = run(root, &args, &[0, 1])?;
+    let prefix = format!("{revision}:");
+    let text = String::from_utf8(listing)
+        .map_err(|_| CiError::new("git listed a path that is not UTF-8"))?;
+    text.split_terminator('\0')
+        .map(|entry| {
+            let name = entry.strip_prefix(&prefix).unwrap_or(entry);
+            RepoPath::new(name).map_err(|error| CiError::new(format!("{name}: {error}")))
+        })
+        .collect()
 }
