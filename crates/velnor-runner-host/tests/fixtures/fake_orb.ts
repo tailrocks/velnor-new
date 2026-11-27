@@ -215,6 +215,7 @@ function runner(rest: string[]): never {
     mkdirSync(`${work}/locked`, { recursive: true });
     writeFileSync(`${work}/locked/keep`, "");
     chmodSync(`${work}/locked`, 0o500);
+    writeFileSync(`${seen}/${name}.locked`, "");
   }
   const held = setting("FAKE_RUNNER_HOLD") !== "";
   const child = held ? Bun.spawn(["sleep", "60"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }) : undefined;
