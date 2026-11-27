@@ -1067,8 +1067,10 @@ claimed to match.
     archive and does not take the no-files branch, as upstream. An entry that
     vanishes after the search is a recorded difference. Velnor skips one that
     vanishes between the listing and the open silently, and fails the step
-    with `stat <path>` before `CreateArtifact` for one that vanishes after
-    the search. Upstream drops it silently at the glob stat
+    before `CreateArtifact` for one that vanishes after the search: with
+    `stat <path>` when the file is gone before the zip starts, and with
+    `open <path>` when it vanishes while earlier files are being
+    compressed. Upstream drops it silently at the glob stat
     (`omitBrokenSymbolicLinks`), throws at the `search.ts` stat loop or in
     `getUploadZipSpecification` (`File <path> does not exist`), warns at
     the `archiver` `lstat`, and fails at `realpath` for a vanished link
