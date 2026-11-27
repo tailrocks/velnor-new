@@ -3,25 +3,24 @@
 
 use crate::expr_support::{TempDir, expected_digest, text};
 use anyhow::Result;
-use rustix::fs::{CWD, Mode, OFlags, mkdirat, openat};
+use rustix::fs::{AtFlags, CWD, Mode, OFlags, mkdirat, openat, unlinkat};
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use std::fs::File;
 use std::io::Write as _;
 use std::os::fd::OwnedFd;
 use std::path::Path;
 
-const DEPTH: usize = 520;
-const HELD_LEVEL: usize = 5;
-const CHECKPOINT_LEVEL: usize = 204;
-const REOPENED_LEVEL: usize = 490;
+const DEPTH: usize = 400;
+const SIBLING_FILES: [(usize, &str, &str); 3] = [(5, "s", "s"), (100, "n", "n"), (350, "m", "m")];
 const LOWERED_LIMIT: u64 = 256;
-const RESTORED_LIMIT: u64 = 8_192;
+const RAISED_LIMIT: u64 = 16_384;
 
 struct DescriptorLimit(Rlimit);
 
 impl DescriptorLimit {
-    fn lower_to(soft: u64) -> Result<Self> {
+    fn set(soft: u64) -> Result<Self> {
         let original = getrlimit(Resource::Nofile);
+        let soft = original.maximum.map_or(soft, |maximum| soft.min(maximum));
         setrlimit(
             Resource::Nofile,
             Rlimit {
@@ -35,17 +34,7 @@ impl DescriptorLimit {
 
 impl Drop for DescriptorLimit {
     fn drop(&mut self) {
-        let restored = self
-            .0
-            .maximum
-            .map_or(RESTORED_LIMIT, |maximum| maximum.min(RESTORED_LIMIT));
-        let _ = setrlimit(
-            Resource::Nofile,
-            Rlimit {
-                current: Some(restored),
-                maximum: self.0.maximum,
-            },
-        );
+        let _ = setrlimit(Resource::Nofile, self.0);
     }
 }
 
@@ -56,11 +45,6 @@ fn open_directory(parent: &OwnedFd, name: &str) -> Result<OwnedFd> {
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
         Mode::empty(),
     )?)
-}
-
-fn make_directory(parent: &OwnedFd, name: &str) -> Result<OwnedFd> {
-    mkdirat(parent, name, Mode::RWXU)?;
-    open_directory(parent, name)
 }
 
 fn make_file(parent: &OwnedFd, name: &str, contents: &str) -> Result<()> {
@@ -74,37 +58,66 @@ fn make_file(parent: &OwnedFd, name: &str, contents: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_branching_tree(workspace: &Path) -> Result<()> {
-    let mut directory = openat(
+fn open_workspace(workspace: &Path) -> Result<OwnedFd> {
+    Ok(openat(
         CWD,
         workspace,
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
         Mode::empty(),
-    )?;
+    )?)
+}
+
+fn build_branching_tree(workspace: &Path) -> Result<()> {
+    let mut directory = open_workspace(workspace)?;
     make_file(&directory, "top.txt", "top")?;
     for level in 0..DEPTH {
-        let sibling = make_directory(&directory, "b")?;
-        match level {
-            HELD_LEVEL => make_file(&sibling, "s.txt", "s")?,
-            CHECKPOINT_LEVEL => make_file(&sibling, "n.txt", "n")?,
-            REOPENED_LEVEL => make_file(&sibling, "m.txt", "m")?,
-            _ => {}
+        mkdirat(&directory, "b", Mode::RWXU)?;
+        if let Some((_, name, contents)) = SIBLING_FILES.iter().find(|(at, _, _)| *at == level) {
+            let sibling = open_directory(&directory, "b")?;
+            make_file(&sibling, &format!("{name}.txt"), contents)?;
         }
-        directory = make_directory(&directory, "a")?;
+        mkdirat(&directory, "a", Mode::RWXU)?;
+        directory = open_directory(&directory, "a")?;
     }
     make_file(&directory, "leaf.txt", "leaf")
+}
+
+fn remove_branching_tree(workspace: &Path) -> Result<()> {
+    let mut chain = vec![open_workspace(workspace)?];
+    for _ in 0..DEPTH {
+        let next = open_directory(&chain[chain.len() - 1], "a")?;
+        chain.push(next);
+    }
+    unlinkat(&chain[DEPTH], "leaf.txt", AtFlags::empty())?;
+    for level in (0..DEPTH).rev() {
+        if let Some((_, name, _)) = SIBLING_FILES.iter().find(|(at, _, _)| *at == level) {
+            unlinkat(&chain[level], format!("b/{name}.txt"), AtFlags::empty())?;
+        }
+        unlinkat(&chain[level], "b", AtFlags::REMOVEDIR)?;
+        unlinkat(&chain[level], "a", AtFlags::REMOVEDIR)?;
+    }
+    unlinkat(&chain[0], "top.txt", AtFlags::empty())?;
+    Ok(())
 }
 
 #[test]
 fn expr_hash_files_walks_a_branching_tree_far_deeper_than_its_descriptor_budget() -> Result<()> {
     let dir = TempDir::new()?;
     dir.write("ws/placeholder.md", "p")?;
-    build_branching_tree(&dir.workspace()?)?;
+    let workspace = dir.workspace()?;
+    let raised = DescriptorLimit::set(RAISED_LIMIT)?;
+    build_branching_tree(&workspace)?;
     let env = dir.env();
-    let _limit = DescriptorLimit::lower_to(LOWERED_LIMIT)?;
+
+    let digest = {
+        let _lowered = DescriptorLimit::set(LOWERED_LIMIT)?;
+        text("hashFiles('**/*.txt')", &env)
+    };
+    remove_branching_tree(&workspace)?;
+    drop(raised);
 
     assert_eq!(
-        text("hashFiles('**/*.txt')", &env)?,
+        digest?,
         expected_digest(&[b"leaf", b"m", b"n", b"s", b"top"])
     );
     Ok(())

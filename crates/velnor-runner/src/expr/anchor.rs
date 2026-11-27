@@ -17,16 +17,13 @@ pub(super) const READ_DIRECTORY: OFlags = OFlags::RDONLY
     .union(OFlags::NOFOLLOW)
     .union(OFlags::CLOEXEC);
 
-const MAX_HELD_DIRECTORIES: usize = 64;
-const DENSE_LEVELS: usize = 8;
-const CHECKPOINT_STRIDE: usize = 8;
+const CHECKPOINTS_PER_DOUBLING_BITS: u32 = 4;
 
 #[derive(Clone)]
 pub(super) struct Anchor {
     fd: Rc<OwnedFd>,
     level: usize,
     below: Rc<Vec<OsString>>,
-    held: usize,
 }
 
 pub(super) fn open_directory_below<'a>(
@@ -50,7 +47,6 @@ impl Anchor {
             fd,
             level: 0,
             below: Rc::default(),
-            held: 1,
         }
     }
 
@@ -60,13 +56,11 @@ impl Anchor {
 
     pub(super) fn descend(&self, name: &OsStr, directory: OwnedFd) -> Self {
         let level = self.level + self.below.len() + 1;
-        let checkpoint = level <= DENSE_LEVELS || level.is_multiple_of(CHECKPOINT_STRIDE);
-        if checkpoint && self.held < MAX_HELD_DIRECTORIES {
+        if is_checkpoint(level) {
             return Self {
                 fd: Rc::new(directory),
                 level,
                 below: Rc::default(),
-                held: self.held + 1,
             };
         }
         let mut below = Vec::with_capacity(self.below.len() + 1);
@@ -76,7 +70,12 @@ impl Anchor {
             fd: Rc::clone(&self.fd),
             level: self.level,
             below: Rc::new(below),
-            held: self.held,
         }
     }
+}
+
+fn is_checkpoint(level: usize) -> bool {
+    let doublings = usize::BITS - 1 - level.leading_zeros();
+    let spacing = 1_usize << doublings.saturating_sub(CHECKPOINTS_PER_DOUBLING_BITS);
+    level.is_multiple_of(spacing)
 }
