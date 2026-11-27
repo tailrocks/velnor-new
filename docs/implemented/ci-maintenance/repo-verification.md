@@ -24,7 +24,9 @@ evidence to confirm that it ran.
 
 No single script runs the full gate. The full local gate is the `run:` steps of the jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` that the changed paths select. Read the steps from the workflow files: they are the source of truth, and `velnor-gen` generates `ci.yml`. Run them from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a job only when the changed paths do not select it, and run every job when you are unsure.
 
-Run the steps in `bash -e` mode, as the workflows do. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`, often with `velnor-ci inputs build --` in front of `<command>`. Run `<command>` itself and leave out the `. "$VELNOR_EXEC" run --` and `velnor-ci inputs build --` prefixes, which exist only on the runner. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, and the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
+Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`, often with `velnor-ci inputs build --` in front of `<command>`. Run `<command>` itself and leave out the `. "$VELNOR_EXEC" run --` and `velnor-ci inputs build --` prefixes, which exist only on the runner. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`, and the two steps that run `test-install-secret-scanners.sh` and `install-secret-scanners.sh`, which handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
+
+A nextest step reads `-E "$TEST_FILTER"`. The skipped `velnor-ci plan` step computes that value, so set it yourself. Use `all()` to run the whole workspace, or `package(<name>) | package(<other>)` for the packages your change affects. Unset or empty, nextest fails with a filterset parse error. A `Test lane guard` step runs `velnor-ci lane-guard`, and `velnor-ci` is not on `PATH` in a checkout. Run it as `cargo run --locked -p velnor-ci -- lane-guard <arguments of the step>`.
 
 The table is a quick reference for the common commands. It is not the gate and it can fall behind the workflows. When the table and a workflow step differ, the workflow step wins.
 
@@ -47,20 +49,20 @@ The table is a quick reference for the common commands. It is not the gate and i
 | `lint-mise-binary-digests` | `mise run test-mise-binary-digests` |
 | `lint-validate-hk` | `mise run validate-hk` |
 | `lint-generated-check` | `cargo run --locked -p velnor-gen --bin velnor-gen -- --root . check --verify-release` |
-| `helper-gates`, fetch and check the added gates | `git fetch --force --tags --quiet origin`, then `bash scripts/check-helper-gates.sh origin/main` |
+| `helper-gates`, fetch and check the added gates | `git fetch --force --tags --quiet origin`, then `bash scripts/check-helper-gates.sh origin/<base>`, where `<base>` is the branch your pull request targets |
 | `helper-gates`, self-test the gate check | The `run:` block of the self-test step of the `helper-gates` job in `repository-checks.yml`, run verbatim under `bash -e` |
 | `helper-gates`, merge-queue test | `bash scripts/test-helper-gates-merge-queue.sh` |
-| Secret scans in `repository-checks.yml` | The scripts named in that workflow's steps |
+| `secret-scan`, scans | The scan steps of the job in `repository-checks.yml`, run with the scanners that `mise install` installs from `mise.toml`, which are the same versions as `scripts/install-secret-scanners.sh` pins |
 
 `cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
 
-Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. Without it, the commands above run the whole workspace.
+Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above run the whole workspace without it.
 
 The `test-maintenance-helpers` mise task runs the repository-only maintenance helper tests. No generated workflow job runs it, so it is a local full run and not a required check. It first runs `scripts/test-setup-velnor-action.py`, the mise binary digest tests, the tag ruleset drift test and `cargo fetch --locked`, then runs the `velnor-archive-guard` tests with `--no-tests fail`.
 
 `hk.pkl` defines the other local checks: `rumdl`, the toolchain mirror check (`scripts/check-rust-toolchain-mirror.sh`), the `cargo test` ban check (`scripts/check-test-cargo.sh`) and the secret scans. The `pre-commit` and `pre-push` hooks run the secret scans.
 
-For documentation-only changes, run `alint validate-config && alint check --fail-on-warning` and `rumdl check` on the changed Markdown files. In `repository-checks.yml`, the `helper-gates` and `secret-scan` jobs have no path filter, so they also run for a documentation-only change in a same-repository pull request. Run them locally too: the three `helper-gates` rows of the table, and the secret-scan steps listed in the workflow.
+For documentation-only changes, run `alint validate-config && alint check --fail-on-warning` and `rumdl check` on the changed Markdown files. In `repository-checks.yml`, the `helper-gates` and `secret-scan` jobs have no path filter, so they also run for a documentation-only change in a same-repository pull request. Run them locally too: the three `helper-gates` rows of the table, and the scan steps of the `secret-scan` job (the table row above).
 
 ---
 
