@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use anyhow::{Result, ensure};
@@ -27,6 +28,7 @@ fn world_with(mode: StoreMode) -> Result<World> {
 fn path_of(world: &World, ancestor: Ancestor) -> std::path::PathBuf {
     canonical(&match ancestor {
         Ancestor::Root => world.root.clone(),
+        Ancestor::Store => world.store.clone(),
         Ancestor::Tools => world.store.join("tools"),
     })
 }
@@ -98,5 +100,37 @@ fn mise_action_does_not_examine_a_directory_above_its_trust_anchor() -> Result<(
         &[("VELNOR_TEST_STORE_TRUST", &declared)],
     )?;
     ensure!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    Ok(())
+}
+
+fn mode_of(path: &Path) -> Result<u32> {
+    Ok(std::fs::metadata(path)?.permissions().mode() & 0o7777)
+}
+
+#[test]
+fn mise_action_settles_a_group_writable_store_root_before_the_job() -> Result<()> {
+    let world = world_with(StoreMode::Loose(Ancestor::Store, 0o757))?;
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    ensure!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    ensure!(!world.mise_calls().is_empty(), "mise never ran");
+    let after = mode_of(&world.store)?;
+    ensure!(after == 0o755, "the store root ended at {after:o}");
+    Ok(())
+}
+
+#[test]
+fn mise_action_refuses_a_store_root_a_leading_step_makes_writable() -> Result<()> {
+    let world = world_with(StoreMode::Sealed)?;
+    let script = format!("chmod 757 {}", world.store.display());
+    let job = world.with_leading_script(&job_fixture("mise_action_ok"), &script)?;
+    let ran = world.run(&job, &[])?;
+    let expected = format!(
+        "mise policy: {} is writable by its group or others (mode 757); no directory above the tools store may be",
+        canonical(&world.store).display()
+    );
+    ensure!(ran.has_line(&expected), "{}", ran.stdout);
+    ensure!(ran.has_line("step 2 failed"), "{}", ran.stdout);
+    ensure!(ran.has_line("job failed"), "{}", ran.stdout);
+    assert_eq!(world.mise_calls(), Vec::<String>::new());
     Ok(())
 }
