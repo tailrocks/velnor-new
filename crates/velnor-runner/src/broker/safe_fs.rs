@@ -94,23 +94,6 @@ fn grant_owner(directory: &OwnedFd) -> rustix::io::Result<()> {
     fchmod(directory, Mode::from_bits_truncate(mode | 0o700))
 }
 
-fn rename_aside(
-    from: BorrowedFd<'_>,
-    name: &OsStr,
-    aside: BorrowedFd<'_>,
-) -> Result<Option<String>> {
-    let target = uuid::Uuid::new_v4().to_string();
-    match renameat(from, name, aside, target.as_str()) {
-        Ok(()) => Ok(Some(target)),
-        Err(Errno::NOENT) => Ok(None),
-        Err(error) => Err(error.into()),
-    }
-}
-
-pub(crate) fn move_aside(from: BorrowedFd<'_>, name: &OsStr, aside: BorrowedFd<'_>) -> Result<()> {
-    rename_aside(from, name, aside).map(drop)
-}
-
 pub(crate) fn remove_entry(
     from: BorrowedFd<'_>,
     name: &OsStr,
@@ -119,9 +102,11 @@ pub(crate) fn remove_entry(
     if let Ok(entry) = openat(from, name, directory_flags(), Mode::empty()) {
         grant_owner(&entry).context("make the cache entry movable")?;
     }
-    match rename_aside(from, name, aside)? {
-        Some(target) => purge(aside, OsStr::new(&target)),
-        None => Ok(()),
+    let target = uuid::Uuid::new_v4().to_string();
+    match renameat(from, name, aside, target.as_str()) {
+        Ok(()) => purge(aside, OsStr::new(&target)),
+        Err(Errno::NOENT) => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 

@@ -354,3 +354,18 @@ async fn a_job_cannot_renew_an_entry_of_a_scope_it_cannot_read() -> Result<()> {
     assert_eq!(stamp("refs/heads/other")?, before);
     Ok(())
 }
+
+#[tokio::test]
+async fn a_touch_does_not_revive_an_entry_idle_for_more_than_seven_days() -> Result<()> {
+    let (fixture, now) = timed(u64::MAX)?;
+    let response = fixture.upload("k-a", &bytes(10)).await;
+    assert!(published(&response), "{response:?}");
+    let path = fixture.entry("k-a")?.join(ACCESSED);
+    let stamp = || fs::metadata(&path).and_then(|meta| meta.modified());
+    let before = stamp()?;
+    at(&now, 7 * DAY + 1);
+    let refused = touch(&fixture, "k-a").await;
+    failed(&refused, "has expired");
+    assert_eq!(stamp()?, before);
+    Ok(())
+}

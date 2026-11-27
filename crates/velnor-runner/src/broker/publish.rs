@@ -20,7 +20,7 @@ use super::cache::{
 use super::incoming::Upload;
 use super::layout::Layout;
 use super::proto::Response;
-use super::safe_fs::{directory_flags, move_aside};
+use super::safe_fs::{directory_flags, remove_entry};
 
 const FROZEN_DIRECTORY: RawMode = 0o555;
 const FROZEN_FILE: RawMode = 0o444;
@@ -88,9 +88,26 @@ fn record(fd: &impl AsFd, what: &str) {
     }
 }
 
+#[cfg(test)]
+pub(super) static FAIL_SYNC: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+fn injected(what: &str) -> bool {
+    FAIL_SYNC.lock().is_ok_and(|mut armed| {
+        let hit = *armed == Some(what);
+        if hit {
+            *armed = None;
+        }
+        hit
+    })
+}
+
 pub(super) fn sync_fd(fd: &impl AsFd, what: &str) -> Result<()> {
     #[cfg(test)]
-    record(fd, what);
+    {
+        record(fd, what);
+        ensure!(!injected(what), "sync {what}: injected failure");
+    }
     fsync(fd).with_context(|| format!("sync {what}"))
 }
 
@@ -133,7 +150,7 @@ fn not_abandoned(abandoned: &AtomicBool, step: &str) -> Result<()> {
 
 fn withdraw(layout: &Layout, scope: &OwnedFd, entry: &OsString) -> Result<()> {
     let aside = layout.open_aside()?;
-    move_aside(scope.as_fd(), entry, aside.as_fd()).context("set the publication aside")?;
+    remove_entry(scope.as_fd(), entry, aside.as_fd()).context("withdraw the publication")?;
     sync_fd(scope, "the cache scope")
 }
 
@@ -164,7 +181,7 @@ fn attempt(
     };
     if leftover {
         let aside = layout.open_aside()?;
-        move_aside(scope.as_fd(), &entry, aside.as_fd()).context("set the leftover aside")?;
+        remove_entry(scope.as_fd(), &entry, aside.as_fd()).context("remove the leftover")?;
     }
     seal(&upload.dir, target, layout.now())?;
     not_abandoned(abandoned, "before it was committed")?;

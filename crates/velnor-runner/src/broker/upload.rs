@@ -94,8 +94,12 @@ fn bytes_follow(reader: &PipeReader) -> Result<bool> {
     if !readable(reader, &NOW)? {
         return Ok(false);
     }
+    Ok(follows(|probe| rustix::io::read(reader, probe)))
+}
+
+pub(super) fn follows(mut read: impl FnMut(&mut [u8]) -> rustix::io::Result<usize>) -> bool {
     let mut probe = [0_u8; 1];
-    Ok(matches!((&*reader).read(&mut probe), Ok(count) if count > 0))
+    matches!(uninterrupted(|| read(&mut probe)), Ok(count) if count > 0)
 }
 
 struct Limits {

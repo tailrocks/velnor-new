@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use anyhow::{Result, anyhow};
 
 use super::cache::{CacheOwner, MARKER, scope_dir};
-use super::publish::SYNCED;
-use super::tests::{Fixture, TAR, published};
+use super::publish::{FAIL_SYNC, SYNCED};
+use super::tests::{Fixture, TAR, failed, published};
 
 const PRIVATE: u32 = 0o700;
 
@@ -166,5 +166,22 @@ async fn first_saves_that_race_to_create_the_store_directories_all_publish() -> 
     let failed: Vec<_> = answers.iter().filter(|answer| !published(answer)).collect();
     assert!(failed.is_empty(), "{failed:?}");
     assert_eq!(fixture.incoming_names(), Vec::<String>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_publish_whose_sync_fails_leaves_no_entry_and_a_later_save_publishes() -> Result<()> {
+    for what in ["the cache entry", "the cache scope"] {
+        let fixture = Fixture::new()?;
+        *FAIL_SYNC
+            .lock()
+            .map_err(|_| anyhow!("the failure hook is poisoned"))? = Some(what);
+        let response = fixture.upload("k-1", TAR).await;
+        failed(&response, "injected failure");
+        fixture.assert_nothing_published();
+        assert!(!fixture.entry("k-1")?.exists(), "{what}");
+        let later = fixture.upload("k-1", TAR).await;
+        assert!(published(&later), "{what}: {later:?}");
+    }
     Ok(())
 }

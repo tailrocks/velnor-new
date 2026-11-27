@@ -15,6 +15,7 @@ use super::proto::{Denied, Response};
 use super::safe_fs::uninterrupted;
 use super::tests::{BRANCH, FORK, Fixture, TAR, begin, failed, published, version, write_all};
 use super::tests_entry::{BOUND, wait_until};
+use super::upload::follows;
 
 const MIB: u64 = 1 << 20;
 
@@ -250,4 +251,14 @@ fn an_interrupted_call_is_retried_until_it_answers() {
         }
     });
     assert_eq!(answer, Ok(3));
+}
+
+#[test]
+fn an_interrupted_probe_read_still_sees_the_bytes_that_follow() {
+    let mut calls = 0;
+    let seen = follows(|_| {
+        calls += 1;
+        if calls < 3 { Err(Errno::INTR) } else { Ok(1) }
+    });
+    assert!(seen);
 }

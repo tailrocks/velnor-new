@@ -9,7 +9,9 @@ use rustix::fs::{
 };
 use velnor_cache_rules::Scope;
 
-use super::cache::{ACCESSED, CacheOwner, MARKER, check_request, entry_name, scope_parts};
+use super::cache::{
+    ACCESSED, CacheOwner, MARKER, check_request, entry_name, live_access, scope_parts,
+};
 use super::facts::TrustedFacts;
 use super::layout::Layout;
 use super::publish::sync_fd;
@@ -75,6 +77,10 @@ pub(super) fn touch(
     ensure!(
         is_regular_mode(marker.st_mode),
         "the cache entry is not complete"
+    );
+    ensure!(
+        live_access(entry.as_fd(), layout.now()).is_some(),
+        "the cache entry has expired"
     );
     stamp_access(entry.as_fd(), layout.now())
 }

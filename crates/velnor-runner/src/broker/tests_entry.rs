@@ -4,6 +4,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
 use std::os::unix::fs::MetadataExt;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
@@ -50,7 +51,8 @@ pub(super) async fn wait_until(what: &str, mut ready: impl FnMut() -> bool) -> R
 }
 
 #[tokio::test]
-async fn a_crashed_leftover_is_set_aside_and_not_deleted_in_place() -> Result<()> {
+async fn a_crashed_leftover_is_replaced_by_the_published_entry_and_leaves_nothing_behind()
+-> Result<()> {
     let fixture = Fixture::new()?;
     let leftover = fixture.entry("k-1")?;
     fs::create_dir_all(&leftover)?;
@@ -59,12 +61,12 @@ async fn a_crashed_leftover_is_set_aside_and_not_deleted_in_place() -> Result<()
     assert!(published(&response), "{response:?}");
     assert_eq!(fs::read(fixture.entry("k-1")?.join("data.tar"))?, TAR);
     assert!(!fixture.entry("k-1")?.join("junk").exists());
-    let aside = fixture.root().join("aside");
-    let sets: Vec<_> = fs::read_dir(&aside)?.collect::<Result<_, _>>()?;
-    assert_eq!(sets.len(), 1);
-    let moved: Vec<_> = fs::read_dir(sets[0].path())?.collect::<Result<_, _>>()?;
-    assert_eq!(moved.len(), 1);
-    assert_eq!(fs::read(moved[0].path().join("junk"))?, b"x");
+    let junk: Vec<_> = fixture
+        .paths_in_the_store()
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|name| name == "junk"))
+        .collect();
+    assert_eq!(junk, Vec::<PathBuf>::new());
     Ok(())
 }
 
