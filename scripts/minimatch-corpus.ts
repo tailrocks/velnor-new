@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 import { spawnSync } from "node:child_process";
-import { renameSync, writeFileSync } from "node:fs";
+import { renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const USAGE =
@@ -18,5 +18,10 @@ const evaluated = spawnSync(node, [join(import.meta.dirname, "minimatch-corpus-n
 if (evaluated.error !== undefined) throw evaluated.error;
 if (evaluated.status !== 0) throw new Error(`the Node evaluation of the corpus failed with status ${evaluated.status}`);
 const partial = `${output}.partial`;
-writeFileSync(partial, evaluated.stdout);
-renameSync(partial, output);
+try {
+  writeFileSync(partial, evaluated.stdout);
+  renameSync(partial, output);
+} catch (error) {
+  rmSync(partial, { force: true });
+  throw error;
+}

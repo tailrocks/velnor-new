@@ -44,6 +44,7 @@ fn expr_hash_files_fails_when_the_walk_reaches_a_name_that_is_not_valid_utf8() -
         "hashFiles('**')",
         "hashFiles('dir/*.txt')",
         "hashFiles('dir/**')",
+        "hashFiles('dir/bad?.txt')",
     ] {
         let message = error_text(expression, &env)?;
         assert!(
@@ -79,5 +80,44 @@ fn expr_hash_files_reads_a_name_that_is_not_valid_utf8_as_its_replacement_charac
     let twice = expected_digest(&[b"Y", b"Y"]);
     assert_eq!(text("hashFiles('both/**')", &env)?, twice);
     assert_eq!(text("hashFiles('both/*.txt')", &env)?, twice);
+    assert_eq!(text("hashFiles('both/a?.txt')", &env)?, twice);
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_drops_a_replacement_character_twin_that_links_outside_the_workspace()
+-> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("outside.txt", "O")?;
+    dir.write("ws/out/z.txt", "Z")?;
+    let out = dir.workspace()?.join("out");
+    if !write_named(&out, b"x\xff.txt", "X")? {
+        return Ok(());
+    }
+    dir.symlink("ws/out/x\u{FFFD}.txt", &dir.path().join("outside.txt"))?;
+    let env = dir.env();
+
+    let only_z = expected_digest(&[b"Z"]);
+    assert_eq!(text("hashFiles('out/**')", &env)?, only_z);
+    assert_eq!(text("hashFiles('out/*.txt')", &env)?, only_z);
+    assert_eq!(text("hashFiles('out/x?.txt')", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_names_the_first_non_utf8_entry_in_walk_order() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/e/z/ok.txt", "ok")?;
+    let tree = dir.workspace()?.join("e");
+    if !write_named(&tree.join("c"), b"q\xff.txt", "q")? {
+        return Ok(());
+    }
+    write_named(&tree, b"m\xff.txt", "m")?;
+    write_named(&tree.join("z"), b"r\xff.txt", "r")?;
+    let env = dir.env();
+
+    let message = error_text("hashFiles('e/**')", &env)?;
+    assert!(message.contains("e/c/q\u{FFFD}.txt"), "{message}");
+    assert!(!message.contains("m\u{FFFD}.txt"), "{message}");
     Ok(())
 }

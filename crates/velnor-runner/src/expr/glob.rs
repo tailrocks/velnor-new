@@ -119,7 +119,7 @@ impl PatternSet {
 struct Visit {
     path: PathBuf,
     comps: Vec<String>,
-    kind: fs::FileType,
+    kind: Option<fs::FileType>,
     matched: bool,
     partial: bool,
 }
@@ -177,14 +177,14 @@ impl Walk<'_> {
     fn classify(
         &self,
         comps: Vec<String>,
-        locate: impl FnOnce() -> Result<(PathBuf, fs::FileType), GlobError>,
+        path: PathBuf,
+        kind: Option<fs::FileType>,
     ) -> Result<Option<Visit>, GlobError> {
         let matched = self.patterns.matches_file(&comps)?;
         let partial = self.patterns.may_contain(&comps)?;
         if !matched && !partial {
             return Ok(None);
         }
-        let (path, kind) = locate()?;
         Ok(Some(Visit {
             path,
             comps,
@@ -217,11 +217,17 @@ impl Walk<'_> {
         let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
             return Ok(None);
         };
-        self.classify(root.to_vec(), || Ok((path, metadata.file_type())))
+        self.classify(root.to_vec(), path, Some(metadata.file_type()))
     }
 
     fn visit(&mut self, visit: Visit) -> Result<Option<PathBuf>, GlobError> {
-        if visit.kind.is_dir() {
+        let kind = match visit.kind {
+            Some(kind) => kind,
+            None => fs::symlink_metadata(&visit.path)
+                .map_err(|error| GlobError::io(&visit.path, error))?
+                .file_type(),
+        };
+        if kind.is_dir() {
             if visit.partial {
                 self.push_children(&visit)?;
             }
@@ -230,10 +236,10 @@ impl Walk<'_> {
         if !visit.matched {
             return Ok(None);
         }
-        if visit.kind.is_file() {
+        if kind.is_file() {
             return Ok(Some(visit.path));
         }
-        if !visit.kind.is_symlink() {
+        if !kind.is_symlink() {
             return Err(GlobError::NotRegularFile(visit.path.display().to_string()));
         }
         let real =
@@ -272,16 +278,11 @@ impl Walk<'_> {
             let lossy = name.to_string_lossy();
             let mut comps = parent.comps.clone();
             comps.push(lossy.to_string());
-            let located = || {
-                if let Some(kind) = kind {
-                    return Ok((parent.path.join(&name), kind));
-                }
-                let path = parent.path.join(lossy.as_ref());
-                let metadata =
-                    fs::symlink_metadata(&path).map_err(|error| GlobError::io(&path, error))?;
-                Ok((path, metadata.file_type()))
+            let path = match kind {
+                Some(_) => parent.path.join(&name),
+                None => parent.path.join(lossy.as_ref()),
             };
-            if let Some(visit) = self.classify(comps, located)? {
+            if let Some(visit) = self.classify(comps, path, kind)? {
                 self.stack.push(visit);
             }
         }

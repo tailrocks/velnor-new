@@ -241,9 +241,14 @@ const [minimatchDirectory, requested, seed] = process.argv.slice(2);
 if (minimatchDirectory === undefined) {
   throw new Error("usage: node scripts/minimatch-corpus-node.ts <directory holding node_modules/minimatch@3.1.2> [pattern count] [seed]; scripts/minimatch-corpus.ts runs it");
 }
+function count(text: string | undefined, fallback: number, label: string): number {
+  if (text === undefined) return fallback;
+  if (!/^\d{1,15}$/.test(text)) throw new Error(`the ${label} must be a non-negative integer, got ${JSON.stringify(text)}`);
+  return Number(text);
+}
 const Minimatch = loadMinimatch(minimatchDirectory);
-const random = generator(seed === undefined ? DEFAULT_SEED : Number(seed));
-const entries = patterns(random, requested === undefined ? PATTERN_COUNT : Number(requested)).map((pattern) => escapeFormatCharacters(JSON.stringify(entry(random, Minimatch, pattern))));
+const random = generator(count(seed, DEFAULT_SEED, "seed"));
+const entries = patterns(random, count(requested, PATTERN_COUNT, "pattern count")).map((pattern) => escapeFormatCharacters(JSON.stringify(entry(random, Minimatch, pattern))));
 const lines: string[] = [];
 for (let start = 0; start < entries.length; start += ENTRIES_PER_LINE) {
   lines.push(entries.slice(start, start + ENTRIES_PER_LINE).join(","));
