@@ -92,3 +92,23 @@ fn expr_string_ordering_folds_surrogate_pairs_before_comparing_them() -> Result<
     assert!(!truthy("'𐐨' > '𐐁'", &env)?);
     Ok(())
 }
+
+#[test]
+fn expr_contains_matches_at_every_character_boundary_without_folding_to_multiple_characters()
+-> Result<()> {
+    let env = empty_env();
+
+    assert!(truthy("contains('', '')", &env)?);
+    assert!(truthy("contains('abc', '')", &env)?);
+    assert!(truthy("contains('aaab', 'aab')", &env)?);
+    assert!(truthy("contains('abababc', 'ababc')", &env)?);
+    assert!(truthy("contains('ÀᾀB', 'ᾈb')", &env)?);
+    assert!(truthy("contains('éa', 'ÉA')", &env)?);
+    assert!(truthy("contains('xyé', 'É')", &env)?);
+    assert!(truthy("contains('𐐨x', '𐐀X')", &env)?);
+    assert!(!truthy("contains('ab', 'abc')", &env)?);
+    assert!(!truthy("contains('', 'a')", &env)?);
+    assert!(!truthy("contains('straße', 'SS')", &env)?);
+    assert!(!truthy("contains('xß', 'ẞ')", &env)?);
+    Ok(())
+}

@@ -21,7 +21,7 @@ pub(crate) fn env_with(contexts: &[(RootContext, &str)]) -> Result<ExprEnv> {
     let mut env = ExprEnv::new(PathBuf::from("/nonexistent-workspace"));
     for (root, json) in contexts {
         let value = ContextValue::from_json_str(json).context("parse context json")?;
-        env.set_context(*root, &value);
+        env.set_context(*root, &value)?;
     }
     Ok(env)
 }
@@ -80,7 +80,7 @@ pub(crate) fn outcome(expression: &str, env: &ExprEnv) -> String {
 
 pub(crate) fn hash_outcome(env: &mut ExprEnv, pattern: &str) -> Result<String> {
     let json = serde_json::json!({ "p": pattern }).to_string();
-    env.set_context(RootContext::Env, &ContextValue::from_json_str(&json)?);
+    env.set_context(RootContext::Env, &ContextValue::from_json_str(&json)?)?;
     Ok(outcome("hashFiles(env.p)", env))
 }
 
@@ -230,7 +230,7 @@ fn support_outcome_keeps_a_failure_about_a_long_pattern_short() -> Result<()> {
     env.set_context(
         RootContext::Env,
         &ContextValue::from_json_str(&serde_json::json!({ "p": pattern }).to_string())?,
-    );
+    )?;
 
     let message = outcome("hashFiles(env.p)", &env);
 

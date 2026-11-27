@@ -3,7 +3,7 @@
 
 use super::eval::from_context_value;
 use super::value::{ObjectValue, Value};
-use crate::context_value::ContextValue;
+use crate::context_value::{ContextValue, ContextValueError};
 use crate::secret::Secret;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -127,10 +127,16 @@ impl ExprEnv {
         }
     }
 
-    pub fn set_context(&mut self, root: RootContext, value: &ContextValue) {
+    pub fn set_context(
+        &mut self,
+        root: RootContext,
+        value: &ContextValue,
+    ) -> Result<(), ContextValueError> {
+        value.validate()?;
         let mut contexts = std::mem::take(&mut self.contexts).into_inner();
         contexts.insert(root, from_context_value(value));
         self.contexts = Secret::new(contexts);
+        Ok(())
     }
 
     pub(crate) fn context(&self, root: RootContext) -> Value {

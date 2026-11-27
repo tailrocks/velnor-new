@@ -113,11 +113,11 @@ fn expression_environment_debug_output_contains_no_context_value() -> Result<()>
     env.set_context(
         RootContext::Github,
         values.expose().get("github").context("github context")?,
-    );
+    )?;
     env.set_context(
         RootContext::Secrets,
         values.expose().get("secrets").context("secrets context")?,
-    );
+    )?;
     assert!(evaluate_expression("github.token", &env)?.is_truthy());
     for format in [format!("{env:?}"), format!("{env:#?}")] {
         assert_no_secret("ExprEnv", &format);

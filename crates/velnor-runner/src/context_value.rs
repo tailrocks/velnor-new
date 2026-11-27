@@ -334,8 +334,8 @@ pub fn ordinal_ignore_case_cmp(left: &str, right: &str) -> Ordering {
         .cmp(right.chars().map(simple_ordinal_uppercase))
 }
 
-pub(crate) fn ordinal_ignore_case_fold(value: &str) -> String {
-    value.chars().map(simple_ordinal_uppercase).collect()
+pub(crate) fn ordinal_ignore_case_fold(value: &str) -> impl Iterator<Item = char> + '_ {
+    value.chars().map(simple_ordinal_uppercase)
 }
 
 const YPOGEGRAMMENI_TO_PROSGEGRAMMENI: u32 = 8;

@@ -264,5 +264,32 @@ pub(crate) fn ordinal_ignore_case_starts_with(value: &str, prefix: &str) -> bool
 }
 
 pub(crate) fn ordinal_ignore_case_contains(value: &str, needle: &str) -> bool {
-    ordinal_ignore_case_fold(value).contains(&ordinal_ignore_case_fold(needle))
+    let needle: Vec<char> = ordinal_ignore_case_fold(needle).collect();
+    if needle.is_empty() {
+        return true;
+    }
+    let mut fallback = vec![0_usize; needle.len()];
+    let mut matched = 0;
+    for index in 1..needle.len() {
+        while matched > 0 && needle[index] != needle[matched] {
+            matched = fallback[matched - 1];
+        }
+        if needle[index] == needle[matched] {
+            matched += 1;
+        }
+        fallback[index] = matched;
+    }
+    matched = 0;
+    for character in ordinal_ignore_case_fold(value) {
+        while matched > 0 && character != needle[matched] {
+            matched = fallback[matched - 1];
+        }
+        if character == needle[matched] {
+            matched += 1;
+        }
+        if matched == needle.len() {
+            return true;
+        }
+    }
+    false
 }

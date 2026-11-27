@@ -6,7 +6,7 @@ use crate::expr_support::{
     empty_env, env_with, error_text, eval, exceeded_memory, same_text, text, truthy,
 };
 use anyhow::{Context, Result};
-use velnor_runner::context_value::ContextValue;
+use velnor_runner::context_value::{ContextValue, ContextValueError};
 use velnor_runner::expr::{RootContext, Value};
 
 const GITHUB: &str = r#"{"event":{"commits":[{"id":"a"},{"id":"b"}]},"list":[10,20]}"#;
@@ -57,7 +57,7 @@ fn expr_env_context_keeps_case_sensitive_keys() -> Result<()> {
     let mut env = empty_env();
     let value = ContextValue::from_json_str_case_sensitive(r#"{"Path":"first","path":"second"}"#)
         .context("parse env json")?;
-    env.set_context(RootContext::Env, &value);
+    env.set_context(RootContext::Env, &value)?;
 
     assert_eq!(text("env.Path", &env)?, "first");
     assert_eq!(text("env.path", &env)?, "second");
@@ -92,5 +92,29 @@ fn expr_wildcard_projections_stop_at_the_memory_budget() -> Result<()> {
         &error_text("env.LIST.*", &beyond)?,
         &exceeded_memory("env.LIST[*]"),
     )?;
+    Ok(())
+}
+
+#[test]
+fn expr_env_context_rejects_an_invalid_value_and_keeps_the_previous_one() -> Result<()> {
+    let mut env = env_with(&[(RootContext::Env, r#"{"kept":"yes"}"#)])?;
+    let duplicate_keys = ContextValue::Array(vec![ContextValue::Object {
+        case_sensitive: false,
+        entries: vec![
+            ("Key".to_owned(), ContextValue::Null),
+            ("key".to_owned(), ContextValue::Null),
+        ],
+    }]);
+    let bad_big_integer = ContextValue::BigInteger("not-a-number".to_owned());
+
+    assert_eq!(
+        env.set_context(RootContext::Env, &duplicate_keys),
+        Err(ContextValueError::DuplicateObjectKey)
+    );
+    assert_eq!(
+        env.set_context(RootContext::Env, &bad_big_integer),
+        Err(ContextValueError::InvalidBigInteger)
+    );
+    assert_eq!(text("env.kept", &env)?, "yes");
     Ok(())
 }

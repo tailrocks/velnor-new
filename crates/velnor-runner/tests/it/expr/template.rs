@@ -114,6 +114,23 @@ fn expr_template_counts_the_trimmed_span_source_in_the_rebuilt_format() -> Resul
         )?,
         "Exceeded max expression length 21000"
     );
+
+    let comparison = |left: usize, right: usize| {
+        format!(
+            "a${{{{ '{}'=='{}' }}}}b",
+            "x".repeat(left),
+            "y".repeat(right)
+        )
+    };
+    let comparison_fits = longest_fitting + 2 - "''==''".len();
+    assert_eq!(
+        evaluate_template(&comparison(1, comparison_fits - 1), &env)?,
+        "afalseb"
+    );
+    assert_eq!(
+        template_error_text(&comparison(1, comparison_fits), &env)?,
+        "Exceeded max expression length 21000"
+    );
     Ok(())
 }
 
