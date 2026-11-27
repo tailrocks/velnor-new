@@ -125,7 +125,7 @@ impl Audit<'_> {
         Ok(())
     }
 
-    fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
+    pub(super) fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
         match self.members.get(package) {
             Some(owners) => indices
                 .iter()

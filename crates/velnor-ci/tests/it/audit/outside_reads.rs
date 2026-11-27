@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What the audit does with a dep-info path outside the repository.
-
 use std::fs;
 
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
@@ -21,6 +19,25 @@ fn units() -> Repo {
     unit(&repo, APP_OUTPUT, "cargo:rerun-if-changed=build.rs\n");
     super::inventory::build(&repo, APP_OUTPUT, None);
     repo
+}
+
+fn recorded(repo: &Repo, root_output: &str) {
+    unit(repo, &format!("{LIB_OUTPUT}/root-output"), root_output);
+}
+
+fn own_out(repo: &Repo) -> String {
+    format!("{}/{LIB_OUTPUT}/out", repo.root().display())
+}
+
+fn fake_compiler(repo: &Repo, prints: &str) -> std::path::PathBuf {
+    let compiler = repo.root().join("compiler.sh");
+    fs::write(&compiler, format!("#!/bin/sh\n{prints}\n")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(
+        &compiler,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    compiler
 }
 
 fn lock(repo: &Repo) -> Option<String> {
@@ -58,17 +75,15 @@ fn a_dep_info_read_outside_the_repository_in_no_output_directory_refuses_the_aud
 }
 
 #[test]
-fn a_dep_info_read_under_a_recorded_build_script_output_directory_is_audited() {
+fn a_dep_info_read_under_the_own_output_directory_of_an_undeclared_build_script_credits_a_dot_line()
+{
     let repo = units();
-    unit(
-        &repo,
-        &format!("{LIB_OUTPUT}/root-output"),
-        &format!("{SOMEWHERE}/out/lib\n"),
-    );
+    let out = own_out(&repo);
+    recorded(&repo, &format!("{out}\n"));
     unit(
         &repo,
         LIB_DEPS,
-        &format!("out.d: lib/src/lib.rs {SOMEWHERE}/out/lib/o.txt\n"),
+        &format!("out.d: lib/src/lib.rs {out}/o.txt\n"),
     );
     assert_eq!(written(&repo), ".\tlib\n");
 }
@@ -95,27 +110,37 @@ fn an_undeclared_build_script_without_a_root_output_credits_a_dot_line_to_its_pa
 }
 
 #[test]
-fn the_output_directory_of_another_package_credits_no_dot_line() {
+fn a_package_reading_the_output_directory_of_another_package_refuses_the_audit() {
     let repo = units();
-    unit(
-        &repo,
-        &format!("{LIB_OUTPUT}/root-output"),
-        &format!("{SOMEWHERE}/out/lib\n"),
-    );
+    let out = own_out(&repo);
+    recorded(&repo, &format!("{out}\n"));
     unit(
         &repo,
         APP_DEPS,
-        &format!("out.d: app/src/lib.rs {SOMEWHERE}/out/lib/o.txt\n"),
+        &format!("out.d: app/src/lib.rs {out}/o.txt\n"),
     );
-    let lock = written(&repo);
-    assert!(!lock.contains("\tapp"), "{lock}");
+    let refused = audit(&repo, &["--write"]);
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{message}");
+    assert!(message.contains("outside the repository"), "{message}");
+    assert!(lock(&repo).is_none());
 }
 
 #[test]
-fn a_root_output_that_is_not_an_absolute_path_is_missing_and_never_disables_the_refusal() {
-    for recorded in ["", "  \n", "relative/out\n"] {
+fn a_root_output_outside_the_unit_own_output_directory_is_missing_and_never_disables_the_refusal() {
+    let own = |repo: &Repo| own_out(repo).replace("/out", "/other");
+    let recordings: [&dyn Fn(&Repo) -> String; 6] = [
+        &|_| String::new(),
+        &|_| "  \n".to_owned(),
+        &|_| "relative/out\n".to_owned(),
+        &|_| "/\n".to_owned(),
+        &|_| format!("{SOMEWHERE}/out/lib\n"),
+        &own,
+    ];
+    for recording in recordings {
         let repo = units();
-        unit(&repo, &format!("{LIB_OUTPUT}/root-output"), recorded);
+        let text = recording(&repo);
+        recorded(&repo, &text);
         unit(
             &repo,
             APP_DEPS,
@@ -123,21 +148,56 @@ fn a_root_output_that_is_not_an_absolute_path_is_missing_and_never_disables_the_
         );
         let refused = audit(&repo, &["--write"]);
         let message = String::from_utf8_lossy(&refused.stderr);
-        assert_eq!(refused.status.code(), Some(1), "{recorded:?} {message}");
+        assert_eq!(refused.status.code(), Some(1), "{text:?} {message}");
         assert!(message.contains("outside the repository"), "{message}");
         unit(&repo, APP_DEPS, "out.d: app/src/lib.rs\n");
-        assert_eq!(written(&repo), ".\tlib\n", "{recorded:?}");
+        assert_eq!(written(&repo), ".\tlib\n", "{text:?}");
+    }
+}
+
+#[test]
+fn a_root_output_of_the_filesystem_root_refuses_an_outside_read() {
+    let repo = units();
+    recorded(&repo, "/\n");
+    unit(
+        &repo,
+        LIB_DEPS,
+        &format!("out.d: lib/src/lib.rs {SOMEWHERE}/docs/x.md\n"),
+    );
+    let refused = audit(&repo, &["--write"]);
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{message}");
+    assert!(lock(&repo).is_none());
+}
+
+#[test]
+fn a_sysroot_the_compiler_does_not_print_never_makes_a_read_explained() {
+    for prints in ["", "echo", "echo relative/sysroot", "echo /"] {
+        let repo = units();
+        let compiler = fake_compiler(&repo, prints);
+        unit(
+            &repo,
+            APP_DEPS,
+            &format!("out.d: app/src/lib.rs {SOMEWHERE}/docs/x.md\n"),
+        );
+        let refused = velnor_ci()
+            .current_dir(repo.root())
+            .env("CARGO_HOME", format!("{SOMEWHERE}/cargo-home"))
+            .env("RUSTC", &compiler)
+            .args(["inputs", "audit", "--write"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let message = String::from_utf8_lossy(&refused.stderr);
+        assert_eq!(refused.status.code(), Some(1), "{prints:?} {message}");
+        assert!(message.contains("outside the repository"), "{message}");
+        assert!(lock(&repo).is_none());
     }
 }
 
 #[test]
 fn a_root_output_above_its_bound_refuses_the_audit() {
     let repo = units();
-    unit(
-        &repo,
-        &format!("{LIB_OUTPUT}/root-output"),
-        &format!("{SOMEWHERE}/{}\n", "x".repeat(64 << 10)),
-    );
+    recorded(&repo, &format!("{SOMEWHERE}/{}\n", "x".repeat(64 << 10)));
     let refused = audit(&repo, &["--write"]);
     let message = String::from_utf8_lossy(&refused.stderr);
     assert_eq!(refused.status.code(), Some(1), "{message}");
@@ -151,21 +211,11 @@ fn a_root_output_above_its_bound_refuses_the_audit() {
 #[test]
 fn the_read_only_roots_are_computed_once_per_audit() {
     let repo = units();
-    let compiler = repo.root().join("compiler.sh");
     let log = repo.root().join("compiler.log");
-    fs::write(
-        &compiler,
-        format!(
-            "#!/bin/sh\necho run >> {}\necho /velnor-test-sysroot\n",
-            log.display()
-        ),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(
-        &compiler,
-        std::os::unix::fs::PermissionsExt::from_mode(0o755),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
+    let compiler = fake_compiler(
+        &repo,
+        &format!("echo run >> {}\necho /velnor-test-sysroot", log.display()),
+    );
     for (file, source) in [(APP_DEPS, "app"), (LIB_DEPS, "lib")] {
         unit(
             &repo,

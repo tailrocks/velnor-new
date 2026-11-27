@@ -41,7 +41,7 @@ pub(super) fn own_units_1100(repo: &Repo, target: &str, left_out: &[&str]) {
             unit(
                 repo,
                 &format!("{base}/run/root-output"),
-                &format!("/velnor-test-out/{package}/{hash}/out\n"),
+                &format!("{}/{base}/out\n", repo.root().display()),
             );
         } else if name.starts_with("build_script_build") {
             unit(repo, &format!("{base}/out/build_script_build.d"), &dep_info);

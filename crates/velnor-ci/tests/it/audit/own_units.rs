@@ -112,7 +112,7 @@ pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&s
             unit(
                 repo,
                 &format!("{directory}/{folder}/root-output"),
-                &format!("/velnor-test-out/{folder}/out\n"),
+                &format!("{}/{directory}/{folder}/out\n", repo.root().display()),
             );
         }
         if !fingerprint.is_empty() {

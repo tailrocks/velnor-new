@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::OnceCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,10 +18,14 @@ use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
 
 const ROOT_OUTPUT_LIMIT: u64 = 8 << 10;
 
+struct Run {
+    out: Option<PathBuf>,
+    undeclared: bool,
+}
+
 #[derive(Default)]
 pub(super) struct BuildOutputs {
-    directories: BTreeSet<PathBuf>,
-    undeclared: BTreeSet<(String, Option<PathBuf>)>,
+    runs: BTreeMap<(usize, String), Vec<Run>>,
     texts: BTreeMap<PathBuf, String>,
     read_only: OnceCell<Vec<PathBuf>>,
 }
@@ -54,8 +58,8 @@ impl Audit<'_> {
             }
             return Ok(None);
         }
-        self.refuse_unexplained_reads(workspace, file, &paths)?;
-        let unseen = self.reads_unseen_output(workspace, package, &paths);
+        self.refuse_unexplained_reads(workspace, index, package, file, &paths)?;
+        let unseen = self.reads_unseen_output(workspace, index, package, &paths);
         for owner in self.owners.of(package, &source) {
             self.credit(&owner, workspace, &paths, false);
             if unseen {
@@ -73,23 +77,30 @@ impl Audit<'_> {
         files: &[(UnitFile, PathBuf, Vec<usize>)],
     ) -> Result<(), CiError> {
         for (unit, output, indices) in files {
-            let (UnitFile::BuildOutput { package, .. }, Some(&index)) = (unit, indices.first())
+            let (UnitFile::BuildOutput { package, .. }, Some(&budget)) = (unit, indices.first())
             else {
                 continue;
             };
+            let index = self
+                .member_owners(package, indices)
+                .first()
+                .copied()
+                .unwrap_or(budget);
             let text = read(
                 output,
-                &mut self.target_bytes[index],
+                &mut self.target_bytes[budget],
                 SOURCE_TOTAL_LIMIT,
                 "build-script output",
             )?;
-            let recorded = self.recorded_root(output, index)?;
-            if let Some(directory) = &recorded {
-                self.outputs.directories.insert(directory.clone());
-            }
-            if rerun_if_changed(&text).is_empty() {
-                self.outputs.undeclared.insert((package.clone(), recorded));
-            }
+            let out = self.recorded_root(output, budget)?;
+            self.outputs
+                .runs
+                .entry((index, package.clone()))
+                .or_default()
+                .push(Run {
+                    out,
+                    undeclared: rerun_if_changed(&text).is_empty(),
+                });
             self.outputs.texts.insert(output.clone(), text);
         }
         Ok(())
@@ -109,33 +120,39 @@ impl Audit<'_> {
             ROOT_OUTPUT_LIMIT,
             "root-output file",
         )?;
-        let path = Path::new(text.trim());
-        Ok(path.is_absolute().then(|| normalize(path)))
+        let path = normalize(Path::new(text.trim()));
+        Ok(own_out(output, &path).then_some(path))
     }
 
     fn reads_unseen_output(
         &self,
         workspace: &Path,
+        index: usize,
         package: Option<&str>,
         paths: &[String],
     ) -> bool {
-        self.outputs
-            .undeclared
-            .iter()
-            .any(|(owner, directory)| match directory {
-                Some(directory) => {
-                    package.is_none_or(|name| name == owner)
-                        && paths
-                            .iter()
-                            .any(|path| normalize(&workspace.join(path)).starts_with(directory))
-                }
-                None => package == Some(owner.as_str()),
+        self.runs_of(index, package)
+            .filter(|run| run.undeclared)
+            .any(|run| match &run.out {
+                Some(out) => paths
+                    .iter()
+                    .any(|path| normalize(&workspace.join(path)).starts_with(out)),
+                None => true,
             })
+    }
+
+    fn runs_of(&self, index: usize, package: Option<&str>) -> impl Iterator<Item = &Run> {
+        package
+            .and_then(|name| self.outputs.runs.get(&(index, name.to_owned())))
+            .into_iter()
+            .flatten()
     }
 
     fn refuse_unexplained_reads(
         &self,
         workspace: &Path,
+        index: usize,
+        package: Option<&str>,
         file: &Path,
         paths: &[String],
     ) -> Result<(), CiError> {
@@ -143,7 +160,12 @@ impl Audit<'_> {
             .iter()
             .filter(|path| matches!(locate(self.repository, workspace, path), Located::Outside))
             .map(|path| normalize(&workspace.join(path)))
-            .filter(|full| !self.outputs.directories.iter().any(|d| full.starts_with(d)))
+            .filter(|full| {
+                !self
+                    .runs_of(index, package)
+                    .filter_map(|run| run.out.as_ref())
+                    .any(|out| full.starts_with(out))
+            })
             .collect();
         if outside.is_empty() {
             return Ok(());
@@ -201,12 +223,34 @@ impl Audit<'_> {
     }
 }
 
+fn own_out(output: &Path, recorded: &Path) -> bool {
+    let unit = match output.file_name().and_then(|name| name.to_str()) {
+        Some("stdout") => output.parent().and_then(Path::parent),
+        _ => output.parent(),
+    };
+    let Some((unit, parent)) = unit.zip(recorded.parent()) else {
+        return false;
+    };
+    recorded.is_absolute()
+        && recorded.file_name().is_some_and(|name| name == "out")
+        && (normalize(unit) == parent
+            || std::fs::canonicalize(unit)
+                .ok()
+                .zip(std::fs::canonicalize(parent).ok())
+                .is_some_and(|(unit, parent)| unit == parent))
+}
+
+fn trusted(root: &Path) -> bool {
+    root.is_absolute() && root.parent().is_some()
+}
+
 fn read_only_roots() -> Vec<PathBuf> {
     let home = std::env::var_os("CARGO_HOME")
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
     let mut roots: Vec<PathBuf> = home
+        .filter(|home| trusted(home))
         .into_iter()
         .flat_map(|home| [home.join("registry"), home.join("git")])
         .collect();
@@ -223,6 +267,7 @@ fn read_only_roots() -> Vec<PathBuf> {
         .filter_map(|root| std::fs::canonicalize(root).ok())
         .collect();
     roots.extend(resolved);
+    roots.retain(|root| trusted(root));
     roots
 }
 
