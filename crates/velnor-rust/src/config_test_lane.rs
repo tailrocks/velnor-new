@@ -135,7 +135,7 @@ fn lane_packages(raw: &RawTestLane) -> Result<Vec<PackageName>, Reason> {
 }
 
 pub(crate) fn workspace_features(names: Vec<String>) -> Result<LaneFeatures, Reason> {
-    if feature_names(&names) && names.iter().all(|name| one_selector(name)) {
+    if feature_names(&names) && names.iter().all(|name| !name.contains('/')) {
         Ok(LaneFeatures {
             names,
             ..LaneFeatures::default()
@@ -146,12 +146,6 @@ pub(crate) fn workspace_features(names: Vec<String>) -> Result<LaneFeatures, Rea
             value: names.join(","),
         })
     }
-}
-
-fn one_selector(name: &str) -> bool {
-    name.split_once('/').is_none_or(|(package, feature)| {
-        !package.is_empty() && !feature.is_empty() && !feature.contains('/')
-    })
 }
 
 fn feature_names(names: &[String]) -> bool {

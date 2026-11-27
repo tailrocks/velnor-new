@@ -4,8 +4,6 @@
 use velnor_model::{DependencyKind, RepoView, TargetKind};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
-mod selectors;
-
 use crate::facts::{TestResult, package, repo};
 use crate::pipeline::workflow;
 

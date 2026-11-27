@@ -95,6 +95,10 @@ pub enum Reason {
     TestLaneDuplicatesWorkspaceFeatures {
         features: String,
     },
+    GatedHarnessWithWorkspaceFeatures {
+        package: String,
+        target: String,
+    },
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {

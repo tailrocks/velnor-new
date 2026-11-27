@@ -21,7 +21,6 @@ const SECTIONS: [(&str, TargetKind); 4] = [
 pub(crate) fn custom_harnesses(
     view: &RepoView,
     package: &RustPackage,
-    workspace_features: &[String],
 ) -> Result<Vec<CustomHarness>, DetectError> {
     if !view.tracked_paths.contains(&package.manifest) {
         return Err(DetectError::invalid(
@@ -34,36 +33,15 @@ pub(crate) fn custom_harnesses(
     };
     let manifest =
         table(bytes).map_err(|reason| DetectError::invalid(&package.manifest, reason))?;
-    let defaults = enabled_features(
-        &manifest,
-        &requested_by_siblings(view, package, workspace_features),
-    );
-    let library = manifest
-        .get("lib")
-        .into_iter()
-        .map(|entry| (entry, TargetKind::Lib));
-    let declared = SECTIONS
-        .into_iter()
-        .flat_map(|(key, kind)| {
-            manifest
-                .get(key)
-                .and_then(toml::Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(move |entry| (entry, kind))
-        })
-        .chain(library);
+    let defaults = enabled_features(&manifest, &requested_by_siblings(view, package));
     let mut found = Vec::new();
-    for (entry, kind) in declared {
+    for (entry, kind) in declared_targets(&manifest) {
         if entry.get("harness").and_then(toml::Value::as_bool) != Some(false)
             || !gated_on(entry, &defaults)
         {
             continue;
         }
-        let name = entry.get("name").and_then(toml::Value::as_str).map_or_else(
-            || package.name.as_str().replace('-', "_"),
-            ToOwned::to_owned,
-        );
+        let name = target_name(entry, package.name.as_str());
         let tested = package
             .targets
             .iter()
@@ -87,6 +65,43 @@ pub(crate) fn custom_harnesses(
         }
     }
     Ok(found)
+}
+
+pub(crate) fn gated_harness_target(manifest: &toml::Table, package: &str) -> Option<String> {
+    declared_targets(manifest)
+        .find(|(entry, _)| {
+            entry.get("harness").and_then(toml::Value::as_bool) == Some(false)
+                && entry
+                    .get("required-features")
+                    .and_then(toml::Value::as_array)
+                    .is_some_and(|features| !features.is_empty())
+        })
+        .map(|(entry, _)| target_name(entry, package))
+}
+
+fn declared_targets(manifest: &toml::Table) -> impl Iterator<Item = (&toml::Value, TargetKind)> {
+    let library = manifest
+        .get("lib")
+        .into_iter()
+        .map(|entry| (entry, TargetKind::Lib));
+    SECTIONS
+        .into_iter()
+        .flat_map(|(key, kind)| {
+            manifest
+                .get(key)
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(move |entry| (entry, kind))
+        })
+        .chain(library)
+}
+
+fn target_name(entry: &toml::Value, package: &str) -> String {
+    entry
+        .get("name")
+        .and_then(toml::Value::as_str)
+        .map_or_else(|| package.replace('-', "_"), ToOwned::to_owned)
 }
 
 pub(crate) fn runs_in_direct_step(
@@ -165,40 +180,19 @@ pub(crate) fn enabled_features(manifest: &toml::Table, requested: &[String]) -> 
     enabled
 }
 
-pub(crate) fn dependency_specs(
-    manifest: &toml::Table,
-) -> impl Iterator<Item = (&String, &toml::Value)> {
-    specs_in(manifest, &["dependencies", "build-dependencies"])
-}
-
-pub(crate) fn feature_dependency_specs(
-    manifest: &toml::Table,
-) -> impl Iterator<Item = (&String, &toml::Value)> {
-    specs_in(
-        manifest,
-        &["dependencies", "build-dependencies", "dev-dependencies"],
-    )
-}
-
-fn specs_in<'a>(
-    manifest: &'a toml::Table,
-    tables: &'a [&'a str],
-) -> impl Iterator<Item = (&'a String, &'a toml::Value)> {
+fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
+    const TABLES: &[&str] = &["dependencies", "build-dependencies"];
     let targets = manifest
         .get("target")
         .and_then(toml::Value::as_table)
         .into_iter()
         .flat_map(toml::Table::values)
         .filter_map(toml::Value::as_table);
-    std::iter::once(manifest)
+    let optional: BTreeSet<String> = std::iter::once(manifest)
         .chain(targets)
-        .flat_map(move |scope| tables.iter().filter_map(move |key| scope.get(*key)))
+        .flat_map(|scope| TABLES.iter().filter_map(|key| scope.get(*key)))
         .filter_map(toml::Value::as_table)
         .flat_map(toml::Table::iter)
-}
-
-pub(crate) fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
-    let optional: BTreeSet<String> = dependency_specs(manifest)
         .filter(|(_, spec)| spec.get("optional").and_then(toml::Value::as_bool) == Some(true))
         .map(|(name, _)| name.clone())
         .collect();

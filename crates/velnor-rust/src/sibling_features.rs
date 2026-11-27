@@ -3,16 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{DependencyKind, PackageDependency, RepoPath, RepoView, RustPackage};
+use velnor_model::{DependencyKind, RepoPath, RepoView, RustPackage};
 
-use crate::harness::{dependency_specs, enabled_features, implicit_features};
+use crate::harness::enabled_features;
 use crate::toml_file::table;
 
-pub(crate) fn requested_by_siblings(
-    view: &RepoView,
-    package: &RustPackage,
-    workspace_features: &[String],
-) -> Vec<String> {
+pub(crate) fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> Vec<String> {
     let Some((workspace, metadata)) = view.rust_metadata.iter().find(|(_, metadata)| {
         metadata
             .members
@@ -22,7 +18,6 @@ pub(crate) fn requested_by_siblings(
         return Vec::new();
     };
     let split_build = resolver_splits_build(view, workspace);
-    let root_only = plain_names_need_root_package(view, workspace);
     let manifests: BTreeMap<&RepoPath, toml::Table> = metadata
         .members
         .iter()
@@ -31,22 +26,7 @@ pub(crate) fn requested_by_siblings(
             Some((&member.manifest, parsed))
         })
         .collect();
-    let mut requested: BTreeMap<&RepoPath, BTreeSet<String>> = metadata
-        .members
-        .iter()
-        .filter_map(|member| {
-            let parsed = manifests.get(&member.manifest)?;
-            Some((
-                &member.manifest,
-                workspace_requests(
-                    parsed,
-                    member.name.as_str(),
-                    workspace_features,
-                    !root_only || member.manifest == *workspace,
-                ),
-            ))
-        })
-        .collect();
+    let mut requested: BTreeMap<&RepoPath, BTreeSet<String>> = BTreeMap::new();
     loop {
         let mut changed = false;
         for member in &metadata.members {
@@ -75,15 +55,13 @@ pub(crate) fn requested_by_siblings(
                 }
                 let mut wanted = dependency.features.clone();
                 if let (Some(parsed), Some(enabled)) = (own, &enabled) {
-                    let Some(more) = edge_requests(
-                        parsed,
-                        enabled,
-                        dependency,
-                        (!root_only || member.manifest == *workspace).then_some(workspace_features),
-                    ) else {
-                        continue;
-                    };
-                    wanted.extend(more);
+                    let mut keys =
+                        dependency_keys(parsed, dependency.name.as_str(), dependency.kind);
+                    keys.extend(dependency.rename.clone());
+                    if keys.is_empty() {
+                        keys.insert(dependency.name.to_string());
+                    }
+                    wanted.extend(forwarded_features(parsed, enabled, &keys));
                 }
                 let slot = requested.entry(target).or_default();
                 for feature in wanted {
@@ -100,44 +78,6 @@ pub(crate) fn requested_by_siblings(
         .unwrap_or_default()
         .into_iter()
         .collect()
-}
-
-fn workspace_requests(
-    manifest: &toml::Table,
-    package: &str,
-    names: &[String],
-    plain: bool,
-) -> BTreeSet<String> {
-    let defined: BTreeSet<&str> = manifest
-        .get("features")
-        .and_then(toml::Value::as_table)
-        .into_iter()
-        .flat_map(toml::Table::keys)
-        .map(String::as_str)
-        .collect();
-    let implicit = implicit_features(manifest);
-    names
-        .iter()
-        .flat_map(|name| match name.split_once('/') {
-            Some((owner, feature)) => [
-                (owner == package).then_some(feature),
-                (plain && implicit.contains(owner)).then_some(owner),
-            ],
-            None => [plain.then_some(name.as_str()), None],
-        })
-        .flatten()
-        .filter(|name| defined.contains(name) || implicit.contains(*name))
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-pub(crate) fn plain_names_need_root_package(view: &RepoView, workspace: &RepoPath) -> bool {
-    !resolver_splits_build(view, workspace)
-        && view
-            .files
-            .get(workspace)
-            .and_then(|bytes| table(bytes).ok())
-            .is_some_and(|manifest| manifest.contains_key("package"))
 }
 
 fn resolver_splits_build(view: &RepoView, workspace: &RepoPath) -> bool {
@@ -159,6 +99,15 @@ fn resolver_splits_build(view: &RepoView, workspace: &RepoPath) -> bool {
         Some(resolver) => resolver != "1",
         None => edition(&manifest).is_some_and(|edition| edition.as_str() >= "2021"),
     }
+}
+
+pub(crate) fn plain_names_need_root_package(view: &RepoView, workspace: &RepoPath) -> bool {
+    !resolver_splits_build(view, workspace)
+        && view
+            .files
+            .get(workspace)
+            .and_then(|bytes| table(bytes).ok())
+            .is_some_and(|manifest| manifest.contains_key("package"))
 }
 
 fn edition(manifest: &toml::Table) -> Option<String> {
@@ -205,40 +154,6 @@ fn dependency_keys(
         .collect()
 }
 
-fn edge_requests(
-    parsed: &toml::Table,
-    enabled: &BTreeSet<String>,
-    dependency: &PackageDependency,
-    workspace_features: Option<&[String]>,
-) -> Option<Vec<String>> {
-    let mut keys = dependency.rename.as_ref().map_or_else(
-        || dependency_keys(parsed, dependency.name.as_str(), dependency.kind),
-        |rename| BTreeSet::from([rename.clone()]),
-    );
-    if keys.is_empty() {
-        keys.insert(dependency.name.to_string());
-    }
-    let direct = workspace_features.map_or_else(Vec::new, |names| workspace_forwards(names, &keys));
-    if dependency.optional
-        && direct.is_empty()
-        && !keys.iter().any(|key| activated(parsed, enabled, key))
-    {
-        return None;
-    }
-    let mut wanted = forwarded_features(parsed, enabled, &keys);
-    wanted.extend(direct);
-    Some(wanted)
-}
-
-fn workspace_forwards(names: &[String], keys: &BTreeSet<String>) -> Vec<String> {
-    names
-        .iter()
-        .filter_map(|name| name.split_once('/'))
-        .filter(|(owner, _)| keys.contains(*owner))
-        .map(|(_, feature)| feature.to_owned())
-        .collect()
-}
-
 fn forwarded_features(
     manifest: &toml::Table,
     enabled: &BTreeSet<String>,
@@ -254,30 +169,7 @@ fn forwarded_features(
         .flatten()
         .filter_map(toml::Value::as_str)
         .filter_map(|member| member.split_once('/'))
-        .filter(|(name, _)| {
-            let key = name.trim_end_matches('?');
-            keys.contains(key) && (key == *name || activated(manifest, enabled, key))
-        })
+        .filter(|(name, _)| keys.contains(name.trim_end_matches('?')))
         .map(|(_, feature)| feature.to_owned())
         .collect()
-}
-
-fn activated(manifest: &toml::Table, enabled: &BTreeSet<String>, key: &str) -> bool {
-    let optional = dependency_specs(manifest).any(|(name, spec)| {
-        name == key && spec.get("optional").and_then(toml::Value::as_bool) == Some(true)
-    });
-    let explicit = format!("dep:{key}");
-    let strong = format!("{key}/");
-    !optional
-        || enabled.contains(key)
-        || manifest
-            .get("features")
-            .and_then(toml::Value::as_table)
-            .into_iter()
-            .flatten()
-            .filter(|(name, _)| enabled.contains(*name))
-            .filter_map(|(_, members)| members.as_array())
-            .flatten()
-            .filter_map(toml::Value::as_str)
-            .any(|member| member == explicit || member.starts_with(&strong))
 }

@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_model::{RepoPath, RepoView, RequiredFeature, Target, TargetKind, TargetName};
+use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_render::rendered_workflow;
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect, plan};
 
@@ -12,11 +12,13 @@ use crate::pipeline::{pin_helper, view, workflow};
 use crate::test_groups::{DATABASE, SHELL};
 use crate::yaml_tree::document;
 
+mod refusals;
 mod root;
 
 pub(crate) const FEATURES: &str = "workspace_features = ['local-mode']\n";
-pub(crate) const MANIFEST: &[u8] =
-    b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n";
+pub(crate) const MANIFEST_TEXT: &str =
+    "[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n";
+pub(crate) const MANIFEST: &[u8] = MANIFEST_TEXT.as_bytes();
 
 pub(crate) fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
@@ -40,7 +42,11 @@ pub(crate) fn repository(roots: &[&str], config: &str) -> Result<RepoView, Box<d
 }
 
 fn runs(config: &str) -> Result<Vec<(String, String)>, Box<dyn Error>> {
-    let text = workflow(&repository(&["Cargo.toml"], config)?)?;
+    steps_of(&repository(&["Cargo.toml"], config)?)
+}
+
+fn steps_of(repo: &RepoView) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let text = workflow(repo)?;
     let jobs = document(&text)?["jobs"].clone();
     Ok(jobs
         .as_object()
@@ -93,18 +99,12 @@ fn assert_featured(steps: &[(String, String)], name: &str, featured: bool) {
 }
 
 #[test]
-fn workspace_features_apply_to_the_main_lint_doc_and_test_and_no_second_lane_exists() -> TestResult
-{
+fn workspace_features_apply_to_the_main_lint_doc_and_test() -> TestResult {
     let steps = runs(FEATURES)?;
     for name in ["Lint", "Documentation", "Test", "Doctests"] {
         assert_eq!(named(&steps, name).len(), 1, "{name}: {steps:?}");
         assert_featured(&steps, name, true);
     }
-    let lanes: Vec<_> = steps
-        .iter()
-        .filter(|(name, _)| name.contains("(features:"))
-        .collect();
-    assert!(lanes.is_empty(), "{lanes:?}");
     let plain = runs("")?;
     for name in ["Lint", "Documentation", "Test", "Doctests"] {
         assert_featured(&plain, name, false);
@@ -179,14 +179,16 @@ fn a_helper_that_builds_apart_gives_the_no_run_build_and_the_separate_audit_the_
 }
 
 #[test]
-fn an_unknown_or_invalid_workspace_feature_name_is_refused() -> TestResult {
+fn a_name_that_is_not_one_plain_feature_name_is_invalid() -> TestResult {
     for names in [
         "['a b']",
         "['']",
         "['a', 'a']",
         "['a,b']",
         "['$x']",
-        "['dep/foo/bar']",
+        "['a/b']",
+        "['a?/b']",
+        "['dep:x']",
         "['/x']",
         "['x/']",
     ] {
@@ -202,77 +204,7 @@ fn an_unknown_or_invalid_workspace_feature_name_is_refused() -> TestResult {
             other => return Err(format!("{names}: {other:?}").into()),
         }
     }
-    Ok(())
-}
-
-const PACKAGE_AND_DEPENDENCY: &str =
-    "[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[dependencies]\nserde = \"1\"\n";
-
-fn with_manifest(name: &str, manifest: &str) -> Result<RepoView, Box<dyn Error>> {
-    let mut repo = repository(
-        &["Cargo.toml"],
-        &format!("workspace_features = ['{name}']\n"),
-    )?;
-    repo.files
-        .insert(RepoPath::new("Cargo.toml")?, manifest.as_bytes().to_vec());
-    Ok(repo)
-}
-
-pub(crate) fn refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
-    match detect(repo) {
-        Err(DetectError::Invalid {
-            path,
-            reason: Reason::UnknownWorkspaceFeature { root, feature },
-        }) if path == CONFIG_PATH => Ok((root, feature)),
-        other => Err(format!("{other:?}").into()),
-    }
-}
-
-#[test]
-fn a_root_with_no_package_that_defines_a_workspace_feature_is_refused_at_generate_time()
--> TestResult {
-    let mut repo = repository(&["Cargo.toml", "lab/Cargo.toml"], FEATURES)?;
-    repo.files.insert(
-        RepoPath::new("lab/Cargo.toml")?,
-        b"[package]\nname = \"package-1\"\n[features]\nother = []\n".to_vec(),
-    );
-    assert_eq!(refusal(&repo)?, ("lab".to_owned(), "local-mode".to_owned()));
-    let message = workflow(&repo).err().ok_or("the repository was accepted")?;
-    assert!(
-        message.to_string().contains(
-            "workspace_features names local-mode, which no package of the root lab defines"
-        ),
-        "{message}"
-    );
-    repo.files.remove(&RepoPath::new("Cargo.toml")?);
-    assert_eq!(refusal(&repo)?, (".".to_owned(), "local-mode".to_owned()));
-    Ok(())
-}
-
-#[test]
-fn a_feature_an_optional_dependency_defines_is_accepted() -> TestResult {
-    let repo = with_manifest(
-        "serde",
-        "[package]\nname = \"package-0\"\n[dependencies]\nserde = { version = \"1\", optional = true }\n",
-    )?;
-    detect(&repo)?;
-    Ok(())
-}
-
-#[test]
-fn a_package_feature_name_needs_a_member_that_defines_it_or_a_dependency_of_a_member() -> TestResult
-{
-    for name in ["package-0/local-modee", "ghost/local-mode"] {
-        let repo = with_manifest(name, PACKAGE_AND_DEPENDENCY)?;
-        assert_eq!(refusal(&repo)?, (".".to_owned(), name.to_owned()), "{name}");
-    }
-    for name in ["package-0/local-mode", "serde/derive"] {
-        detect(&with_manifest(name, PACKAGE_AND_DEPENDENCY)?)?;
-    }
-    let dev_only = "[package]\nname = \"package-0\"\n[dev-dependencies]\nserde = \"1\"\n[target.'cfg(unix)'.dev-dependencies]\nlibc = \"0.2\"\n";
-    for name in ["serde/derive", "libc/extra_traits"] {
-        detect(&with_manifest(name, dev_only)?)?;
-    }
+    detect(&repository(&["Cargo.toml"], FEATURES)?)?;
     Ok(())
 }
 
@@ -292,21 +224,17 @@ fn a_test_lane_that_builds_with_the_workspace_features_is_refused() -> TestResul
         &["Cargo.toml"],
         &format!("{FEATURES}{with_extra}"),
     )?)?;
-    let alone_lane = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n";
-    detect(&repository(&["Cargo.toml"], alone_lane)?)?;
+    detect(&repository(&["Cargo.toml"], lane)?)?;
     Ok(())
 }
 
-pub(crate) const GATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"local-mode\"]\n";
+pub(crate) const UNGATED_HARNESS: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[[test]]\nname = \"gate\"\nharness = false\n";
 
-fn gated_harness(config: &str) -> Result<String, Box<dyn Error>> {
-    gated_on(GATED_HARNESS, "local-mode", config)
-}
-
-fn gated_on(manifest: &[u8], feature: &str, config: &str) -> Result<String, Box<dyn Error>> {
-    let mut repo = repository(&["Cargo.toml"], config)?;
+#[test]
+fn a_direct_test_target_never_takes_the_features() -> TestResult {
+    let mut repo = repository(&["Cargo.toml"], FEATURES)?;
     repo.files
-        .insert(RepoPath::new("Cargo.toml")?, manifest.to_vec());
+        .insert(RepoPath::new("Cargo.toml")?, UNGATED_HARNESS.to_vec());
     for metadata in repo.rust_metadata.values_mut() {
         for member in &mut metadata.members {
             member.targets.push(Target {
@@ -315,73 +243,29 @@ fn gated_on(manifest: &[u8], feature: &str, config: &str) -> Result<String, Box<
                 tests: true,
                 doctest: false,
                 source: None,
-                requires_features: true,
-                required_features: vec![RequiredFeature {
-                    name: feature.to_owned(),
-                    enabled_by: vec![feature.to_owned()],
-                }],
+                requires_features: false,
+                required_features: Vec::new(),
             });
         }
     }
-    workflow(&repo)
-}
-
-#[test]
-fn a_harness_false_target_gated_on_a_workspace_feature_runs_directly_with_that_feature()
--> TestResult {
-    let text = gated_harness(FEATURES)?;
-    let direct: Vec<_> = text
-        .lines()
-        .filter(|line| line.contains("--test=gate"))
+    let steps = steps_of(&repo)?;
+    assert_featured(&steps, "Lint", true);
+    assert_featured(&steps, "Test", true);
+    let direct: Vec<_> = steps
+        .iter()
+        .filter(|(_, run)| run.contains("--test=gate") || run.contains("--test gate"))
         .collect();
-    assert_eq!(direct.len(), 1, "{text}");
-    assert!(direct[0].contains("local-mode"), "{direct:?}");
-    assert!(
-        gated_harness("")?
-            .lines()
-            .all(|line| !line.contains("--test=gate")),
-        "unfeatured"
-    );
+    assert_eq!(direct.len(), 1, "{steps:?}");
+    assert!(!direct[0].1.contains("--features"), "{direct:?}");
     Ok(())
 }
 
-const GATED_ON_RENAMED_DEPENDENCY: &[u8] = b"[package]\nname = \"package-0\"\n[features]\nlocal-mode = []\n[dependencies]\nalias = { package = \"serde\", version = \"1\", optional = true }\n[[test]]\nname = \"gate\"\nharness = false\nrequired-features = [\"alias\"]\n";
-
-#[test]
-fn a_dependency_selector_on_an_optional_renamed_dependency_gates_a_harness_false_target_directly()
--> TestResult {
-    let direct = |config: &str| -> Result<usize, Box<dyn Error>> {
-        Ok(gated_on(GATED_ON_RENAMED_DEPENDENCY, "alias", config)?
-            .lines()
-            .filter(|line| line.contains("--test=gate"))
-            .count())
-    };
-    assert_eq!(direct("workspace_features = ['alias/derive']\n")?, 1);
-    assert_eq!(direct(FEATURES)?, 0);
-    Ok(())
-}
-
-#[test]
-fn the_overlap_check_leaves_out_the_direct_harness_binaries_the_group_runs_leave_out() -> TestResult
-{
-    let groups = format!("{DATABASE}\n{SHELL}");
-    let listed = |config: &str| -> Result<Vec<String>, Box<dyn Error>> {
-        Ok(gated_harness(config)?
-            .lines()
-            .filter(|line| line.contains("test-groups check --"))
-            .map(str::to_owned)
-            .collect())
-    };
-    let featured = listed(&format!("{FEATURES}{groups}"))?;
-    assert_eq!(featured.len(), 1, "{featured:?}");
-    assert!(
-        featured[0].contains("- binary_id(=package-0::gate)"),
-        "{featured:?}"
-    );
-    let plain = listed(&groups)?;
-    assert!(
-        plain.iter().all(|line| !line.contains("binary_id")),
-        "{plain:?}"
-    );
-    Ok(())
+pub(crate) fn refusal(repo: &RepoView) -> Result<(String, String), Box<dyn Error>> {
+    match detect(repo) {
+        Err(DetectError::Invalid {
+            path,
+            reason: Reason::UnknownWorkspaceFeature { root, feature },
+        }) if path == CONFIG_PATH => Ok((root, feature)),
+        other => Err(format!("{other:?}").into()),
+    }
 }
