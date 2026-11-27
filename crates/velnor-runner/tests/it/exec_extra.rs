@@ -1,0 +1,192 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::path::Path;
+
+use anyhow::{Context, Result};
+use futures_util::FutureExt;
+use velnor_runner::exec::{
+    AdapterRegistry, AnnotationLevel, JobCancel, JobResult, StdoutSink, StepAdapter, StepContext,
+    StepFuture, StepResult, run_job,
+};
+
+use crate::exec_support::{Scratch, fixture_message, run_fixture, run_path};
+
+#[test]
+fn shell_forms_expand_like_github() -> Result<()> {
+    let ran = run_fixture("shell-forms", &Scratch::new()?)?;
+    for expected in [
+        "bare",
+        "continued-after-false",
+        "default-shell-continues",
+        "step 4 failed",
+        "job failed",
+    ] {
+        assert!(ran.has_line(expected), "{expected}\n{}", ran.stdout);
+    }
+    assert!(!ran.has_line("not-reached"));
+    assert_eq!(ran.code, Some(1));
+    Ok(())
+}
+
+#[test]
+fn github_context_exports_env_and_event_file() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let ran = run_fixture("github-context", &scratch)?;
+    assert!(
+        ran.has_line(
+            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os=Linux run=42"
+        ),
+        "{}",
+        ran.stdout
+    );
+    let event = ran
+        .lines()
+        .into_iter()
+        .find(|line| line.starts_with('{'))
+        .context("the printed event.json")?;
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(event)?,
+        serde_json::json!({"pull_request": {"number": 7}})
+    );
+    let workspace = scratch.workspace();
+    let expected = format!(
+        "token=*** ws={} env=self-hosted",
+        workspace.to_string_lossy()
+    );
+    assert!(ran.has_line(&expected), "{}", ran.stdout);
+    assert_eq!(ran.code, Some(0));
+    Ok(())
+}
+
+#[test]
+fn missing_job_file_is_a_usage_error() -> Result<()> {
+    let ran = run_path(Path::new("/nonexistent.json"), &Scratch::new()?)?;
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains("/nonexistent.json"), "{}", ran.stderr);
+    assert_eq!(ran.code, Some(2));
+    Ok(())
+}
+
+#[tokio::test]
+async fn annotations_carry_properties_and_exit_code() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let run = run_job(
+        &fixture_message("annotations")?,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    assert_eq!(run.result, JobResult::Failed);
+    let error = run
+        .annotations
+        .iter()
+        .find(|annotation| annotation.title.as_deref() == Some("T:1"))
+        .context("the error annotation with its title")?;
+    assert_eq!(error.level, AnnotationLevel::Error);
+    assert_eq!(error.message, "bad\nthing");
+    assert_eq!(error.file.as_deref(), Some("a.rs"));
+    assert_eq!(error.line, Some(3));
+    let levels: Vec<(AnnotationLevel, &str)> = run
+        .annotations
+        .iter()
+        .map(|annotation| (annotation.level, annotation.message.as_str()))
+        .collect();
+    assert!(levels.contains(&(AnnotationLevel::Notice, "fyi")));
+    assert!(levels.contains(&(AnnotationLevel::Warning, "careful")));
+    assert!(levels.contains(&(
+        AnnotationLevel::Error,
+        "Process completed with exit code 1."
+    )));
+    Ok(())
+}
+
+#[test]
+fn working_directory_input_and_default_resolve_under_workspace() -> Result<()> {
+    let ran = run_fixture("working-directory", &Scratch::new()?)?;
+    let lines = ran.lines();
+    assert!(
+        lines.iter().any(|line| line.ends_with("/workspace/sub")),
+        "{}",
+        ran.stdout
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.ends_with("/workspace/sub/dir")),
+        "{}",
+        ran.stdout
+    );
+    assert_eq!(ran.code, Some(0));
+    Ok(())
+}
+
+#[test]
+fn env_precedence_job_step_and_github_env() -> Result<()> {
+    let ran = run_fixture("env-precedence", &Scratch::new()?)?;
+    assert!(ran.has_line("job step job"), "{}", ran.stdout);
+    assert!(ran.has_line("written-written"), "{}", ran.stdout);
+    assert_eq!(ran.code, Some(0));
+    Ok(())
+}
+
+#[tokio::test]
+async fn step_summary_is_saved_masked() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let run = run_job(
+        &fixture_message("step-summary")?,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    assert_eq!(run.result, JobResult::Succeeded);
+    let path = run.steps[0]
+        .summary_path
+        .as_ref()
+        .context("the first step has a summary")?;
+    assert_eq!(std::fs::read_to_string(path)?, "secret is ***\n");
+    assert!(run.steps[1].summary_path.is_none());
+    Ok(())
+}
+
+struct Greeter;
+
+impl StepAdapter for Greeter {
+    fn handles(&self, reference: &str) -> bool {
+        reference == "actions/foo@v1"
+    }
+
+    fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
+        async move {
+            let who = ctx.inputs.get("who").cloned().unwrap_or_default();
+            ctx.log(&format!("greeting {who}"));
+            ctx.set_output("greeting", format!("hello-{who}"));
+            Ok(StepResult::Succeeded)
+        }
+        .boxed()
+    }
+}
+
+#[tokio::test]
+async fn registered_adapter_runs_uses_step_and_feeds_outputs() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let mut adapters = AdapterRegistry::empty();
+    adapters.register(Box::new(Greeter));
+    let run = run_job(
+        &fixture_message("adapter-uses")?,
+        &scratch.options(),
+        &adapters,
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    assert_eq!(run.result, JobResult::Succeeded);
+    assert_eq!(run.steps[0].name, "Greet");
+    assert_eq!(run.steps[0].context_id.as_deref(), Some("foo"));
+    assert_eq!(run.steps[1].outcome, StepResult::Succeeded);
+    Ok(())
+}

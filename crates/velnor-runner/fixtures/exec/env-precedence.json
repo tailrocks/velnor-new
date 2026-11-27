@@ -1,0 +1,145 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Step env"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "echo \"$A $B $C\""
+            }
+          }
+        ]
+      },
+      "Environment": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "B"
+            },
+            "value": {
+              "type": 0,
+              "lit": "step"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "C"
+            },
+            "value": {
+              "type": 3,
+              "expr": "env.A"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Write env"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "echo \"A=written\" >> \"$GITHUB_ENV\""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000003",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Read env"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 3,
+              "expr": "format('echo {0}-$A', env.A)"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "EnvironmentVariables": [
+    {
+      "type": 2,
+      "map": [
+        {
+          "key": {
+            "type": 0,
+            "lit": "A"
+          },
+          "value": {
+            "type": 0,
+            "lit": "job"
+          }
+        },
+        {
+          "key": {
+            "type": 0,
+            "lit": "B"
+          },
+          "value": {
+            "type": 0,
+            "lit": "job"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "exec_cancel.rs"]
+mod cancel;
+#[path = "exec_commands.rs"]
+mod commands;
+#[path = "exec_conditions.rs"]
+mod conditions;
+#[path = "exec_defaults.rs"]
+mod defaults;
+#[path = "exec_drain.rs"]
+mod drain;
+#[path = "exec_builder.rs"]
+mod exec_builder;
+#[path = "exec_cli.rs"]
+mod exec_cli;
+#[path = "exec_support.rs"]
+mod exec_support;
 #[cfg(target_os = "linux")]
 #[path = "expr/format_allocation.rs"]
 mod expr_format_allocation;
@@ -58,7 +74,23 @@ mod expr_template;
 mod expr_unsupported;
 #[path = "expr/vars.rs"]
 mod expr_vars;
+#[path = "exec_extra.rs"]
+mod extra;
+#[path = "exec_failures.rs"]
+mod failures;
+#[path = "exec_followup.rs"]
+mod followup;
+#[path = "exec_hardening.rs"]
+mod hardening;
 mod job_message;
+#[path = "exec_late.rs"]
+mod late;
+#[path = "exec_offload.rs"]
+mod offload;
+#[path = "exec_parity.rs"]
+mod parity;
+#[path = "exec_process.rs"]
+mod process;
 mod protocol_acquire_renew;
 mod protocol_broker;
 mod protocol_complete;
@@ -68,4 +100,20 @@ mod protocol_oauth;
 mod protocol_results;
 mod protocol_timeline;
 mod redaction;
+#[path = "exec_review.rs"]
+mod review;
+#[path = "exec_semantics.rs"]
+mod semantics;
+#[path = "exec_shells.rs"]
+mod shells;
+#[path = "exec_stopped.rs"]
+mod stopped;
+#[path = "exec_strict.rs"]
+mod strict;
 mod support;
+#[path = "exec_threads.rs"]
+mod threads;
+#[path = "exec_triage.rs"]
+mod triage;
+#[path = "exec_unsettled.rs"]
+mod unsettled;

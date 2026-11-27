@@ -1,0 +1,161 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Variables"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "echo \"repo=$GITHUB_REPOSITORY event=$GITHUB_EVENT_NAME protected=$GITHUB_REF_PROTECTED runner=$RUNNER_ENVIRONMENT job=$GITHUB_JOB os=$RUNNER_OS run=$GITHUB_RUN_ID\""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Event file"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 0,
+              "lit": "cat \"$GITHUB_EVENT_PATH\""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000003",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": {
+        "Type": "script"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Context"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "value": {
+              "type": 3,
+              "expr": "format('echo token={0} ws={1} env={2}', github.token, github.workspace, runner.environment)"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "Variables": {
+    "system.github.token": {
+      "Value": "ghs_tokenvalue123",
+      "IsSecret": true
+    },
+    "system.github.job": {
+      "Value": "build",
+      "IsSecret": false
+    }
+  },
+  "ContextData": {
+    "github": {
+      "t": 2,
+      "d": [
+        {
+          "k": "repository",
+          "v": {
+            "t": 0,
+            "s": "tailrocks/velnor-new"
+          }
+        },
+        {
+          "k": "event_name",
+          "v": {
+            "t": 0,
+            "s": "pull_request"
+          }
+        },
+        {
+          "k": "ref_protected",
+          "v": {
+            "t": 3,
+            "b": false
+          }
+        },
+        {
+          "k": "run_id",
+          "v": {
+            "t": 0,
+            "s": "42"
+          }
+        },
+        {
+          "k": "event",
+          "v": {
+            "t": 2,
+            "d": [
+              {
+                "k": "pull_request",
+                "v": {
+                  "t": 2,
+                  "d": [
+                    {
+                      "k": "number",
+                      "v": {
+                        "t": 4,
+                        "n": 7
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
