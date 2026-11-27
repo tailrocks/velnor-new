@@ -10,7 +10,7 @@ use futures_util::future::BoxFuture;
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
-use super::step::{Limits, ProcessSpec, capture, run};
+use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 
@@ -89,7 +89,35 @@ impl std::fmt::Debug for StepContext<'_> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProcessOutcome {
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
 impl StepContext<'_> {
+    pub(crate) async fn run_isolated(
+        &mut self,
+        spec: (&str, &[String], &Path, &[(String, String)]),
+        quiet: bool,
+    ) -> Result<ProcessOutcome, ExecError> {
+        let (program, args, dir, env) = spec;
+        let spec = ProcessSpec {
+            program,
+            args,
+            dir,
+            env,
+            isolated: true,
+        };
+        let limits = Limits {
+            timeout: None,
+            cancel: self.cancel.as_ref(),
+            groups: self.groups,
+        };
+        run_isolated(&spec, &limits, (!quiet).then_some(&mut *self.out)).await
+    }
+
     pub fn log(&mut self, text: &str) {
         self.out.line(text);
     }
@@ -117,6 +145,7 @@ impl StepContext<'_> {
             args,
             dir: self.workspace,
             env: &env,
+            isolated: false,
         };
         let limits = Limits {
             timeout: None,
@@ -138,6 +167,7 @@ impl StepContext<'_> {
             args,
             dir: self.workspace,
             env: &env,
+            isolated: false,
         };
         let limits = Limits {
             timeout: None,

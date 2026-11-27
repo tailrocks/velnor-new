@@ -12,7 +12,7 @@ use crate::broker::{
     Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, Window, git_args, mirror_path,
 };
 use crate::exec::{
-    ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
+    ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
 };
 use crate::store::store_root;
 
@@ -112,7 +112,7 @@ async fn git(
 ) -> Result<ProcessOutcome, ExecError> {
     let args = git_args(git_dir, args);
     let dir = ctx.workspace.to_path_buf();
-    ctx.run_process(("git", &args, &dir, &[]), quiet).await
+    ctx.run_isolated(("git", &args, &dir, &[]), quiet).await
 }
 
 async fn require(
@@ -148,11 +148,10 @@ impl Depth {
     }
 }
 
-fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
+fn fetch_depth(inputs: &Inputs) -> Result<Depth, ExecError> {
     let given = inputs
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case("fetch-depth"))
-        .map(|(_, value)| js_trim(value))
+        .get("fetch-depth")
+        .map(|value| js_trim(value))
         .filter(|value| !value.is_empty());
     match given.map(str::parse::<u64>) {
         None => Ok(Depth::Last(1)),

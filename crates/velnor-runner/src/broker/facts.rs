@@ -7,7 +7,7 @@ use std::num::NonZeroU64;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::context_value::ContextValue;
+use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::job_message::AgentJobRequestMessage;
 
 #[derive(Debug, thiserror::Error)]
@@ -278,16 +278,20 @@ impl TrustedFacts {
     }
 
     pub(crate) fn from_job_message(message: &AgentJobRequestMessage) -> Result<Self, FactsError> {
-        let contexts =
-            message
-                .materialize_context_values()
-                .map_err(|error| FactsError::Invalid {
-                    field: "context",
-                    value: format!("{error:#}"),
-                })?;
-        let github = contexts.get("github").ok_or(FactsError::Missing {
-            field: "github context",
-        })?;
+        let contexts = message
+            .materialize_context_values_ordered()
+            .map_err(|error| FactsError::Invalid {
+                field: "context",
+                value: format!("{error:#}"),
+            })?;
+        let github = contexts
+            .expose()
+            .iter()
+            .rfind(|(name, _)| ordinal_ignore_case_eq(name, "github"))
+            .map(|(_, value)| value)
+            .ok_or(FactsError::Missing {
+                field: "github context",
+            })?;
         let repository = RepoName::try_from(required(github, "repository")?.to_owned())?;
         let repository_id = id(github, &["repository_id"])
             .and_then(NonZeroU64::new)
