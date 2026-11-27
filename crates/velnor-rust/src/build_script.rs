@@ -4,6 +4,7 @@
 use velnor_model::{PackageName, RepoPath, RepoView, RustMember, TargetKind};
 
 use crate::doc_steps::tokens::{Token, tokens};
+use crate::macro_names::group_end;
 
 const PREFIXES: &[&str] = &[
     "cargo:rerun-if-changed",
@@ -12,12 +13,8 @@ const PREFIXES: &[&str] = &[
     "cargo::rerun-if-env-changed",
 ];
 const CHANGED: &[&str] = &["cargo:rerun-if-changed", "cargo::rerun-if-changed"];
-const OVERRIDES: &[&str] = &[
-    "cargo:rustc-env=CARGO_MANIFEST_DIR=",
-    "cargo::rustc-env=CARGO_MANIFEST_DIR=",
-    "cargo:rustc-env=OUT_DIR=",
-    "cargo::rustc-env=OUT_DIR=",
-];
+const RESERVED: &[&str] = &["CARGO_MANIFEST_DIR", "OUT_DIR"];
+const SET_ENV: &str = "rustc-env=";
 const PRINTING: &[&str] = &["println", "print", "write", "writeln"];
 const LINE_TO_ADD: &str = "println!(\"cargo:rerun-if-changed=build.rs\");";
 
@@ -54,8 +51,9 @@ pub(crate) fn declared(view: &RepoView, member: &RustMember) -> Declared {
         .filter_map(|source| view.files.get(source))
     {
         let text = String::from_utf8_lossy(bytes);
-        found.tracks_changes |= prints(&text, CHANGED);
-        found.overrides_environment |= prints(&text, OVERRIDES);
+        let found_tokens = tokens(&text);
+        found.tracks_changes |= declares(&found_tokens);
+        found.overrides_environment |= overrides(&found_tokens);
     }
     found
 }
@@ -105,31 +103,141 @@ pub fn silent_build_scripts(view: &RepoView) -> Vec<SilentBuildScript> {
 
 fn prints(source: &str, prefixes: &[&str]) -> bool {
     let found = tokens(source);
-    let mut at = 0;
-    while at < found.len() {
-        let printing = matches!(found[at], Token::Ident(name) if PRINTING.contains(&name))
-            && found.get(at + 1) == Some(&Token::Punct('!'));
-        if printing {
-            let mut depth = 0_usize;
-            for token in &found[at + 2..] {
-                match token {
-                    Token::Punct('(' | '[' | '{') => depth += 1,
-                    Token::Punct(')' | ']' | '}') => {
-                        depth = depth.saturating_sub(1);
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    Token::Str(text)
-                        if depth > 0 && prefixes.iter().any(|p| text.starts_with(p)) =>
-                    {
-                        return true;
-                    }
-                    _ => {}
+    (0..found.len()).any(|at| {
+        matches!(found[at], Token::Ident(name) if PRINTING.contains(&name))
+            && mentions(&found, at, prefixes)
+    })
+}
+
+fn mentions(found: &[Token<'_>], at: usize, prefixes: &[&str]) -> bool {
+    if found.get(at + 1) != Some(&Token::Punct('!')) {
+        return false;
+    }
+    let mut depth = 0_usize;
+    for token in found.iter().skip(at + 2) {
+        match token {
+            Token::Punct('(' | '[' | '{') => depth += 1,
+            Token::Punct(')' | ']' | '}') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
                 }
             }
+            Token::Str(text) if depth > 0 && prefixes.iter().any(|p| text.starts_with(p)) => {
+                return true;
+            }
+            _ => {}
         }
-        at += 1;
     }
     false
+}
+
+fn declares(found: &[Token<'_>]) -> bool {
+    let mut depth = 0_usize;
+    let mut mains = Vec::new();
+    for (at, token) in found.iter().enumerate() {
+        match token {
+            Token::Punct('(' | '[' | '{') => depth += 1,
+            Token::Punct(')' | ']' | '}') => depth = depth.saturating_sub(1),
+            Token::Ident("fn")
+                if depth == 0
+                    && matches!(
+                        found[at + 1..],
+                        [Token::Ident("main"), Token::Punct('('), ..]
+                    ) =>
+            {
+                let open = found[at..].iter().position(|t| *t == Token::Punct('{'));
+                mains.extend(open.map(|n| main_body(found, at + n)));
+            }
+            _ => {}
+        }
+    }
+    !mains.is_empty() && mains.into_iter().all(top_level_print)
+}
+
+fn main_body<'t, 'a>(found: &'t [Token<'a>], open: usize) -> &'t [Token<'a>] {
+    let end = group_end(found, open);
+    &found[open + 1..end.saturating_sub(1).max(open + 1)]
+}
+
+fn top_level_print(body: &[Token<'_>]) -> bool {
+    let mut depth = 0_usize;
+    for (at, token) in body.iter().enumerate() {
+        match token {
+            Token::Punct('(' | '[' | '{') => depth += 1,
+            Token::Punct(')' | ']' | '}') => depth = depth.saturating_sub(1),
+            Token::Ident("println" | "print")
+                if depth == 0
+                    && (at == 0 || matches!(body[at - 1], Token::Punct(';' | '}')))
+                    && mentions(body, at, CHANGED) =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn overrides(found: &[Token<'_>]) -> bool {
+    let diverted = found.iter().enumerate().any(|(at, token)| match token {
+        Token::Ident("mod") => true,
+        Token::Ident("include") => found.get(at + 1) == Some(&Token::Punct('!')),
+        _ => false,
+    });
+    let constants = constants(found);
+    diverted
+        || found
+            .iter()
+            .any(|token| matches!(token, Token::Str(text) if sets_reserved(text, &constants)))
+}
+
+fn constants<'t>(found: &[Token<'t>]) -> Vec<(&'t str, &'t str)> {
+    let mut named = Vec::new();
+    for (at, token) in found.iter().enumerate() {
+        let [Token::Ident(name), rest @ ..] = &found[at + 1..] else {
+            continue;
+        };
+        if *token != Token::Ident("const") {
+            continue;
+        }
+        let end = rest.iter().position(|t| *t == Token::Punct(';'));
+        if let Some([.., Token::Punct('='), Token::Str(value)]) = end.map(|n| &rest[..n]) {
+            named.push((*name, *value));
+        }
+    }
+    named
+}
+
+fn sets_reserved(literal: &str, constants: &[(&str, &str)]) -> bool {
+    let mut rest = literal;
+    while let Some(at) = rest.find(SET_ENV) {
+        rest = &rest[at + SET_ENV.len()..];
+        let Some((key, _)) = rest.split_once('=') else {
+            return true;
+        };
+        if reserved(key, constants) {
+            return true;
+        }
+    }
+    false
+}
+
+fn reserved(key: &str, constants: &[(&str, &str)]) -> bool {
+    let mut name = String::new();
+    let mut rest = key;
+    while let Some(open) = rest.find('{') {
+        name.push_str(&rest[..open]);
+        let Some(close) = rest[open..].find('}') else {
+            return true;
+        };
+        let inner = &rest[open + 1..open + close];
+        let Some((_, value)) = constants.iter().find(|(known, _)| *known == inner) else {
+            return true;
+        };
+        name.push_str(value);
+        rest = &rest[open + close + 1..];
+    }
+    name.push_str(rest);
+    RESERVED.contains(&name.as_str())
 }

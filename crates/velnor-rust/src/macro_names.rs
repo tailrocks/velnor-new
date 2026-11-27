@@ -118,7 +118,7 @@ pub(crate) fn macro_bodies(tokens: &[Token<'_>]) -> Vec<Range<usize>> {
     bodies
 }
 
-fn group_end(tokens: &[Token<'_>], open: usize) -> usize {
+pub(crate) fn group_end(tokens: &[Token<'_>], open: usize) -> usize {
     let mut depth = 0_usize;
     for (at, token) in tokens.iter().enumerate().skip(open) {
         match token {

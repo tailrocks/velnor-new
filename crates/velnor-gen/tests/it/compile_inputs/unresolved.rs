@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{RepoPath, RepoView, TargetKind};
+use velnor_model::{DependencyKind, RepoPath, RepoView, TargetKind};
 
 use super::build_output::{DECLARES, with_build_script};
 use super::embed::{selected, unresolved, view_of};
@@ -182,6 +182,55 @@ fn an_include_in_a_proc_macro_crate_is_unresolved() -> TestResult {
             "{kind:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_package_that_reaches_a_proc_macro_package_records_its_includes_as_unresolved() -> TestResult {
+    let include =
+        "const A: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.md\"));";
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![
+                package(
+                    "z-pm",
+                    "crates/z-pm/Cargo.toml",
+                    &[],
+                    &[("z-pm", TargetKind::ProcMacro, true)],
+                )?,
+                package(
+                    "a-user",
+                    "crates/a-user/Cargo.toml",
+                    &[(
+                        "m-facade",
+                        DependencyKind::Normal,
+                        "crates/m-facade/Cargo.toml",
+                    )],
+                    &[("a-user", TargetKind::Lib, true)],
+                )?,
+                package(
+                    "m-facade",
+                    "crates/m-facade/Cargo.toml",
+                    &[("z-pm", DependencyKind::Normal, "crates/z-pm/Cargo.toml")],
+                    &[("m-facade", TargetKind::Lib, true)],
+                )?,
+                lib("other", "crates/other/Cargo.toml")?,
+            ],
+        )],
+        &[
+            ("crates/z-pm/src/lib.rs", ""),
+            ("crates/m-facade/src/lib.rs", ""),
+            ("crates/a-user/src/lib.rs", include),
+            ("crates/a-user/src/x.md", ""),
+            ("crates/other/src/lib.rs", include),
+            ("crates/other/src/x.md", ""),
+        ],
+    )?;
+    assert_eq!(
+        selected(&view, "docs/other.md")?,
+        [("a-user".to_owned(), "unresolved-include".to_owned())]
+    );
     Ok(())
 }
 

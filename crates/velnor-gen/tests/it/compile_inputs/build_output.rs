@@ -7,8 +7,8 @@ use super::embed::{selected, view_of};
 use crate::facts::{TestResult, path};
 
 pub(super) const DECLARES: &str = "fn main() { println!(\"cargo:rerun-if-changed=build.rs\"); }";
-const OUT: &str = "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));";
-const UNRESOLVED: [(&str, &str); 1] = [("c", "unresolved-include")];
+pub(super) const OUT: &str = "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));";
+pub(super) const UNRESOLVED: [(&str, &str); 1] = [("c", "unresolved-include")];
 
 pub(super) fn with_build_script(view: &mut RepoView, member: &str, text: &str) -> TestResult {
     let source = path(&format!("crates/{member}/build.rs"))?;
@@ -32,7 +32,7 @@ pub(super) fn with_build_script(view: &mut RepoView, member: &str, text: &str) -
     Ok(())
 }
 
-fn outcome(
+pub(super) fn outcome(
     source: &str,
     scripts: &[(&str, &str)],
 ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
@@ -50,7 +50,7 @@ fn outcome(
     selected(&view, "docs/other.md")
 }
 
-fn owed(rows: &[(&str, &str)]) -> Vec<(String, String)> {
+pub(super) fn owed(rows: &[(&str, &str)]) -> Vec<(String, String)> {
     rows.iter()
         .map(|(name, reason)| ((*name).to_owned(), (*reason).to_owned()))
         .collect()
@@ -137,6 +137,7 @@ fn a_build_script_that_sets_the_manifest_or_out_dir_makes_its_package_unresolved
         "println!(\"cargo:rustc-env=GIT_HASH=abc\");",
         "println!(\"cargo:rustc-env=OUT_DIRECTORY=abc\");",
         "println!(\"cargo:rustc-cfg=manifest\");",
+        "println!(\"cargo:rustc-env=CARGO_MANIFEST_DIR_HASH=abc\");",
     ] {
         let script =
             format!("fn main() {{ println!(\"cargo:rerun-if-changed=build.rs\"); {line} }}");

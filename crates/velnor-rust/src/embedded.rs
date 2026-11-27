@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CompileInputs, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot, TargetKind,
+    CompileInputs, InputKey, InputOwner, PackageName, RepoPath, RepoView, RustMember, RustRoot,
+    TargetKind,
 };
 
 use crate::build_script::{Declared, declared};
@@ -20,8 +21,10 @@ const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
     let members: Vec<&RustMember> = roots.iter().flat_map(|root| &root.members).collect();
     let mut inputs = CompileInputs::new();
+    let expanding = reaching_proc_macros(&members);
     for member in &members {
-        for key in Scan::new(view, member, &members).run() {
+        let emits_tokens = expanding.contains(&member.name);
+        for key in Scan::new(view, member, &members, emits_tokens).run() {
             inputs
                 .entry(key)
                 .or_default()
@@ -29,6 +32,34 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
         }
     }
     inputs
+}
+
+fn reaching_proc_macros<'m>(members: &[&'m RustMember]) -> BTreeSet<&'m PackageName> {
+    let mut reaching: BTreeSet<&PackageName> = members
+        .iter()
+        .filter(|member| {
+            member
+                .targets
+                .iter()
+                .any(|target| target.kinds.contains(&TargetKind::ProcMacro))
+        })
+        .map(|member| &member.name)
+        .collect();
+    loop {
+        let before = reaching.len();
+        for member in members {
+            if member
+                .dependencies
+                .iter()
+                .any(|dependency| reaching.contains(&dependency.name))
+            {
+                reaching.insert(&member.name);
+            }
+        }
+        if reaching.len() == before {
+            return reaching;
+        }
+    }
 }
 
 enum Embedded<'t> {
@@ -49,7 +80,12 @@ struct Scan<'a> {
 }
 
 impl<'a> Scan<'a> {
-    fn new(view: &'a RepoView, member: &'a RustMember, members: &[&RustMember]) -> Self {
+    fn new(
+        view: &'a RepoView,
+        member: &'a RustMember,
+        members: &[&RustMember],
+        emits_tokens: bool,
+    ) -> Self {
         let nested: Vec<&RepoPath> = members
             .iter()
             .filter(|other| other.manifest != member.manifest)
@@ -83,10 +119,7 @@ impl<'a> Scan<'a> {
             view,
             directory: member.directory.as_ref(),
             declared: declared(view, member),
-            emits_tokens: member
-                .targets
-                .iter()
-                .any(|target| target.kinds.contains(&TargetKind::ProcMacro)),
+            emits_tokens,
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
