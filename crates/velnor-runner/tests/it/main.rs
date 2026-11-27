@@ -4,6 +4,8 @@
 #[cfg(target_os = "linux")]
 #[path = "expr/format_allocation.rs"]
 mod expr_format_allocation;
+#[path = "expr/from_json.rs"]
+mod expr_from_json;
 #[path = "expr/functions.rs"]
 mod expr_functions;
 #[path = "expr/generated_workflow.rs"]

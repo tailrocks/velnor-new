@@ -12,7 +12,7 @@ fn env_from_message(context_data: &serde_json::Value) -> Result<ExprEnv> {
         .context("parse message")?;
     let contexts = message.materialize_context_values()?;
     let mut env = empty_env();
-    env.set_job_contexts(contexts.expose());
+    env.set_job_contexts(contexts.expose())?;
     Ok(env)
 }
 
@@ -76,7 +76,7 @@ fn expr_job_message_fills_only_service_owned_contexts() -> Result<()> {
     let message = AgentJobRequestMessage::from_value(wire).context("parse message")?;
     let contexts = message.materialize_context_values()?;
     let mut env = empty_env();
-    env.set_job_contexts(contexts.expose());
+    env.set_job_contexts(contexts.expose())?;
 
     assert_eq!(text("secrets.DEPLOY_KEY", &env)?, "");
     assert_eq!(text("runner.os", &env)?, "");

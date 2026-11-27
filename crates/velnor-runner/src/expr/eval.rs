@@ -99,8 +99,7 @@ fn evaluate_function(
                 return Err(arity_error());
             };
             let json = evaluate_node(value, env)?.convert_to_string();
-            parse_from_json(&json)
-                .map_err(|error| ExprError::evaluation(format!("Error parsing fromJson: {error}")))
+            parse_from_json(&json).map_err(ExprError::evaluation)
         }
         Function::HashFiles => {
             let values = args

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::expr_support::TempDir;
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::fs;
@@ -121,18 +122,24 @@ fn parse_error(is_condition: bool, source: &str, env: &ExprEnv) -> Option<String
     }
 }
 
-#[test]
-fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
-    let root = repository_root();
-    let env = ExprEnv::new(root.clone());
-    let mut corpus = BTreeSet::new();
-    let mut known_hit = BTreeSet::new();
-    let mut unexpected = Vec::new();
-    for path in workflow_files(&root)? {
+struct Report {
+    corpus: BTreeSet<String>,
+    known_hit: BTreeSet<usize>,
+    unexpected: Vec<String>,
+}
+
+fn report(root: &Path) -> Result<Report> {
+    let env = ExprEnv::new(root.to_path_buf());
+    let mut report = Report {
+        corpus: BTreeSet::new(),
+        known_hit: BTreeSet::new(),
+        unexpected: Vec::new(),
+    };
+    for path in workflow_files(root)? {
         let text = fs::read_to_string(&path).with_context(|| path.display().to_string())?;
         let document: serde_json::Value =
             serde_saphyr::from_str(&text).with_context(|| path.display().to_string())?;
-        let relative = path.strip_prefix(&root)?.to_string_lossy().into_owned();
+        let relative = path.strip_prefix(root)?.to_string_lossy().into_owned();
         let mut sources = BTreeSet::new();
         collect(&document, &[], &mut sources);
         for (is_condition, source) in sources {
@@ -142,25 +149,58 @@ fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
                     .position(|(file, message)| relative == *file && error.contains(message));
                 match known {
                     Some(index) => {
-                        known_hit.insert(index);
+                        report.known_hit.insert(index);
                     }
-                    None => unexpected.push(format!("{relative}: {source}: {error}")),
+                    None => report
+                        .unexpected
+                        .push(format!("{relative}: {source}: {error}")),
                 }
             }
-            corpus.insert(source);
+            report.corpus.insert(source);
         }
     }
-    assert!(unexpected.is_empty(), "{}", unexpected.join("\n"));
+    Ok(report)
+}
+
+#[test]
+fn expr_generated_workflow_expressions_evaluate() -> Result<()> {
+    let report = report(&repository_root())?;
+    assert!(
+        report.unexpected.is_empty(),
+        "{}",
+        report.unexpected.join("\n")
+    );
     assert_eq!(
-        known_hit.len(),
+        report.known_hit.len(),
         OUT_OF_SCOPE.len(),
         "an out-of-scope entry no longer fails to parse"
     );
     for gap in COVERED {
         assert!(
-            corpus.iter().any(|source| source.contains(gap)),
+            report.corpus.iter().any(|source| source.contains(gap)),
             "no generated workflow uses {gap}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn expr_generated_workflow_reads_environment_url_and_yaml() -> Result<()> {
+    let root = TempDir::new()?;
+    fs::create_dir_all(root.path().join("generator/samples"))?;
+    root.write(
+        ".github/workflows/deploy.yaml",
+        "jobs:\n  deploy:\n    environment:\n      name: ${{ toYAML(1) }}\n      url: ${{ toYAML(2) }}\n  other:\n    environment: ${{ toYAML(3) }}\n",
+    )?;
+
+    let report = report(root.path())?;
+
+    assert_eq!(
+        report.unexpected.len(),
+        1,
+        "{}",
+        report.unexpected.join("\n")
+    );
+    assert!(report.unexpected[0].starts_with(".github/workflows/deploy.yaml: ${{ toYAML(2) }}: "));
     Ok(())
 }

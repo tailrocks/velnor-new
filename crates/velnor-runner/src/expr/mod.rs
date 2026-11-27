@@ -7,6 +7,7 @@ mod error;
 mod eval;
 mod format;
 mod from_json;
+mod from_json_depth;
 mod glob;
 mod hash_files;
 mod index;

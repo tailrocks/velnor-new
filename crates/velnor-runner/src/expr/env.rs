@@ -155,14 +155,18 @@ impl ExprEnv {
         self.walk_seam = Seam::new(hook);
     }
 
-    pub fn set_job_contexts(&mut self, contexts: &BTreeMap<String, ContextValue>) {
+    pub fn set_job_contexts(
+        &mut self,
+        contexts: &BTreeMap<String, ContextValue>,
+    ) -> Result<(), ContextValueError> {
         for (name, value) in contexts {
             if let Some(root) =
                 RootContext::parse(name).filter(|root| RootContext::SERVICE_OWNED.contains(root))
             {
-                self.set_context(root, value);
+                self.set_context(root, value)?;
             }
         }
+        Ok(())
     }
 
     pub(crate) fn context(&self, root: RootContext) -> Value {
