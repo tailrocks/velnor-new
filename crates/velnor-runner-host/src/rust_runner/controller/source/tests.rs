@@ -40,3 +40,27 @@ fn the_ref_is_dropped_whatever_it_contains() {
         Ok(".github/workflows/ci.yaml")
     );
 }
+
+#[test]
+fn the_file_name_ends_at_the_last_at_sign_before_the_first_slash_of_the_ref() {
+    for (path, expected) in [
+        (
+            "owner/repo/.github/workflows/a.yml@refs/heads/x.yaml@y",
+            ".github/workflows/a.yml",
+        ),
+        (
+            ".github/workflows/a.yaml@b.yml@refs/heads/x.yml@y",
+            ".github/workflows/a.yaml@b.yml",
+        ),
+        (
+            ".github/workflows/a@b.yml@refs/tags/v1.yml@x",
+            ".github/workflows/a@b.yml",
+        ),
+    ] {
+        assert_eq!(
+            root_workflow_path(path, REPOSITORY).as_deref(),
+            Ok(expected),
+            "{path}"
+        );
+    }
+}
