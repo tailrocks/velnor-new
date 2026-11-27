@@ -215,7 +215,7 @@ pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: Option<&RustRoo
     steps
 }
 
-pub(crate) fn complete_profile(facts: &RepoFacts) -> bool {
+pub fn complete_profile(facts: &RepoFacts) -> bool {
     facts
         .toolchain
         .as_ref()

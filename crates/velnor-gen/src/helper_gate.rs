@@ -8,7 +8,7 @@ use velnor_model::{
 
 use velnor_rust::{
     INPUTS_IDENTITY_HELPER, SCOPED_LOCKS_HELPER, TOKEN_FIRST_HELPER, check_lint_tools, check_mbx,
-    check_tools,
+    check_tools, complete_profile,
 };
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
@@ -146,11 +146,7 @@ pub(crate) fn pinned_helper<'a>(
 }
 
 fn check_complete_profile(facts: &RepoFacts, helper: &HelperRelease) -> Result<(), GenerateError> {
-    let complete = facts
-        .toolchain
-        .as_ref()
-        .is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete"));
-    if complete && !helper.version().at_least(SCOPED_LOCKS_HELPER) {
+    if complete_profile(facts) && !helper.version().at_least(SCOPED_LOCKS_HELPER) {
         return Err(GenerateError::ConfigKeyHelperTooOld {
             file: "rust-toolchain.toml".to_owned(),
             key: "toolchain.profile",

@@ -139,5 +139,6 @@ mod weaken_targets;
 pub use generator_lock::externals_drift;
 pub use image_sources::image_sources_restore;
 pub use lock_scope::SCOPED_LOCKS_HELPER;
+pub use plan::complete_profile;
 pub use plan_tools::{TOOLS_VERIFY_HELPER, tools_verified, unverified_tools_note};
 pub use reexports::*;
