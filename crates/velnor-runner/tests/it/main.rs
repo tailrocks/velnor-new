@@ -63,6 +63,7 @@ mod lifecycle_report;
 mod lifecycle_session;
 mod lifecycle_session_create;
 mod lifecycle_support;
+mod lifecycle_timespan;
 mod lifecycle_token;
 mod lifecycle_token_retry;
 #[path = "exec_offload.rs"]

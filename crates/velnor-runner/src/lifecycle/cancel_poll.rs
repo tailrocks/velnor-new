@@ -14,7 +14,6 @@ use crate::exec::JobCancel;
 use crate::protocol::{RunnerStatus, TaskAgentMessage};
 
 const KILL_RESERVE: Duration = Duration::from_secs(15);
-const MAX_TIMESPAN_SECONDS: u64 = 922_337_203_685;
 
 pub(super) type CancelPollHandle = BackgroundTask;
 
@@ -54,23 +53,6 @@ struct JobCancelBody {
     timeout: Option<String>,
 }
 
-fn parse_timespan(text: &str) -> Option<Duration> {
-    let (days, clock) = match text.split_once('.') {
-        Some((days, clock)) if !days.contains(':') => (days.parse::<u64>().ok()?, clock),
-        _ => (0, text),
-    };
-    let clock = clock.split_once('.').map_or(clock, |(clock, _)| clock);
-    let mut parts = clock.split(':').map(|part| part.parse::<u64>().ok());
-    let (hours, minutes, seconds) = (parts.next()??, parts.next()??, parts.next()??);
-    if parts.next().is_some() || hours > 23 || minutes > 59 || seconds > 59 {
-        return None;
-    }
-    let total = days
-        .checked_mul(86_400)?
-        .checked_add(hours * 3_600 + minutes * 60 + seconds)?;
-    (total <= MAX_TIMESPAN_SECONDS).then(|| Duration::from_secs(total))
-}
-
 fn cancellation(message: &TaskAgentMessage, job_id: &str) -> Option<JobCancelBody> {
     if MessageKind::of(message) != MessageKind::JobCancellation {
         return None;
@@ -98,7 +80,9 @@ pub(super) fn spawn_cancel_poll(
                         return;
                     }
                     if let Some(body) = cancellation(&message, &job_id) {
-                        if let Some(timeout) = body.timeout.as_deref().and_then(parse_timespan) {
+                        if let Some(timeout) =
+                            body.timeout.as_deref().and_then(super::timespan::duration)
+                        {
                             grace.allow(timeout);
                         }
                         cancel.cancel();
