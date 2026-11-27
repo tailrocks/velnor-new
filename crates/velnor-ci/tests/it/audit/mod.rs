@@ -65,6 +65,7 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
 
 pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    velnor_test_support::keep_mise_cargo_home(&mut command);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("CARGO_BUILD_TARGET_DIR")

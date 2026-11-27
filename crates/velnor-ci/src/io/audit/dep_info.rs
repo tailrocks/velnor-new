@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,10 +16,14 @@ use super::{Audit, REBUILD, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
 
+const ROOT_OUTPUT_LIMIT: u64 = 8 << 10;
+
 #[derive(Default)]
 pub(super) struct BuildOutputs {
     directories: BTreeSet<PathBuf>,
     undeclared: BTreeSet<(String, Option<PathBuf>)>,
+    texts: BTreeMap<PathBuf, String>,
+    read_only: OnceCell<Vec<PathBuf>>,
 }
 
 impl Audit<'_> {
@@ -67,30 +72,45 @@ impl Audit<'_> {
         &mut self,
         files: &[(UnitFile, PathBuf, Vec<usize>)],
     ) -> Result<(), CiError> {
-        for (unit, output, _) in files {
-            let UnitFile::BuildOutput { package, .. } = unit else {
+        for (unit, output, indices) in files {
+            let (UnitFile::BuildOutput { package, .. }, Some(&index)) = (unit, indices.first())
+            else {
                 continue;
             };
-            let mut spent = 0;
             let text = read(
                 output,
-                &mut spent,
+                &mut self.target_bytes[index],
                 SOURCE_TOTAL_LIMIT,
                 "build-script output",
             )?;
-            let recorded = output
-                .parent()
-                .map(|directory| directory.join("root-output"))
-                .and_then(|file| std::fs::read_to_string(file).ok())
-                .map(|text| normalize(Path::new(text.trim())));
+            let recorded = self.recorded_root(output, index)?;
             if let Some(directory) = &recorded {
                 self.outputs.directories.insert(directory.clone());
             }
             if rerun_if_changed(&text).is_empty() {
                 self.outputs.undeclared.insert((package.clone(), recorded));
             }
+            self.outputs.texts.insert(output.clone(), text);
         }
         Ok(())
+    }
+
+    fn recorded_root(&mut self, output: &Path, index: usize) -> Result<Option<PathBuf>, CiError> {
+        let Some(file) = output
+            .parent()
+            .map(|directory| directory.join("root-output"))
+            .filter(|file| file.is_file())
+        else {
+            return Ok(None);
+        };
+        let text = read(
+            &file,
+            &mut self.target_bytes[index],
+            ROOT_OUTPUT_LIMIT,
+            "root-output file",
+        )?;
+        let path = Path::new(text.trim());
+        Ok(path.is_absolute().then(|| normalize(path)))
     }
 
     fn reads_unseen_output(
@@ -128,7 +148,7 @@ impl Audit<'_> {
         if outside.is_empty() {
             return Ok(());
         }
-        let roots = read_only_roots();
+        let roots = self.outputs.read_only.get_or_init(read_only_roots);
         let Some(first) = outside
             .iter()
             .find(|full| !roots.iter().any(|root| full.starts_with(root)))
@@ -169,6 +189,9 @@ impl Audit<'_> {
         index: usize,
         file: &Path,
     ) -> Result<String, CiError> {
+        if let Some(text) = self.outputs.texts.remove(file) {
+            return Ok(text);
+        }
         read(
             file,
             &mut self.target_bytes[index],

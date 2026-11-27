@@ -110,3 +110,79 @@ fn the_output_directory_of_another_package_credits_no_dot_line() {
     let lock = written(&repo);
     assert!(!lock.contains("\tapp"), "{lock}");
 }
+
+#[test]
+fn a_root_output_that_is_not_an_absolute_path_is_missing_and_never_disables_the_refusal() {
+    for recorded in ["", "  \n", "relative/out\n"] {
+        let repo = units();
+        unit(&repo, &format!("{LIB_OUTPUT}/root-output"), recorded);
+        unit(
+            &repo,
+            APP_DEPS,
+            &format!("out.d: app/src/lib.rs {SOMEWHERE}/docs/x.md\n"),
+        );
+        let refused = audit(&repo, &["--write"]);
+        let message = String::from_utf8_lossy(&refused.stderr);
+        assert_eq!(refused.status.code(), Some(1), "{recorded:?} {message}");
+        assert!(message.contains("outside the repository"), "{message}");
+        unit(&repo, APP_DEPS, "out.d: app/src/lib.rs\n");
+        assert_eq!(written(&repo), ".\tlib\n", "{recorded:?}");
+    }
+}
+
+#[test]
+fn a_root_output_above_its_bound_refuses_the_audit() {
+    let repo = units();
+    unit(
+        &repo,
+        &format!("{LIB_OUTPUT}/root-output"),
+        &format!("{SOMEWHERE}/{}\n", "x".repeat(64 << 10)),
+    );
+    let refused = audit(&repo, &["--write"]);
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{message}");
+    assert!(
+        message.contains("root-output file exceeds 8192 bytes"),
+        "{message}"
+    );
+    assert!(lock(&repo).is_none());
+}
+
+#[test]
+fn the_read_only_roots_are_computed_once_per_audit() {
+    let repo = units();
+    let compiler = repo.root().join("compiler.sh");
+    let log = repo.root().join("compiler.log");
+    fs::write(
+        &compiler,
+        format!(
+            "#!/bin/sh\necho run >> {}\necho /velnor-test-sysroot\n",
+            log.display()
+        ),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(
+        &compiler,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    for (file, source) in [(APP_DEPS, "app"), (LIB_DEPS, "lib")] {
+        unit(
+            &repo,
+            file,
+            &format!(
+                "out.d: {source}/src/lib.rs {SOMEWHERE}/cargo-home/registry/a/{source}.rs {SOMEWHERE}/cargo-home/registry/b/{source}.rs\n"
+            ),
+        );
+    }
+    let result = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_HOME", format!("{SOMEWHERE}/cargo-home"))
+        .env("RUSTC", &compiler)
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(result.status.success(), "{result:?}");
+    let runs = fs::read_to_string(&log).unwrap_or_default();
+    assert_eq!(runs.lines().count(), 1, "{runs}");
+}
