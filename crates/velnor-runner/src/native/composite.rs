@@ -7,8 +7,8 @@ use std::sync::Arc;
 use futures_util::FutureExt;
 use serde::Deserialize;
 
-use super::git::{ask, reachable, read_blob};
-use crate::broker::{Request, StoreWriter, TrustedFacts, mirror_path};
+use super::git::{ask, is_ancestor, read_blob};
+use crate::broker::{Request, StoreWriter, TrustedFacts, TrustedRef, mirror_path};
 use crate::context_value::{ContextValue, ContextValueError};
 use crate::exec::{
     DeclaredInputs, ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult,
@@ -254,13 +254,13 @@ async fn pinned_action_yml(
 ) -> Result<String, ExecError> {
     let mirror = mirror_path(&store_root(), facts)
         .map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
-    if !reachable(ctx, &mirror, sha).await? {
-        ask(store, ctx, |token| Request::FetchMirror { token }).await?;
-        if !reachable(ctx, &mirror, sha).await? {
-            return Err(ExecError::Invalid(format!(
-                "setup-velnor: the pin {sha} is not reachable from the trusted refs"
-            )));
-        }
+    let trusted = TrustedRef::of(facts).map_err(ExecError::Invalid)?;
+    ask(store, ctx, |token| Request::FetchTrusted { token }).await?;
+    if !is_ancestor(ctx, &mirror, sha, trusted.local()).await? {
+        return Err(ExecError::Invalid(format!(
+            "setup-velnor: the pin {sha} is not reachable from {}",
+            trusted.remote()
+        )));
     }
     read_blob(ctx, &mirror, sha, ACTION_PATH).await
 }

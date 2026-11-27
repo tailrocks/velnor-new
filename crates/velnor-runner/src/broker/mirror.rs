@@ -16,7 +16,8 @@ use super::git::{HELD_LOCK, fetch_env, git, git_args, has_commit, has_tree};
 use super::location::mirror_path;
 use super::proto::{FailedStep, Window};
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
-use super::transfer::{Transfer, fetch_wanted};
+use super::transfer::{Transfer, fetch_trusted as fetch_trusted_ref, fetch_wanted};
+use super::trusted::TrustedRef;
 use super::within;
 
 mod dirty;
@@ -196,6 +197,22 @@ async fn fetch_locked(
     }
     fetched?;
     Err(missing_tree(mirror, sha, &clone_url).await)
+}
+
+pub(crate) async fn fetch_trusted(
+    root: &Path,
+    facts: &TrustedFacts,
+    token: Option<&str>,
+) -> Result<Vec<String>> {
+    let trusted = TrustedRef::of(facts).map_err(|reason| anyhow!(reason))?;
+    let (mirror, _lock) = open(root, facts).await?;
+    remove_ref_locks(&mirror).await?;
+    let notices = drop_broken_refs(&mirror).await?;
+    let env = fetch_env(facts.server_url.url(), token);
+    fetch_trusted_ref(&mirror, &facts.clone_url(), &trusted, &env)
+        .await
+        .with_context(|| format!("fetch {}", trusted.remote()))?;
+    Ok(notices)
 }
 
 async fn missing_tree(git_dir: &Path, sha: &str, clone_url: &str) -> anyhow::Error {

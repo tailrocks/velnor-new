@@ -8,6 +8,7 @@ use anyhow::Result;
 
 use super::facts::TrustedFacts;
 use super::git::{git, git_args, has_tree};
+use super::trusted::TrustedRef;
 
 #[derive(Clone, Copy)]
 pub(super) enum Transfer {
@@ -29,6 +30,22 @@ pub(super) async fn fetch_wanted(
         fetched = fetch_refs(mirror, clone_url, vec![spec], env, transfer).await;
     }
     fetched
+}
+
+pub(super) async fn fetch_trusted(
+    mirror: &Path,
+    clone_url: &str,
+    trusted: &TrustedRef,
+    env: &[(OsString, OsString)],
+) -> Result<()> {
+    fetch_refs(
+        mirror,
+        clone_url,
+        vec![trusted.refspec()],
+        env,
+        Transfer::Incremental,
+    )
+    .await
 }
 
 async fn fetch_refs(

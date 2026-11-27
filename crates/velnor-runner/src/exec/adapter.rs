@@ -17,7 +17,7 @@ use crate::expr::ExprEnv;
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 
-const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
+pub const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 const CANCEL_GRACE_ENV: &str = "VELNOR_CANCEL_GRACE_MS";
 
 fn cancel_grace() -> Duration {

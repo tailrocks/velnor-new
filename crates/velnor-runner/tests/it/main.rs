@@ -181,6 +181,7 @@ mod native_setup_velnor;
 mod native_setup_velnor_admission;
 mod native_setup_velnor_contexts;
 mod native_setup_velnor_fetch;
+mod native_setup_velnor_ref;
 #[path = "exec_offload.rs"]
 mod offload;
 #[path = "exec_parity.rs"]

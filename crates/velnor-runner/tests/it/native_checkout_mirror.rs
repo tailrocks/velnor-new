@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+use velnor_runner::exec::CANCEL_GRACE;
+
 use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, commit, finish, git};
 
@@ -277,7 +279,7 @@ pub(crate) fn exits_cancelled_while_the_mirror_lock_is_held(rig: &Rig, job: &Pat
             .status()
             .context("run kill")?;
         assert!(signalled.success());
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + CANCEL_GRACE.saturating_sub(Duration::from_secs(1));
         while runner.try_wait()?.is_none() {
             if Instant::now() > deadline {
                 let _ = runner.kill();
@@ -375,7 +377,7 @@ fn a_cancelled_fetch_leaves_no_git_helper_behind() -> Result<()> {
         .status()?;
     assert!(signalled.success());
     let ran = finish(runner)?;
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + CANCEL_GRACE.saturating_sub(Duration::from_secs(1));
     while alive(&pid) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }

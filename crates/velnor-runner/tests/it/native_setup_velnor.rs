@@ -84,25 +84,6 @@ fn setup_velnor_ignores_git_from_the_step_path() -> Result<()> {
 }
 
 #[test]
-fn setup_velnor_rejects_a_reference_that_is_not_a_commit_sha() -> Result<()> {
-    let world = World::new()?;
-    world.publish_action(&real_action()?)?;
-    for reference in ["main", "abc123", &"g".repeat(40), &"a".repeat(41)] {
-        let ran = world.run(
-            &real_job(&world, "setup_velnor_real_action", reference)?,
-            &[],
-        )?;
-        assert_refused(
-            &ran,
-            &format!(
-                "unsupported: setup-velnor reference '{reference}' is not a 40 digit commit sha"
-            ),
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn setup_velnor_rejects_a_nested_uses() -> Result<()> {
     let world = World::new()?;
     let action = format!("{}    - uses: actions/checkout@v4\n", real_action()?);
@@ -125,6 +106,7 @@ fn setup_velnor_fails_when_the_action_is_not_in_the_mirror() -> Result<()> {
     ] {
         if published {
             world.publish_action(&real_action()?)?;
+            std::fs::remove_dir_all(world.upstream()).context("remove the upstream")?;
         }
         let ran = world.run(&real_job(&world, "setup_velnor_real_action", &absent)?, &[])?;
         let lines = ran.lines();

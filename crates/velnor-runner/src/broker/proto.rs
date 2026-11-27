@@ -58,6 +58,9 @@ pub(crate) enum Request {
     FetchMirror {
         token: Option<Token>,
     },
+    FetchTrusted {
+        token: Option<Token>,
+    },
     RepairMirror {
         token: Option<Token>,
         window: Window,

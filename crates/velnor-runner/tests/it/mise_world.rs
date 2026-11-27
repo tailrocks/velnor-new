@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use crate::exec_support::{Ran, Scratch};
 use crate::mise_store::StoreMode;
 
+const DEFAULT_SERVER: &str = "file:///velnor-test";
 pub(crate) const VERSION: &str = "2026.11.10";
 pub(crate) const SHA_PLACEHOLDER: &str = "__SETUP_VELNOR_SHA__";
 pub(crate) const CONFIG: &str = "[settings]\nlockfile = true\n\n[tools]\nnode = \"26.13.1\"\n";
@@ -131,8 +132,19 @@ impl World {
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
-        self.store
-            .join("git/file%3A%2F%2F%2Fvelnor-test/tailrocks/velnor-new/1.git")
+        crate::native_checkout_layout::mirror_in(&self.store, &self.server_url(), 1)
+    }
+
+    pub(crate) fn server_url(&self) -> String {
+        if self.upstream().exists() {
+            format!("file://{}", self.root.join("up").display())
+        } else {
+            DEFAULT_SERVER.to_owned()
+        }
+    }
+
+    pub(crate) fn upstream(&self) -> PathBuf {
+        self.root.join("up/tailrocks/velnor-new.git")
     }
 
     pub(crate) fn binary_dir(&self) -> PathBuf {
@@ -193,9 +205,16 @@ impl World {
         let directory = source.join("actions/setup-velnor");
         std::fs::create_dir_all(&directory).context("create the action source")?;
         std::fs::write(directory.join("action.yml"), action).context("write action.yml")?;
-        git(&source, &["init", "--quiet"])?;
+        git(&source, &["init", "--quiet", "-b", "main"])?;
         git(&source, &["add", "."])?;
         git(&source, &["commit", "--quiet", "--message", "action"])?;
+        let upstream = self.upstream();
+        std::fs::create_dir_all(&upstream).context("create the upstream")?;
+        git(&upstream, &["init", "--quiet", "--bare"])?;
+        git(
+            &source,
+            &["push", "--quiet", &upstream.to_string_lossy(), "main"],
+        )?;
         let mirror = self.mirror();
         std::fs::create_dir_all(mirror.with_file_name("")).context("create the mirror parent")?;
         git(
@@ -206,7 +225,9 @@ impl World {
     }
 
     pub(crate) fn with_text(&self, job: &Path, replace: &[(&str, &str)]) -> Result<PathBuf> {
-        let mut text = std::fs::read_to_string(job).context("read the job fixture")?;
+        let mut text = std::fs::read_to_string(job)
+            .context("read the job fixture")?
+            .replace(DEFAULT_SERVER, &self.server_url());
         for (from, to) in replace {
             ensure!(text.contains(from), "{from} is not in {}", job.display());
             text = text.replace(from, to);
