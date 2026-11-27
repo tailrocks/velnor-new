@@ -10,7 +10,7 @@ use futures_util::future::BoxFuture;
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
-use super::step::{Limits, ProcessSpec, capture, run};
+use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 
@@ -18,8 +18,24 @@ const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
 pub type StepFuture<'a> = BoxFuture<'a, Result<StepResult, ExecError>>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputValue {
+    Literal(String),
+    Deferred,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclaredInputs {
+    Known(BTreeMap<String, InputValue>),
+    Unknown,
+}
+
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
+
+    fn problem(&self, _inputs: &DeclaredInputs) -> Option<String> {
+        None
+    }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a>;
 }
@@ -63,6 +79,7 @@ pub struct StepContext<'a> {
     pub env: BTreeMap<String, String>,
     pub workspace: &'a Path,
     pub temp: &'a Path,
+    pub github_token: Option<String>,
     pub cancel: Option<JobCancel>,
     pub(super) outputs: Vec<(String, String)>,
     pub(super) groups: &'a Groups,
@@ -78,7 +95,35 @@ impl std::fmt::Debug for StepContext<'_> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProcessOutcome {
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
 impl StepContext<'_> {
+    pub(crate) async fn run_isolated(
+        &mut self,
+        spec: (&str, &[String], &Path, &[(String, String)]),
+        quiet: bool,
+    ) -> Result<ProcessOutcome, ExecError> {
+        let (program, args, dir, env) = spec;
+        let spec = ProcessSpec {
+            program,
+            args,
+            dir,
+            env,
+            isolated: true,
+        };
+        let limits = Limits {
+            timeout: None,
+            cancel: self.cancel.as_ref(),
+            groups: self.groups,
+        };
+        run_isolated(&spec, &limits, (!quiet).then_some(&mut *self.out)).await
+    }
+
     pub fn log(&mut self, text: &str) {
         self.out.line(text);
     }
@@ -106,6 +151,7 @@ impl StepContext<'_> {
             args,
             dir: self.workspace,
             env: &env,
+            isolated: false,
         };
         let limits = Limits {
             timeout: None,
@@ -127,6 +173,7 @@ impl StepContext<'_> {
             args,
             dir: self.workspace,
             env: &env,
+            isolated: false,
         };
         let limits = Limits {
             timeout: None,
@@ -143,6 +190,7 @@ pub(super) struct AdapterCall<'a> {
     pub(super) env: BTreeMap<String, String>,
     pub(super) workspace: &'a Path,
     pub(super) temp: &'a Path,
+    pub(super) github_token: Option<String>,
     pub(super) cancel: Option<JobCancel>,
     pub(super) timeout: Option<Timeout>,
     pub(super) groups: &'a Groups,
@@ -166,6 +214,7 @@ pub(super) async fn invoke(
         env: call.env,
         workspace: call.workspace,
         temp: call.temp,
+        github_token: call.github_token,
         cancel: Some(step_cancel.clone()),
         outputs: Vec::new(),
         groups: call.groups,

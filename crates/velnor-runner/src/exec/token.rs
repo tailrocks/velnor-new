@@ -3,6 +3,7 @@
 
 use serde_json::{Map, Value as Json};
 
+use super::{DeclaredInputs, InputValue};
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::expr::{ExprEnv, ExprError, Value, evaluate_expression, evaluate_template};
 use crate::job_message::context_data::member;
@@ -24,33 +25,81 @@ fn number_text(number: &serde_json::Number) -> String {
     Value::Number(number.as_f64().unwrap_or(f64::NAN)).convert_to_string()
 }
 
-pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
+enum Scalar<'a> {
+    Template(&'a str),
+    Expression(&'a str),
+    Plain(String),
+}
+
+fn classify(token: &Json) -> Result<Scalar<'_>, ExprError> {
     match token {
-        Json::String(text) => evaluate_template(text, env),
-        Json::Bool(value) => Ok(value.to_string()),
-        Json::Number(number) => Ok(number_text(number)),
-        Json::Null => Ok(String::new()),
+        Json::String(text) => Ok(Scalar::Template(text)),
+        Json::Bool(value) => Ok(Scalar::Plain(value.to_string())),
+        Json::Number(number) => Ok(Scalar::Plain(number_text(number))),
+        Json::Null => Ok(Scalar::Plain(String::new())),
         Json::Array(_) => Err(invalid("array")),
         Json::Object(object) => {
-            let text = |name: &str| member(object, name).and_then(Json::as_str);
-            match tag(object)? {
-                LITERAL => evaluate_template(text("lit").unwrap_or_default(), env),
-                BASIC_EXPRESSION | INSERT_EXPRESSION => {
-                    Ok(evaluate_expression(text("expr").unwrap_or_default(), env)?
-                        .convert_to_string())
-                }
-                BOOLEAN => Ok(member(object, "bool")
-                    .and_then(Json::as_bool)
-                    .unwrap_or(false)
-                    .to_string()),
-                NUMBER => Ok(member(object, "num")
-                    .and_then(Json::as_number)
-                    .map_or_else(|| "0".to_owned(), number_text)),
-                NULL => Ok(String::new()),
-                other => Err(invalid(&format!("type {other}"))),
-            }
+            let text = |name: &str| {
+                member(object, name)
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+            };
+            Ok(match tag(object)? {
+                LITERAL => Scalar::Template(text("lit")),
+                BASIC_EXPRESSION | INSERT_EXPRESSION => Scalar::Expression(text("expr")),
+                BOOLEAN => Scalar::Plain(
+                    member(object, "bool")
+                        .and_then(Json::as_bool)
+                        .unwrap_or(false)
+                        .to_string(),
+                ),
+                NUMBER => Scalar::Plain(
+                    member(object, "num")
+                        .and_then(Json::as_number)
+                        .map_or_else(|| "0".to_owned(), number_text),
+                ),
+                NULL => Scalar::Plain(String::new()),
+                other => return Err(invalid(&format!("type {other}"))),
+            })
         }
     }
+}
+
+pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
+    match classify(token)? {
+        Scalar::Template(text) => evaluate_template(text, env),
+        Scalar::Expression(source) => Ok(evaluate_expression(source, env)?.convert_to_string()),
+        Scalar::Plain(text) => Ok(text),
+    }
+}
+
+fn declared_value(token: &Json) -> Result<InputValue, ExprError> {
+    Ok(match classify(token)? {
+        Scalar::Template(text) if !text.contains("${{") => InputValue::Literal(text.to_owned()),
+        Scalar::Plain(text) => InputValue::Literal(text),
+        Scalar::Template(_) | Scalar::Expression(_) => InputValue::Deferred,
+    })
+}
+
+pub(super) fn declared(token: &Json) -> Result<DeclaredInputs, ExprError> {
+    if expression_of(token)?.is_some() {
+        return Ok(DeclaredInputs::Unknown);
+    }
+    let mut folded: Vec<(String, InputValue)> = Vec::new();
+    for (key, value) in pairs(token)? {
+        let InputValue::Literal(name) = declared_value(key)? else {
+            return Ok(DeclaredInputs::Unknown);
+        };
+        let value = declared_value(value)?;
+        match folded
+            .iter_mut()
+            .find(|(known, _)| ordinal_ignore_case_eq(known, &name))
+        {
+            Some(entry) => entry.1 = value,
+            None => folded.push((name, value)),
+        }
+    }
+    Ok(DeclaredInputs::Known(folded.into_iter().collect()))
 }
 
 fn tag(object: &Map<String, Json>) -> Result<i64, ExprError> {

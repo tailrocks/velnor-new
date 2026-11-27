@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use super::adapter::{AdapterCall, invoke};
-use super::contexts::set_output;
+use super::contexts::{github_token, set_output};
 use super::env_files::{Collected, FileCommands, failure, save_summary};
 use super::evaluate;
 use super::job::Job;
@@ -152,6 +152,7 @@ impl Job<'_> {
             env: process_env.iter().cloned().collect(),
             workspace: &self.options.workspace,
             temp: &self.options.temp,
+            github_token: github_token(self.message),
             cancel: limits.cancel.cloned(),
             timeout: limits.timeout,
             groups: limits.groups,

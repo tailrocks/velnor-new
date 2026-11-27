@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::adapter::AdapterRegistry;
+use std::collections::BTreeMap;
+
+use super::adapter::{AdapterRegistry, DeclaredInputs};
 use super::context::JobContext;
 use super::shell;
+use super::token;
 use crate::job_message::{ActionReferenceType, ActionStep, ActionStepKind, AgentJobRequestMessage};
 
 pub(super) fn reference(step: &ActionStep) -> Option<String> {
@@ -51,10 +54,17 @@ fn step_problem(
         return Some("step without a definition reference".to_owned());
     }
     if let Some(reference) = reference(step) {
-        return adapters
-            .find(&reference)
-            .is_none()
-            .then(|| format!("uses {reference}"));
+        let Some(adapter) = adapters.find(&reference) else {
+            return Some(format!("uses {reference}"));
+        };
+        let inputs = match step.inputs.as_ref() {
+            Some(inputs) => match token::declared(inputs) {
+                Ok(declared) => declared,
+                Err(error) => return Some(format!("{reference} {error}")),
+            },
+            None => DeclaredInputs::Known(BTreeMap::new()),
+        };
+        return adapter.problem(&inputs);
     }
     shell_problem(step, context)
 }

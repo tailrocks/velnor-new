@@ -104,6 +104,10 @@ pub(super) fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> O
         .and_then(|(_, variable)| variable.value.as_ref().map(|value| value.expose().as_str()))
 }
 
+pub(super) fn github_token(message: &AgentJobRequestMessage) -> Option<String> {
+    variable(message, GITHUB_TOKEN_VARIABLE).map(str::to_owned)
+}
+
 pub(super) fn upsert(entries: &mut Vec<(String, ContextValue)>, name: &str, value: ContextValue) {
     entries.retain(|(known, _)| !known.eq_ignore_ascii_case(name));
     entries.push((name.to_owned(), value));

@@ -15,6 +15,8 @@ mod drain;
 mod exec_builder;
 #[path = "exec_cli.rs"]
 mod exec_cli;
+#[path = "exec_declared_inputs.rs"]
+mod exec_declared_inputs;
 #[path = "exec_support.rs"]
 mod exec_support;
 #[cfg(target_os = "linux")]
@@ -85,6 +87,34 @@ mod hardening;
 mod job_message;
 #[path = "exec_late.rs"]
 mod late;
+mod native_checkout;
+mod native_checkout_attack;
+mod native_checkout_cancel;
+mod native_checkout_contend;
+mod native_checkout_depth;
+mod native_checkout_env;
+mod native_checkout_expression;
+mod native_checkout_facts;
+mod native_checkout_inputs;
+mod native_checkout_layout;
+mod native_checkout_links;
+mod native_checkout_marker;
+mod native_checkout_mirror;
+mod native_checkout_mirror_files;
+mod native_checkout_mirror_owned;
+mod native_checkout_mirror_refs;
+mod native_checkout_packed;
+mod native_checkout_preflight;
+mod native_checkout_quarantine;
+mod native_checkout_refetch;
+mod native_checkout_repair;
+mod native_checkout_sink;
+mod native_checkout_torn;
+mod native_checkout_unsound;
+mod native_checkout_upkeep;
+mod native_checkout_walk;
+mod native_checkout_window;
+mod native_checkout_workspace;
 #[path = "exec_offload.rs"]
 mod offload;
 #[path = "exec_parity.rs"]

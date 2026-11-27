@@ -10,7 +10,9 @@ use velnor_runner::exec::{
     StepFuture, StepResult, run_job,
 };
 
-use crate::exec_support::{Scratch, fixture_message, run_fixture, run_path};
+use velnor_runner::job_message::AgentJobRequestMessage;
+
+use crate::exec_support::{Scratch, fixture_message, fixture_path, run_fixture, run_path};
 
 #[test]
 fn shell_forms_expand_like_github() -> Result<()> {
@@ -188,5 +190,59 @@ async fn registered_adapter_runs_uses_step_and_feeds_outputs() -> Result<()> {
     assert_eq!(run.steps[0].name, "Greet");
     assert_eq!(run.steps[0].context_id.as_deref(), Some("foo"));
     assert_eq!(run.steps[1].outcome, StepResult::Succeeded);
+    Ok(())
+}
+
+#[tokio::test]
+async fn refusal_annotations_are_masked() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let body = std::fs::read_to_string(fixture_path("unsupported-uses"))?.replace(
+        "\"Steps\": [",
+        "\"Variables\": {\"HIDDEN\": {\"Value\": \"actions/foo@v1\", \"IsSecret\": true}},\n  \"Steps\": [",
+    );
+    let run = run_job(
+        &AgentJobRequestMessage::parse_json(&body)?,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    assert_eq!(run.result, JobResult::Failed);
+    let messages: Vec<&str> = run
+        .annotations
+        .iter()
+        .map(|annotation| annotation.message.as_str())
+        .collect();
+    assert_eq!(messages, ["unsupported: uses ***"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn workflow_command_annotations_mask_message_title_and_file() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let body = std::fs::read_to_string(fixture_path("annotations"))?
+        .replace(
+            "\"Steps\": [",
+            "\"Variables\": {\"HIDDEN\": {\"Value\": \"sekret-token\", \"IsSecret\": true}},\n  \"Steps\": [",
+        )
+        .replace("T%3A1,file=a.rs", "t-sekret-token,file=sekret-token.rs")
+        .replace("bad%0Athing", "bad sekret-token");
+    let run = run_job(
+        &AgentJobRequestMessage::parse_json(&body)?,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    let error = run
+        .annotations
+        .iter()
+        .find(|annotation| annotation.level == AnnotationLevel::Error && annotation.line == Some(3))
+        .context("the error annotation")?;
+    assert_eq!(error.message, "bad ***");
+    assert_eq!(error.title.as_deref(), Some("t-***"));
+    assert_eq!(error.file.as_deref(), Some("***.rs"));
     Ok(())
 }

@@ -83,6 +83,26 @@ impl Drop for Groups {
     }
 }
 
+pub(super) struct GroupGuard(Option<Pid>);
+
+impl GroupGuard {
+    pub(super) fn arm(group: Option<Pid>) -> Self {
+        Self(group)
+    }
+
+    pub(super) fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        if let Some(group) = self.0 {
+            let _ = kill_process_group(group, Signal::KILL);
+        }
+    }
+}
+
 fn group_alive(group: Pid) -> bool {
     test_kill_process_group(group).is_ok()
 }
