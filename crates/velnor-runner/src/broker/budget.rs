@@ -96,38 +96,46 @@ fn scan(owner: &OwnedFd) -> Result<Scan> {
     Ok(found)
 }
 
-pub(super) fn make_room(layout: &Layout, target: &Target, incoming: u64) -> Result<()> {
-    let now = Timestamp(layout.now());
-    let owner = layout.open_owner(&target.owner)?;
-    let mut found = scan(&owner).context("total the cache entries of this repository")?;
-    let evicted = evict(&found.entries, now, layout.budget.saturating_sub(incoming));
-    if evicted.is_empty() && found.empty.is_empty() {
-        return Ok(());
+fn evict_listed(
+    layout: &Layout,
+    owner: &OwnedFd,
+    placed: &HashMap<EntryId, Placed>,
+    evicted: Vec<EntryId>,
+) -> Result<Vec<OsString>> {
+    if evicted.is_empty() {
+        return Ok(Vec::new());
     }
     let aside = layout.open_aside()?;
     let mut changed = BTreeMap::new();
     for id in evicted {
-        let Some(place) = found.placed.get(&id) else {
+        let Some(place) = placed.get(&id) else {
             continue;
         };
         let scope = match changed.entry(place.scope.clone()) {
             Slot::Occupied(open) => open.into_mut(),
-            Slot::Vacant(slot) => {
-                match openat(&owner, slot.key(), directory_flags(), Mode::empty()) {
-                    Ok(scope) => slot.insert(scope),
-                    Err(Errno::NOENT) => continue,
-                    Err(error) => return Err(error).context("open the scope of an evicted entry"),
-                }
-            }
+            Slot::Vacant(slot) => match openat(owner, slot.key(), directory_flags(), Mode::empty())
+            {
+                Ok(scope) => slot.insert(scope),
+                Err(Errno::NOENT) => continue,
+                Err(error) => return Err(error).context("open the scope of an evicted entry"),
+            },
         };
         remove_entry(scope.as_fd(), &place.entry, aside.as_fd()).context("evict a cache entry")?;
     }
     for scope in changed.values() {
         sync_fd(scope, "the cache scope of an evicted entry")?;
     }
-    found.empty.extend(changed.into_keys());
-    for scope in &found.empty {
-        layout.retire_scope(&owner, scope)?;
+    Ok(changed.into_keys().collect())
+}
+
+pub(super) fn make_room(layout: &Layout, target: &Target, incoming: u64) -> Result<()> {
+    let now = Timestamp(layout.now());
+    let owner = layout.open_owner(&target.owner)?;
+    let found = scan(&owner).context("total the cache entries of this repository")?;
+    let evicted = evict(&found.entries, now, layout.budget.saturating_sub(incoming));
+    let emptied = evict_listed(layout, &owner, &found.placed, evicted)?;
+    for scope in found.empty.iter().chain(&emptied) {
+        let _ = layout.retire_scope(&owner, scope);
     }
     Ok(())
 }

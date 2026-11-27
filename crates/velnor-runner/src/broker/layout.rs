@@ -260,11 +260,15 @@ impl Layout {
 
     fn lock_file(&self, name: &str, what: &str) -> Result<(OwnedFd, OwnedFd)> {
         let root = self.open_root()?;
-        let (locks, _) = enter_directory_as(root.as_fd(), OsStr::new("locks"), PRIVATE)
-            .context("open the lock directory")?;
+        drop(
+            enter_directory_as(root.as_fd(), OsStr::new("locks"), PRIVATE)
+                .context("open the lock directory")?
+                .0,
+        );
+        let locks = open_path(&self.root.join("locks")).context("open the lock directory")?;
         let file = openat(
-            &locks,
-            name,
+            CWD,
+            self.root.join("locks").join(name),
             OFlags::RDWR | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::CLOEXEC,
             Mode::from_bits_truncate(0o600),
         )

@@ -270,6 +270,9 @@ async fn an_eviction_syncs_the_scope_it_removed_an_entry_from_before_the_save_re
         .with_clock(clock_of(&now));
     let response = upload(&writer, "k-a", &bytes(100)).await;
     assert!(published(&response), "{response:?}");
+    at(&now, 5);
+    let response = upload(&writer, "k-c", &bytes(10)).await;
+    assert!(published(&response), "{response:?}");
     let owner = super::cache::CacheOwner::of(&fixture.facts);
     let other = velnor_cache_rules::Scope("refs/heads/other".to_owned());
     let evicted = super::cache::entry_dir(&fixture.root(), &owner, &other, &version(), "k-a");
