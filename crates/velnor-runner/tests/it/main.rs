@@ -90,6 +90,7 @@ mod late;
 mod native_cache;
 mod native_cache_access;
 mod native_cache_alias;
+mod native_cache_expressions;
 mod native_cache_fidelity;
 mod native_cache_ids;
 mod native_cache_inputs;
