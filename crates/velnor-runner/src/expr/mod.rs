@@ -8,6 +8,7 @@ mod eval;
 mod format;
 mod from_json;
 mod from_json_depth;
+mod from_json_number;
 mod glob;
 mod hash_files;
 mod index;

@@ -58,7 +58,7 @@ fn expr_from_json_replaces_exact_repeats_then_merges_case_insensitively() -> Res
 
 #[test]
 fn expr_from_json_caps_nesting_at_64() -> Result<()> {
-    let arrays = |depth: usize| format!("{}1{}", "[".repeat(depth - 1), "]".repeat(depth - 1));
+    let arrays = |depth: usize| format!("{}1{}", "[".repeat(depth), "]".repeat(depth));
     let objects = |depth: usize| format!("{}1{}", "{\"a\":".repeat(depth), "}".repeat(depth));
     assert!(dump(&arrays(64))?.contains('1'));
     assert!(dump(&objects(64))?.contains('1'));
@@ -67,7 +67,7 @@ fn expr_from_json_caps_nesting_at_64() -> Result<()> {
     let object_path = vec!["a"; 64].join(".");
     for depth in [65, 128, 200] {
         assert_eq!(
-            depth_error(&arrays(depth + 1))?,
+            depth_error(&arrays(depth))?,
             max_depth(&array_path, 1, 65),
             "{depth} arrays"
         );
@@ -124,5 +124,108 @@ fn expr_from_json_reports_a_syntax_error_that_precedes_the_depth() -> Result<()>
     let broken = format!("[1 2,{}", "[".repeat(70));
     assert!(depth_error(&broken)?.starts_with(PREFIX));
     assert!(error_text("fromJSON('[] [[')", &empty_env())?.starts_with(PREFIX));
+    Ok(())
+}
+fn merged_lookup(count: usize, key: impl Fn(usize) -> String, lookup: &str) -> Result<String> {
+    let body = (0..count)
+        .map(|index| format!("\"{}\":{index}", key(index)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let env = env_with_json(&format!("{{{body}}}"))?;
+    let started = std::time::Instant::now();
+    let value = text(&format!("fromJSON(env.J).{lookup}"), &env)?;
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(10),
+        "{count} keys took {elapsed:?}"
+    );
+    Ok(value)
+}
+
+#[test]
+fn expr_from_json_merges_thousands_of_keys_in_linear_time() -> Result<()> {
+    assert_eq!(merged_lookup(8_000, |i| format!("k{i}"), "k3")?, "3");
+    assert_eq!(
+        merged_lookup(8_000, |i| format!("k{}", i % 4_000), "k3")?,
+        "4003"
+    );
+    assert_eq!(
+        merged_lookup(
+            20_000,
+            |i| format!("{}{}", if i % 2 == 0 { 'k' } else { 'K' }, i / 2),
+            "k3",
+        )?,
+        "7"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_from_json_reads_numbers_beyond_the_double_range_as_infinity() -> Result<()> {
+    assert_eq!(read("1e400", "")?, "Infinity");
+    assert_eq!(read("-1e400", "")?, "-Infinity");
+    assert_eq!(read("2e308", "")?, "Infinity");
+    assert_eq!(read(&"9".repeat(400), "")?, "Infinity");
+    assert_eq!(read("[1,1e400,-1e400,2]", "[1]")?, "Infinity");
+    assert_eq!(read("[1,1e400,-1e400,2]", "[2]")?, "-Infinity");
+    assert_eq!(read("[1,1e400,-1e400,2]", "[3]")?, "2");
+    assert_eq!(
+        read(r#"{"a":1e400,"b":{"c":-1.5E+999}}"#, ".b.c")?,
+        "-Infinity"
+    );
+    assert_eq!(read(r#"{"a":1,"a":1e400}"#, ".a")?, "Infinity");
+    assert_eq!(read(r#"{"a":1e400,"A":2}"#, ".a")?, "2");
+    assert_eq!(read(r#"{"a":1e400, "b" : 3}"#, ".b")?, "3");
+
+    assert_eq!(read("1e308", " > 0")?, "true");
+    assert_eq!(read(r#""1e400""#, "")?, "1e400");
+    assert_eq!(read(r#"["a\"1e400",3]"#, "[0]")?, "a\"1e400");
+    assert!(error_text("fromJSON('01e400')", &empty_env())?.starts_with(PREFIX));
+    assert!(error_text("fromJSON('1.e400')", &empty_env())?.starts_with(PREFIX));
+    assert!(error_text("fromJSON('-1E+')", &empty_env())?.starts_with(PREFIX));
+    assert_eq!(
+        depth_error("[1e400 2]")?,
+        format!("{PREFIX} expected `,` or `]` at line 1 column 8")
+    );
+    Ok(())
+}
+
+fn path_of(key_json: &str) -> Result<String> {
+    let json = format!("{{{key_json}:{}", "[".repeat(64));
+    let message = depth_error(&json)?;
+    let path = message
+        .split_once(" Path '")
+        .and_then(|(_, rest)| rest.rsplit_once("', line"))
+        .map(|(path, _)| path.to_string());
+    path.ok_or_else(|| anyhow::anyhow!("no path in {message}"))
+        .map(|path| path.trim_end_matches("[0]").to_string())
+}
+
+#[test]
+fn expr_from_json_escapes_key_names_in_the_path_like_newtonsoft() -> Result<()> {
+    assert_eq!(path_of("\"a\\u002eb\"")?, "['a.b']");
+    assert_eq!(path_of("\"a\\u0062c\"")?, "abc");
+    assert_eq!(path_of("\"a\\/b\"")?, "['a/b']");
+    assert_eq!(path_of("\"a\\\"b\"")?, "['a\"b']");
+    assert_eq!(path_of("\"\\ud83d\\ude00\"")?, "\u{1f600}");
+    assert_eq!(
+        path_of("\"a\\tb\\nc\\rd\\fe\\bf\\\\g\\u0085\\u2028\\u2029\\u0001\"")?,
+        "['a\\tb\\nc\\rd\\fe\\bf\\\\g\\u0085\\u2028\\u2029\\u0001']"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_from_json_tracks_the_path_through_scalars_and_siblings() -> Result<()> {
+    let scalars = "[1,true,null,2.5,\"s\",{\"a\":1},[2],";
+    assert_eq!(
+        depth_error(&format!("{scalars}{}", "[".repeat(64)))?,
+        max_depth(&format!("[7]{}", "[0]".repeat(63)), 1, scalars.len() + 64)
+    );
+    let siblings = "{\"x\":1,\"y\":\"s\",\"z\":{\"c\":\"d\",\"e\":";
+    assert_eq!(
+        depth_error(&format!("{siblings}{}", "[".repeat(63)))?,
+        max_depth(&format!("z.e{}", "[0]".repeat(62)), 1, siblings.len() + 63)
+    );
     Ok(())
 }
