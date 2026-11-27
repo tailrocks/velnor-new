@@ -27,6 +27,8 @@ export interface Config {
   ps_table: string;
   default_branch?: string;
   organization?: string;
+  state?: string;
+  existing_labels?: string[];
 }
 interface Message {
   id: number;
@@ -55,6 +57,7 @@ interface Refusal {
 export interface Reply {
   status?: number;
   patch?: Record<string, unknown>;
+  headers?: Record<string, string>;
 }
 
 const configured = process.env.VELNOR_FAKE_DIR;
@@ -111,8 +114,9 @@ export function record(label: string, detail: Record<string, string | number | b
   });
 }
 
-export function reply(status: number, value: unknown): never {
+export function reply(status: number, value: unknown, headers: Record<string, string> = {}): never {
   const text = value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value);
+  if (Object.keys(headers).length > 0) writeSync(2, `${headers["retry-after"] ?? ""}\n${headers["x-ratelimit-remaining"] ?? ""}`);
   writeSync(1, `${text}${status}`);
   process.exit(0);
 }

@@ -3,6 +3,8 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/orb_calls.rs"]
+mod orb_calls;
 #[path = "rust_runner_public/store.rs"]
 mod store;
 #[path = "rust_runner_public/support.rs"]

@@ -12,7 +12,7 @@ use velnor_runner_github::{
 use zeroize::Zeroizing;
 
 use super::owned;
-use crate::config::RepositoryConnection;
+use crate::config::{ConnectionId, RepositoryConnection};
 use crate::error::{HostError, RustRunnerFailure};
 use crate::https::HttpsTransport;
 use crate::launch_blocking::ListenFault;
@@ -89,17 +89,14 @@ pub(super) fn open_scale_set(
     let id = match found {
         ScaleSetFound::Found(view) => {
             if shared {
-                match owned::created(state, &binding.connection_id)? {
-                    Some(recorded) if recorded != view.id => {
-                        return Err(EnsureError::Uncertain.into());
-                    }
-                    Some(_) => {}
-                    None => owned::record_created(state, &binding.connection_id, view.id)?,
-                }
+                adopt_shared(state, &binding.connection_id, view.id)?;
             }
             view.id
         }
         ScaleSetFound::NotFound => {
+            if shared {
+                owned::record_intent(state, &binding.connection_id)?;
+            }
             let created = create_runner_scale_set(
                 &mut transport,
                 &ScaleSetCreate {
@@ -118,6 +115,20 @@ pub(super) fn open_scale_set(
         }
     };
     Ok((admin, id))
+}
+
+fn adopt_shared(
+    state: &Path,
+    connection: &ConnectionId,
+    scale_set_id: i64,
+) -> Result<(), ListenFault> {
+    match owned::created(state, connection)? {
+        Some(recorded) if recorded == scale_set_id => Ok(()),
+        None if owned::intended(state, connection)? => {
+            Ok(owned::record_created(state, connection, scale_set_id)?)
+        }
+        _ => Err(EnsureError::Uncertain.into()),
+    }
 }
 
 pub(super) fn renew_admin(pat: &str, binding: &RepositoryConnection) -> Result<Admin, ListenFault> {

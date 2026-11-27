@@ -16,7 +16,7 @@ impl SourceFault {
 
     pub(crate) const fn lookup(error: WorkflowRunError) -> Self {
         match error {
-            WorkflowRunError::Uncertain | WorkflowRunError::HttpStatus(408 | 429 | 500..=599) => {
+            WorkflowRunError::Uncertain | WorkflowRunError::HttpStatus(408 | 429) => {
                 Self::Retryable("source_api_unavailable")
             }
             _ => Self::Final(HostError::Identity),

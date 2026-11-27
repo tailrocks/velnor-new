@@ -16,6 +16,7 @@ pub struct RunningJob {
     child: tokio::process::Child,
     store: PathBuf,
     jit_name: String,
+    binary: String,
 }
 
 impl RustRunnerLauncher {
@@ -27,12 +28,14 @@ impl RustRunnerLauncher {
         let paths = JobPaths::of(reservation);
         let store = Store::open(&self.host_store)?;
         store.require_runner_binary()?;
+        let binary = store.runner_digest()?;
         store.write_jit(paths.jit_name(), jit.expose().as_bytes())?;
         match self.spawn_runner(&paths) {
             Ok(child) => Ok(RunningJob {
                 child,
                 store: self.host_store.clone(),
                 jit_name: paths.jit_name().to_owned(),
+                binary,
             }),
             Err(error) => {
                 let _ = store.remove_jit(paths.jit_name());
@@ -59,6 +62,10 @@ impl RustRunnerLauncher {
 }
 
 impl RunningJob {
+    pub(super) fn binary(&self) -> &str {
+        &self.binary
+    }
+
     pub async fn wait(&mut self) -> Result<ExitStatus, HostError> {
         let status = self.child.wait().await;
         self.remove_jit_file();

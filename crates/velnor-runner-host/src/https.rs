@@ -17,6 +17,7 @@ mod retry_after;
 
 const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024;
 const SCRATCH_ATTEMPTS: u32 = 16;
+const RATE_LIMITED_STATUS: u16 = 429;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpsTransport {
@@ -108,13 +109,18 @@ fn perform_with_scratch(
     let config = crate::curl_config::encode(&url, request, &body_path, max_time)
         .map_err(|_| CurlFail::Reset)?;
     let response = process::run_curl(config.as_str(), deadline, max_response_bytes)?;
-    retry_after::record_response(base, response.status, response.retry_after.as_deref());
+    let status = if response.rate_limited {
+        RATE_LIMITED_STATUS
+    } else {
+        response.status
+    };
+    retry_after::record_response(base, status, response.retry_after.as_deref());
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }
-    trace(base, request, response.status, response.body.len());
+    trace(base, request, status, response.body.len());
     Ok(Exchange {
-        status: response.status,
+        status,
         body: response.body,
     })
 }

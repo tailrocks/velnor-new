@@ -9,9 +9,9 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use super::events::{Event, parse_events, wait_for, wait_unless};
-use super::fixtures::{TestResult, host_toml, organization_host_toml};
+use super::fixtures::{TestResult, bun, curl_wrapper, host_toml, organization_host_toml};
 
-const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.sh");
+const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 const FAKE_GITHUB: [&str; 6] = [
     "fake_curl.ts",
     "fake_github_admin.ts",
@@ -31,31 +31,6 @@ pub(super) struct World {
     pub(super) github: PathBuf,
     pub(super) tag: &'static str,
     child: Option<Child>,
-}
-
-fn bun() -> TestResult<PathBuf> {
-    let output = Command::new("bun")
-        .args(["--print", "process.execPath"])
-        .output()
-        .map_err(|_| "the controller tests need Bun on PATH")?;
-    let path = String::from_utf8(output.stdout)?.trim().to_owned();
-    if !output.status.success() || !Path::new(&path).is_absolute() {
-        return Err("bun did not report its executable".into());
-    }
-    Ok(PathBuf::from(path))
-}
-
-fn curl_wrapper(bun: &Path) -> String {
-    format!(
-        "#!/bin/sh\n\
-         input=\"$VELNOR_FAKE_DIR/seen/.curl.$$\"\n\
-         cat > \"$input\"\n\
-         {bun} \"$VELNOR_FAKE_DIR/fake_curl.ts\" < \"$input\"\n\
-         status=$?\n\
-         rm -f \"$input\"\n\
-         exit \"$status\"\n",
-        bun = bun.display()
-    )
 }
 
 impl World {
@@ -315,23 +290,31 @@ impl World {
         Ok(())
     }
 
-    pub(super) fn heartbeat_ms(&self) -> Option<u64> {
+    fn heartbeat(&self) -> Option<Value> {
         let text = std::fs::read_to_string(self.state.join("rust-runner-controller.json")).ok()?;
-        serde_json::from_str::<Value>(&text).ok()?["updated_unix_ms"].as_u64()
+        serde_json::from_str(&text).ok()
+    }
+
+    pub(super) fn heartbeat_ms(&self) -> Option<u64> {
+        self.heartbeat()?["updated_unix_ms"].as_u64()
     }
 
     pub(super) fn heartbeat_hash(&self) -> Option<String> {
-        let text = std::fs::read_to_string(self.state.join("rust-runner-controller.json")).ok()?;
-        serde_json::from_str::<Value>(&text).ok()?["config_sha256"]
+        self.heartbeat()?["config_sha256"]
             .as_str()
             .map(str::to_owned)
     }
 
     pub(super) fn heartbeat_phase(&self) -> Option<String> {
-        let text = std::fs::read_to_string(self.state.join("rust-runner-controller.json")).ok()?;
-        serde_json::from_str::<Value>(&text).ok()?["phase"]
-            .as_str()
-            .map(str::to_owned)
+        self.heartbeat()?["phase"].as_str().map(str::to_owned)
+    }
+
+    pub(super) fn terminate(&self) -> TestResult<()> {
+        let child = self.child.as_ref().ok_or("no controller child")?;
+        Command::new("kill")
+            .args(["-TERM", &child.id().to_string()])
+            .status()?;
+        Ok(())
     }
 
     fn cleanup(&mut self) {
@@ -346,9 +329,26 @@ impl World {
             let _ = child.kill();
             let _ = child.wait();
         }
+        self.kill_grandchildren();
         let deadline = Instant::now() + Duration::from_secs(10);
         while Instant::now() < deadline && !self.kill_orbs().is_empty() {
             std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn kill_grandchildren(&self) {
+        let Ok(entries) = std::fs::read_dir(&self.seen) else {
+            return;
+        };
+        for entry in entries.filter_map(Result::ok) {
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("grandchild.")
+                && let Ok(pid) = std::fs::read_to_string(entry.path())
+            {
+                let _ = Command::new("kill").args(["-9", pid.trim()]).status();
+            }
         }
     }
 
@@ -356,11 +356,11 @@ impl World {
         let Ok(output) = Command::new("ps").args(["-axo", "pid=,args="]).output() else {
             return Vec::new();
         };
-        let orb = format!("/bin/sh {}/orb ", self.root.display());
+        let orb = format!("{}/orb", self.root.display());
         let found: Vec<String> = String::from_utf8_lossy(&output.stdout)
             .lines()
             .filter_map(|line| line.trim().split_once(' '))
-            .filter(|(_, args)| args.trim_start().starts_with(&orb))
+            .filter(|(_, args)| args.split_whitespace().nth(1) == Some(orb.as_str()))
             .map(|(pid, _)| pid.to_owned())
             .collect();
         for pid in &found {

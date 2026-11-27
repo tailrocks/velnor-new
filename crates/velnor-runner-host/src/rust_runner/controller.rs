@@ -38,7 +38,7 @@ use cleanup::CleanupProof;
 use connection::Live;
 use github::Acquisition;
 use readiness::Phase;
-use runner::{Change, RunnerHealth};
+use runner::RunnerHealth;
 use source::{LaunchGrant, Refusal};
 use startup::Started;
 
@@ -112,6 +112,7 @@ enum Event {
     Ended {
         reservation: ReservationId,
         exit: JobExit,
+        binary: String,
     },
     Proved {
         reservation: ReservationId,
@@ -146,7 +147,7 @@ struct Run<'a> {
     tasks: JoinSet<Event>,
     machine_ok: bool,
     machine_checking: bool,
-    runner: RunnerHealth,
+    runner: &'a mut RunnerHealth,
     stopping: bool,
 }
 
@@ -157,6 +158,29 @@ pub async fn run_rust_runner_host(
     daemon_lock: &DaemonLock,
     launcher: RustRunnerLauncher,
     shutdown: impl Future<Output = ()>,
+) -> Result<RustRunnerExit, ListenFault> {
+    let mut shutdown = Shutdown(Box::pin(shutdown));
+    let mut health = RunnerHealth::new();
+    run_with_health(
+        config,
+        pats,
+        state,
+        daemon_lock,
+        launcher,
+        &mut shutdown,
+        &mut health,
+    )
+    .await
+}
+
+async fn run_with_health(
+    config: HostConfig,
+    pats: ConnectionPats,
+    state: &Path,
+    daemon_lock: &DaemonLock,
+    launcher: RustRunnerLauncher,
+    shutdown: &mut Shutdown<'_>,
+    health: &mut RunnerHealth,
 ) -> Result<RustRunnerExit, ListenFault> {
     let state = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
@@ -172,8 +196,7 @@ pub async fn run_rust_runner_host(
         config_sha256,
         launcher,
     };
-    let mut shutdown = Shutdown(Box::pin(shutdown));
-    let connections = match startup::start(&cx, &config, &pats, &mut shutdown).await? {
+    let connections = match startup::start(&cx, &config, &pats, shutdown).await? {
         Started::Ready(connections) => connections,
         Started::Shutdown => return Ok(RustRunnerExit::Shutdown),
         Started::ConfigChanged => return Ok(RustRunnerExit::ConfigChanged),
@@ -190,10 +213,10 @@ pub async fn run_rust_runner_host(
         tasks: JoinSet::new(),
         machine_ok: true,
         machine_checking: false,
-        runner: RunnerHealth::new(),
+        runner: health,
         stopping: false,
     };
-    let result = run.serve(&mut shutdown).await;
+    let result = run.serve(shutdown).await;
     if let Err(fault) = &result
         && !matches!(fault, ListenFault::Host(HostError::Lock))
         && !run.stopping
@@ -257,23 +280,23 @@ impl Run<'_> {
                 message_id,
                 result,
             } => self.on_acked(connection, message_id, result),
-            Event::Ended { reservation, exit } => {
-                self.note_exit(&exit);
+            Event::Ended {
+                reservation,
+                exit,
+                binary,
+            } => {
+                self.note_exit(&exit, &binary);
                 self.begin_proof(reservation, exit);
             }
             Event::Proved {
                 reservation,
                 result,
             } => self.on_proved(reservation, result),
-            Event::RunnerBinary(result) => match self.runner.checked(result.ok()) {
-                Some(Change::Recorded) => {
-                    eprintln!("rust-runner recorded the failing runner binary");
-                }
-                Some(Change::Replaced) => {
+            Event::RunnerBinary(result) => {
+                if self.runner.checked(result.ok()) {
                     eprintln!("rust-runner runner binary changed; admission reopens");
                 }
-                None => {}
-            },
+            }
             Event::Machine(result) => {
                 self.machine_checking = false;
                 match result {

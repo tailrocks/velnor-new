@@ -3,7 +3,8 @@
 
 use std::error::Error;
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -291,4 +292,29 @@ pub(super) fn with_run_repository(mut offer: Value, repository_id: u64) -> Value
 pub(super) fn with_jit_failure(mut offer: Value) -> Value {
     offer["jit_returns"] = json!(500);
     offer
+}
+
+pub(super) fn bun() -> TestResult<PathBuf> {
+    let output = Command::new("bun")
+        .args(["--print", "process.execPath"])
+        .output()
+        .map_err(|_| "the controller tests need Bun on PATH")?;
+    let path = String::from_utf8(output.stdout)?.trim().to_owned();
+    if !output.status.success() || !Path::new(&path).is_absolute() {
+        return Err("bun did not report its executable".into());
+    }
+    Ok(PathBuf::from(path))
+}
+
+pub(super) fn curl_wrapper(bun: &Path) -> String {
+    format!(
+        "#!/bin/sh\n\
+         input=\"$VELNOR_FAKE_DIR/seen/.curl.$$\"\n\
+         cat > \"$input\"\n\
+         {bun} \"$VELNOR_FAKE_DIR/fake_curl.ts\" < \"$input\"\n\
+         status=$?\n\
+         rm -f \"$input\"\n\
+         exit \"$status\"\n",
+        bun = bun.display()
+    )
 }

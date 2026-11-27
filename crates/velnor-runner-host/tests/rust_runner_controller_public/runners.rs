@@ -6,8 +6,9 @@ use std::os::unix::fs::PermissionsExt;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{acquire_ids, assert_clean, jit_name, reservation, runner_name};
+use super::child::{HOST_BLOCKING, SERVED_SECRET};
 use super::events::wait_for;
-use super::fixtures::{TestResult, WORKFLOW, push_offer};
+use super::fixtures::{TestResult, WORKFLOW, hex_sha256, push_offer};
 use super::harness::World;
 
 const FAILING: &str = "FAKE_RUNNER_EXIT=1\n";
@@ -56,6 +57,79 @@ fn failed(world: &World, count: usize) -> u64 {
     reservation(&world.gh("jit")[count - 1])
 }
 
+pub(super) fn reopens_for_a_binary_replaced_while_the_failing_job_ran(
+    test: &str,
+) -> TestResult<()> {
+    let mut world = World::new("T10c", 1, true)?;
+    world.configure_orb(FAILING)?;
+    queue(&world, 1)?;
+    world.spawn_controller(test, &[])?;
+    proven(&world, failed(&world, 1));
+    queue(&world, 2)?;
+    proven(&world, failed(&world, 2));
+    world.configure_orb("FAKE_RUNNER_HOLD=1\nFAKE_RUNNER_EXIT=1\n")?;
+    queue(&world, 3)?;
+    let third = held(&world, 3);
+    replace_binary(&world)?;
+    world.release(&jit_name(third))?;
+    proven(&world, third);
+    world.configure_orb(HELD)?;
+    queue(&world, 4)?;
+    wait_for(
+        "offer 4 to be acquired although the binary changed before the first check",
+        60,
+        || acquire_ids(&world) == ["1", "2", "3", "4"],
+    );
+    let fourth = held(&world, 4);
+    world.release(&jit_name(fourth))?;
+    proven(&world, fourth);
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn keeps_the_health_across_a_config_reload(test: &str) -> TestResult<()> {
+    let mut world = World::new("T10b", 1, true)?;
+    world.configure_orb(FAILING)?;
+    queue(&world, 1)?;
+    let orb = world.root.join("orb");
+    let store = world.store.clone();
+    world.spawn_controller(
+        test,
+        &[
+            (HOST_BLOCKING, "1"),
+            (SERVED_SECRET, "pat"),
+            ("VELNOR_ORB", &orb.to_string_lossy()),
+            ("VELNOR_HOST_STORE", &store.to_string_lossy()),
+        ],
+    )?;
+    proven(&world, failed(&world, 1));
+    queue(&world, 2)?;
+    proven(&world, failed(&world, 2));
+    queue(&world, 3)?;
+    proven(&world, failed(&world, 3));
+    wait_for("the runner_failing heartbeat", 30, || {
+        world.heartbeat_phase().as_deref() == Some("runner_failing")
+    });
+    world.write_host_toml(2)?;
+    let reloaded = hex_sha256(&std::fs::read(world.state.join("host.toml"))?);
+    wait_for("the controller of the new configuration", 90, || {
+        world.heartbeat_hash().as_deref() == Some(reloaded.as_str())
+            && matches!(
+                world.heartbeat_phase().as_deref(),
+                Some("ready" | "runner_failing")
+            )
+    });
+    assert_eq!(
+        world.heartbeat_phase().as_deref(),
+        Some("runner_failing"),
+        "a config reload reset the runner health"
+    );
+    world.terminate()?;
+    assert_eq!(world.finish(30)?, "Ok(())");
+    Ok(())
+}
+
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T10", 1, true)?;
     world.configure_orb(FAILING)?;
@@ -98,11 +172,6 @@ fn closed_until_the_binary_changes(world: &World) -> TestResult<()> {
         },
     );
     assert_eq!(world.heartbeat_phase().as_deref(), Some("runner_failing"));
-    wait_for("the failing binary to be recorded", 30, || {
-        world
-            .child_stderr()
-            .contains("rust-runner recorded the failing runner binary")
-    });
     replace_binary(world)?;
     let fourth = held(world, 4);
     assert_eq!(acquire_ids(world), ["1", "2", "3", "4"]);

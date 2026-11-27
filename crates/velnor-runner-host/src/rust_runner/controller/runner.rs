@@ -3,19 +3,9 @@
 
 pub(super) const FAILURE_LIMIT: u32 = 3;
 
-pub(super) enum Change {
-    Recorded,
-    Replaced,
-}
-
 pub(super) enum RunnerHealth {
-    Working {
-        failures: u32,
-    },
-    Failing {
-        baseline: Option<String>,
-        checking: bool,
-    },
+    Working { failures: u32 },
+    Failing { binary: String, checking: bool },
 }
 
 impl RunnerHealth {
@@ -27,7 +17,7 @@ impl RunnerHealth {
         matches!(self, Self::Failing { .. })
     }
 
-    pub(super) fn exited(&mut self, success: bool) -> Option<u32> {
+    pub(super) fn exited(&mut self, success: bool, binary: &str) -> Option<u32> {
         let Self::Working { failures } = self else {
             return None;
         };
@@ -39,7 +29,7 @@ impl RunnerHealth {
         let count = *failures;
         if count >= FAILURE_LIMIT {
             *self = Self::Failing {
-                baseline: None,
+                binary: binary.to_owned(),
                 checking: false,
             };
             return Some(count);
@@ -57,22 +47,15 @@ impl RunnerHealth {
         }
     }
 
-    pub(super) fn checked(&mut self, digest: Option<String>) -> Option<Change> {
-        let Self::Failing { baseline, checking } = self else {
-            return None;
+    pub(super) fn checked(&mut self, digest: Option<String>) -> bool {
+        let Self::Failing { binary, checking } = self else {
+            return false;
         };
         *checking = false;
-        let digest = digest?;
-        match baseline {
-            None => {
-                *baseline = Some(digest);
-                Some(Change::Recorded)
-            }
-            Some(known) if *known != digest => {
-                *self = Self::new();
-                Some(Change::Replaced)
-            }
-            Some(_) => None,
+        if digest.is_some_and(|current| current != *binary) {
+            *self = Self::new();
+            return true;
         }
+        false
     }
 }

@@ -33,6 +33,8 @@ mod organization;
 mod runners;
 #[path = "rust_runner_controller_public/shutdown.rs"]
 mod shutdown;
+#[path = "rust_runner_controller_public/signals.rs"]
+mod signals;
 #[path = "rust_runner_controller_public/slot.rs"]
 mod slot;
 #[path = "rust_runner_controller_public/source.rs"]
@@ -107,10 +109,59 @@ fn rust_runner_controller_defers_a_check_github_could_not_answer() -> TestResult
 }
 
 #[test]
+fn rust_runner_controller_defers_a_rate_limited_check() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => unavailable::rate_limited("rust_runner_controller_defers_a_rate_limited_check"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_refuses_a_403_without_rate_limit_signals() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => unavailable::refused_for_good(
+            "rust_runner_controller_refuses_a_403_without_rate_limit_signals",
+        ),
+    }
+}
+
+#[test]
 fn rust_runner_controller_degrades_after_three_failed_runner_exits() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),
         None => runners::run("rust_runner_controller_degrades_after_three_failed_runner_exits"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_keeps_the_runner_health_across_a_config_reload() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => runners::keeps_the_health_across_a_config_reload(
+            "rust_runner_controller_keeps_the_runner_health_across_a_config_reload",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_reopens_for_a_binary_replaced_while_the_failing_job_ran() -> TestResult<()>
+{
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => runners::reopens_for_a_binary_replaced_while_the_failing_job_ran(
+            "rust_runner_controller_reopens_for_a_binary_replaced_while_the_failing_job_ran",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_ends_the_official_controller_on_a_termination_signal() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => signals::run(
+            "rust_runner_controller_ends_the_official_controller_on_a_termination_signal",
+        ),
     }
 }
 
@@ -130,12 +181,53 @@ fn rust_runner_controller_reports_stale_heartbeats_as_degraded() -> TestResult<(
 }
 
 #[test]
-fn rust_runner_controller_adopts_only_its_own_organization_scale_set() -> TestResult<()> {
+fn rust_runner_controller_holds_a_same_named_organization_set_nobody_recorded() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),
-        None => {
-            organization::run("rust_runner_controller_adopts_only_its_own_organization_scale_set")
-        }
+        None => organization::holds_a_matching_set_nobody_recorded(
+            "rust_runner_controller_holds_a_same_named_organization_set_nobody_recorded",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_adopts_an_organization_set_after_a_recorded_intent() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::adopts_a_set_after_a_recorded_intent(
+            "rust_runner_controller_adopts_an_organization_set_after_a_recorded_intent",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_records_its_intent_before_creating_an_organization_set() -> TestResult<()>
+{
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::records_the_intent_before_it_creates_a_set(
+            "rust_runner_controller_records_its_intent_before_creating_an_organization_set",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_refuses_an_organization_set_recorded_for_another_id() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::refuses_a_set_the_record_assigns_to_another_id(
+            "rust_runner_controller_refuses_an_organization_set_recorded_for_another_id",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_refuses_an_organization_set_with_other_labels() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::refuses_a_set_with_other_labels(
+            "rust_runner_controller_refuses_an_organization_set_with_other_labels",
+        ),
     }
 }
 

@@ -30,6 +30,7 @@ const ORB_DEADLINE: Duration = Duration::from_secs(60);
 const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
+const HOST_STORE_ENVIRONMENT: &str = "VELNOR_HOST_STORE";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
 const PID_NAMESPACE: [&str; 6] = [
     "unshare",
@@ -71,7 +72,11 @@ impl RustRunnerLauncher {
     #[must_use]
     pub fn from_environment() -> Self {
         let orb = std::env::var_os(ORB_ENVIRONMENT).map_or_else(|| DEFAULT_ORB.into(), Into::into);
-        Self::new(orb, Path::new("/").join(DEFAULT_HOST_STORE_UNDER_ROOT))
+        let store = std::env::var_os(HOST_STORE_ENVIRONMENT).map_or_else(
+            || Path::new("/").join(DEFAULT_HOST_STORE_UNDER_ROOT),
+            Into::into,
+        );
+        Self::new(orb, store)
     }
 
     #[must_use]

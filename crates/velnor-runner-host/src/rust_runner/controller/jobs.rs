@@ -15,6 +15,7 @@ async fn supervise(
     mut job: RunningJob,
     stop: oneshot::Receiver<()>,
 ) -> Event {
+    let binary = job.binary().to_owned();
     let exit = tokio::select! {
         status = job.wait() => if let Ok(status) = status {
             JobExit::Exited(status)
@@ -27,7 +28,11 @@ async fn supervise(
             JobExit::Stopped
         }
     };
-    Event::Ended { reservation, exit }
+    Event::Ended {
+        reservation,
+        exit,
+        binary,
+    }
 }
 
 impl Run<'_> {
@@ -62,11 +67,11 @@ impl Run<'_> {
         }
     }
 
-    pub(super) fn note_exit(&mut self, exit: &JobExit) {
+    pub(super) fn note_exit(&mut self, exit: &JobExit, binary: &str) {
         let JobExit::Exited(status) = exit else {
             return;
         };
-        if let Some(failures) = self.runner.exited(status.success()) {
+        if let Some(failures) = self.runner.exited(status.success(), binary) {
             eprintln!(
                 "rust-runner closing admission after {failures} consecutive failed runner exits until the runner binary changes"
             );

@@ -69,7 +69,9 @@ pub fn encode(
     text.push_str(crate::https::method_name(request.method));
     text.push_str("\"\n");
     quoted(&mut text, "url", &[url])?;
-    text.push_str("\noutput = \"-\"\nwrite-out = \"%{http_code}%{stderr}%header{retry-after}\"\n");
+    text.push_str(
+        "\noutput = \"-\"\nwrite-out = \"%{http_code}%{stderr}%header{retry-after}\\n%header{x-ratelimit-remaining}\"\n",
+    );
     write!(text, "max-time = {}.{:03}", millis / 1000, millis % 1000)
         .map_err(|_| CurlConfigError)?;
     for (name, value) in &request.headers {

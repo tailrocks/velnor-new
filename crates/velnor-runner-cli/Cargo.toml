@@ -39,6 +39,10 @@ name = "daemon_lock_process"
 path = "tests/daemon_lock_process.rs"
 
 [[test]]
+name = "launch_mode_public"
+path = "tests/launch_mode_public.rs"
+
+[[test]]
 name = "home_resolution_public"
 path = "tests/home_resolution_public.rs"
 

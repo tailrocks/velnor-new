@@ -25,8 +25,6 @@ mod disconnect;
 mod drain;
 mod journal_show;
 mod marker;
-#[cfg(test)]
-mod mode_tests;
 
 use connect::{ConnectRequest, connect};
 use disconnect::disconnect;
