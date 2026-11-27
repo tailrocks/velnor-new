@@ -214,11 +214,18 @@ impl<'a> Graph<'a> {
             .filter_map(|prefix| self.inputs.get(&Some(RepoPath::new(prefix).ok()?)))
             .flatten()
             .collect();
-        let everywhere = self.inputs.get(&None).into_iter().flatten();
-        let listed: Vec<&InputOwner> = locked.iter().copied().chain(everywhere).collect();
-        let pick =
-            |name: &PackageName, manifest: &RepoPath| listed.iter().any(|o| o.is(name, manifest));
-        self.seed_where(&pick, path, walk);
+        let everywhere: Vec<&InputOwner> = self.inputs.get(&None).into_iter().flatten().collect();
+        let input = SelectionReason::Input(path.clone());
+        self.seed_where(
+            &|name, manifest| locked.iter().any(|o| o.is(name, manifest)),
+            &input,
+            walk,
+        );
+        self.seed_where(
+            &|name, manifest| everywhere.iter().any(|o| o.is(name, manifest)),
+            &SelectionReason::UnresolvedInclude,
+            walk,
+        );
         if self.place_lock(path, walk) {
             return;
         }
@@ -273,7 +280,11 @@ impl<'a> Graph<'a> {
             generated_workflow(self.changes, path),
         ) {
             Class::Nothing => {}
-            Class::Packages(names) => self.seed_where(&|name, _| names.contains(&name), path, walk),
+            Class::Packages(names) => self.seed_where(
+                &|name, _| names.contains(&name),
+                &SelectionReason::Input(path.clone()),
+                walk,
+            ),
             Class::Global(trigger) => walk.trigger(&trigger),
             Class::Unknown if !locked.is_empty() => {}
             Class::Unknown => {
@@ -350,10 +361,10 @@ impl<'a> Graph<'a> {
             )
     }
 
-    fn seed_where(&self, pick: Pick<'_>, path: &RepoPath, walk: &mut Walk<'a>) {
+    fn seed_where(&self, pick: Pick<'_>, reason: &SelectionReason, walk: &mut Walk<'a>) {
         for (manifest, node) in &self.nodes {
             if node.root.is_some() && pick(node.name, manifest) {
-                walk.seed(manifest, SelectionReason::Input(path.clone()));
+                walk.seed(manifest, reason.clone());
             }
         }
     }

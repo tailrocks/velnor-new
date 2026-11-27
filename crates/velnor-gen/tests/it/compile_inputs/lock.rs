@@ -91,7 +91,10 @@ fn a_path_the_inputs_lock_lists_selects_its_packages_even_when_rules_ignore_it()
         vec![
             (
                 &["CHANGELOG.md"],
-                vec![none.clone(), some(&[("cli", input("CHANGELOG.md"))])],
+                vec![
+                    none.clone(),
+                    some(&[("cli", SelectionReason::UnresolvedInclude)]),
+                ],
             ),
             (
                 &["unknown/file.bin"],

@@ -27,15 +27,23 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
     inputs
 }
 
+enum Embedded<'t> {
+    Literal(&'t str),
+    ManifestDir(String),
+    Output,
+    Unresolved,
+}
+
 struct Scan<'a> {
     view: &'a RepoView,
+    directory: Option<&'a RepoPath>,
     reads: BTreeSet<Option<RepoPath>>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
 }
 
 impl<'a> Scan<'a> {
-    fn new(view: &'a RepoView, member: &RustMember, members: &[&RustMember]) -> Self {
+    fn new(view: &'a RepoView, member: &'a RustMember, members: &[&RustMember]) -> Self {
         let nested: Vec<&RepoPath> = members
             .iter()
             .filter(|other| other.manifest != member.manifest)
@@ -67,6 +75,7 @@ impl<'a> Scan<'a> {
             .collect();
         Self {
             view,
+            directory: member.directory.as_ref(),
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
@@ -99,15 +108,20 @@ impl<'a> Scan<'a> {
             let [
                 Token::Punct('!'),
                 Token::Punct('(' | '[' | '{'),
-                argument,
-                ..,
+                argument @ ..,
             ] = &tokens[at + 1..]
             else {
                 continue;
             };
-            let resolved = match argument {
-                Token::Str(literal) => literal_path(literal).and_then(|path| resolve(file, path)),
-                _ => None,
+            let resolved = match embedded(argument) {
+                Embedded::Literal(literal) => {
+                    literal_path(literal).and_then(|path| resolve(&directory_of(file), path))
+                }
+                Embedded::ManifestDir(joined) => joined
+                    .strip_prefix('/')
+                    .and_then(|path| resolve(&self.directory_parts(), path)),
+                Embedded::Output => continue,
+                Embedded::Unresolved => None,
             };
             let Some(resolved) = resolved else {
                 self.reads.insert(None);
@@ -118,6 +132,12 @@ impl<'a> Scan<'a> {
             }
             self.reads.insert(Some(resolved));
         }
+    }
+
+    fn directory_parts(&self) -> Vec<&'a str> {
+        self.directory.map_or_else(Vec::new, |directory| {
+            directory.as_str().split('/').collect()
+        })
     }
 
     fn follow(&mut self, included: &RepoPath) {
@@ -140,12 +160,58 @@ impl<'a> Scan<'a> {
     }
 }
 
-fn resolve(file: &RepoPath, literal: &str) -> Option<RepoPath> {
+fn embedded<'t>(argument: &[Token<'t>]) -> Embedded<'t> {
+    match argument {
+        [Token::Str(literal), ..] => Embedded::Literal(literal),
+        [
+            Token::Ident("concat"),
+            Token::Punct('!'),
+            Token::Punct('('),
+            Token::Ident("env"),
+            Token::Punct('!'),
+            Token::Punct('('),
+            Token::Str(variable),
+            Token::Punct(')'),
+            rest @ ..,
+        ] => match (*variable, literals(rest)) {
+            ("CARGO_MANIFEST_DIR", Some(joined)) => Embedded::ManifestDir(joined),
+            ("OUT_DIR", Some(joined)) if !joined.split('/').any(|part| part == "..") => {
+                Embedded::Output
+            }
+            _ => Embedded::Unresolved,
+        },
+        _ => Embedded::Unresolved,
+    }
+}
+
+fn literals(rest: &[Token<'_>]) -> Option<String> {
+    let mut joined = String::new();
+    let mut rest = rest;
+    loop {
+        match rest {
+            [Token::Punct(','), Token::Str(literal), tail @ ..] => {
+                joined.push_str(literal);
+                rest = tail;
+            }
+            [Token::Punct(')'), ..] | [Token::Punct(','), Token::Punct(')'), ..] => {
+                return Some(joined);
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn directory_of(file: &RepoPath) -> Vec<&str> {
+    let mut parts: Vec<&str> = file.as_str().split('/').collect();
+    parts.pop();
+    parts
+}
+
+fn resolve(base: &[&str], literal: &str) -> Option<RepoPath> {
     if literal.starts_with('/') || literal.contains('\\') {
         return None;
     }
-    let mut parts: Vec<&str> = file.as_str().split('/').collect();
-    parts.pop();
+    let mut parts: Vec<&str> = base.to_vec();
     for part in literal.split('/') {
         match part {
             "" | "." => {}

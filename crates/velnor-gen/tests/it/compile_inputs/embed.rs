@@ -9,35 +9,55 @@ use velnor_rust::detect;
 use crate::facts::{TestResult, lib, repo};
 use crate::select::{name, path};
 
-fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
-    let view = repo(
-        vec![(
-            "Cargo.toml",
-            vec![
-                lib("app", "crates/app/Cargo.toml")?,
-                lib("tool", "crates/tool/Cargo.toml")?,
-                lib("reader", "crates/reader/Cargo.toml")?,
-                lib("left", "crates/left/Cargo.toml")?,
-            ],
-        )],
-        files,
-    )?;
+fn selections(
+    members: &[&str],
+    files: &[(&str, &str)],
+    changed_file: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let crates = members
+        .iter()
+        .map(|member| lib(member, &format!("crates/{member}/Cargo.toml")))
+        .collect::<Result<Vec<_>, _>>()?;
+    let view = repo(vec![("Cargo.toml", crates)], files)?;
     let facts = detect(&view)?;
-    let selected = |changed_file: &str| {
-        let changes = velnor_model::ChangeSet {
-            paths: BTreeSet::from([path(changed_file)]),
-            base_files: BTreeMap::new(),
-            head_files: BTreeMap::new(),
-        };
-        match velnor_rust::select(&facts, &changes).into_values().next() {
-            Some(RustSelection::Some(map)) => map.keys().map(ToString::to_string).collect(),
-            Some(RustSelection::All(_)) => vec!["*".to_owned()],
-            _ => Vec::new(),
-        }
+    let changes = velnor_model::ChangeSet {
+        paths: BTreeSet::from([path(changed_file)]),
+        base_files: BTreeMap::new(),
+        head_files: BTreeMap::new(),
     };
+    Ok(
+        match velnor_rust::select(&facts, &changes).into_values().next() {
+            Some(RustSelection::Some(map)) => map
+                .into_iter()
+                .map(|(name, reason)| (name.to_string(), reason.to_string()))
+                .collect(),
+            Some(RustSelection::All(_)) => vec![("*".to_owned(), String::new())],
+            _ => Vec::new(),
+        },
+    )
+}
+
+fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
     for (file, expected) in check {
-        assert_eq!(&selected(file), expected, "{file}");
+        let names: Vec<String> = selections(&["app", "tool", "reader", "left"], files, file)?
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(&names, expected, "{file}");
     }
+    Ok(())
+}
+
+fn unresolved(source: &str) -> TestResult {
+    let files = [
+        ("crates/c/src/lib.rs", source),
+        ("crates/app/src/lib.rs", ""),
+    ];
+    assert_eq!(
+        selections(&["app", "c", "tool", "left"], &files, "docs/other.md")?,
+        [("c".to_owned(), "unresolved-include".to_owned())],
+        "{source}"
+    );
     Ok(())
 }
 
@@ -69,23 +89,106 @@ fn a_file_a_crate_embeds_selects_it_without_an_inputs_lock_line() -> TestResult 
 }
 
 #[test]
-fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() -> TestResult {
+fn a_manifest_dir_include_resolves_to_the_file_it_reads() -> TestResult {
     embedding(
         &[
             (
                 "crates/reader/src/lib.rs",
-                "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/x.rs\"));",
+                "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.rs\"));\ninclude!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../shared/gen.rs\"));\nconst G: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs\", \"/guide.md\"));\nconst L: &[u8] = include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../assets/logo.bin\"));",
             ),
+            ("crates/reader/src/x.rs", ""),
             (
-                "crates/app/src/lib.rs",
-                "include_str!(\"../../../docs/guide.md\");",
+                "shared/gen.rs",
+                "const D: &str = include_str!(\"../docs/deep.md\");",
             ),
+            ("crates/app/src/lib.rs", ""),
         ],
         &[
-            ("docs/guide.md", &["app", "reader"]),
-            ("docs/other.md", &["reader"]),
+            ("docs/guide.md", &["reader"]),
+            ("docs/deep.md", &["reader"]),
+            ("shared/gen.rs", &["reader"]),
+            ("assets/logo.bin", &["reader"]),
+            ("docs/other.md", &[]),
         ],
     )
+}
+
+#[test]
+fn an_out_dir_include_is_a_build_output_with_no_input() -> TestResult {
+    embedding(
+        &[
+            (
+                "crates/reader/src/lib.rs",
+                "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
+            ),
+            ("crates/app/src/lib.rs", ""),
+        ],
+        &[("docs/other.md", &[])],
+    )
+}
+
+#[test]
+fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reason_unresolved_include()
+-> TestResult {
+    let files = [
+        ("crates/c/src/lib.rs", "include!(env!(\"OTHER\"));"),
+        (
+            "crates/app/src/lib.rs",
+            "include_str!(\"../../../docs/guide.md\");",
+        ),
+    ];
+    assert_eq!(
+        selections(&["app", "c", "tool", "left"], &files, "docs/guide.md")?,
+        [
+            ("app".to_owned(), "input:docs/guide.md".to_owned()),
+            ("c".to_owned(), "unresolved-include".to_owned()),
+        ]
+    );
+    for source in [
+        "include!(env!(\"OTHER\"));",
+        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), suffix()));",
+        "include!(path_of!());",
+        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../../../x.rs\"));",
+        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"src/x.rs\"));",
+        "include!(concat!(env!(\"OUT_DIR\"), \"/../x.rs\"));",
+    ] {
+        unresolved(source)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_root_package_and_a_nested_member_resolve_against_their_own_manifest_dir() -> TestResult {
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![
+                lib("top", "Cargo.toml")?,
+                lib("inner", "crates/inner/Cargo.toml")?,
+            ],
+        )],
+        &[
+            (
+                "src/lib.rs",
+                "const A: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/README.md\"));",
+            ),
+            (
+                "crates/inner/src/lib.rs",
+                "const B: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs/inner.md\"));",
+            ),
+        ],
+    )?;
+    let facts = detect(&view)?;
+    let owners = |file: &str| -> Option<Vec<String>> {
+        facts
+            .compile_inputs
+            .get(&Some(path(file)))
+            .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
+    };
+    assert_eq!(owners("README.md"), Some(vec!["top".to_owned()]));
+    assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
+    assert!(!facts.compile_inputs.contains_key(&None));
+    Ok(())
 }
 
 #[test]
