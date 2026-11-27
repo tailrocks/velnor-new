@@ -18,7 +18,7 @@ mod lines;
 mod mask;
 mod output;
 mod preflight;
-mod private;
+pub(crate) mod private;
 mod shell;
 mod sink;
 mod step;

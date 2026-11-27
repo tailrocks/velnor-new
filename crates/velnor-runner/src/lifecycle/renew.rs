@@ -11,7 +11,7 @@ use tokio::time::Instant;
 
 use super::BackgroundTask;
 use crate::exec::JobCancel;
-use crate::protocol::{GitHubApiError, RunServiceClient, renew_failure_is_job_gone};
+use crate::protocol::{RunServiceClient, renew_failure_is_job_gone};
 
 const RETRY_BASE: Duration = Duration::from_secs(5);
 const RETRY_CAP: Duration = Duration::from_secs(20);
@@ -25,14 +25,6 @@ pub(super) struct RenewTarget {
     pub(super) run_service_url: String,
     pub(super) plan_id: String,
     pub(super) job_id: String,
-}
-
-fn job_is_gone(error: &anyhow::Error) -> bool {
-    renew_failure_is_job_gone(error)
-        || error
-            .chain()
-            .find_map(|cause| cause.downcast_ref::<GitHubApiError>())
-            .is_some_and(|api| api.status == 404)
 }
 
 fn retry_delay(failures: u32) -> Duration {
@@ -98,7 +90,7 @@ pub(super) fn spawn_renew(
                     give_up_at = Instant::now() + remaining.unwrap_or(interval) + lock_grace;
                     next_delay(interval, remaining)
                 }
-                Err(error) if job_is_gone(&error) => {
+                Err(error) if renew_failure_is_job_gone(&error) => {
                     give_up(
                         &mut first_renewed,
                         &cancel,

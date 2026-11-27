@@ -94,10 +94,11 @@ impl Groups {
 
     pub(super) async fn finish(&self) {
         let (groups, tracking) = self.take();
+        let Some(tracking) = tracking else {
+            return;
+        };
         kill_groups(&groups);
-        if let Some(tracking) = tracking {
-            let _ = tokio::task::spawn_blocking(move || tracking.reap()).await;
-        }
+        let _ = tokio::task::spawn_blocking(move || tracking.reap()).await;
     }
 }
 

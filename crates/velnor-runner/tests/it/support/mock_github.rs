@@ -46,6 +46,7 @@ pub(crate) enum Renew {
     ExpiringThenFailing,
     RenewedThenJobGone,
     JobGone,
+    NotFoundWithoutBody,
     ServerError,
 }
 
@@ -319,6 +320,7 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
             404,
             &json!({"source": "actions-run-service", "statusCode": 404, "message": "gone"}),
         ),
+        Renew::NotFoundWithoutBody => Reply::status(404),
         Renew::ExpiringThenFailing | Renew::ServerError => {
             Reply::json(500, &json!({"message": "unavailable"}))
         }

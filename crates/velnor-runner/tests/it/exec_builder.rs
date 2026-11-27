@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use rustix::process::{Pid, Signal, kill_process, test_kill_process};
+use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 use velnor_runner::exec::{AdapterRegistry, JobCancel, JobRun, LogSink, StepResult, run_job};
 use velnor_runner::job_message::AgentJobRequestMessage;
@@ -165,9 +165,23 @@ pub(crate) fn wait_for_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn is_running(pid: Pid) -> bool {
+    let listing = Command::new("ps")
+        .args(["-o", "stat=", "-p"])
+        .arg(pid.as_raw_nonzero().to_string())
+        .output();
+    listing.is_ok_and(|listing| {
+        String::from_utf8_lossy(&listing.stdout)
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|state| state != 'Z')
+    })
+}
+
 pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while test_kill_process(pid).is_ok() {
+    while is_running(pid) {
         if Instant::now() > deadline {
             let _ = kill_process(pid, Signal::KILL);
             bail!("process {} is still alive", pid.as_raw_nonzero());
@@ -175,6 +189,17 @@ pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
         std::thread::sleep(Duration::from_millis(20));
     }
     Ok(())
+}
+
+pub(crate) fn survives(pid: Pid, window: Duration) -> bool {
+    let deadline = Instant::now() + window;
+    while is_running(pid) {
+        if Instant::now() >= deadline {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    false
 }
 
 pub(crate) const BACKGROUND_SLEEP: &str =

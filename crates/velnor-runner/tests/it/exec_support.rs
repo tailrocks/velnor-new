@@ -11,6 +11,14 @@ use velnor_runner::exec::{RunOptions, TOOL_CACHE_VARIABLES};
 use velnor_runner::job_message::AgentJobRequestMessage;
 use velnor_runner::protocol::RunnerOs;
 
+pub(crate) fn host_os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        "Linux"
+    }
+}
+
 pub(crate) struct Scratch {
     root: PathBuf,
 }

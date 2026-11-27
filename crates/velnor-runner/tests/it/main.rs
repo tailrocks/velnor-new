@@ -125,6 +125,7 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod lifecycle;
+mod lifecycle_abandon;
 mod lifecycle_busy;
 mod lifecycle_cancel;
 mod lifecycle_cancel_timeout;

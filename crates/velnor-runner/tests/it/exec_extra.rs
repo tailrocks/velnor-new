@@ -15,7 +15,7 @@ use velnor_runner::job_message::AgentJobRequestMessage;
 use velnor_runner::protocol::RunnerOs;
 
 use crate::exec_builder::{job, run};
-use crate::exec_support::{Scratch, fixture_message, fixture_path, run_fixture, run_path};
+use crate::exec_support::{Scratch, fixture_message, fixture_path, host_os, run_fixture, run_path};
 use crate::lifecycle_support::job_replacing;
 
 #[test]
@@ -40,9 +40,10 @@ fn github_context_exports_env_and_event_file() -> Result<()> {
     let scratch = Scratch::new()?;
     let ran = run_fixture("github-context", &scratch)?;
     assert!(
-        ran.has_line(
-            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os=Linux run=42"
-        ),
+        ran.has_line(&format!(
+            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os={} run=42",
+            host_os()
+        )),
         "{}",
         ran.stdout
     );

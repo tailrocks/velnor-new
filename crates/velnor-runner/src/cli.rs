@@ -145,7 +145,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
         temp,
         tool_cache: tool_cache_from_env().unwrap_or_else(|| root.join("_tool")),
         runner_name: "velnor-exec".to_owned(),
-        os: RunnerOs::Linux,
+        os: RunnerOs::detect()?,
     };
     Ok((options, scratch))
 }

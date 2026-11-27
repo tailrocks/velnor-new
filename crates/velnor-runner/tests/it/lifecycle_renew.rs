@@ -69,6 +69,18 @@ async fn lifecycle_fails_the_job_when_the_first_renew_finds_it_gone() -> Result<
 }
 
 #[tokio::test]
+async fn lifecycle_retries_a_first_renew_that_a_404_without_a_run_service_body_refused()
+-> Result<()> {
+    let mock = first_renew_ends_with(Renew::NotFoundWithoutBody, "status=404").await?;
+
+    assert!(
+        mock.requests_to("POST", "/run/renewjob")?.len() > 1,
+        "a plain 404 is retried until the lock grace has passed"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn lifecycle_fails_the_job_when_the_first_renew_never_succeeds() -> Result<()> {
     let mock = first_renew_ends_with(Renew::ServerError, "status=500").await?;
 

@@ -8,9 +8,8 @@ use std::path::{Path, PathBuf};
 
 use super::logs::LogFiles;
 use super::{LifecycleError, RunJitOptions};
+use crate::exec::private::{PRIVATE_DIR_MODE, create_dir_with_mode};
 use crate::exec::{RunOptions, SHARED_DIR_MODE};
-
-const PRIVATE_DIR_MODE: u32 = 0o700;
 
 #[derive(Debug)]
 pub(super) struct WorkDirs {
@@ -38,10 +37,15 @@ async fn remove_dir(directory: &Path) -> std::io::Result<()> {
     }
 }
 
-async fn fresh_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
+async fn fresh_private_dir(directory: &Path) -> std::io::Result<()> {
     remove_dir(directory).await?;
-    tokio::fs::create_dir_all(directory).await?;
-    tokio::fs::set_permissions(directory, Permissions::from_mode(mode)).await
+    create_dir_with_mode(directory, PRIVATE_DIR_MODE).await
+}
+
+async fn fresh_shared_dir(directory: &Path) -> std::io::Result<()> {
+    remove_dir(directory).await?;
+    create_dir_with_mode(directory, SHARED_DIR_MODE).await?;
+    tokio::fs::set_permissions(directory, Permissions::from_mode(SHARED_DIR_MODE)).await
 }
 
 impl WorkDirs {
@@ -75,7 +79,7 @@ impl WorkDirs {
             .await
             .map_err(|source| work_dir_error(&self.root, source))?;
         if !exists {
-            tokio::fs::create_dir_all(&self.root)
+            create_dir_with_mode(&self.root, SHARED_DIR_MODE)
                 .await
                 .map_err(|source| work_dir_error(&self.root, source))?;
             self.created_root = true;
@@ -83,12 +87,11 @@ impl WorkDirs {
                 .await
                 .map_err(|source| work_dir_error(&self.root, source))?;
         }
-        for (directory, mode) in [
-            (&self.run.workspace, SHARED_DIR_MODE),
-            (&self.run.temp, PRIVATE_DIR_MODE),
-            (&self.logs, PRIVATE_DIR_MODE),
-        ] {
-            fresh_dir(directory, mode)
+        fresh_shared_dir(&self.run.workspace)
+            .await
+            .map_err(|source| work_dir_error(&self.run.workspace, source))?;
+        for directory in [&self.run.temp, &self.logs] {
+            fresh_private_dir(directory)
                 .await
                 .map_err(|source| work_dir_error(directory, source))?;
         }

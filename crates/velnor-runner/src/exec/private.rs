@@ -8,11 +8,18 @@ use tokio::io::AsyncWriteExt;
 
 use super::ExecError;
 
-pub(super) async fn create_dir(path: &Path) -> Result<(), ExecError> {
+pub(crate) const PRIVATE_DIR_MODE: u32 = 0o700;
+
+pub(crate) async fn create_dir_with_mode(path: &Path, mode: u32) -> std::io::Result<()> {
     DirBuilder::new()
         .recursive(true)
-        .mode(0o700)
+        .mode(mode)
         .create(path)
+        .await
+}
+
+pub(super) async fn create_dir(path: &Path) -> Result<(), ExecError> {
+    create_dir_with_mode(path, PRIVATE_DIR_MODE)
         .await
         .map_err(|source| ExecError::io(format!("create {}", path.display()), source))
 }
