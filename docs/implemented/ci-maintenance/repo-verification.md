@@ -39,6 +39,9 @@ The table is a quick reference for the common commands. It is not the gate and i
 | `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast --ignore-default-filter -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
 | `rust`, lint with the `local-mode` feature | `cargo clippy --workspace --all-targets --locked --features local-mode -- -D warnings` |
 | `rust`, docs with the `local-mode` feature | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features local-mode` |
+| `rust`, tests with the `test-support` feature | `cargo nextest run --workspace --locked --features test-support --profile ci --no-fail-fast --ignore-default-filter -E 'package(velnor-runner)' --no-tests=fail` |
+| `rust`, test lane guard with the `test-support` feature | `cargo build --locked -p velnor-ci --bin velnor-ci && target/debug/velnor-ci lane-guard --features test-support --filter 'package(velnor-runner)'` |
+| `rust`, lint with the `test-support` feature | `cargo clippy --workspace --all-targets --locked --features test-support -- -D warnings` |
 | `rust`, per-package check | `cargo check -p <pkg> --locked`, once for each selected package |
 | `policy`, dependencies | `cargo deny --config deny.toml --locked check` |
 | `policy`, unused dependencies | `cargo machete` |
@@ -56,13 +59,29 @@ The table is a quick reference for the common commands. It is not the gate and i
 
 `cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
 
-Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above run the whole workspace without it. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test.
+Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above do not read `TEST_FILTER`. The `rust`, tests row runs every test in the workspace. The `local-mode` and `test-support` rows select the tests of one package with their own `-E` filter. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test.
 
 The `test-maintenance-helpers` mise task runs the repository-only maintenance helper tests. No generated workflow job runs it, so it is a local full run and not a required check. It first runs `scripts/test-setup-velnor-action.py`, the mise binary digest tests, the tag ruleset drift test and `cargo fetch --locked`, then runs the `velnor-archive-guard` tests with `--no-tests fail`.
 
 `hk.pkl` defines the other local checks: `rumdl`, the toolchain mirror check (`scripts/check-rust-toolchain-mirror.sh`), the `cargo test` ban check (`scripts/check-test-cargo.sh`) and the secret scans. The `pre-commit` and `pre-push` hooks run the secret scans.
 
-For documentation-only changes, run `alint validate-config && alint check --fail-on-warning` and `rumdl check` on the changed Markdown files. In `repository-checks.yml`, the `helper-gates` and `secret-scan` jobs have no path filter, so they also run for a documentation-only change in a same-repository pull request. Run them locally too: the three `helper-gates` rows of the table, and the scan steps of the `secret-scan` job (the table row above).
+For any change, run the jobs that `velnor-ci plan` selects, plus the always-on jobs. CI computes the selection in its `rust-plan` job with `. "$VELNOR_EXEC" plan --explain`. Locally, build the binary, then run the plan with the changed paths, relative to the repository root:
+
+```sh
+cargo build --locked -p velnor-ci --bin velnor-ci
+target/debug/velnor-ci plan --explain --changed <path>...
+```
+
+Set `GITHUB_OUTPUT` to a file to read the `rust_*` and `lint_*` values that the plan writes. Without `--changed` and without a pull request event, the plan selects everything.
+
+The always-on jobs run for every change:
+
+- `Jactionlint` (`lint-jactionlint`, `ci.yml` line 747). Its `if:` checks the event, the draft state, the labels and the merge-queue skip output, and no path.
+- `Alint` (`lint-alint`, `ci.yml` line 774). Its `if:` is the same as the `Jactionlint` job.
+- `Helper gates` (`helper-gates`, `repository-checks.yml` line 63). It runs for a pull request from the same repository and for a merge group.
+- `Secret scanners` (`secret-scan`, `repository-checks.yml` line 155). It runs for a pull request from the same repository, for a push and for a merge group.
+
+The `Required` job (`ci.yml` line 1113) collects the results of the other jobs and runs no check. Run the table rows for the always-on jobs locally: the `alint` and `jactionlint` rows, the three `helper-gates` rows and the `secret-scan` row. `rumdl` is not a CI job. It runs from `hk.pkl` and `mise.toml`, so run `rumdl check` on the changed Markdown files as well.
 
 ---
 
