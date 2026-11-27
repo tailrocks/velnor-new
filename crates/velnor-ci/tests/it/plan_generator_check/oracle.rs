@@ -33,6 +33,16 @@ fn vendor(repo: &Repo, library: &str) {
 
 const FOO_MANIFEST: &str = "[package]\nname = \"foo\"\nversion = \"1.0.0\"\nedition = \"2024\"\n";
 
+fn isolated(program: &str) -> Command {
+    let mut command = Command::new(program);
+    command
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_TARGET_DIR")
+        .env_remove("CARGO_BUILD_BUILD_DIR")
+        .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
+    command
+}
+
 fn toolchain_path() -> String {
     let found = Command::new("rustup")
         .args(["which", "--toolchain", pinned_channel(), "cargo"])
@@ -50,7 +60,7 @@ fn toolchain_path() -> String {
 }
 
 fn cargo(repo: &Repo, args: &[&str]) {
-    let output = Command::new("cargo")
+    let output = isolated("cargo")
         .current_dir(repo.root())
         .env("PATH", toolchain_path())
         .args(args)
@@ -119,7 +129,7 @@ fn audit_world(repo: &Repo, vendored: bool) {
         ["clippy", "--workspace", "--all-targets"],
         ["build", "--workspace", "--all-targets"],
     ] {
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let output = isolated(env!("CARGO_BIN_EXE_velnor-ci"))
             .current_dir(repo.root())
             .env("PATH", toolchain_path())
             .args(["inputs", "build", "--", "cargo"])
@@ -133,7 +143,7 @@ fn audit_world(repo: &Repo, vendored: bool) {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let written = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let written = isolated(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .env("PATH", toolchain_path())
         .args(["inputs", "audit", "--write"])
@@ -145,7 +155,7 @@ fn audit_world(repo: &Repo, vendored: bool) {
 fn digest(repo: &Repo, revision: &str, name: &str) -> String {
     git(repo, &["checkout", "--quiet", "--detach", revision]);
     let target = Repo::empty(name);
-    let built = Command::new("cargo")
+    let built = isolated("cargo")
         .current_dir(repo.root())
         .args(["build", "--offline", "-p", "velnor-gen"])
         .env("CARGO_TARGET_DIR", target.root())
