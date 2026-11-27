@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::mock_github::{
     Acknowledge, Behavior, Cancel, JOB_ID, MessageTypes, OAUTH_TOKEN, OAuthTokens, OTHER_JOB_ID,
-    Online, RECREATED_SESSION_ID, SESSION_ID, STALE_OAUTH_TOKEN, SessionCreate,
+    Online, RECREATED_SESSION_ID, SESSION_ID, STALE_OAUTH_TOKEN, SessionCreate, SessionFault,
 };
 use super::{Reply, TestServer};
 
@@ -105,11 +105,20 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
         match create {
             SessionCreate::ConflictsFirst(count) if attempt < count => return conflict(),
             SessionCreate::ConflictsAlways => return conflict(),
-            SessionCreate::UnavailableAlways => return Reply::status(503),
-            SessionCreate::UnavailableOnceCreated if attempt > 0 => return Reply::status(503),
+            SessionCreate::Fails {
+                fault,
+                after,
+                times,
+            } if attempt >= after && attempt - after < times => {
+                return match fault {
+                    SessionFault::Unavailable => Reply::status(503),
+                    SessionFault::Unparsable => Reply::json(200, &json!("not a session")),
+                    SessionFault::Forbidden => Reply::status(403),
+                };
+            }
             SessionCreate::Created
             | SessionCreate::ConflictsFirst(_)
-            | SessionCreate::UnavailableOnceCreated => {}
+            | SessionCreate::Fails { .. } => {}
         }
         let created = if created.fetch_add(1, Ordering::SeqCst) == 0 {
             SESSION_ID

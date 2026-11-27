@@ -10,7 +10,7 @@ use velnor_runner::protocol::SessionRecovery;
 
 use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_with};
 use super::support::mock_github::{
-    Behavior, Cancel, MockGithub, RECREATED_SESSION_ID, SESSION_ID, SessionCreate,
+    Behavior, Cancel, MockGithub, RECREATED_SESSION_ID, SESSION_ID, SessionCreate, SessionFault,
 };
 
 async fn lost_poll_cancels_the_job(behavior: Behavior) -> Result<MockGithub> {
@@ -40,23 +40,35 @@ fn busy_polls(mock: &MockGithub) -> Result<usize> {
 
 #[tokio::test]
 async fn lifecycle_cancels_the_job_when_the_busy_poll_finds_the_runner_gone() -> Result<()> {
-    lost_poll_cancels_the_job(Behavior {
+    let mock = lost_poll_cancels_the_job(Behavior {
         cancel: Cancel::BusyPollRunnerGone,
         ..Behavior::default()
     })
     .await?;
+    assert_eq!(busy_polls(&mock)?, 1);
+    Ok(())
+}
+
+async fn refused_busy_poll_cancels_the_job_after_the_refresh(status: u16) -> Result<()> {
+    let mock = lost_poll_cancels_the_job(Behavior {
+        cancel: Cancel::BusyPollFails(status),
+        ..Behavior::default()
+    })
+    .await?;
+    assert_eq!(busy_polls(&mock)?, 2);
     Ok(())
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_after_ten_busy_polls_in_a_row_stay_forbidden() -> Result<()> {
-    let mock = lost_poll_cancels_the_job(Behavior {
-        cancel: Cancel::BusyPollFails(403),
-        ..Behavior::default()
-    })
-    .await?;
-    assert_eq!(busy_polls(&mock)?, 20);
-    Ok(())
+async fn lifecycle_cancels_the_job_when_the_busy_poll_stays_unauthorized_after_the_refresh()
+-> Result<()> {
+    refused_busy_poll_cancels_the_job_after_the_refresh(401).await
+}
+
+#[tokio::test]
+async fn lifecycle_cancels_the_job_when_the_busy_poll_stays_forbidden_after_the_refresh()
+-> Result<()> {
+    refused_busy_poll_cancels_the_job_after_the_refresh(403).await
 }
 
 #[tokio::test]
@@ -71,14 +83,15 @@ async fn lifecycle_retries_a_busy_poll_that_answers_404_until_the_tenth_error() 
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_when_the_expired_session_cannot_be_recreated() -> Result<()> {
+async fn lifecycle_cancels_the_job_when_the_expired_session_is_refused_a_new_one() -> Result<()> {
     let mock = lost_poll_cancels_the_job(Behavior {
         cancel: Cancel::BusyPollSessionExpiresOnce,
-        session: SessionCreate::UnavailableOnceCreated,
+        session: SessionCreate::failing_when_recreated(SessionFault::Forbidden, usize::MAX),
         ..Behavior::default()
     })
     .await?;
-    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 4);
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 3);
+    assert_eq!(busy_polls(&mock)?, 1);
     Ok(())
 }
 
@@ -91,6 +104,28 @@ async fn lifecycle_cancels_the_job_when_the_expired_session_must_not_be_recreate
     })
     .await?;
     assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 1);
+    assert_eq!(busy_polls(&mock)?, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_keeps_recreating_an_expired_session_through_transient_errors() -> Result<()> {
+    let behavior = Behavior {
+        cancel: Cancel::BusyPollSessionExpiresOnce,
+        session: SessionCreate::failing_when_recreated(SessionFault::Unavailable, 4),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", Some("sleep 2"))?, behavior).await?;
+
+    let outcome = run_with(
+        &mock,
+        Settings::new().renewing_every(Duration::from_secs(60)),
+    )
+    .await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    assert_eq!(mock.requests_to("POST", "/broker/session")?.len(), 6);
     Ok(())
 }
 

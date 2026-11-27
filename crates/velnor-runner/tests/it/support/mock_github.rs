@@ -86,14 +86,42 @@ pub(crate) enum StepStatus {
     StallsFirst,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SessionFault {
+    Unavailable,
+    Unparsable,
+    Forbidden,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum SessionCreate {
     #[default]
     Created,
     ConflictsFirst(usize),
     ConflictsAlways,
-    UnavailableAlways,
-    UnavailableOnceCreated,
+    Fails {
+        fault: SessionFault,
+        after: usize,
+        times: usize,
+    },
+}
+
+impl SessionCreate {
+    pub(crate) const fn failing(fault: SessionFault, times: usize) -> Self {
+        Self::Fails {
+            fault,
+            after: 0,
+            times,
+        }
+    }
+
+    pub(crate) const fn failing_when_recreated(fault: SessionFault, times: usize) -> Self {
+        Self::Fails {
+            fault,
+            after: 1,
+            times,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

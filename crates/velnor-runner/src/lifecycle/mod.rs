@@ -142,13 +142,17 @@ async fn serve(
     let prepared = tokio::select! {
         biased;
         () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
-        prepared = prepare_work_dirs(&run_options) => prepared,
+        prepared = prepare_work_dirs(&root, &run_options) => prepared,
     };
     let outcome = match prepared {
-        Ok(()) => acquire_and_run(options, session, &run_options, &request).await,
+        Ok(files) => acquire_and_run(options, session, &run_options, files, &request).await,
         Err(error) => Err(error),
     };
-    remove_work_dirs(&root, &run_options).await;
+    tokio::select! {
+        biased;
+        () = options.shutdown.cancelled() => {}
+        () = remove_work_dirs(&root, &run_options) => {}
+    }
     outcome
 }
 
@@ -156,6 +160,7 @@ async fn acquire_and_run(
     options: &RunJitOptions,
     session: &Arc<Session>,
     run_options: &RunOptions,
+    files: LogFiles,
     request: &RunnerJobRequestRef,
 ) -> Result<LifecycleOutcome, LifecycleError> {
     let acquired = tokio::select! {
@@ -168,7 +173,7 @@ async fn acquire_and_run(
     };
     let connection = acquire::connect(&message, options.upload_block_budget, options.retry_delays)?;
     let (completion, failure) =
-        match run_and_report(options, session, run_options, &message, &connection).await {
+        match run_and_report(options, session, run_options, &message, &connection, files).await {
             Ok(Finish::Ran(run, report)) => {
                 (complete::build(&message, &run, &report), Ok(run.result))
             }
@@ -205,7 +210,7 @@ async fn remove_dir(directory: &Path) -> std::io::Result<()> {
     }
 }
 
-async fn prepare_work_dirs(options: &RunOptions) -> Result<(), LifecycleError> {
+async fn prepare_work_dirs(root: &Path, options: &RunOptions) -> Result<LogFiles, LifecycleError> {
     for directory in [&options.workspace, &options.temp] {
         let created = match remove_dir(directory).await {
             Ok(()) => tokio::fs::create_dir_all(directory).await,
@@ -216,7 +221,20 @@ async fn prepare_work_dirs(options: &RunOptions) -> Result<(), LifecycleError> {
             source,
         })?;
     }
-    Ok(())
+    LogFiles::create(root).await
+}
+
+fn job_cancel(shutdown: &JobCancel) -> (JobCancel, BackgroundTask) {
+    let cancel = JobCancel::new();
+    if shutdown.is_cancelled() {
+        cancel.cancel();
+    }
+    let (shutdown, forwarded) = (shutdown.clone(), cancel.clone());
+    let task = BackgroundTask::spawn(async move {
+        shutdown.cancelled().await;
+        forwarded.cancel();
+    });
+    (cancel, task)
 }
 
 enum Finish {
@@ -236,13 +254,9 @@ async fn run_and_report(
     run_options: &RunOptions,
     message: &AgentJobRequestMessage,
     connection: &JobConnection,
+    files: LogFiles,
 ) -> Result<Finish, LifecycleError> {
-    let root = run_options
-        .workspace
-        .parent()
-        .unwrap_or(&run_options.workspace);
-    let files = LogFiles::create(root).await?;
-    let cancel = options.shutdown.clone();
+    let (cancel, _shutdown_forward) = job_cancel(&options.shutdown);
     let grace = CancelGrace::new(options.cancel_timeout_floor);
     let _poll = cancel_poll::spawn_cancel_poll(
         Arc::clone(session),

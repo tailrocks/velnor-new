@@ -18,7 +18,6 @@ use crate::protocol::{
 };
 use crate::secret::Secret;
 
-const TRANSIENT_SESSION_ATTEMPTS: u32 = 3;
 const SESSION_CONFLICT_ATTEMPTS: u32 = 8;
 const MAX_CONSECUTIVE_POLL_ERRORS: u32 = 10;
 const MAX_POLL_ERROR_DELAY: Duration = Duration::from_secs(60);
@@ -114,6 +113,15 @@ fn api_status(error: &anyhow::Error) -> Option<u16> {
 
 fn is_auth_failure(error: &anyhow::Error) -> bool {
     matches!(api_status(error), Some(401 | 403))
+}
+
+fn refused(mut error: anyhow::Error) -> anyhow::Error {
+    if let Some(api) = error.downcast_mut::<GitHubApiError>()
+        && matches!(api.status, 401 | 403)
+    {
+        api.category.get_or_insert(BrokerErrorCategory::Terminal);
+    }
+    error
 }
 
 fn is_retriable(error: &anyhow::Error) -> bool {
@@ -229,7 +237,7 @@ impl Session {
             Err(error) if is_auth_failure(&error) => {
                 self.refresh().await?;
                 let broker = self.auth().broker.clone();
-                call(broker).await
+                call(broker).await.map_err(refused)
             }
             other => other,
         }
@@ -362,7 +370,6 @@ async fn create_session(
     session: TaskAgentSession,
     interval: Duration,
 ) -> anyhow::Result<TaskAgentSession> {
-    let mut transient = 0_u32;
     let mut conflicts = 0_u32;
     loop {
         let error = match broker.create_session(&session).await {
@@ -370,15 +377,11 @@ async fn create_session(
             Err(error) => error,
         };
         let retry = match broker_error_category(&error) {
-            Some(BrokerErrorCategory::Transient) => {
-                transient += 1;
-                transient < TRANSIENT_SESSION_ATTEMPTS
-            }
             Some(BrokerErrorCategory::Conflict) => {
                 conflicts += 1;
                 conflicts < SESSION_CONFLICT_ATTEMPTS
             }
-            _ => false,
+            _ => is_retriable(&error),
         };
         if !retry {
             return Err(error);
