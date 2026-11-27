@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod checkout;
+mod depth;
 
 use crate::broker::StoreWriter;
 use crate::exec::AdapterRegistry;

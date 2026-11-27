@@ -3,19 +3,20 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/checkout.rs
 
 use std::collections::BTreeMap;
-use std::num::NonZeroU64;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
 use crate::broker::{
-    FailedStep, Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, Window, git_args,
+    FailedStep, Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, git_args,
     mirror_path,
 };
 use crate::exec::{
     ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
 };
 use crate::store::store_root;
+
+use super::depth::{Depth, js_trim};
 
 pub(super) struct Checkout {
     pub(super) store: StoreWriter,
@@ -38,10 +39,6 @@ impl StepAdapter for Checkout {
     }
 }
 
-fn js_trim(value: &str) -> &str {
-    value.trim_matches(|ch: char| ch == '\u{feff}' || (ch.is_whitespace() && ch != '\u{85}'))
-}
-
 fn unsupported_input(name: &str) -> String {
     format!("actions/checkout input '{name}' is not supported by velnor-runner")
 }
@@ -51,12 +48,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
     for (name, value) in inputs {
         match (name.to_ascii_lowercase().as_str(), value) {
             ("fetch-depth", InputValue::Literal(depth)) => {
-                let depth = js_trim(depth);
-                if !depth.is_empty() && depth.parse::<u64>().is_err() {
-                    return Err(format!(
-                        "actions/checkout input 'fetch-depth' must be a number, got '{depth}'"
-                    ));
-                }
+                Depth::parse(depth)?;
             }
             ("fetch-depth", InputValue::Deferred) => {}
             ("persist-credentials", InputValue::Literal(flag)) => {
@@ -133,38 +125,9 @@ async fn require(
     }
 }
 
-#[derive(Clone, Copy)]
-enum Depth {
-    Full,
-    Last(u64),
-}
-
-impl Depth {
-    fn fetches_through_the_mirror_refs(self) -> bool {
-        matches!(self, Self::Last(count) if count > 1)
-    }
-
-    fn window(self) -> Window {
-        match self {
-            Self::Last(count) => Window::Last(NonZeroU64::new(count).unwrap_or(NonZeroU64::MIN)),
-            Self::Full => Window::All,
-        }
-    }
-}
-
 fn fetch_depth(inputs: &Inputs) -> Result<Depth, ExecError> {
-    let given = inputs
-        .get("fetch-depth")
-        .map(|value| js_trim(value))
-        .filter(|value| !value.is_empty());
-    match given.map(str::parse::<u64>) {
-        None => Ok(Depth::Last(1)),
-        Some(Ok(0)) => Ok(Depth::Full),
-        Some(Ok(depth)) => Ok(Depth::Last(depth)),
-        Some(Err(_)) => Err(ExecError::Unsupported(
-            "actions/checkout input 'fetch-depth' must be a number".to_owned(),
-        )),
-    }
+    Depth::parse(inputs.get("fetch-depth").map_or("", String::as_str))
+        .map_err(ExecError::Unsupported)
 }
 
 enum Materialized {

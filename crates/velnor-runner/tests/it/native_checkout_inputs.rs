@@ -61,32 +61,54 @@ fn malformed_commit_ids_are_rejected_before_git_runs() -> Result<()> {
 }
 
 #[test]
-fn non_numeric_fetch_depth_is_rejected() -> Result<()> {
+fn a_fetch_depth_is_read_as_javascript_reads_a_number() -> Result<()> {
     let rig = Rig::new()?;
-    let job = rig.job_edit(
-        "checkout_depth1",
-        &rig.head,
-        &rig.server_url(),
-        &[("\"lit\": \"1\"", "\"lit\": \"deep\"")],
-    )?;
-    let scratch = Scratch::new()?;
-    let ran = finish(rig.start(&job, &scratch)?)?;
-    assert_rejected_without_git(&rig, &ran, &scratch, "'fetch-depth' must be a number");
+    rig.advance("third")?;
+    let tip = rig.advance("fourth")?;
+    for (given, commits) in [
+        ("2.9", "2"),
+        ("0x3", "3"),
+        ("1e0", "1"),
+        ("-1", "4"),
+        ("deep", "4"),
+        ("\\u00851", "4"),
+    ] {
+        let job = rig.job_edit(
+            "checkout_depth1",
+            &tip,
+            &rig.server_url(),
+            &[("\"lit\": \"1\"", &format!("\"lit\": \"{given}\""))],
+        )?;
+        let scratch = Scratch::new()?;
+        let ran = finish(rig.start(&job, &scratch)?)?;
+        assert_eq!(ran.code, Some(0), "{given}: {}\n{}", ran.stdout, ran.stderr);
+        let count = git(&scratch.workspace(), &["rev-list", "--count", "HEAD"])?;
+        assert_eq!(count, commits, "{given}");
+    }
     Ok(())
 }
 
 #[test]
-fn a_depth_padded_with_a_next_line_is_rejected_like_core_get_input() -> Result<()> {
+fn a_fetch_depth_of_infinity_refuses_the_job_before_its_first_step() -> Result<()> {
     let rig = Rig::new()?;
     let job = rig.job_edit(
         "checkout_depth1",
         &rig.head,
         &rig.server_url(),
-        &[("\"lit\": \"1\"", "\"lit\": \"\\u00851\"")],
+        &[
+            ("\"lit\": \"1\"", "\"lit\": \"Infinity\""),
+            ("\"Steps\": [", MARKER_STEP),
+        ],
     )?;
     let scratch = Scratch::new()?;
     let ran = finish(rig.start(&job, &scratch)?)?;
-    assert_rejected_without_git(&rig, &ran, &scratch, "'fetch-depth' must be a number");
+    assert_rejected_without_git(
+        &rig,
+        &ran,
+        &scratch,
+        "'fetch-depth' must be a finite number",
+    );
+    assert!(!ran.stdout.contains("step-one-marker"), "step 1 ran");
     Ok(())
 }
 
