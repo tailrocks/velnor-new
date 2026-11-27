@@ -999,13 +999,13 @@ behaviours differ on purpose:
   each directory and file with `openat` relative to its parent's descriptor and
   never follows a final symlink, reads a regular file only after `fstat` shows
   one, and opens the target of a matched link from the workspace root one
-  component at a time the same way. The walk holds at most 64 directory
-  descriptors, as `MAX_HELD_DIRECTORIES` in
-  `crates/velnor-runner/src/expr/anchor.rs` sets: below that depth it reopens
-  a directory from the deepest descriptor it holds, one component at a time
-  with `openat` and no link followed, so a branching tree of any depth walks
-  under a limit of 256 open files, and a directory replaced by a link while the
-  walk is that deep fails the call when it is reopened. A path replaced by a link after the walk
+  component at a time the same way. The walk keeps a directory descriptor open only at a checkpoint level (every
+  level up to 31, then 16 per doubling of the depth, `is_checkpoint` in
+  `crates/velnor-runner/src/expr/anchor.rs`) and reopens any other directory
+  from the nearest descriptor above it, one component at a time with `openat`
+  and no link followed. A branching tree holds about 143 descriptors at 4,096
+  levels, so it walks under a limit of 256 open files, and a directory replaced
+  by a link while the walk is reopening it fails the call. A path replaced by a link after the walk
   decided about it therefore cannot pull a file from outside the workspace into
   the digest: a replaced file is read through its resolved target only when that
   target stays inside, a replaced directory or link target fails the call, and
@@ -1091,7 +1091,7 @@ behaviours differ on purpose:
   skipped as it is upstream
   ([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)).
   An entry that no pattern matches and that is not a directory, such as the
-  socket or the file whose mode forbids reading in `sock/*`, is passed over
+  socket in `sock/*` or the unreadable file in `sealed.md/*`, is passed over
   and hashes nothing, as in the runner, which reads only directories.
 - **A timed-out call leaves its worker to stop itself.** The runner runs
   `hashFiles` in a Node child process and kills the process tree when the
