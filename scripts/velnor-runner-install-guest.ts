@@ -230,6 +230,16 @@ async function ensurePackages(context: Context): Promise<void> {
   await step(context, "packages-install", ["apt-get", "-o", APT_LOCK, "install", "-y", "-qq", ...PACKAGES], { env: { DEBIAN_FRONTEND: "noninteractive" } });
 }
 
+export async function verifyToolchain(context: Context): Promise<void> {
+  const { paths } = context;
+  const loose = await step(context, "toolchain-permissions", ["find", paths.toolchain, paths.bin, "!", "-type", "l", "(", "-perm", "/022", "-o", "!", "-user", "root", ")", "-print", "-quit"], {
+    capture: true,
+  });
+  if (loose.stdout.trim() !== "") {
+    throw new InstallError(`step 'toolchain-permissions': ${loose.stdout.trim()} is not root-owned and read-only for other users`);
+  }
+}
+
 async function installToolchain(context: Context): Promise<void> {
   const { paths } = context;
   const toolchain = (name: string): string => `${paths.toolchain}/${name}`;
@@ -245,12 +255,7 @@ async function installToolchain(context: Context): Promise<void> {
       RUSTUP_HOME: toolchain("rustup"),
     },
   });
-  const loose = await step(context, "toolchain-permissions", ["find", paths.toolchain, paths.bin, "!", "-type", "l", "(", "-perm", "/022", "-o", "!", "-user", "root", ")", "-print", "-quit"], {
-    capture: true,
-  });
-  if (loose.stdout.trim() !== "") {
-    throw new InstallError(`step 'toolchain-permissions': ${loose.stdout.trim()} is not root-owned and read-only for other users`);
-  }
+  await verifyToolchain(context);
 }
 
 export async function provision(context: Context, mise: MiseBinary, source: Source): Promise<void> {
@@ -277,6 +282,9 @@ const survivors = async (context: Context, label: string): Promise<boolean> =>
   (await step(context, label, ["pgrep", "-u", BUILD_USER], { capture: true, accept: [ABSENT] })).status === 0;
 
 export async function reap(context: Context, label: string): Promise<void> {
+  if ((await step(context, label, ["id", "-u", BUILD_USER], { capture: true, accept: [ABSENT] })).status !== 0) {
+    return;
+  }
   for (let attempt = 1; attempt <= REAP_ATTEMPTS; attempt += 1) {
     await step(context, label, ["pkill", "-KILL", "-u", BUILD_USER], { accept: [ABSENT] });
     if (!(await survivors(context, label))) {

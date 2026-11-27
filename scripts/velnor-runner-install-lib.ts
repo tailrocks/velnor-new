@@ -14,8 +14,6 @@ export type RunOptions = {
   readonly output?: "stderr" | "stdout" | "capture" | "bytes";
 };
 
-export const EX_TEMPFAIL = 75;
-
 export function requireMacOS(platform: string): void {
   if (platform !== "darwin") {
     throw new InstallError(`velnor-runner:install runs on macOS (it needs /usr/bin/lockf and the OrbStack machine); this is ${platform}`);

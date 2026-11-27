@@ -28,10 +28,7 @@ import {
   temps,
   TEMP_PREFIX,
   TEST_TIMEOUT_MS,
-  UNDER_LOCK,
   waitFor,
-  WAIT_LIMIT_MS,
-  within,
   type Box,
 } from "./velnor-runner-install.harness";
 
@@ -122,7 +119,7 @@ test(
     expect(found).toHaveLength(1);
     expect(await Bun.file(join(box.bin, found[0] ?? "")).text()).toBe(half(binary("0.1.81")));
     await writeFile(gate, "");
-    const [first, second] = await within("A and B to finish", WAIT_LIMIT_MS, Promise.all([a.done, b.done]));
+    const [first, second] = await Promise.all([a.done, b.done]);
     expect(first.status, first.stderr).toBe(0);
     expect(second.status, second.stderr).toBe(0);
     expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
@@ -143,7 +140,7 @@ test(
     const holder = [a.child.pid, ...descendants(a.child.pid)];
     killAll(holder);
     await waitFor("A's processes to exit", () => holder.every((pid) => !alive(pid)));
-    const b = await within("B to finish after A was killed", WAIT_LIMIT_MS, install(box, repo, binary("0.1.82"), {}, "B"));
+    const b = await install(box, repo, binary("0.1.82"), {}, "B");
     expect(b.status, b.stderr).toBe(0);
     expect(b.stderr).not.toContain("waiting for");
     expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
@@ -153,29 +150,27 @@ test(
 );
 
 test(
-  "the internal mode refuses to run when the install lock is not held",
-  async () => {
-    const box = await sandbox();
-    const outcome = await install(box, await checkout(box), binary("0.1.82"), {}, "run", { args: [UNDER_LOCK] });
-    expect(outcome.status).not.toBe(0);
-    expect(outcome.stderr).toContain("only under the install lock");
-    expect(await calls(box)).toEqual([]);
-    expect(existsSync(box.store)).toBe(false);
-  },
-  TEST_TIMEOUT_MS,
-);
-
-test(
-  "the internal mode refuses to run while an unrelated process holds the install lock",
+  "no internal mode exists: the old mode argument is ignored, so the install waits for an unrelated holder of the lock and then proceeds",
   async () => {
     const box = await sandbox();
     const repo = await checkout(box);
-    await holdLock(box);
-    const outcome = await install(box, repo, binary("0.1.82"), {}, "run", { args: [UNDER_LOCK] });
-    expect(outcome.status).not.toBe(0);
-    expect(outcome.stderr).toContain("only under the install lock");
+    const gate = gateFile(box, "holder-gate");
+    const holder = await holdLock(box);
+    const outcome = await start(box, repo, binary("0.1.82"), {}, "B", { args: ["--run-under-install-lock"] });
+    await waitFor("B to report that it waits for the install lock", async () => {
+      if (outcome.finished()) {
+        throw new Error(`B exited while an unrelated process held the lock: ${outcome.stderr()}`);
+      }
+      return outcome.stderr().includes(`waiting for ${lockFile(box)}`);
+    });
     expect(await calls(box)).toEqual([]);
     expect(existsSync(box.store)).toBe(false);
+    await writeFile(gate, "");
+    const [held, done] = await Promise.all([holder.done, outcome.done]);
+    expect(held.status, held.stderr).toBe(0);
+    expect(done.status, done.stderr).toBe(0);
+    expect(done.stdout).toBe("velnor-runner 0.1.82\n");
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
   },
   TEST_TIMEOUT_MS,
 );

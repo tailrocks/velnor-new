@@ -290,6 +290,9 @@ async function guestCommand(rest: string[]): Promise<void> {
   } else if (command === "cat" && operands[0] === "/proc/self/mountinfo") {
     process.stdout.write(config.mountInfo);
   } else if (command === "pkill") {
+    if (!state.user) {
+      fail("pkill: invalid user name", 2);
+    }
     const found = state.busy > 0;
     state.busy = Math.max(0, state.busy - 1);
     save();

@@ -15,6 +15,7 @@ import {
   entries,
   gateFile,
   git,
+  gitDirectories,
   gitEnvironment,
   install,
   installCleanup,
@@ -26,8 +27,6 @@ import {
   start,
   TEST_TIMEOUT_MS,
   waitFor,
-  WAIT_LIMIT_MS,
-  within,
   type Box,
   type Repo,
 } from "./velnor-runner-install.harness";
@@ -168,6 +167,21 @@ test(
 );
 
 test(
+  "every verified git directory is created under the caller's TMPDIR, never under the shared /tmp",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"));
+    expect(outcome.status, outcome.stderr).toBe(0);
+    const directories = await gitDirectories(box);
+    expect(directories.length).toBeGreaterThan(0);
+    for (const directory of directories) {
+      expect(directory.startsWith(`${box.tmp}/`), directory).toBe(true);
+    }
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
   "a copy whose sha256 differs from the bytes that were verified is not installed",
   async () => {
     const box = await sandbox();
@@ -219,7 +233,7 @@ test(
     await waitFor("B to report that it waits for the install lock", () => refused.stderr().includes(`waiting for ${lockFile(box)}`));
     expect((await calls(box)).filter((call) => call.who === "B")).toEqual([]);
     await writeFile(gate, "");
-    const [first, second] = await within("A and B to finish", WAIT_LIMIT_MS, Promise.all([holder.done, refused.done]));
+    const [first, second] = await Promise.all([holder.done, refused.done]);
     expect(first.status, first.stderr).toBe(0);
     expect(second.status).not.toBe(0);
     expect(second.stderr).toContain(`refusing to repoint it to /mnt/mac${other.store}`);

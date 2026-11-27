@@ -366,3 +366,19 @@ test(
   },
   TEST_TIMEOUT_MS,
 );
+
+test(
+  "a failure before the build user exists reports only that step: the cleanup reap skips a user that is not there",
+  async () => {
+    const box = await sandbox();
+    const failOn = { command: "install", operand: BUILD_ROOT };
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { failOn });
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stderr).toContain("step 'layout'");
+    expect(outcome.stderr).not.toContain("cleanup-reap");
+    const guest = guestCalls(await calls(box));
+    expect(guest.some((call) => call.command === "pkill")).toBe(false);
+    expect(guest.some((call) => call.command === "rm" && call.operands?.includes(WORK))).toBe(true);
+  },
+  TEST_TIMEOUT_MS,
+);

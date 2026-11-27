@@ -30,7 +30,6 @@ const INSTALLER_FILES = [
 ];
 const COPIED_INPUTS = ["crates/velnor-runner-host/src/rust_runner/mod.rs", "crates/velnor-render/src/mise_digest.rs", "mise.toml", "rust-toolchain.toml"];
 
-export const UNDER_LOCK = "--run-under-install-lock";
 export const TEMP_PREFIX = ".velnor-runner.tmp-";
 export const WAIT_LIMIT_MS = 8_000;
 export const TEST_TIMEOUT_MS = 30_000;
@@ -142,18 +141,6 @@ export async function waitFor(what: string, check: () => boolean | Promise<boole
   }
 }
 
-export async function within<T>(what: string, limitMs: number, work: Promise<T>): Promise<T> {
-  let timer: Timer | undefined;
-  const expired = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${limitMs} ms waiting for ${what}`)), limitMs);
-  });
-  try {
-    return await Promise.race([work, expired]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export function installCleanup(): void {
   afterEach(async () => {
     await Promise.all(gates.splice(0).map((gate) => writeFile(gate, "")));
@@ -217,11 +204,9 @@ async function fakeOrb(box: Box, who: string, built: string, extra: Extra): Prom
   await copyFile(FAKE_ORB, join(fakes, "orb"));
   await chmod(join(fakes, "orb"), 0o755);
   await writeFile(join(fakes, "config.json"), JSON.stringify({ state: box.state, log: box.log, who, bytes: built, mountInfo: MOUNT_INFO, ...extra }));
-  if (extra.gitTamper !== undefined) {
-    await copyFile(FAKE_GIT, join(fakes, "git"));
-    await chmod(join(fakes, "git"), 0o755);
-    await writeFile(join(fakes, "git-config.json"), JSON.stringify(extra.gitTamper));
-  }
+  await copyFile(FAKE_GIT, join(fakes, "git"));
+  await chmod(join(fakes, "git"), 0o755);
+  await writeFile(join(fakes, "git-config.json"), JSON.stringify({ log: gitLog(box), tampers: extra.gitTamper ?? [] }));
   const path = [fakes, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
   expect(Bun.which("orb", { PATH: path })).toBe(join(fakes, "orb"));
   return path;
@@ -285,6 +270,9 @@ export async function holdLock(box: Box): Promise<Running> {
 
 export const install = async (box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Outcome> =>
   (await start(box, repo, built, extra, who, launch)).done;
+const gitLog = (box: Box): string => join(box.root, "git-dirs.log");
+export const gitDirectories = async (box: Box): Promise<string[]> =>
+  (await Bun.file(gitLog(box)).exists()) ? (await Bun.file(gitLog(box)).text()).split("\n").filter((line) => line !== "") : [];
 export const entries = async (box: Box): Promise<string[]> => (await readdir(box.bin)).sort();
 export const temps = async (box: Box): Promise<string[]> => (await readdir(box.bin)).filter((name) => name.startsWith(TEMP_PREFIX));
 export const mode = async (path: string): Promise<number> => (await stat(path)).mode & 0o777;

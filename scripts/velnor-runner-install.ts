@@ -3,12 +3,9 @@
 "use strict";
 import { parseMachine, parseMise, REPOSITORY } from "./velnor-runner-install-config";
 import { build, cleanup, layout, provision, step, type Context } from "./velnor-runner-install-guest";
-import { ensureStore, prepareLock, requireLockHeld, swap, underLock } from "./velnor-runner-install-host";
+import { ensureStore, swap, takeLock } from "./velnor-runner-install-host";
 import { InstallError, machineNames, messageOf, orb, requireMacOS } from "./velnor-runner-install-lib";
 import { prepareSource } from "./velnor-runner-install-source";
-
-const FORWARDED_ENVIRONMENT = ["VELNOR_HOST_STORE", "TMPDIR"] as const;
-const UNDER_LOCK = [process.execPath, import.meta.path, "--run-under-install-lock"];
 
 async function refuseRepoint(context: Context): Promise<void> {
   const { machine } = context;
@@ -33,8 +30,7 @@ async function ensureMachine(context: Context): Promise<void> {
   await step(context, "store-link", ["ln", "-sfn", machine.link, machine.guestStore]);
 }
 
-async function installUnderLock(): Promise<void> {
-  await requireLockHeld(UNDER_LOCK);
+async function install(): Promise<void> {
   const source = await prepareSource(REPOSITORY);
   process.stderr.write(`velnor-runner:install: building ${source.commit}\n`);
   const machine = parseMachine(source.inputs.machine, process.env.VELNOR_HOST_STORE);
@@ -59,17 +55,12 @@ async function installUnderLock(): Promise<void> {
 
 async function main(): Promise<void> {
   requireMacOS(process.platform);
-  if (process.argv[2] === UNDER_LOCK[2]) {
-    return installUnderLock();
+  const lock = await takeLock();
+  try {
+    await install();
+  } finally {
+    await lock.close();
   }
-  const forwarded: Record<string, string> = {};
-  for (const name of FORWARDED_ENVIRONMENT) {
-    const value = process.env[name];
-    if (value !== undefined) {
-      forwarded[name] = value;
-    }
-  }
-  process.exit(await underLock(await prepareLock(), UNDER_LOCK, forwarded));
 }
 
 main().catch((error: unknown) => {

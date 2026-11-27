@@ -2,16 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import { constants } from "node:fs";
-import { chmod, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
+import { dlopen, FFIType, read, type Pointer } from "bun:ffi";
+import { chmod, lstat, mkdir, open, readdir, rename, rm, type FileHandle } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { Machine } from "./velnor-runner-install-config";
 import { step, type Context } from "./velnor-runner-install-guest";
-import { EX_TEMPFAIL, hostEnvironment, InstallError, run } from "./velnor-runner-install-lib";
+import { InstallError } from "./velnor-runner-install-lib";
 
-const LOCKF = "/usr/bin/lockf";
-const PS = "/bin/ps";
 const LOCK_WAIT_SECONDS = 900;
+const LOCK_POLL_MS = 100;
+const LOCK_EX = 2;
+const LOCK_NB = 4;
+const EWOULDBLOCK = 35;
 const LOCK_DIRECTORY = ".velnor-runner-install";
 const LOCK_NAME = "install.lock";
 const TEMP_PREFIX = ".velnor-runner.tmp-";
@@ -40,38 +43,39 @@ export async function ensureStore(machine: Machine, create: boolean): Promise<vo
   await ensureDirectory(machine.hostBin, "the host bin directory", OTHERS_WRITE, create);
 }
 
-export async function prepareLock(): Promise<string> {
+async function lockDescriptor(fd: number, lock: string): Promise<void> {
+  const { symbols } = dlopen("libSystem.B.dylib", {
+    flock: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+    __error: { args: [], returns: FFIType.ptr },
+  });
+  const deadline = Date.now() + LOCK_WAIT_SECONDS * 1000;
+  for (let announced = false; symbols.flock(fd, LOCK_EX | LOCK_NB) !== 0; announced = true) {
+    const errno = read.i32(symbols.__error() as Pointer);
+    if (errno !== EWOULDBLOCK) {
+      throw new InstallError(`flock of ${lock} failed with errno ${errno}`);
+    }
+    if (!announced) {
+      process.stderr.write(`velnor-runner:install: waiting for ${lock}\n`);
+    }
+    if (Date.now() >= deadline) {
+      throw new InstallError(`${lock} stayed locked for ${LOCK_WAIT_SECONDS} seconds`);
+    }
+    await Bun.sleep(LOCK_POLL_MS);
+  }
+}
+
+export async function takeLock(): Promise<FileHandle> {
   const lock = lockPath();
   await ensureDirectory(join(homedir(), LOCK_DIRECTORY), "the lock directory", OTHERS_ANY, true);
   const handle = await open(lock, constants.O_RDWR | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
   try {
     await handle.chmod(0o600);
-  } finally {
+    await lockDescriptor(handle.fd, lock);
+  } catch (error) {
     await handle.close();
+    throw error;
   }
-  return lock;
-}
-
-const lockCommand = (lock: string, command: readonly string[]): string[] => [LOCKF, "-k", "-t", String(LOCK_WAIT_SECONDS), lock, ...command];
-
-const probe = (lock: string): Promise<{ status: number }> => run([LOCKF, "-s", "-k", "-t", "0", lock, "/usr/bin/true"], { env: hostEnvironment(), output: "capture" });
-
-export async function underLock(lock: string, command: readonly string[], extra: Record<string, string>): Promise<number> {
-  if ((await probe(lock)).status === EX_TEMPFAIL) {
-    process.stderr.write(`velnor-runner:install: waiting for ${lock}\n`);
-  }
-  const held = await run(lockCommand(lock, command), { env: hostEnvironment(extra), output: "stdout" });
-  if (held.status === EX_TEMPFAIL) {
-    throw new InstallError(`${lock} stayed locked for ${LOCK_WAIT_SECONDS} seconds`);
-  }
-  return held.status;
-}
-
-export async function requireLockHeld(command: readonly string[]): Promise<void> {
-  const parent = await run([PS, "-ww", "-o", "args=", "-p", String(process.ppid)], { env: hostEnvironment(), output: "capture" });
-  if (parent.status !== 0 || parent.stdout.trim() !== lockCommand(lockPath(), command).join(" ")) {
-    throw new InstallError("this mode runs only under the install lock, as the child of the lockf that holds it; use `mise run velnor-runner:install`");
-  }
+  return handle;
 }
 
 async function sha256Of(path: string): Promise<string> {
