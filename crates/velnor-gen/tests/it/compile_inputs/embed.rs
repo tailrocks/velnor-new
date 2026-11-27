@@ -3,23 +3,36 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{InputOwner, RustSelection};
+use velnor_model::{InputKey, InputOwner, RepoView, RustSelection};
 use velnor_rust::detect;
 
 use crate::facts::{TestResult, lib, repo};
 use crate::select::{name, path};
+
+pub(super) fn view_of(
+    members: &[&str],
+    files: &[(&str, &str)],
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let crates = members
+        .iter()
+        .map(|member| lib(member, &format!("crates/{member}/Cargo.toml")))
+        .collect::<Result<Vec<_>, _>>()?;
+    repo(vec![("Cargo.toml", crates)], files)
+}
 
 fn selections(
     members: &[&str],
     files: &[(&str, &str)],
     changed_file: &str,
 ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
-    let crates = members
-        .iter()
-        .map(|member| lib(member, &format!("crates/{member}/Cargo.toml")))
-        .collect::<Result<Vec<_>, _>>()?;
-    let view = repo(vec![("Cargo.toml", crates)], files)?;
-    let facts = detect(&view)?;
+    selected(&view_of(members, files)?, changed_file)
+}
+
+pub(super) fn selected(
+    view: &RepoView,
+    changed_file: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let facts = detect(view)?;
     let changes = velnor_model::ChangeSet {
         paths: BTreeSet::from([path(changed_file)]),
         base_files: BTreeMap::new(),
@@ -48,7 +61,7 @@ fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
     Ok(())
 }
 
-fn unresolved(source: &str) -> TestResult {
+pub(super) fn unresolved(source: &str) -> TestResult {
     let files = [
         ("crates/c/src/lib.rs", source),
         ("crates/app/src/lib.rs", ""),
@@ -119,7 +132,7 @@ fn an_out_dir_include_is_a_build_output_with_no_input() -> TestResult {
         &[
             (
                 "crates/reader/src/lib.rs",
-                "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
+                "use std::env;\nuse std::fs;\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/blob.bin\"));",
             ),
             ("crates/app/src/lib.rs", ""),
         ],
@@ -145,12 +158,12 @@ fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reaso
         ]
     );
     for source in [
-        "include!(env!(\"OTHER\"));",
-        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), suffix()));",
-        "include!(path_of!());",
-        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../../../x.rs\"));",
-        "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"src/x.rs\"));",
-        "include!(concat!(env!(\"OUT_DIR\"), \"/../x.rs\"));",
+        "include_str!(env!(\"OTHER\"));",
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/\", suffix()));",
+        "include_str!(path_of!());",
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../../../x.md\"));",
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"src/x.md\"));",
+        "include_str!(concat!(env!(\"OUT_DIR\"), \"/../x.md\"));",
     ] {
         unresolved(source)?;
     }
@@ -182,12 +195,12 @@ fn a_root_package_and_a_nested_member_resolve_against_their_own_manifest_dir() -
     let owners = |file: &str| -> Option<Vec<String>> {
         facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
     };
     assert_eq!(owners("README.md"), Some(vec!["top".to_owned()]));
     assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
-    assert!(!facts.compile_inputs.contains_key(&None));
+    assert!(!facts.compile_inputs.contains_key(&InputKey::Unresolved));
     Ok(())
 }
 
@@ -272,13 +285,13 @@ fn a_nested_package_is_not_charged_with_its_ancestors_scan() -> TestResult {
     let owners = |file: &str| -> Option<Vec<String>> {
         facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
     };
     assert_eq!(owners("docs/top.md"), Some(vec!["top".to_owned()]));
     assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
     assert!(
-        !facts.compile_inputs.contains_key(&None),
+        !facts.compile_inputs.contains_key(&InputKey::Unresolved),
         "{:?}",
         facts.compile_inputs
     );
@@ -312,7 +325,7 @@ fn a_target_source_outside_the_package_directory_attributes_its_includes() -> Te
     for file in ["docs/guide.md", "docs/more.md"] {
         let names: Vec<String> = facts
             .compile_inputs
-            .get(&Some(path(file)))
+            .get(&InputKey::Path(path(file)))
             .into_iter()
             .flatten()
             .map(|owner| owner.name.to_string())
@@ -340,7 +353,7 @@ fn a_symlinked_rust_source_fails_closed_instead_of_being_skipped() -> TestResult
     let facts = detect(&view)?;
     let app = InputOwner::at(name("app"), path("crates/app/Cargo.toml"));
     assert_eq!(
-        facts.compile_inputs.get(&None),
+        facts.compile_inputs.get(&InputKey::Unresolved),
         Some(&BTreeSet::from([app]))
     );
     Ok(())

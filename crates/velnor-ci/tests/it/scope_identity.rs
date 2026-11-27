@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::scope::Scope;
 use velnor_model::{
-    CompileInputs, DenyChecks, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath,
+    CompileInputs, DenyChecks, InputKey, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath,
     RustCiConfig, RustMember, RustRoot, ToolPins,
 };
 
@@ -65,7 +65,7 @@ fn facts() -> RepoFacts {
 }
 
 fn listed(owner: InputOwner) -> CompileInputs {
-    BTreeMap::from([(Some(path("docs/a.md")), BTreeSet::from([owner]))])
+    BTreeMap::from([(InputKey::Path(path("docs/a.md")), BTreeSet::from([owner]))])
 }
 
 #[test]

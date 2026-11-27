@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{InputOwner, RepoFacts, RustSelection, SelectionReason};
+use velnor_model::{InputKey, InputOwner, RepoFacts, RustSelection, SelectionReason};
 use velnor_rust::{DetectError, INPUTS_LOCK, Reason, detect};
 
 use crate::facts::{TestResult, lib, repo};
@@ -13,7 +13,7 @@ fn locked(facts: &mut RepoFacts, entries: &[(&str, &str)]) {
     for (file, package) in entries {
         facts
             .compile_inputs
-            .entry(Some(path(file)))
+            .entry(InputKey::Path(path(file)))
             .or_default()
             .insert(InputOwner::named(name(package)));
     }
@@ -83,18 +83,16 @@ fn a_path_the_inputs_lock_lists_selects_its_packages_even_when_rules_ignore_it()
     );
 
     let mut everywhere = two_roots();
-    everywhere
-        .compile_inputs
-        .insert(None, BTreeSet::from([InputOwner::named(name("cli"))]));
+    everywhere.compile_inputs.insert(
+        InputKey::Everything,
+        BTreeSet::from([InputOwner::named(name("cli"))]),
+    );
     assert_selects(
         &everywhere,
         vec![
             (
                 &["CHANGELOG.md"],
-                vec![
-                    none.clone(),
-                    some(&[("cli", SelectionReason::UnresolvedInclude)]),
-                ],
+                vec![none.clone(), some(&[("cli", input("CHANGELOG.md"))])],
             ),
             (
                 &["unknown/file.bin"],
@@ -115,9 +113,15 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
     assert_eq!(
         detect(&view(".\tapp\nREADME.md\tapp\nshared/a.txt\tapp\n")?)?.compile_inputs,
         BTreeMap::from([
-            (None, BTreeSet::from([named("app")])),
-            (Some(path("README.md")), BTreeSet::from([named("app")])),
-            (Some(path("shared/a.txt")), BTreeSet::from([named("app")])),
+            (InputKey::Everything, BTreeSet::from([named("app")])),
+            (
+                InputKey::Path(path("README.md")),
+                BTreeSet::from([named("app")])
+            ),
+            (
+                InputKey::Path(path("shared/a.txt")),
+                BTreeSet::from([named("app")])
+            ),
         ])
     );
     for (lock, reason) in [
@@ -137,5 +141,41 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
             "{lock}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_dot_line_in_the_inputs_lock_reads_everything_and_is_not_an_unresolved_include() -> TestResult {
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![lib("app", "app/Cargo.toml")?, lib("cli", "cli/Cargo.toml")?],
+        )],
+        &[
+            (INPUTS_LOCK.as_str(), ".\tcli\n"),
+            ("app/src/lib.rs", "include_str!(\"../../docs/guide.md\");"),
+        ],
+    )?;
+    let facts = detect(&view)?;
+    assert_eq!(
+        facts.compile_inputs.get(&InputKey::Everything),
+        Some(&BTreeSet::from([named("cli")]))
+    );
+    let changes = velnor_model::ChangeSet {
+        paths: BTreeSet::from([path("CHANGELOG.md")]),
+        ..velnor_model::ChangeSet::default()
+    };
+    let chosen: Vec<(String, String)> =
+        match velnor_rust::select(&facts, &changes).into_values().next() {
+            Some(RustSelection::Some(map)) => map
+                .into_iter()
+                .map(|(name, reason)| (name.to_string(), reason.to_string()))
+                .collect(),
+            other => panic!("{other:?}"),
+        };
+    assert_eq!(
+        chosen,
+        [("cli".to_owned(), "input:CHANGELOG.md".to_owned())]
+    );
     Ok(())
 }

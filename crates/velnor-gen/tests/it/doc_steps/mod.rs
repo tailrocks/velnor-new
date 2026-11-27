@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RustMember, RustRoot, Target, TargetKind, TargetName};
+use velnor_model::{InputKey, RustMember, RustRoot, Target, TargetKind, TargetName};
 use velnor_rust::{optional_steps, root_sources};
 
 use crate::select::{facts, member, name, path};
@@ -178,19 +178,19 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     ]);
     facts.compile_inputs = BTreeMap::from([
         (
-            Some(path("shared/gen.rs")),
+            InputKey::Path(path("shared/gen.rs")),
             BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
         ),
         (
-            Some(path("shared/gen.inc")),
+            InputKey::Path(path("shared/gen.inc")),
             BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
         ),
         (
-            Some(path("macros")),
+            InputKey::Path(path("macros")),
             BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
         ),
         (
-            Some(path("other/only.rs")),
+            InputKey::Path(path("other/only.rs")),
             BTreeSet::from([velnor_model::InputOwner::named(name("app"))]),
         ),
     ]);
@@ -242,7 +242,7 @@ fn a_package_that_reads_the_whole_repository_reads_no_file_and_runs_both_steps()
         vec![library(true), member("other", "other", &[])],
     )]);
     facts.compile_inputs = BTreeMap::from([(
-        None,
+        InputKey::Everything,
         BTreeSet::from([velnor_model::InputOwner::named(name("a"))]),
     )]);
     let tracked: BTreeSet<_> = ["a/src/lib.rs", "logo.png"].into_iter().map(path).collect();

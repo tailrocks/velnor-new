@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CompileInputs, InputOwner, RepoPath, RepoView, RustMember, RustRoot};
+use velnor_model::{CompileInputs, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot};
 
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
@@ -11,6 +11,7 @@ use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
+const SHADOWABLE: &[&str] = &["env", "concat", "include_str", "include_bytes", "include"];
 
 #[must_use]
 pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
@@ -37,7 +38,7 @@ enum Embedded<'t> {
 struct Scan<'a> {
     view: &'a RepoView,
     directory: Option<&'a RepoPath>,
-    reads: BTreeSet<Option<RepoPath>>,
+    reads: BTreeSet<InputKey>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
 }
@@ -82,7 +83,7 @@ impl<'a> Scan<'a> {
         }
     }
 
-    fn run(mut self) -> BTreeSet<Option<RepoPath>> {
+    fn run(mut self) -> BTreeSet<InputKey> {
         while let Some(file) = self.pending.pop() {
             if !self.seen.insert(file) {
                 continue;
@@ -90,7 +91,7 @@ impl<'a> Scan<'a> {
             match self.view.files.get(file) {
                 Some(bytes) => self.scan(file, &String::from_utf8_lossy(bytes)),
                 None if self.view.symlinks.contains(file) => {
-                    self.reads.insert(None);
+                    self.reads.insert(InputKey::Unresolved);
                 }
                 None => {}
             }
@@ -100,6 +101,9 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
+        if shadows(&tokens) {
+            self.reads.insert(InputKey::Unresolved);
+        }
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -114,23 +118,22 @@ impl<'a> Scan<'a> {
                 continue;
             };
             let resolved = match embedded(argument) {
-                Embedded::Literal(literal) => {
-                    literal_path(literal).and_then(|path| resolve(&directory_of(file), path))
-                }
+                Embedded::Literal(literal) => literal_path(literal)
+                    .and_then(|path| resolve(self.view, &directory_of(file), path)),
                 Embedded::ManifestDir(joined) => joined
                     .strip_prefix('/')
-                    .and_then(|path| resolve(&self.directory_parts(), path)),
+                    .and_then(|path| resolve(self.view, &self.directory_parts(), path)),
                 Embedded::Output => continue,
                 Embedded::Unresolved => None,
             };
             let Some(resolved) = resolved else {
-                self.reads.insert(None);
+                self.reads.insert(InputKey::Unresolved);
                 continue;
             };
             if *name == "include" {
                 self.follow(&resolved);
             }
-            self.reads.insert(Some(resolved));
+            self.reads.insert(InputKey::Path(resolved));
         }
     }
 
@@ -154,7 +157,7 @@ impl<'a> Scan<'a> {
         match held.or(plain) {
             Some(path) => self.pending.push(path),
             None => {
-                self.reads.insert(None);
+                self.reads.insert(InputKey::Unresolved);
             }
         }
     }
@@ -190,7 +193,7 @@ fn literals(rest: &[Token<'_>]) -> Option<String> {
     loop {
         match rest {
             [Token::Punct(','), Token::Str(literal), tail @ ..] => {
-                joined.push_str(literal);
+                joined.push_str(literal_path(literal)?);
                 rest = tail;
             }
             [Token::Punct(')'), ..] | [Token::Punct(','), Token::Punct(')'), ..] => {
@@ -201,18 +204,54 @@ fn literals(rest: &[Token<'_>]) -> Option<String> {
     }
 }
 
+fn shadows(tokens: &[Token<'_>]) -> bool {
+    let mut in_use = false;
+    tokens.iter().enumerate().any(|(at, token)| match token {
+        Token::Ident("use") => {
+            in_use = true;
+            false
+        }
+        Token::Punct(';') => {
+            in_use = false;
+            false
+        }
+        Token::Ident("macro_rules") => matches!(
+            tokens[at + 1..],
+            [Token::Punct('!'), Token::Ident(name), ..] if SHADOWABLE.contains(&name)
+        ),
+        Token::Ident("macro") => matches!(
+            tokens.get(at + 1),
+            Some(Token::Ident(name)) if SHADOWABLE.contains(name)
+        ),
+        Token::Ident(name) if in_use && SHADOWABLE.contains(name) => !from_std(&tokens[..at]),
+        _ => false,
+    })
+}
+
+fn from_std(before: &[Token<'_>]) -> bool {
+    matches!(
+        before,
+        [
+            ..,
+            Token::Ident("std" | "core"),
+            Token::Punct(':'),
+            Token::Punct(':')
+        ]
+    )
+}
+
 fn directory_of(file: &RepoPath) -> Vec<&str> {
     let mut parts: Vec<&str> = file.as_str().split('/').collect();
     parts.pop();
     parts
 }
 
-fn resolve(base: &[&str], literal: &str) -> Option<RepoPath> {
-    if literal.starts_with('/') || literal.contains('\\') {
+fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
+    if literal.starts_with('/') {
         return None;
     }
-    let mut parts: Vec<&str> = base.to_vec();
-    for part in literal.split('/') {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in base.iter().copied().chain(literal.split('/')) {
         match part {
             "" | "." => {}
             ".." => {
@@ -220,8 +259,15 @@ fn resolve(base: &[&str], literal: &str) -> Option<RepoPath> {
             }
             other => parts.push(other),
         }
+        if !parts.is_empty() && is_symlink(view, &parts) {
+            return None;
+        }
     }
     RepoPath::new(parts.join("/")).ok()
+}
+
+fn is_symlink(view: &RepoView, parts: &[&str]) -> bool {
+    RepoPath::new(parts.join("/")).is_ok_and(|prefix| view.symlinks.contains(&prefix))
 }
 
 fn literal_path(literal: &str) -> Option<&str> {

@@ -11,8 +11,8 @@ use crate::roots::CARGO_LOCK;
 pub(crate) use crate::select_paths::relative;
 use crate::select_paths::{contains, depth};
 use velnor_model::{
-    AllTrigger, ChangeSet, CompileInputs, InputOwner, MemberDependency, PackageName, RepoFacts,
-    RepoPath, RustCiConfig, RustRoot, RustSelection, SelectionReason, Unread,
+    AllTrigger, ChangeSet, CompileInputs, InputKey, InputOwner, MemberDependency, PackageName,
+    RepoFacts, RepoPath, RustCiConfig, RustRoot, RustSelection, SelectionReason, Unread,
 };
 
 type Pick<'p> = &'p dyn Fn(&PackageName, &RepoPath) -> bool;
@@ -211,18 +211,22 @@ impl<'a> Graph<'a> {
             .match_indices('/')
             .map(|(at, _)| &text[..at])
             .chain([text])
-            .filter_map(|prefix| self.inputs.get(&Some(RepoPath::new(prefix).ok()?)))
+            .filter_map(|prefix| self.inputs.get(&InputKey::at(prefix)?))
             .flatten()
             .collect();
-        let everywhere: Vec<&InputOwner> = self.inputs.get(&None).into_iter().flatten().collect();
+        let everywhere = self.inputs.get(&InputKey::Everything).into_iter().flatten();
+        let listed: Vec<&InputOwner> = locked.iter().copied().chain(everywhere).collect();
         let input = SelectionReason::Input(path.clone());
         self.seed_where(
-            &|name, manifest| locked.iter().any(|o| o.is(name, manifest)),
+            &|name, manifest| listed.iter().any(|o| o.is(name, manifest)),
             &input,
             walk,
         );
+        let unresolved = self.inputs.get(&InputKey::Unresolved);
         self.seed_where(
-            &|name, manifest| everywhere.iter().any(|o| o.is(name, manifest)),
+            &|name, manifest| {
+                unresolved.is_some_and(|owners| owners.iter().any(|o| o.is(name, manifest)))
+            },
             &SelectionReason::UnresolvedInclude,
             walk,
         );
@@ -280,11 +284,9 @@ impl<'a> Graph<'a> {
             generated_workflow(self.changes, path),
         ) {
             Class::Nothing => {}
-            Class::Packages(names) => self.seed_where(
-                &|name, _| names.contains(&name),
-                &SelectionReason::Input(path.clone()),
-                walk,
-            ),
+            Class::Packages(names) => {
+                self.seed_where(&|name, _| names.contains(&name), &input, walk)
+            }
             Class::Global(trigger) => walk.trigger(&trigger),
             Class::Unknown if !locked.is_empty() => {}
             Class::Unknown => {
