@@ -8,8 +8,10 @@ use serde::Deserialize;
 
 use super::git::read_blob;
 use crate::broker::{TrustedFacts, mirror_path};
-use crate::context_value::ContextValue;
-use crate::exec::{ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult};
+use crate::context_value::{ContextValue, ContextValueError};
+use crate::exec::{
+    DeclaredInputs, ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult,
+};
 use crate::expr::{ExprEnv, ExprError, ParseErrorKind, RootContext, evaluate_template};
 use crate::store::store_root;
 
@@ -159,11 +161,14 @@ pub(crate) fn expand(
         ));
     }
     let mut env = outer.clone();
-    env.set_context(RootContext::Inputs, &resolve_inputs(&action, inputs)?);
+    let invalid = |error: ContextValueError| ExecError::Invalid(error.to_string());
+    env.set_context(RootContext::Inputs, &resolve_inputs(&action, inputs)?)
+        .map_err(invalid)?;
     env.set_context(
         RootContext::Steps,
-        &ContextValue::object(Vec::new()).map_err(|error| ExecError::Invalid(error.to_string()))?,
-    );
+        &ContextValue::object(Vec::new()).map_err(invalid)?,
+    )
+    .map_err(invalid)?;
     env.withhold(RootContext::Secrets);
     env.withhold(RootContext::Needs);
     let mut steps = Vec::new();
@@ -301,8 +306,16 @@ impl StepAdapter for SetupVelnor {
         reference.starts_with(PREFIX)
     }
 
-    fn problem(&self, reference: &str, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        self.accepted(reference, inputs).err().map(super::reason)
+    fn problem(&self, reference: &str, inputs: &DeclaredInputs) -> Option<String> {
+        match inputs {
+            DeclaredInputs::Known(inputs) => {
+                self.accepted(reference, inputs).err().map(super::reason)
+            }
+            DeclaredInputs::Unknown => Some(
+                "setup-velnor cannot validate an expression-valued 'with:' in velnor-runner"
+                    .to_owned(),
+            ),
+        }
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {

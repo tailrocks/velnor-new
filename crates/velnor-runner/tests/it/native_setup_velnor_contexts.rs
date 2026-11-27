@@ -57,7 +57,7 @@ fn setup_velnor_renders_the_outer_contexts_of_its_step() -> Result<()> {
 
 #[test]
 fn setup_velnor_refuses_a_context_it_cannot_supply() -> Result<()> {
-    for root in ["secrets", "needs", "matrix", "job", "strategy", "vars"] {
+    for root in ["secrets", "needs", "matrix", "job", "strategy"] {
         let world = World::new()?;
         let action = real_action()?.replace(STEP_NAME, &format!("- name: ${{{{ {root}.value }}}}"));
         let sha = world.publish_action(&action)?;

@@ -28,8 +28,8 @@ use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
 use crate::exec::{
-    AdapterRegistry, ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture,
-    StepResult, append,
+    AdapterRegistry, DeclaredInputs, ExecError, InputValue, ProcessOutcome, StepAdapter,
+    StepContext, StepFuture, StepResult, append,
 };
 use crate::store::store_root;
 
@@ -333,8 +333,16 @@ impl StepAdapter for MiseAction {
         reference.starts_with(PREFIX)
     }
 
-    fn problem(&self, reference: &str, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        self.accepted(reference, inputs).err().map(super::reason)
+    fn problem(&self, reference: &str, inputs: &DeclaredInputs) -> Option<String> {
+        match inputs {
+            DeclaredInputs::Known(inputs) => {
+                self.accepted(reference, inputs).err().map(super::reason)
+            }
+            DeclaredInputs::Unknown => Some(
+                "jdx/mise-action cannot validate an expression-valued 'with:' in velnor-runner"
+                    .to_owned(),
+            ),
+        }
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {

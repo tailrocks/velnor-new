@@ -135,13 +135,6 @@ mod native_checkout_upkeep;
 mod native_checkout_walk;
 mod native_checkout_window;
 mod native_checkout_workspace;
-#[path = "exec_offload.rs"]
-mod offload;
-#[path = "exec_parity.rs"]
-mod parity;
-#[path = "exec_process.rs"]
-mod process;
-mod protocol_acquire_renew;
 mod native_mise;
 mod native_mise_admission;
 mod native_mise_ancestors;
@@ -162,6 +155,13 @@ mod native_mise_values;
 mod native_setup_velnor;
 mod native_setup_velnor_admission;
 mod native_setup_velnor_contexts;
+#[path = "exec_offload.rs"]
+mod offload;
+#[path = "exec_parity.rs"]
+mod parity;
+#[path = "exec_process.rs"]
+mod process;
+mod protocol_acquire_renew;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
