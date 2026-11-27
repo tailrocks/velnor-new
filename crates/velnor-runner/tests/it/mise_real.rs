@@ -131,6 +131,7 @@ impl World {
             .env("VELNOR_STORE_ROOT", &self.store)
             .env("MISE_CEILING_PATHS", self.ceiling())
             .envs(extra_env.iter().copied());
+        self.declare_read_only(&mut command);
         command.spawn().context("start velnor-runner exec")
     }
 

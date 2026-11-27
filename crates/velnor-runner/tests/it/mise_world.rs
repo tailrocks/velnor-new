@@ -342,6 +342,7 @@ impl World {
         self.unseal_store()?;
         let mut command = self.command(job)?;
         self.seal_store()?;
+        self.declare_read_only(&mut command);
         command
             .env("VELNOR_STORE_ROOT", &self.store)
             .env_remove("MISE_TRUSTED_CONFIG_PATHS")

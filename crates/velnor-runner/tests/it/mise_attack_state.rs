@@ -9,6 +9,7 @@ use anyhow::{Context, Result, ensure};
 
 use crate::exec_support::Ran;
 use crate::mise_real::{Check, Plant, Row, Verify, canonical};
+use crate::mise_store::link_runtime_versions;
 use crate::mise_world::{World, git};
 
 pub(crate) const STATE_IDS: [&str; 7] = ["S1", "S2", "S3", "P1", "P2", "P3", "P4"];
@@ -28,7 +29,7 @@ fn marker(world: &World, label: &str) -> PathBuf {
 fn stub(marker: Option<&Path>) -> String {
     let touch = marker.map_or_default(|marker| format!("touch {}\n", marker.display()));
     format!(
-        "#!/bin/sh\n{touch}if [ \"$1 $2\" = \"show profile\" ]; then echo minimal; fi\nexit 0\n"
+        "#!/bin/sh\n{touch}case \"$1 $2\" in\n  'show profile') echo minimal ;;\n  'component list') printf 'cargo\\nrustc\\nrust-std\\nclippy\\nrustfmt\\n' ;;\n  'target list') printf 'aarch64-unknown-linux-gnu\\nx86_64-unknown-linux-gnu\\n' ;;\nesac\nexit 0\n"
     )
 }
 
@@ -45,6 +46,7 @@ impl World {
         let link = installs.join("1.90.0");
         let _ = std::fs::remove_file(&link);
         std::os::unix::fs::symlink(&bin, &link).context("link the rust install")?;
+        link_runtime_versions(&installs, "1.90.0")?;
         for name in ["rustup", "cargo", "rustc"] {
             let path = bin.join(name);
             std::fs::write(&path, stub(None)).context("write the store proxy")?;

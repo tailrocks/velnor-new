@@ -140,12 +140,7 @@ impl Mise {
             .into_iter()
             .filter_map(|(name, value)| {
                 let value = value.as_str()?;
-                let rewritten = if name.eq_ignore_ascii_case("PATH") {
-                    isolation.path_list_to_workspace(value)
-                } else {
-                    isolation.to_workspace(value)
-                };
-                Some((name, rewritten))
+                Some((name, isolation.to_workspace(value)))
             })
             .collect())
     }
@@ -322,7 +317,12 @@ async fn mise_action(
         .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
-    require_read_only_store(&install.store.data, &store_root())?;
+    require_read_only_store(&[
+        ("MISE_DATA_DIR", &install.store.data),
+        ("MISE_RUSTUP_HOME", &install.store.rustup_home),
+        ("MISE_CARGO_HOME", &install.store.cargo_home),
+        ("the mise binary directory", &install.store.bin),
+    ])?;
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;

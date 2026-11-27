@@ -4,12 +4,7 @@
 use super::mise_lock::refuse;
 use crate::exec::ExecError;
 
-const ARTIFACT_BACKENDS: [&str; 7] = [
-    "aqua", "core", "forgejo", "github", "gitlab", "packslip", "ubi",
-];
-const PACKAGE_BACKENDS: [&str; 10] = [
-    "cargo", "conda", "dotnet", "gem", "go", "npm", "pipx", "pypi", "spinel", "spm",
-];
+const BACKENDS: [&str; 6] = ["aqua", "core", "forgejo", "github", "gitlab", "packslip"];
 const TOOL_OPTIONS: [&str; 6] = [
     "components",
     "os",
@@ -18,7 +13,6 @@ const TOOL_OPTIONS: [&str; 6] = [
     "version",
     "workflow",
 ];
-const CHECKSUM_ALGORITHMS: [(&str, usize); 3] = [("sha256", 64), ("sha512", 128), ("blake3", 64)];
 const RESERVED_ENV: [&str; 3] = ["CARGO_HOME", "HOME", "PATH"];
 const RESERVED_ENV_PREFIXES: [&str; 2] = ["MISE_", "RUSTUP_"];
 
@@ -65,70 +59,61 @@ fn is_plain(value: &toml::Value) -> bool {
     }
 }
 
-fn lock_entries<'a>(lock: &'a toml::Table, key: &str) -> Vec<&'a toml::Table> {
-    match lock
-        .get("tools")
-        .and_then(toml::Value::as_table)
-        .and_then(|tools| tools.get(key))
-    {
-        Some(toml::Value::Table(entry)) => vec![entry],
-        Some(toml::Value::Array(entries)) => {
-            entries.iter().filter_map(toml::Value::as_table).collect()
-        }
+fn entries(value: &toml::Value) -> Vec<&toml::Table> {
+    match value {
+        toml::Value::Table(entry) => vec![entry],
+        toml::Value::Array(entries) => entries.iter().filter_map(toml::Value::as_table).collect(),
         _ => Vec::new(),
     }
 }
 
-fn lock_backend(lock: &toml::Table, key: &str) -> Option<String> {
-    lock_entries(lock, key)
-        .iter()
-        .find_map(|entry| entry.get("backend").and_then(toml::Value::as_str))
-        .map(str::to_owned)
+fn backend_of(entry: &toml::Table) -> Option<&str> {
+    entry.get("backend").and_then(toml::Value::as_str)
 }
 
-fn backend_prefix(lock: &toml::Table, key: &str) -> Result<String, ExecError> {
-    let named = match key.split_once(':') {
-        Some((prefix, _)) => Some(prefix.to_owned()),
-        None => lock_backend(lock, key)
-            .map(|backend| backend.split(':').next().unwrap_or_default().to_owned()),
-    };
-    named.ok_or_else(|| refuse(&format!("tool '{key}' without a backend in mise.lock")))
-}
-
-fn is_checksum(text: &str) -> bool {
-    text.split_once(':').is_some_and(|(algorithm, digest)| {
-        CHECKSUM_ALGORITHMS
-            .iter()
-            .any(|(name, length)| *name == algorithm && digest.len() == *length)
-            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-    })
-}
-
-fn platform_tables(entry: &toml::Table) -> Vec<&toml::Table> {
-    let mut tables: Vec<&toml::Table> = entry
-        .iter()
-        .filter(|(name, _)| name.starts_with("platforms."))
-        .filter_map(|(_, value)| value.as_table())
-        .collect();
-    if let Some(nested) = entry.get("platforms").and_then(toml::Value::as_table) {
-        tables.extend(nested.values().filter_map(toml::Value::as_table));
+fn require_supported_backend(key: &str, backend: &str) -> Result<(), ExecError> {
+    if backend.contains(['[', ']']) {
+        return Err(refuse(&format!(
+            "backend '{backend}' of tool '{key}' with inline options"
+        )));
     }
-    tables
+    let prefix = backend.split(':').next().unwrap_or_default();
+    if !BACKENDS.contains(&prefix) {
+        return Err(refuse(&format!("backend '{prefix}' of tool '{key}'")));
+    }
+    match key.split_once(':') {
+        Some((named, _)) if named != prefix => Err(refuse(&format!(
+            "backend '{prefix}' of tool '{key}' that differs from its key"
+        ))),
+        _ => Ok(()),
+    }
 }
 
-fn carries_checksum(lock: &toml::Table, key: &str) -> bool {
-    let entries = lock_entries(lock, key);
-    !entries.is_empty()
-        && entries.iter().all(|entry| {
-            let platforms = platform_tables(entry);
-            !platforms.is_empty()
-                && platforms.iter().all(|table| {
-                    table
-                        .get("checksum")
-                        .and_then(toml::Value::as_str)
-                        .is_some_and(is_checksum)
-                })
-        })
+fn require_supported_lock(lock: &toml::Table) -> Result<(), ExecError> {
+    let tools = lock.get("tools").and_then(toml::Value::as_table);
+    for (key, value) in tools.into_iter().flatten() {
+        for backend in entries(value).into_iter().filter_map(backend_of) {
+            require_supported_backend(key, backend)?;
+        }
+    }
+    Ok(())
+}
+
+fn require_backend(lock: &toml::Table, key: &str) -> Result<(), ExecError> {
+    if key.contains(':') {
+        return require_supported_backend(key, key);
+    }
+    let locked = lock
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .and_then(|tools| tools.get(key))
+        .map_or_default(entries);
+    if locked.is_empty() || locked.iter().any(|entry| backend_of(entry).is_none()) {
+        return Err(refuse(&format!(
+            "tool '{key}' without a backend in mise.lock"
+        )));
+    }
+    Ok(())
 }
 
 fn require_supported_tool(
@@ -139,16 +124,7 @@ fn require_supported_tool(
     if key.contains(['[', ']']) {
         return Err(refuse(&format!("tool '{key}' with inline options")));
     }
-    let prefix = backend_prefix(lock, key)?;
-    let package = PACKAGE_BACKENDS.contains(&prefix.as_str());
-    if !package && !ARTIFACT_BACKENDS.contains(&prefix.as_str()) {
-        return Err(refuse(&format!("backend '{prefix}' of tool '{key}'")));
-    }
-    if package && !carries_checksum(lock, key) {
-        return Err(refuse(&format!(
-            "package tool '{key}' without a checksum in mise.lock"
-        )));
-    }
+    require_backend(lock, key)?;
     let Some(specs) = specs(value) else {
         return Err(refuse(&format!("tool '{key}' with this value")));
     };
@@ -203,6 +179,7 @@ pub(super) fn require_supported_values(
     lock: &toml::Table,
 ) -> Result<(), ExecError> {
     require_unreserved_env(config)?;
+    require_supported_lock(lock)?;
     let tools = config.get("tools").and_then(toml::Value::as_table);
     for (key, value) in tools.into_iter().flatten() {
         require_supported_tool(lock, key, value)?;

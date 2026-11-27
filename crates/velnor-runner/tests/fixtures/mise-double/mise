@@ -74,7 +74,7 @@ case "$1" in
           IFS=$old_ifs
         fi
         if [ -n "$(conf EMBEDDED)" ]; then
-          printf '{"PATH":"%s/bin:%s/late:%s2/bin:%s","LEAD":"%s/ok","EMB":"pre%s-post","SIB":"%s2/x"}\n' "$here" "$here" "$here" "$inherited" "$here" "$here" "$here"
+          printf '{"PATH":"%s/bin:%s/late:%s2/bin:%s","LEAD":"%s/ok","EMB":"pre%s-post","SIB":"%s2/x","INC":"-I%s/include -L%s/lib","LIST":"%s:%s/x:/other"}\n' "$here" "$here" "$here" "$inherited" "$here" "$here" "$here" "$here" "$here" "$here" "$here"
         elif [ -n "$in_copy" ]; then
           printf '{"PATH":"%s/bin:%s/tbin:%s","FOO":"%s/x","CFG":"%s","SECRET":"%s/secret-token"}\n' "$here" "$here" "$inherited" "$here" "$here" "$here"
         else

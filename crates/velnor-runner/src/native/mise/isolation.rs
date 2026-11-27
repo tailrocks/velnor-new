@@ -29,6 +29,10 @@ fn text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+fn is_boundary(next: char) -> bool {
+    next.is_whitespace() || matches!(next, '/' | ':' | ',' | ';' | '"' | '\'')
+}
+
 fn io(action: &str, path: &Path) -> impl FnOnce(std::io::Error) -> ExecError {
     let context = format!("{action} {}", path.display());
     move |source| ExecError::io(context, source)
@@ -101,20 +105,20 @@ impl Isolation {
     }
 
     pub(super) fn to_workspace(&self, value: &str) -> String {
-        match value.strip_prefix(&text(&self.config_dir())) {
-            Some(rest) if rest.is_empty() || rest.starts_with('/') => {
-                format!("{}{rest}", text(&self.workspace))
-            }
-            _ => value.to_owned(),
+        let private = text(&self.config_dir());
+        let workspace = text(&self.workspace);
+        let mut rewritten = String::with_capacity(value.len());
+        let mut rest = value;
+        while let Some(index) = rest.find(&private) {
+            let (head, tail) = rest.split_at(index);
+            let after = &tail[private.len()..];
+            rewritten.push_str(head);
+            let boundary = after.chars().next().is_none_or(is_boundary);
+            rewritten.push_str(if boundary { &workspace } else { &private });
+            rest = after;
         }
-    }
-
-    pub(super) fn path_list_to_workspace(&self, value: &str) -> String {
-        let entries: Vec<String> = value
-            .split(':')
-            .map(|entry| self.to_workspace(entry))
-            .collect();
-        entries.join(":")
+        rewritten.push_str(rest);
+        rewritten
     }
 
     pub(super) async fn remove(self) -> Result<(), ExecError> {

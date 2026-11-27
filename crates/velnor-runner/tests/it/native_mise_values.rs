@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Write;
-use std::path::PathBuf;
-
 use anyhow::Result;
 
 use crate::mise_double::each_row;
-use crate::mise_store::StoreMode;
 use crate::mise_world::{World, assert_failed, job_fixture};
 
 const HEAD: &str = "[settings]\nlockfile = true\n\n";
@@ -15,7 +11,6 @@ const GO_LOCK: &str = "[[tools.go]]\nversion = \"1.22.0\"\nbackend = \"core:go\"
 const NODE_LOCK: &str = "[[tools.node]]\nversion = \"26.13.1\"\nbackend = \"core:node\"\n";
 const RUST_LOCK: &str = "[[tools.rust]]\nversion = \"1.90.0\"\nbackend = \"core:rust\"\n";
 const NODE: &str = "[tools]\nnode = { version = \"26.13.1\", ";
-const SHA256: &str = "sha256:ca1f81a5b86533eb45ab97e0064aa88e925e53aab9a698ca6331a7cad1f85f07";
 
 type Row = (&'static str, &'static str, &'static str, &'static str);
 
@@ -170,116 +165,31 @@ fn mise_action_refuses_tool_options_outside_the_safe_set() -> Result<()> {
     )
 }
 
-fn package_lock(key: &str, platforms: &[&str]) -> String {
-    platform_lock(key, platforms, "\"platforms.p{}\"")
-}
-
-fn nested_package_lock(key: &str, platforms: &[&str]) -> String {
-    platform_lock(key, platforms, "platforms.p{}")
-}
-
-fn lone_entry(key: &str) -> String {
-    format!("[[tools.\"{key}\"]]\nversion = \"2.0.0\"\nbackend = \"{key}\"\n")
-}
-
-fn platform_lock(key: &str, platforms: &[&str], table: &str) -> String {
-    let mut lock = format!("[[tools.\"{key}\"]]\nversion = \"1.0.0\"\nbackend = \"{key}\"\n");
-    for (index, platform) in platforms.iter().enumerate() {
-        let name = table.replace("{}", &index.to_string());
-        let _ = write!(lock, "\n[tools.\"{key}\".{name}]\n{platform}\n");
-    }
-    lock
-}
-
 #[test]
-fn mise_action_refuses_every_package_backend_without_a_lock_checksum() -> Result<()> {
+fn mise_action_refuses_every_package_and_ubi_backend() -> Result<()> {
     let backends = [
-        "cargo", "go", "npm", "gem", "pipx", "pypi", "conda", "dotnet", "spm", "spinel",
+        "cargo", "go", "npm", "gem", "pipx", "pypi", "conda", "dotnet", "spm", "spinel", "ubi",
     ];
     each_row(&backends, |backend| {
         let key = format!("{backend}:pkg");
         let tools = format!("[tools]\n\"{key}\" = \"1.0.0\"\n");
         let lock = format!("[[tools.\"{key}\"]]\nversion = \"1.0.0\"\nbackend = \"{key}\"\n");
-        let expected = format!("package tool '{key}' without a checksum in mise.lock");
-        refused(backend, &tools, &lock, &expected)
+        let expected = format!("backend '{backend}' of tool '{key}'");
+        refused(backend, &tools, &lock, &expected)?;
+        refused(backend, &tools, "", &expected)
     })
 }
 
 #[test]
-fn mise_action_refuses_a_package_lock_entry_that_does_not_carry_checksums_throughout() -> Result<()>
-{
-    let key = "cargo:pkg";
-    let tools = format!("[tools]\n\"{key}\" = \"1.0.0\"\n");
-    let expected = format!("package tool '{key}' without a checksum in mise.lock");
-    let good = format!("checksum = \"{SHA256}\"");
-    let sha512 = format!("checksum = \"sha512:{}\"", "ab".repeat(64));
-    let rows = [
-        ("no entry", String::new()),
-        ("no platforms", package_lock(key, &[])),
-        (
-            "no checksum",
-            package_lock(key, &["checksum_source = \"mise-versions\""]),
-        ),
-        (
-            "weak algorithm",
-            package_lock(
-                key,
-                &["checksum = \"md5:d41d8cd98f00b204e9800998ecf8427e\""],
-            ),
-        ),
-        (
-            "short digest",
-            package_lock(key, &["checksum = \"sha256:abc\""]),
-        ),
-        (
-            "non hex digest",
-            package_lock(
-                key,
-                &[&format!("checksum = \"sha256:{}\"", "zz".repeat(32))],
-            ),
-        ),
-        (
-            "one platform without",
-            package_lock(key, &[&good, "url = \"x\""]),
-        ),
-        (
-            "one platform empty",
-            package_lock(key, &[&sha512, "checksum = \"\""]),
-        ),
-        ("nested without", nested_package_lock(key, &["url = \"x\""])),
-        (
-            "second entry without",
-            format!("{}\n{}", lone_entry(key), package_lock(key, &[&good])),
-        ),
-    ];
-    for (label, lock) in rows {
-        refused(label, &tools, &lock, &expected)?;
+fn mise_action_refuses_a_ubi_tool_that_names_an_http_url() -> Result<()> {
+    for key in [
+        "ubi:http://example.com/tool.tgz",
+        "ubi:https://example.com/tool.tgz",
+    ] {
+        let tools = format!("[tools]\n\"{key}\" = \"1\"\n");
+        refused(key, &tools, "", &format!("backend 'ubi' of tool '{key}'"))?;
     }
     Ok(())
-}
-
-#[test]
-fn mise_action_accepts_a_package_backend_whose_lock_entry_carries_checksums() -> Result<()> {
-    let sha512 = format!("checksum = \"sha512:{}\"", "ab".repeat(64));
-    let blake3 = format!("checksum = \"blake3:{}\"", "cd".repeat(32));
-    let good = [format!("checksum = \"{SHA256}\""), sha512, blake3];
-    let words: Vec<&str> = good.iter().map(String::as_str).collect();
-    let locks = [
-        package_lock("cargo:pkg", &words),
-        nested_package_lock("cargo:pkg", &words),
-    ];
-    each_row(&locks.each_ref().map(String::as_str), |lock| {
-        let world = World::new()?;
-        world.install_mise()?;
-        world.init_workspace_with_lock(
-            &format!("{HEAD}[tools]\n\"cargo:pkg\" = \"1.0.0\"\n"),
-            lock,
-        )?;
-        let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
-        assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
-        assert_eq!(world.mise_installs().len(), 1);
-        Ok(())
-    })
 }
 
 #[test]
@@ -314,45 +224,5 @@ fn mise_action_accepts_table_options_inside_the_safe_set() -> Result<()> {
     let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert_eq!(world.mise_installs().len(), 1);
-    Ok(())
-}
-
-#[test]
-fn mise_action_refuses_a_data_dir_the_step_can_write() -> Result<()> {
-    for relative in ["tools/data", "tools", ""] {
-        let mut world = World::new()?;
-        world.store_mode = StoreMode::Open(relative);
-        world.install_mise()?;
-        world.init_workspace(true)?;
-        let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
-        let writable = world.store.join(relative).components().collect::<PathBuf>();
-        assert_failed(
-            &ran,
-            &format!(
-                "mise policy: {} is writable by this process; the tools store holding MISE_DATA_DIR {} must be read-only",
-                writable.display(),
-                world.data_dir().display()
-            ),
-        );
-        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{relative:?}");
-    }
-    Ok(())
-}
-
-#[test]
-fn mise_action_refuses_a_data_dir_missing_from_the_store() -> Result<()> {
-    let mut world = World::new()?;
-    world.store_mode = StoreMode::NoData;
-    world.install_mise()?;
-    world.init_workspace(true)?;
-    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
-    assert_failed(
-        &ran,
-        &format!(
-            "mise policy: MISE_DATA_DIR {} is missing from the tools store",
-            world.data_dir().display()
-        ),
-    );
-    assert_eq!(world.mise_calls(), Vec::<String>::new());
     Ok(())
 }

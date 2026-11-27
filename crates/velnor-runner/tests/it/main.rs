@@ -150,6 +150,8 @@ mod native_mise_homes;
 mod native_mise_include;
 mod native_mise_inputs;
 mod native_mise_isolation;
+mod native_mise_lock;
+mod native_mise_mount;
 mod native_mise_policy;
 mod native_mise_readonly;
 mod native_mise_store;

@@ -47,12 +47,12 @@ fn mise_action_takes_cargo_and_rustup_homes_only_from_the_store() -> Result<()> 
 }
 
 #[test]
-fn mise_action_rewrites_only_a_leading_private_prefix() -> Result<()> {
+fn mise_action_rewrites_the_private_prefix_at_a_path_boundary() -> Result<()> {
     let world = prepared()?;
     world.configure_double(&[("EMBEDDED", "1"), ("NO_PATHS", "1")])?;
     let job = world.with_final_script(
         &job_fixture("mise_action_ok"),
-        "echo \"lead=$LEAD\"\necho \"emb=$EMB\"\necho \"sib=$SIB\"\necho \"$PATH\" | tr ':' '\\n' | sed 's/^/pathentry=/'",
+        "echo \"lead=$LEAD\"\necho \"emb=$EMB\"\necho \"sib=$SIB\"\necho \"inc=$INC\"\necho \"list=$LIST\"\necho \"$PATH\" | tr ':' '\\n' | sed 's/^/pathentry=/'",
     )?;
     let ran = world.run(&job, &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
@@ -68,6 +68,8 @@ fn mise_action_rewrites_only_a_leading_private_prefix() -> Result<()> {
         format!("lead={workspace}/ok"),
         format!("emb=pre{private}-post"),
         format!("sib={private}2/x"),
+        format!("inc=-I{workspace}/include -L{workspace}/lib"),
+        format!("list={workspace}:{workspace}/x:/other"),
         format!("pathentry={workspace}/bin"),
         format!("pathentry={workspace}/late"),
         format!("pathentry={private}2/bin"),
