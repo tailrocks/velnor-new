@@ -51,7 +51,24 @@ fn writable_below(root: &Path) -> Result<Vec<PathBuf>, ExecError> {
     Ok(found)
 }
 
+#[cfg(feature = "test-support")]
+fn log_scan() {
+    use std::io::Write;
+    if let Some(path) = std::env::var_os("VELNOR_TEST_SCAN_LOG")
+        && let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+    {
+        let _ = writeln!(file, "scan");
+    }
+}
+
+#[cfg(not(feature = "test-support"))]
+fn log_scan() {}
+
 pub(super) async fn writable_directories(roots: Vec<PathBuf>) -> Result<Vec<PathBuf>, ExecError> {
+    log_scan();
     tokio::task::spawn_blocking(move || {
         let mut found = Vec::new();
         for root in &roots {

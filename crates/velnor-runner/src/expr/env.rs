@@ -169,6 +169,10 @@ impl ExprEnv {
         Ok(())
     }
 
+    pub fn withhold(&mut self, root: RootContext) {
+        self.contexts.remove(&root);
+    }
+
     pub(crate) fn context(&self, root: RootContext) -> Value {
         self.contexts
             .expose()
@@ -180,7 +184,7 @@ impl ExprEnv {
 
 impl ParseEnvironment for ExprEnv {
     fn root_context(&self, name: &str) -> Option<RootContext> {
-        RootContext::parse(name)
+        RootContext::parse(name).filter(|root| self.contexts.contains_key(root))
     }
 
     fn function(&self, name: &str) -> Option<Function> {

@@ -22,13 +22,14 @@ use self::binary::locate_binary;
 use self::inputs::MiseInputs;
 use self::isolation::{Isolation, StoreEnv};
 use self::paths::require_confined;
-use self::pin::{require_pinned_revision, require_pinned_version};
+use self::pin::require_pinned_revision;
 use self::readonly::require_read_only_store;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
 use crate::exec::{
-    AdapterRegistry, ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
+    AdapterRegistry, ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture,
+    StepResult,
 };
 use crate::store::store_root;
 
@@ -229,8 +230,8 @@ impl Install {
         }
     }
 
-    async fn require_read_only(&self) -> Result<(), ExecError> {
-        require_read_only_store(&self.tools, &self.store.directories()).await
+    async fn require_read_only(&self, first: bool) -> Result<(), ExecError> {
+        require_read_only_store(&self.tools, &self.store.directories(), first).await
     }
 }
 
@@ -272,7 +273,7 @@ async fn export(
             variables.push_str(&env_command(name, value));
         }
     }
-    install.require_read_only().await?;
+    install.require_read_only(false).await?;
     append(&github_path, &(paths.join("\n") + "\n")).await?;
     append(&github_env, &variables).await
 }
@@ -289,7 +290,7 @@ async fn mise_action(
         .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
-    install.require_read_only().await?;
+    install.require_read_only(true).await?;
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;
@@ -310,7 +311,7 @@ async fn mise_action(
             return Ok(StepResult::Failed);
         }
     }
-    install.require_read_only().await?;
+    install.require_read_only(false).await?;
     export(ctx, &mise, &isolation, &install).await?;
     isolation.remove().await?;
     Ok(StepResult::Succeeded)
@@ -326,6 +327,13 @@ impl StepAdapter for MiseAction {
         reference.starts_with(PREFIX)
     }
 
+    fn problem(&self, reference: &str, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
+        require_pinned_revision(reference)
+            .and_then(|()| MiseInputs::validate(inputs).map(drop))
+            .err()
+            .map(super::reason)
+    }
+
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
             require_pinned_revision(&ctx.reference)?;
@@ -335,7 +343,6 @@ impl StepAdapter for MiseAction {
                 .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();
             let inputs = MiseInputs::parse(&given)?;
-            require_pinned_version(&inputs.version)?;
             ctx.set_output("cache-hit", "false");
             mise_action(&inputs, &self.facts, ctx).await
         }

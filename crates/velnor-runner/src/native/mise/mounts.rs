@@ -77,9 +77,16 @@ fn table_source() -> Option<PathBuf> {
     declared_table().or_else(|| cfg!(target_os = "linux").then(|| PathBuf::from(MOUNTINFO)))
 }
 
-async fn writable_points(roots: &[(&str, PathBuf)]) -> Result<Vec<PathBuf>, ExecError> {
+async fn writable_points(
+    roots: &[(&str, PathBuf)],
+    first: bool,
+) -> Result<Vec<PathBuf>, ExecError> {
     let Some(source) = table_source() else {
-        return writable_directories(roots.iter().map(|(_, root)| root.clone()).collect()).await;
+        return if first {
+            writable_directories(roots.iter().map(|(_, root)| root.clone()).collect()).await
+        } else {
+            Ok(Vec::new())
+        };
     };
     let text = tokio::fs::read_to_string(&source)
         .await
@@ -93,8 +100,9 @@ async fn writable_points(roots: &[(&str, PathBuf)]) -> Result<Vec<PathBuf>, Exec
 
 pub(super) async fn require_no_writable_mount_under(
     roots: &[(&str, PathBuf)],
+    first: bool,
 ) -> Result<(), ExecError> {
-    for point in writable_points(roots).await? {
+    for point in writable_points(roots, first).await? {
         if let Some((role, root)) = roots.iter().find(|(_, root)| point.starts_with(root)) {
             return Err(ExecError::Invalid(format!(
                 "mise policy: {role} {} holds a writable mount at {}; the tools store must be one read-only mount",

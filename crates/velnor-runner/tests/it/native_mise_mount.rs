@@ -72,7 +72,8 @@ fn run_on_mount(world: &World, mut command: Command, mounted: &Mounted) -> Resul
         .env("HOME", world.home())
         .env("VELNOR_STORE_ROOT", &mounted.mountpoint)
         .env("MISE_CEILING_PATHS", world.ceiling())
-        .env("VELNOR_TEST_STORE_TRUST", world.trust_declaration());
+        .env("VELNOR_TEST_STORE_TRUST", world.trust_declaration())
+        .env("VELNOR_TEST_SCAN_LOG", world.root.join("scans.log"));
     World::finish(command.spawn().context("start velnor-runner exec")?)
 }
 
@@ -155,6 +156,7 @@ fn nested_rows() -> Vec<Nested> {
             "tools/rustup",
             "tools/rustup/toolchains",
         ),
+        row("MISE_CARGO_HOME", "tools/cargo", "tools/cargo/registry"),
         row(
             "the mise binary directory",
             &binary,
@@ -196,5 +198,25 @@ fn mise_action_refuses_a_writable_mount_nested_under_a_read_only_store() -> Resu
         .filter_map(|row| Some(format!("row {row:?}: {:#}", refuses_nested(row).err()?)))
         .collect();
     ensure!(failed.is_empty(), "{}", failed.join("\n"));
+    Ok(())
+}
+
+#[test]
+fn mise_action_scans_the_store_once_per_step() -> Result<()> {
+    let (world, real, command) = prepared()?;
+    let mounted = mount_read_only(&world)?;
+    let ran = run_on_mount(&world, command, &mounted)?;
+    ensure!(
+        ran.has_line("job succeeded"),
+        "({}) {}",
+        real.version,
+        ran.stdout
+    );
+    let scans = std::fs::read_to_string(world.root.join("scans.log")).unwrap_or_default();
+    ensure!(
+        scans.lines().count() == 1,
+        "the store was scanned {} times:\n{scans}",
+        scans.lines().count()
+    );
     Ok(())
 }

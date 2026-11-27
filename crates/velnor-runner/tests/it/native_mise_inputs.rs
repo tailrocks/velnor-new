@@ -3,7 +3,8 @@
 
 use anyhow::Result;
 
-use crate::mise_world::{VERSION, World, assert_failed, job_fixture};
+use crate::mise_world::{VERSION, World, job_fixture};
+use crate::native_mise_admission::assert_refused;
 
 #[test]
 fn mise_action_rejects_inputs_it_does_not_implement() -> Result<()> {
@@ -18,7 +19,7 @@ fn mise_action_rejects_inputs_it_does_not_implement() -> Result<()> {
     ] {
         let job = world.with_input(&job_fixture("mise_action_ok"), name, value)?;
         let ran = world.run(&job, &[])?;
-        assert_failed(
+        assert_refused(
             &ran,
             &format!(
                 "unsupported: jdx/mise-action input '{name}' is not supported by velnor-runner"
@@ -99,9 +100,9 @@ fn mise_action_rejects_a_version_that_is_not_exact() -> Result<()> {
     for version in ["latest", "2026.11", "../../2026.11.10", "2026.13.1"] {
         let job = world.with_input(&job_fixture("mise_action_ok"), "version", version)?;
         let ran = world.run(&job, &[])?;
-        assert_failed(
+        assert_refused(
             &ran,
-            &format!("mise version '{version}' is not an exact YYYY.M.D version"),
+            &format!("unsupported: mise version '{version}' is not an exact YYYY.M.D version"),
         );
         assert_eq!(world.mise_calls(), Vec::<String>::new(), "{version}");
     }
@@ -116,7 +117,7 @@ fn mise_action_refuses_a_mise_version_other_than_the_pinned_one() -> Result<()> 
     for version in ["2026.11.14", "2026.11.9", "2026.12.1"] {
         let job = world.with_input(&job_fixture("mise_action_ok"), "version", version)?;
         let ran = world.run(&job, &[])?;
-        assert_failed(
+        assert_refused(
             &ran,
             &format!(
                 "unsupported: mise {version} is not the mise version {VERSION} pinned in .velnor/version-policy.toml"
@@ -133,7 +134,7 @@ fn mise_action_rejects_cache_true() -> Result<()> {
     world.install_mise()?;
     world.init_workspace(true)?;
     let ran = world.run(&job_fixture("mise_action_cache_true"), &[])?;
-    assert_failed(
+    assert_refused(
         &ran,
         "unsupported: jdx/mise-action input 'cache' must be false",
     );
@@ -148,7 +149,7 @@ fn mise_action_requires_cache_to_be_explicitly_false() -> Result<()> {
     world.init_workspace(true)?;
     let omitted = world.without_input(&job_fixture("mise_action_ok"), "cache")?;
     let ran = world.run(&omitted, &[])?;
-    assert_failed(
+    assert_refused(
         &ran,
         "unsupported: jdx/mise-action input 'cache' must be false",
     );

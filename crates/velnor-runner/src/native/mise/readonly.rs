@@ -59,6 +59,7 @@ fn check(
 pub(super) async fn require_read_only_store(
     tools: &Path,
     directories: &[(&str, &Path)],
+    first: bool,
 ) -> Result<(), ExecError> {
     let held = open_tools(tools)?;
     let mut roots = Vec::with_capacity(directories.len());
@@ -72,5 +73,5 @@ pub(super) async fn require_read_only_store(
         })?;
         roots.push((*role, check(role, directory, relative, held.as_ref())?));
     }
-    require_no_writable_mount_under(&roots).await
+    require_no_writable_mount_under(&roots, first).await
 }

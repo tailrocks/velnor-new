@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::exec::ExecError;
+use super::pin::require_pinned_version;
+use crate::exec::{ExecError, InputValue};
 use crate::native::mise_lock::is_valid_mise_version;
 
 const CACHE_MUST_BE_FALSE: &str = "jdx/mise-action input 'cache' must be false";
@@ -30,27 +31,46 @@ pub(super) struct MiseInputs {
 
 impl MiseInputs {
     pub(super) fn parse(inputs: &BTreeMap<String, String>) -> Result<Self, ExecError> {
+        let literal = inputs
+            .iter()
+            .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
+            .collect();
+        Self::validate(&literal)
+    }
+
+    pub(super) fn validate(inputs: &BTreeMap<String, InputValue>) -> Result<Self, ExecError> {
         let mut parsed = Self {
             version: String::new(),
             sha256: String::new(),
             install_args: String::new(),
         };
         let mut cache_disabled = false;
+        let mut version_known = true;
         for (name, value) in inputs {
-            match name.to_ascii_lowercase().as_str() {
-                "version" => value.trim().clone_into(&mut parsed.version),
-                "sha256" => value.trim().clone_into(&mut parsed.sha256),
-                "install_args" => value.trim().clone_into(&mut parsed.install_args),
-                "cache" if matches!(value.trim(), "false" | "False" | "FALSE") => {
+            let name = name.to_ascii_lowercase();
+            let InputValue::Literal(value) = value else {
+                match name.as_str() {
+                    "cache" => cache_disabled = true,
+                    "version" => version_known = false,
+                    _ => {}
+                }
+                continue;
+            };
+            let value = value.trim();
+            match name.as_str() {
+                "version" => value.clone_into(&mut parsed.version),
+                "sha256" => value.clone_into(&mut parsed.sha256),
+                "install_args" => value.clone_into(&mut parsed.install_args),
+                "cache" if matches!(value, "false" | "False" | "FALSE") => {
                     cache_disabled = true;
                 }
                 "cache" => return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned())),
-                other if value.trim().is_empty() && BOOLEAN_INPUTS.contains(&other) => {
+                other if value.is_empty() && BOOLEAN_INPUTS.contains(&other) => {
                     return Err(ExecError::Invalid(format!(
                         "Input does not meet YAML 1.2 \"Core Schema\" specification: {other}\nSupport boolean input list: `true | True | TRUE | false | False | FALSE`"
                     )));
                 }
-                _ if value.trim().is_empty() => {}
+                _ if value.is_empty() => {}
                 other => {
                     return Err(ExecError::Unsupported(format!(
                         "jdx/mise-action input '{other}' is not supported by velnor-runner"
@@ -61,11 +81,14 @@ impl MiseInputs {
         if !cache_disabled {
             return Err(ExecError::Unsupported(CACHE_MUST_BE_FALSE.to_owned()));
         }
-        if !is_valid_mise_version(&parsed.version) {
-            return Err(ExecError::Invalid(format!(
-                "mise version '{}' is not an exact YYYY.M.D version",
-                parsed.version
-            )));
+        if version_known {
+            if !is_valid_mise_version(&parsed.version) {
+                return Err(ExecError::Invalid(format!(
+                    "mise version '{}' is not an exact YYYY.M.D version",
+                    parsed.version
+                )));
+            }
+            require_pinned_version(&parsed.version)?;
         }
         Ok(parsed)
     }

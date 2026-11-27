@@ -13,6 +13,7 @@ use super::output::Output;
 use super::step::{Limits, ProcessSpec, ScriptStep, capture, run, run_isolated, run_script};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, JobFacts, StepResult};
+use crate::expr::ExprEnv;
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
@@ -82,6 +83,7 @@ pub struct StepContext<'a> {
     pub temp: &'a Path,
     pub github_token: Option<String>,
     pub cancel: Option<JobCancel>,
+    pub(crate) expressions: ExprEnv,
     pub(super) outputs: Vec<(String, String)>,
     pub(super) groups: &'a Groups,
     pub(super) out: &'a mut Output<'a>,
@@ -257,6 +259,7 @@ pub(super) struct AdapterCall<'a> {
     pub(super) temp: &'a Path,
     pub(super) github_token: Option<String>,
     pub(super) cancel: Option<JobCancel>,
+    pub(super) expressions: ExprEnv,
     pub(super) timeout: Option<Timeout>,
     pub(super) groups: &'a Groups,
 }
@@ -282,6 +285,7 @@ pub(super) async fn invoke(
         temp: call.temp,
         github_token: call.github_token,
         cancel: Some(step_cancel.clone()),
+        expressions: call.expressions,
         outputs: Vec::new(),
         groups: call.groups,
         out: &mut inner,

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -10,8 +9,8 @@ use serde::Deserialize;
 use super::git::read_blob;
 use crate::broker::{TrustedFacts, mirror_path};
 use crate::context_value::ContextValue;
-use crate::exec::{ExecError, StepAdapter, StepContext, StepFuture, StepResult};
-use crate::expr::{ExprEnv, RootContext, evaluate_template};
+use crate::exec::{ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult};
+use crate::expr::{ExprEnv, ExprError, ParseErrorKind, RootContext, evaluate_template};
 use crate::store::store_root;
 
 const PREFIX: &str = "tailrocks/velnor-new/actions/setup-velnor@";
@@ -107,9 +106,24 @@ fn resolve_inputs(
     ContextValue::object(entries).map_err(|error| ExecError::Invalid(error.to_string()))
 }
 
+fn refuse(error: ExprError) -> ExecError {
+    match error {
+        ExprError::Parse(parse)
+            if matches!(
+                parse.kind,
+                ParseErrorKind::UnsupportedContext | ParseErrorKind::UnsupportedFunction
+            ) =>
+        {
+            ExecError::Unsupported(format!("setup-velnor expression: {parse}"))
+        }
+        other => ExecError::from(other),
+    }
+}
+
 pub(crate) fn expand(
     action_yml: &str,
     inputs: &BTreeMap<String, String>,
+    outer: &ExprEnv,
 ) -> Result<Vec<ExpandedStep>, ExecError> {
     let action: Action = serde_saphyr::from_str(action_yml)
         .map_err(|error| ExecError::Invalid(format!("setup-velnor action.yml: {error}")))?;
@@ -118,9 +132,20 @@ pub(crate) fn expand(
             "setup-velnor is not a composite action".to_owned(),
         ));
     }
-    let mut env = ExprEnv::new(PathBuf::new());
+    if action.runs.steps.is_empty() {
+        return Err(ExecError::Invalid(
+            "setup-velnor action.yml declares no steps".to_owned(),
+        ));
+    }
+    let mut env = outer.clone();
     env.set_context(RootContext::Inputs, &resolve_inputs(&action, inputs)?);
-    let render = |text: &str| evaluate_template(text, &env).map_err(ExecError::from);
+    env.set_context(
+        RootContext::Steps,
+        &ContextValue::object(Vec::new()).map_err(|error| ExecError::Invalid(error.to_string()))?,
+    );
+    env.withhold(RootContext::Secrets);
+    env.withhold(RootContext::Needs);
+    let render = |text: &str| evaluate_template(text, &env).map_err(refuse);
     let mut steps = Vec::new();
     for raw in &action.runs.steps {
         if raw.uses.is_some() {
@@ -138,7 +163,7 @@ pub(crate) fn expand(
                 .name
                 .as_deref()
                 .map_or_else(|| Ok(String::new()), render)?,
-            shell: shell.clone(),
+            shell: render(shell)?,
             env: raw
                 .env
                 .iter()
@@ -155,16 +180,20 @@ pub(crate) fn expand(
     Ok(steps)
 }
 
+fn require_commit_sha(sha: &str) -> Result<(), ExecError> {
+    if sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Ok(());
+    }
+    Err(ExecError::Invalid(format!(
+        "setup-velnor reference '{sha}' is not a 40 digit commit sha"
+    )))
+}
+
 async fn pinned_action_yml(
     ctx: &mut StepContext<'_>,
     facts: &TrustedFacts,
     sha: &str,
 ) -> Result<String, ExecError> {
-    if sha.len() != 40 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(ExecError::Invalid(format!(
-            "setup-velnor reference '{sha}' is not a 40 digit commit sha"
-        )));
-    }
     let mirror = mirror_path(&store_root(), facts)
         .map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
     read_blob(ctx, &mirror, sha, ACTION_PATH).await
@@ -175,34 +204,51 @@ pub(super) struct SetupVelnor {
     pub(super) facts: Result<TrustedFacts, String>,
 }
 
+impl SetupVelnor {
+    fn accepted<'a>(
+        &'a self,
+        reference: &'a str,
+    ) -> Result<(&'a TrustedFacts, &'a str), ExecError> {
+        let facts = self
+            .facts
+            .as_ref()
+            .map_err(|reason| ExecError::Invalid(reason.clone()))?;
+        if !facts
+            .repository
+            .as_str()
+            .eq_ignore_ascii_case(OWNER_REPOSITORY)
+        {
+            return Err(ExecError::Unsupported(format!(
+                "setup-velnor is only supported in {OWNER_REPOSITORY}, not {}",
+                facts.repository.as_str()
+            )));
+        }
+        let sha = reference.strip_prefix(PREFIX).unwrap_or(reference);
+        require_commit_sha(sha)?;
+        Ok((facts, sha))
+    }
+}
+
 impl StepAdapter for SetupVelnor {
     fn handles(&self, reference: &str) -> bool {
         reference.starts_with(PREFIX)
     }
 
+    fn problem(&self, reference: &str, _inputs: &BTreeMap<String, InputValue>) -> Option<String> {
+        self.accepted(reference).err().map(super::reason)
+    }
+
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
-            let sha = ctx.reference.trim_start_matches(PREFIX).to_owned();
-            let facts = self
-                .facts
-                .as_ref()
-                .map_err(|reason| ExecError::Invalid(reason.clone()))?;
-            if !facts
-                .repository
-                .as_str()
-                .eq_ignore_ascii_case(OWNER_REPOSITORY)
-            {
-                return Err(ExecError::Unsupported(format!(
-                    "setup-velnor is only supported in {OWNER_REPOSITORY}, not {}",
-                    facts.repository.as_str()
-                )));
-            }
+            let reference = ctx.reference.clone();
+            let (facts, sha) = self.accepted(&reference)?;
             let given = ctx
                 .inputs
                 .iter()
                 .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();
-            let steps = expand(&pinned_action_yml(ctx, facts, &sha).await?, &given)?;
+            let yml = pinned_action_yml(ctx, facts, sha).await?;
+            let steps = expand(&yml, &given, &ctx.expressions)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));
                 let result = ctx.run_script(&step.script, &step.shell, &step.env).await?;

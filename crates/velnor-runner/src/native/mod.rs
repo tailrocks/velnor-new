@@ -14,7 +14,14 @@ mod umask;
 pub(crate) use umask::Umask;
 
 use crate::broker::StoreWriter;
-use crate::exec::AdapterRegistry;
+use crate::exec::{AdapterRegistry, ExecError};
+
+fn reason(error: ExecError) -> String {
+    match error {
+        ExecError::Unsupported(text) => text,
+        other => other.to_string(),
+    }
+}
 
 pub(crate) fn registry(store: StoreWriter, umask: Umask) -> AdapterRegistry {
     let store = std::sync::Arc::new(store);

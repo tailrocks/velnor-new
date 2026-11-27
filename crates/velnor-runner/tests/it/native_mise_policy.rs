@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use crate::mise_double::{each_row, git_bytes};
 use crate::mise_repo::{REPO_MISE_CONFIG, REPO_MISE_LOCK, repo_config_without_wrappers};
 use crate::mise_world::{CONFIG, World, assert_failed, git, job_fixture, pinned_mise_action};
+use crate::native_mise_admission::assert_refused;
 
 const LISTED: &str = "jactionlint shellcheck node";
 
@@ -111,7 +112,7 @@ fn mise_action_accepts_only_the_pinned_revision() -> Result<()> {
         world.init_workspace(true)?;
         let job = world.with_text(&job_fixture("mise_action_ok"), &[(&pinned, other)])?;
         let ran = world.run(&job, &[])?;
-        assert_failed(
+        assert_refused(
             &ran,
             &format!(
                 "unsupported: jdx/mise-action@{other} is not the jdx/mise-action revision {pinned} pinned in .velnor/version-policy.toml"

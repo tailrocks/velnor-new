@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::exec_support::Scratch;
 use crate::mise_world::{SHA_PLACEHOLDER, World, assert_failed, job_fixture, real_action};
 use crate::native_checkout::{Rig, finish, git};
+use crate::native_mise_admission::assert_refused;
 
 const REAL_ERROR: &str =
     "::error title=setup-velnor::version 'x' must be MAJOR.MINOR.PATCH, digits only";
@@ -91,9 +92,11 @@ fn setup_velnor_rejects_a_reference_that_is_not_a_commit_sha() -> Result<()> {
             &real_job(&world, "setup_velnor_real_action", reference)?,
             &[],
         )?;
-        assert_failed(
+        assert_refused(
             &ran,
-            &format!("setup-velnor reference '{reference}' is not a 40 digit commit sha"),
+            &format!(
+                "unsupported: setup-velnor reference '{reference}' is not a 40 digit commit sha"
+            ),
         );
     }
     Ok(())
@@ -216,7 +219,7 @@ fn setup_velnor_is_unsupported_outside_its_own_repository() -> Result<()> {
         ],
     )?;
     let ran = world.run(&job, &[])?;
-    assert_failed(
+    assert_refused(
         &ran,
         "unsupported: setup-velnor is only supported in tailrocks/velnor-new, not someone/fork",
     );
