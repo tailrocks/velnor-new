@@ -65,8 +65,7 @@ impl Broker {
             }
             Request::RepairMirror { token, window } => {
                 let token = token.as_ref().map(Token::expose);
-                let repair = mirror::repair(&self.root, &self.facts, token, window);
-                within(self.repair_cap, repair)
+                mirror::repair(&self.root, &self.facts, token, window, self.repair_cap)
                     .await
                     .map(|repair| match repair {
                         Repair::Sound => Response::Sound,

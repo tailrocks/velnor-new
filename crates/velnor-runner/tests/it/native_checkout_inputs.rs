@@ -169,7 +169,7 @@ fn workspace_inside_another_repositorys_mirror_is_refused_and_that_mirror_surviv
     Ok(())
 }
 
-const MARKER_STEP: &str = r#""Steps": [
+pub(crate) const MARKER_STEP: &str = r#""Steps": [
     {
       "Type": "action",
       "Id": "00000000-0000-0000-0000-000000000002",

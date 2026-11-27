@@ -113,14 +113,15 @@ impl TryFrom<String> for ServerUrl {
         };
         match Url::parse(&value) {
             Ok(url) if matches!(url.scheme(), "https" | "http" | "file") => {
-                if url.username().is_empty() && url.password().is_none() {
-                    Ok(Self(url))
-                } else {
+                let origin = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
+                if !url.username().is_empty() || url.password().is_some() {
+                    Err(invalid(format!("{origin} (credentials are not allowed)")))
+                } else if url.query().is_some() || url.fragment().is_some() {
                     Err(invalid(format!(
-                        "{}://{} (credentials are not allowed)",
-                        url.scheme(),
-                        url.host_str().unwrap_or_default()
+                        "{origin} (a query or a fragment is not allowed)"
                     )))
+                } else {
+                    Ok(Self(url))
                 }
             }
             _ => Err(invalid("not an http, https or file URL".to_owned())),

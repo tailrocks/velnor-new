@@ -48,6 +48,10 @@ async fn purge_expired(directory: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(super) async fn clear(mirror: &Path) -> Result<()> {
+    remove_entry(&mirror.join(DIRECTORY)).await
+}
+
 pub(super) async fn record(mirror: &Path, sha: &str, window: Window) -> Result<()> {
     let directory: PathBuf = mirror.join(DIRECTORY);
     if !is_dir(&directory).await {

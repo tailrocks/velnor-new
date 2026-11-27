@@ -38,7 +38,7 @@ fn deep(rig: &Rig, sha: &str, depth: usize) -> Result<(Ran, Scratch)> {
     Ok((ran, scratch))
 }
 
-fn checks_out(rig: &Rig, sha: &str, depth: usize) -> Result<Scratch> {
+pub(crate) fn checks_out(rig: &Rig, sha: &str, depth: usize) -> Result<Scratch> {
     let (ran, scratch) = deep(rig, sha, depth)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     let workspace = scratch.workspace();
@@ -47,7 +47,7 @@ fn checks_out(rig: &Rig, sha: &str, depth: usize) -> Result<Scratch> {
     Ok(scratch)
 }
 
-fn warm(rig: &Rig, sha: &str) -> Result<()> {
+pub(crate) fn warm(rig: &Rig, sha: &str) -> Result<()> {
     let ran = rig.run("checkout_depth1", sha, &Scratch::new()?)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
     Ok(())

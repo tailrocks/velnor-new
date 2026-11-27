@@ -26,7 +26,10 @@ impl StepAdapter for Checkout {
     }
 
     fn problem(&self, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        validate_inputs(inputs).err()
+        self.store
+            .facts()
+            .err()
+            .or_else(|| validate_inputs(inputs).err())
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
@@ -259,16 +262,16 @@ async fn ask(
     store: &StoreWriter,
     ctx: &mut StepContext<'_>,
     request: impl FnOnce(Option<Token>) -> Request,
-) -> Result<bool, ExecError> {
+) -> Result<(), ExecError> {
     let token = ctx.github_token.clone().map(Token::new);
     match store.request(request(token)).await {
         Response::Done { notices } => {
             for notice in notices {
                 ctx.log(&notice);
             }
-            Ok(true)
+            Ok(())
         }
-        Response::Sound => Ok(false),
+        Response::Sound => Ok(()),
         Response::Failed { message } => Err(ExecError::Invalid(message)),
         Response::Hello(_) => Err(ExecError::Invalid(
             "store broker protocol error: Hello answered a mirror request".to_owned(),
@@ -302,13 +305,12 @@ async fn populate(
     }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
     let mut state = materialize(ctx, &mirror, facts, &dest, depth).await?;
-    if matches!(state, Materialized::CheckoutFailed)
-        && ask(store, ctx, |token| Request::RepairMirror {
+    if matches!(state, Materialized::CheckoutFailed) {
+        ask(store, ctx, |token| Request::RepairMirror {
             token,
             window: depth.window(),
         })
-        .await?
-    {
+        .await?;
         empty_directory(ctx.workspace).await.map_err(invalid)?;
         state = materialize(ctx, &mirror, facts, &dest, depth).await?;
     }

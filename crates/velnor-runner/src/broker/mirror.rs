@@ -19,7 +19,9 @@ use super::location::mirror_path;
 use super::proto::Window;
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
+use super::within;
 
+mod orphans;
 mod refetch;
 mod sound;
 
@@ -287,26 +289,37 @@ pub(crate) enum Repair {
     Repaired(Vec<String>),
 }
 
+async fn repair_locked(
+    mirror: &Path,
+    facts: &TrustedFacts,
+    token: Option<&str>,
+    window: Window,
+) -> Result<Repair> {
+    let sha = facts.sha.as_str();
+    let cached = sound::is_fresh(mirror, sha, window).await;
+    let scanned = if cached { Window::COMMIT } else { window };
+    if quarantine_corrupt(mirror, sha, scanned).await? == Scan::Sound {
+        if !cached {
+            let _ = sound::record(mirror, sha, window).await;
+        }
+        return Ok(Repair::Sound);
+    }
+    remove_ref_locks(mirror).await?;
+    let notices = drop_broken_refs(mirror).await?;
+    let env = fetch_env(facts.server_url.url(), token);
+    refetch(mirror, &facts.clone_url(), facts, &env).await?;
+    Ok(Repair::Repaired(notices))
+}
+
 pub(crate) async fn repair(
     root: &Path,
     facts: &TrustedFacts,
     token: Option<&str>,
     window: Window,
+    cap: Duration,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
-    let sha = facts.sha.as_str();
-    if sound::is_fresh(&mirror, sha, window).await {
-        return Ok(Repair::Sound);
-    }
-    if quarantine_corrupt(&mirror, sha, window).await? == Scan::Sound {
-        let _ = sound::record(&mirror, sha, window).await;
-        return Ok(Repair::Sound);
-    }
-    remove_ref_locks(&mirror).await?;
-    let notices = drop_broken_refs(&mirror).await?;
-    let env = fetch_env(facts.server_url.url(), token);
-    refetch(&mirror, &facts.clone_url(), facts, &env).await?;
-    Ok(Repair::Repaired(notices))
+    within(cap, repair_locked(&mirror, facts, token, window)).await
 }
 
 async fn is_dir(path: &Path) -> bool {
@@ -343,5 +356,6 @@ async fn prepare(mirror: &Path) -> Result<()> {
             .with_context(|| format!("path {} is not UTF-8", mirror.display()))?;
         git(&git_args(None, &["init", "-q", "--bare", mirror_arg]), &[]).await?;
     }
+    orphans::remove_orphan_packs(mirror).await?;
     reset_mirror(mirror).await
 }

@@ -11,6 +11,7 @@ use crate::native_checkout_repair::{object_path, overwrite};
 use crate::native_checkout_walk::{import, publish, started};
 
 const VERIFIED: &str = "--verify-objects";
+const WALKED: &str = "\"cat-file\",\"--batch\"]";
 
 fn unwritable_commit(rig: &Rig) -> Result<String> {
     let stream = format!(
@@ -35,14 +36,19 @@ fn fails_to_check_out(rig: &Rig, fixture: &str, sha: &str) -> Result<()> {
     Ok(())
 }
 
+fn walks(rig: &Rig) -> usize {
+    started(rig, WALKED)
+}
+
 #[test]
-fn a_repeated_failure_on_a_sound_mirror_is_not_scanned_again() -> Result<()> {
+fn a_repeated_failure_on_a_sound_mirror_does_not_walk_the_window_again() -> Result<()> {
     let rig = Rig::new()?;
     let sha = unwritable_commit(&rig)?;
     for _ in 0..3 {
-        fails_to_check_out(&rig, "checkout_depth1", &sha)?;
+        fails_to_check_out(&rig, "checkout_depth2", &sha)?;
     }
-    assert_eq!(started(&rig, VERIFIED), 1);
+    assert_eq!(walks(&rig), 1);
+    assert_eq!(started(&rig, VERIFIED), 3);
     assert_eq!(rig.refetches(), 0);
     Ok(())
 }
@@ -53,9 +59,9 @@ fn a_sound_result_covers_only_the_window_it_checked() -> Result<()> {
     let sha = unwritable_commit(&rig)?;
     fails_to_check_out(&rig, "checkout_depth1", &sha)?;
     fails_to_check_out(&rig, "checkout_depth2", &sha)?;
-    assert_eq!(started(&rig, VERIFIED), 2);
+    assert_eq!(walks(&rig), 1);
     fails_to_check_out(&rig, "checkout_depth2", &sha)?;
-    assert_eq!(started(&rig, VERIFIED), 2);
+    assert_eq!(walks(&rig), 1);
     Ok(())
 }
 
@@ -63,15 +69,15 @@ fn a_sound_result_covers_only_the_window_it_checked() -> Result<()> {
 fn a_sound_result_expires_after_a_day() -> Result<()> {
     let rig = Rig::new()?;
     let sha = unwritable_commit(&rig)?;
-    fails_to_check_out(&rig, "checkout_depth1", &sha)?;
-    let marker = rig.mirror().join("sound").join(format!("{sha}-last-1"));
+    fails_to_check_out(&rig, "checkout_depth2", &sha)?;
+    let marker = rig.mirror().join("sound").join(format!("{sha}-last-2"));
     let recorded = std::fs::File::options().write(true).open(&marker)?;
     recorded.set_modified(SystemTime::now() - Duration::from_hours(23))?;
-    fails_to_check_out(&rig, "checkout_depth1", &sha)?;
-    assert_eq!(started(&rig, VERIFIED), 1);
+    fails_to_check_out(&rig, "checkout_depth2", &sha)?;
+    assert_eq!(walks(&rig), 1);
     recorded.set_modified(SystemTime::now() - Duration::from_hours(25))?;
-    fails_to_check_out(&rig, "checkout_depth1", &sha)?;
-    assert_eq!(started(&rig, VERIFIED), 2);
+    fails_to_check_out(&rig, "checkout_depth2", &sha)?;
+    assert_eq!(walks(&rig), 2);
     Ok(())
 }
 

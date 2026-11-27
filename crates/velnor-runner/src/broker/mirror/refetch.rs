@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::{missing_tree, remove_entry};
+use super::{missing_tree, remove_entry, sound};
 use crate::broker::facts::TrustedFacts;
 use crate::broker::git::{git, git_args, has_tree, output};
 use crate::broker::repair::refs;
@@ -115,6 +115,7 @@ pub(super) async fn refetch(
     facts: &TrustedFacts,
     env: &[(OsString, OsString)],
 ) -> Result<()> {
+    sound::clear(mirror).await?;
     let stage = mirror.join(STAGE);
     remove_entry(&stage).await?;
     let adopted = adopt(mirror, &stage, clone_url, facts, env).await;

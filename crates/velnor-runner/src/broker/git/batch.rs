@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -18,11 +18,22 @@ pub(crate) enum Commit {
     Damaged,
 }
 
-pub(crate) struct Batch {
+enum Answer {
+    Commit(Commit),
+    Ended,
+}
+
+struct Session {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     stderr: JoinHandle<String>,
     _leader: Leader,
+}
+
+pub(crate) struct Batch {
+    git_dir: PathBuf,
+    session: Session,
+    noted: String,
 }
 
 fn object_id(word: &str) -> Option<&str> {
@@ -54,15 +65,14 @@ fn parse_commit(body: &[u8]) -> Commit {
     Commit::Parents(parents)
 }
 
-async fn answer(stdout: &mut BufReader<ChildStdout>, id: &str) -> Result<Commit> {
+async fn answer(stdout: &mut BufReader<ChildStdout>, id: &str) -> Result<Answer> {
     let mut header = String::new();
-    if stdout
+    let read = stdout
         .read_line(&mut header)
         .await
-        .context("read git cat-file")?
-        == 0
-    {
-        bail!("git cat-file ended before it answered {id}");
+        .context("read git cat-file")?;
+    if read == 0 || !header.ends_with('\n') {
+        return Ok(Answer::Ended);
     }
     let mut words = header.trim_end().split(' ');
     if words.next() != Some(id) {
@@ -70,7 +80,7 @@ async fn answer(stdout: &mut BufReader<ChildStdout>, id: &str) -> Result<Commit>
     }
     let kind = words.next().unwrap_or_default();
     if kind == "missing" {
-        return Ok(Commit::Damaged);
+        return Ok(Answer::Commit(Commit::Damaged));
     }
     let size: u64 = words
         .next()
@@ -78,31 +88,33 @@ async fn answer(stdout: &mut BufReader<ChildStdout>, id: &str) -> Result<Commit>
         .with_context(|| format!("git cat-file answered {header:?} to {id}"))?;
     let kept = size.min(BODY_LIMIT);
     let mut body = Vec::new();
-    (&mut *stdout)
-        .take(kept)
-        .read_to_end(&mut body)
+    let copied = tokio::io::copy(&mut (&mut *stdout).take(kept), &mut body)
         .await
         .context("read a commit from git cat-file")?;
-    tokio::io::copy(
+    let skipped = tokio::io::copy(
         &mut (&mut *stdout).take(size - kept),
         &mut tokio::io::sink(),
     )
     .await
     .context("skip a commit body from git cat-file")?;
     let mut newline = [0_u8; 1];
-    stdout
-        .read_exact(&mut newline)
-        .await
-        .context("read the end of a git cat-file entry")?;
-    Ok(if kind == "commit" && size <= BODY_LIMIT {
+    match stdout.read_exact(&mut newline).await {
+        Ok(_) if copied == kept && skipped == size - kept => {}
+        Ok(_) => return Ok(Answer::Ended),
+        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+            return Ok(Answer::Ended);
+        }
+        Err(error) => return Err(error).context("read the end of a git cat-file entry"),
+    }
+    Ok(Answer::Commit(if kind == "commit" && size <= BODY_LIMIT {
         parse_commit(&body)
     } else {
         Commit::Damaged
-    })
+    }))
 }
 
-impl Batch {
-    pub(crate) fn open(git_dir: &Path) -> Result<Self> {
+impl Session {
+    fn open(git_dir: &Path) -> Result<Self> {
         let args = git_args(Some(git_dir), &["cat-file", "--batch"]);
         let mut leader = Leader::spawn(&args, &[], Pipes::Capture { feed: true })?;
         let stdin = leader.child.stdin.take().context("git has no stdin")?;
@@ -121,28 +133,59 @@ impl Batch {
         })
     }
 
-    pub(crate) async fn commits(&mut self, ids: &[String]) -> Result<Vec<Commit>> {
+    async fn ask(&mut self, ids: &[String], answered: &mut Vec<Commit>) -> Result<()> {
         let input = line_per(ids.iter().map(String::as_str));
         let Self { stdin, stdout, .. } = self;
         let write = async {
-            stdin
-                .write_all(input.as_bytes())
-                .await
-                .context("feed git cat-file")?;
-            stdin.flush().await.context("feed git cat-file")
+            let _ = stdin.write_all(input.as_bytes()).await;
+            let _ = stdin.flush().await;
         };
         let read = async {
-            let mut commits = Vec::with_capacity(ids.len());
             for id in ids {
-                commits.push(answer(stdout, id).await?);
+                match answer(stdout, id).await? {
+                    Answer::Commit(commit) => answered.push(commit),
+                    Answer::Ended => break,
+                }
             }
-            Ok(commits)
+            Ok::<(), anyhow::Error>(())
         };
-        tokio::try_join!(write, read).map(|((), commits)| commits)
+        let ((), read) = tokio::join!(write, read);
+        read
+    }
+
+    async fn finish(self) -> String {
+        drop(self.stdin);
+        self.stderr.await.unwrap_or_default()
+    }
+}
+
+impl Batch {
+    pub(crate) fn open(git_dir: &Path) -> Result<Self> {
+        Ok(Self {
+            git_dir: git_dir.to_owned(),
+            session: Session::open(git_dir)?,
+            noted: String::new(),
+        })
+    }
+
+    pub(crate) async fn commits(&mut self, ids: &[String]) -> Result<Vec<Commit>> {
+        let mut commits = Vec::with_capacity(ids.len());
+        while commits.len() < ids.len() {
+            self.session
+                .ask(&ids[commits.len()..], &mut commits)
+                .await?;
+            if commits.len() < ids.len() {
+                commits.push(Commit::Damaged);
+                let next = Session::open(&self.git_dir)?;
+                let ended = std::mem::replace(&mut self.session, next);
+                self.noted.extend([ended.finish().await.as_str(), "\n"]);
+            }
+        }
+        Ok(commits)
     }
 
     pub(crate) async fn finish(self) -> String {
-        drop(self.stdin);
-        self.stderr.await.unwrap_or_default()
+        let last = self.session.finish().await;
+        format!("{}{last}", self.noted)
     }
 }

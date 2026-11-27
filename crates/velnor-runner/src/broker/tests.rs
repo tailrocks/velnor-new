@@ -41,3 +41,33 @@ async fn a_repair_that_outlives_its_cap_reports_failure_and_stops_git() {
         other => panic!("the cap did not end the repair: {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn the_cap_does_not_count_the_wait_for_the_mirror_lock() {
+    let root = std::env::temp_dir().join(format!("velnor-cap-lock-{}", std::process::id()));
+    let facts = facts("file:///nonexistent-velnor-server");
+    let mirror = super::mirror_path(&root, &facts).expect("mirror path");
+    let mut lock_file = mirror.clone().into_os_string();
+    lock_file.push(".lock");
+    std::fs::create_dir_all(mirror.parent().expect("parent")).expect("parent dir");
+    let held = std::fs::File::create(&lock_file).expect("lock file");
+    held.lock().expect("take the lock");
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(11));
+        drop(held);
+    });
+    let broker = Broker::new(facts, root.clone()).with_repair_cap(Duration::from_secs(10));
+    let request = Request::RepairMirror {
+        token: None,
+        window: Window::COMMIT,
+    };
+    let response = tokio::time::timeout(Duration::from_secs(120), broker.handle(request)).await;
+    release.join().expect("release the lock");
+    let _ = std::fs::remove_dir_all(&root);
+    match response {
+        Ok(Response::Failed { message }) => {
+            assert!(!message.contains("took longer than"), "{message}");
+        }
+        other => panic!("the repair did not fail on the missing server: {other:?}"),
+    }
+}

@@ -24,7 +24,7 @@ fn a_workspace_path_that_is_not_utf8_is_rejected_before_it_is_emptied() -> Resul
     let ran = finish(rig.start_at(&job, &workspace, &scratch, &[])?)?;
     assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
     assert!(
-        ran.stdout.contains("workspace is not UTF-8"),
+        ran.stdout.contains("the workspace path is not valid UTF-8"),
         "{}\n{}",
         ran.stdout,
         ran.stderr
