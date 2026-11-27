@@ -1,5 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Isaac Z. Schlueter and Contributors
+// SPDX-License-Identifier: Apache-2.0 AND ISC
+// SPDX-FileContributor: isaacs/minimatch@3.1.5 minimatch.js
 
 use super::js_class::{Raw, check_raw};
 use super::pattern::GlobError;

@@ -349,7 +349,11 @@ fn expr_hash_files_rejects_dotted_home() -> Result<()> {
     let root = fs::canonicalize(dir.path())?;
     let mut env = dir.env();
 
-    for home in [root.join("ws/sub/.."), root.join(".").join("ws")] {
+    for home in [
+        root.join("ws/sub/.."),
+        root.join(".").join("ws"),
+        root.join("missing/../ws"),
+    ] {
         env.home = Some(home);
         for pattern in ["~/a.txt", "~/**"] {
             let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
