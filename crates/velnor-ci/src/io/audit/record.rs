@@ -129,7 +129,14 @@ impl Audit<'_> {
                     self.foreign.get(&key).cloned()
                 })
             });
-        let Some((source, _)) = self.dep_info(&base, budget, file, package.as_deref())? else {
+        let Some((source, _)) = self.dep_info(
+            &base,
+            budget,
+            file,
+            package.as_deref(),
+            hash.map(|hash| (configuration, hash)),
+        )?
+        else {
             return Ok(());
         };
         for (index, (package, fingerprint)) in hits {

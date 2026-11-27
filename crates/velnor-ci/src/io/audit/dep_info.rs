@@ -12,13 +12,18 @@ use velnor_model::RepoPath;
 use velnor_rust::{Located, dep_info_paths, locate, normalize, rerun_if_changed};
 
 use super::super::units::UnitFile;
+use super::links::{self, Links};
 use super::{Audit, REBUILD, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
 
 const ROOT_OUTPUT_LIMIT: u64 = 8 << 10;
+const FINGERPRINT_LIMIT: u64 = 1 << 20;
+
+type Identity<'a> = (Option<&'a str>, Option<(&'a str, &'a str)>);
 
 struct Run {
+    hash: String,
     out: Option<PathBuf>,
     undeclared: bool,
 }
@@ -27,6 +32,7 @@ struct Run {
 pub(super) struct BuildOutputs {
     runs: BTreeMap<(usize, String), Vec<Run>>,
     texts: BTreeMap<PathBuf, String>,
+    owned: BTreeMap<(usize, String, String), String>,
     read_only: OnceCell<Vec<PathBuf>>,
 }
 
@@ -37,6 +43,7 @@ impl Audit<'_> {
         index: usize,
         file: &Path,
         package: Option<&str>,
+        unit: Option<(&str, &str)>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
         let text = read(
             file,
@@ -58,8 +65,8 @@ impl Audit<'_> {
             }
             return Ok(None);
         }
-        self.refuse_unexplained_reads(workspace, index, package, file, &paths)?;
-        let unseen = self.reads_unseen_output(workspace, index, package, &paths);
+        self.refuse_unexplained_reads(workspace, index, (package, unit), file, &paths)?;
+        let unseen = self.reads_unseen_output(workspace, index, (package, unit), &paths);
         for owner in self.owners.of(package, &source) {
             self.credit(&owner, workspace, &paths, false);
             if unseen {
@@ -76,33 +83,68 @@ impl Audit<'_> {
         &mut self,
         files: &[(UnitFile, PathBuf, Vec<usize>)],
     ) -> Result<(), CiError> {
+        let mut links = Links::default();
         for (unit, output, indices) in files {
-            let (UnitFile::BuildOutput { package, .. }, Some(&budget)) = (unit, indices.first())
-            else {
+            let Some(&budget) = indices.first() else {
                 continue;
             };
-            let index = self
-                .member_owners(package, indices)
-                .first()
-                .copied()
-                .unwrap_or(budget);
-            let text = read(
-                output,
-                &mut self.target_bytes[budget],
-                SOURCE_TOTAL_LIMIT,
-                "build-script output",
-            )?;
-            let out = self.recorded_root(output, budget)?;
-            self.outputs
-                .runs
-                .entry((index, package.clone()))
-                .or_default()
-                .push(Run {
-                    out,
-                    undeclared: rerun_if_changed(&text).is_empty(),
-                });
-            self.outputs.texts.insert(output.clone(), text);
+            match unit {
+                UnitFile::BuildOutput { package, hash, .. } => {
+                    self.note_run(output, indices, budget, package, hash)?;
+                }
+                UnitFile::Fingerprint {
+                    configuration,
+                    hash,
+                    name,
+                    ..
+                } => {
+                    if let Some(kind) = links::kind(name) {
+                        let text = read(
+                            output,
+                            &mut self.target_bytes[budget],
+                            FINGERPRINT_LIMIT,
+                            "fingerprint file",
+                        )?;
+                        links.note(kind, &text, configuration, hash, indices);
+                    }
+                }
+                _ => {}
+            }
         }
+        self.outputs.owned = links.resolve();
+        Ok(())
+    }
+
+    fn note_run(
+        &mut self,
+        output: &Path,
+        indices: &[usize],
+        budget: usize,
+        package: &str,
+        hash: &str,
+    ) -> Result<(), CiError> {
+        let index = self
+            .member_owners(package, indices)
+            .first()
+            .copied()
+            .unwrap_or(budget);
+        let text = read(
+            output,
+            &mut self.target_bytes[budget],
+            SOURCE_TOTAL_LIMIT,
+            "build-script output",
+        )?;
+        let out = self.recorded_root(output, budget)?;
+        self.outputs
+            .runs
+            .entry((index, package.to_owned()))
+            .or_default()
+            .push(Run {
+                hash: hash.to_owned(),
+                out,
+                undeclared: rerun_if_changed(&text).is_empty(),
+            });
+        self.outputs.texts.insert(output.to_path_buf(), text);
         Ok(())
     }
 
@@ -128,10 +170,10 @@ impl Audit<'_> {
         &self,
         workspace: &Path,
         index: usize,
-        package: Option<&str>,
+        unit: Identity<'_>,
         paths: &[String],
     ) -> bool {
-        self.runs_of(index, package)
+        self.runs_of(index, unit)
             .filter(|run| run.undeclared)
             .any(|run| match &run.out {
                 Some(out) => paths
@@ -141,18 +183,24 @@ impl Audit<'_> {
             })
     }
 
-    fn runs_of(&self, index: usize, package: Option<&str>) -> impl Iterator<Item = &Run> {
+    fn runs_of(&self, index: usize, (package, unit): Identity<'_>) -> impl Iterator<Item = &Run> {
+        let own = unit.and_then(|(configuration, hash)| {
+            self.outputs
+                .owned
+                .get(&(index, configuration.to_owned(), hash.to_owned()))
+        });
         package
             .and_then(|name| self.outputs.runs.get(&(index, name.to_owned())))
             .into_iter()
             .flatten()
+            .filter(move |run| own.is_none_or(|hash| run.hash == *hash))
     }
 
     fn refuse_unexplained_reads(
         &self,
         workspace: &Path,
         index: usize,
-        package: Option<&str>,
+        unit: Identity<'_>,
         file: &Path,
         paths: &[String],
     ) -> Result<(), CiError> {
@@ -162,7 +210,7 @@ impl Audit<'_> {
             .map(|path| normalize(&workspace.join(path)))
             .filter(|full| {
                 !self
-                    .runs_of(index, package)
+                    .runs_of(index, unit)
                     .filter_map(|run| run.out.as_ref())
                     .any(|out| full.starts_with(out))
             })

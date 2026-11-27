@@ -5,6 +5,7 @@ mod build;
 mod freshness;
 mod groups;
 mod inventory;
+mod links;
 mod options;
 mod outside;
 mod record;
