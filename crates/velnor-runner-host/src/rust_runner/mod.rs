@@ -3,10 +3,12 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 mod controller;
 mod job;
 mod machine;
+mod orb;
 mod paths;
 mod processes;
 mod store;
@@ -24,6 +26,8 @@ const MACHINE_NAME: &str = "velnor";
 const GUEST_STORE: &str = "/var/lib/velnor";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
+const ORB_DEADLINE: Duration = Duration::from_secs(60);
+const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
@@ -45,12 +49,23 @@ const WORK_DIRECTORY: &str = "work";
 pub struct RustRunnerLauncher {
     orb: PathBuf,
     host_store: PathBuf,
+    deadline: Duration,
 }
 
 impl RustRunnerLauncher {
     #[must_use]
     pub const fn new(orb: PathBuf, host_store: PathBuf) -> Self {
-        Self { orb, host_store }
+        Self {
+            orb,
+            host_store,
+            deadline: ORB_DEADLINE,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_orb_deadline(mut self, deadline: Duration) -> Self {
+        self.deadline = deadline;
+        self
     }
 
     #[must_use]

@@ -40,7 +40,10 @@ pub(super) fn run(test: &str) -> TestResult<()> {
 fn mismatched_config(world: &mut World, test: &str) -> TestResult<()> {
     world.spawn_controller(test, &[(PASSED_MAX_JOBS, "1")])?;
     assert_eq!(world.finish(20)?, "Ok(ConfigChanged)");
-    assert!(world.gh("session.create").is_empty() && world.gh("poll").is_empty());
+    assert!(
+        world.gh("session.create").is_empty() && world.gh("poll").is_empty(),
+        "a controller whose passed config differs from host.toml must exit before it opens a session or polls"
+    );
     Ok(())
 }
 

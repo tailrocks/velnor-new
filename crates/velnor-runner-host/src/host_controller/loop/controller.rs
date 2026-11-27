@@ -23,8 +23,9 @@ use super::{
     connection_poll::{ConnectionPollContext, poll_active_connections},
     setup,
     state::setup_receipt_inputs,
-    transitions::{JournalEffects, apply_config, retire_pending},
+    transitions::{JournalEffects, apply_config, handover_to, retire_pending},
 };
+use crate::rust_runner::Handover;
 #[path = "controller/doctor.rs"]
 mod doctor;
 #[path = "controller/profile.rs"]
@@ -210,18 +211,20 @@ impl<'a> ControllerLoop<'a> {
         })
     }
 
-    async fn run(mut self) -> Result<(), ListenFault> {
+    async fn run(mut self) -> Result<Handover, ListenFault> {
         loop {
             tokio::time::sleep(CONFIG_RELOAD_PAUSE).await;
             self.start_doctor_probe().await;
             self.refresh_storage_profile().await;
-            self.refresh_config_and_retire().await?;
+            if let Some(handover) = self.refresh_config_and_retire().await? {
+                return Ok(handover);
+            }
             self.supervise_local_workers().await;
             Box::pin(self.poll_connections()).await;
         }
     }
 
-    async fn refresh_config_and_retire(&mut self) -> Result<(), ListenFault> {
+    async fn refresh_config_and_retire(&mut self) -> Result<Option<Handover>, ListenFault> {
         if !self
             .daemon_lock
             .matches_path(&self.state.join("daemon.lock"))
@@ -237,6 +240,15 @@ impl<'a> ControllerLoop<'a> {
                 None
             }
         };
+        if let Some(handover) = next
+            .as_ref()
+            .and_then(|next| handover_to(&self.current, next))
+        {
+            eprintln!(
+                "host controller: launch mode changed; handing over to the rust-runner controller"
+            );
+            return Ok(Some(handover));
+        }
         let mut effects = JournalEffects {
             state: &self.state,
             journal: &self.journal,
@@ -267,7 +279,7 @@ impl<'a> ControllerLoop<'a> {
         if let Err(error) = retire_pending(&mut self.pending_retirements, &mut effects).await {
             eprintln!("host controller connection retirement held: {error}");
         }
-        Ok(())
+        Ok(None)
     }
 
     async fn poll_connections(&mut self) {

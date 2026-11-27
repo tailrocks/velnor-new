@@ -11,38 +11,71 @@ use super::fixtures::{
 };
 use super::harness::World;
 
-const REPOSITORY_READS: usize = 8;
+const FIRST_PHASE_READS: [(&str, usize); 3] = [("m19", 2), ("m20", 2), ("m24", 2)];
+
+fn feed(world: &World, phase: &str, message: u64, offer: serde_json::Value) -> TestResult<()> {
+    std::fs::write(world.seen.join("phase"), phase)?;
+    world.queue_message(message, &[offer])?;
+    let id = message.to_string();
+    world.wait_for_event("the delete of the refused message", 60, |events| {
+        events
+            .iter()
+            .any(|event| event.label == "message.delete" && event.field("id") == id)
+    });
+    Ok(())
+}
 
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T2", 1, true)?;
     world.write_config("trunk")?;
     world.script_refusals(&json!({
-        "repo.get": {"after_session": true, "replies": [{}, {"patch": {"id": 43}}, {}, {"patch": {"default_branch": null}}]}
+        "repo.get@m19": {"after_session": true, "replies": [{}, {"patch": {"id": 43}}]},
+        "repo.get@m20": {"after_session": true, "replies": [{}, {"patch": {"default_branch": null}}]}
     }))?;
-    world.queue_message(19, &[push_offer(6, 2006, "main", WORKFLOW)])?;
-    world.queue_message(20, &[push_offer(7, 2007, "main", WORKFLOW)])?;
-    world.queue_message(21, &[push_offer(1, 2001, "main", OTHER_WORKFLOW)])?;
-    world.queue_message(22, &[pull_offer(2, 2002, 7, Some(&[sha(1), sha(2)]))])?;
-    world.queue_message(23, &[push_offer(3, 2003, "not-allowed", WORKFLOW)])?;
-    world.queue_message(
-        24,
-        &[with_acquire_none(push_offer(5, 2005, "main", WORKFLOW))],
-    )?;
-    let fork = with_head_repository(pull_offer(8, 2008, 9, None), 43);
-    world.queue_message(25, &[fork])?;
-    let other = with_run_repository(push_offer(9, 2009, "main", WORKFLOW), 43);
-    world.queue_message(26, &[other])?;
-    world.queue_message(27, &[pull_offer(4, 2004, 8, None)])?;
     world.spawn_controller(test, &[])?;
-    world.wait_for_event("the deletes of the refused messages", 60, |events| {
-        ["19", "20", "21", "22", "23", "24", "25", "26"]
-            .iter()
-            .all(|id| {
-                events
-                    .iter()
-                    .any(|event| event.label == "message.delete" && event.field("id") == *id)
-            })
+    world.wait_for_event("the session", 60, |events| {
+        events.iter().any(|event| event.label == "session.create")
     });
+    feed(&world, "m19", 19, push_offer(6, 2006, "main", WORKFLOW))?;
+    feed(&world, "m20", 20, push_offer(7, 2007, "main", WORKFLOW))?;
+    feed(
+        &world,
+        "m21",
+        21,
+        push_offer(1, 2001, "main", OTHER_WORKFLOW),
+    )?;
+    feed(
+        &world,
+        "m22",
+        22,
+        pull_offer(2, 2002, 7, Some(&[sha(1), sha(2)])),
+    )?;
+    feed(
+        &world,
+        "m23",
+        23,
+        push_offer(3, 2003, "not-allowed", WORKFLOW),
+    )?;
+    feed(
+        &world,
+        "m24",
+        24,
+        with_acquire_none(push_offer(5, 2005, "main", WORKFLOW)),
+    )?;
+    feed(
+        &world,
+        "m25",
+        25,
+        with_head_repository(pull_offer(8, 2008, 9, None), 43),
+    )?;
+    feed(
+        &world,
+        "m26",
+        26,
+        with_run_repository(push_offer(9, 2009, "main", WORKFLOW), 43),
+    )?;
+    std::fs::write(world.seen.join("phase"), "m27")?;
+    world.queue_message(27, &[pull_offer(4, 2004, 8, None)])?;
     world.wait_for_event("the sentinel runner and its removal", 60, |events| {
         events
             .iter()
@@ -53,6 +86,14 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert_outcome(&world);
     assert_clean(&world, "1");
     Ok(())
+}
+
+fn reads_in(world: &World, phase: &str) -> usize {
+    world
+        .gh("repo.get")
+        .iter()
+        .filter(|event| event.field("phase") == phase)
+        .count()
 }
 
 fn assert_outcome(world: &World) {
@@ -84,13 +125,18 @@ fn assert_outcome(world: &World) {
     }
     let jits = world.gh("jit");
     assert_eq!(jits.len(), 1, "only the sentinel gets a JIT");
-    let opened = world.gh("session.create")[0].seq;
-    let fetches = world
-        .gh("repo.get")
-        .iter()
-        .filter(|event| event.seq > opened)
-        .count();
-    assert_eq!(fetches, REPOSITORY_READS);
+    for (phase, reads) in FIRST_PHASE_READS {
+        assert_eq!(
+            reads_in(world, phase),
+            reads,
+            "phase {phase}: the repository must be read once to authorize and once for the default branch"
+        );
+    }
+    assert_eq!(
+        reads_in(world, "m27"),
+        1,
+        "the accepted offer after a fetched default branch must be served from the cache"
+    );
     assert!(
         world
             .child_stderr()

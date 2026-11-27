@@ -76,7 +76,8 @@ fn unsafe_roots() -> Check {
     let launcher = RustRunnerLauncher::new(foreign.root.join("orb"), PathBuf::from("/usr"));
     assert_eq!(
         launcher.ensure_machine().err(),
-        Some(refused(RustRunnerFailure::StoreUnsafe))
+        Some(refused(RustRunnerFailure::StoreUnsafe)),
+        "a store owned by another user"
     );
     Ok(())
 }
@@ -99,6 +100,7 @@ fn unsafe_binaries() -> Check {
     std::fs::remove_file(&binary)?;
     symlink(&target, &binary)?;
     assert_refused(&linked, RustRunnerFailure::BinaryUnsafe, "a symlink")?;
+    root_owned_binary()?;
     for (name, expected) in [
         ("bin", RustRunnerFailure::StoreUnsafe),
         ("bin/velnor-runner", RustRunnerFailure::StoreUnsafe),
@@ -110,14 +112,54 @@ fn unsafe_binaries() -> Check {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn root_owned_binary() -> Check {
+    use std::os::unix::fs::MetadataExt;
+    const TOOLS: &str = "/Library/Developer/CommandLineTools/usr/bin";
+    let source = std::fs::read_dir(TOOLS)
+        .map_err(|_| format!("the root-owned binary row needs the command line tools in {TOOLS}"))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            std::fs::symlink_metadata(path).is_ok_and(|meta| {
+                meta.is_file()
+                    && meta.uid() == 0
+                    && meta.mode() & 0o111 != 0
+                    && meta.mode() & 0o022 == 0
+            })
+        })
+        .ok_or("no root-owned executable file in the command line tools")?;
+    let fixture = fixture()?;
+    let binary = fixture.store.join("bin/velnor-runner");
+    std::fs::remove_file(&binary)?;
+    std::fs::hard_link(&source, &binary)?;
+    assert_refused(
+        &fixture,
+        RustRunnerFailure::BinaryUnsafe,
+        "a root-owned binary hard-linked into the store",
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+fn root_owned_binary() -> Check {
+    Ok(())
+}
+
 fn symlinked_directories() -> Check {
     let fixture = fixture()?;
     let victim = fixture.root.join("victim");
     std::fs::create_dir(&victim)?;
     chmod(&victim, 0o700)?;
     symlink(&victim, fixture.store.join("work"))?;
-    assert!(fixture.launcher().ensure_machine().is_err());
-    assert_eq!(std::fs::read_dir(&victim)?.count(), 0);
+    assert!(
+        fixture.launcher().ensure_machine().is_err(),
+        "a symlinked work directory"
+    );
+    assert_eq!(
+        std::fs::read_dir(&victim)?.count(),
+        0,
+        "the target of a symlinked work directory must stay untouched"
+    );
     for name in ["work", "jit"] {
         let fixture = fixture_with_directories()?;
         let victim = fixture.root.join("victim");
@@ -162,10 +204,16 @@ fn sweep_without_init() -> Check {
         fixture.launcher().sweep().err(),
         Some(refused(RustRunnerFailure::ProcessList))
     );
-    assert!(planted.exists());
+    assert!(
+        planted.exists(),
+        "a ps listing without pid 1 must not let the sweep delete files"
+    );
     fixture.configure("")?;
     fixture.launcher().sweep()?;
-    assert!(!planted.exists());
+    assert!(
+        !planted.exists(),
+        "a ps listing with pid 1 must let the sweep delete stale files"
+    );
     Ok(())
 }
 

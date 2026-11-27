@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::process::Stdio;
-
-use super::{GUEST_RUNNER, RustRunnerLauncher};
+use super::{GUEST_RUNNER, RustRunnerLauncher, orb};
 use crate::error::{HostError, RustRunnerFailure};
 
 #[cfg(test)]
@@ -63,13 +61,9 @@ pub(crate) fn names_work_dir(args: &str, work_dir: &str) -> bool {
 
 impl RustRunnerLauncher {
     pub fn list_processes(&self) -> Result<Vec<MachineProcess>, HostError> {
-        let output = self
-            .as_root()
-            .args(["ps", "-eo", "pid=,args="])
-            .stdin(Stdio::null())
-            .stderr(Stdio::inherit())
-            .output()
-            .map_err(|_| HostError::RustRunner(RustRunnerFailure::OrbUnavailable))?;
+        let mut command = self.as_root();
+        command.args(["ps", "-eo", "pid=,args="]);
+        let output = orb::run(command, self.deadline, true).map_err(HostError::RustRunner)?;
         if !output.status.success() {
             return Err(HostError::RustRunner(RustRunnerFailure::ProcessList));
         }
@@ -87,16 +81,12 @@ impl RustRunnerLauncher {
         if pids.is_empty() {
             return Ok(());
         }
-        let status = self
-            .as_root()
+        let mut command = self.as_root();
+        command
             .args(["kill", "-9"])
-            .args(pids.iter().map(u32::to_string))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .status()
-            .map_err(|_| HostError::RustRunner(RustRunnerFailure::OrbUnavailable))?;
-        if status.success() {
+            .args(pids.iter().map(u32::to_string));
+        let finished = orb::run(command, self.deadline, false).map_err(HostError::RustRunner)?;
+        if finished.status.success() {
             Ok(())
         } else {
             Err(HostError::RustRunner(RustRunnerFailure::ProcessKill))

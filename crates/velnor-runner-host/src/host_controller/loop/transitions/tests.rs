@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{TransitionEffects, apply_config_transition};
-use crate::config::{HostConfig, RepositoryConnection};
+use super::{TransitionEffects, apply_config_transition, handover_to};
+use crate::config::{HostConfig, LaunchMode, RepositoryConnection};
 use crate::error::HostError;
+use crate::rust_runner::Handover;
 
 #[derive(Default)]
 struct RecordingEffects {
@@ -107,5 +108,22 @@ async fn developer_images_change_only_on_restart() -> Result<(), HostError> {
             "a refused reload had effects"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_launch_mode_change_hands_the_official_controller_over_to_the_rust_runner()
+-> Result<(), HostError> {
+    let current = config("")?;
+    let mut next = current.clone();
+    assert!(
+        handover_to(&current, &next).is_none(),
+        "a reload that keeps the launch mode must not hand the host over"
+    );
+    next.host.launch_mode = LaunchMode::RustRunner;
+    assert!(
+        matches!(handover_to(&current, &next), Some(Handover::RustRunner)),
+        "a reload that selects rust-runner must hand the official controller over"
+    );
     Ok(())
 }

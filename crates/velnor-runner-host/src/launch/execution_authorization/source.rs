@@ -10,7 +10,9 @@ mod validation;
 mod verifier;
 
 pub use validation::verify_persisted_execution_source_role;
-pub(crate) use verifier::{PullClaim, SourceClaim, verify_live_source, verify_source_claim};
+pub(crate) use verifier::{
+    PullClaim, SourceClaim, SourceFault, verify_live_source, verify_source_claim,
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,14 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
-
 use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{
-    acquire_ids, assert_clean, call_number, deleted_messages, heartbeat_advances, orb_calls_after,
-    runner_name, snapshot,
+    acquire_ids, assert_clean, call_number, deleted_messages, heartbeat_advances, runner_name,
+    snapshot,
 };
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
@@ -43,7 +41,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     held_by_the_runner(&world)?;
     world.configure_orb("FAKE_RUNNER_LOCK=1\n")?;
     std::fs::write(world.seen.join("release-runner"), "")?;
-    held_by_the_files(&world)?;
+    reclaimed_files(&world)?;
     world.wait_for_event("job D", 90, |events| {
         events.iter().any(|event| {
             event.label == "runner.delete"
@@ -203,7 +201,7 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
     Ok(())
 }
 
-fn held_by_the_files(world: &World) -> TestResult<()> {
+fn reclaimed_files(world: &World) -> TestResult<()> {
     world.wait_for_event("job C", 60, |events| {
         acquire_with_ids(events, "3").is_some()
     });
@@ -221,13 +219,10 @@ fn held_by_the_files(world: &World) -> TestResult<()> {
     assert!(acquire.seq > removal.seq);
     let state = snapshot(world, &acquire);
     assert!(!state.runners.contains(&runner_name(2)) && !state.work.contains(&"2".to_owned()));
-    let before = orb_calls_after(world, acquire.seq, "ps -eo").len();
     let locked = world.store.join("work/3/locked");
     wait_for("the work dir of C", 20, || locked.exists());
-    heartbeat_advances(world, 4);
-    assert!(orb_calls_after(world, acquire.seq, "ps -eo").len() > before);
-    assert_held(world, "job C", &["31", "32", "33"], &["1", "2", "3"]);
-    world.configure_orb("")?;
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700))?;
+    world.wait_for_event("job D", 90, |events| {
+        acquire_with_ids(events, "4").is_some()
+    });
     Ok(())
 }

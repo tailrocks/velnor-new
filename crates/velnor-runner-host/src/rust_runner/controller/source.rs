@@ -13,7 +13,7 @@ use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::launch::execution_authorization::{
-    PullClaim, SourceClaim, VerifiedWorkflowIdentity, verify_source_claim,
+    PullClaim, SourceClaim, SourceFault, VerifiedWorkflowIdentity, verify_source_claim,
 };
 use crate::launch::steps::source::{SourceBlock, authorize_source};
 
@@ -44,11 +44,15 @@ impl Refusal {
     }
 
     fn lookup(error: WorkflowRunError) -> Self {
-        match error {
-            WorkflowRunError::Uncertain | WorkflowRunError::HttpStatus(408 | 429 | 500..=599) => {
-                Self::Unavailable("source_api_unavailable")
-            }
-            _ => IDENTITY,
+        SourceFault::lookup(error).into()
+    }
+}
+
+impl From<SourceFault> for Refusal {
+    fn from(fault: SourceFault) -> Self {
+        match fault {
+            SourceFault::Retryable(code) => Self::Unavailable(code),
+            SourceFault::Final(error) => Self::blocked(error),
         }
     }
 }
@@ -178,14 +182,7 @@ pub(super) fn verify_launch_source(
     {
         return Err(Refusal::Blocked(CROSS_REPOSITORY));
     }
-    let checked =
-        verify_source_claim(connection, policy, &claim, token, deadline).map_err(|error| {
-            if Instant::now() >= deadline {
-                Refusal::Unavailable("timeout")
-            } else {
-                Refusal::blocked(error)
-            }
-        })?;
+    let checked = verify_source_claim(connection, policy, &claim, token, deadline)?;
     let (default_branch, fetched_default_branch) = match known_default_branch {
         Some(branch) => (branch.to_owned(), false),
         None => (default_branch(&mut transport, connection, token)?, true),

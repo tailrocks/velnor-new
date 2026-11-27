@@ -168,7 +168,7 @@ fn inventory() -> TestResult<String> {
 }
 
 pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
-const PADDING_BYTES: usize = 96 * 1024;
+pub(super) const HOST_TOML_LIMIT: usize = 1_048_576;
 
 pub(super) fn host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
     host_toml_for(root, max_jobs, KEYCHAIN_REFERENCE)
@@ -179,6 +179,29 @@ pub(super) fn host_toml_for(
     max_jobs: u32,
     credential_ref: &str,
 ) -> TestResult<String> {
+    host_toml_with(root, max_jobs, credential_ref, "")
+}
+
+pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
+    host_toml_with(
+        root,
+        max_jobs,
+        KEYCHAIN_REFERENCE,
+        "organization = \"tailrocks\"\n",
+    )
+}
+
+pub(super) fn padded(text: &str, bytes: usize) -> String {
+    let fill = bytes.saturating_sub(text.len() + 4);
+    format!("{text}\n# {}\n", "x".repeat(fill))
+}
+
+fn host_toml_with(
+    root: &Path,
+    max_jobs: u32,
+    credential_ref: &str,
+    connection_lines: &str,
+) -> TestResult<String> {
     let base = format!(
         "schema = 2\n\
          [[connections]]\n\
@@ -186,6 +209,7 @@ pub(super) fn host_toml_for(
          repository_id = 42\n\
          repository = \"tailrocks/velnor-lab\"\n\
          credential_ref = \"{credential_ref}\"\n\
+         {connection_lines}\
          [connections.scale_set]\n\
          name = \"velnor-mac\"\n\
          labels = [\"velnor\", \"velnor-mac\"]\n\
@@ -215,10 +239,9 @@ pub(super) fn host_toml_for(
     let connection = config.connection(&id).ok_or("connection lab")?;
     let policy =
         build_job_authority_policy_json(connection, &inventory()?, SOURCE_SHA, &"d".repeat(64), 1)?;
-    let text = config
+    Ok(config
         .with_job_authority_policy_json(&id, &policy)?
-        .to_toml()?;
-    Ok(format!("{text}\n# {}\n", "x".repeat(PADDING_BYTES)))
+        .to_toml()?)
 }
 
 pub(super) fn official_host_toml(root: &Path, credential_ref: &str) -> String {

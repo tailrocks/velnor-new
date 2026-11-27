@@ -24,6 +24,7 @@ const CONFIG_RETRY: Duration = Duration::from_secs(5);
 pub(crate) enum Handover {
     Stopped,
     OfficialRunner(Box<HostConfig>),
+    RustRunner,
 }
 
 pub(crate) fn run_blocking(

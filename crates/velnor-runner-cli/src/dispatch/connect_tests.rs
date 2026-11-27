@@ -248,15 +248,28 @@ fn switching_the_launch_mode_is_rejected(
     let state = temp.path().canonicalize()?;
     let keychain = FakeKeychain::default();
     let first = arm_request(&state, LaunchMode::RustRunner, inventory, artifact);
-    assert_eq!(connect(&keychain, &first, "token-1"), Ok(()));
+    assert_eq!(
+        connect(&keychain, &first, "token-1"),
+        Ok(()),
+        "the first connect in rust-runner mode must succeed"
+    );
     let configured = std::fs::read(state.join("host.toml"))?;
     let second = arm_request(&state, LaunchMode::OfficialRunner, inventory, artifact);
     assert_eq!(
         connect(&keychain, &second, "token-2"),
-        Err(ConnectError::Rejected)
+        Err(ConnectError::Rejected),
+        "a connect that switches the launch mode must be rejected"
     );
-    assert_eq!(std::fs::read(state.join("host.toml"))?, configured);
-    assert_eq!(keychain.stored(), vec![b"token-1".to_vec()]);
+    assert_eq!(
+        std::fs::read(state.join("host.toml"))?,
+        configured,
+        "a rejected connect must leave host.toml byte-identical"
+    );
+    assert_eq!(
+        keychain.stored(),
+        vec![b"token-1".to_vec()],
+        "a rejected connect must not store its token"
+    );
     Ok(())
 }
 

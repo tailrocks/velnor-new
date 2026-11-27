@@ -1,17 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::checks::{acquire_ids, assert_clean, deleted_messages, runner_name};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
 pub(super) fn run(test: &str) -> TestResult<()> {
-    let mut world = World::new("T9", 1, true)?;
-    world.script_refusals(&json!({
-        "repo.get": {"after_session": true, "replies": [{}, {"status": 503}]}
-    }))?;
+    deferred(
+        test,
+        "T9",
+        &json!({"repo.get": {"after_session": true, "replies": [{}, {"status": 503}]}}),
+    )?;
+    deferred(
+        test,
+        "T9b",
+        &json!({"run.get": {"after_session": true, "replies": [{}, {}, {}, {"status": 503}]}}),
+    )
+}
+
+fn deferred(test: &str, tag: &'static str, script: &Value) -> TestResult<()> {
+    let mut world = World::new(tag, 1, true)?;
+    world.script_refusals(script)?;
     world.queue_message(91, &[push_offer(1, 9001, "main", WORKFLOW)])?;
     world.spawn_controller(test, &[])?;
     world.wait_for_event_unless(

@@ -14,6 +14,7 @@ use super::fixtures::{TestResult, host_toml};
 
 pub(super) const PASSED_MAX_JOBS: &str = "VELNOR_CHILD_PASSED_MAX_JOBS";
 pub(super) const HOST_BLOCKING: &str = "VELNOR_CHILD_HOST_BLOCKING";
+pub(super) const ORB_DEADLINE_MS: &str = "VELNOR_CHILD_ORB_DEADLINE_MS";
 
 pub(super) fn run(root: &Path) -> TestResult<()> {
     let state = root.join("state");
@@ -29,7 +30,10 @@ pub(super) fn run(root: &Path) -> TestResult<()> {
     let secret = Zeroizing::new(std::fs::read(root.join("pat"))?);
     let pats = ConnectionPats::from_secrets(&config, [(ConnectionId::parse("lab")?, secret)])?;
     let lock = DaemonLock::try_acquire_daemon(&state)?;
-    let launcher = RustRunnerLauncher::new(root.join("orb"), root.join("store"));
+    let mut launcher = RustRunnerLauncher::new(root.join("orb"), root.join("store"));
+    if let Ok(milliseconds) = std::env::var(ORB_DEADLINE_MS) {
+        launcher = launcher.with_orb_deadline(Duration::from_millis(milliseconds.parse()?));
+    }
     let stop = root.join("seen/stop");
     let shutdown = async move {
         while !stop.exists() {
