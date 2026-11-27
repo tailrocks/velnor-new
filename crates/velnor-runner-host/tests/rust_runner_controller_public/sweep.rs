@@ -105,20 +105,7 @@ fn unconfirmed_sweep(world: &mut World, test: &str) -> TestResult<()> {
 fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     std::fs::write(world.seen.join("release"), "")?;
     world.script_refusals(&json!({"velnor-mac-99": {"statuses": [400], "repeat_last": false}}))?;
-    world.configure_orb("FAKE_ORB_PS_IMMORTAL=4242\nFAKE_RUNNER_HOLD=1\n")?;
-    world.spawn_controller(test, &[])?;
-    world.wait_for_event("the first jit", 90, |events| {
-        events.iter().any(|event| event.label == "jit")
-    });
-    let held = world.gh("jit")[0].clone();
-    world.wait_for_event("two polls while the job is held", 40, |events| {
-        events
-            .iter()
-            .filter(|event| event.label == "poll" && event.seq > held.seq)
-            .count()
-            >= 2
-    });
-    world.release(&jit_name(reservation(&held)))?;
+    release_after_polls(world, test)?;
     world.wait_for_event("the first job and its removal", 90, |events| {
         let acquired = events.iter().any(|event| event.label == "acquire");
         acquired
@@ -194,6 +181,24 @@ fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     assert_capacity(world, "1");
     world.stop()?;
     assert_eq!(world.finish(10)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+fn release_after_polls(world: &mut World, test: &str) -> TestResult<()> {
+    world.configure_orb("FAKE_ORB_PS_IMMORTAL=4242\nFAKE_RUNNER_HOLD=1\n")?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("the first jit", 90, |events| {
+        events.iter().any(|event| event.label == "jit")
+    });
+    let held = world.gh("jit")[0].clone();
+    world.wait_for_event("two polls while the job is held", 40, |events| {
+        events
+            .iter()
+            .filter(|event| event.label == "poll" && event.seq > held.seq)
+            .count()
+            >= 2
+    });
+    world.release(&jit_name(reservation(&held)))?;
     Ok(())
 }
 
