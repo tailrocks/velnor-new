@@ -90,7 +90,8 @@ pub(crate) fn sha256_hex(path: &Path) -> Result<String> {
 impl World {
     pub(crate) fn new() -> Result<Self> {
         let scratch = Scratch::new()?;
-        let root = scratch.workspace().with_file_name("");
+        let root = std::fs::canonicalize(scratch.workspace().with_file_name(""))
+            .context("resolve the scratch root")?;
         let store = root.join("store");
         std::fs::create_dir_all(&store).context("create the store")?;
         let temp = root.join("temp");

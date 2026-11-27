@@ -145,22 +145,27 @@ fn mise_action_accepts_a_path_entry_whose_store_link_stays_in_the_store() -> Res
 }
 
 #[test]
-fn mise_action_resolves_a_path_entry_named_by_the_real_path_of_a_linked_store_root() -> Result<()> {
+fn mise_action_refuses_a_store_root_reached_through_a_link() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
     world.install_store_homes()?;
-    let resolved = outside(&world)?;
-    let entry = canonical(&world.store).join("tools/data/installs/evil");
-    std::os::unix::fs::symlink(&resolved, &entry).context("link out of the store")?;
     let link = world.root.join("store-link");
     std::os::unix::fs::symlink(&world.store, &link).context("link the store root")?;
-    let entry = entry.display().to_string();
-    world.configure_double(&[("EXTRA_DIR", &entry)])?;
-    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
     let root = link.display().to_string();
-    let ran = world.run(&job, &[("VELNOR_STORE_ROOT", &root)])?;
-    refused_entry(&ran, &entry, &resolved);
+    let ran = world.run(
+        &job_fixture("mise_action_ok"),
+        &[("VELNOR_STORE_ROOT", &root)],
+    )?;
+    assert_failed(
+        &ran,
+        &format!(
+            "mise policy: {} is reached through a link ({}); the tools store path must not contain links",
+            link.join("tools").display(),
+            canonical(&world.store).join("tools").display()
+        ),
+    );
+    assert_eq!(world.mise_calls(), Vec::<String>::new());
     Ok(())
 }
 

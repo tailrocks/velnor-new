@@ -82,6 +82,13 @@ pub(super) fn open_tools(tools: &Path) -> Result<Option<Tools>, ExecError> {
             return Err(ExecError::io(format!("resolve {}", tools.display()), error));
         }
     };
+    if real != tools {
+        return Err(ExecError::Invalid(format!(
+            "mise policy: {} is reached through a link ({}); the tools store path must not contain links",
+            tools.display(),
+            real.display()
+        )));
+    }
     let trust = trust();
     let mut walked = PathBuf::new();
     let mut current: Option<OwnedFd> = None;

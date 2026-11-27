@@ -24,7 +24,6 @@ pub(super) async fn require_confined(
         let in_store = directories
             .iter()
             .map(|(_, directory)| *directory)
-            .chain(real.iter().map(PathBuf::as_path))
             .any(|directory| path.starts_with(directory));
         if !in_store {
             continue;

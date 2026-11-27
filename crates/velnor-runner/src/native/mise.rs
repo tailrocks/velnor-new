@@ -217,7 +217,7 @@ impl Install {
             ),
             ("MISE_YES", "1".to_owned()),
         ] {
-            if !ctx.env.contains_key(name) && std::env::var_os(name).is_none() {
+            if ctx.env.get(name).is_none_or(String::is_empty) {
                 exports.push((name.to_owned(), value));
             }
         }

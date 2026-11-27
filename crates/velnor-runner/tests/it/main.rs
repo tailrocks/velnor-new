@@ -145,6 +145,7 @@ mod protocol_acquire_renew;
 mod native_mise;
 mod native_mise_ancestors;
 mod native_mise_attack;
+mod native_mise_defaults;
 mod native_mise_homes;
 mod native_mise_include;
 mod native_mise_inputs;
