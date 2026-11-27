@@ -1,0 +1,171 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::ffi::OsString;
+use std::fs::File;
+use std::io::Write as _;
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use anyhow::{Context, Result, ensure};
+use rustix::fs::{AtFlags, Mode, OFlags, RawMode, Stat, fchmod, fstat, fsync, openat, statat};
+use rustix::io::Errno;
+use velnor_cache_rules::Scope;
+
+use super::access::stamp_access;
+use super::budget::make_room;
+use super::cache::{ACCESSED, CacheOwner, DATA, KEY, MARKER, VERSION, entry_name};
+use super::incoming::Upload;
+use super::layout::Layout;
+use super::proto::Response;
+use super::safe_fs::{directory_flags, is_regular_mode, move_aside};
+
+const FROZEN_DIRECTORY: RawMode = 0o555;
+const FROZEN_FILE: RawMode = 0o444;
+
+#[derive(Clone)]
+pub(super) struct Target {
+    pub(super) owner: CacheOwner,
+    pub(super) scope: Scope,
+    pub(super) key: String,
+    pub(super) version: String,
+}
+
+enum Outcome {
+    Published,
+    AlreadyExists,
+}
+
+fn create_synced(entry: BorrowedFd<'_>, name: &str, bytes: &[u8]) -> Result<()> {
+    let fd = openat(
+        entry,
+        name,
+        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::from_bits_truncate(0o644),
+    )
+    .with_context(|| format!("create {name} in the cache entry"))?;
+    fchmod(&fd, Mode::from_bits_truncate(FROZEN_FILE))
+        .with_context(|| format!("open {name} in the cache entry to the step uid"))?;
+    let mut file = File::from(fd);
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("write {name} in the cache entry"))
+}
+
+fn finish(entry: &OwnedFd, target: &Target, now: u64) -> Result<()> {
+    create_synced(entry.as_fd(), KEY, target.key.as_bytes())?;
+    create_synced(entry.as_fd(), VERSION, target.version.as_bytes())?;
+    create_synced(entry.as_fd(), ACCESSED, b"")?;
+    stamp_access(entry.as_fd(), now)?;
+    create_synced(entry.as_fd(), MARKER, b"")?;
+    fchmod(entry, Mode::from_bits_truncate(FROZEN_DIRECTORY))?;
+    sync_directory(entry, "the cache entry")
+}
+
+#[cfg(test)]
+pub(super) static SYNCED: std::sync::Mutex<Vec<(u64, u64)>> = std::sync::Mutex::new(Vec::new());
+
+pub(super) fn sync_directory(directory: &impl AsFd, what: &str) -> Result<()> {
+    #[cfg(test)]
+    if let (Ok(stat), Ok(mut synced)) = (fstat(directory), SYNCED.lock()) {
+        synced.push((u64::try_from(stat.st_dev).unwrap_or_default(), stat.st_ino));
+    }
+    fsync(directory).with_context(|| format!("sync {what}"))
+}
+
+fn same_file(left: &Stat, right: &Stat) -> bool {
+    (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+}
+
+fn is_streamed(published: &OwnedFd, upload: &Upload, data: &File) -> Result<()> {
+    ensure!(
+        same_file(&fstat(published)?, &fstat(&upload.dir)?),
+        "the published cache entry is not the directory this broker streamed into"
+    );
+    let inside = statat(published, DATA, AtFlags::SYMLINK_NOFOLLOW)
+        .context("inspect the published cache data")?;
+    ensure!(
+        same_file(&inside, &fstat(data)?),
+        "the published cache data is not the file this broker streamed"
+    );
+    Ok(())
+}
+
+fn is_complete(scope: BorrowedFd<'_>, name: &OsString) -> bool {
+    openat(scope, name, directory_flags(), Mode::empty()).is_ok_and(|entry| {
+        statat(entry.as_fd(), MARKER, AtFlags::SYMLINK_NOFOLLOW)
+            .is_ok_and(|stat| is_regular_mode(stat.st_mode))
+    })
+}
+
+fn attempt(
+    layout: &Layout,
+    target: &Target,
+    upload: &Upload,
+    data: &File,
+    abandoned: &AtomicBool,
+) -> Result<Outcome> {
+    data.sync_all().context("sync the cache data")?;
+    fchmod(data, Mode::from_bits_truncate(FROZEN_FILE)).context("freeze the cache data")?;
+    let scope = layout.open_scope(target)?;
+    let _lock = layout.lock(target, abandoned)?;
+    ensure!(
+        !abandoned.load(Ordering::Relaxed),
+        "the publish was abandoned before it was sealed"
+    );
+    let entry = OsString::from(entry_name(&target.version, &target.key));
+    if is_complete(scope.as_fd(), &entry) {
+        return Ok(Outcome::AlreadyExists);
+    }
+    let _store = layout.lock_store(abandoned)?;
+    let size = u64::try_from(fstat(data)?.st_size).unwrap_or_default();
+    make_room(layout, target, size)?;
+    let leftover = match statat(scope.as_fd(), &entry, AtFlags::SYMLINK_NOFOLLOW) {
+        Ok(_) => true,
+        Err(Errno::NOENT) => false,
+        Err(error) => return Err(error).context("inspect the cache entry"),
+    };
+    if leftover {
+        let aside = layout.open_aside()?;
+        move_aside(scope.as_fd(), &entry, aside.as_fd()).context("set the leftover aside")?;
+    }
+    upload
+        .rename_into(scope.as_fd(), &entry)
+        .context("publish the cache entry")?;
+    let sealed = openat(scope.as_fd(), &entry, directory_flags(), Mode::empty())
+        .context("reopen the published cache entry")
+        .and_then(|published| {
+            is_streamed(&published, upload, data)?;
+            finish(&published, target, layout.now())
+        })
+        .and_then(|()| sync_directory(&scope, "the cache scope"));
+    if let Err(error) = sealed {
+        if let Ok(aside) = layout.open_aside() {
+            let _ = move_aside(scope.as_fd(), &entry, aside.as_fd());
+        }
+        return Err(error);
+    }
+    Ok(Outcome::Published)
+}
+
+pub(super) fn publish(
+    layout: &Layout,
+    target: &Target,
+    upload: &Upload,
+    data: &File,
+    abandoned: &AtomicBool,
+) -> Response {
+    let response = match attempt(layout, target, upload, data, abandoned) {
+        Ok(Outcome::Published) => Response::Published {
+            scope: target.scope.0.clone(),
+        },
+        Ok(Outcome::AlreadyExists) => Response::AlreadyExists,
+        Err(error) => Response::Failed {
+            message: format!("{error:#}"),
+        },
+    };
+    if !matches!(response, Response::Published { .. }) {
+        upload.discard();
+    }
+    response
+}

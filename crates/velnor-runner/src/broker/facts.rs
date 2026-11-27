@@ -328,13 +328,6 @@ impl TrustedFacts {
         )
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the cache broker of #2952 calls it after the restack"
-        )
-    )]
     pub(crate) fn may_write_stores(&self) -> bool {
         matches!(
             (self.event_name.as_str(), &self.event),

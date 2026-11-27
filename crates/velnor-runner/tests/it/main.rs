@@ -87,6 +87,18 @@ mod hardening;
 mod job_message;
 #[path = "exec_late.rs"]
 mod late;
+mod native_cache;
+mod native_cache_access;
+mod native_cache_alias;
+mod native_cache_fidelity;
+mod native_cache_ids;
+mod native_cache_inputs;
+mod native_cache_job;
+mod native_cache_links;
+mod native_cache_modes;
+mod native_cache_readers;
+mod native_cache_support;
+mod native_cache_tar;
 mod native_checkout;
 mod native_checkout_attack;
 mod native_checkout_cancel;

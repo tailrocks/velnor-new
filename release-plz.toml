@@ -39,6 +39,10 @@ release = false
 # is seen here. release = false keeps them out of release-plz: the family tag
 # releases the tools, and its version is bumped by hand.
 [[package]]
+name = "velnor-cache-rules"
+release = false
+
+[[package]]
 name = "velnor-model"
 release = false
 

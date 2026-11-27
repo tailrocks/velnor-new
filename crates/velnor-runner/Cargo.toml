@@ -42,6 +42,7 @@ rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+tar = { version = "=0.4.46", default-features = false }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
@@ -49,6 +50,7 @@ tokio-tungstenite = { workspace = true }
 url = { workspace = true }
 velnor-model = { workspace = true }
 uuid = { workspace = true }
+velnor-cache-rules = { path = "../velnor-cache-rules", version = "=0.0.0" }
 
 [dev-dependencies]
 serde-saphyr = { workspace = true }

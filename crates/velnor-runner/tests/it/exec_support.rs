@@ -34,8 +34,19 @@ impl Scratch {
     }
 }
 
+pub(crate) fn unlock_tree(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) {
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
+        for item in std::fs::read_dir(path).into_iter().flatten().flatten() {
+            unlock_tree(&item.path());
+        }
+    }
+}
+
 impl Drop for Scratch {
     fn drop(&mut self) {
+        unlock_tree(&self.root);
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }

@@ -7,6 +7,8 @@ pub const ENTRY_LIFETIME_SECONDS: u64 = 7 * 24 * 60 * 60;
 
 pub const REPOSITORY_LIMIT_BYTES: u64 = 10_000_000_000;
 
+pub const DEFAULT_CACHE_BUDGET_BYTES: u64 = 8_000_000_000;
+
 #[must_use]
 pub fn evict(entries: &[Entry], now: Timestamp, limit_bytes: u64) -> Vec<EntryId> {
     let mut oldest_first: Vec<&Entry> = entries.iter().collect();

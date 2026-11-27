@@ -10,6 +10,7 @@ mod encode;
 mod env_files;
 mod evaluate;
 mod execute;
+mod facts;
 mod host_env;
 mod inputs;
 mod issues;
@@ -34,6 +35,7 @@ pub use adapter::{
     AdapterRegistry, DeclaredInputs, InputValue, StepAdapter, StepContext, StepFuture,
 };
 pub use cancel::JobCancel;
+pub use facts::JobFacts;
 pub use inputs::Inputs;
 pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
