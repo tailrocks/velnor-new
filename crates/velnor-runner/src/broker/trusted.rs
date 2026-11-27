@@ -3,8 +3,6 @@
 
 use super::facts::{TrustedEvent, TrustedFacts};
 
-const LOCAL: &str = "refs/velnor/trusted/pin";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TrustedRef {
     remote: String,
@@ -25,13 +23,5 @@ impl TrustedRef {
 
     pub(super) fn remote(&self) -> &str {
         &self.remote
-    }
-
-    pub(super) fn local() -> &'static str {
-        LOCAL
-    }
-
-    pub(super) fn refspec(&self) -> String {
-        format!("+{}:{LOCAL}", self.remote)
     }
 }

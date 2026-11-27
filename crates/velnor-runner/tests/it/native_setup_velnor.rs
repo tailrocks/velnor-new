@@ -99,7 +99,7 @@ fn setup_velnor_fails_when_the_action_is_not_in_the_mirror() -> Result<()> {
     let world = World::new()?;
     let absent = "1".repeat(40);
     let unreachable =
-        format!("setup-velnor: the pin {absent} is not reachable from the trusted refs");
+        format!("setup-velnor: the pin {absent} is not reachable from refs/heads/main");
     for (published, broker_message) in [
         (false, "Permission denied"),
         (true, "does not appear to be a git repository"),
@@ -283,6 +283,7 @@ fn setup_velnor_matches_input_names_case_insensitively() -> Result<()> {
 fn setup_velnor_accepts_the_repository_in_any_case() -> Result<()> {
     let world = World::new()?;
     let sha = world.publish_action(&real_action()?)?;
+    world.upstream_as("Tailrocks/Velnor-New")?;
     let job = world.with_text(
         &job_fixture("setup_velnor_real_action"),
         &[

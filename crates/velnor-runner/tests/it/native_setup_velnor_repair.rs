@@ -70,7 +70,8 @@ fn a_blob_lost_from_a_warm_mirror_is_repaired_once_and_the_next_job_succeeds() -
 }
 
 #[test]
-fn a_pin_the_repair_cannot_restore_fails_closed_after_one_repair_naming_the_pin() -> Result<()> {
+fn a_pin_the_repair_cannot_restore_fails_closed_after_one_repair_and_a_pin_without_the_action_fails_at_once()
+-> Result<()> {
     let lost_on_the_server = Rig::new()?;
     let pinned = default_branch_commit(&lost_on_the_server)?;
     let cold = Cold::new(&lost_on_the_server)?;
@@ -91,11 +92,12 @@ fn a_pin_the_repair_cannot_restore_fails_closed_after_one_repair_naming_the_pin(
     assert!(
         ran.lines()
             .iter()
-            .any(|line| line.contains(&format!("has no readable {ACTION} after one repair"))),
+            .any(|line| line.contains(&format!("the pin {early} has no {ACTION}"))),
         "{}",
         ran.stdout
     );
-    assert_eq!(without_the_action.refetches(), 1);
+    assert!(!ran.stdout.contains("after one repair"), "{}", ran.stdout);
+    assert_eq!(without_the_action.refetches(), 0);
     assert_eq!(cold.trusted_refs()?, "");
     Ok(())
 }

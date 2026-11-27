@@ -181,3 +181,42 @@ fn a_pin_that_left_the_trusted_ref_upstream_is_not_trusted_through_a_stale_copy(
     assert_unreachable(&ran, &pinned, "refs/heads/main");
     Ok(())
 }
+
+#[test]
+fn a_dispatch_on_a_feature_branch_trusts_the_default_branch_and_not_its_own_branch() -> Result<()> {
+    let rig = Rig::new()?;
+    let featured = foreign_commit(&rig, "refs/heads/feature-x")?;
+    let cold = Cold::new(&rig)?;
+    let event = r#"{"kind": "branch", "branch": "feature-x"}"#;
+    let dispatch = facts(&rig, "workflow_dispatch", event, &featured)?;
+    assert_unreachable(
+        &cold.run_as(&featured, &dispatch)?,
+        &featured,
+        "refs/heads/main",
+    );
+    let push = facts(&rig, "push", event, &featured)?;
+    assert_ran(&cold.run_as(&featured, &push)?);
+    Ok(())
+}
+
+#[test]
+fn a_trusted_ref_planted_in_the_mirror_never_vouches_for_a_pin() -> Result<()> {
+    let rig = Rig::new()?;
+    let tagged = foreign_commit(&rig, "refs/tags/v1")?;
+    let cold = Cold::new(&rig)?;
+    let tag = facts(&rig, "push", r#"{"kind": "tag", "name": "v1"}"#, &tagged)?;
+    let fetched = checkout(&rig, &tag, &tagged, &[])?;
+    assert_eq!(
+        fetched.code,
+        Some(0),
+        "{}\n{}",
+        fetched.stdout,
+        fetched.stderr
+    );
+    let planted = "refs/velnor/trusted/pin";
+    git(&rig.mirror(), &["update-ref", planted, &tagged])?;
+    let main = facts(&rig, "push", MAIN, &rig.head)?;
+    assert_unreachable(&cold.run_as(&tagged, &main)?, &tagged, "refs/heads/main");
+    assert_eq!(cold.trusted_refs()?, planted);
+    Ok(())
+}

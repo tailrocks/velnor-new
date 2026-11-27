@@ -89,6 +89,16 @@ impl World {
         self.root.join("up/tailrocks/velnor-new.git")
     }
 
+    pub(crate) fn upstream_as(&self, repository: &str) -> Result<()> {
+        let link = self.root.join("up").join(format!("{repository}.git"));
+        if link.exists() {
+            return Ok(());
+        }
+        let parent = link.parent().context("the upstream link has a parent")?;
+        std::fs::create_dir_all(parent).context("create the upstream link directory")?;
+        std::os::unix::fs::symlink(self.upstream(), &link).context("link the upstream")
+    }
+
     pub(crate) fn binary_dir(&self) -> PathBuf {
         self.store.join("tools/mise").join(VERSION)
     }

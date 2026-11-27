@@ -39,7 +39,14 @@ pub(super) async fn fetch_trusted(
     env: &[(OsString, OsString)],
     transfer: Transfer,
 ) -> Result<()> {
-    fetch_refs(mirror, clone_url, vec![trusted.refspec()], env, transfer).await
+    fetch_refs(
+        mirror,
+        clone_url,
+        vec![trusted.remote().to_owned()],
+        env,
+        transfer,
+    )
+    .await
 }
 
 async fn fetch_refs(
