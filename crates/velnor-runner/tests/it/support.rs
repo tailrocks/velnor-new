@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Error, Result, anyhow};
 use serde_json::Value;
@@ -30,6 +30,7 @@ pub(crate) struct RecordedRequest {
     query: Vec<(String, String)>,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+    pub(crate) at: Instant,
 }
 
 impl RecordedRequest {
@@ -64,6 +65,7 @@ pub(crate) struct Reply {
     body: String,
     stall: bool,
     delay: Duration,
+    header: Option<(&'static str, &'static str)>,
 }
 
 impl Reply {
@@ -78,6 +80,7 @@ impl Reply {
             body: body.to_owned(),
             stall: false,
             delay: Duration::ZERO,
+            header: None,
         }
     }
 
@@ -93,6 +96,11 @@ impl Reply {
         self
     }
 
+    pub(crate) fn with_header(mut self, name: &'static str, value: &'static str) -> Self {
+        self.header = Some((name, value));
+        self
+    }
+
     pub(crate) fn json(status: u16, body: &Value) -> Self {
         Self {
             status,
@@ -100,6 +108,7 @@ impl Reply {
             body: body.to_string(),
             stall: false,
             delay: Duration::ZERO,
+            header: None,
         }
     }
 }
@@ -240,8 +249,11 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     {
         *current -= 1;
     }
+    let extra = reply
+        .header
+        .map_or_else(String::new, |(name, value)| format!("{name}: {value}\r\n"));
     let head = format!(
-        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\ncontent-length: {}\r\n{extra}connection: close\r\n\r\n",
         reply.status,
         reply.content_type,
         reply.body.len()
@@ -301,6 +313,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<RecordedRequest> {
             .collect(),
         headers,
         body,
+        at: Instant::now(),
     })
 }
 

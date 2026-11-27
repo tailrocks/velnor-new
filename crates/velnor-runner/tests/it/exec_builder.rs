@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use velnor_runner::exec::{AdapterRegistry, JobCancel, JobRun, LogSink, StepResult, run_job};
 use velnor_runner::job_message::AgentJobRequestMessage;
 
-use crate::exec_support::{Ran, Scratch};
+use crate::exec_support::{Ran, Scratch, scrub_tool_cache};
 
 pub(crate) const HANG_GUARD: Duration = Duration::from_secs(300);
 
@@ -75,6 +75,7 @@ pub(crate) fn write_job(scratch: &Scratch, message: &Value) -> Result<PathBuf> {
 
 pub(crate) fn binary(job: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+    scrub_tool_cache(&mut command);
     command.arg("exec").arg("--job").arg(job);
     command
 }

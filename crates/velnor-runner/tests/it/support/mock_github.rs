@@ -77,6 +77,12 @@ pub(crate) enum OAuthTokens {
     StaleFirst,
     UnavailableAfterSignIn(usize),
     UnavailableFirst(usize),
+    Fails {
+        status: u16,
+        after: usize,
+        times: usize,
+        retry_after: Option<&'static str>,
+    },
     Rejected(&'static str, &'static str),
 }
 

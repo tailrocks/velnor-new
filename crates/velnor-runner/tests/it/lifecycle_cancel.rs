@@ -265,7 +265,6 @@ async fn lifecycle_warns_about_dropped_logs_when_a_job_is_stopped_at_the_cancel_
     let mut settings = Settings::new()
         .killing_after_cancel_floor(Duration::from_secs(16))
         .renewing_every(Duration::from_secs(60))
-        .draining_uploads_within(Duration::from_secs(1))
         .within(CANCEL_BUDGET);
     settings.shutdown = shutdown;
 

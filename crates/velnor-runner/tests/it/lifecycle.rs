@@ -7,7 +7,8 @@ use anyhow::{Context, Result};
 use velnor_runner::exec::JobResult;
 use velnor_runner::lifecycle::LifecycleOutcome;
 
-use super::lifecycle_support::{fixture_job, run};
+use super::exec_support::Scratch;
+use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in};
 use super::support::mock_github::{
     Behavior, JOB_ID, JOB_LOG_BLOB, JOB_TOKEN, MockGithub, OAUTH_TOKEN, PLAN_ID,
     RESULTS_STEPS_UPDATE, SESSION_ID, STEP_LOG_BLOB, STEP_LOG_URL, SUMMARY_BLOB, step_id,
@@ -134,5 +135,22 @@ async fn lifecycle_renews_job_before_the_first_interval_passes() -> Result<()> {
         renewals, 1,
         "one renew happens at once, before the interval"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_keeps_the_tool_cache_after_a_job() -> Result<()> {
+    let script = "echo kept > \"$RUNNER_TOOL_CACHE/marker\"";
+    let mock = MockGithub::start(fixture_job("hello", Some(script))?, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+
+    let outcome = run_in(&mock, &scratch, Settings::new().within(CANCEL_BUDGET)).await??;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(
+        std::fs::read_to_string(scratch.work_dir().join("_tool").join("marker"))?,
+        "kept\n"
+    );
+    assert!(!scratch.work_dir().join("workspace").exists());
     Ok(())
 }

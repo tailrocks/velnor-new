@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-use super::{LifecycleError, remove_dir};
+use super::LifecycleError;
 use crate::exec::{JobRun, LogSink, StepResult};
 
 pub(super) const STAMP_LEN: usize = "2026-11-27T00:00:00.0000000Z ".len();
@@ -40,17 +40,8 @@ impl LogFiles {
         root.join("logs")
     }
 
-    pub(super) async fn create(root: &Path) -> Result<Self, LifecycleError> {
-        let dir = Self::dir_of(root);
-        let created = match remove_dir(&dir).await {
-            Ok(()) => tokio::fs::create_dir_all(&dir).await,
-            Err(error) => Err(error),
-        };
-        created.map_err(|source| LifecycleError::WorkDir {
-            path: dir.clone(),
-            source,
-        })?;
-        Ok(Self { dir })
+    pub(super) const fn at(dir: PathBuf) -> Self {
+        Self { dir }
     }
 
     pub(super) fn job_path(&self) -> PathBuf {

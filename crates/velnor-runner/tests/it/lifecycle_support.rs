@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome, RunJitOptions, run_jit};
-use velnor_runner::protocol::{RetryDelays, RunnerOs};
+use velnor_runner::protocol::{RetryDelays, RunnerOs, TokenBackoff};
 use velnor_runner::secret::Secret;
 
 use super::exec_support::{Scratch, fixture_path};
@@ -65,6 +65,7 @@ pub(crate) struct Settings {
     pub(crate) report_budget: Duration,
     pub(crate) upload_drain_budget: Duration,
     pub(crate) feed_flush_interval: Duration,
+    pub(crate) token_backoff: TokenBackoff,
     pub(crate) os: RunnerOs,
     pub(crate) budget: Duration,
     pub(crate) shutdown: JobCancel,
@@ -82,6 +83,7 @@ impl Settings {
             report_budget: Duration::from_secs(10),
             upload_drain_budget: Duration::from_secs(600),
             feed_flush_interval: Duration::from_millis(250),
+            token_backoff: TokenBackoff::IMMEDIATE,
             os: RunnerOs::Linux,
             budget: RUN_BUDGET,
             shutdown: JobCancel::new(),
@@ -138,6 +140,11 @@ impl Settings {
         self
     }
 
+    pub(crate) fn backing_off_tokens(mut self, backoff: TokenBackoff) -> Self {
+        self.token_backoff = backoff;
+        self
+    }
+
     pub(crate) fn within(mut self, budget: Duration) -> Self {
         self.budget = budget;
         self
@@ -163,7 +170,11 @@ pub(crate) async fn run_in(
         report_budget: settings.report_budget,
         upload_drain_budget: settings.upload_drain_budget,
         feed_flush_interval: settings.feed_flush_interval,
-        retry_delays: RetryDelays::IMMEDIATE,
+        retry_delays: RetryDelays {
+            token: settings.token_backoff,
+            ..RetryDelays::IMMEDIATE
+        },
+        tool_cache: None,
         os: settings.os,
         adapters: AdapterRegistry::empty(),
     };

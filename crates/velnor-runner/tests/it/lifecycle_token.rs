@@ -56,8 +56,8 @@ async fn lifecycle_stops_acquiring_after_five_failed_token_exchanges() -> Result
     );
     assert_eq!(
         mock.requests_to("POST", "/oauth/token")?.len(),
-        6,
-        "the sign-in and five attempts"
+        1 + 5 * 6,
+        "the sign-in, then five acquire attempts that try the token endpoint six times each"
     );
     assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
     mock.server.only_request("DELETE", "/broker/session")?;

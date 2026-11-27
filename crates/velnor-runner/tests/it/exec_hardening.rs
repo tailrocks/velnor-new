@@ -267,6 +267,23 @@ fn default_directories_are_removed_and_temp_is_not_placed_beside_a_workspace() -
     Ok(())
 }
 
+#[test]
+fn the_scratch_of_a_job_with_its_own_workspace_and_temp_is_removed() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let tmpdir = scratch.work_dir().join("tmp");
+    std::fs::create_dir_all(&tmpdir)?;
+    let path = write_job(&scratch, &job(vec![run("s", "echo hi")]))?;
+    let mut command = bounded(&scratch, &path);
+    command.env("TMPDIR", &tmpdir);
+
+    let ran = finished(command)?;
+
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left: Vec<_> = std::fs::read_dir(&tmpdir)?.collect::<Result<_, _>>()?;
+    assert!(left.is_empty(), "{left:?}");
+    Ok(())
+}
+
 #[tokio::test]
 async fn adapter_steps_honour_timeout_minutes() -> Result<()> {
     let body = std::fs::read_to_string(fixture_path("adapter-uses"))?;

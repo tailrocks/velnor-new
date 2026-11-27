@@ -13,6 +13,7 @@ mod results_wire;
 pub mod run_service;
 pub mod session;
 pub mod timeline;
+mod token_backoff;
 
 pub use broker::{Acknowledgement, BrokerClient, BrokerPoll};
 pub use error::{BrokerErrorCategory, GitHubApiError, broker_error_category};
@@ -42,3 +43,4 @@ pub use session::{
     TaskAgentSession,
 };
 pub use timeline::{TaskResult, TimelineRecordState};
+pub use token_backoff::TokenBackoff;

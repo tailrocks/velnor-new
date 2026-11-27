@@ -12,7 +12,9 @@ mod session;
 mod status;
 mod tail;
 
+use std::fs::Permissions;
 use std::future::Future;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,6 +51,7 @@ pub struct RunJitOptions {
     pub upload_drain_budget: Duration,
     pub feed_flush_interval: Duration,
     pub retry_delays: RetryDelays,
+    pub tool_cache: Option<PathBuf>,
     pub os: RunnerOs,
     pub adapters: AdapterRegistry,
 }
@@ -108,7 +111,7 @@ pub async fn run_jit(options: RunJitOptions) -> Result<LifecycleOutcome, Lifecyc
     let opened = tokio::select! {
         biased;
         () = options.shutdown.cancelled() => return Ok(LifecycleOutcome::NoJob),
-        opened = Session::open(&config, options.os, options.session_retry_interval) => opened?,
+        opened = Session::open(&config, options.os, options.session_retry_interval, options.retry_delays.token) => opened?,
     };
     let session = Arc::new(opened);
     let outcome = serve(&options, &agent_name, &session).await;
@@ -136,7 +139,10 @@ async fn serve(
     let run_options = RunOptions {
         workspace: root.join("workspace"),
         temp: root.join("temp"),
-        tool_cache: root.join("_tool"),
+        tool_cache: options
+            .tool_cache
+            .clone()
+            .unwrap_or_else(|| root.join("_tool")),
         runner_name: agent_name.to_owned(),
         os: options.os,
     };
@@ -217,18 +223,45 @@ async fn remove_dir(directory: &Path) -> std::io::Result<()> {
     }
 }
 
-async fn prepare_work_dirs(root: &Path, options: &RunOptions) -> Result<LogFiles, LifecycleError> {
-    for directory in [&options.workspace, &options.temp] {
-        let created = match remove_dir(directory).await {
-            Ok(()) => tokio::fs::create_dir_all(directory).await,
-            Err(error) => Err(error),
-        };
-        created.map_err(|source| LifecycleError::WorkDir {
-            path: directory.clone(),
-            source,
-        })?;
+const PRIVATE_DIR_MODE: u32 = 0o700;
+const WORK_DIR_MODE: u32 = 0o755;
+
+async fn create_work_root(root: &Path) -> std::io::Result<()> {
+    if tokio::fs::try_exists(root).await? {
+        return Ok(());
     }
-    LogFiles::create(root).await
+    tokio::fs::create_dir_all(root).await?;
+    tokio::fs::set_permissions(root, Permissions::from_mode(WORK_DIR_MODE)).await
+}
+
+async fn fresh_dir(directory: &Path, mode: Option<u32>) -> std::io::Result<()> {
+    remove_dir(directory).await?;
+    tokio::fs::create_dir_all(directory).await?;
+    match mode {
+        Some(mode) => tokio::fs::set_permissions(directory, Permissions::from_mode(mode)).await,
+        None => Ok(()),
+    }
+}
+
+async fn prepare_work_dirs(root: &Path, options: &RunOptions) -> Result<LogFiles, LifecycleError> {
+    let logs = LogFiles::dir_of(root);
+    let work_dir = |path: &Path, source| LifecycleError::WorkDir {
+        path: path.to_path_buf(),
+        source,
+    };
+    create_work_root(root)
+        .await
+        .map_err(|source| work_dir(root, source))?;
+    for (directory, mode) in [
+        (&options.workspace, None),
+        (&options.temp, Some(PRIVATE_DIR_MODE)),
+        (&logs, Some(PRIVATE_DIR_MODE)),
+    ] {
+        fresh_dir(directory, mode)
+            .await
+            .map_err(|source| work_dir(directory, source))?;
+    }
+    Ok(LogFiles::at(logs))
 }
 
 fn job_cancel(shutdown: &JobCancel) -> (JobCancel, BackgroundTask) {
@@ -306,14 +339,18 @@ async fn run_and_report(
         () = deadline.as_mut() => None,
     };
     drop(sink);
+    let dropped = ReportSummary {
+        logs_dropped: true,
+        ..ReportSummary::default()
+    };
     let Some(run) = run else {
-        return Ok(Finish::Abandoned(reporter.await.unwrap_or_default()));
+        reporter.abort();
+        return Ok(Finish::Abandoned(dropped));
     };
     let report = tokio::select! {
         report = &mut reporter => report.unwrap_or_default(),
         () = deadline.as_mut() => {
             reporter.abort();
-            let dropped = ReportSummary { logs_dropped: true, ..ReportSummary::default() };
             return Ok(Finish::Abandoned(dropped));
         }
     };

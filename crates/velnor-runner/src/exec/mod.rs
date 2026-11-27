@@ -25,6 +25,7 @@ mod step;
 mod step_info;
 mod timeout;
 mod token;
+mod tool_cache;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -34,6 +35,7 @@ pub use cancel::JobCancel;
 pub use inputs::Inputs;
 pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
+pub use tool_cache::{TOOL_CACHE_VARIABLES, tool_cache_from_env};
 
 use crate::expr::ExprError;
 use crate::protocol::RunnerOs;

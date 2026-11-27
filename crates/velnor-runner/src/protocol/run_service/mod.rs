@@ -6,9 +6,9 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
 use std::time::Duration;
 use url::Url;
-use uuid::Uuid;
 
 use super::http::{slash_url, validate_known_service_url};
+use super::token_backoff::{TokenBackoff, random_between};
 use crate::secret::Secret;
 
 mod acquire;
@@ -35,6 +35,7 @@ pub struct RetryDelays {
     pub acquire_max: Duration,
     pub complete_initial: Duration,
     pub complete_max: Duration,
+    pub token: TokenBackoff,
 }
 
 impl RetryDelays {
@@ -43,16 +44,11 @@ impl RetryDelays {
         acquire_max: Duration::ZERO,
         complete_initial: Duration::ZERO,
         complete_max: Duration::ZERO,
+        token: TokenBackoff::IMMEDIATE,
     };
 
     fn acquire_delay(&self) -> Duration {
-        let span = self.acquire_max.saturating_sub(self.acquire_min);
-        let span_millis = span.as_millis();
-        if span_millis == 0 {
-            return self.acquire_min;
-        }
-        let jitter = Uuid::new_v4().as_u128() % span_millis;
-        self.acquire_min + Duration::from_millis(u64::try_from(jitter).unwrap_or(0))
+        random_between(self.acquire_min, self.acquire_max)
     }
 
     fn complete_delay(&self, attempt: u32) -> Duration {
@@ -73,6 +69,7 @@ impl Default for RetryDelays {
             acquire_max: Duration::from_secs(15),
             complete_initial: Duration::from_secs(5),
             complete_max: Duration::from_secs(5),
+            token: TokenBackoff::default(),
         }
     }
 }

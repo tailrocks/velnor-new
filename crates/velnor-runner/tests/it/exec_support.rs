@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use uuid::Uuid;
-use velnor_runner::exec::RunOptions;
+use velnor_runner::exec::{RunOptions, TOOL_CACHE_VARIABLES};
 use velnor_runner::job_message::AgentJobRequestMessage;
 use velnor_runner::protocol::RunnerOs;
 
@@ -70,6 +70,12 @@ impl Ran {
     }
 }
 
+pub(crate) fn scrub_tool_cache(command: &mut Command) {
+    for name in TOOL_CACHE_VARIABLES {
+        command.env_remove(name);
+    }
+}
+
 pub(crate) fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures/exec")
@@ -87,7 +93,9 @@ pub(crate) fn run_fixture(name: &str, scratch: &Scratch) -> Result<Ran> {
 
 pub(crate) fn run_path(job: &Path, scratch: &Scratch) -> Result<Ran> {
     let started = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+    scrub_tool_cache(&mut command);
+    let output = command
         .arg("exec")
         .arg("--job")
         .arg(job)

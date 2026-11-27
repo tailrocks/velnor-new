@@ -48,6 +48,21 @@ pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result
         {
             return Reply::status(503);
         }
+        if let OAuthTokens::Fails {
+            status,
+            after,
+            times,
+            retry_after,
+        } = tokens
+            && number >= after
+            && number - after < times
+        {
+            let reply = Reply::status(status);
+            return match retry_after {
+                Some(value) => reply.with_header("retry-after", value),
+                None => reply,
+            };
+        }
         let stale = matches!(tokens, OAuthTokens::StaleFirst) && number == 0;
         let token = if stale {
             STALE_OAUTH_TOKEN
