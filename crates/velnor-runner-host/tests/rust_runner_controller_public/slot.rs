@@ -223,8 +223,12 @@ fn reclaimed_files(world: &World) -> TestResult<()> {
     assert!(acquire.seq > removal.seq);
     let state = snapshot(world, &acquire);
     assert!(!state.runners.contains(&runner_name(2)) && !state.work.contains(&"2".to_owned()));
-    let locked = world.store.join("work/3/locked");
-    wait_for("the work dir of C", 20, || locked.exists());
+    let locked = world.seen.join("3.jit.locked");
+    wait_for(
+        "job C to leave a 0500 directory in its work dir",
+        20,
+        || locked.exists(),
+    );
     world.wait_for_event(
         "job D to be acquired: the 0500 work directory left by job C must not hold its slot",
         90,
