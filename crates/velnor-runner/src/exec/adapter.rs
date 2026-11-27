@@ -13,7 +13,6 @@ use super::output::Output;
 use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, JobFacts, StepResult};
-use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 

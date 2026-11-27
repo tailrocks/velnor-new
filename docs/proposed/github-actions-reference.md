@@ -1065,9 +1065,14 @@ claimed to match.
     prints the same two lines once per entry, after the line that counts the
     files. A path that matches only such entries therefore uploads an empty
     archive and does not take the no-files branch, as upstream. An entry that
-    vanishes between the search and the zip is a recorded difference: Velnor
-    skips it silently, where upstream warns (and fails for a vanished link
-    target). `hashFiles` keeps failing with `<path>: not a regular file` and
+    vanishes after the search is a recorded difference. Velnor skips one that
+    vanishes between the listing and the open silently, and fails the step
+    with `stat <path>` before `CreateArtifact` for one that vanishes after
+    the search. Upstream drops it silently at the glob stat
+    (`omitBrokenSymbolicLinks`), throws at the `search.ts` stat loop or in
+    `getUploadZipSpecification` (`File <path> does not exist`), warns at
+    the `archiver` `lstat`, and fails at `realpath` for a vanished link
+    target. `hashFiles` keeps failing with `<path>: not a regular file` and
     keeps its guarded opens.
 
 The native steps claim only the pinned revisions: `actions/upload-artifact` at
