@@ -17,6 +17,7 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
+import { FFIType, dlopen } from "bun:ffi";
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
 
@@ -200,7 +201,16 @@ function listProcesses(): never {
   return finish(0);
 }
 
+function escapeGroup(): void {
+  const libc = dlopen(process.platform === "darwin" ? "libSystem.B.dylib" : "libc.so.6", {
+    getpgid: { args: [FFIType.i32], returns: FFIType.i32 },
+    setpgid: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+  });
+  libc.symbols.setpgid(0, libc.symbols.getpgid(process.ppid));
+}
+
 function runner(rest: string[]): never {
+  if (setting("FAKE_RUNNER_ESCAPE") !== "") escapeGroup();
   const jit = `${setting("FAKE_ORB_STORE")}${text(rest[3]).replace(`@${GUEST}`, "")}`;
   const work = `${setting("FAKE_ORB_STORE")}${text(rest[5]).replace(GUEST, "")}`;
   const name = basename(jit);

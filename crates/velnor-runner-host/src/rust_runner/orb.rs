@@ -3,7 +3,7 @@
 
 use std::io::Read;
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -12,6 +12,7 @@ use rustix::process::{Pid, Signal, kill_process_group};
 use crate::error::RustRunnerFailure;
 
 const POLL: Duration = Duration::from_millis(10);
+const CAPTURE_LIMIT: u64 = 8 * 1024 * 1024;
 
 pub(super) struct Finished {
     pub(super) status: ExitStatus,
@@ -37,12 +38,10 @@ pub(super) fn run(
         .map_err(|_| RustRunnerFailure::OrbUnavailable)?;
     let limit = Instant::now() + deadline;
     let group = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
-    let reader = child.stdout.take().map(|mut stdout| {
+    let reader = child.stdout.take().map(|stdout| {
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = stdout.read_to_end(&mut bytes);
-            let _ = sender.send(bytes);
+            let _ = sender.send(read_bounded(stdout));
         });
         receiver
     });
@@ -79,18 +78,30 @@ fn kill_group(group: Option<Pid>) {
     }
 }
 
+fn read_bounded(stdout: ChildStdout) -> Option<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let mut bounded = stdout.take(CAPTURE_LIMIT + 1);
+    let _ = bounded.read_to_end(&mut bytes);
+    if u64::try_from(bytes.len()).is_ok_and(|read| read <= CAPTURE_LIMIT) {
+        return Some(bytes);
+    }
+    let _ = std::io::copy(&mut bounded.into_inner(), &mut std::io::sink());
+    None
+}
+
 fn collected(
-    reader: Option<Receiver<Vec<u8>>>,
+    reader: Option<Receiver<Option<Vec<u8>>>>,
     group: Option<Pid>,
     limit: Instant,
 ) -> Result<Vec<u8>, RustRunnerFailure> {
     let Some(reader) = reader else {
         return Ok(Vec::new());
     };
-    reader
+    let received = reader
         .recv_timeout(limit.saturating_duration_since(Instant::now()))
         .map_err(|_| {
             kill_group(group);
             RustRunnerFailure::OrbTimeout
-        })
+        })?;
+    received.ok_or(RustRunnerFailure::OrbOutputTooLarge)
 }

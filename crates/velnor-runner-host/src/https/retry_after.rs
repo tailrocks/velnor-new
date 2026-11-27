@@ -4,13 +4,14 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::Url;
 
 use super::CurlFail;
 
 const WAIT_SLICE: Duration = Duration::from_millis(50);
+const MAX_RESET_HOLD: Duration = Duration::from_hours(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct OriginKey(String);
@@ -72,17 +73,25 @@ pub(super) fn wait_for_base(base: &str, deadline: Instant) -> Result<(), CurlFai
     }
 }
 
-pub(super) fn record_response(base: &str, status: u16, header: Option<&[u8]>) {
+pub(super) fn record_response(
+    base: &str,
+    status: u16,
+    header: Option<&[u8]>,
+    reset: Option<&[u8]>,
+) {
     if !matches!(status, 429 | 503) {
         return;
     }
-    let (Some(key), Some(header)) = (origin_key(base), header) else {
+    let Some(key) = origin_key(base) else {
         return;
     };
 
     let mut registry = registry_lock();
     let wall_now = SystemTime::now();
-    let Some(duration) = parse_retry_after(header, wall_now) else {
+    let Some(duration) = header
+        .and_then(|value| parse_retry_after(value, wall_now))
+        .or_else(|| reset.and_then(|value| parse_reset(value, wall_now)))
+    else {
         return;
     };
     if duration.is_zero() {
@@ -91,6 +100,21 @@ pub(super) fn record_response(base: &str, status: u16, header: Option<&[u8]>) {
 
     let now = Instant::now();
     record_at(&mut registry, key, duration, now);
+}
+
+fn parse_reset(header: &[u8], wall_now: SystemTime) -> Option<Duration> {
+    let seconds = std::str::from_utf8(header)
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()?;
+    let reset_at = UNIX_EPOCH.checked_add(Duration::from_secs(seconds))?;
+    Some(
+        reset_at
+            .duration_since(wall_now)
+            .unwrap_or(Duration::ZERO)
+            .min(MAX_RESET_HOLD),
+    )
 }
 
 fn parse_retry_after(header: &[u8], wall_now: SystemTime) -> Option<Duration> {

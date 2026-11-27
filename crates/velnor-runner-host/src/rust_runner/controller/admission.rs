@@ -164,10 +164,16 @@ impl Slots {
         }
     }
 
-    pub(super) fn prove_launching(&mut self) -> Vec<(ReservationId, usize)> {
+    pub(super) fn launching(&self) -> bool {
+        self.entries
+            .values()
+            .any(|slot| matches!(slot.phase, Phase::Launching { .. }))
+    }
+
+    pub(super) fn prove_unsettled(&mut self) -> Vec<(ReservationId, usize)> {
         let mut moved = Vec::new();
         for (reservation, slot) in &mut self.entries {
-            if matches!(slot.phase, Phase::Launching { .. }) {
+            if !matches!(slot.phase, Phase::Proving { .. }) {
                 slot.phase = Phase::Proving {
                     exit: JobExit::Stopped,
                     attempting: false,

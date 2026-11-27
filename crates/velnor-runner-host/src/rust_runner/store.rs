@@ -9,21 +9,30 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, Dir, FileType, Mode, OFlags, chmodat, fchmod, fstat, fsync, mkdirat, openat, renameat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, fsync, mkdirat, openat,
+    renameat, statat, unlinkat,
 };
-use rustix::fs::{statat, unlinkat};
 use rustix::io::Errno;
 use rustix::path::Arg;
 use rustix::process::geteuid;
 use sha2::{Digest, Sha256};
 
+use self::remove::BOUNDS;
 use super::machine::failure;
 use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
 
+mod remove;
+
 const RUNNER_BINARY: &str = "velnor-runner";
 const BIN_DIRECTORY: &str = "bin";
+const LOCK_FILE: &str = "host.lock";
+
+#[derive(Debug)]
+pub struct HostHold {
+    _lock: OwnedFd,
+}
 
 fn others_can_write() -> Mode {
     Mode::WGRP | Mode::WOTH
@@ -54,6 +63,12 @@ impl Store {
     }
 
     pub(super) fn prepare(path: &Path) -> Result<Self, HostError> {
+        let store = Self::create(path)?;
+        store.require_runner_binary()?;
+        Ok(store)
+    }
+
+    pub(super) fn create(path: &Path) -> Result<Self, HostError> {
         DirBuilder::new()
             .recursive(true)
             .mode(0o700)
@@ -73,8 +88,22 @@ impl Store {
             others_can_reach(),
             RustRunnerFailure::JitDirectoryAccessible,
         )?;
-        store.require_runner_binary()?;
         Ok(store)
+    }
+
+    pub(super) fn hold(&self) -> Result<HostHold, HostError> {
+        let descriptor = openat(
+            &self.root,
+            LOCK_FILE,
+            OFlags::RDWR | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::RUSR | Mode::WUSR,
+        )
+        .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+        match flock(&descriptor, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => Ok(HostHold { _lock: descriptor }),
+            Err(Errno::WOULDBLOCK) => Err(failure(RustRunnerFailure::HostStoreHeld)),
+            Err(_) => Err(failure(RustRunnerFailure::HostStore)),
+        }
     }
 
     pub(super) fn require_runner_binary(&self) -> Result<(), HostError> {
@@ -168,7 +197,7 @@ impl Store {
 
     pub(super) fn remove_work(&self, name: &str) -> Result<(), HostError> {
         let work = self.work_directory()?;
-        remove_tree(&work, name).map_err(|_| failure(RustRunnerFailure::HostStore))
+        remove::tree(&work, name, BOUNDS).map_err(|error| failure(error.failure()))
     }
 
     pub(super) fn leftovers(&self, jit_name: &str, work_name: &str) -> Result<bool, HostError> {
@@ -179,7 +208,7 @@ impl Store {
 
     pub(super) fn empty_jit_and_work(&self) -> Result<(), HostError> {
         for directory in [self.jit_directory()?, self.work_directory()?] {
-            empty(&directory).map_err(|_| failure(RustRunnerFailure::HostStore))?;
+            remove::contents(&directory, BOUNDS).map_err(|error| failure(error.failure()))?;
         }
         Ok(())
     }
@@ -278,44 +307,9 @@ fn exists(directory: &OwnedFd, name: &str) -> Result<bool, HostError> {
     }
 }
 
-fn remove_entry(directory: &OwnedFd, name: impl Arg) -> Result<(), Errno> {
+fn remove_entry(directory: &impl AsFd, name: impl Arg) -> Result<(), Errno> {
     match unlinkat(directory, name, AtFlags::empty()) {
         Ok(()) | Err(Errno::NOENT) => Ok(()),
         Err(error) => Err(error),
     }
-}
-
-fn remove_tree(directory: &OwnedFd, name: impl Arg + Copy) -> Result<(), Errno> {
-    let stat = match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(stat) => stat,
-        Err(Errno::NOENT) => return Ok(()),
-        Err(error) => return Err(error),
-    };
-    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory {
-        return remove_entry(directory, name);
-    }
-    let child = match openat(directory, name, directory_flags(), Mode::empty()) {
-        Err(Errno::ACCESS) => {
-            chmodat(directory, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)?;
-            openat(directory, name, directory_flags(), Mode::empty())?
-        }
-        opened => opened?,
-    };
-    fchmod(&child, Mode::RWXU)?;
-    empty(&child)?;
-    unlinkat(directory, name, AtFlags::REMOVEDIR)
-}
-
-fn empty(directory: &OwnedFd) -> Result<(), Errno> {
-    let mut names = Vec::new();
-    for entry in Dir::read_from(directory)? {
-        let name = entry?.file_name().to_owned();
-        if !matches!(name.to_bytes(), b"." | b"..") {
-            names.push(name);
-        }
-    }
-    for name in &names {
-        remove_tree(directory, name.as_c_str())?;
-    }
-    Ok(())
 }

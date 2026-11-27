@@ -4,13 +4,15 @@
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
     RepositoryTarget, VerifiedPullRequest, VerifiedWorkflowSource, WorkflowRefKind,
-    get_pull_request, get_workflow_run, verify_pull_request, verify_workflow_source,
+    WorkflowRunError, get_pull_request, get_workflow_run, verify_pull_request,
+    verify_workflow_source,
 };
 
 use crate::config::{
     ConnectionId, RepositoryConnection, SourcePolicy, SourcePolicyMode, WorkflowEvent,
 };
 use crate::journal::SourceAuthorizationBinding;
+use crate::launch::execution_authorization::SourceFault;
 use sha2::{Digest, Sha256};
 use velnor_runner_github::Transport;
 
@@ -146,7 +148,7 @@ pub(crate) fn authorize_source<T: Transport + ?Sized>(
         complete.workflow_run_id,
         token,
     )
-    .map_err(|_| SourceBlock::ApiUnavailable)?;
+    .map_err(lookup_block)?;
     let verified = verify_workflow_source(
         complete,
         &run,
@@ -164,6 +166,13 @@ pub(crate) fn authorize_source<T: Transport + ?Sized>(
         verify_pull(connection, transport, token, &run, &verified)?;
     }
     Ok(verified)
+}
+
+fn lookup_block(error: WorkflowRunError) -> SourceBlock {
+    match SourceFault::lookup(error) {
+        SourceFault::Retryable(_) => SourceBlock::ApiUnavailable,
+        SourceFault::Final(_) => SourceBlock::SourceMismatch,
+    }
 }
 
 fn verify_binding(
@@ -209,8 +218,8 @@ fn verify_pull(
         .filter(|value| *value > 0)
         .ok_or(SourceBlock::PullRequestDenied)?;
     let (owner, repository) = split_repository(&connection.repository)?;
-    let pull = get_pull_request(transport, owner, repository, number, token)
-        .map_err(|_| SourceBlock::ApiUnavailable)?;
+    let pull =
+        get_pull_request(transport, owner, repository, number, token).map_err(lookup_block)?;
     let verified_pull = verify_pull_request(run, &pull, connection.repository_id)
         .map_err(|_| SourceBlock::PullRequestDenied)?;
     if !connection

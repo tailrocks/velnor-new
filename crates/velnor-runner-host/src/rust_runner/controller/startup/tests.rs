@@ -17,7 +17,13 @@ fn a_held_session_or_clear_step_renews_the_admin_token_only_once_it_is_old() {
         "a token younger than the renewal age must not be renewed"
     );
     assert_eq!(renew_held(Step::Clear(1), young), None);
-    for step in [Step::Machine, Step::Sweep, Step::Set(0), Step::Renew(0)] {
+    for step in [
+        Step::Hold,
+        Step::Machine,
+        Step::Sweep,
+        Step::Set(0),
+        Step::Renew(0),
+    ] {
         assert_eq!(
             renew_held(step, old * 2),
             None,

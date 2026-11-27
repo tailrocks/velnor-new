@@ -152,3 +152,42 @@ fn changed_config(world: &World, second: u64) -> TestResult<()> {
     assert!(!deleted_messages(world).contains(&"64".to_owned()));
     Ok(())
 }
+
+pub(super) fn probes_the_machine_while_idle(test: &str) -> TestResult<()> {
+    let mut world = World::new("T6b", 1, true)?;
+    world.spawn_controller(test, &[])?;
+    wait_for("the ready heartbeat", 40, || {
+        world.heartbeat_phase().as_deref() == Some("ready")
+    });
+    world.configure_orb(&format!(
+        "FAKE_ORB_LIST={}\n",
+        world.root.join("no-such-list.json").display()
+    ))?;
+    wait_for(
+        "the machine_unavailable heartbeat of an idle host",
+        40,
+        || world.heartbeat_phase().as_deref() == Some("machine_unavailable"),
+    );
+    assert_eq!(controller_readiness(&world.state), Readiness::Degraded);
+    world.queue_message(65, &[push_offer(1, 6501, "main", WORKFLOW)])?;
+    let marker = world.events().last().map_or(0, |event| event.seq);
+    world.wait_for_event_unless(
+        "two polls of the message while the machine is down",
+        40,
+        |_| polls_returning(&world, "65", marker) >= 2,
+        |_| {
+            (!acquire_ids(&world).is_empty())
+                .then(|| "an offer was acquired while the machine was unavailable".to_owned())
+        },
+    );
+    world.configure_orb("")?;
+    wait_for("the ready heartbeat after the machine returned", 40, || {
+        world.heartbeat_phase().as_deref() == Some("ready")
+    });
+    world.wait_for_event("the offer after the machine returned", 60, |_| {
+        acquire_ids(&world) == ["1"]
+    });
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}

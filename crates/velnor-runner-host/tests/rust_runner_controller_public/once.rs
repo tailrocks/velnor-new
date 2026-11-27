@@ -119,16 +119,17 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
                 >= 2
                 && events.iter().any(|event| event.label == "message.delete")
         },
-        |_| {
-            let mut ids = acquire_ids(world);
-            ids.sort();
-            ids.dedup();
-            (ids.len() != acquire_ids(world).len()).then(|| {
-                format!(
-                    "a runner request was acquired twice: {:?}",
-                    acquire_ids(world)
-                )
-            })
+        |events| {
+            let acquired: Vec<&str> = events
+                .iter()
+                .filter(|event| event.label == "acquire")
+                .map(|event| event.field("ids"))
+                .collect();
+            let mut distinct = acquired.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            (distinct.len() != acquired.len())
+                .then(|| format!("a runner request was acquired twice: {acquired:?}"))
         },
     );
     let events = world.events();

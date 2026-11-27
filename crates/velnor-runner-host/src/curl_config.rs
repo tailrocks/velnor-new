@@ -70,7 +70,7 @@ pub fn encode(
     text.push_str("\"\n");
     quoted(&mut text, "url", &[url])?;
     text.push_str(
-        "\noutput = \"-\"\nwrite-out = \"%{http_code}%{stderr}%header{retry-after}\\n%header{x-ratelimit-remaining}\"\n",
+        "\noutput = \"-\"\nwrite-out = \"%{http_code}%{stderr}%header{retry-after}\\n%header{x-ratelimit-remaining}\\n%header{x-ratelimit-reset}\"\n",
     );
     write!(text, "max-time = {}.{:03}", millis / 1000, millis % 1000)
         .map_err(|_| CurlConfigError)?;

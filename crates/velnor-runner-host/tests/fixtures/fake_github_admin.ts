@@ -48,8 +48,8 @@ function intended(): boolean {
   return ((JSON.parse(readFileSync(file, "utf8")) as { intended?: string[] }).intended ?? []).length > 0;
 }
 
-function firstJit(requestId: number): boolean {
-  return mutate((state) => (state.attempts[`jit-${requestId}`] = (state.attempts[`jit-${requestId}`] ?? 0) + 1)) === 1;
+function jitAttempt(requestId: number): number {
+  return mutate((state) => (state.attempts[`jit-${requestId}`] = (state.attempts[`jit-${requestId}`] ?? 0) + 1));
 }
 
 function sessions(path: string): void {
@@ -72,6 +72,7 @@ function sessions(path: string): void {
     reply(200, { sessionId: session[2], messageQueueUrl: config.queue_url, messageQueueAccessToken: `queue-token-${session[2]}-refreshed`, ...scripted?.patch });
   }
   if (method === "DELETE" && session[2]) {
+    held("session");
     mutate((state) => (state.sessions = state.sessions.filter((id) => id !== session[2])));
     record("session.delete", { id: session[2] });
     reply(204, undefined);
@@ -97,10 +98,13 @@ function jobs(path: string): void {
       state.runners.push(created);
       return created;
     });
-    const failing = offers().some((offer) => offer.jit_returns === 500 && readState().pending_jit?.includes(offer.request_id) && firstJit(offer.request_id));
+    const pending = readState().pending_jit ?? [];
+    const scripted = offers().find((offer) => offer.request_id !== undefined && pending.includes(offer.request_id) && (offer.jit_failures !== undefined || offer.jit_identity !== undefined));
+    const failing = scripted?.jit_failures !== undefined && jitAttempt(scripted.request_id) <= scripted.jit_failures;
     record("jit", { name, status: failing ? 500 : 200 });
     if (failing) reply(500, { message: "jit failed" });
-    reply(200, { encodedJITConfig: canary, runner });
+    const wrong = { id: { ...runner, id: 0 }, scale_set: { ...runner, runnerScaleSetId: 99 }, name: { ...runner, name: `${name}-other` } };
+    reply(200, { encodedJITConfig: canary, runner: scripted?.jit_identity ? wrong[scripted.jit_identity] : runner });
   }
 }
 
@@ -115,9 +119,19 @@ export function admin(path: string): never {
     if (scripted?.status && scripted.status !== 200) reply(scripted.status, { message: "unavailable" });
     reply(200, { count: id === null ? 0 : 1, value: id === null ? [] : [scaleSetView(id, config.existing_labels)] });
   }
+  const byId = new RegExp(`^${sets}/(\\d+)$`).exec(path);
+  if (method === "GET" && byId?.[1]) {
+    const id = readState().scale_set_id;
+    const found = id !== null && id === Number(byId[1]);
+    record("scaleset.get", { id: byId[1], found, status: found ? 200 : 404 });
+    if (id === null || !found) reply(404, { message: "not found" });
+    reply(200, scaleSetView(id, config.existing_labels));
+  }
   if (method === "POST" && path === sets) {
+    const refused = refusal("scaleset.create");
+    record("scaleset.create", { name: config.scale_set, intent: intended(), status: refused?.status ?? 200 });
+    if (refused) reply(refused.status, { message: "create refused" });
     const id = mutate((state) => (state.scale_set_id = 7));
-    record("scaleset.create", { name: config.scale_set, intent: intended() });
     reply(200, scaleSetView(id));
   }
   sessions(path);

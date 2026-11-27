@@ -114,7 +114,12 @@ fn perform_with_scratch(
     } else {
         response.status
     };
-    retry_after::record_response(base, status, response.retry_after.as_deref());
+    retry_after::record_response(
+        base,
+        status,
+        response.retry_after.as_deref(),
+        response.reset.as_deref(),
+    );
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }

@@ -6,8 +6,8 @@ use super::events::Event;
 use serde_json::json;
 
 use super::fixtures::{
-    OTHER_WORKFLOW, TestResult, WORKFLOW, pull_offer, push_offer, sha, with_acquire_none,
-    with_head_repository, with_run_repository,
+    OTHER_WORKFLOW, TestResult, WORKFLOW, merge_group_host_toml, merge_group_offer, pull_offer,
+    push_offer, sha, with_acquire_none, with_head_repository, with_run_repository,
 };
 use super::harness::World;
 
@@ -160,4 +160,43 @@ fn assert_outcome(world: &World) {
         runners[0].text
     );
     assert_eq!(jits[0].field("name"), runner_name(sentinel));
+}
+
+pub(super) fn merge_groups(test: &str) -> TestResult<()> {
+    let mut world = World::new("T2b", 1, true)?;
+    world.write_host_toml_text(&merge_group_host_toml(&world.root)?)?;
+    let queue = |pull: u64, run: u64| format!("gh-readonly-queue/main/pr-{pull}-{}", sha(run));
+    world.queue_message(
+        31,
+        &[merge_group_offer(
+            1,
+            3001,
+            &format!("refs/heads/{}", queue(3, 3001)),
+            &queue(3, 3001),
+        )],
+    )?;
+    world.queue_message(
+        32,
+        &[merge_group_offer(
+            2,
+            3002,
+            "refs/merge-queue/main/pr-4",
+            &queue(4, 3002),
+        )],
+    )?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("both merge group offers", 60, |_| {
+        acquire_ids(&world) == ["1", "2"]
+    });
+    assert!(
+        !world
+            .child_stderr()
+            .lines()
+            .any(|line| line.starts_with("source_admission=blocked")),
+        "a merge group offer was refused"
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_clean(&world, "1");
+    Ok(())
 }

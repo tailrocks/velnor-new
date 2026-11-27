@@ -64,8 +64,9 @@ pub(crate) fn assess(state: &Path, config_sha256: &str) -> Readiness {
     let Some(record) = read(state) else {
         return Readiness::Degraded;
     };
-    let fresh = now_unix_ms().saturating_sub(record.updated_unix_ms)
-        <= u64::try_from(FRESH.as_millis()).unwrap_or(u64::MAX);
+    let fresh = now_unix_ms()
+        .checked_sub(record.updated_unix_ms)
+        .is_some_and(|age| age <= u64::try_from(FRESH.as_millis()).unwrap_or(u64::MAX));
     if !fresh {
         return Readiness::Degraded;
     }

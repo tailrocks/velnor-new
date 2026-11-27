@@ -21,6 +21,7 @@ impl CleanupProof {
 pub(super) struct ProofInputs {
     pub(super) launcher: RustRunnerLauncher,
     pub(super) admin: Admin,
+    pub(super) scale_set_id: i64,
     pub(super) runner_name: String,
     pub(super) reservation: ReservationId,
 }
@@ -29,7 +30,7 @@ pub(super) fn prove(inputs: &ProofInputs) -> Result<CleanupProof, ListenFault> {
     let paths = JobPaths::of(inputs.reservation);
     end_processes(&inputs.launcher, paths.guest_work_dir())?;
     remove_files(&inputs.launcher, &paths)?;
-    remove_runner_named(&inputs.admin, &inputs.runner_name)?;
+    remove_runner_named(&inputs.admin, inputs.scale_set_id, &inputs.runner_name)?;
     Ok(CleanupProof {
         reservation: inputs.reservation,
     })
@@ -61,7 +62,7 @@ fn remove_files(launcher: &RustRunnerLauncher, paths: &JobPaths) -> Result<(), L
     let left = || HostError::RustRunner(RustRunnerFailure::JobFilesLeft);
     let store = Store::open(launcher.host_store()).map_err(|_| left())?;
     store.remove_jit(paths.jit_name()).map_err(|_| left())?;
-    store.remove_work(paths.work_name()).map_err(|_| left())?;
+    store.remove_work(paths.work_name())?;
     if store
         .leftovers(paths.jit_name(), paths.work_name())
         .map_err(|_| left())?

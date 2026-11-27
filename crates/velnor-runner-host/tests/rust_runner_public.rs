@@ -5,6 +5,8 @@
 mod hardening;
 #[path = "rust_runner_public/orb_calls.rs"]
 mod orb_calls;
+#[path = "rust_runner_public/removal.rs"]
+mod removal;
 #[path = "rust_runner_public/store.rs"]
 mod store;
 #[path = "rust_runner_public/support.rs"]
@@ -349,4 +351,31 @@ fn rust_runner_mode_accepts_velnor_mac_selector_and_requires_arm64() {
         .err(),
         Some(HostError::PlatformSelector)
     );
+}
+
+#[test]
+fn rust_runner_removes_a_tree_deeper_than_its_descriptor_limit() -> Result<(), Box<dyn Error>> {
+    removal::deep_tree_under_a_small_descriptor_limit()
+}
+
+#[test]
+fn rust_runner_removes_directories_its_owner_cannot_open() -> Result<(), Box<dyn Error>> {
+    removal::directories_the_owner_cannot_open()
+}
+
+#[test]
+fn rust_runner_bounds_the_output_it_captures_from_orb() -> Result<(), Box<dyn Error>> {
+    removal::orb_output_over_the_capture_bound()
+}
+
+#[test]
+fn rust_runner_allows_one_controller_per_host_store() -> Result<(), Box<dyn Error>> {
+    removal::one_controller_per_host_store()
+}
+
+#[test]
+fn rust_runner_ignores_a_host_store_override_in_the_environment() -> Result<(), Box<dyn Error>> {
+    removal::ignores_a_store_override_in_the_environment(
+        "rust_runner_ignores_a_host_store_override_in_the_environment",
+    )
 }

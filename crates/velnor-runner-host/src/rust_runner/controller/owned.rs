@@ -63,6 +63,14 @@ pub(super) fn record_intent(state: &Path, connection: &ConnectionId) -> Result<(
     Ok(())
 }
 
+pub(super) fn drop_intent(state: &Path, connection: &ConnectionId) -> Result<(), HostError> {
+    let mut records = read(state)?;
+    if records.intended.remove(connection.as_str()) {
+        write(state, &records)?;
+    }
+    Ok(())
+}
+
 pub(super) fn record_created(
     state: &Path,
     connection: &ConnectionId,
