@@ -226,7 +226,7 @@ impl RootJobs<'_> {
         steps.extend(mirror());
         if cargo {
             steps.extend(
-                rust_additions(self.facts.toolchain.as_ref(), &self.member().root)
+                rust_additions(self.facts.toolchain.as_ref(), Some(&self.member().root))
                     .into_iter()
                     .map(|step| Step {
                         gate: self.lane.steps(),
