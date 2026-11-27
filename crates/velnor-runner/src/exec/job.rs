@@ -8,6 +8,7 @@ use super::cancel::Groups;
 use super::commands;
 use super::context::{JobContext, StepEntry};
 use super::contexts::set_output;
+use super::evaluate;
 use super::execute::Executed;
 use super::issues::Issues;
 use super::mask::{self, Masker};
@@ -15,9 +16,8 @@ use super::output::Output;
 use super::preflight::problems;
 use super::sink::LogSink;
 use super::step_info::{context_id, continue_on_error, step_environment, step_name};
-use super::token;
 use super::{AnnotationLevel, JobCancel, JobResult, JobRun, RunOptions, StepRecord, StepResult};
-use crate::expr::{JobStatus, evaluate_condition};
+use crate::expr::JobStatus;
 use crate::job_message::{ActionStep, AgentJobRequestMessage};
 
 pub(super) struct Job<'a> {
@@ -111,7 +111,7 @@ impl Job<'_> {
             let record = self.run_step(number, step, out).await;
             run.steps.push(record);
         }
-        self.collect_outputs(out, run);
+        self.collect_outputs(out, run).await;
         self.groups.kill_all();
         run.result = match self.status {
             JobStatus::Success => JobResult::Succeeded,
@@ -120,13 +120,13 @@ impl Job<'_> {
         };
     }
 
-    fn collect_outputs(&mut self, out: &mut Output<'_>, run: &mut JobRun) {
+    async fn collect_outputs(&mut self, out: &mut Output<'_>, run: &mut JobRun) {
         let Some(token) = self.message.job_outputs.as_ref() else {
             return;
         };
         out.enter(0);
         let env = self.ctx.expr_env(self.status, &[]);
-        match token::mapping(token, &env) {
+        match evaluate::mapping(token, &env).await {
             Ok(outputs) => {
                 let mut unique = Vec::new();
                 for (name, value) in &outputs {
@@ -164,10 +164,10 @@ impl Job<'_> {
             self.status = JobStatus::Cancelled;
         }
         let prepared = self.ctx.begin_step(step).await;
-        let step_env = step_environment(step, &self.ctx.expr_env(self.status, &[]));
+        let step_env = step_environment(step, &self.ctx.expr_env(self.status, &[])).await;
         let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
         let env = self.ctx.expr_env(self.status, &step_vars);
-        let name = out.masker.mask(&step_name(step, &env)).into_owned();
+        let name = out.masker.mask(&step_name(step, &env).await).into_owned();
         let mut record = StepRecord {
             number,
             context_id: context_id(step).map(str::to_owned),
@@ -180,7 +180,7 @@ impl Job<'_> {
         let condition = match (step.enabled, &step_env) {
             (false, _) => Ok(false),
             (true, Err(_)) => Ok(true),
-            (true, Ok(_)) => evaluate_condition(condition_text, &env),
+            (true, Ok(_)) => evaluate::condition(condition_text, &env).await,
         };
         let condition_failed = condition.is_err() || step_env.is_err();
         let mut outputs = Vec::new();
@@ -207,7 +207,7 @@ impl Job<'_> {
             outputs = executed.outputs;
             record.summary_path = executed.summary;
             record.outcome = executed.result;
-            record.conclusion = if executed.result == StepResult::Failed
+            let forgiven = executed.result == StepResult::Failed
                 && !condition_failed
                 && continue_on_error(
                     step,
@@ -216,7 +216,9 @@ impl Job<'_> {
                         &[step_vars.as_slice(), executed.env.as_slice()].concat(),
                     ),
                     out,
-                ) {
+                )
+                .await;
+            record.conclusion = if forgiven {
                 StepResult::Succeeded
             } else {
                 executed.result

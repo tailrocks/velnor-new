@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::evaluate;
 use super::output::Output;
-use super::token;
 use super::{AnnotationLevel, ExecError};
-use crate::expr::{ExprEnv, evaluate_template};
+use crate::expr::ExprEnv;
 use crate::job_message::ActionStep;
 
 use super::preflight::reference;
@@ -18,9 +18,12 @@ pub(super) fn context_id(step: &ActionStep) -> Option<&str> {
         .filter(|name| !name.is_empty() && !name.starts_with("__"))
 }
 
-pub(super) fn step_name(step: &ActionStep, env: &ExprEnv) -> String {
-    step.display_name_template()
-        .and_then(|template| evaluate_template(&template, env).ok())
+pub(super) async fn step_name(step: &ActionStep, env: &ExprEnv) -> String {
+    let evaluated = match step.display_name_template() {
+        Some(template) => evaluate::template(&template, env).await.ok(),
+        None => None,
+    };
+    evaluated
         .filter(|name| !name.is_empty())
         .or_else(|| {
             step.script_text()
@@ -32,12 +35,12 @@ pub(super) fn step_name(step: &ActionStep, env: &ExprEnv) -> String {
         .unwrap_or_else(|| "step".to_owned())
 }
 
-pub(super) fn step_environment(
+pub(super) async fn step_environment(
     step: &ActionStep,
     env: &ExprEnv,
 ) -> Result<Vec<(String, String)>, ExecError> {
     match step.environment.as_ref() {
-        Some(environment) => Ok(token::mapping(environment, env)?),
+        Some(environment) => Ok(evaluate::mapping(environment, env).await?),
         None => Ok(Vec::new()),
     }
 }
@@ -49,9 +52,13 @@ fn report_pair(out: &mut Output<'_>, headline: &str, detail: &str) {
     }
 }
 
-pub(super) fn step_timeout(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_>) -> Option<f64> {
+pub(super) async fn step_timeout(
+    step: &ActionStep,
+    env: &ExprEnv,
+    out: &mut Output<'_>,
+) -> Option<f64> {
     let token = step.timeout_in_minutes.as_ref()?;
-    let text = match token::scalar(token, env) {
+    let text = match evaluate::scalar(token, env).await {
         Ok(text) => text,
         Err(error) => {
             report_pair(out, TIMEOUT_FAILED, &error.to_string());
@@ -69,11 +76,15 @@ pub(super) fn step_timeout(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_
     }
 }
 
-pub(super) fn continue_on_error(step: &ActionStep, env: &ExprEnv, out: &mut Output<'_>) -> bool {
+pub(super) async fn continue_on_error(
+    step: &ActionStep,
+    env: &ExprEnv,
+    out: &mut Output<'_>,
+) -> bool {
     let Some(token) = step.continue_on_error.as_ref() else {
         return false;
     };
-    match token::boolean(token, env) {
+    match evaluate::boolean(token, env).await {
         Ok(value) => value,
         Err(error) => {
             report_pair(out, CONTINUE_ON_ERROR_FAILED, &error.to_string());

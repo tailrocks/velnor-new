@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::convert::Infallible;
-use std::sync::OnceLock;
 use std::time::Duration;
 
+use tokio::sync::OnceCell;
 use tokio::time::Instant;
 
+use super::evaluate;
 use super::output::Output;
 use super::{AnnotationLevel, JobCancel, StepResult};
-use crate::expr::{ExprEnv, evaluate_condition};
+use crate::expr::ExprEnv;
 
 #[derive(Clone, Copy)]
 pub(super) struct Timeout {
@@ -57,7 +58,7 @@ enum Interruption {
 pub(super) struct Survival<'a> {
     condition: &'a str,
     env: ExprEnv,
-    verdict: OnceLock<bool>,
+    verdict: OnceCell<bool>,
 }
 
 impl<'a> Survival<'a> {
@@ -65,23 +66,30 @@ impl<'a> Survival<'a> {
         Self {
             condition,
             env,
-            verdict: OnceLock::new(),
+            verdict: OnceCell::new(),
         }
     }
 
-    fn survives(&self) -> bool {
+    async fn survives(&self) -> bool {
         *self
             .verdict
-            .get_or_init(|| evaluate_condition(self.condition, &self.env) == Ok(true))
+            .get_or_init(|| async {
+                evaluate::condition(self.condition, &self.env).await == Ok(true)
+            })
+            .await
     }
 }
 
-fn interruption(
+async fn interruption(
     survival: Option<&Survival<'_>>,
     job: &JobCancel,
     timeout: Option<Timeout>,
 ) -> Option<Interruption> {
-    if job.is_cancelled() && survival.is_some_and(|survival| !survival.survives()) {
+    let abandoned = match survival {
+        Some(survival) if job.is_cancelled() => !survival.survives().await,
+        _ => false,
+    };
+    if abandoned {
         Some(Interruption::Cancelled)
     } else if timeout.is_some_and(|timeout| Instant::now() >= timeout.at) {
         Some(if job.is_cancelled() {
@@ -102,14 +110,14 @@ pub(super) fn stop_result(stop: Option<&JobCancel>) -> StepResult {
     }
 }
 
-pub(super) fn settle(
+pub(super) async fn settle(
     result: StepResult,
     survival: Option<&Survival<'_>>,
     job: &JobCancel,
     timeout: Option<Timeout>,
     out: &mut Output<'_>,
 ) -> StepResult {
-    match interruption(survival, job, timeout) {
+    match interruption(survival, job, timeout).await {
         None => result,
         Some(Interruption::Cancelled) => StepResult::Cancelled,
         Some(Interruption::TimedOut) => {
@@ -129,7 +137,7 @@ pub(super) async fn stop_unless_surviving(
 ) -> Infallible {
     if let Some(survival) = survival {
         job.cancelled().await;
-        if !survival.survives() {
+        if !survival.survives().await {
             halt.cancel();
         }
     }

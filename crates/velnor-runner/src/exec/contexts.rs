@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{ExecError, RunOptions, private, token};
+use super::{ExecError, RunOptions, evaluate, private, token};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::ExprEnv;
 use crate::job_message::AgentJobRequestMessage;
@@ -267,7 +267,7 @@ pub(super) async fn write_event(path: &Path, github: &ContextValue) -> Result<()
     private::write_replacing(path, body.as_bytes()).await
 }
 
-pub(super) fn run_defaults(
+pub(super) async fn run_defaults(
     message: &AgentJobRequestMessage,
     env: &ExprEnv,
 ) -> Result<Vec<(String, String)>, ExecError> {
@@ -275,7 +275,7 @@ pub(super) fn run_defaults(
     for defaults in &message.defaults {
         if let Some(entry) = token::find(defaults, "run") {
             run.clear();
-            for (name, value) in token::mapping(entry, env)? {
+            for (name, value) in evaluate::mapping(entry, env).await? {
                 if !value.is_empty() {
                     set_output(&mut run, &name, &value);
                 }

@@ -9,7 +9,7 @@ use super::contexts::{
 };
 use super::host_env::host_env;
 use super::{ExecError, RunOptions, StepResult};
-use super::{private, token};
+use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::{ActionReferenceType, ActionStep, AgentJobRequestMessage};
@@ -78,12 +78,12 @@ impl JobContext {
         }
         let mut env = Vec::new();
         for token in &message.environment_variables {
-            for (name, value) in token::mapping(token, &base)? {
+            for (name, value) in evaluate::mapping(token, &base).await? {
                 set_pair(&mut env, &name, &value);
             }
             base.set_context(RootContext::Env, &object(&env, true));
         }
-        let defaults = run_defaults(message, &base)?;
+        let defaults = run_defaults(message, &base).await?;
         Ok(Self {
             host: host_env(),
             runtime: exported_variables(&github, &runner),
