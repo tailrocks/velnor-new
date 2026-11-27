@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
 use anyhow::{Context, Error, Result, anyhow};
 use serde_json::Value;
@@ -19,6 +20,10 @@ pub(crate) const TOKEN: &str = "test-token";
 pub(crate) const PLAN_ID: &str = "00000000-0000-0000-0000-000000000002";
 pub(crate) const JOB_ID: &str = "00000000-0000-0000-0000-000000000001";
 
+mod reply;
+
+pub(crate) use reply::Reply;
+
 const MAX_REQUEST_BYTES: usize = 1 << 20;
 
 #[derive(Debug, Clone)]
@@ -28,9 +33,18 @@ pub(crate) struct RecordedRequest {
     query: Vec<(String, String)>,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+    arrived: Instant,
 }
 
 impl RecordedRequest {
+    pub(crate) fn arrived(&self) -> Instant {
+        self.arrived
+    }
+
+    pub(crate) fn body(&self) -> &[u8] {
+        &self.body
+    }
+
     pub(crate) fn query(&self, name: &str) -> Option<&str> {
         self.query
             .iter()
@@ -54,64 +68,6 @@ impl RecordedRequest {
     pub(crate) fn json(&self) -> Result<Value> {
         serde_json::from_slice(&self.body)
             .with_context(|| format!("{} {} body is JSON", self.method, self.path))
-    }
-}
-
-pub(crate) struct Reply {
-    status: u16,
-    content_type: &'static str,
-    body: String,
-    stall: bool,
-    hangup: bool,
-    location: Option<String>,
-}
-
-impl Reply {
-    pub(crate) fn status(status: u16) -> Self {
-        Self::text(status, "")
-    }
-
-    pub(crate) fn text(status: u16, body: &str) -> Self {
-        Self {
-            status,
-            content_type: "text/plain",
-            body: body.to_owned(),
-            stall: false,
-            hangup: false,
-            location: None,
-        }
-    }
-
-    pub(crate) fn stall() -> Self {
-        Self {
-            stall: true,
-            ..Self::status(200)
-        }
-    }
-
-    pub(crate) fn hangup() -> Self {
-        Self {
-            hangup: true,
-            ..Self::status(200)
-        }
-    }
-
-    pub(crate) fn redirect(location: &str) -> Self {
-        Self {
-            location: Some(location.to_owned()),
-            ..Self::status(302)
-        }
-    }
-
-    pub(crate) fn json(status: u16, body: &Value) -> Self {
-        Self {
-            status,
-            content_type: "application/json",
-            body: body.to_string(),
-            stall: false,
-            hangup: false,
-            location: None,
-        }
     }
 }
 
@@ -241,14 +197,23 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
         .location
         .as_ref()
         .map_or_else(String::new, |location| format!("location: {location}\r\n"));
+    let extra = reply
+        .header
+        .as_ref()
+        .map_or_else(String::new, |(name, value)| format!("{name}: {value}\r\n"));
     let head = format!(
-        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\n{location}content-length: {}\r\nconnection: close\r\n\r\n",
+        "HTTP/1.1 {} Test\r\ncontent-type: {}\r\n{location}content-length: {}\r\n{extra}connection: close\r\n\r\n",
         reply.status,
         reply.content_type,
         reply.body.len()
     );
     let _ = stream.write_all(head.as_bytes()).await;
-    let _ = stream.write_all(reply.body.as_bytes()).await;
+    if reply.half_body {
+        let _ = stream.write_all(&reply.body[..reply.body.len() / 2]).await;
+        let _ = stream.flush().await;
+        std::future::pending::<()>().await;
+    }
+    let _ = stream.write_all(&reply.body).await;
     let _ = stream.shutdown().await;
 }
 
@@ -302,6 +267,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<RecordedRequest> {
             .collect(),
         headers,
         body,
+        arrived: Instant::now(),
     })
 }
 

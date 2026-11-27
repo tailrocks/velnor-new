@@ -7,7 +7,38 @@ use super::seam::Seam;
 use super::walk::Walk;
 use std::collections::HashSet;
 use std::path::Path;
-use std::time::Instant;
+use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
+
+const UNBOUNDED: Duration = Duration::from_hours(365 * 24);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DirLinks {
+    Ignore,
+    Follow,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Hidden {
+    Include,
+    Skip,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct WalkOptions<'a> {
+    pub(crate) links: DirLinks,
+    pub(crate) hidden: Hidden,
+    pub(crate) stop: Option<&'a AtomicBool>,
+}
+
+impl WalkOptions<'static> {
+    pub(crate) const HASH_FILES: Self = Self {
+        links: DirLinks::Ignore,
+        hidden: Hidden::Include,
+        stop: None,
+    };
+}
 
 struct Entry {
     negate: bool,
@@ -67,7 +98,7 @@ impl PatternSet {
         Ok(false)
     }
 
-    pub(super) fn roots(&self) -> Vec<Vec<String>> {
+    pub(crate) fn roots(&self) -> Vec<Vec<String>> {
         let candidates: Vec<Vec<String>> = self
             .entries
             .iter()
@@ -114,7 +145,18 @@ impl PatternSet {
         workspace: &'a Path,
         deadline: Instant,
         seam: &'a Seam,
+        options: WalkOptions<'a>,
     ) -> Walk<'a> {
-        Walk::new(self, workspace, deadline, seam)
+        Walk::new(self, workspace, deadline, seam, options)
+    }
+
+    pub(crate) fn walk_following<'a>(
+        &'a self,
+        workspace: &'a Path,
+        options: WalkOptions<'a>,
+    ) -> Walk<'a> {
+        static FOLLOWING: LazyLock<Seam> = LazyLock::new(Seam::following);
+        let deadline = Instant::now() + UNBOUNDED;
+        Walk::new(self, workspace, deadline, &FOLLOWING, options)
     }
 }

@@ -1,0 +1,84 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "Plan": {
+    "PlanId": "00000000-0000-0000-0000-000000000002"
+  },
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "artifact",
+  "JobName": "artifact",
+  "RequestId": 1,
+  "Resources": {
+    "Endpoints": [
+      {
+        "Name": "SystemVssConnection",
+        "Url": "https://pipelines.actions.githubusercontent.com/abc",
+        "Authorization": {
+          "Scheme": "OAuth",
+          "Parameters": {
+            "AccessToken": "fake-results-token"
+          }
+        },
+        "Data": {
+          "ResultsServiceUrl": "http://127.0.0.1:1"
+        }
+      }
+    ]
+  },
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "step",
+      "ContextName": "step",
+      "Reference": {
+        "Type": "repository",
+        "Name": "actions/upload-artifact",
+        "Ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "RepositoryType": "GitHub"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "actions/upload-artifact"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "name"
+            },
+            "value": {
+              "type": 0,
+              "lit": "hidden"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "path"
+            },
+            "value": {
+              "type": 0,
+              "lit": "ci-metrics.json"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "include-hidden-files"
+            },
+            "value": {
+              "type": 0,
+              "lit": "true"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "JobOutputs": {
+    "type": 2,
+    "map": []
+  }
+}

@@ -13,8 +13,22 @@ use super::output::Output;
 use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, JobFacts, StepResult};
+use crate::job_message::AgentJobRequestMessage;
+use crate::secret::Secret;
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
+const CANCEL_GRACE_ENV: &str = "VELNOR_CANCEL_GRACE_MS";
+
+fn cancel_grace() -> Duration {
+    if cfg!(feature = "test-support") {
+        std::env::var(CANCEL_GRACE_ENV)
+            .ok()
+            .and_then(|text| text.parse::<u64>().ok())
+            .map_or(CANCEL_GRACE, Duration::from_millis)
+    } else {
+        CANCEL_GRACE
+    }
+}
 
 pub type StepFuture<'a> = BoxFuture<'a, Result<StepResult, ExecError>>;
 
@@ -34,6 +48,15 @@ pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
     fn problem(&self, _reference: &str, _inputs: &DeclaredInputs) -> Option<String> {
+        None
+    }
+
+    fn unsupported_input(
+        &self,
+        _reference: &str,
+        _name: &str,
+        _value: Option<&str>,
+    ) -> Option<String> {
         None
     }
 
@@ -73,6 +96,39 @@ impl AdapterRegistry {
     }
 }
 
+pub struct ResultsScope {
+    pub url: String,
+    pub token: Secret<String>,
+    pub run_backend_id: String,
+    pub job_backend_id: String,
+}
+
+impl std::fmt::Debug for ResultsScope {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ResultsScope")
+            .field("url", &self.url)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ResultsScope {
+    pub(super) fn from_message(message: &AgentJobRequestMessage) -> Option<Self> {
+        let endpoint = message.system_connection().ok()?;
+        let url = endpoint.data_string("ResultsServiceUrl")?;
+        let token = endpoint
+            .authorization
+            .as_ref()?
+            .parameter_string("AccessToken")?;
+        (!url.is_empty() && !token.is_empty()).then(|| Self {
+            url: url.to_owned(),
+            token: Secret::new(token.to_owned()),
+            run_backend_id: message.plan.plan_id.clone(),
+            job_backend_id: message.job_id.clone(),
+        })
+    }
+}
+
 pub struct StepContext<'a> {
     pub reference: String,
     pub inputs: Inputs,
@@ -82,6 +138,7 @@ pub struct StepContext<'a> {
     pub temp: &'a Path,
     pub github_token: Option<String>,
     pub cancel: Option<JobCancel>,
+    pub results: Option<ResultsScope>,
     pub(super) outputs: Vec<(String, String)>,
     pub(super) groups: &'a Groups,
     pub(super) out: &'a mut Output<'a>,
@@ -196,6 +253,7 @@ pub(super) struct AdapterCall<'a> {
     pub(super) cancel: Option<JobCancel>,
     pub(super) timeout: Option<Timeout>,
     pub(super) groups: &'a Groups,
+    pub(super) results: Option<ResultsScope>,
 }
 
 pub(super) async fn invoke(
@@ -219,6 +277,7 @@ pub(super) async fn invoke(
         temp: call.temp,
         github_token: call.github_token,
         cancel: Some(step_cancel.clone()),
+        results: call.results,
         outputs: Vec::new(),
         groups: call.groups,
         out: &mut inner,
@@ -231,7 +290,7 @@ pub(super) async fn invoke(
             result = &mut running => Some(result),
             () = interrupted(call.cancel.as_ref(), call.timeout) => {
                 step_cancel.cancel();
-                let _ = tokio::time::timeout(CANCEL_GRACE, &mut running).await;
+                let _ = tokio::time::timeout(cancel_grace(), &mut running).await;
                 None
             }
         }

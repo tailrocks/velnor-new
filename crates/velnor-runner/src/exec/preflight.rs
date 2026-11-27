@@ -7,6 +7,7 @@ use super::adapter::{AdapterRegistry, DeclaredInputs};
 use super::context::JobContext;
 use super::shell;
 use super::token;
+use crate::job_message::template_token::token_literal;
 use crate::job_message::{ActionReferenceType, ActionStep, ActionStepKind, AgentJobRequestMessage};
 
 pub(super) fn reference(step: &ActionStep) -> Option<String> {
@@ -64,7 +65,21 @@ fn step_problem(
             },
             None => DeclaredInputs::Known(BTreeMap::new()),
         };
-        return adapter.problem(&reference, &inputs);
+        if let Some(problem) = adapter.problem(&reference, &inputs) {
+            return Some(problem);
+        }
+        let env = context.admission_env(step).ok();
+        return step.inputs.as_ref().and_then(|inputs| {
+            token::pairs(inputs)
+                .ok()?
+                .into_iter()
+                .find_map(|(key, value)| {
+                    let value = env
+                        .as_ref()
+                        .and_then(|env| token::scalar_before_steps(value, env).ok().flatten());
+                    adapter.unsupported_input(&reference, token_literal(key)?, value.as_deref())
+                })
+        });
     }
     shell_problem(step, context)
 }
