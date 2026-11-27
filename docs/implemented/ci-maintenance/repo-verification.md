@@ -24,9 +24,9 @@ evidence to confirm that it ran.
 
 No single script runs the full gate. The full local gate is the `run:` steps of the jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` that the changed paths select. Read the steps from the workflow files: they are the source of truth, and `velnor-gen` generates `ci.yml`. Run them from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a job only when the changed paths do not select it, and run every job when you are unsure.
 
-Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`, often with `velnor-ci inputs build --` in front of `<command>`. Run `<command>` itself and leave out the `. "$VELNOR_EXEC" run --` and `velnor-ci inputs build --` prefixes, which exist only on the runner. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`, and the two steps that run `test-install-secret-scanners.sh` and `install-secret-scanners.sh`, which handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
+Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`, often with `velnor-ci inputs build --` in front of `<command>`. Run `<command>` itself and leave out the `. "$VELNOR_EXEC" run --` and `velnor-ci inputs build --` prefixes, which exist only on the runner. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, and the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`. Also skip the two `repository-checks.yml` steps that run `scripts/test-install-secret-scanners.sh` and `scripts/install-secret-scanners.sh`. Both handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
 
-A nextest step reads `-E "$TEST_FILTER"`. The skipped `velnor-ci plan` step computes that value, so set it yourself. Use `all()` to run the whole workspace, or `package(<name>) | package(<other>)` for the packages your change affects. Unset or empty, nextest fails with a filterset parse error. A `Test lane guard` step runs `velnor-ci lane-guard`, and `velnor-ci` is not on `PATH` in a checkout. Run it as `cargo run --locked -p velnor-ci -- lane-guard <arguments of the step>`.
+A nextest step reads `-E "$TEST_FILTER"`. The skipped `velnor-ci plan` step computes that value, so set it yourself. Use `all()` to run the whole workspace, or `package(<name>) | package(<other>)` for the packages your change affects. Unset or empty, nextest fails with a filterset parse error. A `Test lane guard` step runs `velnor-ci lane-guard`, and `velnor-ci` is not on `PATH` in a checkout. Build the binary with `cargo build --locked -p velnor-ci --bin velnor-ci`, then run `target/debug/velnor-ci lane-guard <arguments of the step>`. In a checkout that uses mbx, `target` is a symlink into the mbx store, and the path works through it. Do not use `cargo run`: it sets `CARGO` to the toolchain's cargo, so the nested nextest builds of lane-guard skip mbx.
 
 The table is a quick reference for the common commands. It is not the gate and it can fall behind the workflows. When the table and a workflow step differ, the workflow step wins.
 
@@ -35,7 +35,7 @@ The table is a quick reference for the common commands. It is not the gate and i
 | `rust`, format | `cargo fmt --all --check` |
 | `rust`, lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | `rust`, docs | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'` |
-| `rust`, tests | `cargo nextest run --workspace --locked --profile ci --no-fail-fast --no-tests=fail` |
+| `rust`, tests | `cargo nextest run --workspace --locked --profile ci --no-fail-fast --ignore-default-filter --no-tests=fail` |
 | `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
 | `rust`, lint with the `local-mode` feature | `cargo clippy --workspace --all-targets --locked --features local-mode -- -D warnings` |
 | `rust`, docs with the `local-mode` feature | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features local-mode` |
@@ -56,7 +56,7 @@ The table is a quick reference for the common commands. It is not the gate and i
 
 `cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
 
-Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above run the whole workspace without it.
+Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above run the whole workspace without it. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test.
 
 The `test-maintenance-helpers` mise task runs the repository-only maintenance helper tests. No generated workflow job runs it, so it is a local full run and not a required check. It first runs `scripts/test-setup-velnor-action.py`, the mise binary digest tests, the tag ruleset drift test and `cargo fetch --locked`, then runs the `velnor-archive-guard` tests with `--no-tests fail`.
 
@@ -83,7 +83,7 @@ For documentation-only changes, run `alint validate-config && alint check --fail
   - `--all-targets`: Ensures tests and benchmarks meet the same lint standards as product crates.
   - `-D warnings`: Prevents warning accumulation.
 
-### 3. Test Suite Execution: `cargo nextest run --workspace --locked --profile ci --no-fail-fast --no-tests=fail`
+### 3. Test Suite Execution: `cargo nextest run --workspace --locked --profile ci --no-fail-fast --ignore-default-filter --no-tests=fail`
 
 - **Purpose**: Runs the workspace Nextest suite with the `ci` profile from `.config/nextest.toml`. `--no-tests=fail` makes an empty selection fail.
 - **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
