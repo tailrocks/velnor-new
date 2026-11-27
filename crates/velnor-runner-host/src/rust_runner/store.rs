@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, fsync, mkdirat, openat,
-    renameat, statat, unlinkat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, chmodat, fchmod, flock, fstat, fsync, mkdirat,
+    openat, renameat, statat, unlinkat,
 };
 use rustix::io::Errno;
 use rustix::path::Arg;
@@ -18,22 +18,16 @@ use rustix::process::geteuid;
 
 use self::remove::BOUNDS;
 use super::machine::failure;
-use super::{HOST_DIRECTORIES, JIT_DIRECTORY, PRIVATE_DIRECTORIES};
+use super::{JIT_DIRECTORY, PRIVATE_DIRECTORIES};
 use crate::error::{HostError, RustRunnerFailure};
 
 mod remove;
 
-const RUNNER_BINARY: &str = "velnor-runner";
-const BIN_DIRECTORY: &str = "bin";
 const LOCK_FILE: &str = "host.lock";
 
 #[derive(Debug)]
 pub struct HostHold {
     _lock: OwnedFd,
-}
-
-fn others_can_write() -> Mode {
-    Mode::WGRP | Mode::WOTH
 }
 
 fn others_can_reach() -> Mode {
@@ -60,12 +54,6 @@ impl Store {
         })
     }
 
-    pub(super) fn prepare(path: &Path) -> Result<Self, HostError> {
-        let store = Self::create(path)?;
-        store.require_runner_binary()?;
-        Ok(store)
-    }
-
     pub(super) fn create(path: &Path) -> Result<Self, HostError> {
         DirBuilder::new()
             .recursive(true)
@@ -73,15 +61,8 @@ impl Store {
             .create(path)
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         let store = Self::open(path)?;
-        for name in HOST_DIRECTORIES {
-            store.ensure_directory(name, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
-        }
         for name in PRIVATE_DIRECTORIES {
-            store.ensure_directory(
-                name,
-                others_can_reach(),
-                RustRunnerFailure::JitDirectoryAccessible,
-            )?;
+            store.ensure_directory(name)?;
         }
         Ok(store)
     }
@@ -101,42 +82,12 @@ impl Store {
         }
     }
 
-    pub(super) fn require_runner_binary(&self) -> Result<(), HostError> {
-        let bin = self.directory(
-            BIN_DIRECTORY,
-            others_can_write(),
-            RustRunnerFailure::StoreUnsafe,
-        )?;
-        let stat = match statat(&bin, RUNNER_BINARY, AtFlags::SYMLINK_NOFOLLOW) {
-            Ok(stat) => stat,
-            Err(Errno::NOENT) => return Err(failure(RustRunnerFailure::BinaryMissing)),
-            Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
-        };
-        let mode = Mode::from_raw_mode(stat.st_mode);
-        let safe = FileType::from_raw_mode(stat.st_mode) == FileType::RegularFile
-            && stat.st_uid == geteuid().as_raw()
-            && !mode.intersects(others_can_write())
-            && mode.contains(Mode::XUSR);
-        if !safe {
-            return Err(failure(RustRunnerFailure::BinaryUnsafe));
-        }
-        let bin_path = self.path.join(BIN_DIRECTORY);
-        for path in [
-            self.path.clone(),
-            bin_path.clone(),
-            bin_path.join(RUNNER_BINARY),
-        ] {
-            require_no_acl(&path)?;
-        }
-        Ok(())
+    pub(super) fn require_no_acl(&self) -> Result<(), HostError> {
+        require_no_acl(&self.path)
     }
 
     pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
-        self.ensure_directory(
-            JIT_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )?;
+        self.ensure_directory(JIT_DIRECTORY)?;
         let jit = self.jit_directory()?;
         let staging = format!(".{name}.tmp");
         let write = || -> Result<(), Errno> {
@@ -172,37 +123,59 @@ impl Store {
     }
 
     fn jit_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            JIT_DIRECTORY,
+        let descriptor = openat(&self.root, JIT_DIRECTORY, directory_flags(), Mode::empty())
+            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+        require_directory(
+            &descriptor,
             others_can_reach(),
             RustRunnerFailure::JitDirectoryAccessible,
-        )
-    }
-
-    fn directory(
-        &self,
-        name: &str,
-        forbidden: Mode,
-        refusal: RustRunnerFailure,
-    ) -> Result<OwnedFd, HostError> {
-        let descriptor = openat(&self.root, name, directory_flags(), Mode::empty())
-            .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        require_directory(&descriptor, forbidden, refusal)?;
+        )?;
         Ok(descriptor)
     }
 
-    fn ensure_directory(
-        &self,
-        name: &str,
-        forbidden: Mode,
-        refusal: RustRunnerFailure,
-    ) -> Result<(), HostError> {
+    fn ensure_directory(&self, name: &str) -> Result<(), HostError> {
+        let descriptor = match openat(&self.root, name, directory_flags(), Mode::empty()) {
+            Ok(descriptor) => descriptor,
+            Err(Errno::NOENT) => self.create_directory(name)?,
+            Err(Errno::ACCESS) => {
+                chmodat(&self.root, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)
+                    .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+                openat(&self.root, name, directory_flags(), Mode::empty())
+                    .map_err(|_| failure(RustRunnerFailure::HostStore))?
+            }
+            Err(Errno::LOOP | Errno::NOTDIR) => {
+                remove_entry(&self.root, name)
+                    .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+                self.create_directory(name)?
+            }
+            Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
+        };
+        close_to_others(&descriptor)
+    }
+
+    fn create_directory(&self, name: &str) -> Result<OwnedFd, HostError> {
         match mkdirat(&self.root, name, Mode::RWXU) {
             Ok(()) | Err(Errno::EXIST) => {}
             Err(_) => return Err(failure(RustRunnerFailure::HostStore)),
         }
-        self.directory(name, forbidden, refusal).map(drop)
+        openat(&self.root, name, directory_flags(), Mode::empty())
+            .map_err(|_| failure(RustRunnerFailure::HostStore))
     }
+}
+
+fn close_to_others(descriptor: &OwnedFd) -> Result<(), HostError> {
+    let stat = fstat(descriptor).map_err(|_| failure(RustRunnerFailure::HostStore))?;
+    if Mode::from_raw_mode(stat.st_mode).intersects(others_can_reach())
+        && FileType::from_raw_mode(stat.st_mode) == FileType::Directory
+        && stat.st_uid == geteuid().as_raw()
+    {
+        fchmod(descriptor, Mode::RWXU).map_err(|_| failure(RustRunnerFailure::HostStore))?;
+    }
+    require_directory(
+        descriptor,
+        others_can_reach(),
+        RustRunnerFailure::JitDirectoryAccessible,
+    )
 }
 
 fn require_directory(

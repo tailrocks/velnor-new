@@ -3,23 +3,31 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/inside.rs"]
+mod inside;
 #[path = "rust_runner_public/machine.rs"]
 mod machine;
 #[path = "rust_runner_public/orb_calls.rs"]
 mod orb_calls;
 #[path = "rust_runner_public/removal.rs"]
 mod removal;
+#[path = "rust_runner_public/runner_copy.rs"]
+mod runner_copy;
 #[path = "rust_runner_public/store.rs"]
 mod store;
 #[path = "rust_runner_public/support.rs"]
 mod support;
+#[path = "rust_runner_public/user.rs"]
+mod user;
 
 use std::error::Error;
 use std::time::{Duration, Instant};
 
 use velnor_runner_host::{HostConfig, HostError, LaunchMode, RunningJob, RustRunnerFailure};
 
-use support::{Fixture, SECRET_JIT, jit, process_exists, reservation, runner_lines, wait_for};
+use support::{
+    Fixture, GUEST, SECRET_JIT, jit, process_exists, reservation, runner_lines, wait_for,
+};
 
 #[tokio::test(flavor = "current_thread")]
 async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), Box<dyn Error>> {
@@ -34,17 +42,15 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
     let lines = runner_lines(&log);
     assert_eq!(lines.len(), 2, "{log:?}");
     assert!(
-        lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/11.jit --work-dir /srv/velnor/gen/work/11"
-                .to_owned()
-        ),
+        lines.contains(&&format!(
+            "{GUEST} unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/11.jit --work-dir /srv/velnor/gen/work/11"
+        )),
         "{lines:?}"
     );
     assert!(
-        lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/12.jit --work-dir /srv/velnor/gen/work/12"
-                .to_owned()
-        ),
+        lines.contains(&&format!(
+            "{GUEST} unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/12.jit --work-dir /srv/velnor/gen/work/12"
+        )),
         "{lines:?}"
     );
     assert_eq!(
@@ -136,7 +142,7 @@ async fn wait_until_dead(pid: &str) -> Result<(), Box<dyn Error>> {
 #[test]
 fn rust_runner_fails_when_binary_missing() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::ready()?;
-    std::fs::remove_file(fixture.store.join("bin/velnor-runner"))?;
+    std::fs::remove_file(fixture.root.join("host-runner"))?;
     let error = fixture
         .launcher()
         .ensure_machine()
@@ -148,7 +154,7 @@ fn rust_runner_fails_when_binary_missing() -> Result<(), Box<dyn Error>> {
     );
     assert_eq!(
         error.to_string(),
-        "velnor-runner is missing from the host store bin directory or from the host runner path"
+        "velnor-runner is missing from the host runner path"
     );
     Ok(())
 }

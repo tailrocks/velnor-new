@@ -75,6 +75,7 @@ pub(super) fn cleans_up_after_an_error(test: &str) -> TestResult<()> {
         "the session was never closed"
     );
     assert_eq!(std::fs::read_dir(world.work())?.count(), 0);
+    assert_eq!(std::fs::read_dir(world.stage())?.count(), 0);
     Ok(())
 }
 

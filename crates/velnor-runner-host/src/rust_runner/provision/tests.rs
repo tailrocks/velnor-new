@@ -3,8 +3,11 @@
 
 use std::collections::HashMap;
 
+use super::job_dirs::removal_verdict;
 use super::parse::{self, Entry};
 use super::{ANCESTORS, CLOSED_DIRECTORIES, DIRECTORY, Layout, OPEN_DIRECTORIES, classify};
+use crate::error::RustRunnerFailure;
+use crate::rust_runner::GuestUser;
 
 fn entry(uid: u32, mode: u32, kind: &str) -> Entry {
     Entry {
@@ -56,12 +59,10 @@ fn an_ancestor_that_anyone_else_can_change_is_unsafe() {
 #[test]
 fn a_store_directory_that_is_wrong_is_repaired() {
     let wrong = [
-        ("/var/lib/velnor", entry(1000, 0o755, DIRECTORY)),
         ("/var/lib/velnor/tools", entry(0, 0o775, DIRECTORY)),
         ("/var/lib/velnor/cache", entry(0, 0o755, "symbolic link")),
         ("/var/lib/velnor/locks", entry(0, 0o755, DIRECTORY)),
         ("/var/lib/velnor/aside", entry(0, 0o750, DIRECTORY)),
-        ("/var/lib/velnor/live", entry(1000, 0o700, DIRECTORY)),
     ];
     for (path, replacement) in wrong {
         let mut entries = sound();
@@ -72,6 +73,19 @@ fn a_store_directory_that_is_wrong_is_repaired() {
         let mut entries = sound();
         entries.remove(*path);
         assert_eq!(classify(&entries), Layout::Repair, "{path} missing");
+    }
+}
+
+#[test]
+fn a_store_directory_owned_by_another_user_is_refused_by_name_and_never_re_owned() {
+    for path in OPEN_DIRECTORIES.iter().chain(&CLOSED_DIRECTORIES) {
+        let mut entries = sound();
+        entries.insert((*path).to_owned(), entry(1000, 0o755, DIRECTORY));
+        assert_eq!(
+            classify(&entries),
+            Layout::Foreign((*path).to_owned()),
+            "{path}"
+        );
     }
 }
 
@@ -101,4 +115,54 @@ fn digests_are_strict() {
 fn command_lines_drop_blank_rows() {
     assert_eq!(parse::lines("btrfs\n\n btrfs \n"), vec!["btrfs", "btrfs"]);
     assert_eq!(parse::lines("\n"), Vec::<&str>::new());
+}
+
+#[test]
+fn a_removal_that_fails_or_leaves_a_path_wedges_the_slot_and_an_orb_failure_does_not() {
+    assert_eq!(removal_verdict(Some(0)), Ok(()));
+    for code in [70, 71] {
+        assert_eq!(
+            removal_verdict(Some(code)),
+            Err(RustRunnerFailure::JobDirsWedged),
+            "{code}"
+        );
+    }
+    for code in [Some(1), Some(127), Some(255), None] {
+        assert_eq!(
+            removal_verdict(code),
+            Err(RustRunnerFailure::JobFilesLeft),
+            "{code:?}"
+        );
+    }
+}
+
+#[test]
+fn only_a_nologin_job_user_with_nonzero_ids_parses() {
+    let line = |uid: &str, gid: &str, shell: &str| {
+        format!("velnor-job:x:{uid}:{gid}::/home/velnor-job:{shell}\n")
+    };
+    let user = GuestUser::parse(&line("500", "501", "/usr/sbin/nologin"))
+        .map(|user| (user.uid(), user.gid(), user.home().to_owned()));
+    assert_eq!(user, Some((500, 501, "/home/velnor-job".to_owned())));
+    for bad in [
+        line("0", "1000", "/usr/sbin/nologin"),
+        line("1000", "0", "/usr/sbin/nologin"),
+        line("500", "501", "/bin/bash"),
+        "other:x:500:501::/home/velnor-job:/usr/sbin/nologin\n".to_owned(),
+        format!(
+            "{}root:x:0:0:root:/root:/bin/bash\n",
+            line("500", "501", "/usr/sbin/nologin")
+        ),
+    ] {
+        assert_eq!(GuestUser::parse(&bad), None, "{bad}");
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn the_test_support_constructor_equals_a_parsed_user() {
+    assert_eq!(
+        GuestUser::parse("velnor-job:x:500:501::/home/velnor-job:/usr/sbin/nologin\n"),
+        Some(GuestUser::for_tests(500, 501, "/home/velnor-job"))
+    );
 }

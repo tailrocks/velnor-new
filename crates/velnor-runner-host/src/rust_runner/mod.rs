@@ -45,6 +45,12 @@ const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const RUNNER_BINARY_ENVIRONMENT: &str = "VELNOR_RUNNER_BINARY";
 const RUNNER_BINARY_NAME: &str = "velnor-runner";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
+const GUEST_ENVIRONMENT: [&str; 4] = [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+    "LC_ALL=C",
+];
 const PID_NAMESPACE: [&str; 6] = [
     "unshare",
     "--user",
@@ -53,7 +59,6 @@ const PID_NAMESPACE: [&str; 6] = [
     "--fork",
     "--kill-child",
 ];
-const HOST_DIRECTORIES: [&str; 1] = ["bin"];
 const PRIVATE_DIRECTORIES: [&str; 2] = [JIT_DIRECTORY, TRUSTED_DIRECTORY];
 const JIT_DIRECTORY: &str = "jit";
 const TRUSTED_DIRECTORY: &str = "trusted";
@@ -143,15 +148,11 @@ impl RustRunnerLauncher {
         command
     }
 
-    fn in_machine(&self) -> Command {
+    fn guest(&self) -> Command {
         let mut command = self.orb();
-        command.args(["-m", MACHINE_NAME]);
         command
-    }
-
-    fn as_root(&self) -> Command {
-        let mut command = self.in_machine();
-        command.args(["-u", "root"]);
+            .args(["-m", MACHINE_NAME, "-u", "root"])
+            .args(GUEST_ENVIRONMENT);
         command
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -31,7 +31,8 @@ impl ListedConfig {
     pub(super) fn matches(&self, shape: &Shape<'_>) -> bool {
         let mounted = match self.mounts.as_slice() {
             [mount] => {
-                Path::new(&mount.source) == shape.share && mount.destination == shape.guest_share
+                canonical(Path::new(&mount.source)) == canonical(shape.share)
+                    && mount.destination == shape.guest_share
             }
             _ => false,
         };
@@ -41,6 +42,10 @@ impl ListedConfig {
             && self.disk_limit_bytes == Some(shape.disk_bytes)
             && mounted
     }
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 pub(super) fn orb_version(output: &str) -> Option<String> {
@@ -59,21 +64,62 @@ pub(super) fn orb_version(output: &str) -> Option<String> {
         .then_some(joined)
 }
 
+pub(super) const GUEST_USER: &str = "velnor-job";
+const NOLOGIN: &str = "/usr/sbin/nologin";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuestUser {
-    pub uid: u32,
-    pub gid: u32,
-    pub home: String,
+    uid: u32,
+    gid: u32,
+    home: String,
 }
 
 impl GuestUser {
+    #[must_use]
+    pub const fn uid(&self) -> u32 {
+        self.uid
+    }
+
+    #[must_use]
+    pub const fn gid(&self) -> u32 {
+        self.gid
+    }
+
+    #[must_use]
+    pub fn home(&self) -> &str {
+        &self.home
+    }
+
+    #[cfg(feature = "test-support")]
+    #[must_use]
+    pub fn for_tests(uid: u32, gid: u32, home: &str) -> Self {
+        Self {
+            uid,
+            gid,
+            home: home.to_owned(),
+        }
+    }
+
     pub(super) fn parse(output: &str) -> Option<Self> {
         let mut lines = output.lines();
-        let uid: u32 = lines.next()?.trim().parse().ok()?;
-        let gid: u32 = lines.next()?.trim().parse().ok()?;
-        let home = lines.next()?.trim();
+        let line = lines.next()?;
+        let mut fields = line.split(':');
+        let name = fields.next()?;
+        let _password = fields.next()?;
+        let uid: u32 = fields.next()?.parse().ok()?;
+        let gid: u32 = fields.next()?.parse().ok()?;
+        let _gecos = fields.next()?;
+        let home = fields.next()?;
+        let shell = fields.next()?;
         let clean = home.starts_with('/') && home.bytes().all(|byte| byte.is_ascii_graphic());
-        (uid != 0 && gid != 0 && clean && lines.next().is_none()).then(|| Self {
+        (name == GUEST_USER
+            && uid != 0
+            && gid != 0
+            && shell == NOLOGIN
+            && clean
+            && fields.next().is_none()
+            && lines.next().is_none())
+        .then(|| Self {
             uid,
             gid,
             home: home.to_owned(),

@@ -55,6 +55,7 @@ pub(super) enum Phase {
         exit: JobExit,
         attempting: bool,
     },
+    Quarantined,
 }
 
 pub(super) struct Slot {
@@ -148,7 +149,7 @@ impl Slots {
         exit: JobExit,
     ) -> Option<LaunchGrant> {
         let slot = self.entries.get_mut(&reservation)?;
-        if matches!(slot.phase, Phase::Proving { .. }) {
+        if matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined) {
             return None;
         }
         let previous = std::mem::replace(
@@ -160,7 +161,7 @@ impl Slots {
         );
         match previous {
             Phase::Launching { grant } | Phase::Running { grant, .. } => Some(grant),
-            Phase::Proving { .. } => None,
+            Phase::Proving { .. } | Phase::Quarantined => None,
         }
     }
 
@@ -173,7 +174,7 @@ impl Slots {
     pub(super) fn prove_unsettled(&mut self) -> Vec<(ReservationId, usize)> {
         let mut moved = Vec::new();
         for (reservation, slot) in &mut self.entries {
-            if !matches!(slot.phase, Phase::Proving { .. }) {
+            if !matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined) {
                 slot.phase = Phase::Proving {
                     exit: JobExit::Stopped,
                     attempting: false,
@@ -203,7 +204,7 @@ impl Slots {
     pub(super) fn settled(&self) -> bool {
         self.entries
             .values()
-            .all(|slot| matches!(slot.phase, Phase::Proving { .. }))
+            .all(|slot| matches!(slot.phase, Phase::Proving { .. } | Phase::Quarantined))
     }
 
     pub(super) fn claim_due_proofs(&mut self) -> Vec<(ReservationId, usize)> {
@@ -229,10 +230,18 @@ impl Slots {
         }
     }
 
+    pub(super) fn quarantine(&mut self, reservation: ReservationId) {
+        if let Some(slot) = self.entries.get_mut(&reservation)
+            && matches!(slot.phase, Phase::Proving { .. })
+        {
+            slot.phase = Phase::Quarantined;
+        }
+    }
+
     pub(super) fn release(&mut self, proof: CleanupProof) -> Option<JobExit> {
         match self.entries.remove(&proof.into_reservation())?.phase {
             Phase::Proving { exit, .. } => Some(exit),
-            Phase::Launching { .. } | Phase::Running { .. } => None,
+            Phase::Launching { .. } | Phase::Running { .. } | Phase::Quarantined => None,
         }
     }
 }

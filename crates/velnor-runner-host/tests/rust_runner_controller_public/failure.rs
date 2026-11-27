@@ -48,7 +48,7 @@ fn last_seq(world: &World) -> u64 {
 
 fn chmod_runner(world: &World, mode: u32) -> TestResult<()> {
     std::fs::set_permissions(
-        world.store.join("bin/velnor-runner"),
+        world.root.join("host-runner"),
         std::fs::Permissions::from_mode(mode),
     )?;
     Ok(())

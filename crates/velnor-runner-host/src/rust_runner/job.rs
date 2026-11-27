@@ -27,7 +27,7 @@ impl RustRunnerLauncher {
     ) -> Result<RunningJob, HostError> {
         let paths = JobPaths::of(reservation);
         let store = Store::open(&self.host_store)?;
-        store.require_runner_binary()?;
+        store.require_no_acl()?;
         let binary = self.runner_digest()?;
         store.write_jit(paths.jit_name(), jit.expose().as_bytes())?;
         match self.spawn_runner(&paths) {
@@ -45,7 +45,7 @@ impl RustRunnerLauncher {
     }
 
     fn spawn_runner(&self, paths: &JobPaths) -> Result<tokio::process::Child, HostError> {
-        let mut command = self.in_machine();
+        let mut command = self.guest();
         command
             .args(PID_NAMESPACE)
             .arg(GUEST_RUNNER)

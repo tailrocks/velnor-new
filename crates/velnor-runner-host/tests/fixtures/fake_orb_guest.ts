@@ -4,24 +4,19 @@
 import {
   chmodSync,
   readdirSync,
-  copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
-  writeSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { Guest, complain, list, real, say } from "./fake_orb_base.ts";
+import { shapeScript, systemCommand } from "./fake_orb_system.ts";
 
-const SHARE = "/var/lib/velnor-host";
-
-export type Guest = {
-  root: string;
-  share: string;
-  setting(name: string): string;
-};
+export type { Guest } from "./fake_orb_base.ts";
 
 function owners(guest: Guest): Map<string, number> {
   const table = new Map<string, number>();
@@ -39,18 +34,6 @@ function modes(guest: Guest): Map<string, number> {
     if (at > 0) table.set(pair.slice(0, at), parseInt(pair.slice(at + 1), 8));
   }
   return table;
-}
-
-function real(guest: Guest, path: string): string {
-  return path === SHARE || path.startsWith(`${SHARE}/`) ? `${guest.share}${path.slice(SHARE.length)}` : `${guest.root}${path}`;
-}
-
-function say(text: string): void {
-  writeSync(1, text);
-}
-
-function complain(text: string): void {
-  writeSync(2, text);
 }
 
 function kind(mode: number): string {
@@ -77,21 +60,12 @@ function stat(guest: Guest, paths: string[]): number {
 }
 
 function install(guest: Guest, args: string[]): number {
+  if (!args.includes("-d")) return 64;
   const mode = parseInt(args[args.indexOf("-m") + 1], 8);
-  if (args.includes("-d")) {
-    for (const path of args.slice(args.indexOf("-m") + 2)) {
-      mkdirSync(real(guest, path), { recursive: true });
-      chmodSync(real(guest, path), mode);
-    }
-    return 0;
+  for (const path of args.slice(args.indexOf("-m") + 2)) {
+    mkdirSync(real(guest, path), { recursive: true });
+    chmodSync(real(guest, path), mode);
   }
-  const [source, target] = args.slice(args.indexOf("-m") + 2);
-  try {
-    copyFileSync(real(guest, source), real(guest, target));
-  } catch {
-    return 1;
-  }
-  chmodSync(real(guest, target), mode);
   return 0;
 }
 
@@ -106,14 +80,56 @@ function sha256(guest: Guest, path: string): number {
   }
 }
 
-function fallocate(guest: Guest, size: number, path: string): number {
+function fallocate(guest: Guest, body: string, size: number, path: string): number {
   const cap = Number(guest.setting("FAKE_GUEST_CAP_BYTES") || "0");
-  if (guest.setting("FAKE_GUEST_NO_CAP") === "" && size > cap) {
-    complain("fallocate: fallocate failed: No space left on device\n");
+  const refused = guest.setting("FAKE_GUEST_NO_CAP") === "" && size > cap;
+  writeFileSync(real(guest, path), "");
+  if (refused) {
+    complain(`fallocate: fallocate failed: ${guest.setting("FAKE_GUEST_CAP_ERROR") || "No space left on device"}\n`);
+  }
+  if (body.includes("rm -f --")) rmSync(real(guest, path), { force: true });
+  return refused ? 1 : 0;
+}
+
+function stage(guest: Guest, path: string): number {
+  const target = real(guest, path);
+  const bytes = readFileSync(0);
+  if (guest.setting("FAKE_GUEST_STREAM_FAIL") !== "") {
+    writeFileSync(target, bytes.subarray(0, 1));
     return 1;
   }
-  writeFileSync(real(guest, path), "");
+  writeFileSync(target, guest.setting("FAKE_GUEST_CORRUPT_STREAM") === "" ? bytes : Buffer.concat([bytes, Buffer.from("!")]));
+  chmodSync(target, 0o700);
   return 0;
+}
+
+function cleanup(guest: Guest, paths: string[]): number {
+  if (guest.setting("FAKE_GUEST_WEDGE") !== "") return 70;
+  for (const path of paths) purge(real(guest, path));
+  return paths.some((path) => existsSync(real(guest, path))) ? 71 : 0;
+}
+
+function empty(guest: Guest, dirs: string[]): number {
+  if (guest.setting("FAKE_GUEST_WEDGE") !== "") return 70;
+  for (const dir of dirs) {
+    for (const name of readdirSync(real(guest, dir))) purge(`${real(guest, dir)}/${name}`);
+  }
+  return 0;
+}
+
+function script(guest: Guest, rest: string[]): number | undefined {
+  const [, , body, , ...args] = rest;
+  if (body.includes("fallocate -l")) return fallocate(guest, body, Number(args[0]), args[1]);
+  if (body.includes("set -e; umask 077")) return stage(guest, args[0]);
+  if (body.includes("rm -rf -- \"$@\" || exit")) return cleanup(guest, args);
+  if (body.includes("-mindepth")) return empty(guest, args);
+  if (body.includes("printf")) {
+    const target = real(guest, args[1]);
+    writeFileSync(`${target}.new`, `${args[0]}\n`);
+    renameSync(`${target}.new`, target);
+    return 0;
+  }
+  return shapeScript(guest, body, args);
 }
 
 export function guestCommand(guest: Guest, rest: string[]): number | undefined {
@@ -128,12 +144,15 @@ export function guestCommand(guest: Guest, rest: string[]): number | undefined {
     case "sha256sum":
       return sha256(guest, rest[1]);
     case "mv":
-      renameSync(real(guest, rest[2]), real(guest, rest[3]));
+      renameSync(real(guest, rest[3]), real(guest, rest[4]));
+      return 0;
+    case "chmod":
+      chmodSync(real(guest, rest[3]), parseInt(rest[1], 8));
       return 0;
     case "rm":
       return remove(guest, rest.slice(1));
     case "find":
-      return find(guest, rest.slice(1));
+      return findSockets(guest, rest.slice(1));
     case "cat":
       try {
         say(readFileSync(real(guest, rest[1]), "utf8"));
@@ -141,20 +160,10 @@ export function guestCommand(guest: Guest, rest: string[]): number | undefined {
       } catch {
         return 1;
       }
-    case "fallocate":
-      return fallocate(guest, Number(rest[2]), rest[3]);
-    case "sh": {
-      if (rest.length === 3) {
-        say(`${(guest.setting("FAKE_GUEST_USER") || "1000,1000,/srv/sandbox").split(",").join("\n")}\n`);
-        return 0;
-      }
-      const target = real(guest, rest[5]);
-      writeFileSync(`${target}.new`, `${rest[4]}\n`);
-      renameSync(`${target}.new`, target);
-      return 0;
-    }
+    case "sh":
+      return script(guest, rest);
     default:
-      return undefined;
+      return systemCommand(guest, rest);
   }
 }
 
@@ -173,29 +182,15 @@ function purge(path: string): void {
 }
 
 function remove(guest: Guest, args: string[]): number {
-  const paths = args.includes("--") ? args.slice(args.indexOf("--") + 1) : args.slice(1);
-  if (args[0] === "-rf") for (const path of paths) purge(real(guest, path));
-  else for (const path of paths) rmSync(real(guest, path), { force: true });
+  const paths = args.slice(args.indexOf("--") + 1);
+  for (const path of paths) rmSync(real(guest, path), { force: true });
   return 0;
 }
 
-function find(guest: Guest, args: string[]): number {
-  const directory = real(guest, args[0]);
-  if (args.includes("-exec")) {
-    try {
-      for (const name of readdirSync(directory)) purge(`${directory}/${name}`);
-    } catch {
-      return 1;
-    }
-    return 0;
-  }
-  try {
-    lstatSync(directory);
-    say(`${args[0]}\n`);
-    return 0;
-  } catch {
-    return 1;
-  }
+function findSockets(guest: Guest, args: string[]): number {
+  if (args[1] !== "-type") return 64;
+  for (const socket of list(guest, "FAKE_GUEST_SOCKETS")) say(`${socket}\n`);
+  return 0;
 }
 
 function statFilesystem(guest: Guest, paths: string[]): number {

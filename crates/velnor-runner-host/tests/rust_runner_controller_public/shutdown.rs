@@ -45,6 +45,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     });
     assert!(!world.store.join("jit").join(&name).exists());
     assert!(!world.work().join(job.to_string()).exists());
+    assert!(!world.stage().join(job.to_string()).exists());
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
     assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));
@@ -170,6 +171,7 @@ pub(super) fn proves_a_job_that_will_not_stop(test: &str) -> TestResult<()> {
         "the runner of a job that would not stop was never removed"
     );
     assert!(!world.work().join(job.to_string()).exists());
+    assert!(!world.stage().join(job.to_string()).exists());
     world.release(&name)?;
     Ok(())
 }

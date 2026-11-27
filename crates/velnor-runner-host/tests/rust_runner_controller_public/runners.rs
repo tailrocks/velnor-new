@@ -43,20 +43,10 @@ fn queue(world: &World, number: u64) -> TestResult<()> {
 }
 
 fn replace_binary(world: &World) -> TestResult<()> {
-    for (staging, target) in [
-        (
-            world.store.join("bin/velnor-runner.next"),
-            world.store.join("bin/velnor-runner"),
-        ),
-        (
-            world.root.join("host-runner.next"),
-            world.root.join("host-runner"),
-        ),
-    ] {
-        std::fs::write(&staging, "a different runner build")?;
-        std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))?;
-        std::fs::rename(staging, target)?;
-    }
+    let staging = world.root.join("host-runner.next");
+    std::fs::write(&staging, "a different runner build")?;
+    std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::rename(staging, world.root.join("host-runner"))?;
     Ok(())
 }
 

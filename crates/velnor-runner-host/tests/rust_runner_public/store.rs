@@ -124,7 +124,7 @@ fn unsafe_roots() -> Check {
 fn unsafe_binaries() -> Check {
     for mode in [0o775, 0o644, 0o757] {
         let fixture = fixture()?;
-        chmod(&fixture.store.join("bin/velnor-runner"), mode)?;
+        chmod(&fixture.root.join("host-runner"), mode)?;
         assert_refused(
             &fixture,
             RustRunnerFailure::BinaryUnsafe,
@@ -135,20 +135,12 @@ fn unsafe_binaries() -> Check {
     let target = linked.root.join("elsewhere");
     std::fs::write(&target, "")?;
     chmod(&target, 0o755)?;
-    let binary = linked.store.join("bin/velnor-runner");
+    let binary = linked.root.join("host-runner");
     std::fs::remove_file(&binary)?;
     symlink(&target, &binary)?;
     assert_refused(&linked, RustRunnerFailure::BinaryUnsafe, "a symlink")?;
     #[cfg(target_os = "macos")]
     root_owned_binary()?;
-    for (name, expected) in [
-        ("bin", RustRunnerFailure::StoreUnsafe),
-        ("bin/velnor-runner", RustRunnerFailure::StoreUnsafe),
-    ] {
-        let fixture = fixture()?;
-        add_acl(&fixture.store.join(name))?;
-        assert_refused(&fixture, expected, &format!("an ACL on {name}"))?;
-    }
     Ok(())
 }
 
@@ -170,7 +162,7 @@ fn root_owned_binary() -> Check {
         })
         .ok_or("no root-owned executable file in the command line tools")?;
     let fixture = fixture()?;
-    let binary = fixture.store.join("bin/velnor-runner");
+    let binary = fixture.root.join("host-runner");
     std::fs::remove_file(&binary)?;
     std::fs::hard_link(&source, &binary)?;
     assert_refused(
@@ -180,32 +172,16 @@ fn root_owned_binary() -> Check {
     )
 }
 
-fn symlinked_directories() -> Check {
-    let fixture = fixture()?;
+fn symlinked_jit_directory() -> Check {
+    let fixture = fixture_with_directories()?;
     let victim = fixture.root.join("victim");
     std::fs::create_dir(&victim)?;
-    chmod(&victim, 0o700)?;
-    symlink(&victim, fixture.store.join("trusted"))?;
-    assert!(
-        fixture.launcher().ensure_machine().is_err(),
-        "a symlinked trusted directory"
-    );
-    assert_eq!(
-        std::fs::read_dir(&victim)?.count(),
-        0,
-        "the target of a symlinked trusted directory must stay untouched"
-    );
-    {
-        let fixture = fixture_with_directories()?;
-        let victim = fixture.root.join("victim");
-        std::fs::create_dir(&victim)?;
-        std::fs::write(victim.join("keep"), "")?;
-        let directory = fixture.store.join("jit");
-        std::fs::remove_dir(&directory)?;
-        symlink(&victim, &directory)?;
-        assert!(fixture.launcher().sweep().is_err(), "jit");
-        assert!(victim.join("keep").exists(), "jit");
-    }
+    std::fs::write(victim.join("keep"), "")?;
+    let directory = fixture.store.join("jit");
+    std::fs::remove_dir(&directory)?;
+    symlink(&victim, &directory)?;
+    assert!(fixture.launcher().sweep().is_err(), "jit");
+    assert!(victim.join("keep").exists(), "jit");
     Ok(())
 }
 
@@ -220,7 +196,7 @@ async fn acl_after_a_started_job() -> Check {
     let launcher = fixture.launcher();
     let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT))?;
     assert!(job.wait().await?.success());
-    add_acl(&fixture.store.join("bin/velnor-runner"))?;
+    add_acl(&fixture.store)?;
     assert_eq!(
         launcher.start_job(reservation(52)?, &jit(SECRET_JIT)).err(),
         Some(refused(RustRunnerFailure::StoreUnsafe))
@@ -256,7 +232,7 @@ fn sweep_without_init() -> Check {
 async fn rust_runner_refuses_an_unsafe_host_store() -> Check {
     unsafe_roots()?;
     unsafe_binaries()?;
-    symlinked_directories()?;
+    symlinked_jit_directory()?;
     acl_after_a_started_job().await?;
     sweep_without_init()
 }

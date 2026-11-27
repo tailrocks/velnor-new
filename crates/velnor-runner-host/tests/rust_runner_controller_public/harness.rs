@@ -56,7 +56,7 @@ impl World {
             _directory: directory,
         };
         for path in [
-            world.store.join("bin"),
+            world.store.clone(),
             world.state.clone(),
             world.seen.clone(),
             world.github.join("messages"),
@@ -73,9 +73,6 @@ impl World {
             guest::machines(&world.store, CAP_GIB, |_| {}),
         )?;
         guest::prepare_guest(&world.root)?;
-        let runner = world.store.join("bin/velnor-runner");
-        std::fs::write(&runner, "")?;
-        std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755))?;
         for name in FAKE_GITHUB {
             std::fs::copy(
                 Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -99,6 +96,10 @@ impl World {
 
     pub(super) fn work(&self) -> PathBuf {
         self.root.join("guest/srv/velnor/gen/work")
+    }
+
+    pub(super) fn stage(&self) -> PathBuf {
+        self.root.join("guest/srv/velnor/gen/stage")
     }
 
     pub(super) fn write_config(&self, default_branch: &str) -> TestResult<()> {

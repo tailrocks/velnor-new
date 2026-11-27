@@ -38,9 +38,8 @@ impl RustRunnerLauncher {
                 return Err(failure(RustRunnerFailure::MachineCreate));
             }
         }
-        Store::prepare(&self.host_store)?;
-        self.provision(&self.runner_digest()?)?;
-        self.guest_user()
+        Store::create(&self.host_store)?.require_no_acl()?;
+        self.provision(&self.runner_digest()?)
     }
 
     pub fn hold_host(&self) -> Result<HostHold, HostError> {

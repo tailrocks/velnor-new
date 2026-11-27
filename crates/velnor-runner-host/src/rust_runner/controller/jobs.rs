@@ -7,6 +7,7 @@ use velnor_runner_github::EncodedJit;
 use super::admission::JobExit;
 use super::cleanup::{CleanupProof, ProofInputs, prove};
 use super::{Event, MACHINE_PROBE, Run, blocking};
+use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
 use crate::rust_runner::{ReservationId, RunningJob};
 
@@ -127,8 +128,18 @@ impl Run<'_> {
                 }
             }
             Err(error) => {
-                eprintln!("rust-runner cleanup held for reservation {reservation}: {error}");
-                self.slots.proof_failed(reservation);
+                if matches!(
+                    error,
+                    ListenFault::Host(HostError::RustRunner(RustRunnerFailure::JobDirsWedged))
+                ) {
+                    eprintln!(
+                        "rust-runner quarantined reservation {reservation}: {error}; remove its work and stage directories in the velnor machine by hand, then restart the daemon"
+                    );
+                    self.slots.quarantine(reservation);
+                } else {
+                    eprintln!("rust-runner cleanup held for reservation {reservation}: {error}");
+                    self.slots.proof_failed(reservation);
+                }
             }
         }
     }

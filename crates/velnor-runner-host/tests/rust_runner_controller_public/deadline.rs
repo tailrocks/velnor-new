@@ -36,7 +36,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     });
     world.configure_orb("FAKE_ORB_HANG=list\n")?;
     std::fs::set_permissions(
-        world.store.join("bin/velnor-runner"),
+        world.root.join("host-runner"),
         std::fs::Permissions::from_mode(0o775),
     )?;
     world.queue_message(171, &[push_offer(1, 17_001, "main", WORKFLOW)])?;
@@ -54,7 +54,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     });
     world.configure_orb("")?;
     std::fs::set_permissions(
-        world.store.join("bin/velnor-runner"),
+        world.root.join("host-runner"),
         std::fs::Permissions::from_mode(0o755),
     )?;
     wait_for("the ready heartbeat after the machine answered", 60, || {

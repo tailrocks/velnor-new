@@ -43,9 +43,12 @@ pub enum RustRunnerFailure {
     MachineIncompatible,
 
     #[error(
-        "the velnor machine does not have the required shape (isolated, network-isolated, no ssh agent forwarding, the disk cap, only the host share mount, protected hardlinks and symlinks); delete it with orb delete velnor"
+        "the velnor machine does not have the required shape (isolated, network-isolated, no ssh agent forwarding, the disk cap on the machine and in its btrfs qgroup, only the host share mount, no route to the Mac, protected hardlinks and symlinks); delete it with orb delete velnor"
     )]
     MachineShape,
+
+    #[error("nft or ip is missing from the velnor machine and nftables could not be installed")]
+    MachineTools,
 
     #[error("the velnor machine does not enforce its disk cap; delete it with orb delete velnor")]
     CapProbe,
@@ -62,18 +65,23 @@ pub enum RustRunnerFailure {
     #[error("the machine store layout is not root-owned with the required modes")]
     MachineLayout,
 
+    #[error(
+        "the store directory {0} of the velnor machine is owned by another user; delete the machine with orb delete velnor"
+    )]
+    StoreOwner(ErrorDetail),
+
     #[error("the machine store or generation directory is not on btrfs")]
     MachineFilesystem,
 
-    #[error("the unprivileged user of the velnor machine could not be read")]
+    #[error(
+        "the velnor-job user of the velnor machine is missing or not unprivileged, with its own group, the nologin shell, no sudo rule"
+    )]
     GuestUser,
 
-    #[error(
-        "velnor-runner is missing from the host store bin directory or from the host runner path"
-    )]
+    #[error("velnor-runner is missing from the host runner path")]
     BinaryMissing,
 
-    #[error("the velnor-runner copy in the machine does not match the host store")]
+    #[error("the velnor-runner copy in the machine does not match the host runner")]
     BinaryCopy,
 
     #[error("the JIT file could not be written")]
@@ -91,7 +99,7 @@ pub enum RustRunnerFailure {
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,
 
-    #[error("velnor-runner in the host store is not an owned, executable file closed to others")]
+    #[error("the host velnor-runner is not an owned, executable regular file closed to others")]
     BinaryUnsafe,
 
     #[error("the processes of the velnor machine could not be listed")]
@@ -109,8 +117,13 @@ pub enum RustRunnerFailure {
     #[error("a runner is still registered after its removal")]
     RunnerStillRegistered,
 
-    #[error("the job directory is still on the host store after its removal")]
+    #[error("the job files are still on the host store or in the machine after their removal")]
     JobFilesLeft,
+
+    #[error(
+        "the job directories cannot be removed inside the velnor machine; the slot is quarantined until the daemon restarts"
+    )]
+    JobDirsWedged,
 
     #[error(
         "the job work tree is deeper or larger than the cleanup bound; the slot stays closed until it is removed by hand"

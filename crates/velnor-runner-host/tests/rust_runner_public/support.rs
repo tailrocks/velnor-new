@@ -7,13 +7,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::EncodedJit;
-use velnor_runner_host::{ReservationId, RustRunnerLauncher};
+use velnor_runner_host::{HostError, ReservationId, RustRunnerFailure, RustRunnerLauncher};
 
 #[path = "../fixtures/guest.rs"]
 mod guest;
 
 const CAP_GIB: u64 = 172;
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
+pub(super) const GUEST: &str =
+    "-m velnor -u root /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C";
 pub(super) const SECRET_JIT: &str = "eyJ2ZWxub3IiOiJzZWNyZXQtaml0LWNvbmZpZyJ9";
 
 pub(super) struct Fixture {
@@ -42,17 +44,12 @@ impl Fixture {
         let root = directory.path().canonicalize()?;
         let store = root.join("store");
         std::fs::create_dir_all(root.join("seen"))?;
-        std::fs::create_dir_all(store.join("bin"))?;
+        std::fs::create_dir_all(&store)?;
         std::fs::copy(FAKE_ORB, root.join("orb"))?;
         guest::install_guest_module(&root)?;
         std::fs::write(root.join("list.json"), machines(&store))?;
         guest::prepare_guest(&root)?;
-        for private in [store.clone(), store.join("bin")] {
-            std::fs::set_permissions(private, std::fs::Permissions::from_mode(0o700))?;
-        }
-        let binary = store.join("bin/velnor-runner");
-        std::fs::write(&binary, "")?;
-        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700))?;
         let fixture = Self {
             _directory: directory,
             root,
@@ -91,6 +88,37 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
             Err(error) => Err(error.into()),
         }
+    }
+
+    pub(super) fn list_share(&self, source: &Path) -> Result<(), Box<dyn Error>> {
+        std::fs::write(
+            self.root.join("list.json"),
+            guest::machines(source, CAP_GIB, |_| {}),
+        )?;
+        Ok(())
+    }
+
+    pub(super) fn guest(&self, path: &str) -> PathBuf {
+        self.root.join("guest").join(path)
+    }
+
+    pub(super) fn commands(&self, word: &str) -> Result<usize, Box<dyn Error>> {
+        Ok(self
+            .log()?
+            .iter()
+            .filter(|line| line.contains(&format!(" {word} ")))
+            .count())
+    }
+
+    pub(super) fn ensure_refused(&self, failure: RustRunnerFailure) {
+        assert_eq!(
+            self.launcher().ensure_machine().err(),
+            Some(HostError::RustRunner(failure))
+        );
+        assert!(
+            !self.guest("var/lib/velnor/bin/velnor-runner").exists(),
+            "a refused machine still got the runner"
+        );
     }
 
     pub(super) fn seen(&self, name: &str) -> PathBuf {

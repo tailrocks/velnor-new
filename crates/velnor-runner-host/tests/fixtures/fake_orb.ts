@@ -147,9 +147,23 @@ function text(value: string | undefined): string {
   return value ?? "";
 }
 
+const GUEST_PREFIX = [
+  "-m",
+  "velnor",
+  "-u",
+  "root",
+  "/usr/bin/env",
+  "-i",
+  "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+  "LC_ALL=C",
+];
+
 function inGuest(args: string[]): never {
-  let rest = args.slice(2);
-  if (rest[0] === "-u") rest = rest.slice(2);
+  if (GUEST_PREFIX.some((word, at) => args[at] !== word)) {
+    writeFileSync(`${seen}/unbuilt`, `${args.join(" ")}\n`);
+    finish(64);
+  }
+  let rest = args.slice(GUEST_PREFIX.length);
   if (rest[0] === "unshare") {
     const start = rest.indexOf(RUNNER);
     if (start < 0) finish(64);
@@ -210,6 +224,9 @@ function runner(rest: string[]): never {
   writeFileSync(`${seen}/${name}.env`, environment());
   writeFileSync(`${seen}/${name}.mode`, `${(statSync(jit).mode & 0o777).toString(8)}\n`);
   mkdirSync(work, { recursive: true });
+  const stage = work.replace("/gen/work/", "/gen/stage/");
+  mkdirSync(stage, { recursive: true });
+  writeFileSync(`${stage}/staged`, "");
   const standIn = setting("FAKE_RUNNER_PS_PID");
   addToTable(`${standIn === "" ? process.pid : standIn} ${rest.join(" ")}`);
   if (standIn === "") exits.push(() => dropFromTable(String(process.pid)));

@@ -30,17 +30,35 @@ pub(crate) fn machines(
 }
 
 pub(crate) fn install_guest_module(root: &Path) -> io::Result<()> {
-    let module = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/fake_orb_guest.ts"
-    );
-    std::fs::copy(module, root.join("fake_orb_guest.ts")).map(drop)
+    for name in [
+        "fake_orb_guest.ts",
+        "fake_orb_base.ts",
+        "fake_orb_system.ts",
+    ] {
+        let module = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
+        std::fs::copy(module, root.join(name))?;
+    }
+    Ok(())
 }
 
 pub(crate) fn prepare_guest(root: &Path) -> io::Result<()> {
-    for path in ["guest/var/lib", "guest/srv"] {
+    for path in [
+        "guest/var/lib",
+        "guest/srv",
+        "guest/usr/sbin",
+        "guest/etc/sudoers.d",
+        "guest/mnt",
+        "guest/opt/orbstack-guest/run",
+    ] {
         std::fs::create_dir_all(root.join(path))?;
     }
+    std::fs::write(root.join("guest/usr/sbin/ip"), "")?;
+    std::fs::write(
+        root.join("guest/etc/passwd"),
+        "root:x:0:0:root:/root:/bin/bash\n",
+    )?;
     for path in ["guest", "guest/var", "guest/var/lib", "guest/srv"] {
         std::fs::set_permissions(root.join(path), std::fs::Permissions::from_mode(0o755))?;
     }

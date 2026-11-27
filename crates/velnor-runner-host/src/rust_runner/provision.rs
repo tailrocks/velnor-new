@@ -6,16 +6,17 @@ use std::collections::HashMap;
 use self::parse::Entry;
 use super::machine::{failure, succeeds};
 use super::shape::GuestUser;
-use super::{
-    GIB, GUEST_CAP_RECORD, GUEST_GEN, GUEST_RUNNER, GUEST_SHARE, GUEST_SRV, GUEST_STORE,
-    RustRunnerLauncher, orb, shape,
-};
-use crate::error::{HostError, RustRunnerFailure};
+use super::{GUEST_GEN, GUEST_SRV, GUEST_STORE, RustRunnerLauncher, orb};
+use crate::error::{ErrorDetail, HostError, RustRunnerFailure};
 
+mod cap;
+mod inside;
 mod job_dirs;
 mod parse;
+mod runner_copy;
 #[cfg(test)]
 mod tests;
+mod user;
 
 const ANCESTORS: [&str; 4] = ["/", "/var", "/var/lib", "/srv"];
 const OPEN_DIRECTORIES: [&str; 10] = [
@@ -36,18 +37,18 @@ const CLOSED_DIRECTORIES: [&str; 4] = [
     "/var/lib/velnor/incoming",
     "/var/lib/velnor/live",
 ];
-const RUNNER_STAGING: &str = "/var/lib/velnor/bin/.velnor-runner.new";
-const CAP_PROBE_FILE: &str = "/var/lib/velnor/.cap-probe";
 const STORE_FILESYSTEM: &str = "btrfs";
 const PROTECTED_LINKS: [&str; 2] = ["fs.protected_hardlinks", "fs.protected_symlinks"];
-const USER_PROBE: &str = r#"printf '%s\n%s\n%s\n' "$(id -u)" "$(id -g)" "$HOME""#;
-const RECORD_WRITER: &str = r#"printf '%s\n' "$1" > "$2.new" && mv -f "$2.new" "$2""#;
+const NFTABLES_PACKAGE: &str = "nftables";
+const REQUIRED_TOOLS: [&str; 2] = ["nft", "ip"];
+const TOOLS_PROBE: &str = r#"for tool in "$@"; do command -v "$tool" >/dev/null || exit 1; done"#;
 const DIRECTORY: &str = "directory";
 const REGULAR_FILE: &str = "regular file";
 
 struct Output {
     code: Option<i32>,
     text: String,
+    stderr: String,
 }
 
 impl Output {
@@ -61,6 +62,7 @@ enum Layout {
     Sound,
     Repair,
     Unsafe,
+    Foreign(String),
 }
 
 fn classify(entries: &HashMap<String, Entry>) -> Layout {
@@ -71,6 +73,13 @@ fn classify(entries: &HashMap<String, Entry>) -> Layout {
     });
     if !closed_ancestors {
         return Layout::Unsafe;
+    }
+    let foreign = OPEN_DIRECTORIES
+        .iter()
+        .chain(&CLOSED_DIRECTORIES)
+        .find(|path| entries.get(**path).is_some_and(|entry| entry.uid != 0));
+    if let Some(path) = foreign {
+        return Layout::Foreign((*path).to_owned());
     }
     let sound = |paths: &[&str], mode| {
         paths.iter().all(|path| {
@@ -87,26 +96,31 @@ fn classify(entries: &HashMap<String, Entry>) -> Layout {
 }
 
 impl RustRunnerLauncher {
-    pub(super) fn provision(&self, runner_digest: &str) -> Result<(), HostError> {
+    pub(super) fn provision(&self, runner_digest: &str) -> Result<GuestUser, HostError> {
         self.ensure_layout()?;
         self.require_btrfs()?;
         self.require_protected_links()?;
+        self.check_inside()?;
+        self.ensure_tools()?;
+        let user = self.job_user()?;
         self.ensure_cap()?;
-        self.refresh_runner(runner_digest)
+        self.refresh_runner(runner_digest)?;
+        Ok(user)
     }
 
     fn read(&self, args: &[&str]) -> Result<Output, HostError> {
-        let mut command = self.as_root();
+        let mut command = self.guest();
         command.args(args);
         let finished = orb::run(command, self.deadline, true).map_err(failure)?;
         Ok(Output {
             code: finished.status.code(),
             text: String::from_utf8_lossy(&finished.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&finished.stderr).into_owned(),
         })
     }
 
     fn apply(&self, args: &[&str]) -> Result<(), HostError> {
-        let mut command = self.as_root();
+        let mut command = self.guest();
         command.args(args);
         succeeds(command, self.deadline, RustRunnerFailure::MachineProvision)
     }
@@ -128,6 +142,11 @@ impl RustRunnerLauncher {
         match self.layout()? {
             Layout::Sound => return Ok(()),
             Layout::Unsafe => return Err(failure(RustRunnerFailure::MachineLayout)),
+            Layout::Foreign(path) => {
+                return Err(failure(RustRunnerFailure::StoreOwner(
+                    ErrorDetail::from_bytes(path.as_bytes()),
+                )));
+            }
             Layout::Repair => {}
         }
         for (mode, directories) in [
@@ -171,72 +190,29 @@ impl RustRunnerLauncher {
         }
     }
 
-    pub(super) fn guest_user(&self) -> Result<GuestUser, HostError> {
-        let mut command = self.in_machine();
-        command.args(["sh", "-c", USER_PROBE]);
-        let output = orb::run(command, self.deadline, true).map_err(failure)?;
-        GuestUser::parse(&String::from_utf8_lossy(&output.stdout))
-            .filter(|_| output.status.success())
-            .ok_or_else(|| failure(RustRunnerFailure::GuestUser))
+    fn tools_present(&self) -> Result<bool, HostError> {
+        let mut args = vec!["sh", "-c", TOOLS_PROBE, "sh"];
+        args.extend(REQUIRED_TOOLS);
+        Ok(self.read(&args)?.success())
     }
 
-    fn cap_record(&self) -> Result<String, HostError> {
-        let mut command = self.orb();
-        command.arg("version");
-        let output = orb::run(command, self.deadline, true).map_err(failure)?;
-        let version = shape::orb_version(&String::from_utf8_lossy(&output.stdout))
-            .filter(|_| output.status.success())
-            .ok_or_else(|| failure(RustRunnerFailure::MachineProvision))?;
-        Ok(format!("orbstack={version} cap={}", self.disk_cap_bytes()))
-    }
-
-    fn ensure_cap(&self) -> Result<(), HostError> {
-        let record = self.cap_record()?;
-        let recorded = self.read(&["cat", GUEST_CAP_RECORD])?;
-        if recorded.success() && recorded.text.trim() == record {
+    fn ensure_tools(&self) -> Result<(), HostError> {
+        if self.tools_present()? {
             return Ok(());
         }
-        let over_cap = self.disk_cap_bytes().saturating_add(GIB).to_string();
-        let attempt = self.read(&["fallocate", "-l", &over_cap, CAP_PROBE_FILE])?;
-        self.apply(&["rm", "-f", CAP_PROBE_FILE])?;
-        if attempt.success() {
-            return Err(failure(RustRunnerFailure::CapProbe));
-        }
-        self.apply(&["sh", "-c", RECORD_WRITER, "sh", &record, GUEST_CAP_RECORD])
-    }
-
-    fn runner_matches(&self, path: &str, digest: &str) -> Result<bool, HostError> {
-        let owned = self
-            .stat(&[path])?
-            .get(path)
-            .is_some_and(|entry| entry.is(REGULAR_FILE, 0o755));
-        if !owned {
-            return Ok(false);
-        }
-        let sum = self.read(&["sha256sum", path])?;
-        Ok(sum.success() && parse::digest(&sum.text).as_deref() == Some(digest))
-    }
-
-    fn refresh_runner(&self, digest: &str) -> Result<(), HostError> {
-        if self.runner_matches(GUEST_RUNNER, digest)? {
-            return Ok(());
-        }
-        let shared = format!("{GUEST_SHARE}/bin/velnor-runner");
-        self.apply(&[
+        self.read(&[
+            "env",
+            "DEBIAN_FRONTEND=noninteractive",
+            "apt-get",
             "install",
-            "-o",
-            "root",
-            "-g",
-            "root",
-            "-m",
-            "0755",
-            &shared,
-            RUNNER_STAGING,
+            "-y",
+            "--no-install-recommends",
+            NFTABLES_PACKAGE,
         ])?;
-        if !self.runner_matches(RUNNER_STAGING, digest)? {
-            let _ = self.apply(&["rm", "-f", RUNNER_STAGING]);
-            return Err(failure(RustRunnerFailure::BinaryCopy));
+        if self.tools_present()? {
+            Ok(())
+        } else {
+            Err(failure(RustRunnerFailure::MachineTools))
         }
-        self.apply(&["mv", "-f", RUNNER_STAGING, GUEST_RUNNER])
     }
 }
