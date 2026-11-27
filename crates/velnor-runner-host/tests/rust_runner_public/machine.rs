@@ -333,6 +333,10 @@ fn rust_runner_takes_only_a_quota_error_as_proof_of_the_disk_cap() -> Check {
             !fixture.guest("var/lib/velnor/cap-probe").exists(),
             "{error}"
         );
+        assert!(
+            !fixture.guest("var/lib/velnor/.cap-probe").exists(),
+            "{error}"
+        );
     }
     for error in ["No space left on device", "Disk quota exceeded"] {
         let fixture = Fixture::ready()?;
