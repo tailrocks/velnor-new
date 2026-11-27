@@ -24,6 +24,7 @@ use self::isolation::{Isolation, StoreEnv};
 use self::paths::require_confined;
 use self::pin::require_pinned_revision;
 use self::readonly::require_read_only_store;
+use self::tools::resolve;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
@@ -276,7 +277,7 @@ async fn mise_action(
     facts: &TrustedFacts,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
-    let tools = store_root().join("tools");
+    let tools = resolve(&store_root().join("tools"));
     let binary = locate_binary(inputs, &tools).await?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);

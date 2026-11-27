@@ -179,10 +179,8 @@ impl ExprEnv {
         });
     }
 
-    pub fn withhold(&mut self, root: RootContext) {
-        self.update_contexts(|contexts| {
-            contexts.remove(&root);
-        });
+    pub fn retain_only(&mut self, keep: &[RootContext]) {
+        self.update_contexts(|contexts| contexts.retain(|root, _| keep.contains(root)));
     }
 
     fn update_contexts(&mut self, update: impl FnOnce(&mut BTreeMap<RootContext, Value>)) {

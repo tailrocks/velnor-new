@@ -74,6 +74,10 @@ fn require_trusted(
     Ok(())
 }
 
+pub(super) fn resolve(tools: &Path) -> PathBuf {
+    std::fs::canonicalize(tools).unwrap_or_else(|_| tools.to_path_buf())
+}
+
 pub(super) fn open_tools(tools: &Path) -> Result<Option<Tools>, ExecError> {
     let real = match std::fs::canonicalize(tools) {
         Ok(real) => real,

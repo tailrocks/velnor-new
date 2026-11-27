@@ -24,6 +24,13 @@ const INPUTS: [&str; 4] = [
     "sha256-linux-arm64",
     "sha256-macos-arm64",
 ];
+const KEPT_CONTEXTS: [RootContext; 5] = [
+    RootContext::Github,
+    RootContext::Runner,
+    RootContext::Steps,
+    RootContext::Inputs,
+    RootContext::Env,
+];
 const ACTION_PATH_NAME: &str = "action_path";
 const ACTION_PATH_PREFIX: &str = "github_";
 
@@ -169,8 +176,7 @@ pub(crate) fn expand(
         &ContextValue::object(Vec::new()).map_err(invalid)?,
     )
     .map_err(invalid)?;
-    env.withhold(RootContext::Secrets);
-    env.withhold(RootContext::Needs);
+    env.retain_only(&KEPT_CONTEXTS);
     let mut steps = Vec::new();
     for raw in &action.runs.steps {
         if raw.uses.is_some() {

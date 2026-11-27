@@ -8,6 +8,7 @@ use anyhow::{Context, Result, ensure};
 use crate::exec_support::Ran;
 use crate::mise_double::each_row;
 use crate::mise_real::canonical;
+use crate::mise_store::{Ancestor, StoreMode};
 use crate::mise_world::{VERSION, World, assert_failed, job_fixture};
 
 #[derive(Clone, Copy, Debug)]
@@ -144,15 +145,36 @@ fn mise_action_accepts_a_path_entry_whose_store_link_stays_in_the_store() -> Res
     Ok(())
 }
 
-#[test]
-fn mise_action_refuses_a_store_root_reached_through_a_link() -> Result<()> {
-    let world = World::new()?;
+fn linked_store(world: &World) -> Result<String> {
     world.install_mise()?;
     world.init_workspace(true)?;
     world.install_store_homes()?;
     let link = world.root.join("store-link");
     std::os::unix::fs::symlink(&world.store, &link).context("link the store root")?;
-    let root = link.display().to_string();
+    Ok(link.display().to_string())
+}
+
+#[test]
+fn mise_action_accepts_a_store_root_reached_through_a_link_to_a_trusted_store() -> Result<()> {
+    let world = World::new()?;
+    let root = linked_store(&world)?;
+    let job = world.with_final_script(&job_fixture("mise_action_ok"), "echo \"path=$PATH\"")?;
+    let ran = world.run(&job, &[("VELNOR_STORE_ROOT", &root)])?;
+    ensure!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    ensure!(world.mise_installs().len() == 1, "{:?}", world.mise_calls());
+    ensure!(
+        !ran.stdout.contains(&root),
+        "the link reached a child\n{}",
+        ran.stdout
+    );
+    Ok(())
+}
+
+#[test]
+fn mise_action_refuses_a_store_root_link_whose_target_is_not_trusted() -> Result<()> {
+    let mut world = World::new()?;
+    world.store_mode = StoreMode::Loose(Ancestor::Store, 0o757);
+    let root = linked_store(&world)?;
     let ran = world.run(
         &job_fixture("mise_action_ok"),
         &[("VELNOR_STORE_ROOT", &root)],
@@ -160,9 +182,8 @@ fn mise_action_refuses_a_store_root_reached_through_a_link() -> Result<()> {
     assert_failed(
         &ran,
         &format!(
-            "mise policy: {} is reached through a link ({}); the tools store path must not contain links",
-            link.join("tools").display(),
-            canonical(&world.store).join("tools").display()
+            "mise policy: {} is writable by its group or others (mode 757); no directory above the tools store may be",
+            canonical(&world.store).display()
         ),
     );
     assert_eq!(world.mise_calls(), Vec::<String>::new());

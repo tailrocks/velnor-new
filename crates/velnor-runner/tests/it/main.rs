@@ -135,6 +135,7 @@ mod native_checkout_upkeep;
 mod native_checkout_walk;
 mod native_checkout_window;
 mod native_checkout_workspace;
+mod native_expression_with;
 mod native_mise;
 mod native_mise_admission;
 mod native_mise_ancestors;
