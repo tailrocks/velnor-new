@@ -42,7 +42,16 @@ async fn fetch_refs(
         Transfer::Incremental => (&[], &[]),
         Transfer::Refetch => (&["-c", "fetch.unpackLimit=1"], &["--refetch"]),
     };
-    let base = ["-c", "protocol.version=2", "-c", "gc.auto=0"];
+    let base = [
+        "-c",
+        "protocol.version=2",
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "http.lowSpeedLimit=1000",
+        "-c",
+        "http.lowSpeedTime=60",
+    ];
     let fetch = [
         "fetch",
         "--no-auto-maintenance",

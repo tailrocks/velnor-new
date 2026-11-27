@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 
 use super::{is_file, missing_tree, remove_entry, sound};
 use crate::broker::facts::TrustedFacts;
-use crate::broker::git::{git, git_args, has_tree, output};
+use crate::broker::git::{git, git_args, has_tree, update};
 use crate::broker::repair::refs;
 use crate::broker::transfer::{Transfer, fetch_wanted};
 
@@ -56,7 +56,7 @@ async fn update_refs(mirror: &Path, script: &str) -> Result<()> {
         return Ok(());
     }
     let args = git_args(Some(mirror), &["update-ref", "--stdin"]);
-    let updated = output(&args, Some(script)).await?;
+    let updated = update(&args, script).await?;
     if !updated.succeeded {
         bail!("git update-ref: {}", updated.stderr);
     }

@@ -88,3 +88,89 @@ fn a_git_that_outlives_its_killed_runner_keeps_the_mirror_lock() -> Result<()> {
     assert_eq!(git(&rig.mirror(), &["rev-parse", "refs/heads/main"])?, next);
     Ok(())
 }
+
+fn plant(marker: &Path, kind: &str) -> Result<()> {
+    match kind {
+        "directory" => std::fs::create_dir_all(marker.join("inner"))?,
+        "link" => std::os::unix::fs::symlink(marker.with_file_name("nowhere"), marker)?,
+        _ => assert!(Command::new("mkfifo").arg(marker).status()?.success()),
+    }
+    Ok(())
+}
+
+#[test]
+fn a_marker_that_is_not_a_regular_file_is_replaced_and_the_job_succeeds() -> Result<()> {
+    let rig = Rig::new()?;
+    let tip = rig.advance("x")?;
+    warm(&rig, &tip)?;
+    let marker = rig.mirror().join("sweep-needed");
+    for kind in ["directory", "link", "fifo"] {
+        plant(&marker, kind)?;
+        let next = rig.advance(kind)?;
+        checks_out(&rig, &next, 2)?;
+        assert!(!marker.exists(), "the {kind} marker survived a clean job");
+        assert!(
+            !marker.with_file_name("nowhere").exists(),
+            "the {kind} marker was followed"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn every_broker_fetch_gives_up_on_a_stalled_transfer() -> Result<()> {
+    let rig = Rig::new()?;
+    let tip = rig.advance("x")?;
+    warm(&rig, &tip)?;
+    let trace = std::fs::read_to_string(rig.trace())?;
+    let fetches: Vec<&str> = trace
+        .lines()
+        .filter(|line| {
+            line.contains("\"event\":\"start\"") && line.contains("--no-auto-maintenance")
+        })
+        .collect();
+    assert!(!fetches.is_empty(), "the broker never fetched");
+    for line in fetches {
+        for setting in ["http.lowSpeedLimit=1000", "http.lowSpeedTime=60"] {
+            assert!(line.contains(setting), "a fetch lacks {setting}: {line}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_ref_update_of_a_refetch_keeps_the_mirror_lock_after_the_runner_dies() -> Result<()> {
+    let rig = Rig::new()?;
+    let tip = rig.advance("x")?;
+    warm(&rig, &tip)?;
+    std::fs::write(
+        rig.mirror().join("refs/heads/main"),
+        format!("{}\n", "1".repeat(40)),
+    )?;
+    let started = rig.root.join("updating");
+    wrapper_env(
+        &rig.root,
+        &format!(
+            "case \" $* \" in *\" --refetch \"*) ;; *\" fetch \"*) exit 0;; *\" update-ref --stdin \"*) touch '{}'; sleep 6;; esac\n",
+            started.display()
+        ),
+    )?;
+    let next = rig.advance("y")?;
+    let job = rig.job("checkout_depth1", &next, &rig.server_url())?;
+    let runner = rig.start(&job, &Scratch::new()?)?;
+    wait_for(&started);
+    assert!(started.exists(), "the refetch never updated a ref");
+    let killed = Command::new("kill")
+        .args(["-KILL", &runner.id().to_string()])
+        .status()?;
+    assert!(killed.success());
+    finish(runner)?;
+    let lock = lock_of(&rig);
+    assert!(is_locked(&lock)?, "the ref update lost the mirror lock");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while is_locked(&lock)? && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(!is_locked(&lock)?, "the surviving git never ended");
+    Ok(())
+}

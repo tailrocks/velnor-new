@@ -123,6 +123,7 @@ pub(super) struct Output {
 enum Pipes {
     Discard,
     Capture { feed: bool },
+    Update,
 }
 
 fn wait_for_exit(leader: Pid) -> Result<bool, Errno> {
@@ -151,6 +152,7 @@ impl Leader {
             Pipes::Discard => (held, Stdio::null()),
             Pipes::Capture { feed: false } => (held, Stdio::piped()),
             Pipes::Capture { feed: true } => (Stdio::piped(), Stdio::piped()),
+            Pipes::Update => (Stdio::piped(), held),
         };
         let mut command = Command::new("git");
         let child = isolate(&mut command)
@@ -254,6 +256,10 @@ pub(super) async fn output(args: &[String], input: Option<&str>) -> Result<Outpu
     Leader::spawn(args, &[], pipes)?
         .finish(input.unwrap_or_default())
         .await
+}
+
+pub(super) async fn update(args: &[String], input: &str) -> Result<Output> {
+    Leader::spawn(args, &[], Pipes::Update)?.finish(input).await
 }
 
 pub(super) async fn has_commit(git_dir: &Path, sha: &str) -> bool {
