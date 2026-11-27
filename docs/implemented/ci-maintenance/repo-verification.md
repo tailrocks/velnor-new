@@ -24,7 +24,7 @@ evidence to confirm that it ran.
 
 No single script runs the full gate. The full local gate is the `run:` steps of the jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` that the changed paths select. Read the steps from the workflow files: they are the source of truth, and `velnor-gen` generates `ci.yml`. Run them from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a job only when the changed paths do not select it, and run every job when you are unsure.
 
-Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`, often with `velnor-ci inputs build --` in front of `<command>`. Run `<command>` itself and leave out the `. "$VELNOR_EXEC" run --` and `velnor-ci inputs build --` prefixes, which exist only on the runner. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, and the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`. Also skip the two `repository-checks.yml` steps that run `scripts/test-install-secret-scanners.sh` and `scripts/install-secret-scanners.sh`. Both handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
+Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`. A `ci.yml` step has the form `. "$VELNOR_EXEC" run -- <command>`. Leave out the `. "$VELNOR_EXEC" run --` prefix, which exists only on the runner. When the step has `velnor-ci inputs build --` in front of `<command>`, keep it and run it through the built binary: `target/debug/velnor-ci inputs build -- <command>`. That subcommand runs its own checks before the command starts, such as the `outside_selection` check and the build-directory declarations, so dropping it lets CI discover those failures. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, and the `velnor-ci` helper subcommands such as `plan`, `tools-verify`, `tools-local`, `crates-mirror` and `mbx-store`. Also skip the two `repository-checks.yml` steps that run `scripts/test-install-secret-scanners.sh` and `scripts/install-secret-scanners.sh`. Both handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Where a `repository-checks.yml` step uses `$RUNNER_TEMP`, set it to a scratch directory outside the checkout. Run the `git fetch --no-tags --unshallow` step only in a shallow clone, because it fails in a full clone.
 
 A nextest step reads `-E "$TEST_FILTER"`. The skipped `velnor-ci plan` step computes that value, so set it yourself. Use `all()` to run the whole workspace, or `package(<name>) | package(<other>)` for the packages your change affects. Unset or empty, nextest fails with a filterset parse error. A `Test lane guard` step runs `velnor-ci lane-guard`, and `velnor-ci` is not on `PATH` in a checkout. Build the binary with `cargo build --locked -p velnor-ci --bin velnor-ci`, then run `target/debug/velnor-ci lane-guard <arguments of the step>`. In a checkout that uses mbx, `target` is a symlink into the mbx store, and the path works through it. Do not use `cargo run`: it sets `CARGO` to the toolchain's cargo, so the nested nextest builds of lane-guard skip mbx.
 
@@ -39,6 +39,7 @@ The table is a quick reference for the common commands. It is not the gate and i
 | `rust`, tests with the `local-mode` feature | `cargo nextest run --workspace --locked --features local-mode --profile ci --no-fail-fast --ignore-default-filter -E 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))' --no-tests=fail` |
 | `rust`, lint with the `local-mode` feature | `cargo clippy --workspace --all-targets --locked --features local-mode -- -D warnings` |
 | `rust`, docs with the `local-mode` feature | `cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features local-mode` |
+| `rust`, test lane guard with the `local-mode` feature | `cargo build --locked -p velnor-ci --bin velnor-ci && target/debug/velnor-ci lane-guard --features local-mode --filter 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))'` |
 | `rust`, tests with the `test-support` feature | `cargo nextest run --workspace --locked --features test-support --profile ci --no-fail-fast --ignore-default-filter -E 'package(velnor-runner)' --no-tests=fail` |
 | `rust`, test lane guard with the `test-support` feature | `cargo build --locked -p velnor-ci --bin velnor-ci && target/debug/velnor-ci lane-guard --features test-support --filter 'package(velnor-runner)'` |
 | `rust`, lint with the `test-support` feature | `cargo clippy --workspace --all-targets --locked --features test-support -- -D warnings` |
@@ -59,7 +60,7 @@ The table is a quick reference for the common commands. It is not the gate and i
 
 `cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
 
-Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above do not read `TEST_FILTER`. The `rust`, tests row runs every test in the workspace. The `local-mode` and `test-support` rows select the tests of one package with their own `-E` filter. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test.
+Generated workflow steps run the nextest commands with a `TEST_FILTER` that `velnor-ci plan` computes from the diff. The commands in the table above do not read `TEST_FILTER`. The `rust`, tests row runs every test in the workspace that compiles without the `local-mode` and `test-support` features. The `local-mode` and `test-support` rows enable their feature and select the tests of one package with their own `-E` filter, so they run the feature-gated tests that the `rust`, tests row leaves out. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test.
 
 The `test-maintenance-helpers` mise task runs the repository-only maintenance helper tests. No generated workflow job runs it, so it is a local full run and not a required check. It first runs `scripts/test-setup-velnor-action.py`, the mise binary digest tests, the tag ruleset drift test and `cargo fetch --locked`, then runs the `velnor-archive-guard` tests with `--no-tests fail`.
 
@@ -72,16 +73,16 @@ cargo build --locked -p velnor-ci --bin velnor-ci
 target/debug/velnor-ci plan --explain --changed <path>...
 ```
 
-Set `GITHUB_OUTPUT` to a file to read the `rust_*` and `lint_*` values that the plan writes. Without `--changed` and without a pull request event, the plan selects everything.
+Set `GITHUB_OUTPUT` to a file to read the `rust_*` and `lint_*` values that the plan writes. Without `--changed` and without a pull request event, the plan selects everything. The plan reads the files in the working tree and the paths you pass. It does not read the `origin` remote, so a checkout without a remote works.
 
 The always-on jobs run for every change:
 
-- `Jactionlint` (`lint-jactionlint`, `ci.yml` line 747). Its `if:` checks the event, the draft state, the labels and the merge-queue skip output, and no path.
-- `Alint` (`lint-alint`, `ci.yml` line 774). Its `if:` is the same as the `Jactionlint` job.
-- `Helper gates` (`helper-gates`, `repository-checks.yml` line 63). It runs for a pull request from the same repository and for a merge group.
-- `Secret scanners` (`secret-scan`, `repository-checks.yml` line 155). It runs for a pull request from the same repository, for a push and for a merge group.
+- `Jactionlint` (`lint-jactionlint` job in `ci.yml`). Its `if:` checks the event, the draft state, the labels and the merge-queue skip output, and no path.
+- `Alint` (`lint-alint` job in `ci.yml`). Its `if:` is the same as the `Jactionlint` job.
+- `Helper gates` (`helper-gates` job in `repository-checks.yml`). It runs for a pull request from the same repository and for a merge group.
+- `Secret scanners` (`secret-scan` job in `repository-checks.yml`). It runs for a pull request from the same repository, for a push and for a merge group.
 
-The `Required` job (`ci.yml` line 1113) collects the results of the other jobs and runs no check. Run the table rows for the always-on jobs locally: the `alint` and `jactionlint` rows, the three `helper-gates` rows and the `secret-scan` row. `rumdl` is not a CI job. It runs from `hk.pkl` and `mise.toml`, so run `rumdl check` on the changed Markdown files as well.
+The `required` job in `ci.yml` collects the results of the other jobs and runs no check. Run the table rows for the always-on jobs locally: the `alint` and `jactionlint` rows, the three `helper-gates` rows and the `secret-scan` row. `rumdl` is not a CI job. It runs from `hk.pkl` and `mise.toml`, so run `rumdl check` on the changed Markdown files as well.
 
 ---
 
@@ -152,9 +153,10 @@ To verify a local checkout:
 export MISE_TRUSTED_CONFIG_PATHS=$PWD
 mise install
 type -a cargo | head -1   # must show a path under mise/command-wrappers/bin/
+mbx doctor               # must report 0 failures
 ```
 
-Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]: object cache: H hits, M misses, ...` lines in its output. If they are missing, the build did not go through mbx.
+Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]` lines in its output. The counts change from build to build, for example `mbx[cache]: 8 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally`. If they are missing, the build did not go through mbx.
 
 ## Runner Crates (`crates/velnor-runner-*`)
 
