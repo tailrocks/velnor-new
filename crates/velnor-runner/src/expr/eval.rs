@@ -110,6 +110,7 @@ fn evaluate_function(
                 env.home.as_deref(),
                 &values,
                 env.hash_files_timeout,
+                &env.walk_seam,
             )
             .map(Value::String)
         }

@@ -110,5 +110,12 @@ fn expr_contains_matches_at_every_character_boundary_without_folding_to_multiple
     assert!(!truthy("contains('', 'a')", &env)?);
     assert!(!truthy("contains('straße', 'SS')", &env)?);
     assert!(!truthy("contains('xß', 'ẞ')", &env)?);
+    assert!(!truthy("contains('AAbAabAaaA', 'aaaAa')", &env)?);
+    assert!(!truthy("contains('bAaAbaabAb', 'aAabAb')", &env)?);
+    assert!(truthy("contains('AabaAabaaaA', 'Aabaaaa')", &env)?);
+    assert!(truthy("contains('aɐbɐɐc', 'ⱯⱯc')", &env)?);
+    assert!(truthy("contains('ȺȺx', 'ⱥx')", &env)?);
+    assert!(!truthy("contains('ɐɐ', 'ⱯⱯⱯ')", &env)?);
+    assert!(!truthy("contains('ɐ', 'Ɒ')", &env)?);
     Ok(())
 }

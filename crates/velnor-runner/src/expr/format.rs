@@ -9,7 +9,7 @@ use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
 use super::number::format_number;
 use super::value::{Value, ValueKind};
-use crate::context_value::write_json_string;
+use crate::context_value::{json_string_utf16_units, write_json_string};
 use std::ops::Range;
 
 pub(crate) fn evaluate_format(
@@ -262,6 +262,14 @@ impl JsonWriter<'_> {
         self.out.push_str(piece);
         Ok(())
     }
+
+    fn push_string(&mut self, prefix: &str, value: &str) -> Result<(), ExprError> {
+        let units = prefix.encode_utf16().count() + json_string_utf16_units(value);
+        self.memory.add_units(units)?;
+        self.out.push_str(prefix);
+        write_json_string(value, &mut self.out);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -303,20 +311,11 @@ fn write_json(
             }
             writer.push(&format!("\n{indent}]"))
         }
-        other => {
-            let text = match other {
-                Value::Null => "null".to_string(),
-                Value::Boolean(value) => value.to_string(),
-                Value::Number(value) => format_number(*value),
-                Value::String(value) => {
-                    let mut quoted = String::new();
-                    write_json_string(value, &mut quoted);
-                    quoted
-                }
-                Value::Array(_) => "[]".to_string(),
-                Value::Object(_) => "{}".to_string(),
-            };
-            writer.push(&format!("{prefix}{text}"))
-        }
+        Value::String(value) => writer.push_string(&prefix, value),
+        Value::Null => writer.push(&format!("{prefix}null")),
+        Value::Boolean(value) => writer.push(&format!("{prefix}{value}")),
+        Value::Number(value) => writer.push(&format!("{prefix}{}", format_number(*value))),
+        Value::Array(_) => writer.push(&format!("{prefix}[]")),
+        Value::Object(_) => writer.push(&format!("{prefix}{{}}")),
     }
 }

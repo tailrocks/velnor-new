@@ -263,28 +263,47 @@ pub(crate) fn ordinal_ignore_case_starts_with(value: &str, prefix: &str) -> bool
     ordinal_ignore_case_eq(&value[..end], prefix)
 }
 
+fn folded_bytes(value: &str) -> impl Iterator<Item = u8> + '_ {
+    ordinal_ignore_case_fold(value).flat_map(|character| {
+        let mut encoded = [0_u8; 4];
+        let length = character.encode_utf8(&mut encoded).len();
+        encoded.into_iter().take(length)
+    })
+}
+
+fn widen(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+fn narrow(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 pub(crate) fn ordinal_ignore_case_contains(value: &str, needle: &str) -> bool {
-    let needle: Vec<char> = ordinal_ignore_case_fold(needle).collect();
+    let needle: Vec<u8> = folded_bytes(needle).collect();
     if needle.is_empty() {
         return true;
     }
-    let mut fallback = vec![0_usize; needle.len()];
-    let mut matched = 0;
+    if u32::try_from(needle.len()).is_err() {
+        return false;
+    }
+    let mut fallback = vec![0_u32; needle.len()];
+    let mut matched = 0_usize;
     for index in 1..needle.len() {
         while matched > 0 && needle[index] != needle[matched] {
-            matched = fallback[matched - 1];
+            matched = widen(fallback[matched - 1]);
         }
         if needle[index] == needle[matched] {
             matched += 1;
         }
-        fallback[index] = matched;
+        fallback[index] = narrow(matched);
     }
     matched = 0;
-    for character in ordinal_ignore_case_fold(value) {
-        while matched > 0 && character != needle[matched] {
-            matched = fallback[matched - 1];
+    for byte in folded_bytes(value) {
+        while matched > 0 && byte != needle[matched] {
+            matched = widen(fallback[matched - 1]);
         }
-        if character == needle[matched] {
+        if byte == needle[matched] {
             matched += 1;
         }
         if matched == needle.len() {

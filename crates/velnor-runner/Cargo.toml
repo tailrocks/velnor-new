@@ -37,6 +37,7 @@ clap = { workspace = true }
 futures-util = { workspace = true }
 reqwest = { workspace = true }
 ring = { workspace = true }
+rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }

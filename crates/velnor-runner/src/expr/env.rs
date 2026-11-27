@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::eval::from_context_value;
+use super::seam::Seam;
 use super::value::{ObjectValue, Value};
 use crate::context_value::{ContextValue, ContextValueError};
 use crate::secret::Secret;
@@ -101,6 +102,7 @@ pub struct ExprEnv {
     pub home: Option<PathBuf>,
     pub status: JobStatus,
     pub hash_files_timeout: Duration,
+    pub(crate) walk_seam: Seam,
     contexts: Secret<BTreeMap<RootContext, Value>>,
 }
 
@@ -123,6 +125,7 @@ impl ExprEnv {
             home: home_var.map(PathBuf::from).or_else(std::env::home_dir),
             status: JobStatus::Success,
             hash_files_timeout: HASH_FILES_TIMEOUT,
+            walk_seam: Seam::default(),
             contexts,
         }
     }
@@ -137,6 +140,11 @@ impl ExprEnv {
         contexts.insert(root, from_context_value(value));
         self.contexts = Secret::new(contexts);
         Ok(())
+    }
+
+    #[cfg(feature = "test-support")]
+    pub fn set_walk_seam(&mut self, hook: impl Fn(&std::path::Path) + Send + Sync + 'static) {
+        self.walk_seam = Seam::new(hook);
     }
 
     pub(crate) fn context(&self, root: RootContext) -> Value {

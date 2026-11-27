@@ -4300,6 +4300,7 @@ dependencies = [
  "futures-util",
  "reqwest",
  "ring",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "serde_path_to_error",

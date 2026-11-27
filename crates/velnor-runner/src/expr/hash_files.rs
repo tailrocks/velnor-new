@@ -6,6 +6,7 @@ use super::error::ExprError;
 use super::glob::PatternSet;
 use super::pattern::GlobError;
 use super::pattern::trim_line;
+use super::seam::Seam;
 use super::value::Value;
 use ring::digest::{Context, Digest, SHA256};
 use std::fmt::{Display, Write as _};
@@ -26,6 +27,7 @@ struct Job {
     arguments: Vec<String>,
     timeout: Duration,
     deadline: Instant,
+    seam: Seam,
 }
 
 impl Job {
@@ -63,19 +65,21 @@ impl Job {
         let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
         let mut aggregate = Context::new(&SHA256);
         let mut count = 0_usize;
-        for found in patterns.walk(&root, self.deadline) {
-            let path = match found {
-                Ok(path) => path,
+        for found in patterns.walk(&root, self.deadline, &self.seam) {
+            let mut found = match found {
+                Ok(found) => found,
                 Err(GlobError::TimedOut) => return Err(self.timed_out()),
                 Err(error) => return Err(self.failure(&error)),
             };
-            match file_digest(&path, &mut buffer, self.deadline) {
+            match file_digest(&mut found.file, &mut buffer, self.deadline) {
                 Ok(Some(digest)) => {
                     aggregate.update(digest.as_ref());
                     count += 1;
                 }
                 Ok(None) => return Err(self.timed_out()),
-                Err(error) => return Err(self.failure(&format!("{}: {error}", path.display()))),
+                Err(error) => {
+                    return Err(self.failure(&format!("{}: {error}", found.path.display())));
+                }
             }
         }
         if count == 0 {
@@ -90,6 +94,7 @@ pub(crate) fn hash_files(
     home: Option<&Path>,
     args: &[Value],
     timeout: Duration,
+    seam: &Seam,
 ) -> Result<String, ExprError> {
     let arguments: Vec<String> = args.iter().map(Value::convert_to_string).collect();
     if let Some(option) = arguments.first().filter(|first| first.starts_with("--")) {
@@ -103,6 +108,7 @@ pub(crate) fn hash_files(
         arguments,
         timeout,
         deadline: Instant::now() + timeout.min(LONGEST_TIMEOUT),
+        seam: seam.clone(),
     };
     let (sender, receiver) = mpsc::channel();
     let worker = job.clone();
@@ -121,8 +127,11 @@ pub(crate) fn hash_files(
     }
 }
 
-fn file_digest(path: &Path, buffer: &mut [u8], deadline: Instant) -> io::Result<Option<Digest>> {
-    let mut file = File::open(path)?;
+fn file_digest(
+    file: &mut File,
+    buffer: &mut [u8],
+    deadline: Instant,
+) -> io::Result<Option<Digest>> {
     let mut context = Context::new(&SHA256);
     loop {
         if Instant::now() >= deadline {

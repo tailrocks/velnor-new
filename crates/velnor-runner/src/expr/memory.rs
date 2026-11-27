@@ -40,7 +40,10 @@ impl<'a> MemoryCounter<'a> {
         if value.is_empty() {
             return Ok(());
         }
-        let units = value.encode_utf16().count();
+        self.add_units(value.encode_utf16().count())
+    }
+
+    pub(crate) fn add_units(&mut self, units: usize) -> Result<(), ExprError> {
         self.add_bytes(
             STRING_BASE_OVERHEAD.saturating_add(units.saturating_mul(BYTES_PER_UTF16_UNIT)),
         )

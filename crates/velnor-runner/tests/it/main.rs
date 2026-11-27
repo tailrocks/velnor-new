@@ -18,6 +18,8 @@ mod expr_hash_files_minimatch;
 mod expr_hash_files_non_utf8;
 #[path = "expr/hash_files_patterns.rs"]
 mod expr_hash_files_patterns;
+#[path = "expr/hash_files_race.rs"]
+mod expr_hash_files_race;
 #[path = "expr/hash_files_regex_limits.rs"]
 mod expr_hash_files_regex_limits;
 #[path = "expr/hash_files_relative.rs"]
@@ -30,6 +32,8 @@ mod expr_indexing;
 mod expr_limits;
 #[path = "expr/memory.rs"]
 mod expr_memory;
+#[path = "expr/memory_json.rs"]
+mod expr_memory_json;
 #[path = "expr/minimatch_corpus.rs"]
 mod expr_minimatch_corpus;
 #[path = "expr/operators.rs"]

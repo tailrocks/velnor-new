@@ -995,8 +995,16 @@ behaviours differ on purpose:
   through the link, so a symlinked file or a symlinked parent directory pulls
   files from outside the workspace into the digest. Velnor resolves the parent
   chain of each search root and the target of each matched symlink, and drops
-  every path whose real location leaves the canonical workspace. The search
-  root itself is examined with `lstat` and never resolved, as in the runner
+  every path whose real location leaves the canonical workspace. Velnor opens
+  each directory and file with `openat` relative to its parent's descriptor and
+  never follows a final symlink, reads a regular file only after `fstat` shows
+  one, and opens the target of a matched link from the workspace root one
+  component at a time the same way. A path replaced by a link after the walk
+  decided about it therefore cannot pull a file from outside the workspace into
+  the digest: a replaced file is read through its resolved target only when that
+  target stays inside, a replaced directory or link target fails the call, and
+  a file replaced by a FIFO fails with `not a regular file` instead of blocking.
+  The search root itself is examined with `lstat` and never resolved, as in the runner
   ([index.js:1362](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1362)),
   and it is examined before its parents are resolved, so a path too long for
   the system fails the call with `ENAMETOOLONG` even when a parent is

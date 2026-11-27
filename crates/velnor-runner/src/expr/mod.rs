@@ -17,11 +17,13 @@ mod number;
 mod parser;
 mod pattern;
 mod render;
+mod seam;
 mod segment;
 mod template;
 mod token;
 mod translate;
 mod value;
+mod walk;
 
 pub use env::{ExprEnv, JobStatus, RootContext};
 pub use error::{ExprError, ParseError, ParseErrorKind};
