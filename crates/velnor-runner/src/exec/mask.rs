@@ -8,7 +8,7 @@ use regex_automata::meta::Regex;
 
 use super::encode::ENCODERS;
 use super::{Annotation, ExecError};
-use crate::job_message::{AgentJobRequestMessage, MaskType};
+use crate::job_message::{AgentJobRequestMessage, MaskKind};
 
 const MASK: &str = "***";
 const SECRET_WHITELIST: [&str; 2] = ["ACTIONS_STEP_DEBUG", "ACTIONS_RUNNER_DEBUG"];
@@ -135,7 +135,7 @@ pub(super) fn load(masker: &mut Masker, message: &AgentJobRequestMessage) -> Res
             })
         };
     for (_, hint, value) in hints() {
-        if hint.kind != Some(MaskType::Regex) {
+        if hint.kind != MaskKind::Regex {
             masker.add(value);
         }
     }
@@ -173,7 +173,7 @@ pub(super) fn load(masker: &mut Masker, message: &AgentJobRequestMessage) -> Res
         masker.add(value.expose());
     }
     for (index, hint, value) in hints() {
-        if hint.kind == Some(MaskType::Regex) && !masker.add_pattern(value) {
+        if hint.kind == MaskKind::Regex && !masker.add_pattern(value) {
             return Err(ExecError::Invalid(format!(
                 "mask hint {} is not a valid regular expression",
                 index + 1

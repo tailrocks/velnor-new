@@ -38,12 +38,14 @@ impl Job<'_> {
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
         let halt = JobCancel::new();
-        let survival = (!already_cancelled).then(|| {
-            Survival::new(
+        let survival = if already_cancelled {
+            None
+        } else {
+            Some(Survival::new(
                 step.condition.as_deref().unwrap_or_default(),
-                self.ctx.expr_env(JobStatus::Cancelled, step_vars),
-            )
-        });
+                self.ctx.expr_env(JobStatus::Cancelled, step_vars)?,
+            ))
+        };
         let watcher = stop_unless_surviving(self.cancel.clone(), halt.clone(), survival.as_ref());
         let signal = survival.is_some().then_some(&halt);
         tokio::select! {

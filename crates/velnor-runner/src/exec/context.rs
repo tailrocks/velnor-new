@@ -14,6 +14,11 @@ use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::{ActionReferenceType, ActionStep, AgentJobRequestMessage};
 
+fn put(env: &mut ExprEnv, root: RootContext, value: &ContextValue) -> Result<(), ExecError> {
+    env.set_context(root, value)
+        .map_err(|error| ExecError::Invalid(format!("{error:#}")))
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct StepEntry {
     pub(super) outcome: StepResult,
@@ -65,15 +70,15 @@ impl JobContext {
         let github = github_context(message, lookup("github"), options, &event_path);
         let runner = runner_context(message, options)?;
         let mut base = ExprEnv::new(options.workspace.clone());
-        base.set_context(RootContext::Github, &github);
-        base.set_context(RootContext::Runner, &runner);
-        base.set_context(RootContext::Secrets, &secrets_context(message));
+        put(&mut base, RootContext::Github, &github)?;
+        put(&mut base, RootContext::Runner, &runner)?;
+        put(&mut base, RootContext::Secrets, &secrets_context(message))?;
         for (name, root) in [
             ("needs", RootContext::Needs),
             ("inputs", RootContext::Inputs),
         ] {
             if let Some(value) = lookup(name) {
-                base.set_context(root, value);
+                put(&mut base, root, value)?;
             }
         }
         let mut env = Vec::new();
@@ -81,7 +86,7 @@ impl JobContext {
             for (name, value) in evaluate::mapping(token, &base).await? {
                 set_pair(&mut env, &name, &value);
             }
-            base.set_context(RootContext::Env, &object(&env, true));
+            put(&mut base, RootContext::Env, &object(&env, true))?;
         }
         let defaults = run_defaults(message, &base).await?;
         Ok(Self {
@@ -121,21 +126,29 @@ impl JobContext {
             step.name.as_deref().unwrap_or_default(),
             repository,
         );
-        self.base.set_context(RootContext::Github, &self.github);
+        put(&mut self.base, RootContext::Github, &self.github)?;
         self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await
     }
 
-    pub(super) fn expr_env(&self, status: JobStatus, step_env: &[(String, String)]) -> ExprEnv {
+    pub(super) fn base_env(&self) -> ExprEnv {
+        self.base.clone()
+    }
+
+    pub(super) fn expr_env(
+        &self,
+        status: JobStatus,
+        step_env: &[(String, String)],
+    ) -> Result<ExprEnv, ExecError> {
         let mut env = self.base.clone();
         env.status = status;
         let mut merged = self.env.clone();
         for (name, value) in step_env {
             set_pair(&mut merged, name, value);
         }
-        env.set_context(RootContext::Env, &object(&merged, true));
-        env.set_context(RootContext::Steps, &self.steps_value());
-        env
+        put(&mut env, RootContext::Env, &object(&merged, true))?;
+        put(&mut env, RootContext::Steps, &self.steps_value())?;
+        Ok(env)
     }
 
     fn steps_value(&self) -> ContextValue {

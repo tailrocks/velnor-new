@@ -83,7 +83,6 @@ mod followup;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
-mod protocol_acquire_renew;
 #[path = "exec_late.rs"]
 mod late;
 #[path = "exec_offload.rs"]
@@ -92,6 +91,7 @@ mod offload;
 mod parity;
 #[path = "exec_process.rs"]
 mod process;
+mod protocol_acquire_renew;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;

@@ -16,7 +16,9 @@ use super::output::Output;
 use super::preflight::problems;
 use super::sink::LogSink;
 use super::step_info::{context_id, continue_on_error, step_environment, step_name};
-use super::{AnnotationLevel, JobCancel, JobResult, JobRun, RunOptions, StepRecord, StepResult};
+use super::{
+    AnnotationLevel, ExecError, JobCancel, JobResult, JobRun, RunOptions, StepRecord, StepResult,
+};
 use crate::expr::JobStatus;
 use crate::job_message::{ActionStep, AgentJobRequestMessage};
 
@@ -125,8 +127,13 @@ impl Job<'_> {
             return;
         };
         out.enter(0);
-        let env = self.ctx.expr_env(self.status, &[]);
-        match evaluate::mapping(token, &env).await {
+        let mapped = match self.ctx.expr_env(self.status, &[]) {
+            Ok(env) => evaluate::mapping(token, &env)
+                .await
+                .map_err(ExecError::from),
+            Err(error) => Err(error),
+        };
+        match mapped {
             Ok(outputs) => {
                 let mut unique = Vec::new();
                 for (name, value) in &outputs {
@@ -164,9 +171,15 @@ impl Job<'_> {
             self.status = JobStatus::Cancelled;
         }
         let prepared = self.ctx.begin_step(step).await;
-        let step_env = step_environment(step, &self.ctx.expr_env(self.status, &[])).await;
+        let step_env = match self.ctx.expr_env(self.status, &[]) {
+            Ok(env) => step_environment(step, &env).await,
+            Err(error) => Err(error),
+        };
         let step_vars = step_env.as_deref().unwrap_or_default().to_vec();
-        let env = self.ctx.expr_env(self.status, &step_vars);
+        let (env, step_env) = match self.ctx.expr_env(self.status, &step_vars) {
+            Ok(env) => (env, step_env),
+            Err(error) => (self.ctx.base_env(), step_env.and(Err(error))),
+        };
         let name = out.masker.mask(&step_name(step, &env).await).into_owned();
         let mut record = StepRecord {
             number,
@@ -209,15 +222,16 @@ impl Job<'_> {
             record.outcome = executed.result;
             let forgiven = executed.result == StepResult::Failed
                 && !condition_failed
-                && continue_on_error(
-                    step,
-                    &self.ctx.expr_env(
-                        self.status,
-                        &[step_vars.as_slice(), executed.env.as_slice()].concat(),
-                    ),
-                    out,
-                )
-                .await;
+                && match self.ctx.expr_env(
+                    self.status,
+                    &[step_vars.as_slice(), executed.env.as_slice()].concat(),
+                ) {
+                    Ok(env) => continue_on_error(step, &env, out).await,
+                    Err(error) => {
+                        out.message(&error.to_string());
+                        false
+                    }
+                };
             record.conclusion = if forgiven {
                 StepResult::Succeeded
             } else {
