@@ -42,6 +42,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
     for (name, value) in inputs {
         match (name.to_ascii_lowercase().as_str(), value) {
             ("fetch-depth", InputValue::Literal(depth)) => {
+                let depth = depth.trim();
                 if !depth.is_empty() && depth.parse::<u64>().is_err() {
                     return Err(format!(
                         "actions/checkout input 'fetch-depth' must be a number, got '{depth}'"
@@ -139,7 +140,7 @@ fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
     let given = inputs
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("fetch-depth"))
-        .map(|(_, value)| value.as_str())
+        .map(|(_, value)| value.trim())
         .filter(|value| !value.is_empty());
     match given.map(str::parse::<u64>) {
         None => Ok(Depth::Last(1)),

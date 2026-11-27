@@ -57,6 +57,24 @@ fn empty_depth_means_one() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn a_padded_depth_is_trimmed_like_core_get_input() -> Result<()> {
+    assert_eq!(
+        history_after("checkout_depth1", Some("\"lit\": \" 2 \""))?,
+        ("3".to_owned(), true)
+    );
+    Ok(())
+}
+
+#[test]
+fn a_blank_depth_means_one() -> Result<()> {
+    assert_eq!(
+        history_after("checkout_depth1", Some("\"lit\": \"  \""))?,
+        ("1".to_owned(), false)
+    );
+    Ok(())
+}
+
 fn warm_mirror(rig: &Rig) -> Result<()> {
     let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
