@@ -14,7 +14,7 @@ use tar::{Archive, Entry, EntryType};
 
 use super::archive::{BUFFER, checkpoint};
 use super::descent::{Descent, descend};
-use super::nest::{Parent, parents_of};
+use super::nest::{Link, Nesting, Parent};
 use super::place::{Placed, link_file, mode_of, place, remove_existing};
 use super::stamp::Stamp;
 use crate::broker::safe_fs::{directory_flags, enter_directory, open_regular};
@@ -59,6 +59,7 @@ enum Root {
 
 struct Restore {
     paths: Vec<PathBuf>,
+    nesting: Nesting,
     parents: Vec<Parent>,
     roots: Vec<Root>,
     current: Option<usize>,
@@ -72,6 +73,13 @@ struct Pending {
     path: Vec<OsString>,
     bits: u32,
     stamp: Option<Stamp>,
+}
+
+fn cycle(path: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "the declared path {} and another declared path each resolve below the other",
+        path.display()
+    )
 }
 
 fn closed(path: &Path) -> anyhow::Error {
@@ -91,17 +99,17 @@ fn open_root(parent: BorrowedFd<'_>, name: &OsStr) -> Result<OwnedFd> {
 }
 
 impl Restore {
-    fn new(declared: &[PathBuf], umask: Umask) -> Result<Self> {
-        let parents = parents_of(declared)?;
-        Ok(Self {
+    fn new(declared: &[PathBuf], umask: Umask) -> Self {
+        Self {
             paths: declared.to_vec(),
-            parents,
+            nesting: Nesting::new(declared),
+            parents: declared.iter().map(|_| Parent::Unresolved).collect(),
             roots: declared.iter().map(|_| Root::Fresh).collect(),
             current: None,
             descent: Descent::default(),
             pending: Vec::new(),
             umask,
-        })
+        }
     }
 
     fn name(&self, index: usize) -> Result<OsString> {
@@ -112,23 +120,35 @@ impl Restore {
     }
 
     fn parent(&mut self, index: usize) -> Result<BorrowedFd<'_>> {
-        if let Parent::Under { outer, below } = &self.parents[index] {
-            let (outer, below) = (*outer, below.clone());
-            if matches!(self.roots[outer], Root::Fresh) {
-                self.open(outer)?;
-            }
-            let Root::Open(base) = &self.roots[outer] else {
-                return Err(closed(&self.paths[outer]));
-            };
-            let fd = match descend(base.as_fd(), &below)? {
-                Some(fd) => fd,
-                None => base.try_clone()?,
-            };
+        if !matches!(self.parents[index], Parent::Ready(_)) {
+            let fd = self.open_parent(index)?;
             self.parents[index] = Parent::Ready(fd);
         }
         match &self.parents[index] {
             Parent::Ready(fd) => Ok(fd.as_fd()),
-            Parent::Under { .. } => Err(closed(&self.paths[index])),
+            Parent::Unresolved | Parent::Resolving => Err(closed(&self.paths[index])),
+        }
+    }
+
+    fn open_parent(&mut self, index: usize) -> Result<OwnedFd> {
+        if matches!(self.parents[index], Parent::Resolving) {
+            return Err(cycle(&self.paths[index]));
+        }
+        self.parents[index] = Parent::Resolving;
+        match self.nesting.resolve(&self.paths, index)? {
+            Link::Free(fd) => Ok(fd),
+            Link::Below { outer, below } => {
+                if matches!(self.roots[outer], Root::Fresh) {
+                    self.open(outer)?;
+                }
+                let Root::Open(base) = &self.roots[outer] else {
+                    return Err(closed(&self.paths[outer]));
+                };
+                match descend(base.as_fd(), &below)? {
+                    Some(fd) => Ok(fd),
+                    None => Ok(base.try_clone()?),
+                }
+            }
         }
     }
 
@@ -141,6 +161,7 @@ impl Restore {
         let name = self.name(index)?;
         let root = open_root(self.parent(index)?, &name)?;
         self.roots[index] = Root::Open(root);
+        self.nesting.note(&self.paths, index);
         Ok(())
     }
 
@@ -169,6 +190,7 @@ impl Restore {
         let umask = self.umask;
         place(self.parent(index)?, &name, entry, stamp, umask, cancel)?;
         self.roots[index] = Root::Closed;
+        self.nesting.note(&self.paths, index);
         Ok(())
     }
 
@@ -216,6 +238,7 @@ impl Restore {
         link_file(source.as_fd(), &from, parent.as_fd(), &name)?;
         if rest.is_empty() {
             self.roots[index] = Root::Closed;
+            self.nesting.note(&self.paths, index);
         }
         Ok(())
     }
@@ -253,7 +276,7 @@ pub(super) fn unpack(
         }
     };
     let mut tar = Archive::new(BufReader::with_capacity(BUFFER, file));
-    let mut restore = Restore::new(roots, umask)?;
+    let mut restore = Restore::new(roots, umask);
     let mut members = 0_u64;
     for entry in tar.entries().context("read the cache archive")? {
         checkpoint(cancel)?;

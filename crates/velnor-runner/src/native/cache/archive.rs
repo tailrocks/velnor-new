@@ -23,6 +23,7 @@ use super::stamp::Stamp;
 use crate::broker::cache::MAX_DATA_BYTES;
 use crate::broker::safe_fs::directory_flags;
 use crate::exec::JobCancel;
+use crate::width::widen;
 
 pub(super) const BUFFER: usize = 1 << 20;
 
@@ -41,7 +42,7 @@ pub(super) fn checkpoint(cancel: Option<&JobCancel>) -> Result<(), Cancelled> {
 fn header_of(stat: &Stat, kind: EntryType, size: u64) -> Header {
     let mut header = Header::new_gnu();
     header.set_entry_type(kind);
-    header.set_mode(u32::from(stat.st_mode & 0o7777));
+    header.set_mode(widen(stat.st_mode & 0o7777));
     header.set_uid(u64::from(stat.st_uid));
     header.set_gid(u64::from(stat.st_gid));
     header.set_size(size);

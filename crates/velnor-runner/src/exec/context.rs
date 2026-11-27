@@ -44,18 +44,6 @@ pub(super) struct JobContext {
     steps: Vec<(String, StepEntry)>,
 }
 
-fn runtime_of(
-    github: &ContextValue,
-    runner: &ContextValue,
-    facts: &JobFacts,
-) -> Vec<(String, String)> {
-    let mut runtime = exported_variables(github, runner);
-    if let Some(mode) = &facts.cache_mode {
-        set_pair(&mut runtime, "ACTIONS_CACHE_MODE", mode);
-    }
-    runtime
-}
-
 impl JobContext {
     pub(super) async fn new(
         message: &AgentJobRequestMessage,
@@ -109,7 +97,7 @@ impl JobContext {
         let facts = JobFacts::new(&github, cache_mode);
         Ok(Self {
             host: host_env(),
-            runtime: runtime_of(&github, &runner, &facts),
+            runtime: exported_variables(&github, &runner),
             facts,
             service: service_variables(message),
             github,
@@ -146,7 +134,7 @@ impl JobContext {
             repository,
         );
         put(&mut self.base, RootContext::Github, &self.github)?;
-        self.runtime = runtime_of(&self.github, &self.runner, &self.facts);
+        self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await
     }
 

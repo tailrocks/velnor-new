@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, OpenOptions};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
@@ -46,5 +46,32 @@ fn a_lookup_only_hit_renews_the_access_stamp_of_the_entry() -> Result<()> {
     let looked = run("cache-lookup-only", &store, &[])?;
     assert!(looked.succeeded(), "{}", looked.ran.stdout);
     assert!(idle(&store, "k-1")? < FRESH);
+    Ok(())
+}
+
+#[test]
+fn another_uid_can_walk_through_the_namespaces_of_the_store_but_not_list_them() -> Result<()> {
+    const LIST: u32 = 0o044;
+    const WALK: u32 = 0o011;
+    let store = Store::new()?;
+    saved(&store, "k-1", "hello")?;
+    let scope = store.entry("k-1")?.dir;
+    let mut namespaces = Vec::new();
+    let mut directory = scope.parent().map(std::path::Path::to_owned);
+    while let Some(path) = directory.filter(|path| *path != store.root()) {
+        namespaces.push(path.clone());
+        directory = path.parent().map(std::path::Path::to_owned);
+    }
+    assert_eq!(namespaces.len(), 4);
+    for (position, path) in namespaces.iter().enumerate() {
+        let mode = fs::metadata(path)?.mode();
+        assert_eq!(mode & WALK, WALK, "{}", path.display());
+        assert_eq!(
+            mode & LIST != 0,
+            position == 0,
+            "{}: only the scope directory is listable",
+            path.display()
+        );
+    }
     Ok(())
 }

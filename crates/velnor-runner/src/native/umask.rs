@@ -5,6 +5,8 @@ use rustix::fs::Mode;
 use rustix::process::umask;
 use tar::Header;
 
+use crate::width::widen;
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Umask(u32);
 
@@ -12,7 +14,7 @@ impl Umask {
     pub(crate) fn read() -> Self {
         let current = umask(Mode::empty());
         umask(current);
-        Self(u32::from(current.bits()))
+        Self(widen(current.bits()))
     }
 
     pub(super) fn restored_mode(self, header: &Header) -> u32 {

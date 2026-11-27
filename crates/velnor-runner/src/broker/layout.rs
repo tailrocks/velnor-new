@@ -26,15 +26,13 @@ use super::safe_fs::{directory_flags, enter_directory_as, open_path, purge};
 
 pub(super) const PRIVATE: RawMode = 0o700;
 pub(super) const SHARED: RawMode = 0o755;
+pub(super) const TRAVERSABLE: RawMode = 0o711;
 
-pub(super) fn share(directory: &OwnedFd) -> Result<()> {
+pub(super) fn settle(directory: &OwnedFd, mode: RawMode) -> Result<()> {
     let stat = fstat(directory).context("inspect the directory")?;
-    if stat.st_uid == geteuid().as_raw() && stat.st_mode & SHARED != SHARED {
-        fchmod(
-            directory,
-            Mode::from_bits_truncate(stat.st_mode & 0o7777 | SHARED),
-        )
-        .context("open the directory to the step uid")?;
+    if stat.st_uid == geteuid().as_raw() && stat.st_mode & 0o7777 != mode {
+        fchmod(directory, Mode::from_bits_truncate(mode))
+            .context("set the mode of the directory")?;
     }
     Ok(())
 }
@@ -48,7 +46,7 @@ pub(super) fn open_store(root: &Path) -> Result<OwnedFd> {
         Err(error) => return Err(error).with_context(|| format!("create {}", root.display())),
     }
     let store = open_path(root).with_context(|| format!("open {}", root.display()))?;
-    share(&store)?;
+    settle(&store, SHARED)?;
     Ok(store)
 }
 
@@ -179,28 +177,33 @@ impl Layout {
     }
 
     pub(super) fn open_owner(&self, owner: &CacheOwner) -> Result<OwnedFd> {
-        self.open_chain(&owner_parts(owner))
+        self.open_chain(&owner_parts(owner), TRAVERSABLE)
     }
 
     pub(super) fn open_scope(&self, target: &Target) -> Result<OwnedFd> {
-        self.open_chain(&scope_parts(&target.owner, &target.scope))
+        self.open_chain(&scope_parts(&target.owner, &target.scope), SHARED)
     }
 
-    fn open_chain(&self, parts: &[String]) -> Result<OwnedFd> {
+    fn open_chain(&self, parts: &[String], last: RawMode) -> Result<OwnedFd> {
         let mut directory = self.open_root()?;
-        for part in parts {
+        for (position, part) in parts.iter().enumerate() {
+            let mode = if position + 1 == parts.len() {
+                last
+            } else {
+                TRAVERSABLE
+            };
             directory = self
-                .enter_shared(&directory, part)
+                .enter_chain(&directory, part, mode)
                 .with_context(|| format!("open the cache directory {part}"))?;
         }
         Ok(directory)
     }
 
-    fn enter_shared(&self, parent: &OwnedFd, name: &str) -> Result<OwnedFd> {
+    fn enter_chain(&self, parent: &OwnedFd, name: &str, mode: RawMode) -> Result<OwnedFd> {
         loop {
             match openat(parent, name, directory_flags(), Mode::empty()) {
                 Ok(existing) => {
-                    share(&existing)?;
+                    settle(&existing, mode)?;
                     return Ok(existing);
                 }
                 Err(Errno::NOENT) => {}
@@ -212,9 +215,14 @@ impl Layout {
                 .context("stage the cache directory")?;
             let fresh = openat(own.as_fd(), &staged, directory_flags(), Mode::empty())
                 .context("open the staged cache directory")?;
-            let moved = fchmod(&fresh, Mode::from_bits_truncate(SHARED)).and_then(|()| {
-                renameat_with(own.as_fd(), &staged, parent, name, RenameFlags::NOREPLACE)
-            });
+            let opened = fchmod(&fresh, Mode::from_bits_truncate(mode))
+                .context("open the staged cache directory to the step uid")
+                .and_then(|()| sync_fd(&fresh, "a new cache directory"));
+            if let Err(error) = opened {
+                let _ = unlinkat(own.as_fd(), &staged, AtFlags::REMOVEDIR);
+                return Err(error);
+            }
+            let moved = renameat_with(own.as_fd(), &staged, parent, name, RenameFlags::NOREPLACE);
             match moved {
                 Ok(()) => {
                     sync_fd(parent, "the parent of a new cache directory")?;

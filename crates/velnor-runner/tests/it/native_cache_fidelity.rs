@@ -296,7 +296,7 @@ fn a_save_under_a_private_umask_still_opens_the_store_to_the_step_uid() -> Resul
         .take_while(|directory| *directory != root)
         .map(|directory| fs::metadata(directory).map(|meta| meta.mode() & 0o7777))
         .collect::<Result<_, _>>()?;
-    assert_eq!(shared, [0o755; 4]);
+    assert_eq!(shared, [0o755, 0o711, 0o711, 0o711]);
     assert_eq!(fs::metadata(&root)?.mode() & 0o7777, 0o755);
     Ok(())
 }

@@ -76,7 +76,10 @@ fn record(fd: &impl AsFd, what: &str) {
     if let (Ok(stat), Ok(mut synced)) = (fstat(fd), SYNCED.lock()) {
         synced.push(Synced {
             what: what.to_owned(),
-            identity: (u64::try_from(stat.st_dev).unwrap_or_default(), stat.st_ino),
+            identity: (
+                crate::width::narrow(stat.st_dev).unwrap_or_default(),
+                stat.st_ino,
+            ),
             mode: stat.st_mode & 0o7777,
         });
     }
@@ -119,6 +122,14 @@ fn is_complete(scope: BorrowedFd<'_>, name: &OsString) -> bool {
     })
 }
 
+fn not_abandoned(abandoned: &AtomicBool, step: &str) -> Result<()> {
+    ensure!(
+        !abandoned.load(Ordering::Relaxed),
+        "the publish was abandoned {step}"
+    );
+    Ok(())
+}
+
 fn attempt(
     layout: &Layout,
     target: &Target,
@@ -130,15 +141,13 @@ fn attempt(
     sync_file(data, "the cache data")?;
     let scope = layout.open_scope(target)?;
     let _lock = layout.lock(target, abandoned)?;
-    ensure!(
-        !abandoned.load(Ordering::Relaxed),
-        "the publish was abandoned before it was sealed"
-    );
+    not_abandoned(abandoned, "before it was sealed")?;
     let entry = OsString::from(entry_name(&target.version, &target.key));
     if is_complete(scope.as_fd(), &entry) {
         return Ok(Outcome::AlreadyExists);
     }
     let _store = layout.lock_store(abandoned)?;
+    not_abandoned(abandoned, "before it evicted anything")?;
     let size = u64::try_from(fstat(data)?.st_size).unwrap_or_default();
     make_room(layout, target, size)?;
     let leftover = match statat(scope.as_fd(), &entry, AtFlags::SYMLINK_NOFOLLOW) {
@@ -151,6 +160,7 @@ fn attempt(
         move_aside(scope.as_fd(), &entry, aside.as_fd()).context("set the leftover aside")?;
     }
     seal(&upload.dir, target, layout.now())?;
+    not_abandoned(abandoned, "before it was committed")?;
     upload
         .rename_into(scope.as_fd(), &entry)
         .context("publish the cache entry")?;

@@ -142,12 +142,10 @@ fn a_link_to_the_parent_of_another_declared_path_restores_when_the_link_comes_la
     restored_beside_a_link_to_its_parent("releases/42/assets\ncurrent")
 }
 
-#[test]
-fn a_link_to_the_workspace_root_does_not_stop_a_sibling_path_from_restoring() -> Result<()> {
-    const PATHS: &str = "x\nself";
+fn restored_beside_a_link_to_the_workspace(paths: &str) -> Result<()> {
     let store = Store::new()?;
-    saved_as(&store, PATHS, "mkdir x && printf x > x/f && ln -s . self")?;
-    let (restored, victim) = restored_over(&store, PATHS, |workspace, _| {
+    saved_as(&store, paths, "mkdir x && printf x > x/f && ln -s . self")?;
+    let (restored, victim) = restored_over(&store, paths, |workspace, _| {
         symlink(".", workspace.join("self"))?;
         Ok(())
     })?;
@@ -158,6 +156,84 @@ fn a_link_to_the_workspace_root_does_not_stop_a_sibling_path_from_restoring() ->
     );
     assert_eq!(fs::read_to_string(restored.workspace_file("x/f"))?, "x");
     Ok(())
+}
+
+#[test]
+fn a_link_to_the_workspace_root_does_not_stop_a_sibling_path_from_restoring() -> Result<()> {
+    restored_beside_a_link_to_the_workspace("x\nself")
+}
+
+#[test]
+fn a_link_to_the_workspace_root_does_not_stop_an_earlier_path_from_restoring() -> Result<()> {
+    restored_beside_a_link_to_the_workspace("self\nx")
+}
+
+const FRESH_SCRIPT: &str =
+    "mkdir -p releases/42/assets && printf x > releases/42/assets/f && ln -s releases/42 current";
+
+fn restored_below_a_link_to_a_root_that_is_not_there_yet(paths: &str) -> Result<Run> {
+    let store = Store::new()?;
+    saved_as(&store, paths, FRESH_SCRIPT)?;
+    let (restored, victim) = attempted_over(&store, paths, |workspace, _| {
+        symlink("releases/42", workspace.join("current"))?;
+        Ok(())
+    })?;
+    assert_empty(&victim)?;
+    assert_eq!(
+        fs::read_link(restored.workspace_file("current"))?,
+        Path::new("releases/42")
+    );
+    Ok(restored)
+}
+
+#[test]
+fn a_path_below_a_link_to_an_earlier_root_that_a_fresh_checkout_lacks_is_restored_below_it()
+-> Result<()> {
+    let restored =
+        restored_below_a_link_to_a_root_that_is_not_there_yet("releases/42\ncurrent/assets")?;
+    assert!(restored.succeeded(), "{}", restored.ran.stdout);
+    assert_eq!(
+        fs::read_to_string(restored.workspace_file("releases/42/assets/f"))?,
+        "x"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_path_below_a_link_to_a_later_root_that_a_fresh_checkout_lacks_fails_as_gnu_tar_does()
+-> Result<()> {
+    let restored =
+        restored_below_a_link_to_a_root_that_is_not_there_yet("current/assets\nreleases/42")?;
+    assert_eq!(restored.ran.code, Some(1), "{}", restored.ran.stdout);
+    assert!(
+        restored.ran.stdout.contains("never writes through a link"),
+        "{}",
+        restored.ran.stdout
+    );
+    assert!(!restored.workspace_file("releases").exists());
+    Ok(())
+}
+
+#[test]
+fn a_path_below_an_alias_of_an_earlier_root_that_a_fresh_checkout_lacks_is_restored_below_it()
+-> Result<()> {
+    const PATHS: &str = "data\nalias/sub";
+    let store = Store::new()?;
+    saved_as(
+        &store,
+        PATHS,
+        "mkdir -p data/sub && printf x > data/sub/f && ln -s data alias",
+    )?;
+    let (restored, victim) = restored_over(&store, PATHS, |workspace, _| {
+        symlink("data", workspace.join("alias"))?;
+        Ok(())
+    })?;
+    assert_empty(&victim)?;
+    assert_eq!(
+        fs::read_link(restored.workspace_file("alias"))?,
+        Path::new("data")
+    );
+    assert_restored_below_the_outer_root(&restored, "sub/f")
 }
 
 const DOTDOT_SCRIPT: &str =

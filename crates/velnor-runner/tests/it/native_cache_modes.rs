@@ -87,6 +87,26 @@ fn write_only_mode_saves_but_never_restores() -> Result<()> {
 }
 
 #[test]
+fn a_declared_cache_mode_is_not_exported_to_run_steps() -> Result<()> {
+    let store = Store::new()?;
+    let script = format!(
+        "{} && printf 'mode=%s\\n' \"${{ACTIONS_CACHE_MODE-unset}}\"",
+        seed("x")
+    );
+    let saving = run_as(
+        Scratch::new()?,
+        "cache-save",
+        &store,
+        &[("script", &script)],
+        &with_mode(WRITE_ONLY),
+    )?;
+    assert!(saving.succeeded(), "{}", saving.ran.stdout);
+    assert!(saving.ran.has_line("mode=unset"), "{}", saving.ran.stdout);
+    assert!(saving.ran.has_line("Cache saved with key: k-1"));
+    Ok(())
+}
+
+#[test]
 fn a_restore_that_never_reads_the_store_needs_no_broker_facts() -> Result<()> {
     let store = Store::new()?;
     for (mode, name) in [(NONE, "none"), (WRITE_ONLY, "write-only")] {

@@ -15,8 +15,14 @@ use rustix::fs::{CWD, Mode, OFlags, openat};
 use super::descent::enter;
 
 pub(super) enum Parent {
+    Unresolved,
+    Resolving,
     Ready(OwnedFd),
-    Under { outer: usize, below: Vec<OsString> },
+}
+
+pub(super) enum Link {
+    Free(OwnedFd),
+    Below { outer: usize, below: Vec<OsString> },
 }
 
 fn open_parent(path: &Path) -> Result<OwnedFd> {
@@ -70,112 +76,104 @@ fn names(path: &Path) -> impl DoubleEndedIterator<Item = OsString> + '_ {
     })
 }
 
-fn outer_of(declared: &HashMap<&Path, usize>, path: &Path) -> Option<usize> {
-    path.ancestors()
-        .skip(1)
-        .find_map(|ancestor| declared.get(ancestor).copied())
+pub(super) struct Nesting {
+    texts: HashMap<PathBuf, usize>,
+    identities: HashMap<Identity, usize>,
 }
 
-fn walk(
-    roots: &HashMap<Identity, usize>,
-    path: &Path,
-    index: usize,
-) -> Result<Option<(usize, Vec<OsString>)>> {
-    let Some(parent) = path.parent() else {
-        return Ok(None);
-    };
-    let mut at = PathBuf::from("/");
-    let mut queue: VecDeque<OsString> = names(parent).collect();
-    let mut links = 0;
-    while let Some(part) = queue.pop_front() {
-        if part == ".." {
-            at.pop();
-            continue;
+impl Nesting {
+    pub(super) fn new(declared: &[PathBuf]) -> Self {
+        let mut nesting = Self {
+            texts: declared.iter().cloned().zip(0..).collect(),
+            identities: HashMap::new(),
+        };
+        for index in 0..declared.len() {
+            nesting.note(declared, index);
         }
-        let next = at.join(&part);
-        let Some(here) = identity(&next) else {
+        nesting
+    }
+
+    pub(super) fn note(&mut self, declared: &[PathBuf], index: usize) {
+        if let Some(here) = identity(&declared[index]) {
+            self.identities.insert(here, index);
+        }
+    }
+
+    fn root_at(&self, declared: &[PathBuf], here: Identity, index: usize) -> Option<usize> {
+        self.identities
+            .get(&here)
+            .copied()
+            .filter(|&outer| outer != index && identity(&declared[outer]) == Some(here))
+    }
+
+    fn outer_of(&self, path: &Path) -> Option<usize> {
+        path.ancestors()
+            .skip(1)
+            .find_map(|ancestor| self.texts.get(ancestor).copied())
+    }
+
+    fn walk(&self, declared: &[PathBuf], index: usize) -> Result<Option<(usize, Vec<OsString>)>> {
+        let path = &declared[index];
+        let Some(parent) = path.parent() else {
             return Ok(None);
         };
-        if let Some(&outer) = roots.get(&here).filter(|outer| **outer != index) {
-            let below: Vec<OsString> = queue.into_iter().collect();
-            ensure!(
-                below.iter().all(|name| name != ".."),
-                "the declared path {} leaves another declared path through a link",
-                path.display()
-            );
-            return Ok(Some((outer, below)));
-        }
-        match fs::read_link(&next) {
-            Ok(target) => {
-                links += 1;
+        let mut at = PathBuf::from("/");
+        let mut queue: VecDeque<OsString> = names(parent).collect();
+        let mut links = 0;
+        while let Some(part) = queue.pop_front() {
+            if part == ".." {
+                at.pop();
+                continue;
+            }
+            let next = at.join(&part);
+            let Some(here) = identity(&next) else {
+                return Ok(None);
+            };
+            if let Some(outer) = self.root_at(declared, here, index) {
+                let below: Vec<OsString> = queue.into_iter().collect();
                 ensure!(
-                    links <= LINK_LIMIT,
-                    "resolve {}: too many links",
+                    below.iter().all(|name| name != ".."),
+                    "the declared path {} leaves another declared path through a link",
                     path.display()
                 );
-                if target.is_absolute() {
-                    at = PathBuf::from("/");
-                }
-                for name in names(&target).rev() {
-                    queue.push_front(name);
-                }
+                return Ok(Some((outer, below)));
             }
-            Err(_) => at = next,
-        }
-    }
-    Ok(None)
-}
-
-fn parent_of(
-    declared: &[PathBuf],
-    texts: &HashMap<&Path, usize>,
-    roots: &HashMap<Identity, usize>,
-    index: usize,
-) -> Result<Parent> {
-    let path = &declared[index];
-    let Some(outer) = outer_of(texts, path) else {
-        return Ok(match walk(roots, path, index)? {
-            Some((outer, below)) => Parent::Under { outer, below },
-            None => Parent::Ready(open_parent(path)?),
-        });
-    };
-    let below = path
-        .parent()
-        .and_then(|parent| parent.strip_prefix(&declared[outer]).ok())
-        .context("place a declared path under another declared path")?
-        .iter()
-        .map(OsStr::to_owned)
-        .collect();
-    Ok(Parent::Under { outer, below })
-}
-
-pub(super) fn parents_of(declared: &[PathBuf]) -> Result<Vec<Parent>> {
-    let texts: HashMap<&Path, usize> = declared
-        .iter()
-        .enumerate()
-        .map(|(index, path)| (path.as_path(), index))
-        .collect();
-    let roots: HashMap<Identity, usize> = declared
-        .iter()
-        .enumerate()
-        .filter_map(|(index, path)| identity(path).map(|id| (id, index)))
-        .collect();
-    let parents = (0..declared.len())
-        .map(|index| parent_of(declared, &texts, &roots, index))
-        .collect::<Result<Vec<_>>>()?;
-    for (start, path) in declared.iter().enumerate() {
-        let mut at = start;
-        for _ in 0..parents.len() {
-            match &parents[at] {
-                Parent::Under { outer, .. } => at = *outer,
-                Parent::Ready(_) => break,
+            match fs::read_link(&next) {
+                Ok(target) => {
+                    links += 1;
+                    ensure!(
+                        links <= LINK_LIMIT,
+                        "resolve {}: too many links",
+                        path.display()
+                    );
+                    if target.is_absolute() {
+                        at = PathBuf::from("/");
+                    }
+                    for name in names(&target).rev() {
+                        queue.push_front(name);
+                    }
+                }
+                Err(_) => at = next,
             }
         }
-        ensure!(
-            matches!(parents[at], Parent::Ready(_)),
-            "the declared path {} and another declared path each resolve below the other",
-            path.display()
-        );
+        Ok(None)
     }
-    Ok(parents)
+
+    pub(super) fn resolve(&self, declared: &[PathBuf], index: usize) -> Result<Link> {
+        let path = &declared[index];
+        if let Some(outer) = self.outer_of(path) {
+            let below = path
+                .parent()
+                .and_then(|parent| parent.strip_prefix(&declared[outer]).ok())
+                .context("place a declared path under another declared path")?
+                .iter()
+                .map(OsStr::to_owned)
+                .collect();
+            return Ok(Link::Below { outer, below });
+        }
+        Ok(match self.walk(declared, index)? {
+            Some((outer, below)) => Link::Below { outer, below },
+            None => Link::Free(open_parent(path)?),
+        })
+    }
 }

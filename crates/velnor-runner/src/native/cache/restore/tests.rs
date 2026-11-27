@@ -171,7 +171,7 @@ fn finalizing_the_directories_stops_once_the_job_is_cancelled() -> Result<()> {
     let _cleanup = Cleanup(dir.clone());
     let root = dir.join("dest");
     fs::create_dir_all(&root)?;
-    let mut restore = Restore::new(std::slice::from_ref(&root), Umask::read())?;
+    let mut restore = Restore::new(std::slice::from_ref(&root), Umask::read());
     restore.open(0)?;
     for index in 0..DIRECTORIES {
         let name = format!("d{index}");
@@ -290,5 +290,42 @@ fn declared_paths_that_each_resolve_below_the_other_are_refused() -> Result<()> 
             .is_some_and(|text| text.contains("each resolve below the other")),
         "{error:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn four_thousand_declared_paths_restore_within_a_bounded_time() -> Result<()> {
+    const PATHS: usize = 4000;
+    const BOUND: Duration = Duration::from_secs(20);
+    let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
+    let _cleanup = Cleanup(dir.clone());
+    let workspace = dir.join("workspace");
+    fs::create_dir_all(&workspace)?;
+    let names: Vec<String> = (0..PATHS).map(|index| format!("{index}/")).collect();
+    let members: Vec<(&str, EntryType, Option<&str>)> = names
+        .iter()
+        .map(|root| (root.as_str(), EntryType::Directory, None))
+        .collect();
+    let archive = dir.join("in.tar");
+    write_tar(&archive, &members)?;
+    let roots: Vec<PathBuf> = (0..PATHS)
+        .map(|index| workspace.join(format!("p{index}")))
+        .collect();
+    let cancel = JobCancel::new();
+    let finished = AtomicBool::new(false);
+    let started = Instant::now();
+    let restored = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !finished.load(Ordering::SeqCst) && started.elapsed() < BOUND {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            cancel.cancel();
+        });
+        let restored = unpack(&archive, &roots, Umask::read(), Some(&cancel));
+        finished.store(true, Ordering::SeqCst);
+        restored
+    });
+    assert_eq!(restored?, PATHS as u64);
+    assert!(workspace.join(format!("p{}", PATHS - 1)).is_dir());
     Ok(())
 }

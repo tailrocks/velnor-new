@@ -18,6 +18,8 @@ pub(crate) mod safe_fs;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_abandon;
+#[cfg(test)]
 mod tests_budget;
 #[cfg(test)]
 mod tests_commit;

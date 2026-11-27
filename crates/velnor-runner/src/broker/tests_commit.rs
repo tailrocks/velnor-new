@@ -83,25 +83,68 @@ async fn an_entry_is_never_visible_in_the_scope_before_it_is_complete() -> Resul
 }
 
 #[tokio::test]
-async fn a_store_directory_that_lost_its_shared_bits_is_repaired_by_the_next_save() -> Result<()> {
+async fn a_store_directory_with_the_wrong_mode_is_repaired_by_the_next_save() -> Result<()> {
     let fixture = Fixture::new()?;
     let response = fixture.upload("k-1", TAR).await;
     assert!(published(&response), "{response:?}");
     let scope = scope_of(&fixture)?;
-    let owner = scope
-        .parent()
-        .ok_or_else(|| anyhow!("a scope has no owner directory"))?;
-    let broken = [fixture.root(), owner.to_owned(), scope.clone()];
-    for directory in &broken {
-        fs::set_permissions(directory, fs::Permissions::from_mode(PRIVATE))?;
+    let owner = parent_of(&scope)?;
+    let versions = parent_of(&owner)?;
+    let broken = [
+        (fixture.root(), PRIVATE),
+        (versions.clone(), 0o755),
+        (owner.clone(), 0o755),
+        (scope.clone(), PRIVATE),
+    ];
+    for (directory, mode) in &broken {
+        fs::set_permissions(directory, fs::Permissions::from_mode(*mode))?;
     }
     let response = fixture.upload("k-2", TAR).await;
     assert!(published(&response), "{response:?}");
-    let modes: Vec<_> = broken
+    let modes: Vec<_> = [fixture.root(), versions, owner, scope]
         .iter()
         .map(|directory| mode_of(directory))
         .collect::<Result<_>>()?;
-    assert_eq!(modes, [0o755; 3]);
+    assert_eq!(modes, [0o755, 0o711, 0o711, 0o755]);
+    Ok(())
+}
+
+fn parent_of(directory: &Path) -> Result<PathBuf> {
+    directory
+        .parent()
+        .map(Path::to_owned)
+        .ok_or_else(|| anyhow!("{} has no parent", directory.display()))
+}
+
+#[tokio::test]
+async fn a_new_store_directory_is_synced_with_its_final_mode_before_it_is_renamed_into_place()
+-> Result<()> {
+    let fixture = Fixture::new()?;
+    let response = fixture.upload("k-1", TAR).await;
+    assert!(published(&response), "{response:?}");
+    let scope = scope_of(&fixture)?;
+    let owner = parent_of(&scope)?;
+    let versions = parent_of(&owner)?;
+    let cache = parent_of(&versions)?;
+    let synced = SYNCED
+        .lock()
+        .map_err(|_| anyhow!("the sync record is poisoned"))?;
+    for (directory, mode) in [
+        (cache, 0o711),
+        (versions, 0o711),
+        (owner, 0o711),
+        (scope, 0o755),
+    ] {
+        let stat = fs::metadata(&directory)?;
+        let modes: Vec<_> = synced
+            .iter()
+            .filter(|seen| {
+                seen.what == "a new cache directory" && seen.identity == (stat.dev(), stat.ino())
+            })
+            .map(|seen| seen.mode)
+            .collect();
+        assert_eq!(modes, [mode], "{}", directory.display());
+    }
     Ok(())
 }
 
