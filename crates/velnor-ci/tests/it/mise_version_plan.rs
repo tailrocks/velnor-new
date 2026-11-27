@@ -44,13 +44,7 @@ fn a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it() {
     packages.sort();
     assert_eq!(
         packages,
-        [
-            "velnor-archive-guard",
-            "velnor-ci",
-            "velnor-gen",
-            "velnor-runner-cli",
-            "velnor-runner-host",
-        ],
+        ["velnor-archive-guard", "velnor-ci", "velnor-gen",],
         "a change to .mise-version must select exactly these packages, \
          velnor-gen included so crates/velnor-gen/tests/it/mise_version_pin.rs runs"
     );

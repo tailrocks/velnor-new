@@ -142,6 +142,7 @@ mod job_setup_env;
 mod key_gates;
 mod lane_guard_steps;
 mod lane_job_gaps;
+mod lane_lint_doc_scope;
 mod lane_parallel_job;
 mod lane_parallel_size;
 mod mbx_store;

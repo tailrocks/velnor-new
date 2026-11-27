@@ -10,6 +10,41 @@ use crate::error::DetectError;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
+enum Argument<'a> {
+    Relative(&'a str),
+    ManifestDir(&'a str),
+    BuildOutput,
+    Unknown,
+}
+
+impl<'a> Argument<'a> {
+    fn parse(first: &Token<'a>, rest: &[Token<'a>]) -> Self {
+        match (first, rest) {
+            (Token::Str(literal), _) => Self::Relative(literal),
+            (
+                Token::Ident("concat"),
+                [
+                    Token::Punct('!'),
+                    Token::Punct('('),
+                    Token::Ident("env"),
+                    Token::Punct('!'),
+                    Token::Punct('('),
+                    Token::Str(variable),
+                    Token::Punct(')'),
+                    Token::Punct(','),
+                    Token::Str(tail),
+                    ..,
+                ],
+            ) if !tail.contains('\\') => match *variable {
+                "CARGO_MANIFEST_DIR" => Self::ManifestDir(tail),
+                "OUT_DIR" if !tail.split('/').any(|part| part == "..") => Self::BuildOutput,
+                _ => Self::Unknown,
+            },
+            _ => Self::Unknown,
+        }
+    }
+}
+
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
 
 #[must_use]
@@ -29,6 +64,7 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
 
 struct Scan<'a> {
     view: &'a RepoView,
+    directory: Option<RepoPath>,
     reads: BTreeSet<Option<RepoPath>>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
@@ -67,6 +103,7 @@ impl<'a> Scan<'a> {
             .collect();
         Self {
             view,
+            directory: member.directory.clone(),
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
@@ -105,9 +142,13 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
-            let resolved = match argument {
-                Token::Str(literal) => literal_path(literal).and_then(|path| resolve(file, path)),
-                _ => None,
+            let resolved = match Argument::parse(argument, &tokens[at + 4..]) {
+                Argument::Relative(literal) => {
+                    literal_path(literal).and_then(|path| resolve(file, path))
+                }
+                Argument::ManifestDir(rest) => self.under_manifest_dir(rest),
+                Argument::BuildOutput => continue,
+                Argument::Unknown => None,
             };
             let Some(resolved) = resolved else {
                 self.reads.insert(None);
@@ -118,6 +159,13 @@ impl<'a> Scan<'a> {
             }
             self.reads.insert(Some(resolved));
         }
+    }
+
+    fn under_manifest_dir(&self, rest: &str) -> Option<RepoPath> {
+        let parts = self.directory.as_ref().map_or_else(Vec::new, |directory| {
+            directory.as_str().split('/').collect()
+        });
+        join(parts, rest.trim_start_matches('/'))
     }
 
     fn follow(&mut self, included: &RepoPath) {
@@ -146,6 +194,10 @@ fn resolve(file: &RepoPath, literal: &str) -> Option<RepoPath> {
     }
     let mut parts: Vec<&str> = file.as_str().split('/').collect();
     parts.pop();
+    join(parts, literal)
+}
+
+fn join<'a>(mut parts: Vec<&'a str>, literal: &'a str) -> Option<RepoPath> {
     for part in literal.split('/') {
         match part {
             "" | "." => {}

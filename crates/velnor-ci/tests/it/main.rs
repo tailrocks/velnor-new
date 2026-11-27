@@ -97,6 +97,7 @@ mod io_inputs_spec;
 mod io_nested_targets;
 mod io_plan;
 mod io_plan_docs;
+mod io_plan_embedded;
 mod io_plan_forged;
 mod io_plan_groups;
 mod io_plan_helper_pin;

@@ -74,7 +74,7 @@ fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() ->
         &[
             (
                 "crates/reader/src/lib.rs",
-                "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/x.rs\"));",
+                "include!(concat!(env!(\"GENERATED_ROOT\"), \"/x.rs\"));",
             ),
             (
                 "crates/app/src/lib.rs",

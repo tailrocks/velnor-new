@@ -15,8 +15,7 @@ use crate::steps::{RUN, RUN_DOCTESTS};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-pub(crate) const DOC_RUN: &str =
-    "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
+pub(crate) const WORKSPACE: &str = "--workspace";
 
 #[derive(Clone, Copy)]
 pub(crate) struct CargoLane {
@@ -136,9 +135,9 @@ fn cargo_command(
             format!("cargo-fmt{path} --all --check"),
             vec![],
         ),
-        CargoCommand::Clippy { extra } => clippy(cargo, extra, &path),
-        CargoCommand::ClippyFeatures { features } => {
-            crate::cargo_features::clippy_features(cargo, features)
+        CargoCommand::Clippy { extra } => clippy(cargo, extra, &path, WORKSPACE),
+        CargoCommand::ClippyFeatures { features, packages } => {
+            crate::cargo_features::clippy_features(cargo, features, packages)
         }
         CargoCommand::NextestBuild => nextest_build(nextest, &path),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
@@ -200,8 +199,8 @@ fn cargo_command(
             ),
             vec![],
         ),
-        CargoCommand::DocFeatures { features } => {
-            crate::cargo_features::doc_features(cargo, features)
+        CargoCommand::DocFeatures { features, packages } => {
+            crate::cargo_features::doc_features(cargo, features, packages)
         }
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
@@ -248,11 +247,12 @@ pub(crate) fn clippy(
     cargo: &str,
     extra: &[String],
     path: &str,
+    scope: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
-            "cargo-clippy clippy{path} --workspace --all-targets --locked{cargo} -- -D warnings"
+            "cargo-clippy clippy{path} {scope} --all-targets --locked{cargo} -- -D warnings"
         )]
         .into_iter()
         .chain(extra.iter().cloned())

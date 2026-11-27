@@ -41,12 +41,14 @@ fn every_cargo_command_has_its_check_classification() {
         (
             CargoCommand::ClippyFeatures {
                 features: LaneFeatures::default(),
+                packages: vec![],
             },
             true,
         ),
         (
             CargoCommand::DocFeatures {
                 features: LaneFeatures::default(),
+                packages: vec![],
             },
             true,
         ),

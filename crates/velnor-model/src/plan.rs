@@ -241,9 +241,11 @@ pub enum CargoCommand {
     },
     ClippyFeatures {
         features: LaneFeatures,
+        packages: Vec<PackageName>,
     },
     DocFeatures {
         features: LaneFeatures,
+        packages: Vec<PackageName>,
     },
     LaneGuard {
         features: LaneFeatures,

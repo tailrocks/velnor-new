@@ -197,8 +197,10 @@ pub(crate) fn commands(
 ) -> Vec<CargoCommand> {
     let mut linted = BTreeSet::new();
     let mut documented = BTreeSet::new();
-    lanes_of(config, root, LaneJob::Inline)
-        .flat_map(|lane| lane_commands(lane, root, direct, &mut linted, &mut documented))
+    let lanes: Vec<&TestLane> = lanes_of(config, root, LaneJob::Inline).collect();
+    lanes
+        .iter()
+        .flat_map(|lane| lane_commands(lane, &lanes, root, direct, &mut linted, &mut documented))
         .collect()
 }
 
@@ -219,6 +221,7 @@ pub(crate) fn parallel(
             timeout_minutes: lane.timeout_minutes,
             commands: lane_commands(
                 lane,
+                &[lane],
                 root,
                 direct,
                 &mut BTreeSet::new(),
@@ -248,6 +251,7 @@ fn lanes_of<'a>(
 
 fn lane_commands(
     lane: &TestLane,
+    peers: &[&TestLane],
     root: &RustRoot,
     direct: &[String],
     linted: &mut BTreeSet<LaneFeatures>,
@@ -279,15 +283,38 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
+            packages: scope(peers, &normalized, |lane| lane.lint),
             features: features(),
         });
     }
-    if lane.doc && documented.insert(normalized) {
+    if lane.doc && documented.insert(normalized.clone()) {
         commands.push(CargoCommand::DocFeatures {
+            packages: scope(peers, &normalized, |lane| lane.doc),
             features: features(),
         });
     }
     commands
+}
+
+fn scope(
+    peers: &[&TestLane],
+    normalized: &LaneFeatures,
+    wants: fn(&TestLane) -> bool,
+) -> Vec<PackageName> {
+    if normalized.all || normalized.no_default {
+        return Vec::new();
+    }
+    let mut packages = BTreeSet::new();
+    for lane in peers
+        .iter()
+        .filter(|lane| wants(lane) && lane.features.normalized() == *normalized)
+    {
+        if lane.packages.is_empty() {
+            return Vec::new();
+        }
+        packages.extend(lane.packages.iter().cloned());
+    }
+    packages.into_iter().collect()
 }
 
 pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

@@ -10,13 +10,12 @@ use velnor_rust::{detect, is_plain_source};
 
 use crate::facts::{TestResult, lib, repo};
 
-const READ: [&str; 11] = [
+const READ: [&str; 10] = [
     "pub const A: &str = include_str!(\"../x.md\");",
     "pub const A: &[u8] = include_bytes!(\"../x.bin\");",
     "include!(\"gen.rs\");",
     "pub const A: &str = core::include_str!(\"x\");",
     "pub const A: &str = include_str ! ( \"x\" );",
-    "pub const A: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/x\"));",
     "pub const A: &[u8] = include_bytes![ \"x\" ];",
     "include!{ \"x.rs\" }",
     "macro_rules! m { () => { include_str!(\"x\") }; }",
@@ -68,6 +67,9 @@ fn a_source_whose_scan_returns_a_read_is_never_plain() -> TestResult {
         assert!(reads_of(source)?, "the scan misses a read: {source}");
         assert!(!plain(source)?, "a source with a read is plain: {source}");
     }
+    let build_output = "pub const A: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/x\"));";
+    assert!(!reads_of(build_output)?, "{build_output}");
+    assert!(!plain(build_output)?, "{build_output}");
     for source in PLAIN {
         assert!(!reads_of(source)?, "{source}");
         assert!(plain(source)?, "{source}");
