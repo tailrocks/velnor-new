@@ -7,7 +7,7 @@ use velnor_rust::DetectError;
 
 use crate::archive::jobs_of;
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 
 #[test]
 fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> TestResult {
@@ -77,6 +77,7 @@ fn lane_step_order(
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
     let file = RepoPath::new("rust-toolchain.toml")?;
     let mut declared = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    pin_helper(&mut declared, "0.1.104")?;
     declared.tracked_paths.insert(file.clone());
     declared.files.insert(
         file,
