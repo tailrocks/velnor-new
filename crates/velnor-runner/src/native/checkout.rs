@@ -52,7 +52,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
             }
             ("fetch-depth", InputValue::Deferred) => {}
             ("persist-credentials", InputValue::Literal(flag)) => {
-                persist_false = !flag.eq_ignore_ascii_case("true");
+                persist_false = !flag.trim().eq_ignore_ascii_case("true");
             }
             ("persist-credentials", InputValue::Deferred) => persist_false = true,
             _ => return Err(unsupported_input(name)),

@@ -186,9 +186,13 @@ fn persist_credentials_other_than_true_is_accepted_as_false() -> Result<()> {
         ("fAlse", true),
         ("no", true),
         ("", true),
+        (" false ", true),
         ("true", false),
         ("TRUE", false),
         ("True", false),
+        (" true ", false),
+        ("true\\n", false),
+        ("\\ttrue", false),
     ] {
         let job = rig.job_edit(
             "checkout_depth1",
