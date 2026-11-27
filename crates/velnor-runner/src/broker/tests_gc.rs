@@ -69,10 +69,10 @@ async fn saved(broker: &Broker, key: &str) -> Result<()> {
     Ok(())
 }
 
-fn lock_path(fixture: &Fixture, name: &str) -> Result<PathBuf> {
+fn lock_path(fixture: &Fixture, name: &str) -> PathBuf {
     let scope = Scope(format!("refs/heads/{name}"));
     let hash = scope_hash(&CacheOwner::of(&fixture.facts), &scope);
-    Ok(fixture.root().join("locks").join(hash))
+    fixture.root().join("locks").join(hash)
 }
 
 fn scope_path(fixture: &Fixture, name: &str) -> PathBuf {
@@ -140,10 +140,10 @@ async fn a_scope_emptied_by_eviction_is_removed_with_its_lock_and_can_be_saved_t
     let other = broker_on(&fixture, "other", 350)?;
     let bytes = [b'x'; 300];
     assert!(published(&upload(&fixture.broker, "k-a", &bytes).await));
-    assert!(lock_path(&fixture, "main")?.exists());
+    assert!(lock_path(&fixture, "main").exists());
     assert!(published(&upload(&other, "k-b", &bytes).await));
     assert!(!scope_path(&fixture, "main").exists());
-    assert!(!lock_path(&fixture, "main")?.exists());
+    assert!(!lock_path(&fixture, "main").exists());
     assert!(published(
         &upload(&fixture.broker, "k-c", &bytes[..10]).await
     ));
@@ -159,11 +159,11 @@ async fn a_scope_whose_lock_is_held_is_never_removed_from_under_its_holder() -> 
     assert!(published(&upload(&fixture.broker, "k-a", &bytes).await));
     let held = OpenOptions::new()
         .write(true)
-        .open(lock_path(&fixture, "main")?)?;
+        .open(lock_path(&fixture, "main"))?;
     flock(&held, FlockOperation::NonBlockingLockExclusive)?;
     assert!(published(&upload(&other, "k-b", &bytes).await));
     assert!(scope_path(&fixture, "main").is_dir());
-    assert!(lock_path(&fixture, "main")?.exists());
+    assert!(lock_path(&fixture, "main").exists());
     drop(held);
     Ok(())
 }
@@ -195,7 +195,7 @@ async fn a_lock_waiter_reopens_a_lock_file_that_was_unlinked_while_it_waited() -
     };
     wait_until("the waiter to start", || started.load(Ordering::SeqCst)).await?;
     tokio::time::sleep(Duration::from_millis(100)).await;
-    let path = lock_path(&fixture, "main")?;
+    let path = lock_path(&fixture, "main");
     fs::remove_file(&path)?;
     drop(held);
     let acquired = waiter.await??;
