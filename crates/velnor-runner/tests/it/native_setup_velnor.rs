@@ -117,18 +117,25 @@ fn setup_velnor_rejects_a_nested_uses() -> Result<()> {
 fn setup_velnor_fails_when_the_action_is_not_in_the_mirror() -> Result<()> {
     let world = World::new()?;
     let absent = "1".repeat(40);
-    let git_dir = format!("--git-dir={}", world.mirror().display());
-    let show = format!("show {absent}:{ACTION} failed: ");
-    for published in [false, true] {
+    let unreachable =
+        format!("setup-velnor: the pin {absent} is not reachable from the trusted refs");
+    for (published, broker_message) in [
+        (false, "Permission denied"),
+        (true, "does not appear to be a git repository"),
+    ] {
         if published {
             world.publish_action(&real_action()?)?;
         }
         let ran = world.run(&real_job(&world, "setup_velnor_real_action", &absent)?, &[])?;
+        let lines = ran.lines();
         assert!(
-            ran.lines()
-                .iter()
-                .any(|line| line.contains(&git_dir) && line.contains(&show)),
-            "{git_dir} {show}\n{}",
+            lines.iter().any(|line| line.contains(broker_message)),
+            "{broker_message}\n{}",
+            ran.stdout
+        );
+        assert!(
+            !lines.iter().any(|line| line.contains(&unreachable)),
+            "{}",
             ran.stdout
         );
         assert!(ran.has_line("step 1 failed"), "{}", ran.stdout);

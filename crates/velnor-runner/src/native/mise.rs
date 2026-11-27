@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use futures_util::FutureExt;
 use uuid::Uuid;
@@ -27,7 +28,7 @@ use self::readonly::require_read_only_store;
 use self::tools::resolve;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
-use crate::broker::TrustedFacts;
+use crate::broker::{StoreWriter, TrustedFacts};
 use crate::exec::{
     AdapterRegistry, DeclaredInputs, ExecError, InputValue, ProcessOutcome, StepAdapter,
     StepContext, StepFuture, StepResult, append,
@@ -38,11 +39,13 @@ const ACTION: &str = "jdx/mise-action";
 const PREFIX: &str = "jdx/mise-action@";
 const NOT_IN_STORE: &str = "tool is not installed in the tools store";
 
-pub(super) fn register(registry: &mut AdapterRegistry, facts: Result<TrustedFacts, String>) {
+pub(super) fn register(registry: &mut AdapterRegistry, store: &Arc<StoreWriter>) {
     registry.register(Box::new(MiseAction {
-        facts: facts.clone(),
+        facts: store.facts().cloned(),
     }));
-    registry.register(Box::new(SetupVelnor { facts }));
+    registry.register(Box::new(SetupVelnor {
+        store: Arc::clone(store),
+    }));
 }
 
 fn env_command(name: &str, value: &str) -> String {

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use futures_util::FutureExt;
 use serde::Deserialize;
 
-use super::git::read_blob;
-use crate::broker::{TrustedFacts, mirror_path};
+use super::git::{ask, reachable, read_blob};
+use crate::broker::{Request, StoreWriter, TrustedFacts, mirror_path};
 use crate::context_value::{ContextValue, ContextValueError};
 use crate::exec::{
     DeclaredInputs, ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult,
@@ -246,18 +247,26 @@ fn require_commit_sha(sha: &str) -> Result<(), ExecError> {
 }
 
 async fn pinned_action_yml(
+    store: &StoreWriter,
     ctx: &mut StepContext<'_>,
     facts: &TrustedFacts,
     sha: &str,
 ) -> Result<String, ExecError> {
     let mirror = mirror_path(&store_root(), facts)
         .map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
+    if !reachable(ctx, &mirror, sha).await? {
+        ask(store, ctx, |token| Request::FetchMirror { token }).await?;
+        if !reachable(ctx, &mirror, sha).await? {
+            return Err(ExecError::Invalid(format!(
+                "setup-velnor: the pin {sha} is not reachable from the trusted refs"
+            )));
+        }
+    }
     read_blob(ctx, &mirror, sha, ACTION_PATH).await
 }
 
-#[derive(Debug)]
 pub(super) struct SetupVelnor {
-    pub(super) facts: Result<TrustedFacts, String>,
+    pub(super) store: Arc<StoreWriter>,
 }
 
 fn require_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), ExecError> {
@@ -286,10 +295,7 @@ impl SetupVelnor {
         reference: &'a str,
         inputs: &BTreeMap<String, InputValue>,
     ) -> Result<(&'a TrustedFacts, &'a str), ExecError> {
-        let facts = self
-            .facts
-            .as_ref()
-            .map_err(|reason| ExecError::Invalid(reason.clone()))?;
+        let facts = self.store.facts().map_err(ExecError::Invalid)?;
         if !facts
             .repository
             .as_str()
@@ -337,7 +343,7 @@ impl StepAdapter for SetupVelnor {
                 .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
                 .collect();
             let (facts, sha) = self.accepted(&reference, &admitted)?;
-            let yml = pinned_action_yml(ctx, facts, sha).await?;
+            let yml = pinned_action_yml(&self.store, ctx, facts, sha).await?;
             let steps = expand(&yml, &given, &ctx.expressions)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));

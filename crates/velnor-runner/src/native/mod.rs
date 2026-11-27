@@ -14,6 +14,8 @@ mod umask;
 
 pub(crate) use umask::Umask;
 
+use std::sync::Arc;
+
 use crate::broker::StoreWriter;
 use crate::exec::{AdapterRegistry, ExecError};
 
@@ -25,9 +27,9 @@ fn reason(error: ExecError) -> String {
 }
 
 pub(crate) fn registry(store: StoreWriter, umask: Umask) -> AdapterRegistry {
-    let store = std::sync::Arc::new(store);
+    let store = Arc::new(store);
     let mut registry = AdapterRegistry::empty();
-    mise::register(&mut registry, store.facts().cloned());
+    mise::register(&mut registry, &store);
     registry.register(Box::new(checkout::Checkout {
         store: store.clone(),
     }));

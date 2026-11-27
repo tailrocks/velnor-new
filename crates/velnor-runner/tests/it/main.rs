@@ -180,6 +180,7 @@ mod native_mise_values;
 mod native_setup_velnor;
 mod native_setup_velnor_admission;
 mod native_setup_velnor_contexts;
+mod native_setup_velnor_fetch;
 #[path = "exec_offload.rs"]
 mod offload;
 #[path = "exec_parity.rs"]
