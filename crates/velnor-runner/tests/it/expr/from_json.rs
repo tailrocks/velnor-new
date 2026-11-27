@@ -135,6 +135,22 @@ fn expr_from_json_reports_newtonsofts_path_and_position() -> Result<()> {
         depth_error(&astral)?,
         max_depth(&format!("[1]{}", "[0]".repeat(63)), 1, 70)
     );
+
+    let escaped = format!("[\"\\\"[\",{}", "[".repeat(64));
+    assert_eq!(
+        depth_error(&escaped)?,
+        max_depth(&format!("[1]{}", "[0]".repeat(63)), 1, 71)
+    );
+    let rearmed = format!("{{\"a\":1,\"b\":{}", "[".repeat(64));
+    assert_eq!(
+        depth_error(&rearmed)?,
+        max_depth(&format!("b{}", "[0]".repeat(63)), 1, 75)
+    );
+    let after_newline = format!("[1,\n{}", "[".repeat(64));
+    assert_eq!(
+        depth_error(&after_newline)?,
+        max_depth(&format!("[1]{}", "[0]".repeat(63)), 2, 64)
+    );
     Ok(())
 }
 
