@@ -13,6 +13,8 @@ use crate::native_checkout::{Rig, finish, git};
 use crate::native_checkout_env::wrapper_env;
 use crate::native_checkout_walk::{checks_out, warm};
 
+const SETTINGS: [&str; 2] = ["http.lowSpeedLimit=1", "http.lowSpeedTime=600"];
+
 fn lock_of(rig: &Rig) -> PathBuf {
     let mut path = rig.mirror().into_os_string();
     path.push(".lock");
@@ -89,10 +91,10 @@ fn a_git_that_outlives_its_killed_runner_keeps_the_mirror_lock() -> Result<()> {
     Ok(())
 }
 
-fn plant(marker: &Path, kind: &str) -> Result<()> {
+fn plant(marker: &Path, outside: &Path, kind: &str) -> Result<()> {
     match kind {
         "directory" => std::fs::create_dir_all(marker.join("inner"))?,
-        "link" => std::os::unix::fs::symlink(marker.with_file_name("nowhere"), marker)?,
+        "link" => std::os::unix::fs::symlink(outside, marker)?,
         _ => assert!(Command::new("mkfifo").arg(marker).status()?.success()),
     }
     Ok(())
@@ -104,15 +106,13 @@ fn a_marker_that_is_not_a_regular_file_is_replaced_and_the_job_succeeds() -> Res
     let tip = rig.advance("x")?;
     warm(&rig, &tip)?;
     let marker = rig.mirror().join("sweep-needed");
-    for kind in ["directory", "link", "fifo"] {
-        plant(&marker, kind)?;
+    let outside = rig.root.join("outside-the-mirror");
+    for kind in ["link", "directory", "fifo"] {
+        plant(&marker, &outside, kind)?;
         let next = rig.advance(kind)?;
         checks_out(&rig, &next, 2)?;
         assert!(!marker.exists(), "the {kind} marker survived a clean job");
-        assert!(
-            !marker.with_file_name("nowhere").exists(),
-            "the {kind} marker was followed"
-        );
+        assert!(!outside.exists(), "the {kind} marker was followed");
     }
     Ok(())
 }
@@ -122,6 +122,16 @@ fn every_broker_fetch_gives_up_on_a_stalled_transfer() -> Result<()> {
     let rig = Rig::new()?;
     let tip = rig.advance("x")?;
     warm(&rig, &tip)?;
+    std::fs::write(
+        rig.mirror().join("refs/heads/main"),
+        format!("{}\n", "1".repeat(40)),
+    )?;
+    wrapper_env(
+        &rig.root,
+        "case \" $* \" in *\" --refetch \"*) ;; *\" fetch \"*) exit 0;; esac\n",
+    )?;
+    let next = rig.advance("y")?;
+    checks_out(&rig, &next, 2)?;
     let trace = std::fs::read_to_string(rig.trace())?;
     let fetches: Vec<&str> = trace
         .lines()
@@ -129,9 +139,16 @@ fn every_broker_fetch_gives_up_on_a_stalled_transfer() -> Result<()> {
             line.contains("\"event\":\"start\"") && line.contains("--no-auto-maintenance")
         })
         .collect();
-    assert!(!fetches.is_empty(), "the broker never fetched");
+    assert!(
+        fetches.iter().any(|line| line.contains("--refetch")),
+        "the broker never refetched"
+    );
+    assert!(
+        fetches.iter().any(|line| !line.contains("--refetch")),
+        "the broker never fetched incrementally"
+    );
     for line in fetches {
-        for setting in ["http.lowSpeedLimit=1000", "http.lowSpeedTime=60"] {
+        for setting in SETTINGS {
             assert!(line.contains(setting), "a fetch lacks {setting}: {line}");
         }
     }

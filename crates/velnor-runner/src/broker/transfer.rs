@@ -48,9 +48,9 @@ async fn fetch_refs(
         "-c",
         "gc.auto=0",
         "-c",
-        "http.lowSpeedLimit=1000",
+        "http.lowSpeedLimit=1",
         "-c",
-        "http.lowSpeedTime=60",
+        "http.lowSpeedTime=600",
     ];
     let fetch = [
         "fetch",
