@@ -158,16 +158,12 @@ fn expr_template_rejects_an_empty_span() -> Result<()> {
 fn expr_template_rejects_a_collection_in_a_single_span_only() -> Result<()> {
     let env = env_with(&[(RootContext::Github, r#"{"sha":"deadbeef"}"#)])?;
 
-    for source in [
-        "${{ github }}",
-        "${{ fromJSON('[1]') }}",
-        "${{ fromJSON('{}') }}",
+    for (source, expected) in [
+        ("${{ github }}", "A mapping was not expected"),
+        ("${{ fromJSON('[1]') }}", "A sequence was not expected"),
+        ("${{ fromJSON('{}') }}", "A mapping was not expected"),
     ] {
-        assert_eq!(
-            template_error_text(source, &env)?,
-            "Expected a string",
-            "{source:?}"
-        );
+        assert_eq!(template_error_text(source, &env)?, expected, "{source:?}");
     }
     assert_eq!(evaluate_template("a${{ github }}", &env)?, "aObject");
     assert_eq!(
@@ -194,6 +190,30 @@ fn expr_template_limits_the_rebuilt_format_to_255_parameters() -> Result<()> {
     assert!(
         with_text.starts_with("Too many parameters supplied: '('"),
         "{with_text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_template_limits_the_rebuilt_format_depth_to_50() -> Result<()> {
+    let env = empty_env();
+    let nots = |count: usize| "!".repeat(count);
+
+    assert_eq!(
+        evaluate_template(&format!("a${{{{ {}true }}}}", nots(48)), &env)?,
+        "atrue"
+    );
+    assert_eq!(
+        template_error_text(&format!("a${{{{ {}true }}}}", nots(49)), &env)?,
+        "Exceeded max expression depth 50"
+    );
+    assert_eq!(
+        template_error_text(&format!("${{{{ {}true }}}}b", nots(49)), &env)?,
+        "Exceeded max expression depth 50"
+    );
+    assert_eq!(
+        evaluate_template(&format!("${{{{ {}true }}}}", nots(49)), &env)?,
+        "false"
     );
     Ok(())
 }

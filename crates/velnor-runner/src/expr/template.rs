@@ -3,17 +3,16 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
 use super::env::ExprEnv;
-use super::error::{ExprError, ParseError, ParseErrorKind};
+use super::error::ExprError;
 use super::eval::evaluate_node;
 use super::memory::{MemoryCounter, Subject};
 use super::node::Node;
-use super::parser::{MAX_LENGTH, parse};
+use super::parser::parse;
 use super::render::{Argument, template_expression};
 use super::value::Value;
 
 const OPEN: &str = "${{";
 const CLOSE: &str = "}}";
-const FORMAT_MAX_PARAMETERS: usize = 255;
 
 pub(crate) enum Part<'a> {
     Text(&'a str),
@@ -66,18 +65,10 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
     if parts.iter().all(|part| matches!(part, Part::Text(_))) {
         return Ok(source.to_owned());
     }
-    let expression = template_expression(&parts, Argument::Source);
-    if expression.encode_utf16().count() > MAX_LENGTH {
-        return Err(ParseError::without_token(ParseErrorKind::ExceededMaxLength).into());
+    if parts.len() > 1 {
+        parse(&template_expression(&parts, Argument::Source), env)?;
     }
-    let spans = parts
-        .iter()
-        .filter(|part| matches!(part, Part::Expression { .. }))
-        .count();
-    if spans >= FORMAT_MAX_PARAMETERS {
-        parse(&expression, env)?;
-    }
-    let single_span = spans == 1 && parts.len() == 1;
+    let single_span = parts.len() == 1;
     let mut rendered = String::with_capacity(source.len());
     let mut memory = MemoryCounter::new(Subject::Template(&parts));
     for part in &parts {
@@ -88,8 +79,16 @@ pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprErro
             }
             Part::Expression { node, .. } => {
                 let value = evaluate_node(node, env)?;
-                if single_span && matches!(value, Value::Array(_) | Value::Object(_)) {
-                    return Err(ExprError::evaluation("Expected a string"));
+                if single_span {
+                    match value {
+                        Value::Array(_) => {
+                            return Err(ExprError::evaluation("A sequence was not expected"));
+                        }
+                        Value::Object(_) => {
+                            return Err(ExprError::evaluation("A mapping was not expected"));
+                        }
+                        _ => {}
+                    }
                 }
                 let value = value.convert_to_string();
                 memory.add(&value)?;

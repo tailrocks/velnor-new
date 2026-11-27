@@ -1118,10 +1118,16 @@ sizes and the same 10 MiB limit, and print the same
   rejects an empty or whitespace-only `${{ }}` span with `An expression was
   expected`, and Velnor does the same. A scalar that is exactly one span stays
   a basic expression, and the
-  [string-token evaluator](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/WorkflowParser/ObjectTemplating/Tokens/TemplateToken.cs#L70-L77)
-  fails an array or object result with `Expected a string`; Velnor fails the
-  same way, while a span among other segments is stringified by `format` as
-  `Array` or `Object`. The rebuilt `format` call takes at most
+  template evaluator rejects an array result in a string field with
+  [`A sequence was not expected`](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/WorkflowParser/ObjectTemplating/TemplateEvaluator.cs#L103)
+  and an object result with
+  [`A mapping was not expected`](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/WorkflowParser/ObjectTemplating/TemplateEvaluator.cs#L139). Velnor returns a `String`, so it
+  fails a single span that evaluates to a collection with those messages
+  instead of keeping its type, while a span among other segments is
+  stringified by `format` as `Array` or `Object`. Velnor parses the rebuilt
+  `format` call for every template of more than one segment, so its length,
+  parameter count and nesting depth fail as upstream does. The call takes at
+  most
   [255 parameters](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionConstants.cs#L15),
   the format string included, so 255 spans fail with `Too many parameters
   supplied`.
