@@ -312,7 +312,13 @@ fn each_generated_header_names_its_own_config() {
 #[test]
 fn the_externals_list_of_this_repository_covers_the_generator_closure() -> TestResult {
     let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
-    let facts = velnor_rust::detect(&committed_view(&root)?)?;
-    assert!(!facts.generator_unmodelled);
+    let view = committed_view(&root)?;
+    let (missing, stale) = velnor_rust::externals_drift(&view, &RepoPath::new("Cargo.toml")?)
+        .ok_or("Cargo.lock is missing or unreadable")?;
+    assert!(
+        missing.is_empty() && stale.is_empty(),
+        ".velnor/generator-externals.lock is out of date; missing: {missing:?}; stale: {stale:?}"
+    );
+    assert!(!velnor_rust::detect(&view)?.generator_unmodelled);
     Ok(())
 }

@@ -136,6 +136,7 @@ mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
+pub use generator_lock::externals_drift;
 pub use image_sources::image_sources_restore;
 pub use plan_tools::{TOOLS_VERIFY_HELPER, tools_verified, unverified_tools_note};
 pub use reexports::*;

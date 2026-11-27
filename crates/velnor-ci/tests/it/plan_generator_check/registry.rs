@@ -69,3 +69,34 @@ fn an_edit_a_registry_proc_macro_reads_never_skips_the_generated_check() {
     assert_ne!(before, "build failed");
     assert_ne!(before, after, "the proc-macro baked the edited file in");
 }
+
+fn add_a_local_twin(repo: &Repo) {
+    repo.write_unstaged(
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"crates/velnor-gen\", \"crates/engine\", \"crates/other\", \"crates/ext\"]\nresolver = \"3\"\n",
+    );
+    repo.write_unstaged(
+        "crates/ext/Cargo.toml",
+        "[package]\nname = \"ext\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    repo.write_unstaged("crates/ext/src/lib.rs", "pub fn local() {}\n");
+    repo.write_unstaged(
+        "crates/velnor-gen/Cargo.toml",
+        &format!(
+            "{}ext = {{ path = \"../ext\" }}\n",
+            super::manifest("velnor-gen", Some("engine"))
+        ),
+    );
+}
+
+#[test]
+fn a_local_member_sharing_a_registry_proc_macros_name_and_version_does_not_hide_it() {
+    let home = cargo_home("gc-twin-home");
+    let repo = world_over("gc-twin", FLAT, PINNED, |repo| {
+        depend_on_the_macro(repo);
+        add_a_local_twin(repo);
+        lock_and_audit(repo, Some(home.root()));
+    });
+    merge(&repo, |repo| repo.write("docs/goals.md", "goals\nmore\n"));
+    assert_eq!(decision(&repo), "run");
+}
