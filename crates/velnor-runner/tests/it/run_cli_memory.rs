@@ -6,7 +6,6 @@ use std::process::Output;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use tokio::process::Command;
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::fixture_job;
@@ -42,7 +41,7 @@ async fn peak_resident_kib(pid: u32) -> Option<u64> {
 
 #[cfg(not(target_os = "linux"))]
 async fn peak_resident_kib(pid: u32) -> Option<u64> {
-    let output = Command::new("ps")
+    let output = tokio::process::Command::new("ps")
         .args(["-o", "rss=", "-p", &pid.to_string()])
         .output()
         .await
