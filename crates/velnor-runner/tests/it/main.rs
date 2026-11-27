@@ -83,16 +83,9 @@ mod followup;
 #[path = "exec_hardening.rs"]
 mod hardening;
 mod job_message;
-mod native_checkout;
 #[path = "exec_late.rs"]
 mod late;
-#[path = "exec_offload.rs"]
-mod offload;
-#[path = "exec_parity.rs"]
-mod parity;
-#[path = "exec_process.rs"]
-mod process;
-mod protocol_acquire_renew;
+mod native_checkout;
 mod native_checkout_attack;
 mod native_checkout_cancel;
 mod native_checkout_contend;
@@ -115,10 +108,17 @@ mod native_checkout_repair;
 mod native_checkout_sink;
 mod native_checkout_torn;
 mod native_checkout_unsound;
-mod native_checkout_window;
-mod native_checkout_workspace;
 mod native_checkout_upkeep;
 mod native_checkout_walk;
+mod native_checkout_window;
+mod native_checkout_workspace;
+#[path = "exec_offload.rs"]
+mod offload;
+#[path = "exec_parity.rs"]
+mod parity;
+#[path = "exec_process.rs"]
+mod process;
+mod protocol_acquire_renew;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
