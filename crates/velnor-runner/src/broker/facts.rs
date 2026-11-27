@@ -109,7 +109,17 @@ impl TryFrom<String> for ServerUrl {
 
     fn try_from(value: String) -> Result<Self, FactsError> {
         match Url::parse(&value) {
-            Ok(url) if matches!(url.scheme(), "https" | "http" | "file") => Ok(Self(url)),
+            Ok(mut url) if matches!(url.scheme(), "https" | "http" | "file") => {
+                if url.username().is_empty() && url.password().is_none() {
+                    return Ok(Self(url));
+                }
+                let _ = url.set_username("");
+                let _ = url.set_password(None);
+                Err(FactsError::Invalid {
+                    field: "server_url",
+                    value: format!("{url} (credentials are not allowed)"),
+                })
+            }
             _ => Err(FactsError::Invalid {
                 field: "server_url",
                 value,
