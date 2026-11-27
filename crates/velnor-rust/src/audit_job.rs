@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, StepKind,
+    CacheKey, CargoCommand, HelperCommand, HelperRelease, Job, JobId, RepoFacts, RootSlug, StepKind,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
@@ -28,10 +28,11 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
 }
 
 pub(crate) fn audits_pull_requests(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
+    pull_request_audit(facts.helper.as_ref())
+}
+
+pub(crate) fn pull_request_audit(helper: Option<&HelperRelease>) -> bool {
+    helper.is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
 }
 
 pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {

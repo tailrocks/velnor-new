@@ -3,13 +3,9 @@
 
 use velnor_rust::{dep_info_paths, rerun_if_changed};
 
-mod build_modules;
-mod build_output;
-mod build_rules;
+mod audited;
 mod embed;
 mod lock;
-mod macro_path;
-mod unresolved;
 
 #[test]
 fn dep_info_and_build_script_output_become_the_paths_they_list() {

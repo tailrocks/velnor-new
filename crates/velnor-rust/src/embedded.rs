@@ -4,27 +4,28 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CompileInputs, InputKey, InputOwner, PackageName, RepoPath, RepoView, RustMember, RustRoot,
-    TargetKind,
+    CompileInputs, HelperRelease, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot,
 };
 
-use crate::build_script::{Declared, declared};
+use crate::audit_job::pull_request_audit;
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
-use crate::macro_names::{macro_bodies, names_builtin, shadows};
+use crate::lock::{LOCK_PATH, parse_lock};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];
 
 #[must_use]
-pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInputs {
+pub(crate) fn embedded_inputs(
+    view: &RepoView,
+    roots: &[RustRoot],
+    evidence: IncludeEvidence,
+) -> CompileInputs {
     let members: Vec<&RustMember> = roots.iter().flat_map(|root| &root.members).collect();
     let mut inputs = CompileInputs::new();
-    let expanding = reaching_proc_macros(&members);
     for member in &members {
-        let emits_tokens = expanding.contains(&member.name);
-        for key in Scan::new(view, member, &members, emits_tokens).run() {
+        for key in Scan::new(view, member, &members, evidence).run() {
             inputs
                 .entry(key)
                 .or_default()
@@ -34,30 +35,18 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
     inputs
 }
 
-fn reaching_proc_macros<'m>(members: &[&'m RustMember]) -> BTreeSet<&'m PackageName> {
-    let mut reaching: BTreeSet<&PackageName> = members
-        .iter()
-        .filter(|member| {
-            member
-                .targets
-                .iter()
-                .any(|target| target.kinds.contains(&TargetKind::ProcMacro))
-        })
-        .map(|member| &member.name)
-        .collect();
-    loop {
-        let before = reaching.len();
-        for member in members {
-            if member
-                .dependencies
-                .iter()
-                .any(|dependency| reaching.contains(&dependency.name))
-            {
-                reaching.insert(&member.name);
-            }
-        }
-        if reaching.len() == before {
-            return reaching;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IncludeEvidence {
+    Audited,
+    SourceOnly,
+}
+
+impl IncludeEvidence {
+    pub(crate) fn of(helper: Option<&HelperRelease>) -> Self {
+        if pull_request_audit(helper) {
+            Self::Audited
+        } else {
+            Self::SourceOnly
         }
     }
 }
@@ -72,8 +61,7 @@ enum Embedded<'t> {
 struct Scan<'a> {
     view: &'a RepoView,
     directory: Option<&'a RepoPath>,
-    declared: Declared,
-    emits_tokens: bool,
+    evidence: IncludeEvidence,
     reads: BTreeSet<InputKey>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
@@ -84,7 +72,7 @@ impl<'a> Scan<'a> {
         view: &'a RepoView,
         member: &'a RustMember,
         members: &[&RustMember],
-        emits_tokens: bool,
+        evidence: IncludeEvidence,
     ) -> Self {
         let nested: Vec<&RepoPath> = members
             .iter()
@@ -118,8 +106,7 @@ impl<'a> Scan<'a> {
         Self {
             view,
             directory: member.directory.as_ref(),
-            declared: declared(view, member),
-            emits_tokens,
+            evidence,
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
@@ -127,9 +114,6 @@ impl<'a> Scan<'a> {
     }
 
     fn run(mut self) -> BTreeSet<InputKey> {
-        if self.declared.overrides_environment {
-            self.reads.insert(InputKey::Unresolved);
-        }
         while let Some(file) = self.pending.pop() {
             if !self.seen.insert(file) {
                 continue;
@@ -147,10 +131,6 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
-        if shadows(&tokens) {
-            self.reads.insert(InputKey::Unresolved);
-        }
-        let bodies = macro_bodies(&tokens);
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -164,18 +144,15 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
-            let foreign_expansion = self.emits_tokens
-                || !names_builtin(&tokens[..at])
-                || bodies.iter().any(|body| body.contains(&at));
+            let audited = self.evidence == IncludeEvidence::Audited;
             let resolved = match embedded(argument) {
-                _ if foreign_expansion => None,
                 Embedded::Literal(literal) => literal_path(literal)
                     .and_then(|path| resolve(self.view, &directory_of(file), path)),
-                Embedded::ManifestDir(joined) => joined
+                Embedded::ManifestDir(joined) if audited => joined
                     .strip_prefix('/')
                     .and_then(|path| resolve(self.view, &self.directory_parts(), path)),
-                Embedded::Output if self.declared.tracks_changes => continue,
-                Embedded::Output | Embedded::Unresolved => None,
+                Embedded::Output if audited => continue,
+                Embedded::ManifestDir(_) | Embedded::Output | Embedded::Unresolved => None,
             };
             let Some(resolved) = resolved else {
                 self.reads.insert(InputKey::Unresolved);
@@ -303,11 +280,17 @@ pub(crate) fn locked_and_embedded(
     view: &RepoView,
     roots: &[RustRoot],
 ) -> Result<CompileInputs, DetectError> {
+    let evidence = IncludeEvidence::of(
+        view.files
+            .get(&LOCK_PATH)
+            .and_then(|bytes| parse_lock(bytes).ok())
+            .as_ref(),
+    );
     let mut inputs = view.files.get(&INPUTS_LOCK).map_or_else(
         || Ok(CompileInputs::new()),
         |bytes| parse_inputs_lock(bytes),
     )?;
-    for (file, owners) in embedded_inputs(view, roots) {
+    for (file, owners) in embedded_inputs(view, roots, evidence) {
         inputs.entry(file).or_default().extend(owners);
     }
     Ok(inputs)

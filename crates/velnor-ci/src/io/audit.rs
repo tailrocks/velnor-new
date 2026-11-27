@@ -54,6 +54,7 @@ pub(super) struct Audit<'a> {
     pub(super) rooted: BTreeSet<(usize, String)>,
     pub(super) present: BTreeSet<(usize, String, String)>,
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
+    undeclared: BTreeSet<(String, PathBuf)>,
     targets: Vec<RepoPath>,
     roots: Vec<PathBuf>,
     members: BTreeMap<String, Vec<usize>>,
@@ -91,7 +92,9 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &groups,
         options.max_directory_entries,
     )?;
-    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
+    let gathered = setup::gathered_files(&workspaces, &shared, &groups, &chosen)?;
+    audit.note_undeclared_outputs(&gathered)?;
+    for (unit, file, indices) in gathered {
         audit.record(&indices, &file, unit)?;
     }
     audit.orphans();

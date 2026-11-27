@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{InputKey, InputOwner, RepoView, RustSelection};
 use velnor_rust::detect;
 
-use super::build_output::{DECLARES, with_build_script};
 use crate::facts::{TestResult, lib, repo};
+use crate::pipeline::HELPER_LOCK;
 use crate::select::{name, path};
 
 pub(super) fn view_of(
@@ -21,12 +21,19 @@ pub(super) fn view_of(
     repo(vec![("Cargo.toml", crates)], files)
 }
 
-fn selections(
+pub(super) fn selections(
     members: &[&str],
     files: &[(&str, &str)],
     changed_file: &str,
 ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     selected(&view_of(members, files)?, changed_file)
+}
+
+pub(super) fn audited(view: &mut RepoView) -> TestResult {
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", "0.1.117", 1);
+    view.files
+        .insert(path(".velnor/rust-ci.lock"), lock.into_bytes());
+    Ok(())
 }
 
 pub(super) fn selected(
@@ -51,8 +58,15 @@ pub(super) fn selected(
     )
 }
 
-fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
+pub(super) fn embedding(
+    files: &[(&str, &str)],
+    check: &[(&str, &[&str])],
+    evidence: Evidence,
+) -> TestResult {
     let mut view = view_of(&["app", "tool", "reader", "left"], files)?;
+    if evidence == Evidence::Audited {
+        audited(&mut view)?;
+    }
     for (file, _) in check {
         view.tracked_paths.insert(path(file));
     }
@@ -66,7 +80,13 @@ fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
     Ok(())
 }
 
-pub(super) fn unresolved(source: &str) -> TestResult {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Evidence {
+    Audited,
+    SourceOnly,
+}
+
+pub(super) fn unresolved(source: &str, evidence: Evidence) -> TestResult {
     let mut view = view_of(
         &["app", "c", "tool", "left"],
         &[
@@ -76,7 +96,9 @@ pub(super) fn unresolved(source: &str) -> TestResult {
             ("x.md", ""),
         ],
     )?;
-    with_build_script(&mut view, "c", DECLARES)?;
+    if evidence == Evidence::Audited {
+        audited(&mut view)?;
+    }
     assert_eq!(
         selected(&view, "docs/other.md")?,
         [("c".to_owned(), "unresolved-include".to_owned())],
@@ -109,99 +131,8 @@ fn a_file_a_crate_embeds_selects_it_without_an_inputs_lock_line() -> TestResult 
             ("crates/left/src/banner.txt", &["left", "reader"]),
             ("docs/other.md", &[]),
         ],
+        Evidence::SourceOnly,
     )
-}
-
-#[test]
-fn a_manifest_dir_include_resolves_to_the_file_it_reads() -> TestResult {
-    embedding(
-        &[
-            (
-                "crates/reader/src/lib.rs",
-                "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.rs\"));\ninclude!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../shared/gen.rs\"));\nconst G: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs\", \"/guide.md\"));\nconst L: &[u8] = include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../assets/logo.bin\"));",
-            ),
-            ("crates/reader/src/x.rs", ""),
-            (
-                "shared/gen.rs",
-                "const D: &str = include_str!(\"../docs/deep.md\");",
-            ),
-            ("crates/app/src/lib.rs", ""),
-        ],
-        &[
-            ("docs/guide.md", &["reader"]),
-            ("docs/deep.md", &["reader"]),
-            ("shared/gen.rs", &["reader"]),
-            ("assets/logo.bin", &["reader"]),
-            ("docs/other.md", &[]),
-        ],
-    )
-}
-
-#[test]
-fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reason_unresolved_include()
--> TestResult {
-    let files = [
-        ("crates/c/src/lib.rs", "include!(env!(\"OTHER\"));"),
-        (
-            "crates/app/src/lib.rs",
-            "include_str!(\"../../../docs/guide.md\");",
-        ),
-        ("docs/guide.md", ""),
-    ];
-    assert_eq!(
-        selections(&["app", "c", "tool", "left"], &files, "docs/guide.md")?,
-        [
-            ("app".to_owned(), "input:docs/guide.md".to_owned()),
-            ("c".to_owned(), "unresolved-include".to_owned()),
-        ]
-    );
-    for source in [
-        "include_str!(env!(\"OTHER\"));",
-        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.md\", suffix()));",
-        "include_str!(path_of!());",
-        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../../../x.md\"));",
-        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"src/x.md\"));",
-        "include_str!(concat!(env!(\"OUT_DIR\"), \"/../x.md\"));",
-    ] {
-        unresolved(source)?;
-    }
-    Ok(())
-}
-
-#[test]
-fn a_root_package_and_a_nested_member_resolve_against_their_own_manifest_dir() -> TestResult {
-    let view = repo(
-        vec![(
-            "Cargo.toml",
-            vec![
-                lib("top", "Cargo.toml")?,
-                lib("inner", "crates/inner/Cargo.toml")?,
-            ],
-        )],
-        &[
-            (
-                "src/lib.rs",
-                "const A: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/README.md\"));",
-            ),
-            (
-                "crates/inner/src/lib.rs",
-                "const B: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs/inner.md\"));",
-            ),
-            ("README.md", ""),
-            ("docs/inner.md", ""),
-        ],
-    )?;
-    let facts = detect(&view)?;
-    let owners = |file: &str| -> Option<Vec<String>> {
-        facts
-            .compile_inputs
-            .get(&InputKey::Path(path(file)))
-            .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
-    };
-    assert_eq!(owners("README.md"), Some(vec!["top".to_owned()]));
-    assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
-    assert!(!facts.compile_inputs.contains_key(&InputKey::Unresolved));
-    Ok(())
 }
 
 #[test]
@@ -224,6 +155,7 @@ fn a_file_an_included_file_embeds_selects_the_crate() -> TestResult {
             ("docs/deep.md", &["app"]),
             ("docs/other.md", &[]),
         ],
+        Evidence::SourceOnly,
     )
 }
 
@@ -263,6 +195,7 @@ fn a_comment_between_the_macro_and_its_bang_does_not_hide_it() -> TestResult {
             ("docs/commented.md", &[]),
             ("docs/quoted.md", &[]),
         ],
+        Evidence::SourceOnly,
     )
 }
 

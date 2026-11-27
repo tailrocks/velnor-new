@@ -67,6 +67,7 @@ pub(super) fn begin<'a>(
             .map(|workspace| workspace.root.clone())
             .collect(),
         members,
+        undeclared: BTreeSet::new(),
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
         stale: Vec::new(),

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use velnor_model::RepoPath;
-use velnor_rust::{Located, dep_info_paths, locate};
+use velnor_rust::{Located, dep_info_paths, locate, normalize, rerun_if_changed};
 
+use super::super::units::UnitFile;
 use super::{Audit, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
@@ -40,8 +41,12 @@ impl Audit<'_> {
             }
             return Ok(None);
         }
+        let unseen = self.reads_unseen_output(workspace, package, &paths);
         for owner in self.owners.of(package, &source) {
             self.credit(&owner, workspace, &paths, false);
+            if unseen {
+                self.credit_everything(&owner);
+            }
         }
         self.units += 1;
         Ok(Some((source, built)))
@@ -49,6 +54,50 @@ impl Audit<'_> {
 }
 
 impl Audit<'_> {
+    pub(in crate::io) fn note_undeclared_outputs(
+        &mut self,
+        files: &[(UnitFile, PathBuf, Vec<usize>)],
+    ) -> Result<(), CiError> {
+        for (unit, output, _) in files {
+            let UnitFile::BuildOutput { package, .. } = unit else {
+                continue;
+            };
+            let mut spent = 0;
+            let text = read(
+                output,
+                &mut spent,
+                SOURCE_TOTAL_LIMIT,
+                "build-script output",
+            )?;
+            let Some(recorded) = output
+                .parent()
+                .map(|directory| directory.join("root-output"))
+                .and_then(|file| std::fs::read_to_string(file).ok())
+            else {
+                continue;
+            };
+            if rerun_if_changed(&text).is_empty() {
+                self.undeclared
+                    .insert((package.clone(), normalize(Path::new(recorded.trim()))));
+            }
+        }
+        Ok(())
+    }
+
+    fn reads_unseen_output(
+        &self,
+        workspace: &Path,
+        package: Option<&str>,
+        paths: &[String],
+    ) -> bool {
+        paths.iter().any(|path| {
+            let full = normalize(&workspace.join(path));
+            self.undeclared.iter().any(|(owner, out)| {
+                package.is_none_or(|name| name == owner) && full.starts_with(out)
+            })
+        })
+    }
+
     fn unit_source(
         &self,
         workspace: &Path,

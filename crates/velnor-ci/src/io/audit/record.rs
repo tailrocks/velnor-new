@@ -247,6 +247,17 @@ impl Audit<'_> {
         }
     }
 
+    pub(super) fn credit_everything(&mut self, owner: &Owner<'_>) {
+        add_reads(
+            &mut self.found,
+            self.tracked,
+            owner,
+            &[None],
+            false,
+            &self.targets,
+        );
+    }
+
     pub(super) fn credit(
         &mut self,
         owner: &Owner<'_>,
