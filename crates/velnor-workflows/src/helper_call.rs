@@ -43,6 +43,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "mise-pin",
     "validate-artifact-id",
     "qualification",
+    "runner-drift",
 ];
 
 pub(crate) fn subcommand(run: &str) -> Option<String> {

@@ -6,10 +6,11 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use serde_json::json;
+use velnor_model::RUNNER_PROTOCOL_VERSION;
 use velnor_runner::protocol::{
     AcquireJobOutcome, BrokerClient, BrokerErrorCategory, BrokerPoll, RUNNER_JOB_REQUEST,
-    RUNNER_VERSION, RunServiceClient, RunnerStatus, ServiceErrorKind, TaskAgentMessage,
-    TaskAgentSession, broker_error_category, service_error_kind,
+    RunServiceClient, RunnerStatus, ServiceErrorKind, TaskAgentMessage, TaskAgentSession,
+    broker_error_category, service_error_kind,
 };
 
 use super::support::{
@@ -44,7 +45,7 @@ fn mount_broker_routes(server: &TestServer, run_service_url: &str) -> Result<()>
                 "agent": {
                     "id": 42,
                     "name": "velnor-test",
-                    "version": RUNNER_VERSION,
+                    "version": RUNNER_PROTOCOL_VERSION,
                     "osDescription": std::env::consts::OS
                 },
                 "useFipsEncryption": false
@@ -75,7 +76,10 @@ fn assert_poll_query(request: &RecordedRequest, status: &str, disable_update: &s
     assert_bearer(request);
     assert_eq!(request.query("sessionId"), Some("session-1"));
     assert_eq!(request.query("status"), Some(status));
-    assert_eq!(request.query("runnerVersion"), Some(RUNNER_VERSION));
+    assert_eq!(
+        request.query("runnerVersion"),
+        Some(RUNNER_PROTOCOL_VERSION)
+    );
     assert_eq!(request.query("os"), Some(UPSTREAM_OS));
     assert_eq!(request.query("architecture"), Some(UPSTREAM_ARCHITECTURE));
     assert_eq!(request.query("disableUpdate"), Some(disable_update));

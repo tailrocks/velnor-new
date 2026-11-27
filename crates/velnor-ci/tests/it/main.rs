@@ -218,6 +218,8 @@ mod run_nextest_output;
 mod run_nextest_reconcile;
 mod run_process;
 mod run_summary;
+mod runner_drift;
+mod runner_drift_binary;
 mod scope_identity;
 mod setup_mise_identity;
 mod setup_pure;
