@@ -7,7 +7,7 @@ use std::time::Instant;
 use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{assert_capacity, assert_clean, reservation, snapshot};
+use super::checks::{assert_capacity, assert_clean, jit_name, reservation, snapshot};
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -105,7 +105,20 @@ fn unconfirmed_sweep(world: &mut World, test: &str) -> TestResult<()> {
 fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     std::fs::write(world.seen.join("release"), "")?;
     world.script_refusals(&json!({"velnor-mac-99": {"statuses": [400], "repeat_last": false}}))?;
+    world.configure_orb("FAKE_ORB_PS_IMMORTAL=4242\nFAKE_RUNNER_HOLD=1\n")?;
     world.spawn_controller(test, &[])?;
+    world.wait_for_event("the first jit", 90, |events| {
+        events.iter().any(|event| event.label == "jit")
+    });
+    let held = world.gh("jit")[0].clone();
+    world.wait_for_event("two polls while the job is held", 40, |events| {
+        events
+            .iter()
+            .filter(|event| event.label == "poll" && event.seq > held.seq)
+            .count()
+            >= 2
+    });
+    world.release(&jit_name(reservation(&held)))?;
     world.wait_for_event("the first job and its removal", 90, |events| {
         let acquired = events.iter().any(|event| event.label == "acquire");
         acquired
