@@ -16,10 +16,10 @@ use crate::exec::{
     AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job, tool_cache_from_env,
 };
 use crate::job_message::AgentJobRequestMessage;
-use crate::store::store_root;
 use crate::lifecycle::{RunJitOptions, run_jit};
 use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
 use crate::secret::Secret;
+use crate::store::store_root;
 
 const USAGE_ERROR: u8 = 2;
 const FORCED_EXIT: u8 = 130;

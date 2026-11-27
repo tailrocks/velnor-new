@@ -76,6 +76,61 @@ async fn job_log_over_one_block_is_appended_in_blocks_without_losing_a_line() ->
 }
 
 #[tokio::test]
+async fn job_log_over_one_block_of_other_storage_is_appended_in_blocks_without_azure_headers()
+-> Result<()> {
+    const LINES: usize = 150_000;
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    let blob_url = format!("{}/blob/log?sig=1", server.uri());
+    server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_UNSPECIFIED"}),
+        )
+    })?;
+    server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
+    server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
+        Reply::json(200, &json!({"ok": true}))
+    })?;
+    let mut text = String::new();
+    for number in 0..LINES {
+        writeln!(text, "{number:020} {}", "x".repeat(40))?;
+    }
+    let scratch = Scratch::new()?;
+    let log = scratch.write("job.log", text.as_bytes())?;
+
+    client.upload_job_log(RUN, JOB, &log).await?;
+
+    let puts = server.requests_to("PUT", "/blob/log")?;
+    assert!(puts.len() >= 4, "{} requests", puts.len());
+    assert_eq!(puts[0].text(), "");
+    assert_eq!(puts[0].query("comp"), None);
+    for put in &puts {
+        assert_eq!(put.header("x-ms-blob-type"), None);
+        assert_eq!(put.header("x-ms-blob-sealed"), None);
+        assert!(
+            put.text().len() < 2 * 1024 * 1024 + 128,
+            "{}",
+            put.text().len()
+        );
+    }
+    let (last, blocks) = puts[1..].split_last().context("the blocks")?;
+    for block in blocks {
+        assert_eq!(block.query("comp"), Some("appendblock"));
+        assert_eq!(block.query("seal"), None);
+    }
+    assert_eq!(last.query("comp"), Some("appendblock"));
+    assert_eq!(last.query("seal"), Some("true"));
+    let joined: String = puts.iter().map(RecordedRequest::text).collect();
+    assert_eq!(joined, text);
+    let metadata = server
+        .only_request("POST", &receiver("CreateJobLogsMetadata"))?
+        .json()?;
+    assert_eq!(metadata["line_count"], LINES);
+    Ok(())
+}
+
+#[tokio::test]
 async fn job_log_of_one_block_is_a_single_block_blob() -> Result<()> {
     let server = TestServer::start().await?;
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;

@@ -95,7 +95,8 @@ pub struct RunServiceStepResult {
     pub completed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_log_url: Option<String>,
-    pub completed_log_lines: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_log_lines: Option<i64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<RunServiceAnnotation>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

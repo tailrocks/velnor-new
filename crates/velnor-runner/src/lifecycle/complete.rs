@@ -77,7 +77,7 @@ fn step_result(
         started_at: times.and_then(|times| times.started_at.clone()),
         completed_at: times.and_then(|times| times.completed_at.clone()),
         completed_log_url: None,
-        completed_log_lines: 0,
+        completed_log_lines: None,
         annotations: run
             .annotations
             .iter()
