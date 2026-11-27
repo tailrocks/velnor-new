@@ -11,7 +11,11 @@ use url::Url;
 
 use crate::secret::Secret;
 
-pub use super::version::RUNNER_USER_AGENT;
+pub const RUNNER_USER_AGENT: &str = concat!(
+    "actions-runner/",
+    velnor_model::runner_protocol_version!(),
+    " (velnor)"
+);
 
 pub(crate) fn runner_os() -> Result<&'static str> {
     match std::env::consts::OS {

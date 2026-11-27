@@ -13,7 +13,6 @@ mod results_wire;
 pub mod run_service;
 pub mod session;
 pub mod timeline;
-pub mod version;
 
 pub use broker::{BrokerClient, BrokerPoll};
 pub use distributed_task::DistributedTaskClient;
