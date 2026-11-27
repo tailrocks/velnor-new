@@ -167,14 +167,25 @@ fn inventory() -> TestResult<String> {
     })?)
 }
 
+pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
+const PADDING_BYTES: usize = 96 * 1024;
+
 pub(super) fn host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
+    host_toml_for(root, max_jobs, KEYCHAIN_REFERENCE)
+}
+
+pub(super) fn host_toml_for(
+    root: &Path,
+    max_jobs: u32,
+    credential_ref: &str,
+) -> TestResult<String> {
     let base = format!(
         "schema = 2\n\
          [[connections]]\n\
          connection_id = \"lab\"\n\
          repository_id = 42\n\
          repository = \"tailrocks/velnor-lab\"\n\
-         credential_ref = \"keychain:com.tailrocks.velnor.host/lab\"\n\
+         credential_ref = \"{credential_ref}\"\n\
          [connections.scale_set]\n\
          name = \"velnor-mac\"\n\
          labels = [\"velnor\", \"velnor-mac\"]\n\
@@ -183,7 +194,7 @@ pub(super) fn host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
          branches = [\"main\"]\n\
          tag_prefixes = []\n\
          events = [\"push\", \"pull_request\"]\n\
-         pull_request_rules = [{{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }}]\n\
+         pull_request_rules = [{{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }}, {{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 43, head_branch = \"feature\" }}]\n\
          [host]\n\
          launch_mode = \"rust-runner\"\n\
          max_jobs = {max_jobs}\n\
@@ -204,7 +215,57 @@ pub(super) fn host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
     let connection = config.connection(&id).ok_or("connection lab")?;
     let policy =
         build_job_authority_policy_json(connection, &inventory()?, SOURCE_SHA, &"d".repeat(64), 1)?;
-    Ok(config
+    let text = config
         .with_job_authority_policy_json(&id, &policy)?
-        .to_toml()?)
+        .to_toml()?;
+    Ok(format!("{text}\n# {}\n", "x".repeat(PADDING_BYTES)))
+}
+
+pub(super) fn official_host_toml(root: &Path, credential_ref: &str) -> String {
+    format!(
+        "schema = 2\n\
+         [[connections]]\n\
+         connection_id = \"lab\"\n\
+         repository_id = 42\n\
+         repository = \"tailrocks/velnor-lab\"\n\
+         credential_ref = \"{credential_ref}\"\n\
+         [connections.scale_set]\n\
+         name = \"ubuntu-26.04-scale-set\"\n\
+         labels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\n\
+         [connections.source_policy]\n\
+         mode = \"branch_restricted\"\n\
+         branches = [\"main\"]\n\
+         tag_prefixes = []\n\
+         events = [\"push\"]\n\
+         pull_request_rules = []\n\
+         [host]\n\
+         launch_mode = \"official-runner\"\n\
+         max_jobs = 1\n\
+         [host.resources]\n\
+         runner_cpu_millicores = 2000\n\
+         runner_memory_bytes = 4294967296\n\
+         dind_cpu_millicores = 1000\n\
+         dind_memory_bytes = 2147483648\n\
+         operational_memory_reserve_bytes = 1073741824\n\
+         [docker]\n\
+         context = \"orbstack\"\n\
+         platform = \"linux/amd64\"\n\
+         endpoint = \"unix://{}/no-such-docker.sock\"\n",
+        root.display()
+    )
+}
+
+pub(super) fn with_head_repository(mut offer: Value, repository_id: u64) -> Value {
+    offer["head_repository_id"] = json!(repository_id);
+    offer
+}
+
+pub(super) fn with_run_repository(mut offer: Value, repository_id: u64) -> Value {
+    offer["run_repository_id"] = json!(repository_id);
+    offer
+}
+
+pub(super) fn with_jit_failure(mut offer: Value) -> Value {
+    offer["jit_returns"] = json!(500);
+    offer
 }

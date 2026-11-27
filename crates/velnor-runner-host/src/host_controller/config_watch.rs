@@ -6,10 +6,8 @@ use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use crate::config::HostConfig;
+use crate::config::{HostConfig, MAX_HOST_TOML_BYTES};
 use crate::error::HostError;
-
-const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(crate) fn read_host_config(path: &Path) -> Result<Option<HostConfig>, HostError> {
     let mut options = std::fs::OpenOptions::new();
@@ -22,7 +20,7 @@ pub(crate) fn read_host_config(path: &Path) -> Result<Option<HostConfig>, HostEr
         Err(_) => return Err(HostError::Config),
     };
     let before = file.metadata().map_err(|_| HostError::Config)?;
-    if !before.file_type().is_file() || before.len() > MAX_CONFIG_BYTES {
+    if !before.file_type().is_file() || before.len() > MAX_HOST_TOML_BYTES {
         return Err(HostError::Config);
     }
 
@@ -44,10 +42,10 @@ fn read_snapshot(file: &mut File) -> Result<Vec<u8>, HostError> {
         .map_err(|_| HostError::Config)?;
     let mut bytes = Vec::new();
     (&mut *file)
-        .take(MAX_CONFIG_BYTES + 1)
+        .take(MAX_HOST_TOML_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| HostError::Config)?;
-    if u64::try_from(bytes.len()).map_err(|_| HostError::Config)? > MAX_CONFIG_BYTES {
+    if u64::try_from(bytes.len()).map_err(|_| HostError::Config)? > MAX_HOST_TOML_BYTES {
         return Err(HostError::Config);
     }
     Ok(bytes)

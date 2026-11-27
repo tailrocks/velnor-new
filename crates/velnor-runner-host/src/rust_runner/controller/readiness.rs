@@ -20,6 +20,7 @@ pub(crate) enum Phase {
     Startup,
     WaitingForCredentials,
     MachineUnavailable,
+    RunnerFailing,
     Ready,
 }
 
@@ -64,11 +65,13 @@ pub(crate) fn assess(state: &Path, config_sha256: &str) -> Readiness {
     };
     let fresh = now_unix_ms().saturating_sub(record.updated_unix_ms)
         <= u64::try_from(FRESH.as_millis()).unwrap_or(u64::MAX);
+    if !fresh {
+        return Readiness::Degraded;
+    }
     match record.phase {
         Phase::WaitingForCredentials => Readiness::WaitingForCredentials,
-        Phase::Ready if record.config_sha256 == config_sha256 && fresh => Readiness::Ready,
-        Phase::Startup => Readiness::Reconciling,
-        Phase::Ready if record.config_sha256 != config_sha256 => Readiness::Reconciling,
-        Phase::MachineUnavailable | Phase::Ready => Readiness::Degraded,
+        Phase::Ready if record.config_sha256 == config_sha256 => Readiness::Ready,
+        Phase::Startup | Phase::Ready => Readiness::Reconciling,
+        Phase::MachineUnavailable | Phase::RunnerFailing => Readiness::Degraded,
     }
 }

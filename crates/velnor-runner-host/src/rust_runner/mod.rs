@@ -17,7 +17,7 @@ pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
 
-pub(crate) use controller::{heartbeat_readiness, run_blocking};
+pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";

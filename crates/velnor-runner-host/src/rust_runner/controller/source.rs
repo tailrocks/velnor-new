@@ -5,7 +5,8 @@ use std::time::Instant;
 
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
-    VerifiedWorkflowSource, WorkflowRun, get_pull_request, get_repository, get_workflow_run_attempt,
+    VerifiedWorkflowSource, WorkflowRun, WorkflowRunError, get_pull_request, get_repository,
+    get_workflow_run_attempt,
 };
 
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
@@ -14,11 +15,43 @@ use crate::https::HttpsTransport;
 use crate::launch::execution_authorization::{
     PullClaim, SourceClaim, VerifiedWorkflowIdentity, verify_source_claim,
 };
-use crate::launch::steps::source::authorize_source;
+use crate::launch::steps::source::{SourceBlock, authorize_source};
 
 const GITHUB_API: &str = "https://api.github.com";
 const GITHUB_SERVER_URL: &str = "https://github.com";
 const CROSS_REPOSITORY: &str = "cross_repository";
+const IDENTITY: Refusal = Refusal::Blocked("identity");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Refusal {
+    Blocked(&'static str),
+    Unavailable(&'static str),
+}
+
+impl Refusal {
+    pub(super) const fn code(self) -> &'static str {
+        match self {
+            Self::Blocked(code) | Self::Unavailable(code) => code,
+        }
+    }
+
+    pub(super) const fn is_unavailable(self) -> bool {
+        matches!(self, Self::Unavailable(_))
+    }
+
+    const fn blocked(error: HostError) -> Self {
+        Self::Blocked(error.code())
+    }
+
+    fn lookup(error: WorkflowRunError) -> Self {
+        match error {
+            WorkflowRunError::Uncertain | WorkflowRunError::HttpStatus(408 | 429 | 500..=599) => {
+                Self::Unavailable("source_api_unavailable")
+            }
+            _ => IDENTITY,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GrantedPull {
@@ -33,6 +66,7 @@ pub(super) struct LaunchGrant {
     repository: String,
     server_url: &'static str,
     default_branch: String,
+    fetched_default_branch: bool,
     event: String,
     event_ref: String,
     tested_sha: String,
@@ -45,6 +79,10 @@ pub(super) struct LaunchGrant {
 impl LaunchGrant {
     pub(super) fn default_branch(&self) -> &str {
         &self.default_branch
+    }
+
+    pub(super) const fn fetched_default_branch(&self) -> bool {
+        self.fetched_default_branch
     }
 
     pub(super) fn describe(&self) -> String {
@@ -82,11 +120,17 @@ pub(super) fn check_offer(
     source: &SourceMetadata,
     known_default_branch: Option<&str>,
     deadline: Instant,
-) -> Result<LaunchGrant, &'static str> {
-    let mut transport =
-        HttpsTransport::with_deadline(GITHUB_API, deadline).map_err(HostError::code)?;
-    let verified = authorize_source(connection, source, token, &mut transport)
-        .map_err(crate::launch::steps::source::SourceBlock::code)?;
+) -> Result<LaunchGrant, Refusal> {
+    let mut transport = HttpsTransport::with_deadline(GITHUB_API, deadline)
+        .map_err(|_| Refusal::Unavailable("transport"))?;
+    let verified =
+        authorize_source(connection, source, token, &mut transport).map_err(|block| {
+            if matches!(block, SourceBlock::ApiUnavailable) {
+                Refusal::Unavailable(block.code())
+            } else {
+                Refusal::Blocked(block.code())
+            }
+        })?;
     verify_launch_source(
         connection,
         policy,
@@ -104,11 +148,10 @@ pub(super) fn verify_launch_source(
     token: &str,
     known_default_branch: Option<&str>,
     deadline: Instant,
-) -> Result<LaunchGrant, &'static str> {
-    let identity = HostError::code(HostError::Identity);
-    let (owner, name) = connection.repository.split_once('/').ok_or(identity)?;
-    let mut transport =
-        HttpsTransport::with_deadline(GITHUB_API, deadline).map_err(HostError::code)?;
+) -> Result<LaunchGrant, Refusal> {
+    let (owner, name) = connection.repository.split_once('/').ok_or(IDENTITY)?;
+    let mut transport = HttpsTransport::with_deadline(GITHUB_API, deadline)
+        .map_err(|_| Refusal::Unavailable("transport"))?;
     let run = get_workflow_run_attempt(
         &mut transport,
         owner,
@@ -117,15 +160,15 @@ pub(super) fn verify_launch_source(
         verified.run_attempt,
         token,
     )
-    .map_err(|_| identity)?;
+    .map_err(Refusal::lookup)?;
     if run.repository.id != connection.repository_id {
-        return Err(CROSS_REPOSITORY);
+        return Err(Refusal::Blocked(CROSS_REPOSITORY));
     }
     let (claim, pull) = if verified.event_name == "pull_request" {
-        pull_claim(&mut transport, connection, verified, &run, token).map_err(HostError::code)?
+        pull_claim(&mut transport, connection, verified, &run, token)?
     } else {
         (
-            branch_claim(connection, verified, &run).map_err(HostError::code)?,
+            branch_claim(connection, verified, &run).map_err(Refusal::blocked)?,
             None,
         )
     };
@@ -133,19 +176,26 @@ pub(super) fn verify_launch_source(
         .as_ref()
         .is_some_and(|pull| pull.head_repository_id != connection.repository_id)
     {
-        return Err(CROSS_REPOSITORY);
+        return Err(Refusal::Blocked(CROSS_REPOSITORY));
     }
-    let checked = verify_source_claim(connection, policy, &claim, token, deadline)
-        .map_err(HostError::code)?;
-    let default_branch = match known_default_branch {
-        Some(branch) => branch.to_owned(),
-        None => default_branch(&mut transport, connection, token)?,
+    let checked =
+        verify_source_claim(connection, policy, &claim, token, deadline).map_err(|error| {
+            if Instant::now() >= deadline {
+                Refusal::Unavailable("timeout")
+            } else {
+                Refusal::blocked(error)
+            }
+        })?;
+    let (default_branch, fetched_default_branch) = match known_default_branch {
+        Some(branch) => (branch.to_owned(), false),
+        None => (default_branch(&mut transport, connection, token)?, true),
     };
     Ok(LaunchGrant {
         repository_id: claim.repository_id,
         repository: claim.repository_name,
         server_url: GITHUB_SERVER_URL,
         default_branch,
+        fetched_default_branch,
         event: claim.event_name,
         event_ref: claim.event_ref,
         tested_sha: claim.tested_sha,
@@ -160,17 +210,16 @@ fn default_branch(
     transport: &mut HttpsTransport,
     connection: &RepositoryConnection,
     token: &str,
-) -> Result<String, &'static str> {
-    let identity = HostError::code(HostError::Identity);
-    let (owner, name) = connection.repository.split_once('/').ok_or(identity)?;
-    let repository = get_repository(transport, owner, name, token).map_err(|_| identity)?;
+) -> Result<String, Refusal> {
+    let (owner, name) = connection.repository.split_once('/').ok_or(IDENTITY)?;
+    let repository = get_repository(transport, owner, name, token).map_err(Refusal::lookup)?;
     if repository.id != connection.repository_id {
-        return Err(identity);
+        return Err(IDENTITY);
     }
     repository
         .default_branch
         .filter(|branch| !branch.is_empty())
-        .ok_or(identity)
+        .ok_or(IDENTITY)
 }
 
 fn base_claim(
@@ -224,24 +273,21 @@ fn pull_claim(
     verified: &VerifiedWorkflowSource,
     run: &WorkflowRun,
     token: &str,
-) -> Result<(SourceClaim, Option<GrantedPull>), HostError> {
+) -> Result<(SourceClaim, Option<GrantedPull>), Refusal> {
     let reference = verified.job_workflow.reference.as_str();
     let number = reference
         .strip_prefix("refs/pull/")
         .and_then(|value| value.strip_suffix("/merge"))
         .and_then(|value| value.parse::<i64>().ok())
         .filter(|value| *value > 0)
-        .ok_or(HostError::Identity)?;
-    let (owner, name) = connection
-        .repository
-        .split_once('/')
-        .ok_or(HostError::Identity)?;
-    let pull =
-        get_pull_request(transport, owner, name, number, token).map_err(|_| HostError::Identity)?;
-    let tested_sha = pull.merge_commit_sha.clone().ok_or(HostError::Identity)?;
-    let head_repository = pull.head.repository.as_ref().ok_or(HostError::Identity)?;
-    let number = u64::try_from(number).map_err(|_| HostError::Identity)?;
-    let mut claim = base_claim(connection, verified, run, reference.to_owned(), tested_sha)?;
+        .ok_or(IDENTITY)?;
+    let (owner, name) = connection.repository.split_once('/').ok_or(IDENTITY)?;
+    let pull = get_pull_request(transport, owner, name, number, token).map_err(Refusal::lookup)?;
+    let tested_sha = pull.merge_commit_sha.clone().ok_or(IDENTITY)?;
+    let head_repository = pull.head.repository.as_ref().ok_or(IDENTITY)?;
+    let number = u64::try_from(number).map_err(|_| IDENTITY)?;
+    let mut claim = base_claim(connection, verified, run, reference.to_owned(), tested_sha)
+        .map_err(Refusal::blocked)?;
     claim.pull_request = Some(PullClaim {
         number,
         base_ref: pull.base.reference.clone(),

@@ -6,7 +6,7 @@ use velnor_runner_github::EncodedJit;
 
 use super::admission::JobExit;
 use super::cleanup::{CleanupProof, ProofInputs, prove};
-use super::{Event, Run, blocking};
+use super::{Event, RUNNER_FAILURE_LIMIT, Run, blocking};
 use crate::launch_blocking::ListenFault;
 use crate::rust_runner::{ReservationId, RunningJob};
 
@@ -59,6 +59,24 @@ impl Run<'_> {
                 self.machine_ok = false;
                 self.begin_proof(reservation, JobExit::SpawnFailed);
             }
+        }
+    }
+
+    pub(super) fn note_exit(&mut self, exit: &JobExit) {
+        let JobExit::Exited(status) = exit else {
+            return;
+        };
+        if status.success() {
+            self.runner_failures = 0;
+            return;
+        }
+        self.runner_failures = self.runner_failures.saturating_add(1);
+        if self.runner_failures >= RUNNER_FAILURE_LIMIT {
+            eprintln!(
+                "rust-runner closing admission after {} consecutive failed runner exits",
+                self.runner_failures
+            );
+            self.machine_ok = false;
         }
     }
 

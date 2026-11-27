@@ -14,12 +14,15 @@ use crate::launch_blocking::ListenFault;
 
 const ADMIN_RENEWAL: Duration = Duration::from_mins(20);
 const ADMIN_RETRY: Duration = Duration::from_secs(30);
+const DEFAULT_BRANCH_TTL: Duration = Duration::from_mins(5);
 
 pub(super) struct Pending {
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
     pub(super) policy: ApprovedJobAuthorityPolicy,
     pub(super) set: Option<(Admin, i64)>,
+    pub(super) admin_at: Instant,
+    pub(super) renew: bool,
     pub(super) session: Option<QueueSession>,
     pub(super) cleared: bool,
 }
@@ -28,7 +31,7 @@ pub(super) struct Live {
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
     pub(super) policy: ApprovedJobAuthorityPolicy,
-    pub(super) default_branch: Option<String>,
+    default_branch: Option<(String, Instant)>,
     pub(super) admin: Admin,
     pub(super) scale_set_id: i64,
     pub(super) session: QueueSession,
@@ -64,12 +67,27 @@ impl Pending {
             poll_retry_at: None,
             batch: None,
             refreshing: false,
-            admin_due: Instant::now() + ADMIN_RENEWAL,
+            admin_due: self.admin_at + ADMIN_RENEWAL,
         })
+    }
+
+    pub(super) fn admin_expired(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.admin_at) >= ADMIN_RENEWAL
     }
 }
 
 impl Live {
+    pub(super) fn known_default_branch(&self, now: Instant) -> Option<String> {
+        self.default_branch
+            .as_ref()
+            .filter(|(_, fetched)| now.saturating_duration_since(*fetched) < DEFAULT_BRANCH_TTL)
+            .map(|(name, _)| name.clone())
+    }
+
+    pub(super) fn remember_default_branch(&mut self, name: &str, now: Instant) {
+        self.default_branch = Some((name.to_owned(), now));
+    }
+
     pub(super) fn renewed(&mut self, now: Instant, admin: Option<Admin>) {
         self.refreshing = false;
         match admin {

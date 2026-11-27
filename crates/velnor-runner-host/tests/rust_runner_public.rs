@@ -3,6 +3,8 @@
 
 #[path = "rust_runner_public/hardening.rs"]
 mod hardening;
+#[path = "rust_runner_public/store.rs"]
+mod store;
 #[path = "rust_runner_public/support.rs"]
 mod support;
 
@@ -47,6 +49,26 @@ fn rust_runner_skips_create_when_machine_exists() -> Result<(), Box<dyn Error>> 
         "{:?}",
         fixture.log()?
     );
+    for listed in [
+        r#"[{"name":"velnor","image":{"distro":"debian","arch":"arm64"}}]"#,
+        r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"amd64"}}]"#,
+    ] {
+        let incompatible = Fixture::new(listed)?;
+        assert_eq!(
+            incompatible.launcher().ensure_machine().err(),
+            Some(HostError::RustRunner(
+                RustRunnerFailure::MachineIncompatible
+            )),
+            "{listed}"
+        );
+        assert!(
+            incompatible.log()?.iter().all(|line| {
+                !line.starts_with("create") && !line.contains(" ln ") && !line.contains(" test ")
+            }),
+            "{:?}",
+            incompatible.log()?
+        );
+    }
     Ok(())
 }
 

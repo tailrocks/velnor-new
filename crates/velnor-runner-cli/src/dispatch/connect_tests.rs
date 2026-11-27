@@ -211,6 +211,52 @@ fn connect_writes_launch_mode_rust_runner() -> Result<(), Box<dyn std::error::Er
     assert!(text.contains("launch_mode = \"rust-runner\""), "{text}");
     let config = HostConfig::parse(&text)?;
     assert_eq!(config.host.launch_mode, LaunchMode::RustRunner);
+    switching_the_launch_mode_is_rejected(&inventory, &artifact)
+}
+
+fn arm_request<'a>(
+    state: &'a Path,
+    launch_mode: LaunchMode,
+    inventory: &'a Path,
+    artifact: &'a str,
+) -> ConnectRequest<'a> {
+    ConnectRequest {
+        scale_set: "ubuntu-26.04-arm-scale-set",
+        scale_set_labels: vec!["velnor".to_owned(), "ubuntu-26.04-arm-scale-set".to_owned()],
+        platform: "linux/arm64",
+        launch_mode,
+        job_authority_inventory: Some(inventory),
+        job_authority_generator_source_sha: Some(SOURCE_SHA),
+        job_authority_generator_artifact_sha256: Some(artifact),
+        job_authority_generation: Some(1),
+        ..request(state, None)
+    }
+}
+
+fn switching_the_launch_mode_is_rejected(
+    inventory: &Path,
+    artifact: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for mode in [LaunchMode::RustRunner, LaunchMode::OfficialRunner] {
+        let temp = tempfile::tempdir()?;
+        let state = temp.path().canonicalize()?;
+        let keychain = FakeKeychain::default();
+        let request = arm_request(&state, mode, inventory, artifact);
+        assert_eq!(connect(&keychain, &request, "token-0"), Ok(()), "{mode:?}");
+    }
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let first = arm_request(&state, LaunchMode::RustRunner, inventory, artifact);
+    assert_eq!(connect(&keychain, &first, "token-1"), Ok(()));
+    let configured = std::fs::read(state.join("host.toml"))?;
+    let second = arm_request(&state, LaunchMode::OfficialRunner, inventory, artifact);
+    assert_eq!(
+        connect(&keychain, &second, "token-2"),
+        Err(ConnectError::Rejected)
+    );
+    assert_eq!(std::fs::read(state.join("host.toml"))?, configured);
+    assert_eq!(keychain.stored(), vec![b"token-1".to_vec()]);
     Ok(())
 }
 

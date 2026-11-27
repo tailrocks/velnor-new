@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
 use velnor_runner_github::{
     AckScope, AcquireOutcome, EncodedJit, ParsedBatch, QueueSession, RefreshGate, ScaleSetByName,
     ScaleSetCreate, ScaleSetFound, WireError, ack, acquire, create_runner_scale_set,
     create_session, delete_session, get_runner_by_name, get_runner_scale_set, jit, jit_request,
     list_runner_groups, list_scale_set_runners, refresh_session, remove_runner,
 };
+
 use zeroize::Zeroizing;
 
+use super::owned;
 use crate::config::RepositoryConnection;
 use crate::error::{HostError, RustRunnerFailure};
 use crate::https::HttpsTransport;
@@ -59,6 +62,7 @@ impl QueueAccess {
 pub(super) fn open_scale_set(
     pat: &str,
     binding: &RepositoryConnection,
+    state: &Path,
 ) -> Result<(Admin, i64), ListenFault> {
     let (mut transport, connection) = open_binding_admin(pat, binding)?;
     let admin = Admin {
@@ -81,10 +85,16 @@ pub(super) fn open_scale_set(
         },
     )
     .map_err(|error| map_session(error, &transport))?;
+    let shared = binding.organization.is_some();
     let id = match found {
-        ScaleSetFound::Found(view) => view.id,
+        ScaleSetFound::Found(view) => {
+            if shared && owned::created(state, &binding.connection_id)? != Some(view.id) {
+                return Err(EnsureError::Uncertain.into());
+            }
+            view.id
+        }
         ScaleSetFound::NotFound => {
-            create_runner_scale_set(
+            let created = create_runner_scale_set(
                 &mut transport,
                 &ScaleSetCreate {
                     name,
@@ -94,7 +104,11 @@ pub(super) fn open_scale_set(
                 },
             )
             .map_err(|error| map_session(error, &transport))?
-            .id
+            .id;
+            if shared {
+                owned::record_created(state, &binding.connection_id, created)?;
+            }
+            created
         }
     };
     Ok((admin, id))

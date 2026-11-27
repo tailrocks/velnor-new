@@ -9,6 +9,7 @@ use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
 pub(super) fn run(test: &str) -> TestResult<()> {
+    super::credentials::run(test)?;
     let mut world = World::new("T5", 1, true)?;
     world.configure_orb("FAKE_RUNNER_HOLD=1\n")?;
     world.queue_message(51, &[push_offer(1, 5001, "main", WORKFLOW)])?;

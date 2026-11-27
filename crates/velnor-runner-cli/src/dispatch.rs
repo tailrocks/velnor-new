@@ -121,10 +121,11 @@ fn dispatch(cli: &Cli) -> ExitCode {
 }
 
 fn in_rust_runner_mode(state: &Path) -> bool {
-    matches!(
-        connection_state::read_host(state),
-        Ok(Some(config)) if config.host.launch_mode == LaunchMode::RustRunner
-    )
+    match connection_state::read_host(state) {
+        Ok(None) => false,
+        Ok(Some(config)) => config.host.launch_mode == LaunchMode::RustRunner,
+        Err(_) => true,
+    }
 }
 
 fn command_unavailable() -> ExitCode {

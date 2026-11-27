@@ -147,6 +147,9 @@ impl Slots {
         exit: JobExit,
     ) -> Option<LaunchGrant> {
         let slot = self.entries.get_mut(&reservation)?;
+        if matches!(slot.phase, Phase::Proving { .. }) {
+            return None;
+        }
         let previous = std::mem::replace(
             &mut slot.phase,
             Phase::Proving {
@@ -158,6 +161,20 @@ impl Slots {
             Phase::Launching { grant } | Phase::Running { grant, .. } => Some(grant),
             Phase::Proving { .. } => None,
         }
+    }
+
+    pub(super) fn prove_launching(&mut self) -> Vec<(ReservationId, usize)> {
+        let mut moved = Vec::new();
+        for (reservation, slot) in &mut self.entries {
+            if matches!(slot.phase, Phase::Launching { .. }) {
+                slot.phase = Phase::Proving {
+                    exit: JobExit::Stopped,
+                    attempting: false,
+                };
+                moved.push((*reservation, slot.connection));
+            }
+        }
+        moved
     }
 
     pub(super) fn stop_all(&mut self) {

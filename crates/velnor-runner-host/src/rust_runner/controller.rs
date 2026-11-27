@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::task::{JoinError, JoinSet};
 use velnor_runner_github::QueueSession;
@@ -24,9 +24,11 @@ mod connection;
 mod cursor;
 mod github;
 mod jobs;
+mod owned;
 mod pats;
 mod readiness;
 mod run_blocking;
+mod sessions;
 mod source;
 mod startup;
 
@@ -35,17 +37,18 @@ use cleanup::CleanupProof;
 use connection::Live;
 use github::Acquisition;
 use readiness::Phase;
-use source::LaunchGrant;
+use source::{LaunchGrant, Refusal};
 use startup::Started;
 
 pub use pats::ConnectionPats;
 pub(crate) use readiness::assess as heartbeat_readiness;
-pub(crate) use run_blocking::run_blocking;
+pub(crate) use run_blocking::{Handover, run_blocking};
 
 const TICK: Duration = Duration::from_secs(2);
 const POLL_WAKE: Duration = Duration::from_millis(500);
 const JOB_STOP_WAIT: Duration = Duration::from_secs(15);
 const PROOF_WAIT: Duration = Duration::from_secs(30);
+const RUNNER_FAILURE_LIMIT: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RustRunnerExit {
@@ -91,11 +94,12 @@ enum Event {
     Checked {
         connection: usize,
         request_id: i64,
-        result: Result<LaunchGrant, &'static str>,
+        result: Result<LaunchGrant, Refusal>,
     },
     Acquired {
         connection: usize,
         reservation: ReservationId,
+        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     },
     Acked {
@@ -139,6 +143,7 @@ struct Run<'a> {
     tasks: JoinSet<Event>,
     machine_ok: bool,
     machine_checking: bool,
+    runner_failures: u32,
     stopping: bool,
 }
 
@@ -168,6 +173,7 @@ pub async fn run_rust_runner_host(
     let connections = match startup::start(&cx, &config, &pats, &mut shutdown).await? {
         Started::Ready(connections) => connections,
         Started::Shutdown => return Ok(RustRunnerExit::Shutdown),
+        Started::ConfigChanged => return Ok(RustRunnerExit::ConfigChanged),
     };
     let capacity = config.host.max_jobs;
     let mut run = Run {
@@ -181,9 +187,17 @@ pub async fn run_rust_runner_host(
         tasks: JoinSet::new(),
         machine_ok: true,
         machine_checking: false,
+        runner_failures: 0,
         stopping: false,
     };
-    run.serve(&mut shutdown).await
+    let result = run.serve(&mut shutdown).await;
+    if result.is_err()
+        && !run.stopping
+        && let Err(error) = run.stop().await
+    {
+        eprintln!("rust-runner cleanup after a controller error held: {error}");
+    }
+    result
 }
 
 impl Run<'_> {
@@ -231,14 +245,18 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
+                request_id,
                 result,
-            } => self.on_acquired(connection, reservation, result),
+            } => self.on_acquired(connection, reservation, request_id, result),
             Event::Acked {
                 connection,
                 message_id,
                 result,
             } => self.on_acked(connection, message_id, result),
-            Event::Ended { reservation, exit } => self.begin_proof(reservation, exit),
+            Event::Ended { reservation, exit } => {
+                self.note_exit(&exit);
+                self.begin_proof(reservation, exit);
+            }
             Event::Proved {
                 reservation,
                 result,
@@ -261,10 +279,12 @@ impl Run<'_> {
         {
             return Err(HostError::Lock.into());
         }
-        self.cx.beat(if self.machine_ok {
-            Phase::Ready
-        } else {
+        self.cx.beat(if !self.machine_ok {
             Phase::MachineUnavailable
+        } else if self.runner_failures >= RUNNER_FAILURE_LIMIT {
+            Phase::RunnerFailing
+        } else {
+            Phase::Ready
         });
         self.spawn_due_proofs();
         self.spawn_due_renewals();
@@ -302,6 +322,12 @@ impl Run<'_> {
                 Ok(None) | Err(_) => break,
             }
         }
+        for (reservation, connection) in self.slots.prove_launching() {
+            eprintln!(
+                "rust-runner stopping with reservation {reservation} launching; the proof removes runner {}",
+                self.runner_name(connection, reservation)
+            );
+        }
         self.spawn_due_proofs();
         let proofs_deadline = tokio::time::Instant::now() + PROOF_WAIT;
         while self.slots.attempting() {
@@ -312,73 +338,5 @@ impl Run<'_> {
         }
         self.close_sessions().await;
         Ok(())
-    }
-
-    async fn close_sessions(&mut self) {
-        for live in &self.connections {
-            let admin = live.admin.clone();
-            let (id, session_id) = (live.scale_set_id, live.session.session_id.clone());
-            if let Err(error) =
-                blocking(move || github::close_session(&admin, id, &session_id)).await
-            {
-                eprintln!("rust-runner session close held: {error}");
-            }
-        }
-    }
-
-    fn spawn_due_renewals(&mut self) {
-        let now = Instant::now();
-        for (index, live) in self.connections.iter_mut().enumerate() {
-            if live.refreshing || now < live.admin_due {
-                continue;
-            }
-            live.refreshing = true;
-            let (pat, binding) = (live.pat.clone(), live.binding.clone());
-            self.tasks.spawn(async move {
-                let result = blocking(move || github::renew_admin(&pat, &binding)).await;
-                Event::Renewed {
-                    connection: index,
-                    result,
-                }
-            });
-        }
-    }
-
-    pub(super) fn spawn_refresh(&mut self, connection: usize) {
-        let Some(live) = self.connections.get_mut(connection) else {
-            return;
-        };
-        live.refreshing = true;
-        let (pat, binding, admin) = (live.pat.clone(), live.binding.clone(), live.admin.clone());
-        let (id, session_id) = (live.scale_set_id, live.session.session_id.clone());
-        self.tasks.spawn(async move {
-            let result =
-                blocking(move || github::refresh(&pat, &binding, &admin, id, &session_id)).await;
-            Event::Refreshed { connection, result }
-        });
-    }
-
-    fn on_refreshed(
-        &mut self,
-        connection: usize,
-        result: Result<(github::Admin, QueueSession), ListenFault>,
-    ) -> Result<(), ListenFault> {
-        let Some(live) = self.connections.get_mut(connection) else {
-            return Ok(());
-        };
-        if let Err(error) = &result {
-            eprintln!("rust-runner session refresh held: {error}");
-        }
-        live.refreshed(Instant::now(), result.ok())
-    }
-
-    fn on_renewed(&mut self, connection: usize, result: Result<github::Admin, ListenFault>) {
-        let Some(live) = self.connections.get_mut(connection) else {
-            return;
-        };
-        if let Err(error) = &result {
-            eprintln!("rust-runner admin renewal held: {error}");
-        }
-        live.renewed(Instant::now(), result.ok());
     }
 }

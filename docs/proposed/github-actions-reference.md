@@ -35,6 +35,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 - The actions/scaleset client registers with `POST /actions/runner-registration` carrying the `url` of the registration scope and a registration token; GitHub documents the organization token as `POST /orgs/{org}/actions/runners/registration-token` and the repository token as `POST /repos/{owner}/{repo}/actions/runners/registration-token`. For an organization binding, `velnor-runner-host` sends `url=https://github.com/{org}` and uses the organization token path; the organization must equal the owner of the bound repository, compared exactly as configured.
 - Runner groups are listed at `_apis/runtime/runnergroups` on the admin connection. A named group must match exactly one entry and the unnamed choice must match exactly one default entry. Duplicate numeric group IDs anywhere in the response are rejected, because the journal keeps only the numeric ID.
 - An organization scale set is shared by every repository of the organization that selects the same group, name and labels, so the host never adopts an existing organization scale set that this connection did not create; a name conflict stays uncertain.
+- The rust-runner controller keeps no journal. For an organization binding it records the scale set it created in `rust-runner-scale-sets.json` of the state directory (connection id to scale set id) and adopts an existing set only when that id matches; any other set with the same group, name and labels is refused as uncertain. A repository binding still adopts a set that matches its selector.
 - The bound repository ID, owner and name are verified before registration and again on every admin refresh. Owner and name compare ASCII case-insensitively against GitHub's canonical spelling; the repository ID must match exactly.
 
 ### 3. Runner Environments & Tooling Inventories
@@ -104,6 +105,8 @@ The claim takes its event ref and tested SHA from the values GitHub documents fo
 
 The host admits a source only when the run's repository and, for a pull request, the head repository of the pull request are the connected repository. Any other source is refused with the reason `cross_repository`: the job-level grant, and the sandbox that enforces it, belong to the launch-grant work, and until then a job from another repository would run with the host's reach.
 
+A check that fails for a reason on GitHub's side leaves the message in the queue: a transport failure, a timeout (the check budget is 60 s), `408`, `429`, `5xx` and an unreadable run, pull request or repository response are deferred and the offer is checked again when the message is redelivered. Every other refusal is final and the message is acknowledged. Errors that the shared verifier (`verify_source_claim`) folds into `identity` stay final unless the budget ran out.
+
 ### GitHub REST response shapes read by the rust-runner host
 
 Observed from public repositories with `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2026-03-10` (`GET /repos/actions/runner`, `GET /repos/actions/runner/actions/runs?per_page=1`, and, for a same-repository pull request run, `GET /repos/oven-sh/bun/actions/runs/{run}/attempts/1` and `GET /repos/oven-sh/bun/pulls/{number}`). The fake GitHub (`crates/velnor-runner-host/tests/fixtures/fake_github_shapes.ts`) serves these key sets.
@@ -115,7 +118,7 @@ Observed from public repositories with `Accept: application/vnd.github+json` and
 | `pull_requests[]` of a run | 5 | `number`, `head.ref`, `head.sha`, `head.repo.id`, `base.ref`, `base.sha`, `base.repo.id` | `head.repo` and `base.repo` hold `id`, `url`, `name` only, never `full_name`. The array is empty for a run of a pull request from a fork. |
 | `GET /repos/{owner}/{repo}/pulls/{number}` | 48 | `number`, `state`, `merged`, `merge_commit_sha`, `head`, `base` | `head` and `base` hold `label`, `ref`, `repo`, `sha`, `user`; `repo` is a full repository of 81 keys that includes `default_branch`. |
 
-The host reads the default branch from `GET /repos/{owner}/{repo}` once per connection and keeps it until the controller restarts. It never takes it from a run, whose repository objects do not carry it.
+The host reads the default branch from `GET /repos/{owner}/{repo}` and keeps it for at most five minutes per connection; the first offer of a batch after that refetches it. It never takes it from a run, whose repository objects do not carry it.
 
 ### Performance review sources
 

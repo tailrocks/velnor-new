@@ -7,6 +7,7 @@ export interface Repo {
   owner: string;
   repo: string;
   repository_id: number;
+  default_branch?: string;
 }
 export interface Pull {
   number: number;
@@ -26,6 +27,9 @@ export interface Offer {
   workflow_content: string;
   pr?: Pull;
   acquire_returns?: "none";
+  jit_returns?: 500;
+  head_repository_id?: number;
+  run_repository_id?: number;
 }
 
 const API = "https://api.github.com";
@@ -100,19 +104,19 @@ export function repository(c: Repo): Record<string, unknown> {
     forks: 0,
     open_issues: 0,
     watchers: 0,
-    default_branch: "main",
+    default_branch: c.default_branch ?? "main",
     custom_properties: {},
     network_count: 0,
     subscribers_count: 0,
   };
 }
 
-export function runJson(c: Repo, offer: Offer): object {
+export function runJson(c: Repo, offer: Offer, attempt: boolean): object {
   const pull = offer.pr;
-  const stub = (ref: string, sha: string) => ({
+  const stub = (ref: string, sha: string, id: number) => ({
     ref,
     sha,
-    repo: { id: c.repository_id, url: `${API}/repos/${c.owner}/${c.repo}`, name: c.repo },
+    repo: { id, url: `${API}/repos/${c.owner}/${c.repo}`, name: c.repo },
   });
   const url = `${API}/repos/${c.owner}/${c.repo}/actions/runs/${offer.run_id}`;
   return {
@@ -133,7 +137,7 @@ export function runJson(c: Repo, offer: Offer): object {
     url,
     html_url: url,
     pull_requests: pull
-      ? [{ url: `${API}/repos/${c.owner}/${c.repo}/pulls/${pull.number}`, id: pull.number, number: pull.number, head: stub(pull.head_ref, pull.head_sha), base: stub(pull.base_ref, pull.base_sha) }]
+      ? [{ url: `${API}/repos/${c.owner}/${c.repo}/pulls/${pull.number}`, id: pull.number, number: pull.number, head: stub(pull.head_ref, pull.head_sha, offer.head_repository_id ?? c.repository_id), base: stub(pull.base_ref, pull.base_sha, c.repository_id) }]
       : [],
     created_at: "2026-11-27T10:00:00Z",
     updated_at: "2026-11-27T10:00:00Z",
@@ -151,13 +155,13 @@ export function runJson(c: Repo, offer: Offer): object {
     previous_attempt_url: null,
     workflow_url: `${API}/repos/${c.owner}/${c.repo}/actions/workflows/7`,
     head_commit: { id: pull ? pull.head_sha : offer.sha },
-    repository: minimalRepository(c),
-    head_repository: minimalRepository(c),
+    repository: { ...minimalRepository(c), id: attempt ? (offer.run_repository_id ?? c.repository_id) : c.repository_id },
+    head_repository: { ...minimalRepository(c), id: offer.head_repository_id ?? c.repository_id },
   };
 }
 
 export function pullJson(c: Repo, pull: Pull, offer: Offer): object {
-  const side = (ref: string, sha: string) => ({ label: `${c.owner}:${ref}`, ref, repo: repository(c), sha, user: account(c.owner) });
+  const side = (ref: string, sha: string, id: number) => ({ label: `${c.owner}:${ref}`, ref, repo: { ...repository(c), id }, sha, user: account(c.owner) });
   return {
     url: `${API}/repos/${c.owner}/${c.repo}/pulls/${pull.number}`,
     id: pull.number,
@@ -172,8 +176,8 @@ export function pullJson(c: Repo, pull: Pull, offer: Offer): object {
     closed_at: null,
     merged_at: null,
     merge_commit_sha: offer.sha,
-    head: side(pull.head_ref, pull.head_sha),
-    base: side(pull.base_ref, pull.base_sha),
+    head: side(pull.head_ref, pull.head_sha, offer.head_repository_id ?? c.repository_id),
+    base: side(pull.base_ref, pull.base_sha, c.repository_id),
     draft: false,
     merged: false,
     mergeable: true,

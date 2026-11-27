@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
+pub const MAX_HOST_TOML_BYTES: u64 = 1_048_576;
+
 mod connection;
 mod developer_images;
 mod job_authority;
