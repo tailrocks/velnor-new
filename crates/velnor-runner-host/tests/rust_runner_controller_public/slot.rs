@@ -35,9 +35,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     world.script_refusals(&json!({
         "velnor-mac-2": {"statuses": [400, 409], "repeat_last": true, "until": "seen/release-runner"}
     }))?;
-    for (message, request, run) in [(31, 1, 3001), (32, 2, 3002), (33, 3, 3003), (34, 4, 3004)] {
-        world.queue_message(message, &[push_offer(request, run, "main", WORKFLOW)])?;
-    }
+    queue_next(&world, 31)?;
     world.spawn_controller(test, &[])?;
     held_by_processes(&world)?;
     world.configure_orb("")?;
@@ -109,10 +107,19 @@ fn assert_held(world: &World, job: &str, allowed_deletes: &[&str], acquired: &[&
     assert_eq!(acquire_ids(world), acquired, "{job}");
 }
 
+fn queue_next(world: &World, message: u64) -> TestResult<()> {
+    let request = message - 30;
+    world.queue_message(
+        message,
+        &[push_offer(request, 3000 + request, "main", WORKFLOW)],
+    )
+}
+
 fn held_by_processes(world: &World) -> TestResult<()> {
     world.wait_for_event("job A", 40, |events| {
         events.iter().any(Event::is_runner_start)
     });
+    queue_next(world, 32)?;
     let started = world
         .events()
         .into_iter()
@@ -139,6 +146,7 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
     world.wait_for_event("job B", 60, |events| {
         acquire_with_ids(events, "2").is_some()
     });
+    queue_next(world, 33)?;
     let events = world.events();
     let acquire = acquire_with_ids(&events, "2").ok_or("no acquire for B")?;
     let state = snapshot(world, &acquire);
@@ -199,6 +207,7 @@ fn held_by_the_files(world: &World) -> TestResult<()> {
     world.wait_for_event("job C", 60, |events| {
         acquire_with_ids(events, "3").is_some()
     });
+    queue_next(world, 34)?;
     let events = world.events();
     let removal = events
         .iter()
