@@ -10,7 +10,7 @@ use velnor_runner::lifecycle::LifecycleOutcome;
 use super::exec_builder::{assert_gone, pid_from, wait_for_file};
 use super::exec_support::Scratch;
 use super::lifecycle_support::{
-    CANCEL_BUDGET, Settings, fixture_job, job_replacing, run_in, run_with,
+    CANCEL_BUDGET, RUN_BUDGET, Settings, fixture_job, job_replacing, run_in, run_with,
 };
 use super::support::mock_github::{Behavior, Cancel, MessageTypes, MockGithub};
 
@@ -320,6 +320,49 @@ async fn lifecycle_stops_clearing_a_leftover_workspace_when_shutdown_arrives() -
         "the run returned before the leftover workspace was gone"
     );
     assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
+    mock.server.only_request("DELETE", "/broker/session")?;
+    Ok(())
+}
+
+const DIRECTORIES: usize = 100;
+
+fn growing_a_large_workspace() -> Result<serde_json::Value> {
+    let script = format!(
+        "seq 1 {DIRECTORIES} | xargs -P 8 -I{{}} sh -c \
+         'mkdir directory-{{}} && cd directory-{{}} && seq 1 50 | xargs touch'"
+    );
+    job_replacing("hello", Some(("echo hello", &script)))
+}
+
+#[tokio::test]
+async fn lifecycle_stops_clearing_the_workspace_after_the_job_when_shutdown_arrives() -> Result<()>
+{
+    let scratch = Scratch::new()?;
+    let workspace = scratch.work_dir().join("workspace");
+    let mock = MockGithub::start(growing_a_large_workspace()?, Behavior::default()).await?;
+    let shutdown = JobCancel::new();
+    let signal = shutdown.clone();
+    let watched = workspace.clone();
+    tokio::spawn(async move {
+        while std::fs::read_dir(&watched).map_or(true, |entries| entries.count() < DIRECTORIES) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        while std::fs::read_dir(&watched).is_ok_and(|entries| entries.count() == DIRECTORIES) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        signal.cancel();
+    });
+    let mut settings = Settings::new().within(RUN_BUDGET);
+    settings.shutdown = shutdown;
+
+    let outcome = run_in(&mock, &scratch, settings).await??;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
+    assert!(
+        std::fs::read_dir(&workspace).is_ok_and(|entries| entries.count() > 0),
+        "the run returned before the workspace was gone"
+    );
     mock.server.only_request("DELETE", "/broker/session")?;
     Ok(())
 }

@@ -186,6 +186,16 @@ pub(crate) async fn run_with(mock: &MockGithub, settings: Settings) -> Result<Li
     Ok(outcome)
 }
 
+pub(crate) fn shutdown_after(delay: Duration) -> JobCancel {
+    let shutdown = JobCancel::new();
+    let signal = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        signal.cancel();
+    });
+    shutdown
+}
+
 pub(crate) async fn run(mock: &MockGithub, renew_interval: Duration) -> Result<LifecycleOutcome> {
     run_with(mock, Settings::new().renewing_every(renew_interval)).await
 }

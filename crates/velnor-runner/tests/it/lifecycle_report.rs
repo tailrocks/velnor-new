@@ -317,3 +317,18 @@ async fn lifecycle_leaves_out_an_environment_url_that_reveals_a_secret() -> Resu
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn lifecycle_fails_the_job_when_the_environment_url_cannot_be_evaluated() -> Result<()> {
+    let url = serde_json::json!({"type": 3, "expr": "fromJSON('{')"});
+    let job = with_environment(fixture_job("hello", None)?, &url);
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+
+    let outcome = run(&mock, Duration::from_millis(200)).await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Failed));
+    let complete = mock.complete_request()?;
+    assert_eq!(complete["conclusion"], "failed");
+    assert!(complete.get("environmentUrl").is_none_or(Value::is_null));
+    Ok(())
+}

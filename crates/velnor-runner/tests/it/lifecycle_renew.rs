@@ -110,7 +110,8 @@ async fn lifecycle_cancels_the_job_when_a_shutdown_arrives_before_the_first_rene
     let mut settings = Settings::new().within(CANCEL_BUDGET);
     settings.shutdown = shutdown;
 
-    let outcome = run_with(&mock, settings).await?;
+    let scratch = Scratch::new()?;
+    let outcome = run_in(&mock, &scratch, settings).await??;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
     let complete = mock.complete_request()?;
