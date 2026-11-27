@@ -2,174 +2,269 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import type { Subprocess } from "bun";
+import { chmod, copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-const FAKE_ORB = `#!/usr/bin/env bun
-"use strict";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-type State = { machines: string[]; link: string | null };
-const env = (name: string): string => {
-  const value = process.env[name];
-  if (value === undefined) throw new Error("missing " + name);
-  return value;
-};
-const statePath = env("FAKE_ORB_STATE");
-const state: State = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : { machines: [], link: null };
-const save = (): void => writeFileSync(statePath, JSON.stringify(state));
-const fail = (message: string): never => {
-  process.stderr.write("fake orb: " + message + "\\n");
-  process.exit(1);
-};
-const args = Bun.argv.slice(2);
-if (args[0] === "list") {
-  process.stdout.write(JSON.stringify(state.machines.map((name) => ({ name }))));
-} else if (args[0] === "create") {
-  const name = args[args.length - 1] ?? "";
-  if (state.machines.includes(name)) fail("machine '" + name + "' already exists");
-  state.machines.push(name);
-  save();
-} else if (args[0] === "-m") {
-  if (!state.machines.includes(args[1] ?? "")) fail("no such machine");
-  let rest = args.slice(2);
-  if (rest[0] === "-u") rest = rest.slice(2);
-  const [command = "", ...operands] = rest;
-  if (command === "ln") {
-    if (operands[0] !== "-sfn" || operands[2] !== "/var/lib/velnor") fail("unexpected ln " + operands.join(" "));
-    state.link = operands[1] ?? null;
-    save();
-  } else if (command === "bash") {
-    process.exit(0);
-  } else if (command === "cat") {
-    const bytes = env("FAKE_ORB_BYTES");
-    const half = bytes.slice(0, Math.floor(bytes.length / 2));
-    if (process.env.FAKE_ORB_CAT_FAIL !== undefined) {
-      process.stdout.write(half);
-      process.exit(1);
-    }
-    process.stdout.write(half);
-    const started = process.env.FAKE_ORB_CAT_STARTED;
-    if (started !== undefined) writeFileSync(started, "");
-    const gate = process.env.FAKE_ORB_CAT_GATE;
-    while (gate !== undefined && !existsSync(gate)) await Bun.sleep(20);
-    process.stdout.write(bytes.slice(half.length));
-  } else if (command.startsWith("/var/lib/velnor/") && operands[0] === "--version") {
-    if (state.link === null || !state.link.startsWith("/mnt/mac")) fail("/var/lib/velnor is not linked to the host store");
-    const host = state.link.slice("/mnt/mac".length) + command.slice("/var/lib/velnor".length);
-    if (!existsSync(host)) fail(host + ": no such file");
-    const line = readFileSync(host, "utf8").split("\\n").find((candidate) => candidate.startsWith("velnor-runner "));
-    if (line === undefined) fail("not a velnor-runner binary");
-    process.stdout.write(line + "\\n");
-  } else {
-    fail("unexpected command " + command);
-  }
-} else {
-  fail("unexpected arguments " + args.join(" "));
-}
-`;
-
 const SCRIPT = join(import.meta.dir, "velnor-runner-install.ts");
+const FAKE_ORB = join(import.meta.dir, "fixtures/velnor-runner-install-orb.ts");
+const LOCK_FILE = ".velnor-runner.lock";
+const TEMP_PREFIX = ".velnor-runner.tmp-";
+const WAIT_LIMIT_MS = 8_000;
+const TEST_TIMEOUT_MS = 30_000;
+
+type Outcome = { readonly stdout: string; readonly stderr: string; readonly status: number };
+type Running = {
+  readonly child: Subprocess<"ignore", "pipe", "pipe">;
+  readonly stderr: () => string;
+  readonly finished: () => boolean;
+  readonly done: Promise<Outcome>;
+};
+type Box = { readonly root: string; readonly store: string; readonly bin: string; readonly state: string };
+type Extra = { readonly catFail?: boolean; readonly catStarted?: string; readonly catGate?: string };
+
 const scratch: string[] = [];
+const gates: string[] = [];
+let launches = 0;
+const running: Running[] = [];
+
+function processTable(): Array<readonly [number, number]> {
+  const listing = Bun.spawnSync(["/bin/ps", "-ax", "-o", "pid=,ppid="]).stdout.toString();
+  return listing
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/).map(Number))
+    .flatMap(([pid, parent]) => (pid === undefined || parent === undefined || Number.isNaN(pid) || Number.isNaN(parent) ? [] : [[pid, parent] as const]));
+}
+
+function descendants(root: number): number[] {
+  const table = processTable();
+  const found: number[] = [];
+  const queue = [root];
+  for (let parent = queue.pop(); parent !== undefined; parent = queue.pop()) {
+    for (const [pid, ppid] of table) {
+      if (ppid === parent && !found.includes(pid)) {
+        found.push(pid);
+        queue.push(pid);
+      }
+    }
+  }
+  return found;
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function killAll(pids: readonly number[]): void {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      continue;
+    }
+  }
+}
+
+async function waitFor(what: string, check: () => boolean | Promise<boolean>, limitMs = WAIT_LIMIT_MS): Promise<void> {
+  const deadline = Date.now() + limitMs;
+  while (!(await check())) {
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out after ${limitMs} ms waiting for ${what}`);
+    }
+    await Bun.sleep(20);
+  }
+}
+
+async function within<T>(what: string, limitMs: number, work: Promise<T>): Promise<T> {
+  let timer: Timer | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${limitMs} ms waiting for ${what}`)), limitMs);
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 afterEach(async () => {
+  await Promise.all(gates.splice(0).map((gate) => writeFile(gate, "")));
+  const active = running.splice(0);
+  const everything = active.flatMap((run) => [run.child.pid, ...descendants(run.child.pid)]);
+  killAll(everything);
+  await Promise.all(active.map((run) => run.child.exited));
+  await waitFor(`processes ${everything.join(",")} to exit`, () => everything.every((pid) => !alive(pid)));
   await Promise.all(scratch.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-type Sandbox = { readonly store: string; readonly bin: string; readonly state: string; readonly fakes: string };
-async function sandbox(): Promise<Sandbox> {
+async function sandbox(): Promise<Box> {
   const root = await mkdtemp(join(tmpdir(), "velnor-runner-install-"));
   scratch.push(root);
-  const fakes = join(root, "fakes");
-  await mkdir(fakes);
-  await writeFile(join(fakes, "orb"), FAKE_ORB, { mode: 0o755 });
   const store = join(root, "store");
-  return { store, bin: join(store, "bin"), state: join(root, "orb-state.json"), fakes };
+  return { root, store, bin: join(store, "bin"), state: join(root, "orb-state.json") };
 }
+
+async function fakeOrb(box: Box, built: string, extra: Extra): Promise<string> {
+  launches += 1;
+  const fakes = join(box.root, `fakes-${launches}`);
+  await mkdir(fakes);
+  await copyFile(FAKE_ORB, join(fakes, "orb"));
+  await chmod(join(fakes, "orb"), 0o755);
+  await writeFile(join(fakes, "config.json"), JSON.stringify({ state: box.state, bytes: built, ...extra }));
+  const path = [fakes, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+  expect(Bun.which("orb", { PATH: path })).toBe(join(fakes, "orb"));
+  return path;
+}
+
+const gateFile = (box: Box, name: string): string => {
+  const gate = join(box.root, name);
+  gates.push(gate);
+  return gate;
+};
 
 const binary = (version: string): string => `#!fake-binary-${version}\nvelnor-runner ${version}\npayload-${version}\n`;
-
-function launch(box: Sandbox, built: string, extra: Record<string, string> = {}) {
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    PATH: [box.fakes, dirname(process.execPath), process.env.PATH ?? ""].join(":"),
-    VELNOR_HOST_STORE: box.store,
-    FAKE_ORB_STATE: box.state,
-    FAKE_ORB_BYTES: built,
-  };
-  const child = Bun.spawn([process.execPath, SCRIPT], { env: { ...env, ...extra }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-  return Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]).then(([stdout, stderr, status]) => ({
-    stdout,
-    stderr,
-    status,
-  }));
-}
-
-const install = (box: Sandbox, built: string, catFails = false) => launch(box, built, catFails ? { FAKE_ORB_CAT_FAIL: "1" } : {});
 const half = (text: string): string => text.slice(0, Math.floor(text.length / 2));
 
-const mode = async (path: string): Promise<number> => (await stat(path)).mode & 0o777;
-const machines = async (box: Sandbox): Promise<string[]> => (JSON.parse(await Bun.file(box.state).text()) as { machines: string[] }).machines;
-
-test("installing twice converges: same version, identical 755 binary, one machine, no temp files", async () => {
-  const box = await sandbox();
-  const built = binary("0.1.82");
-  const first = await install(box, built);
-  const second = await install(box, built);
-  expect(first.status, first.stderr).toBe(0);
-  expect(second.status, second.stderr).toBe(0);
-  expect(first.stdout).toBe("velnor-runner 0.1.82\n");
-  expect(second.stdout).toBe(first.stdout);
-  expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(built);
-  expect(await mode(join(box.bin, "velnor-runner"))).toBe(0o755);
-  expect(await readdir(box.bin)).toEqual(["velnor-runner"]);
-  expect(await machines(box)).toEqual(["velnor"]);
-});
-
-test("a copy that fails partway keeps the old binary, prints no version and leaves no temp file", async () => {
-  const box = await sandbox();
-  const old = binary("0.1.81");
-  expect(half(old)).not.toBe(half(binary("0.1.82")));
-  expect((await install(box, old)).status).toBe(0);
-  const failed = await install(box, binary("0.1.82"), true);
-  expect(failed.status).not.toBe(0);
-  expect(failed.stdout).toBe("");
-  expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(old);
-  expect(await readdir(box.bin)).toEqual(["velnor-runner"]);
-});
-
-test("a temp file from a crashed run is swept and an existing binary is replaced", async () => {
-  const box = await sandbox();
-  expect((await install(box, binary("0.1.81"))).status).toBe(0);
-  await writeFile(join(box.bin, ".velnor-runner.tmp-99999"), "half-written");
-  const replaced = await install(box, binary("0.1.82"));
-  expect(replaced.status, replaced.stderr).toBe(0);
-  expect(replaced.stdout).toBe("velnor-runner 0.1.82\n");
-  expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
-  expect(await readdir(box.bin)).toEqual(["velnor-runner"]);
-});
-
-test("a concurrent install waits for the lock and leaves the first run's temp file alone", async () => {
-  const box = await sandbox();
-  expect((await install(box, binary("0.1.80"))).status).toBe(0);
-  const started = join(box.state, "..", "first-started");
-  const gate = join(box.state, "..", "first-gate");
-  const secondStarted = join(box.state, "..", "second-started");
-  const first = launch(box, binary("0.1.81"), { FAKE_ORB_CAT_STARTED: started, FAKE_ORB_CAT_GATE: gate });
-  await waitFor(() => Bun.file(started).exists(), 10_000);
-  const second = launch(box, binary("0.1.82"), { FAKE_ORB_CAT_STARTED: secondStarted });
-  await waitFor(() => Bun.file(secondStarted).exists(), 2_000);
-  const midCopy = (await readdir(box.bin)).filter((name) => name.startsWith(".velnor-runner.tmp-"));
-  expect(await Bun.file(secondStarted).exists()).toBe(false);
-  expect(midCopy.length).toBe(1);
-  await writeFile(gate, "");
-  const [a, b] = await Promise.all([first, second]);
-  expect(a.status, a.stderr).toBe(0);
-  expect(b.status, b.stderr).toBe(0);
-  expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
-  expect(await readdir(box.bin)).toEqual(["velnor-runner"]);
-});
-
-async function waitFor(done: () => Promise<boolean>, limitMs: number): Promise<void> {
-  const deadline = Date.now() + limitMs;
-  while (Date.now() < deadline && !(await done())) await Bun.sleep(20);
+async function start(box: Box, built: string, extra: Extra = {}): Promise<Running> {
+  const child = Bun.spawn([process.execPath, SCRIPT], {
+    env: { PATH: await fakeOrb(box, built, extra), HOME: box.root, VELNOR_HOST_STORE: box.store },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  let stderr = "";
+  let finished = false;
+  const decoder = new TextDecoder();
+  const drain = (async () => {
+    for await (const chunk of child.stderr) {
+      stderr += decoder.decode(chunk, { stream: true });
+    }
+  })();
+  const done = Promise.all([new Response(child.stdout).text(), drain, child.exited]).then(([stdout, , status]) => {
+    finished = true;
+    return { stdout, stderr, status };
+  });
+  const run = { child, stderr: () => stderr, finished: () => finished, done };
+  running.push(run);
+  return run;
 }
+
+const install = async (box: Box, built: string, extra: Extra = {}): Promise<Outcome> => (await start(box, built, extra)).done;
+const entries = async (box: Box): Promise<string[]> => (await readdir(box.bin)).sort();
+const temps = async (box: Box): Promise<string[]> => (await readdir(box.bin)).filter((name) => name.startsWith(TEMP_PREFIX));
+const mode = async (path: string): Promise<number> => (await stat(path)).mode & 0o777;
+const machines = async (box: Box): Promise<string[]> => (JSON.parse(await Bun.file(box.state).text()) as { machines: string[] }).machines;
+
+test(
+  "installing twice converges: same version, identical 755 binary, one machine, no temp files",
+  async () => {
+    const box = await sandbox();
+    const built = binary("0.1.82");
+    const first = await install(box, built);
+    const second = await install(box, built);
+    expect(first.status, first.stderr).toBe(0);
+    expect(second.status, second.stderr).toBe(0);
+    expect(first.stdout).toBe("velnor-runner 0.1.82\n");
+    expect(second.stdout).toBe(first.stdout);
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(built);
+    expect(await mode(join(box.bin, "velnor-runner"))).toBe(0o755);
+    expect(await entries(box)).toEqual([LOCK_FILE, "velnor-runner"]);
+    expect(await machines(box)).toEqual(["velnor"]);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a copy that fails partway keeps the old binary, prints no version and leaves no temp file",
+  async () => {
+    const box = await sandbox();
+    const old = binary("0.1.81");
+    expect(half(old)).not.toBe(half(binary("0.1.82")));
+    expect((await install(box, old)).status).toBe(0);
+    const failed = await install(box, binary("0.1.82"), { catFail: true });
+    expect(failed.status).not.toBe(0);
+    expect(failed.stdout).toBe("");
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(old);
+    expect(await entries(box)).toEqual([LOCK_FILE, "velnor-runner"]);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a temp file from a crashed run is swept and an existing binary is replaced",
+  async () => {
+    const box = await sandbox();
+    expect((await install(box, binary("0.1.81"))).status).toBe(0);
+    await writeFile(join(box.bin, `${TEMP_PREFIX}99999`), "half-written");
+    const replaced = await install(box, binary("0.1.82"));
+    expect(replaced.status, replaced.stderr).toBe(0);
+    expect(replaced.stdout).toBe("velnor-runner 0.1.82\n");
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
+    expect(await entries(box)).toEqual([LOCK_FILE, "velnor-runner"]);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a concurrent install reports that it waits for the lock and leaves the first run's temp file alone",
+  async () => {
+    const box = await sandbox();
+    expect((await install(box, binary("0.1.80"))).status).toBe(0);
+    const aStarted = join(box.root, "a-started");
+    const bStarted = join(box.root, "b-started");
+    const gate = gateFile(box, "a-gate");
+    const a = await start(box, binary("0.1.81"), { catStarted: aStarted, catGate: gate });
+    await waitFor("A's copy to start", () => Bun.file(aStarted).exists());
+    await waitFor("A's temp file to hold the first half of 0.1.81", async () => {
+      const found = await temps(box);
+      return found.length === 1 && (await Bun.file(join(box.bin, found[0] ?? "")).text()) === half(binary("0.1.81"));
+    });
+    const b = await start(box, binary("0.1.82"), { catStarted: bStarted });
+    await waitFor("B to report that it waits for the lock", async () => {
+      if (await Bun.file(bStarted).exists()) {
+        throw new Error("B started copying while A held the lock");
+      }
+      if (b.finished()) {
+        throw new Error(`B exited while A held the lock: ${b.stderr()}`);
+      }
+      return b.stderr().includes(`waiting for ${join(box.bin, LOCK_FILE)}`);
+    });
+    expect(await Bun.file(bStarted).exists()).toBe(false);
+    const found = await temps(box);
+    expect(found).toHaveLength(1);
+    expect(await Bun.file(join(box.bin, found[0] ?? "")).text()).toBe(half(binary("0.1.81")));
+    await writeFile(gate, "");
+    const [first, second] = await within("A and B to finish", WAIT_LIMIT_MS, Promise.all([a.done, b.done]));
+    expect(first.status, first.stderr).toBe(0);
+    expect(second.status, second.stderr).toBe(0);
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
+    expect(await entries(box)).toEqual([LOCK_FILE, "velnor-runner"]);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a holder killed with SIGKILL releases the lock and the next install proceeds without waiting",
+  async () => {
+    const box = await sandbox();
+    expect((await install(box, binary("0.1.80"))).status).toBe(0);
+    const aStarted = join(box.root, "a-started");
+    const a = await start(box, binary("0.1.81"), { catStarted: aStarted, catGate: gateFile(box, "a-gate") });
+    await waitFor("A's copy to start", () => Bun.file(aStarted).exists());
+    const holder = [a.child.pid, ...descendants(a.child.pid)];
+    killAll(holder);
+    await waitFor("A's processes to exit", () => holder.every((pid) => !alive(pid)));
+    const b = await within("B to finish after A was killed", WAIT_LIMIT_MS, install(box, binary("0.1.82")));
+    expect(b.status, b.stderr).toBe(0);
+    expect(b.stderr).not.toContain("waiting for");
+    expect(await Bun.file(join(box.bin, "velnor-runner")).text()).toBe(binary("0.1.82"));
+    expect(await entries(box)).toEqual([LOCK_FILE, "velnor-runner"]);
+  },
+  TEST_TIMEOUT_MS,
+);

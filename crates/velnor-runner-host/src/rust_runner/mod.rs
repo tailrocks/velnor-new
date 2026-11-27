@@ -24,6 +24,7 @@ const MAC_MOUNT: &str = "/mnt/mac";
 const MACHINE_ARCH: &str = "arm64";
 const MACHINE_DISTRO: &str = "ubuntu";
 const GUEST_STORE: &str = "/var/lib/velnor";
+const BIN_DIRECTORY: &str = "bin";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
@@ -38,7 +39,14 @@ const PID_NAMESPACE: [&str; 6] = [
     "--kill-child",
 ];
 const HOST_DIRECTORIES: [&str; 8] = [
-    "bin", "crates", "tools", "git", "gen", "cache", "records", "work",
+    BIN_DIRECTORY,
+    "crates",
+    "tools",
+    "git",
+    "gen",
+    "cache",
+    "records",
+    "work",
 ];
 const JIT_DIRECTORY: &str = "jit";
 
