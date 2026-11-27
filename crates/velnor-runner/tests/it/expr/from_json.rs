@@ -121,7 +121,7 @@ fn expr_from_json_reports_newtonsofts_path_and_position() -> Result<()> {
 
 #[test]
 fn expr_from_json_reports_a_syntax_error_that_precedes_the_depth() -> Result<()> {
-    let broken = format!("[1 2{}", "[".repeat(70));
+    let broken = format!("[1 2,{}", "[".repeat(70));
     assert!(depth_error(&broken)?.starts_with(PREFIX));
     assert!(error_text("fromJSON('[] [[')", &empty_env())?.starts_with(PREFIX));
     Ok(())
