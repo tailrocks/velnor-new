@@ -13,6 +13,12 @@ export type RunOptions = {
 };
 
 export const EX_TEMPFAIL = 75;
+
+export function requireMacOS(platform: string): void {
+  if (platform !== "darwin") {
+    throw new InstallError(`velnor-runner:install runs on macOS (it needs /usr/bin/lockf and the OrbStack machine); this is ${platform}`);
+  }
+}
 const PRESERVED_ENVIRONMENT = ["PATH", "HOME"] as const;
 
 export function hostEnvironment(extra: Readonly<Record<string, string>> = {}): Record<string, string> {

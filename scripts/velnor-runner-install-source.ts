@@ -4,13 +4,16 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { INPUT_FILES, type Inputs } from "./velnor-runner-install-config";
 import { hostEnvironment, InstallError, run } from "./velnor-runner-install-lib";
 
 const HARDENING = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"];
 const TOOLCHAIN_FILES = ["mise.toml", "mise.lock", "rust-toolchain.toml"];
 const OBJECT_NAME = /^[0-9a-f]{40,64}$/;
+const HIDDEN_FROM_STATUS = /^[a-zS] /;
 
-export const isObjectName = (text: string): boolean => OBJECT_NAME.test(text);
+export type Source = { readonly commit: string; readonly archive: Uint8Array; readonly toolchain: Uint8Array; readonly inputs: Inputs };
 
 const gitEnvironment = (extra: Readonly<Record<string, string>> = {}): Record<string, string> =>
   hostEnvironment({
@@ -22,39 +25,38 @@ const gitEnvironment = (extra: Readonly<Record<string, string>> = {}): Record<st
     ...extra,
   });
 
-async function git(args: readonly string[], extra: Readonly<Record<string, string>> = {}): Promise<string> {
+async function git(label: string, args: readonly string[], extra: Readonly<Record<string, string>> = {}): Promise<string> {
   const outcome = await run(["git", ...HARDENING, ...args], { env: gitEnvironment(extra), output: "capture" });
   if (outcome.status !== 0) {
-    throw new InstallError(`step 'source': git ${args.find((word) => !word.startsWith("-") && !word.includes("=")) ?? ""} exited with ${outcome.status}`);
+    throw new InstallError(`step 'source': git ${label} exited with ${outcome.status}`);
   }
   return outcome.stdout;
 }
 
-async function gitBytes(args: readonly string[]): Promise<Uint8Array> {
+async function gitBytes(label: string, args: readonly string[]): Promise<Uint8Array> {
   const child = Bun.spawn(["git", ...HARDENING, ...args], { cwd: "/", env: gitEnvironment(), stdin: "ignore", stdout: "pipe", stderr: "inherit" });
   const [bytes, status] = await Promise.all([new Response(child.stdout).bytes(), child.exited]);
   if (status !== 0) {
-    throw new InstallError(`step 'source': git archive exited with ${status}`);
+    throw new InstallError(`step 'source': git ${label} exited with ${status}`);
   }
   return bytes;
 }
 
-async function repositoryFacts(repository: string): Promise<{ commit: string; objects: string; index: string }> {
+async function repositoryFacts(repository: string): Promise<{ commit: string; index: string }> {
   const at = ["-C", repository];
-  const commit = (await git([...at, "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"])).trim();
-  const objects = (await git([...at, "rev-parse", "--path-format=absolute", "--git-path", "objects"])).trim();
-  const index = (await git([...at, "rev-parse", "--path-format=absolute", "--git-path", "index"])).trim();
-  if (!isObjectName(commit) || objects === "" || index === "") {
+  const commit = (await git("rev-parse", [...at, "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"])).trim();
+  const index = (await git("rev-parse", [...at, "rev-parse", "--path-format=absolute", "--git-path", "index"])).trim();
+  if (!OBJECT_NAME.test(commit) || index === "") {
     throw new InstallError(`step 'source': ${repository} is not a usable git checkout`);
   }
-  return { commit, objects, index };
+  return { commit, index };
 }
 
-async function pristine<T>(objects: string, commit: string, work: (gitDir: string) => Promise<T>): Promise<T> {
+async function verified<T>(repository: string, commit: string, work: (gitDir: string) => Promise<T>): Promise<T> {
   const gitDir = await mkdtemp(join(tmpdir(), "velnor-runner-git-"));
   try {
-    await git(["init", "--bare", "--quiet", "--template=", gitDir]);
-    await writeFile(join(gitDir, "objects/info/alternates"), `${objects}\n`);
+    await git("init", ["init", "--bare", "--quiet", "--template=", gitDir]);
+    await git("fetch", ["--git-dir", gitDir, "fetch", "--quiet", "--no-tags", "--depth=1", pathToFileURL(repository).href, commit]);
     await writeFile(join(gitDir, "HEAD"), `${commit}\n`);
     return await work(gitDir);
   } finally {
@@ -62,29 +64,40 @@ async function pristine<T>(objects: string, commit: string, work: (gitDir: strin
   }
 }
 
-export async function cleanCommit(repository: string): Promise<string> {
-  const { commit, objects, index } = await repositoryFacts(repository);
-  const changes = await pristine(objects, commit, (gitDir) =>
-    git(
-      ["--git-dir", gitDir, "-c", "core.bare=false", "--work-tree", repository, "status", "--porcelain=v1", "--untracked-files=no", "--ignore-submodules=all"],
-      { GIT_INDEX_FILE: index },
-    ),
-  );
-  if (changes.trim() !== "") {
-    const count = changes.trim().split("\n").length;
+async function refuseUnclean(repository: string, gitDir: string, index: string, commit: string): Promise<void> {
+  const tree = ["--git-dir", gitDir, "-c", "core.bare=false", "--work-tree", repository];
+  const env = { GIT_INDEX_FILE: index };
+  const changes = (await git("status", [...tree, "status", "--porcelain=v1", "--untracked-files=no", "--ignore-submodules=all"], env)).trim();
+  if (changes !== "") {
+    const count = changes.split("\n").length;
     throw new InstallError(
       `${repository} has ${count} uncommitted change${count === 1 ? "" : "s"} in tracked files; velnor-runner is built from the exact HEAD commit ${commit}, so commit or stash them first`,
     );
   }
-  return commit;
+  const hidden = (await git("ls-files", [...tree, "ls-files", "-v", "-z"], env)).split("\0").filter((entry) => HIDDEN_FROM_STATUS.test(entry));
+  if (hidden.length > 0) {
+    throw new InstallError(
+      `${repository} marks ${hidden.length} tracked file${hidden.length === 1 ? "" : "s"} assume-unchanged or skip-worktree (${hidden[0]?.slice(2) ?? ""}), so git cannot show whether they match HEAD ${commit}; clear the flags first`,
+    );
+  }
 }
 
-export type Source = { readonly archive: Uint8Array; readonly toolchain: Uint8Array };
+const blob = async (gitDir: string, commit: string, path: string): Promise<string> => git("cat-file", ["--git-dir", gitDir, "cat-file", "blob", `${commit}:${path}`]);
 
-export async function archiveCommit(repository: string, commit: string): Promise<Source> {
-  const { objects } = await repositoryFacts(repository);
-  return pristine(objects, commit, async (gitDir) => {
+export async function prepareSource(repository: string): Promise<Source> {
+  const { commit, index } = await repositoryFacts(repository);
+  return verified(repository, commit, async (gitDir) => {
+    await refuseUnclean(repository, gitDir, index, commit);
     const archive = ["--git-dir", gitDir, "archive", "--format=tar", commit];
-    return { archive: await gitBytes(archive), toolchain: await gitBytes([...archive, "--", ...TOOLCHAIN_FILES]) };
+    return {
+      commit,
+      archive: await gitBytes("archive", archive),
+      toolchain: await gitBytes("archive", [...archive, "--", ...TOOLCHAIN_FILES]),
+      inputs: {
+        machine: await blob(gitDir, commit, INPUT_FILES.machine),
+        digests: await blob(gitDir, commit, INPUT_FILES.digests),
+        mise: await blob(gitDir, commit, INPUT_FILES.mise),
+      },
+    };
   });
 }

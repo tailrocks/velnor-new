@@ -97,12 +97,12 @@ python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 '''
 
 [tasks."velnor-runner:install"]
-description = "Build velnor-runner in the OrbStack machine velnor and atomically install it into /Users/Shared/velnor/bin"
+description = "macOS only (the script stops elsewhere): build the exact HEAD commit of velnor-runner in the OrbStack machine velnor and atomically install it into /Users/Shared/velnor/bin"
 run = "bun scripts/velnor-runner-install.ts"
 
 [tasks.test-velnor-runner-install]
-description = "macOS only: run the bun tests of scripts/velnor-runner-install.ts (they need /usr/bin/lockf and /usr/bin/shasum); no generated workflow job runs them"
-run = "bun test ./scripts/velnor-runner-install.test.ts ./scripts/velnor-runner-install-guards.test.ts"
+description = "macOS only (the tests stop elsewhere; they need /usr/bin/lockf): run the bun tests of scripts/velnor-runner-install.ts; no generated workflow job runs them"
+run = "bun test ./scripts/velnor-runner-install.test.ts ./scripts/velnor-runner-install-guards.test.ts ./scripts/velnor-runner-install-guest.test.ts"
 
 [tasks.validate-hk]
 description = "Validate hk.pkl: fail when hk cannot load the config"

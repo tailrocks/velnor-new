@@ -3,19 +3,31 @@
 "use strict";
 import { afterEach, expect } from "bun:test";
 import type { Subprocess } from "bun";
-import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { chmod, copyFile, cp, mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+if (process.platform !== "darwin") {
+  throw new Error("the velnor-runner install tests need macOS (/usr/bin/lockf)");
+}
+
 const SCRIPTS = import.meta.dir;
 const REPOSITORY = join(SCRIPTS, "..");
 const FAKE_ORB = join(SCRIPTS, "fixtures/velnor-runner-install-orb.ts");
-const INSTALLER_FILES = ["velnor-runner-install.ts", "velnor-runner-install-lib.ts", "velnor-runner-install-config.ts", "velnor-runner-install-guest.ts", "velnor-runner-install-source.ts"];
+const FAKE_GIT = join(SCRIPTS, "fixtures/velnor-runner-install-git.ts");
+export const FORCE_LINUX = join(SCRIPTS, "fixtures/velnor-runner-install-linux.ts");
+const INSTALLER_FILES = [
+  "velnor-runner-install.ts",
+  "velnor-runner-install-lib.ts",
+  "velnor-runner-install-config.ts",
+  "velnor-runner-install-guest.ts",
+  "velnor-runner-install-host.ts",
+  "velnor-runner-install-source.ts",
+];
 const COPIED_INPUTS = ["crates/velnor-runner-host/src/rust_runner/mod.rs", "crates/velnor-render/src/mise_digest.rs", "mise.toml", "rust-toolchain.toml"];
 
-export const LOCK_FILE = ".velnor-runner.lock";
+export const UNDER_LOCK = "--run-under-install-lock";
 export const TEMP_PREFIX = ".velnor-runner.tmp-";
 export const WAIT_LIMIT_MS = 8_000;
 export const TEST_TIMEOUT_MS = 30_000;
@@ -28,9 +40,41 @@ export type Running = {
   readonly done: Promise<Outcome>;
 };
 export type Box = { readonly root: string; readonly store: string; readonly bin: string; readonly state: string; readonly log: string; readonly home: string };
-export type Repo = { readonly dir: string; readonly script: string; readonly key: string };
+export type Repo = { readonly dir: string; readonly script: string };
+export type Launch = { readonly preload?: string; readonly args?: readonly string[] };
 export type Extra = Record<string, unknown>;
-export type Call = { who: string; args: string[]; env: string[]; command?: string; operands?: string[]; user?: string; assignments?: Record<string, string>; stdinSha256?: string; checked?: string };
+export type Call = {
+  who: string;
+  args: string[];
+  env: string[];
+  command?: string;
+  operands?: string[];
+  user?: string;
+  assignments?: Record<string, string>;
+  outer?: Record<string, string>;
+  namespaced?: boolean;
+  stdinSha256?: string;
+  checked?: string;
+  checkedSha?: string;
+};
+
+export const MOUNT_INFO = [
+  "253 92 0:38 /scon/containers/AAA/rootfs / rw,noatime shared:242 - btrfs /dev/vdb1 rw,subvol=/scon",
+  "410 253 0:20 /opt/orbstack-guest /opt/orbstack-guest ro,noatime shared:296 - overlay orbstack rw,lowerdir=/",
+  "413 253 0:37 / /mnt/mac rw,relatime shared:299 - virtiofs mac rw",
+  "414 253 0:37 /Applications /Applications rw,relatime shared:300 - virtiofs mac rw",
+  "415 253 0:37 /Library /Library rw,relatime shared:301 - virtiofs mac rw",
+  "416 253 0:37 /Users /Users rw,relatime shared:302 - virtiofs mac rw",
+  "417 253 0:37 /Volumes /Volumes rw,relatime shared:306 - virtiofs mac rw",
+  "418 253 0:37 /private /private rw,relatime shared:307 - virtiofs mac rw",
+  "425 416 0:61 /Shared/Nested /Users/Nested rw,relatime shared:310 - virtiofs extra rw",
+  "426 253 0:62 /Shared /Extra\\040Disk rw,relatime shared:311 - virtiofs extra rw",
+  "419 253 0:50 / /mnt/machines rw,relatime shared:308 - tmpfs tmpfs rw",
+  "420 419 0:38 /scon/containers/BBB/rootfs /mnt/machines/other rw,noatime shared:309 - btrfs /dev/vdb1 rw",
+  "424 416 0:38 /scon/containers/BBB/rootfs /Users/someone/OrbStack/other rw,noatime shared:304 - btrfs /dev/vdb1 rw",
+  "",
+].join("\n");
+export const MASKED_MOUNTS = ["/Extra Disk", "/Applications", "/Library", "/Users", "/Volumes", "/mnt/mac", "/mnt/machines", "/private"];
 
 const scratch: string[] = [];
 const gates: string[] = [];
@@ -146,7 +190,7 @@ export async function checkout(box: Box, name = "checkout"): Promise<Repo> {
   git(box, dir, "init", "-q");
   git(box, dir, "add", "-A");
   git(box, dir, "commit", "-q", "-m", "initial");
-  return { dir, script: join(dir, "scripts/velnor-runner-install.ts"), key: createHash("sha256").update(dir).digest("hex").slice(0, 16) };
+  return { dir, script: join(dir, "scripts/velnor-runner-install.ts") };
 }
 
 export const gateFile = (box: Box, name: string): string => {
@@ -161,7 +205,12 @@ async function fakeOrb(box: Box, who: string, built: string, extra: Extra): Prom
   await mkdir(fakes);
   await copyFile(FAKE_ORB, join(fakes, "orb"));
   await chmod(join(fakes, "orb"), 0o755);
-  await writeFile(join(fakes, "config.json"), JSON.stringify({ state: box.state, log: box.log, who, bytes: built, ...extra }));
+  await writeFile(join(fakes, "config.json"), JSON.stringify({ state: box.state, log: box.log, who, bytes: built, mountInfo: MOUNT_INFO, ...extra }));
+  if (extra.gitTamper !== undefined) {
+    await copyFile(FAKE_GIT, join(fakes, "git"));
+    await chmod(join(fakes, "git"), 0o755);
+    await writeFile(join(fakes, "git-config.json"), JSON.stringify(extra.gitTamper));
+  }
   const path = [fakes, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
   expect(Bun.which("orb", { PATH: path })).toBe(join(fakes, "orb"));
   return path;
@@ -170,8 +219,9 @@ async function fakeOrb(box: Box, who: string, built: string, extra: Extra): Prom
 export const binary = (version: string): string => `#!fake-binary-${version}\nvelnor-runner ${version}\npayload-${version}\n`;
 export const half = (text: string): string => text.slice(0, Math.floor(text.length / 2));
 
-export async function start(box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run"): Promise<Running> {
-  const child = Bun.spawn([process.execPath, repo.script], {
+export async function start(box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Running> {
+  const command = [process.execPath, ...(launch.preload === undefined ? [] : ["--preload", launch.preload]), repo.script, ...(launch.args ?? [])];
+  const child = Bun.spawn(command, {
     env: { PATH: await fakeOrb(box, who, built, extra), HOME: box.home, VELNOR_HOST_STORE: box.store, SSH_AUTH_SOCK: join(box.root, "agent.sock"), ORBENV: "LEAK" },
     stdin: "ignore",
     stdout: "pipe",
@@ -194,13 +244,14 @@ export async function start(box: Box, repo: Repo, built: string, extra: Extra = 
   return run;
 }
 
-export const install = async (box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run"): Promise<Outcome> => (await start(box, repo, built, extra, who)).done;
+export const install = async (box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Outcome> =>
+  (await start(box, repo, built, extra, who, launch)).done;
 export const entries = async (box: Box): Promise<string[]> => (await readdir(box.bin)).sort();
 export const temps = async (box: Box): Promise<string[]> => (await readdir(box.bin)).filter((name) => name.startsWith(TEMP_PREFIX));
 export const mode = async (path: string): Promise<number> => (await stat(path)).mode & 0o777;
 export const machines = async (box: Box): Promise<string[]> => (JSON.parse(await Bun.file(box.state).text()) as { machines: string[] }).machines;
-export const checkoutLock = (repo: Repo): string => `.velnor-runner.${repo.key}.lock`;
-export const settled = (repo: Repo): string[] => [checkoutLock(repo), LOCK_FILE, "velnor-runner"].sort();
+export const lockFile = (box: Box): string => join(box.home, ".velnor-runner-install", "install.lock");
+export const settled = (): string[] => ["velnor-runner"];
 
 export async function calls(box: Box): Promise<Call[]> {
   if (!(await Bun.file(box.log).exists())) {
