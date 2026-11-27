@@ -176,13 +176,16 @@ impl Walk<'_> {
 
     fn classify(
         &self,
-        path: PathBuf,
         comps: Vec<String>,
-        kind: fs::FileType,
+        locate: impl FnOnce() -> Result<(PathBuf, fs::FileType), GlobError>,
     ) -> Result<Option<Visit>, GlobError> {
         let matched = self.patterns.matches_file(&comps)?;
         let partial = self.patterns.may_contain(&comps)?;
-        Ok((matched || partial).then_some(Visit {
+        if !matched && !partial {
+            return Ok(None);
+        }
+        let (path, kind) = locate()?;
+        Ok(Some(Visit {
             path,
             comps,
             kind,
@@ -214,7 +217,7 @@ impl Walk<'_> {
         let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
             return Ok(None);
         };
-        self.classify(path, root.to_vec(), metadata.file_type())
+        self.classify(root.to_vec(), || Ok((path, metadata.file_type())))
     }
 
     fn visit(&mut self, visit: Visit) -> Result<Option<PathBuf>, GlobError> {
@@ -254,16 +257,31 @@ impl Walk<'_> {
         let mut children = Vec::new();
         for item in reader {
             let item = item.map_err(|error| GlobError::io(&parent.path, error))?;
-            let kind = item
-                .file_type()
-                .map_err(|error| GlobError::io(&item.path(), error))?;
-            children.push((item.file_name(), kind));
+            let name = item.file_name();
+            let kind = match name.to_str() {
+                Some(_) => Some(
+                    item.file_type()
+                        .map_err(|error| GlobError::io(&item.path(), error))?,
+                ),
+                None => None,
+            };
+            children.push((name, kind));
         }
         children.sort_unstable_by(|left, right| right.0.cmp(&left.0));
         for (name, kind) in children {
+            let lossy = name.to_string_lossy();
             let mut comps = parent.comps.clone();
-            comps.push(name.to_string_lossy().into_owned());
-            if let Some(visit) = self.classify(parent.path.join(&name), comps, kind)? {
+            comps.push(lossy.to_string());
+            let located = || {
+                if let Some(kind) = kind {
+                    return Ok((parent.path.join(&name), kind));
+                }
+                let path = parent.path.join(lossy.as_ref());
+                let metadata =
+                    fs::symlink_metadata(&path).map_err(|error| GlobError::io(&path, error))?;
+                Ok((path, metadata.file_type()))
+            };
+            if let Some(visit) = self.classify(comps, located)? {
                 self.stack.push(visit);
             }
         }

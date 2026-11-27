@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(target_os = "linux")]
+#[path = "expr/format_allocation.rs"]
+mod expr_format_allocation;
 #[path = "expr/functions.rs"]
 mod expr_functions;
 #[path = "expr/hash_files.rs"]
@@ -11,6 +14,8 @@ mod expr_hash_files_fs;
 mod expr_hash_files_length;
 #[path = "expr/hash_files_minimatch.rs"]
 mod expr_hash_files_minimatch;
+#[path = "expr/hash_files_non_utf8.rs"]
+mod expr_hash_files_non_utf8;
 #[path = "expr/hash_files_patterns.rs"]
 mod expr_hash_files_patterns;
 #[path = "expr/hash_files_regex_limits.rs"]

@@ -104,34 +104,23 @@ enum Segment {
     },
 }
 
-struct Segments<'a, 'm, 'n> {
-    format: &'a str,
-    memory: &'m mut MemoryCounter<'n>,
-    found: Vec<Segment>,
-}
-
-impl Segments<'_, '_, '_> {
-    fn text(&mut self, range: Range<usize>) -> Result<(), ExprError> {
-        if range.is_empty() {
-            return Ok(());
-        }
-        self.memory.add(&self.format[range.clone()])?;
-        self.found.push(Segment::Text(range));
+fn visit_text(
+    visit: &mut impl FnMut(Segment) -> Result<(), ExprError>,
+    range: Range<usize>,
+) -> Result<(), ExprError> {
+    if range.is_empty() {
         Ok(())
+    } else {
+        visit(Segment::Text(range))
     }
 }
 
 fn scan_template(
     format: &str,
     argument_count: usize,
-    memory: &mut MemoryCounter<'_>,
-) -> Result<Vec<Segment>, ExprError> {
+    mut visit: impl FnMut(Segment) -> Result<(), ExprError>,
+) -> Result<(), ExprError> {
     let bytes = format.as_bytes();
-    let mut segments = Segments {
-        format,
-        memory,
-        found: Vec::new(),
-    };
     let mut index = 0usize;
     let invalid = || ExprError::evaluation(format!("Invalid format string: {format}"));
     let mut opening = NextByte::new(b'{');
@@ -144,7 +133,7 @@ fn scan_template(
         match (lbrace, rbrace) {
             (Some(lbrace), rbrace) if rbrace.is_none_or(|rbrace| rbrace > lbrace) => {
                 if byte_at(bytes, lbrace + 1) == b'{' {
-                    segments.text(index..lbrace + 1)?;
+                    visit_text(&mut visit, index..lbrace + 1)?;
                     index = lbrace + 2;
                     continue;
                 }
@@ -154,28 +143,28 @@ fn scan_template(
                         "The following format string references more arguments than were supplied: {format}"
                     )));
                 }
-                segments.text(index..lbrace)?;
-                segments.found.push(Segment::Argument {
+                visit_text(&mut visit, index..lbrace)?;
+                visit(Segment::Argument {
                     index: placeholder.arg_index,
                     specifiers: placeholder.specifiers,
-                });
+                })?;
                 index = placeholder.rbrace + 1;
             }
             (_, Some(rbrace)) => {
                 if byte_at(bytes, rbrace + 1) != b'}' {
                     return Err(invalid());
                 }
-                segments.text(index..rbrace + 1)?;
+                visit_text(&mut visit, index..rbrace + 1)?;
                 index = rbrace + 2;
             }
             _ => {
-                segments.text(index..bytes.len())?;
+                visit_text(&mut visit, index..bytes.len())?;
                 break;
             }
         }
     }
 
-    Ok(segments.found)
+    Ok(())
 }
 
 fn format_template(
@@ -184,10 +173,14 @@ fn format_template(
     memory: &mut MemoryCounter<'_>,
     mut resolve: impl FnMut(usize) -> Result<Value, ExprError>,
 ) -> Result<String, ExprError> {
+    scan_template(format, argument_count, |segment| match segment {
+        Segment::Text(range) => memory.add(&format[range]),
+        Segment::Argument { .. } => Ok(()),
+    })?;
     let mut cache: Vec<Option<(ValueKind, String)>> = vec![None; argument_count];
     let mut result = String::new();
 
-    for segment in scan_template(format, argument_count, memory)? {
+    scan_template(format, argument_count, |segment| {
         match segment {
             Segment::Text(range) => result.push_str(&format[range]),
             Segment::Argument { index, specifiers } => {
@@ -197,7 +190,7 @@ fn format_template(
                     *slot = Some((value.kind(), value.convert_to_string()));
                 }
                 let Some((kind, argument)) = slot.as_ref() else {
-                    continue;
+                    return Ok(());
                 };
                 if !specifiers.is_empty() {
                     return Err(ExprError::evaluation(format!(
@@ -210,7 +203,8 @@ fn format_template(
                 result.push_str(argument);
             }
         }
-    }
+        Ok(())
+    })?;
 
     Ok(result)
 }

@@ -107,6 +107,7 @@ fn expr_hash_files_keeps_the_lookahead_minimatch_puts_after_an_unclosed_class() 
 #[test]
 fn expr_hash_files_starts_a_search_at_a_leading_one_character_class() -> Result<()> {
     hashes_only("[!]", &["!", "a", "b"], &["!"])?;
+    hashes_only("[^]", &["^", "a", "b"], &["^"])?;
     hashes_only("[]]", &["]", "a"], &[])?;
     Ok(())
 }
