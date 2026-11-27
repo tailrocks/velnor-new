@@ -19,6 +19,7 @@ use self::isolation::{Isolation, StoreEnv};
 use self::pin::require_pinned_revision;
 use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
+use crate::broker::TrustedFacts;
 use crate::exec::{
     AdapterRegistry, ExecError, ProcessEnv, ProcessOutcome, StepAdapter, StepContext, StepFuture,
     StepResult,
@@ -30,9 +31,11 @@ const ACTION: &str = "jdx/mise-action";
 const PREFIX: &str = "jdx/mise-action@";
 const NOT_IN_STORE: &str = "tool is not installed in the tools store";
 
-pub(super) fn register(registry: &mut AdapterRegistry, setup: SetupVelnor) {
-    registry.register(Box::new(MiseAction));
-    registry.register(Box::new(setup));
+pub(super) fn register(registry: &mut AdapterRegistry, facts: Result<TrustedFacts, String>) {
+    registry.register(Box::new(MiseAction {
+        facts: facts.clone(),
+    }));
+    registry.register(Box::new(SetupVelnor { facts }));
 }
 
 async fn sha256_hex(path: &Path) -> Result<String, ExecError> {
@@ -133,7 +136,15 @@ impl Mise {
             })?;
         Ok(values
             .into_iter()
-            .filter_map(|(name, value)| Some((name, isolation.to_workspace(value.as_str()?))))
+            .filter_map(|(name, value)| {
+                let value = value.as_str()?;
+                let rewritten = if name.eq_ignore_ascii_case("PATH") {
+                    isolation.path_list_to_workspace(value)
+                } else {
+                    isolation.to_workspace(value)
+                };
+                Some((name, rewritten))
+            })
             .collect())
     }
 }
@@ -189,55 +200,31 @@ struct Install {
     exports: Vec<(String, String)>,
 }
 
-fn effective(ctx: &StepContext<'_>, name: &str) -> Option<String> {
-    ctx.env
-        .get(name)
-        .cloned()
-        .or_else(|| std::env::var(name).ok())
-        .filter(|value| !value.is_empty())
-}
-
 fn data_dir(tools: &Path, _lock: &[u8]) -> PathBuf {
     tools.join("data")
 }
 
-fn store_env(
-    ctx: &StepContext<'_>,
-    tools: &Path,
-    lock: &str,
-    binary: &Path,
-) -> Result<StoreEnv, ExecError> {
-    let home_relative = |variable: &str, directory: &str| {
-        effective(ctx, variable).map(PathBuf::from).map_or_else(
-            || {
-                effective(ctx, "HOME")
-                    .map(|home| PathBuf::from(home).join(directory))
-                    .ok_or_else(|| {
-                        ExecError::Invalid(format!(
-                            "mise needs {variable} or HOME to place its {directory} directory"
-                        ))
-                    })
-            },
-            Ok,
-        )
-    };
-    Ok(StoreEnv {
+fn cargo_home(tools: &Path) -> PathBuf {
+    tools.join("cargo")
+}
+
+fn rustup_home(tools: &Path) -> PathBuf {
+    tools.join("rustup")
+}
+
+fn store_env(ctx: &StepContext<'_>, tools: &Path, lock: &str, binary: &Path) -> StoreEnv {
+    StoreEnv {
         bin: binary.parent().map_or_default(Path::to_path_buf),
         data: data_dir(tools, lock.as_bytes()),
         shims: ctx.temp.join("mise-shims"),
-        cargo_home: home_relative("CARGO_HOME", ".cargo")?,
-        rustup_home: home_relative("RUSTUP_HOME", ".rustup")?,
-    })
+        cargo_home: cargo_home(tools),
+        rustup_home: rustup_home(tools),
+    }
 }
 
 impl Install {
-    fn new(
-        ctx: &StepContext<'_>,
-        tools: &Path,
-        lock: &str,
-        binary: PathBuf,
-    ) -> Result<Self, ExecError> {
-        let store = store_env(ctx, tools, lock, &binary)?;
+    fn new(ctx: &StepContext<'_>, tools: &Path, lock: &str, binary: PathBuf) -> Self {
+        let store = store_env(ctx, tools, lock, &binary);
         let mut exports = vec![
             (
                 "MISE_DATA_DIR".to_owned(),
@@ -264,11 +251,11 @@ impl Install {
                 exports.push((name.to_owned(), value));
             }
         }
-        Ok(Self {
+        Self {
             binary,
             store,
             exports,
-        })
+        }
     }
 }
 
@@ -315,12 +302,16 @@ async fn export(
 
 async fn mise_action(
     inputs: &MiseInputs,
+    facts: &Result<TrustedFacts, String>,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
-    let accepted = enforce_locked_mise_policy(ctx, &inputs.install_args).await?;
-    let install = Install::new(ctx, &tools, &accepted.lock, binary)?;
+    let facts = facts
+        .as_ref()
+        .map_err(|reason| ExecError::Invalid(reason.clone()))?;
+    let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
+    let install = Install::new(ctx, &tools, &accepted.lock, binary);
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;
@@ -347,7 +338,9 @@ async fn mise_action(
 }
 
 #[derive(Debug)]
-struct MiseAction;
+struct MiseAction {
+    facts: Result<TrustedFacts, String>,
+}
 
 impl StepAdapter for MiseAction {
     fn handles(&self, reference: &str) -> bool {
@@ -359,7 +352,7 @@ impl StepAdapter for MiseAction {
             require_pinned_revision(&ctx.reference)?;
             let inputs = MiseInputs::parse(&ctx.inputs)?;
             ctx.set_output("cache-hit", "false");
-            mise_action(&inputs, ctx).await
+            mise_action(&inputs, &self.facts, ctx).await
         }
         .boxed()
     }

@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 
+use crate::mise_double::git_bytes;
 use crate::mise_world::{CONFIG, World, assert_failed, git, job_fixture, pinned_mise_action};
 
 const LISTED: &str = "jactionlint shellcheck node";
@@ -45,17 +46,25 @@ fn mise_action_rejects_install_args_token_that_is_not_a_bare_tool_key() -> Resul
 }
 
 #[test]
-fn mise_action_rejects_dirty_mise_lock() -> Result<()> {
+fn mise_action_uses_the_committed_bytes_whatever_the_work_tree_holds() -> Result<()> {
     let world = World::new()?;
     world.install_mise()?;
     world.init_workspace(true)?;
-    let lock = world.workspace().join("mise.lock");
+    let workspace = world.workspace();
+    let committed = git_bytes(&workspace, "mise.lock")?;
+    let lock = workspace.join("mise.lock");
     let mut text = std::fs::read_to_string(&lock).context("read mise.lock")?;
     text.push_str("\n[[tools.ghost]]\nversion = \"1.0.0\"\n");
     std::fs::write(&lock, text).context("dirty mise.lock")?;
-    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
-    assert_failed(&ran, "mise policy: mise.lock is dirty against index/HEAD");
+    let ran = world.run(&install_args_job(&world, "jactionlint ghost")?, &[])?;
+    assert_failed(
+        &ran,
+        "mise install_args token 'ghost' is not in the committed mise.lock",
+    );
     assert_eq!(world.mise_calls(), Vec::<String>::new());
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    assert_eq!(world.calls()[0].files.get("mise.lock"), Some(&committed));
     Ok(())
 }
 
@@ -127,7 +136,9 @@ fn mise_action_rejects_a_symlinked_mise_config_or_lock() -> Result<()> {
         let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
         assert_failed(
             &ran,
-            &format!("mise policy: {name} is missing from the workspace or is not a regular file"),
+            &format!(
+                "mise policy: {name} is missing from the trusted commit or is not a regular file"
+            ),
         );
         assert_eq!(world.mise_calls(), Vec::<String>::new(), "{name}");
     }

@@ -101,7 +101,20 @@ impl Isolation {
     }
 
     pub(super) fn to_workspace(&self, value: &str) -> String {
-        value.replace(&text(&self.config_dir()), &text(&self.workspace))
+        match value.strip_prefix(&text(&self.config_dir())) {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => {
+                format!("{}{rest}", text(&self.workspace))
+            }
+            _ => value.to_owned(),
+        }
+    }
+
+    pub(super) fn path_list_to_workspace(&self, value: &str) -> String {
+        let entries: Vec<String> = value
+            .split(':')
+            .map(|entry| self.to_workspace(entry))
+            .collect();
+        entries.join(":")
     }
 
     pub(super) async fn remove(self) -> Result<(), ExecError> {

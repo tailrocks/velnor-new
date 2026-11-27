@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, ensure};
 
+use crate::mise_attack_state::{STATE_IDS, state_row};
 use crate::mise_real::{Plant, Row, attack, real_mise};
 use crate::mise_world::{World, job_fixture};
 
@@ -110,12 +111,15 @@ fn env_row(world: &World, id: &str) -> Option<EnvRow> {
 }
 
 fn row(world: &World, id: &'static str) -> Result<Row> {
+    if let Some(row) = state_row(world, id) {
+        return Ok(row);
+    }
     if let Some((plants, control_cwd)) = file_row(world, id) {
         return Ok(Row {
             id,
             plants,
-            env: Vec::new(),
             control_cwd,
+            ..Row::default()
         });
     }
     let (plants, env) = env_row(world, id).with_context(|| format!("unknown row {id}"))?;
@@ -123,14 +127,15 @@ fn row(world: &World, id: &'static str) -> Result<Row> {
         id,
         plants,
         env,
-        control_cwd: None,
+        hides_workspace_config: matches!(id, "V7" | "V8"),
+        ..Row::default()
     })
 }
 
 #[test]
 fn mise_action_loads_only_the_private_copy() -> Result<()> {
     let mut failures = Vec::new();
-    for id in ROW_IDS {
+    for id in ROW_IDS.into_iter().chain(STATE_IDS) {
         let world = World::new()?;
         let real = real_mise(&world)?;
         let row = row(&world, id)?;

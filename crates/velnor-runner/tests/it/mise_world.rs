@@ -329,7 +329,7 @@ impl World {
     }
 
     pub(crate) fn start(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
-        let mut command = self.command(job);
+        let mut command = self.command(job)?;
         command
             .env("VELNOR_STORE_ROOT", &self.store)
             .env_remove("MISE_TRUSTED_CONFIG_PATHS")
@@ -341,7 +341,7 @@ impl World {
         command.spawn().context("start velnor-runner exec")
     }
 
-    pub(crate) fn command(&self, job: &Path) -> Command {
+    pub(crate) fn command(&self, job: &Path) -> Result<Command> {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
         command
             .arg("exec")
@@ -353,7 +353,10 @@ impl World {
             .arg(&self.temp)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        command
+        if let Some(facts) = self.trusted_facts()? {
+            command.arg("--trusted").arg(facts);
+        }
+        Ok(command)
     }
 
     pub(crate) fn run(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Ran> {

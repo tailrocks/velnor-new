@@ -73,7 +73,9 @@ case "$1" in
           for entry in $PATH; do [ "$entry" = "$promote" ] || inherited="$inherited${inherited:+:}$entry"; done
           IFS=$old_ifs
         fi
-        if [ -n "$in_copy" ]; then
+        if [ -n "$(conf EMBEDDED)" ]; then
+          printf '{"PATH":"%s/bin:%s2/bin:%s","LEAD":"%s/ok","EMB":"pre%s-post","SIB":"%s2/x"}\n' "$here" "$here" "$inherited" "$here" "$here" "$here"
+        elif [ -n "$in_copy" ]; then
           printf '{"PATH":"%s/bin:%s/tbin:%s","FOO":"%s/x","CFG":"%s","SECRET":"%s/secret-token"}\n' "$here" "$here" "$inherited" "$here" "$here" "$here"
         else
           printf '{"PATH":"%s/tool-bin:%s%s","FOO":"bar","SECRET":"%s"}\n' "$bindir" "${extra_dir:+$extra_dir:}${promote:+$promote:}" "$inherited" "$secret"

@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use super::git;
+use crate::broker::{TrustedFacts, mirror_path};
 use crate::exec::{ExecError, StepContext};
+use crate::store::store_root;
 
 const CONFIG: &str = "mise.toml";
 const LOCK: &str = "mise.lock";
@@ -67,12 +69,6 @@ fn validate_install_args(install_args: &str, lock_toml: &str) -> Result<(), Exec
     Ok(())
 }
 
-async fn is_regular_file(path: &Path) -> bool {
-    tokio::fs::symlink_metadata(path)
-        .await
-        .is_ok_and(|meta| meta.file_type().is_file())
-}
-
 pub(super) struct AcceptedConfig {
     pub(super) config: String,
     pub(super) lock: String,
@@ -100,23 +96,50 @@ pub(super) fn require_sole_config(expected: &Path, config_listing: &str) -> Resu
     )))
 }
 
-async fn require_tracked_and_clean(ctx: &mut StepContext<'_>) -> Result<(), ExecError> {
-    let tracked = git::capture(ctx, None, &["ls-files", "--", CONFIG, LOCK]).await?;
-    for name in [CONFIG, LOCK] {
-        if !tracked.lines().any(|line| line == name) {
-            return Err(invalid(format!(
-                "mise policy: {name} is not tracked by git"
-            )));
-        }
+async fn read_committed_file(
+    ctx: &mut StepContext<'_>,
+    mirror: &Path,
+    sha: &str,
+    listing: &str,
+    name: &str,
+) -> Result<String, ExecError> {
+    let size = listing
+        .lines()
+        .find_map(|line| {
+            let (meta, path) = line.split_once('\t')?;
+            let fields: Vec<&str> = meta.split_whitespace().collect();
+            match (path == name, fields.as_slice()) {
+                (true, ["100644" | "100755", "blob", _, size]) => size.parse::<usize>().ok(),
+                _ => None,
+            }
+        })
+        .ok_or_else(|| {
+            invalid(format!(
+                "mise policy: {name} is missing from the trusted commit or is not a regular file"
+            ))
+        })?;
+    let text = git::read_blob(ctx, mirror, sha, name).await?;
+    if text.len() != size {
+        return Err(invalid(format!(
+            "mise policy: {name} in the trusted commit is not valid UTF-8"
+        )));
     }
-    let changes = git::capture(ctx, None, &["status", "--porcelain", "--", CONFIG, LOCK]).await?;
-    match changes.lines().next() {
-        Some(line) => Err(invalid(format!(
-            "mise policy: {} is dirty against index/HEAD",
-            line.get(3..).unwrap_or(line)
-        ))),
-        None => Ok(()),
-    }
+    Ok(text)
+}
+
+async fn read_committed(
+    ctx: &mut StepContext<'_>,
+    facts: &TrustedFacts,
+) -> Result<AcceptedConfig, ExecError> {
+    let mirror =
+        mirror_path(&store_root(), facts).map_err(|error| invalid(format!("{error:#}")))?;
+    let sha = facts.sha.as_str();
+    let args = ["ls-tree", "-l", sha, "--", CONFIG, LOCK];
+    let listing = git::capture(ctx, Some(&mirror), &args).await?;
+    Ok(AcceptedConfig {
+        config: read_committed_file(ctx, &mirror, sha, &listing, CONFIG).await?,
+        lock: read_committed_file(ctx, &mirror, sha, &listing, LOCK).await?,
+    })
 }
 
 fn require_supported_directives(config: &toml::Table) -> Result<(), ExecError> {
@@ -149,25 +172,9 @@ fn require_supported_directives(config: &toml::Table) -> Result<(), ExecError> {
 
 async fn resolve_locked_mise_config(
     ctx: &mut StepContext<'_>,
+    facts: &TrustedFacts,
 ) -> Result<AcceptedConfig, ExecError> {
-    let workspace = ctx.workspace;
-    for name in [CONFIG, LOCK] {
-        if !is_regular_file(&workspace.join(name)).await {
-            return Err(invalid(format!(
-                "mise policy: {name} is missing from the workspace or is not a regular file"
-            )));
-        }
-    }
-    let read = async |name: &str| {
-        tokio::fs::read_to_string(workspace.join(name))
-            .await
-            .map_err(|source| ExecError::io(format!("read {name}"), source))
-    };
-    let accepted = AcceptedConfig {
-        config: read(CONFIG).await?,
-        lock: read(LOCK).await?,
-    };
-    require_tracked_and_clean(ctx).await?;
+    let accepted = read_committed(ctx, facts).await?;
     let config: toml::Table = accepted
         .config
         .parse()
@@ -189,9 +196,10 @@ async fn resolve_locked_mise_config(
 
 pub(super) async fn enforce_locked_mise_policy(
     ctx: &mut StepContext<'_>,
+    facts: &TrustedFacts,
     install_args: &str,
 ) -> Result<AcceptedConfig, ExecError> {
-    let accepted = resolve_locked_mise_config(ctx).await?;
+    let accepted = resolve_locked_mise_config(ctx, facts).await?;
     validate_install_args(install_args, &accepted.lock)?;
     Ok(accepted)
 }

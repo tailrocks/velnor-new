@@ -334,7 +334,10 @@ fn mise_action_rejects_untracked_mise_lock() -> Result<()> {
     world.install_mise()?;
     world.init_workspace(false)?;
     let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
-    assert_failed(&ran, "mise policy: mise.lock is not tracked by git");
+    assert_failed(
+        &ran,
+        "mise policy: mise.lock is missing from the trusted commit or is not a regular file",
+    );
     assert_eq!(world.mise_calls(), Vec::<String>::new());
     Ok(())
 }

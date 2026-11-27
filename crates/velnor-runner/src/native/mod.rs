@@ -18,12 +18,7 @@ use crate::exec::AdapterRegistry;
 pub(crate) fn registry(store: StoreWriter, umask: Umask) -> AdapterRegistry {
     let store = std::sync::Arc::new(store);
     let mut registry = AdapterRegistry::empty();
-    mise::register(
-        &mut registry,
-        composite::SetupVelnor {
-            facts: store.facts().cloned(),
-        },
-    );
+    mise::register(&mut registry, store.facts().cloned());
     registry.register(Box::new(checkout::Checkout {
         store: store.clone(),
     }));

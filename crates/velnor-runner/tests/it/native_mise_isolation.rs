@@ -54,7 +54,7 @@ fn mise_runs_with_exactly_the_velnor_environment() -> Result<()> {
     let argv: Vec<&str> = calls.iter().map(|call| call.argv.as_str()).collect();
     assert_eq!(argv, CALLS);
     let root = calls[0].root();
-    let (home, system) = (world.home().display().to_string(), root.join("system"));
+    let system = root.join("system");
     let expected = [
         (
             "PATH",
@@ -86,8 +86,14 @@ fn mise_runs_with_exactly_the_velnor_environment() -> Result<()> {
         ("MISE_CACHE_DIR", format!("{}/cache", root.display())),
         ("MISE_AUTO_INSTALL", "false".to_owned()),
         ("MISE_YES", "1".to_owned()),
-        ("MISE_CARGO_HOME", format!("{home}/.cargo")),
-        ("MISE_RUSTUP_HOME", format!("{home}/.rustup")),
+        (
+            "MISE_CARGO_HOME",
+            format!("{}/tools/cargo", world.store.display()),
+        ),
+        (
+            "MISE_RUSTUP_HOME",
+            format!("{}/tools/rustup", world.store.display()),
+        ),
     ];
     for call in &calls {
         let keys: BTreeSet<&str> = call.env.keys().map(String::as_str).collect();
@@ -311,37 +317,6 @@ fn mise_action_accepts_the_repository_mise_toml_settings() -> Result<()> {
     let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
     assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
     assert_eq!(world.calls()[0].ls, ["mise.lock", "mise.toml"]);
-    Ok(())
-}
-
-#[test]
-fn mise_action_translates_cargo_and_rustup_homes() -> Result<()> {
-    for job_env in [vec![("CARGO_HOME", "/c"), ("RUSTUP_HOME", "/r")], vec![]] {
-        let world = prepared()?;
-        let home = world.home().display().to_string();
-        let (cargo, rustup) = if job_env.is_empty() {
-            (format!("{home}/.cargo"), format!("{home}/.rustup"))
-        } else {
-            ("/c".to_owned(), "/r".to_owned())
-        };
-        let job = world.with_job_env(&job_fixture("mise_action_ok"), &job_env)?;
-        let ran = world.run(&job, &[])?;
-        assert!(ran.has_line("job succeeded"), "{job_env:?}\n{}", ran.stdout);
-        for call in world.calls() {
-            assert_eq!(
-                call.env_value("MISE_CARGO_HOME"),
-                cargo,
-                "{job_env:?} {}",
-                call.argv
-            );
-            assert_eq!(
-                call.env_value("MISE_RUSTUP_HOME"),
-                rustup,
-                "{job_env:?} {}",
-                call.argv
-            );
-        }
-    }
     Ok(())
 }
 

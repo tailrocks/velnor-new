@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
@@ -25,11 +26,22 @@ pub(crate) struct Plant {
     pub(crate) listed: bool,
 }
 
+pub(crate) type Check = Box<dyn Fn(&World, &RealMise) -> Result<()>>;
+pub(crate) type Verify = Box<dyn Fn(&World, &Ran) -> Option<String>>;
+
+#[derive(Default)]
 pub(crate) struct Row {
     pub(crate) id: &'static str,
     pub(crate) plants: Vec<Plant>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) control_cwd: Option<PathBuf>,
+    pub(crate) hides_workspace_config: bool,
+    pub(crate) config: Option<(String, String)>,
+    pub(crate) prepare: Option<Check>,
+    pub(crate) control: Option<Check>,
+    pub(crate) prelude: Option<String>,
+    pub(crate) script: Option<String>,
+    pub(crate) verify: Option<Verify>,
 }
 
 impl Plant {
@@ -79,6 +91,7 @@ pub(crate) fn real_mise(world: &World) -> Result<RealMise> {
     std::fs::create_dir_all(world.home()).context("create the home directory")?;
     let output = Command::new(&binary)
         .arg("--version")
+        .current_dir(world.home())
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", world.home())
@@ -107,7 +120,7 @@ impl World {
     }
 
     pub(crate) fn start_clean(&self, job: &Path, extra_env: &[(&str, &str)]) -> Result<Child> {
-        let mut command = self.command(job);
+        let mut command = self.command(job)?;
         command
             .env_clear()
             .env("PATH", "/usr/bin:/bin")
@@ -146,7 +159,7 @@ impl World {
     }
 }
 
-fn canonical(path: &Path) -> PathBuf {
+pub(crate) fn canonical(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
@@ -174,6 +187,7 @@ fn control_listing(
 }
 
 fn write_plants(row: &Row) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
     for plant in &row.plants {
         if let Some(parent) = plant.path.parent() {
             std::fs::create_dir_all(parent).context("create the plant directory")?;
@@ -182,6 +196,10 @@ fn write_plants(row: &Row) -> Result<()> {
             std::fs::create_dir_all(marker).context("create the marker directory")?;
         }
         std::fs::write(&plant.path, &plant.content).context("write the plant")?;
+        if plant.content.starts_with("#!") {
+            std::fs::set_permissions(&plant.path, std::fs::Permissions::from_mode(0o755))
+                .context("make the plant executable")?;
+        }
     }
     Ok(())
 }
@@ -201,19 +219,34 @@ fn fired(row: &Row) -> Vec<String> {
     names
 }
 
-fn prove_control(world: &World, real: &RealMise, row: &Row) -> Result<()> {
+fn prove_listing(world: &World, real: &RealMise, row: &Row) -> Result<()> {
     let cwd = row.control_cwd.clone().unwrap_or_else(|| world.workspace());
     std::fs::create_dir_all(&cwd).context("create the control directory")?;
-    let listing = control_listing(world, real, &cwd, &row.env)?;
-    for plant in row.plants.iter().filter(|plant| plant.listed) {
-        let expected = canonical(&plant.path);
-        ensure!(
-            listing.contains(&expected),
-            "row {}: the control ({}) does not list {}: {listing:?}",
-            row.id,
-            real.version,
-            expected.display()
-        );
+    let listing: BTreeSet<PathBuf> = control_listing(world, real, &cwd, &row.env)?
+        .into_iter()
+        .collect();
+    let mut expected: BTreeSet<PathBuf> = row
+        .plants
+        .iter()
+        .filter(|plant| plant.listed)
+        .map(|plant| canonical(&plant.path))
+        .collect();
+    if row.control_cwd.is_none() && !row.hides_workspace_config {
+        expected.insert(canonical(&world.workspace().join("mise.toml")));
+    }
+    ensure!(
+        listing == expected,
+        "row {}: the control ({}) lists {listing:?}, expected exactly {expected:?}",
+        row.id,
+        real.version
+    );
+    Ok(())
+}
+
+fn prove_control(world: &World, real: &RealMise, row: &Row) -> Result<()> {
+    match &row.control {
+        Some(control) => control(world, real)?,
+        None => prove_listing(world, real, row)?,
     }
     let unfired: Vec<String> = row
         .plants
@@ -233,41 +266,53 @@ fn prove_control(world: &World, real: &RealMise, row: &Row) -> Result<()> {
 
 pub(crate) fn attack(world: &World, real: &RealMise, row: &Row) -> Result<Vec<String>> {
     world.install_real_mise(real)?;
-    world.init_workspace_with_lock(ACCEPTED_CONFIG, "")?;
+    let (config, lock) = row
+        .config
+        .as_ref()
+        .map_or((ACCEPTED_CONFIG, ""), |(config, lock)| {
+            (config.as_str(), lock.as_str())
+        });
+    world.init_workspace_with_lock(config, lock)?;
     write_plants(row)?;
+    if let Some(prepare) = &row.prepare {
+        prepare(world, real)?;
+    }
     prove_control(world, real, row)?;
-    let job = world.with_final_script(
-        &job_fixture("mise_action_ok"),
-        "echo \"accepted=$ACCEPTED\"",
-    )?;
+    let script = row
+        .script
+        .as_deref()
+        .unwrap_or("echo \"accepted=$ACCEPTED\"");
+    let mut job = world.with_final_script(&job_fixture("mise_action_ok"), script)?;
+    if let Some(prelude) = &row.prelude {
+        job = world.with_leading_script(&job, prelude)?;
+    }
     let pairs: Vec<(&str, &str)> = row
         .env
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    let mut runs: Vec<(&str, Child)> = Vec::new();
-    if pairs.is_empty() {
-        runs.push(("files", world.start_clean(&job, &[])?));
+    let delivery = if pairs.is_empty() {
+        "files"
     } else {
-        runs.push(("process env", world.start_clean(&job, &pairs)?));
-    }
+        "process env"
+    };
     let mut failures = Vec::new();
-    for (delivery, child) in runs {
-        failures.extend(report(row, delivery, &World::finish(child)?, real));
-    }
+    let ran = World::finish(world.start_clean(&job, &pairs)?)?;
+    failures.extend(report(world, row, delivery, &ran, real));
     if !pairs.is_empty() {
         let with_env = world.with_job_env(&job, &pairs)?;
         let ran = World::finish(world.start_clean(&with_env, &[])?)?;
-        failures.extend(report(row, "job message env", &ran, real));
+        failures.extend(report(world, row, "job message env", &ran, real));
     }
     Ok(failures)
 }
 
-fn report(row: &Row, delivery: &str, ran: &Ran, real: &RealMise) -> Option<String> {
+fn report(world: &World, row: &Row, delivery: &str, ran: &Ran, real: &RealMise) -> Option<String> {
     let markers = fired(row);
     let accepted = ran.has_line("accepted=1");
     let succeeded = ran.has_line("job succeeded") && ran.code == Some(0);
-    if markers.is_empty() && accepted && succeeded {
+    let verified = row.verify.as_ref().and_then(|verify| verify(world, ran));
+    if markers.is_empty() && accepted && succeeded && verified.is_none() {
         return None;
     }
     let unsupported: Vec<&str> = ran
@@ -276,7 +321,9 @@ fn report(row: &Row, delivery: &str, ran: &Ran, real: &RealMise) -> Option<Strin
         .filter(|line| line.starts_with("unsupported:"))
         .collect();
     Some(format!(
-        "row {} [{delivery}] ({}): markers fired {markers:?}; accepted=1 seen {accepted}; job succeeded and exit 0 seen {succeeded}; {unsupported:?}",
-        row.id, real.version
+        "row {} [{delivery}] ({}): markers fired {markers:?}; accepted=1 seen {accepted}; job succeeded and exit 0 seen {succeeded}; {}{unsupported:?}",
+        row.id,
+        real.version,
+        verified.map_or_default(|text| format!("{text}; "))
     ))
 }
