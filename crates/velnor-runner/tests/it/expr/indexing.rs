@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/tests.rs
 
-use crate::expr_support::{empty_env, env_with, error_text, eval, exceeded_memory, text, truthy};
+use crate::expr_support::{
+    empty_env, env_with, error_text, eval, exceeded_memory, same_text, text, truthy,
+};
 use anyhow::{Context, Result};
 use velnor_runner::context_value::ContextValue;
 use velnor_runner::expr::{RootContext, Value};
@@ -86,9 +88,9 @@ fn expr_wildcard_projections_stop_at_the_memory_budget() -> Result<()> {
     let beyond = env_with(&[(RootContext::Env, &list(1_400_000))])?;
 
     assert!(truthy("env.LIST.* != null", &within)?);
-    assert_eq!(
-        error_text("env.LIST.*", &beyond)?,
-        exceeded_memory("env.LIST[*]")
-    );
+    same_text(
+        &error_text("env.LIST.*", &beyond)?,
+        &exceeded_memory("env.LIST[*]"),
+    )?;
     Ok(())
 }

@@ -17,6 +17,7 @@ mod pattern;
 mod render;
 mod template;
 mod token;
+mod unit_glob;
 mod value;
 
 pub use env::{ExprEnv, JobStatus, RootContext};

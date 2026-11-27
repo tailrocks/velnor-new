@@ -11,9 +11,10 @@ use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
 use velnor_runner::context_value::ContextValue;
-use velnor_runner::expr::{ExprEnv, RootContext, Value, evaluate_expression};
+use velnor_runner::expr::{ExprEnv, RootContext, Value, evaluate_expression, evaluate_template};
 
 const LINEAR_TIME_LIMIT: Duration = Duration::from_secs(10);
+const MISMATCH_PREFIX_CHARS: usize = 200;
 
 pub(crate) fn env_with(contexts: &[(RootContext, &str)]) -> Result<ExprEnv> {
     let mut env = ExprEnv::new(PathBuf::from("/nonexistent-workspace"));
@@ -60,6 +61,31 @@ pub(crate) fn error_text(expression: &str, env: &ExprEnv) -> Result<String> {
         Ok(value) => bail!("{expression:?} evaluated to {}", describe_success(&value)),
         Err(error) => Ok(error.to_string()),
     }
+}
+
+pub(crate) fn template_error_text(source: &str, env: &ExprEnv) -> Result<String> {
+    match evaluate_template(source, env) {
+        Ok(rendered) => bail!(
+            "a template of {} bytes evaluated to {} bytes",
+            source.len(),
+            rendered.len()
+        ),
+        Err(error) => Ok(error.to_string()),
+    }
+}
+
+pub(crate) fn same_text(actual: &str, expected: &str) -> Result<()> {
+    if actual == expected {
+        return Ok(());
+    }
+    let prefix = |text: &str| text.chars().take(MISMATCH_PREFIX_CHARS).collect::<String>();
+    bail!(
+        "text differs: actual has {} chars and starts {:?}; expected has {} chars and starts {:?}",
+        actual.chars().count(),
+        prefix(actual),
+        expected.chars().count(),
+        prefix(expected)
+    )
 }
 
 pub(crate) fn exceeded_memory(expression: &str) -> String {

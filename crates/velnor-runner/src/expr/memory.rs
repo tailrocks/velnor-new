@@ -4,8 +4,8 @@
 
 use super::error::ExprError;
 use super::node::Node;
-use super::parser::MAX_LENGTH;
-use super::render::template_expression;
+use super::render::{Argument, template_expression};
+use super::template::Part;
 
 const MAX_MEMORY_BYTES: usize = 10 * 1024 * 1024;
 const STRING_BASE_OVERHEAD: usize = 26;
@@ -14,20 +14,14 @@ const BYTES_PER_UTF16_UNIT: usize = 2;
 #[derive(Clone, Copy)]
 pub(crate) enum Subject<'a> {
     Node(&'a Node),
-    Template(&'a str),
+    Template(&'a [Part<'a>]),
 }
 
 impl Subject<'_> {
     fn expression(self) -> String {
         match self {
             Subject::Node(node) => node.to_expression(),
-            Subject::Template(source) => {
-                let expression = template_expression(source);
-                match expression.char_indices().nth(MAX_LENGTH) {
-                    Some((end, _)) => format!("{}...", &expression[..end]),
-                    None => expression,
-                }
-            }
+            Subject::Template(parts) => template_expression(parts, Argument::Parsed),
         }
     }
 }

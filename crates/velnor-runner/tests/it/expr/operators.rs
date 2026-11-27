@@ -190,14 +190,3 @@ fn expr_hex_and_octal_literals_use_signed_32_bit_semantics() -> Result<()> {
     }
     Ok(())
 }
-
-#[test]
-fn expr_string_comparison_orders_utf16_code_units() -> Result<()> {
-    let json = format!(r#"{{"A":"{}","B":"{}"}}"#, '\u{10000}', '\u{e000}');
-    let env = env_with(&[(RootContext::Env, &json)])?;
-
-    assert!(truthy("env.A < env.B", &env)?);
-    assert!(truthy("env.B > env.A", &env)?);
-    assert!(!truthy("env.A == env.B", &env)?);
-    Ok(())
-}

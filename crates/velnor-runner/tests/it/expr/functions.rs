@@ -3,7 +3,8 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/tests.rs
 
 use crate::expr_support::{
-    empty_env, env_with, error_text, exceeded_memory, text, truthy, within_the_linear_time_limit,
+    empty_env, env_with, error_text, exceeded_memory, same_text, text, truthy,
+    within_the_linear_time_limit,
 };
 use anyhow::Result;
 use velnor_runner::expr::RootContext;
@@ -160,10 +161,10 @@ fn expr_to_json_stops_at_the_memory_budget() -> Result<()> {
     let beyond = env_with(&[(RootContext::Env, &items(400_000))])?;
 
     assert!(text("toJSON(env.LIST)", &within)?.starts_with("[\n  1,\n  1,"));
-    assert_eq!(
-        error_text("toJSON(env.LIST)", &beyond)?,
-        exceeded_memory("toJSON(env.LIST)")
-    );
+    same_text(
+        &error_text("toJSON(env.LIST)", &beyond)?,
+        &exceeded_memory("toJSON(env.LIST)"),
+    )?;
     Ok(())
 }
 

@@ -67,3 +67,28 @@ fn expr_object_keys_fold_the_greek_ypogegrammeni_letters() -> Result<()> {
     assert!(ordinal_ignore_case_cmp("ᾀ", "ᾈ").is_eq());
     Ok(())
 }
+
+#[test]
+fn expr_string_ordering_puts_every_bmp_character_before_a_surrogate_pair() -> Result<()> {
+    let json = format!(r#"{{"A":"{}","B":"{}"}}"#, '\u{10000}', '\u{e000}');
+    let env = env_with(&[(RootContext::Env, &json)])?;
+
+    assert!(truthy("env.B < env.A", &env)?);
+    assert!(truthy("env.A > env.B", &env)?);
+    assert!(!truthy("env.A == env.B", &env)?);
+    assert!(truthy("'Ａ' < '𐐀'", &env)?);
+    assert!(ordinal_ignore_case_cmp("\u{ff21}", "\u{10400}").is_lt());
+    Ok(())
+}
+
+#[test]
+fn expr_string_ordering_folds_surrogate_pairs_before_comparing_them() -> Result<()> {
+    let env = empty_env();
+
+    assert!(truthy("'𐐨' == '𐐀'", &env)?);
+    assert!(truthy("'𐐨' < '𐐁'", &env)?);
+    assert!(truthy("'𐐁' > '𐐨'", &env)?);
+    assert!(truthy("'a𐐨' < 'a𐐁'", &env)?);
+    assert!(!truthy("'𐐨' > '𐐁'", &env)?);
+    Ok(())
+}

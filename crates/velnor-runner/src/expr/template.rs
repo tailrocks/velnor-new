@@ -3,14 +3,23 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
 use super::env::ExprEnv;
-use super::error::ExprError;
-use super::eval::evaluate_expression;
+use super::error::{ExprError, ParseError, ParseErrorKind};
+use super::eval::evaluate_node;
 use super::memory::{MemoryCounter, Subject};
+use super::node::Node;
+use super::parser::{MAX_LENGTH, parse};
+use super::render::{Argument, template_expression};
+use super::value::Value;
 
-pub(super) const OPEN: &str = "${{";
-pub(super) const CLOSE: &str = "}}";
+const OPEN: &str = "${{";
+const CLOSE: &str = "}}";
 
-pub(super) fn find_close(source: &str) -> Option<usize> {
+pub(crate) enum Part<'a> {
+    Text(&'a str),
+    Expression { source: &'a str, node: Option<Node> },
+}
+
+fn find_close(source: &str) -> Option<usize> {
     let mut in_string = false;
     let bytes = source.as_bytes();
     let mut index = 0;
@@ -25,25 +34,62 @@ pub(super) fn find_close(source: &str) -> Option<usize> {
     None
 }
 
-pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprError> {
-    let mut rendered = String::with_capacity(source.len());
-    let mut memory = MemoryCounter::new(Subject::Template(source));
+fn split<'a>(source: &'a str, env: &ExprEnv) -> Result<Vec<Part<'a>>, ExprError> {
+    let mut parts = Vec::new();
     let mut rest = source;
     while let Some(start) = rest.find(OPEN) {
-        memory.add(&rest[..start])?;
-        rendered.push_str(&rest[..start]);
+        if start > 0 {
+            parts.push(Part::Text(&rest[..start]));
+        }
         let expression = &rest[start + OPEN.len()..];
         let Some(end) = find_close(expression) else {
             return Err(ExprError::evaluation(format!(
                 "The expression is not closed. An unescaped {OPEN} sequence was found, but the closing {CLOSE} sequence was not found."
             )));
         };
-        let value = evaluate_expression(expression[..end].trim(), env)?.convert_to_string();
-        memory.add(&value)?;
-        rendered.push_str(&value);
+        let source = expression[..end].trim();
+        parts.push(Part::Expression {
+            source,
+            node: parse(source, env)?,
+        });
         rest = &expression[end + CLOSE.len()..];
     }
-    memory.add(rest)?;
-    rendered.push_str(rest);
+    if !rest.is_empty() {
+        parts.push(Part::Text(rest));
+    }
+    Ok(parts)
+}
+
+pub fn evaluate_template(source: &str, env: &ExprEnv) -> Result<String, ExprError> {
+    let parts = split(source, env)?;
+    if parts.iter().all(|part| matches!(part, Part::Text(_))) {
+        return Ok(source.to_owned());
+    }
+    if template_expression(&parts, Argument::Source)
+        .encode_utf16()
+        .count()
+        > MAX_LENGTH
+    {
+        return Err(ParseError::without_token(ParseErrorKind::ExceededMaxLength).into());
+    }
+    let mut rendered = String::with_capacity(source.len());
+    let mut memory = MemoryCounter::new(Subject::Template(&parts));
+    for part in &parts {
+        match part {
+            Part::Text(text) => {
+                memory.add(text)?;
+                rendered.push_str(text);
+            }
+            Part::Expression { node, .. } => {
+                let value = match node {
+                    Some(node) => evaluate_node(node, env)?,
+                    None => Value::Null,
+                }
+                .convert_to_string();
+                memory.add(&value)?;
+                rendered.push_str(&value);
+            }
+        }
+    }
     Ok(rendered)
 }

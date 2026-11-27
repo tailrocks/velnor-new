@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
+use super::unit_glob::UnitGlob;
 use globset::{GlobBuilder, GlobMatcher};
 use std::io;
 use std::path::{Component, Path};
@@ -71,7 +72,7 @@ pub(crate) enum Seg {
         matcher: GlobMatcher,
         literal: Option<String>,
         segment: String,
-        code_units: bool,
+        units: Option<UnitGlob>,
     },
 }
 
@@ -81,13 +82,21 @@ impl Seg {
             Seg::GlobStar | Seg::Any => Ok(true),
             Seg::Literal(literal) => Ok(literal == name),
             Seg::Glob {
+                matcher,
                 segment,
-                code_units: true,
+                units: Some(units),
                 ..
-            } if !name.is_ascii() => Err(GlobError::NonAsciiName {
-                segment: segment.clone(),
-                name: name.to_owned(),
-            }),
+            } if !name.is_ascii() => {
+                let by_bytes = matcher.is_match(name);
+                if units.is_match(name) == by_bytes {
+                    Ok(by_bytes)
+                } else {
+                    Err(GlobError::NonAsciiName {
+                        segment: segment.clone(),
+                        name: name.to_owned(),
+                    })
+                }
+            }
             Seg::Glob { matcher, .. } => Ok(matcher.is_match(name)),
         }
     }
@@ -104,7 +113,7 @@ impl Seg {
         if part == "**" {
             return Ok(Seg::GlobStar);
         }
-        let code_units = needs_code_units(part)?;
+        let units = UnitGlob::compile(part)?;
         let matcher = GlobBuilder::new(&escape_segment(part))
             .allow_unclosed_class(true)
             .build()
@@ -114,7 +123,7 @@ impl Seg {
             matcher,
             literal: Some(literal_of(part)).filter(|literal| !literal.is_empty()),
             segment: part.to_owned(),
-            code_units,
+            units,
         })
     }
 }
@@ -254,7 +263,7 @@ fn collapse_slashes(text: &str) -> String {
     collapsed
 }
 
-fn class_end(chars: &[char], open: usize) -> Option<usize> {
+pub(super) fn class_end(chars: &[char], open: usize) -> Option<usize> {
     let mut index = open + 1;
     if matches!(chars.get(index), Some('!' | '^')) {
         index += 1;
@@ -266,33 +275,6 @@ fn class_end(chars: &[char], open: usize) -> Option<usize> {
         .iter()
         .position(|character| *character == ']')
         .map(|offset| index + offset)
-}
-
-fn needs_code_units(part: &str) -> Result<bool, GlobError> {
-    let chars: Vec<char> = part.chars().collect();
-    let mut found = false;
-    let mut index = 0;
-    while index < chars.len() {
-        match chars[index] {
-            '\\' => index += 2,
-            '?' => {
-                found = true;
-                index += 1;
-            }
-            '[' => match class_end(&chars, index) {
-                Some(end) => {
-                    if !chars[index..=end].iter().all(char::is_ascii) {
-                        return Err(GlobError::NonAsciiClass(part.to_owned()));
-                    }
-                    found = true;
-                    index = end + 1;
-                }
-                None => index += 1,
-            },
-            _ => index += 1,
-        }
-    }
-    Ok(found)
 }
 
 fn escape_segment(part: &str) -> String {

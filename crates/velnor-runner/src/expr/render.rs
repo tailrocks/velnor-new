@@ -3,7 +3,7 @@
 
 use super::node::{BinaryOperator, Node};
 use super::number::format_number;
-use super::template::{CLOSE, OPEN, find_close};
+use super::template::Part;
 use super::value::Value;
 use std::fmt::Write as _;
 
@@ -74,35 +74,35 @@ fn is_legal_keyword(key: &str) -> bool {
         && characters.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
-pub(crate) fn template_expression(source: &str) -> String {
+#[derive(Clone, Copy)]
+pub(crate) enum Argument {
+    Source,
+    Parsed,
+}
+
+pub(crate) fn template_expression(parts: &[Part<'_>], argument: Argument) -> String {
     let mut format = String::new();
-    let mut arguments = Vec::new();
-    let mut rest = source;
-    while let Some(start) = rest.find(OPEN) {
-        push_text(&mut format, &rest[..start]);
-        let expression = &rest[start + OPEN.len()..];
-        let Some(end) = find_close(expression) else {
-            push_text(&mut format, &rest[start..]);
-            rest = "";
-            break;
-        };
-        let _ = write!(format, "{{{}}}", arguments.len());
-        arguments.push(expression[..end].trim());
-        rest = &expression[end + CLOSE.len()..];
+    let mut arguments: Vec<String> = Vec::new();
+    for part in parts {
+        match part {
+            Part::Text(text) => format.push_str(&text.replace('{', "{{").replace('}', "}}")),
+            Part::Expression { source, node } => {
+                let _ = write!(format, "{{{}}}", arguments.len());
+                arguments.push(match argument {
+                    Argument::Source => (*source).to_owned(),
+                    Argument::Parsed => node.as_ref().map_or_default(Node::to_expression),
+                });
+            }
+        }
     }
-    push_text(&mut format, rest);
-    if matches!(arguments.as_slice(), [_]) && format == "{0}" {
-        return arguments[0].to_owned();
+    if let ([only], "{0}") = (arguments.as_mut_slice(), format.as_str()) {
+        return std::mem::take(only);
     }
     let mut call = format!("format({}", quoted(&format));
     for argument in arguments {
         call.push_str(", ");
-        call.push_str(argument);
+        call.push_str(&argument);
     }
     call.push(')');
     call
-}
-
-fn push_text(format: &mut String, text: &str) {
-    format.push_str(&text.replace('{', "{{").replace('}', "}}"));
 }
