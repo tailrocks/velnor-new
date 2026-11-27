@@ -154,6 +154,7 @@ fn a_dot_line_in_the_inputs_lock_reads_everything_and_is_not_an_unresolved_inclu
         &[
             (INPUTS_LOCK.as_str(), ".\tcli\n"),
             ("app/src/lib.rs", "include_str!(\"../../docs/guide.md\");"),
+            ("docs/guide.md", ""),
         ],
     )?;
     let facts = detect(&view)?;

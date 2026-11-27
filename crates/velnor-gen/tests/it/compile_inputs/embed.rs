@@ -51,8 +51,12 @@ pub(super) fn selected(
 }
 
 fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
+    let mut view = view_of(&["app", "tool", "reader", "left"], files)?;
+    for (file, _) in check {
+        view.tracked_paths.insert(path(file));
+    }
     for (file, expected) in check {
-        let names: Vec<String> = selections(&["app", "tool", "reader", "left"], files, file)?
+        let names: Vec<String> = selected(&view, file)?
             .into_iter()
             .map(|(name, _)| name)
             .collect();
@@ -153,6 +157,7 @@ fn an_include_that_cannot_be_resolved_selects_its_crate_on_any_change_with_reaso
             "crates/app/src/lib.rs",
             "include_str!(\"../../../docs/guide.md\");",
         ),
+        ("docs/guide.md", ""),
     ];
     assert_eq!(
         selections(&["app", "c", "tool", "left"], &files, "docs/guide.md")?,
@@ -193,6 +198,8 @@ fn a_root_package_and_a_nested_member_resolve_against_their_own_manifest_dir() -
                 "crates/inner/src/lib.rs",
                 "const B: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs/inner.md\"));",
             ),
+            ("README.md", ""),
+            ("docs/inner.md", ""),
         ],
     )?;
     let facts = detect(&view)?;
@@ -283,6 +290,8 @@ fn a_nested_package_is_not_charged_with_its_ancestors_scan() -> TestResult {
                 "crates/inner/src/lib.rs",
                 "const B: &str = include_str!(\"../../../docs/inner.md\");",
             ),
+            ("docs/top.md", ""),
+            ("docs/inner.md", ""),
         ],
     )?;
     let facts = detect(&view)?;
@@ -323,6 +332,8 @@ fn a_target_source_outside_the_package_directory_attributes_its_includes() -> Te
                 "const B: &str = include_str!(\"../docs/more.md\");",
             ),
             ("crates/tool/src/lib.rs", ""),
+            ("docs/guide.md", ""),
+            ("docs/more.md", ""),
         ],
     )?;
     let facts = detect(&view)?;

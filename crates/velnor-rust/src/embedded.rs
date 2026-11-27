@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::ops::Range;
 
-use velnor_model::{CompileInputs, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot};
+use velnor_model::{
+    CompileInputs, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot, TargetKind,
+};
 
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
@@ -38,6 +41,7 @@ enum Embedded<'t> {
 struct Scan<'a> {
     view: &'a RepoView,
     directory: Option<&'a RepoPath>,
+    emits_tokens: bool,
     reads: BTreeSet<InputKey>,
     seen: BTreeSet<&'a RepoPath>,
     pending: Vec<&'a RepoPath>,
@@ -77,6 +81,10 @@ impl<'a> Scan<'a> {
         Self {
             view,
             directory: member.directory.as_ref(),
+            emits_tokens: member
+                .targets
+                .iter()
+                .any(|target| target.kinds.contains(&TargetKind::ProcMacro)),
             reads: BTreeSet::new(),
             seen: BTreeSet::new(),
             pending,
@@ -104,6 +112,7 @@ impl<'a> Scan<'a> {
         if shadows(&tokens) {
             self.reads.insert(InputKey::Unresolved);
         }
+        let bodies = macro_bodies(&tokens);
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -117,7 +126,10 @@ impl<'a> Scan<'a> {
             else {
                 continue;
             };
+            let expands_elsewhere =
+                self.emits_tokens || bodies.iter().any(|body| body.contains(&at));
             let resolved = match embedded(argument) {
+                _ if expands_elsewhere => None,
                 Embedded::Literal(literal) => literal_path(literal)
                     .and_then(|path| resolve(self.view, &directory_of(file), path)),
                 Embedded::ManifestDir(joined) => joined
@@ -275,15 +287,54 @@ fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
             }
             other => parts.push(other),
         }
-        if !parts.is_empty() && is_symlink(view, &parts) {
+        if !parts.is_empty() && is_linked(view, &parts) {
             return None;
         }
     }
-    RepoPath::new(parts.join("/")).ok()
+    RepoPath::new(parts.join("/"))
+        .ok()
+        .filter(|path| view.tracked_paths.contains(path))
 }
 
-fn is_symlink(view: &RepoView, parts: &[&str]) -> bool {
-    RepoPath::new(parts.join("/")).is_ok_and(|prefix| view.symlinks.contains(&prefix))
+fn is_linked(view: &RepoView, parts: &[&str]) -> bool {
+    RepoPath::new(parts.join("/"))
+        .is_ok_and(|prefix| view.symlinks.contains(&prefix) || view.gitlinks.contains(&prefix))
+}
+
+fn macro_bodies(tokens: &[Token<'_>]) -> Vec<Range<usize>> {
+    let mut bodies = Vec::new();
+    for (at, token) in tokens.iter().enumerate() {
+        let (open, has_arguments) = match (token, &tokens[at + 1..]) {
+            (Token::Ident("macro_rules"), [Token::Punct('!'), Token::Ident(_), ..]) => {
+                (at + 3, false)
+            }
+            (Token::Ident("macro"), [Token::Ident(_), ..]) => (at + 2, true),
+            _ => continue,
+        };
+        let mut end = group_end(tokens, open);
+        if has_arguments && tokens.get(open) == Some(&Token::Punct('(')) {
+            end = group_end(tokens, end);
+        }
+        bodies.push(at..end);
+    }
+    bodies
+}
+
+fn group_end(tokens: &[Token<'_>], open: usize) -> usize {
+    let mut depth = 0_usize;
+    for (at, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Punct('(' | '[' | '{') => depth += 1,
+            Token::Punct(')' | ']' | '}') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return at + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    tokens.len()
 }
 
 fn literal_path(literal: &str) -> Option<&str> {

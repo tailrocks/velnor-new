@@ -30,6 +30,8 @@ fn two_utils(lock: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>>
             "b/util/src/lib.rs",
             "const B: &str = include_str!(\"../../../docs/b.md\");",
         ),
+        ("docs/a.md", ""),
+        ("docs/b.md", ""),
     ];
     if let Some(lock) = lock {
         files.push((".velnor/rust-inputs.lock", lock));
