@@ -7,9 +7,9 @@ use serde::{Deserialize, Deserializer};
 use std::future::Future;
 use std::time::Duration;
 use url::Url;
-use uuid::Uuid;
 
 use super::http::{slash_url, validate_known_service_url};
+use super::token_backoff::{TokenBackoff, random_between};
 use crate::secret::Secret;
 
 mod acquire;
@@ -35,21 +35,18 @@ const MAX_ATTEMPTS: u32 = 5;
 pub struct RetryDelays {
     pub min: Duration,
     pub max: Duration,
+    pub token: TokenBackoff,
 }
 
 impl RetryDelays {
     pub const IMMEDIATE: Self = Self {
         min: Duration::ZERO,
         max: Duration::ZERO,
+        token: TokenBackoff::IMMEDIATE,
     };
 
     fn delay(&self) -> Duration {
-        let span_millis = self.max.saturating_sub(self.min).as_millis();
-        if span_millis == 0 {
-            return self.min;
-        }
-        let jitter = Uuid::new_v4().as_u128() % span_millis;
-        self.min + Duration::from_millis(u64::try_from(jitter).unwrap_or(0))
+        random_between(self.min, self.max)
     }
 }
 
@@ -58,6 +55,7 @@ impl Default for RetryDelays {
         Self {
             min: Duration::from_secs(5),
             max: Duration::from_secs(15),
+            token: TokenBackoff::default(),
         }
     }
 }

@@ -10,14 +10,16 @@ use rustix::process::{Pid, Signal, kill_process};
 use tokio::process::{Child, Command};
 
 use super::exec_builder::{BACKGROUND_SLEEP, assert_gone, pid_from};
-use super::exec_support::{Scratch, fixture_path};
+use super::exec_support::{Scratch, fixture_path, scrub_tool_cache};
 use super::lifecycle_support::{fixture_job, job_replacing};
 use super::support::mock_github::{Behavior, MockGithub, Online, SESSION_ID};
 
 const EXIT_BUDGET: Duration = Duration::from_secs(20);
 
 pub(crate) async fn velnor_runner(arguments: &[&str]) -> Result<Output> {
-    Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+    scrub_tool_cache(command.as_std_mut());
+    command
         .args(arguments)
         .output()
         .await
@@ -31,11 +33,33 @@ pub(crate) struct Started {
 }
 
 pub(crate) fn start_runner(mock: &MockGithub, scratch: &Scratch) -> Result<Started> {
+    start_runner_with(mock, scratch, None, &[])
+}
+
+pub(crate) fn start_runner_with(
+    mock: &MockGithub,
+    scratch: &Scratch,
+    umask: Option<&str>,
+    environment: &[(&str, &Path)],
+) -> Result<Started> {
     std::fs::create_dir_all(scratch.work_dir())?;
     let jit_file = scratch.work_dir().join("jit.txt");
     std::fs::write(&jit_file, mock.jit())?;
     let work_dir = scratch.work_dir().join("job");
-    let child = Command::new(env!("CARGO_BIN_EXE_velnor-runner"))
+    let mut command = match umask {
+        Some(umask) => {
+            let mut command = Command::new("sh");
+            command
+                .arg("-c")
+                .arg(format!("umask {umask}; exec \"$0\" \"$@\""))
+                .arg(env!("CARGO_BIN_EXE_velnor-runner"));
+            command
+        }
+        None => Command::new(env!("CARGO_BIN_EXE_velnor-runner")),
+    };
+    scrub_tool_cache(command.as_std_mut());
+    let child = command
+        .envs(environment.iter().copied())
         .arg("run")
         .arg("--jit")
         .arg(format!("@{}", jit_file.display()))

@@ -24,6 +24,8 @@ mod exec_support;
 mod expr_format_allocation;
 #[path = "expr/from_json.rs"]
 mod expr_from_json;
+#[path = "exec_tool_cache.rs"]
+mod exec_tool_cache;
 #[path = "expr/functions.rs"]
 mod expr_functions;
 #[path = "expr/generated_workflow.rs"]
@@ -132,6 +134,7 @@ mod lifecycle_session;
 mod lifecycle_session_create;
 mod lifecycle_support;
 mod lifecycle_token;
+mod lifecycle_token_retry;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;
@@ -143,6 +146,7 @@ mod redaction;
 #[path = "exec_review.rs"]
 mod review;
 mod run_cli;
+mod run_cli_dirs;
 mod run_cli_jit;
 mod run_cli_shutdown;
 #[path = "exec_semantics.rs"]

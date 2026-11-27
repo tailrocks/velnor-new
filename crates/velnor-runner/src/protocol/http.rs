@@ -3,7 +3,7 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/protocol.rs
 
 use anyhow::{Context, Result, bail};
-use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, USER_AGENT};
+use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, RETRY_AFTER, USER_AGENT};
 use reqwest::{Client, Method};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -130,11 +130,17 @@ pub async fn github_json_request(
     Ok((response.status, response.body.into_inner()))
 }
 
+pub(crate) struct OAuthResponse {
+    pub(crate) status: u16,
+    pub(crate) body: String,
+    pub(crate) retry_after: Option<String>,
+}
+
 pub(crate) async fn oauth_form_request(
     url: &str,
-    form_body: String,
+    form_body: &str,
     timeout: Duration,
-) -> Result<(u16, String)> {
+) -> Result<OAuthResponse> {
     validate_authenticated_url(url)?;
     let response = http_client()?
         .post(url)
@@ -142,7 +148,7 @@ pub(crate) async fn oauth_form_request(
         .header(ACCEPT, "application/json")
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .timeout(timeout)
-        .body(form_body)
+        .body(form_body.to_owned())
         .send()
         .await
         .map_err(|error| {
@@ -152,13 +158,22 @@ pub(crate) async fn oauth_form_request(
             )
         })?;
     let status = response.status().as_u16();
-    let text = response.text().await.map_err(|error| {
+    let retry_after = response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let body = response.text().await.map_err(|error| {
         anyhow::anyhow!(
             "read OAuth token response: {}",
             redacted_reqwest_error(&error)
         )
     })?;
-    Ok((status, text))
+    Ok(OAuthResponse {
+        status,
+        body,
+        retry_after,
+    })
 }
 
 pub(crate) fn validate_authenticated_url(raw: &str) -> Result<Url> {

@@ -36,7 +36,7 @@ struct Failures {
 impl Failures {
     fn allow_retry(&mut self, error: &anyhow::Error) -> bool {
         match oauth_error_kind(error) {
-            Some(OAuthErrorKind::RegistrationDeleted) => false,
+            Some(OAuthErrorKind::RegistrationDeleted | OAuthErrorKind::Refused) => false,
             Some(OAuthErrorKind::ClockSkew) => {
                 self.clock_skews += 1;
                 self.clock_skews < CLOCK_SKEW_ATTEMPTS

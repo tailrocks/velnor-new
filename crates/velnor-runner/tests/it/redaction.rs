@@ -357,6 +357,7 @@ fn run_jit_options_debug_output_hides_the_jit_configuration() {
         upload_drain_budget: Duration::from_secs(600),
         feed_flush_interval: Duration::from_millis(250),
         retry_delays: RetryDelays::default(),
+        tool_cache: None,
         os: RunnerOs::Linux,
         adapters: AdapterRegistry::empty(),
     };

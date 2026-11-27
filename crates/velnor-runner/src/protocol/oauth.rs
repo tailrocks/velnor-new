@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::http::{oauth_form_request, redacted_authenticated_url};
 use super::jit::private_key_der_from_pem;
+use super::token_backoff::{MAX_RETRIES, TokenBackoff, is_retryable};
 
 const OAUTH_TIMEOUT: Duration = Duration::from_secs(5);
 const OAUTH_MAX_RESPONSE_BYTES: usize = 64 * 1024;
@@ -80,6 +81,7 @@ impl fmt::Debug for OAuthAccessToken {
 pub enum OAuthErrorKind {
     RegistrationDeleted,
     ClockSkew,
+    Refused,
     Other,
 }
 
@@ -98,6 +100,13 @@ impl fmt::Display for OAuthTokenError {
                 "GitHub runner registration no longer exists: {}",
                 self.description
             ),
+            OAuthErrorKind::Refused => {
+                write!(
+                    f,
+                    "OAuth token request failed: HTTP status {}",
+                    self.description
+                )
+            }
             OAuthErrorKind::ClockSkew | OAuthErrorKind::Other => write!(
                 f,
                 "OAuth token request failed: error={}, description={}",
@@ -110,6 +119,14 @@ impl fmt::Display for OAuthTokenError {
 impl std::error::Error for OAuthTokenError {}
 
 impl OAuthTokenError {
+    fn refused(status: u16) -> Self {
+        Self {
+            kind: OAuthErrorKind::Refused,
+            error: "http_status".to_owned(),
+            description: status.to_string(),
+        }
+    }
+
     fn new(error: String, description: String) -> Self {
         let kind = if error.eq_ignore_ascii_case("invalid_client") {
             OAuthErrorKind::RegistrationDeleted
@@ -134,12 +151,15 @@ pub fn oauth_error_kind(error: &anyhow::Error) -> Option<OAuthErrorKind> {
         .map(|oauth| oauth.kind)
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct OAuthClient;
+#[derive(Debug, Clone, Copy)]
+pub struct OAuthClient {
+    backoff: TokenBackoff,
+}
 
 impl OAuthClient {
-    pub fn new() -> Result<Self> {
-        Ok(Self)
+    #[must_use]
+    pub const fn new(backoff: TokenBackoff) -> Self {
+        Self { backoff }
     }
 
     pub async fn exchange_client_credentials(
@@ -155,9 +175,17 @@ impl OAuthClient {
             )
             .append_pair("client_assertion", &assertion)
             .finish();
-        let (status, text) =
-            oauth_form_request(&credentials.token_url, body, OAUTH_TIMEOUT).await?;
-        parse_oauth_token_response(status, &text)
+        let mut retries = 0;
+        loop {
+            let response = oauth_form_request(&credentials.token_url, &body, OAUTH_TIMEOUT).await?;
+            if retries < MAX_RETRIES && is_retryable(response.status) {
+                retries += 1;
+                let delay = self.backoff.delay(retries, response.retry_after.as_deref());
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return parse_oauth_token_response(response.status, &response.body);
+        }
     }
 }
 
@@ -166,7 +194,7 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
         bail!("OAuth token response exceeded {OAUTH_MAX_RESPONSE_BYTES} bytes");
     }
     if status != 200 && status != 400 {
-        bail!("OAuth token request failed: HTTP status {status}");
+        return Err(OAuthTokenError::refused(status).into());
     }
     let response: OAuthTokenResponse =
         serde_json::from_str(body.trim()).context("parse OAuth token response")?;

@@ -257,6 +257,16 @@ async fn lifecycle_gives_up_at_once_when_the_runner_registration_is_deleted() ->
 }
 
 #[tokio::test]
+async fn lifecycle_gives_up_at_once_when_a_deleted_registration_also_reports_clock_skew()
+-> Result<()> {
+    let both = OAuthTokens::Rejected(
+        "invalid_client",
+        "The assertion is not valid yet. Current server time is 2026-11-27T10:00:00Z",
+    );
+    sign_in_ends_the_run_after(both, 1).await
+}
+
+#[tokio::test]
 async fn lifecycle_gives_up_on_a_clock_skewed_sign_in_after_sixty_attempts() -> Result<()> {
     let skewed = OAuthTokens::Rejected(
         "invalid_request",

@@ -16,8 +16,8 @@ use crate::exec::JobCancel;
 use crate::protocol::{
     Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
     OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerOs,
-    RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, broker_error_category,
-    oauth_error_kind,
+    RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, TokenBackoff,
+    broker_error_category, oauth_error_kind,
 };
 use crate::secret::Secret;
 use create::Token;
@@ -161,6 +161,7 @@ impl Session {
         config: &DecodedJitConfig,
         os: RunnerOs,
         retry_interval: Duration,
+        token_backoff: TokenBackoff,
     ) -> Result<Self, LifecycleError> {
         let credentials = oauth_credentials(config).map_err(LifecycleError::Config)?;
         let base_url = config
@@ -174,7 +175,7 @@ impl Session {
             .agent_id
             .ok_or_else(|| LifecycleError::Config(anyhow!("JIT settings have no AgentId")))?;
         let agent_name = config.settings.agent_name.clone().unwrap_or_default();
-        let oauth = OAuthClient::new().map_err(LifecycleError::SignIn)?;
+        let oauth = OAuthClient::new(token_backoff);
         let broker =
             BrokerClient::new(&base_url, os, String::new()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());

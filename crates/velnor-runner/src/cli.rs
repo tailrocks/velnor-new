@@ -12,7 +12,9 @@ use uuid::Uuid;
 
 use crate::broker::{Broker, StoreWriter, TrustedFacts};
 use crate::context_value::ordinal_ignore_case_eq;
-use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
+use crate::exec::{
+    AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job, tool_cache_from_env,
+};
 use crate::job_message::AgentJobRequestMessage;
 use crate::store::store_root;
 use crate::lifecycle::{RunJitOptions, run_jit};
@@ -140,7 +142,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     let options = RunOptions {
         workspace,
         temp,
-        tool_cache: root.join("_tool"),
+        tool_cache: tool_cache_from_env().unwrap_or_else(|| root.join("_tool")),
         runner_name: "velnor-exec".to_owned(),
         os: RunnerOs::detect()?,
     };
@@ -243,6 +245,7 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
         upload_drain_budget: UPLOAD_DRAIN_BUDGET,
         feed_flush_interval: FEED_FLUSH_INTERVAL,
         retry_delays: RetryDelays::default(),
+        tool_cache: tool_cache_from_env(),
         os,
         adapters: build_adapters(),
     };
