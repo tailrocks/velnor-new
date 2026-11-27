@@ -90,6 +90,17 @@ pub enum RustRunnerFailure {
     #[error("the job directory is still on the host store after its removal")]
     JobFilesLeft,
 
+    #[error(
+        "the job work tree is deeper or larger than the cleanup bound; the slot stays closed until it is removed by hand"
+    )]
+    WorkTreeBound,
+
+    #[error("an orb call wrote more output than the capture bound")]
+    OrbOutputTooLarge,
+
+    #[error("another controller holds the host store")]
+    HostStoreHeld,
+
     #[error("this command is not available in rust-runner launch mode yet")]
     CommandUnavailable,
 

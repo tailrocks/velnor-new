@@ -16,6 +16,7 @@ pub(super) struct CurlResponse {
     pub(super) status: u16,
     pub(super) body: Vec<u8>,
     pub(super) retry_after: Option<Vec<u8>>,
+    pub(super) reset: Option<Vec<u8>>,
     pub(super) rate_limited: bool,
 }
 
@@ -89,16 +90,19 @@ fn run_curl_with_home(
     let headers = stderr
         .filter(|captured| !captured.overflow)
         .map_or_else(Vec::new, |captured| captured.bytes);
-    let (retry_after, remaining) = match headers.iter().position(|byte| *byte == b'\n') {
-        Some(split) => (&headers[..split], &headers[split + 1..]),
-        None => (headers.as_slice(), &[][..]),
-    };
-    let retry_after = Some(retry_after.to_vec()).filter(|bytes| !bytes.is_empty());
-    let rate_limited = status == 403 && (retry_after.is_some() || remaining.trim_ascii() == b"0");
+    let mut lines = headers
+        .split(|byte| *byte == b'\n')
+        .map(|line| Some(line.trim_ascii().to_vec()).filter(|bytes| !bytes.is_empty()));
+    let retry_after = lines.next().flatten();
+    let remaining = lines.next().flatten();
+    let reset = lines.next().flatten();
+    let rate_limited =
+        status == 403 && (retry_after.is_some() || remaining.as_deref() == Some(b"0".as_slice()));
     Ok(CurlResponse {
         status,
         body: response.body,
         retry_after: retry_after.filter(|_| matches!(status, 403 | 429 | 503)),
+        reset: reset.filter(|_| matches!(status, 403 | 429 | 503)),
         rate_limited,
     })
 }

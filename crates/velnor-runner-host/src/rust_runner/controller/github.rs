@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
+use std::time::{Duration, Instant};
+
 use velnor_runner_github::{
-    AckScope, AcquireOutcome, EncodedJit, ParsedBatch, QueueSession, RefreshGate, ScaleSetByName,
-    ScaleSetCreate, ScaleSetFound, WireError, ack, acquire, create_runner_scale_set,
-    create_session, delete_session, get_runner_by_name, get_runner_scale_set, jit, jit_request,
-    list_runner_groups, list_scale_set_runners, refresh_session, remove_runner,
+    AckScope, AcquireOutcome, EncodedJit, JitResult, ParsedBatch, QueueSession, RefreshGate,
+    RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, WireError, ack,
+    acquire, create_runner_scale_set, create_session, delete_session, get_runner_scale_set,
+    get_runner_scale_set_by_id, jit, jit_request, list_runner_groups, list_scale_set_runners,
+    refresh_session, remove_runner,
 };
 
 use zeroize::Zeroizing;
@@ -20,6 +23,10 @@ use crate::listen::{
     OWNER_NAME, PollPathResult, absolute_https, map_listen, poll_path_with, queue_path,
 };
 use crate::scale_set::{EnsureError, create_labels, map_session, open_binding_admin};
+
+pub(super) const ACQUIRE_BUDGET: Duration = Duration::from_secs(30);
+const JIT_ATTEMPTS: u32 = 3;
+const JIT_GAP: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
 pub(super) struct Admin {
@@ -97,7 +104,7 @@ pub(super) fn open_scale_set(
             if shared {
                 owned::record_intent(state, &binding.connection_id)?;
             }
-            let created = create_runner_scale_set(
+            let created = match create_runner_scale_set(
                 &mut transport,
                 &ScaleSetCreate {
                     name,
@@ -105,9 +112,29 @@ pub(super) fn open_scale_set(
                     labels: &create_labels(labels),
                     admin_token: &admin.token,
                 },
+            ) {
+                Ok(view) => view.id,
+                Err(error) => {
+                    let error = map_session(error, &transport);
+                    if shared && refused(&error) {
+                        owned::drop_intent(state, &binding.connection_id)?;
+                    }
+                    return Err(error.into());
+                }
+            };
+            let reread = get_runner_scale_set_by_id(
+                &mut transport,
+                &ScaleSetById {
+                    scale_set_id: created,
+                    name,
+                    expected_labels: labels,
+                    admin_token: &admin.token,
+                },
             )
-            .map_err(|error| map_session(error, &transport))?
-            .id;
+            .map_err(|error| map_session(error, &transport))?;
+            if reread.id != created || !reread.runner_setting.disable_update {
+                return Err(EnsureError::Uncertain.into());
+            }
             if shared {
                 owned::record_created(state, &binding.connection_id, created)?;
             }
@@ -115,6 +142,10 @@ pub(super) fn open_scale_set(
         }
     };
     Ok((admin, id))
+}
+
+fn refused(error: &EnsureError) -> bool {
+    matches!(error, EnsureError::Unexpected { status, .. } if (400..500).contains(status))
 }
 
 fn adopt_shared(
@@ -197,21 +228,36 @@ pub(super) fn clear_runners(admin: &Admin, scale_set_id: i64) -> Result<(), List
     Ok(())
 }
 
-pub(super) fn remove_runner_named(admin: &Admin, name: &str) -> Result<(), ListenFault> {
+pub(super) fn remove_runner_named(
+    admin: &Admin,
+    scale_set_id: i64,
+    name: &str,
+) -> Result<(), ListenFault> {
     let mut transport = HttpsTransport::new(&admin.base)?;
-    let Some(runner) =
-        get_runner_by_name(&mut transport, name, &admin.token).map_err(map_listen)?
-    else {
+    let named = named_runners(&mut transport, admin, scale_set_id, name)?;
+    if named.is_empty() {
         return Ok(());
-    };
-    remove_runner(&mut transport, runner.id, &admin.token).map_err(map_listen)?;
-    if get_runner_by_name(&mut transport, name, &admin.token)
-        .map_err(map_listen)?
-        .is_some()
-    {
-        return Err(HostError::RustRunner(RustRunnerFailure::RunnerStillRegistered).into());
     }
-    Ok(())
+    for runner in &named {
+        remove_runner(&mut transport, runner.id, &admin.token).map_err(map_listen)?;
+    }
+    if named_runners(&mut transport, admin, scale_set_id, name)?.is_empty() {
+        Ok(())
+    } else {
+        Err(HostError::RustRunner(RustRunnerFailure::RunnerStillRegistered).into())
+    }
+}
+
+fn named_runners(
+    transport: &mut HttpsTransport,
+    admin: &Admin,
+    scale_set_id: i64,
+    name: &str,
+) -> Result<Vec<RunnerReference>, ListenFault> {
+    let mut runners =
+        list_scale_set_runners(transport, scale_set_id, &admin.token).map_err(map_listen)?;
+    runners.retain(|runner| runner.name == name);
+    Ok(runners)
 }
 
 pub(super) fn poll(
@@ -236,7 +282,8 @@ pub(super) fn acquire_and_jit(
     request_id: i64,
     runner_name: &str,
 ) -> Result<Acquisition, ListenFault> {
-    let mut transport = HttpsTransport::new(&admin.base)?;
+    let mut transport =
+        HttpsTransport::with_deadline(&admin.base, Instant::now() + ACQUIRE_BUDGET)?;
     let gate = RefreshGate::new();
     let outcome = acquire(
         &mut transport,
@@ -255,10 +302,34 @@ pub(super) fn acquire_and_jit(
         return Ok(Acquisition::NotAcquired);
     }
     let request = jit_request(runner_name).map_err(|_| EnsureError::Rejected)?;
-    let result = jit(&mut transport, scale_set_id, &admin.token, &request).map_err(map_listen)?;
+    let result = generate_jit(&mut transport, scale_set_id, &admin.token, &request)?;
+    let runner = &result.runner;
+    if runner.id <= 0 || runner.runner_scale_set_id != scale_set_id || runner.name != runner_name {
+        return Err(EnsureError::Malformed.into());
+    }
     Ok(Acquisition::Acquired {
         jit: result.encoded_jit_config,
     })
+}
+
+fn generate_jit(
+    transport: &mut HttpsTransport,
+    scale_set_id: i64,
+    token: &str,
+    request: &[u8],
+) -> Result<JitResult, ListenFault> {
+    let mut attempt = 1;
+    loop {
+        match jit(transport, scale_set_id, token, request) {
+            Ok(result) => return Ok(result),
+            Err(error) if attempt < JIT_ATTEMPTS => {
+                eprintln!("rust-runner jit attempt {attempt} held: {error}");
+                attempt += 1;
+                std::thread::sleep(JIT_GAP);
+            }
+            Err(error) => return Err(map_listen(error).into()),
+        }
+    }
 }
 
 pub(super) fn acknowledge(queue: &QueueAccess, batch: &ParsedBatch) -> Result<(), ListenFault> {

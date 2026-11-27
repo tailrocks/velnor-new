@@ -116,7 +116,7 @@ export function record(label: string, detail: Record<string, string | number | b
 
 export function reply(status: number, value: unknown, headers: Record<string, string> = {}): never {
   const text = value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value);
-  if (Object.keys(headers).length > 0) writeSync(2, `${headers["retry-after"] ?? ""}\n${headers["x-ratelimit-remaining"] ?? ""}`);
+  if (Object.keys(headers).length > 0) writeSync(2, `${headers["retry-after"] ?? ""}\n${headers["x-ratelimit-remaining"] ?? ""}\n${headers["x-ratelimit-reset"] ?? ""}`);
   writeSync(1, `${text}${status}`);
   process.exit(0);
 }

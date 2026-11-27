@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::store::Store;
+use super::store::{HostHold, Store};
 use super::{
     GUEST_RUNNER, GUEST_STORE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb,
 };
@@ -35,6 +35,10 @@ impl RustRunnerLauncher {
         Store::prepare(&self.host_store)?;
         self.link_store()?;
         self.require_runner_binary()
+    }
+
+    pub fn hold_host(&self) -> Result<HostHold, HostError> {
+        Store::create(&self.host_store)?.hold()
     }
 
     pub fn runner_digest(&self) -> Result<String, HostError> {

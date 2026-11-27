@@ -42,6 +42,23 @@ pub(super) fn push_offer(request_id: u64, run_id: u64, branch: &str, content: &s
     })
 }
 
+pub(super) fn merge_group_offer(
+    request_id: u64,
+    run_id: u64,
+    reference: &str,
+    branch: &str,
+) -> Value {
+    json!({
+        "request_id": request_id,
+        "event": "merge_group",
+        "run_id": run_id,
+        "ref": reference,
+        "branch": branch,
+        "sha": sha(run_id),
+        "workflow_content": WORKFLOW,
+    })
+}
+
 pub(super) fn pull_offer(
     request_id: u64,
     run_id: u64,
@@ -121,7 +138,30 @@ struct InventoryEnvelope<'a> {
     workflows: &'a [InventoryWorkflow],
 }
 
-fn inventory() -> TestResult<String> {
+fn inventory(merge_group: bool) -> TestResult<String> {
+    let contexts = vec![
+        Context {
+            event: "push",
+            branch_filters: vec!["main"],
+            tag_filters: Vec::new(),
+            pull_request_base_branches: Vec::new(),
+        },
+        if merge_group {
+            Context {
+                event: "merge_group",
+                branch_filters: vec!["main"],
+                tag_filters: Vec::new(),
+                pull_request_base_branches: Vec::new(),
+            }
+        } else {
+            Context {
+                event: "pull_request",
+                branch_filters: Vec::new(),
+                tag_filters: Vec::new(),
+                pull_request_base_branches: vec!["main"],
+            }
+        },
+    ];
     let workflows = vec![InventoryWorkflow {
         path: ".github/workflows/ci.yml",
         content_sha256: hex_sha256(WORKFLOW.as_bytes()),
@@ -131,20 +171,7 @@ fn inventory() -> TestResult<String> {
             workflow_path: ".github/workflows/ci.yml",
             job_key: "build",
             role: "verification",
-            contexts: vec![
-                Context {
-                    event: "push",
-                    branch_filters: vec!["main"],
-                    tag_filters: Vec::new(),
-                    pull_request_base_branches: Vec::new(),
-                },
-                Context {
-                    event: "pull_request",
-                    branch_filters: Vec::new(),
-                    tag_filters: Vec::new(),
-                    pull_request_base_branches: vec!["main"],
-                },
-            ],
+            contexts,
             permissions_declared: true,
             permissions: std::collections::BTreeMap::from([("contents", "read")]),
             secrets: Vec::new(),
@@ -168,6 +195,8 @@ fn inventory() -> TestResult<String> {
     })?)
 }
 
+const BRANCH_POLICY: &str = "mode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = [{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }, { base_repository_id = 42, base_branch = \"main\", head_repository_id = 43, head_branch = \"feature\" }]";
+const MERGE_GROUP_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"merge_group\"]\npull_request_rules = []";
 pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
 pub(super) const HOST_TOML_LIMIT: usize = 1_048_576;
 
@@ -180,7 +209,7 @@ pub(super) fn host_toml_for(
     max_jobs: u32,
     credential_ref: &str,
 ) -> TestResult<String> {
-    host_toml_with(root, max_jobs, credential_ref, "")
+    host_toml_with(root, max_jobs, credential_ref, "", BRANCH_POLICY)
 }
 
 pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
@@ -189,7 +218,12 @@ pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<S
         max_jobs,
         KEYCHAIN_REFERENCE,
         "organization = \"tailrocks\"\n",
+        BRANCH_POLICY,
     )
+}
+
+pub(super) fn merge_group_host_toml(root: &Path) -> TestResult<String> {
+    host_toml_with(root, 1, KEYCHAIN_REFERENCE, "", MERGE_GROUP_POLICY)
 }
 
 pub(super) fn padded(text: &str, bytes: usize) -> String {
@@ -202,6 +236,7 @@ fn host_toml_with(
     max_jobs: u32,
     credential_ref: &str,
     connection_lines: &str,
+    source_policy: &str,
 ) -> TestResult<String> {
     let base = format!(
         "schema = 2\n\
@@ -215,11 +250,7 @@ fn host_toml_with(
          name = \"velnor-mac\"\n\
          labels = [\"velnor\", \"velnor-mac\"]\n\
          [connections.source_policy]\n\
-         mode = \"branch_restricted\"\n\
-         branches = [\"main\"]\n\
-         tag_prefixes = []\n\
-         events = [\"push\", \"pull_request\"]\n\
-         pull_request_rules = [{{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }}, {{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 43, head_branch = \"feature\" }}]\n\
+         {policy}\n\
          [host]\n\
          launch_mode = \"rust-runner\"\n\
          max_jobs = {max_jobs}\n\
@@ -233,13 +264,19 @@ fn host_toml_with(
          context = \"orbstack\"\n\
          platform = \"linux/arm64\"\n\
          endpoint = \"unix://{}/no-such-docker.sock\"\n",
-        root.display()
+        root.display(),
+        policy = source_policy,
     );
     let config = HostConfig::parse_draft(&base)?;
     let id = ConnectionId::parse("lab")?;
     let connection = config.connection(&id).ok_or("connection lab")?;
-    let policy =
-        build_job_authority_policy_json(connection, &inventory()?, SOURCE_SHA, &"d".repeat(64), 1)?;
+    let policy = build_job_authority_policy_json(
+        connection,
+        &inventory(source_policy.contains("merge_group"))?,
+        SOURCE_SHA,
+        &"d".repeat(64),
+        1,
+    )?;
     Ok(config
         .with_job_authority_policy_json(&id, &policy)?
         .to_toml()?)
@@ -289,8 +326,13 @@ pub(super) fn with_run_repository(mut offer: Value, repository_id: u64) -> Value
     offer
 }
 
-pub(super) fn with_jit_failure(mut offer: Value) -> Value {
-    offer["jit_returns"] = json!(500);
+pub(super) fn with_jit_failures(mut offer: Value, count: u64) -> Value {
+    offer["jit_failures"] = json!(count);
+    offer
+}
+
+pub(super) fn with_jit_identity(mut offer: Value, field: &str) -> Value {
+    offer["jit_identity"] = json!(field);
     offer
 }
 

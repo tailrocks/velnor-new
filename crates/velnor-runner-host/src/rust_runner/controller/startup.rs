@@ -12,22 +12,24 @@ use super::connection::{ADMIN_RENEWAL, Live, Pending};
 use super::github::{self, Admin};
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
+use super::sessions::close_all;
 use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
 use crate::launch_blocking::ListenFault;
-use crate::rust_runner::RustRunnerLauncher;
+use crate::rust_runner::{HostHold, RustRunnerLauncher};
 
 const STARTUP_RETRY: Duration = Duration::from_secs(30);
 
 pub(super) enum Started {
-    Ready(Vec<Live>),
+    Ready(Vec<Live>, HostHold),
     Shutdown,
     ConfigChanged,
 }
 
 #[derive(Clone, Copy)]
 enum Step {
+    Hold,
     Machine,
     Sweep,
     Set(usize),
@@ -40,7 +42,7 @@ impl Step {
     const fn held_renewal(self) -> Option<usize> {
         match self {
             Self::Session(index) | Self::Clear(index) => Some(index),
-            Self::Machine | Self::Sweep | Self::Set(_) | Self::Renew(_) => None,
+            Self::Hold | Self::Machine | Self::Sweep | Self::Set(_) | Self::Renew(_) => None,
         }
     }
 }
@@ -50,6 +52,7 @@ fn renew_held(step: Step, admin_age: Duration) -> Option<usize> {
 }
 
 enum Done {
+    Held(HostHold),
     Machine,
     Swept,
     Set(usize, Admin, i64),
@@ -98,8 +101,8 @@ pub(super) async fn start(
     shutdown: &mut Shutdown<'_>,
 ) -> Result<Started, ListenFault> {
     let mut pending = pending_connections(config, pats)?;
-    let (mut machine, mut swept) = (false, false);
-    while let Some(step) = next_step(&pending, machine, swept) {
+    let (mut store_lock, mut machine, mut swept) = (None, false, false);
+    while let Some(step) = next_step(&pending, store_lock.is_some(), machine, swept) {
         if config_changed(cx) {
             close_pending(&pending).await;
             return Ok(Started::ConfigChanged);
@@ -110,6 +113,7 @@ pub(super) async fn start(
         let mut held = false;
         match outcome.value {
             Some(Ok(done)) => match done {
+                Done::Held(acquired) => store_lock = Some(acquired),
                 Done::Machine => machine = true,
                 Done::Swept => swept = true,
                 Done::Set(index, admin, id) => {
@@ -169,7 +173,8 @@ pub(super) async fn start(
     for connection in pending {
         live.push(connection.into_live()?);
     }
-    Ok(Started::Ready(live))
+    let store_lock = store_lock.ok_or(HostError::Config)?;
+    Ok(Started::Ready(live, store_lock))
 }
 
 fn config_changed(cx: &Context) -> bool {
@@ -203,7 +208,10 @@ fn pending_connections(
     Ok(pending)
 }
 
-fn next_step(pending: &[Pending], machine: bool, swept: bool) -> Option<Step> {
+fn next_step(pending: &[Pending], held: bool, machine: bool, swept: bool) -> Option<Step> {
+    if !held {
+        return Some(Step::Hold);
+    }
     if !machine {
         return Some(Step::Machine);
     }
@@ -236,6 +244,7 @@ fn prepare(
     let launcher = launcher.clone();
     let state = state.to_path_buf();
     Ok(match step {
+        Step::Hold => Box::new(move || launcher.hold_host().map(Done::Held).map_err(Into::into)),
         Step::Machine => Box::new(move || {
             launcher
                 .ensure_machine()
@@ -274,13 +283,12 @@ fn prepare(
 }
 
 pub(super) async fn close_pending(pending: &[Pending]) {
-    for connection in pending {
-        let (Some((admin, id)), Some(session)) = (&connection.set, &connection.session) else {
-            continue;
-        };
-        let (admin, id, session_id) = (admin.clone(), *id, session.session_id.clone());
-        if let Err(error) = blocking(move || github::close_session(&admin, id, &session_id)).await {
-            eprintln!("rust-runner session close held: {error}");
-        }
-    }
+    let sessions = pending
+        .iter()
+        .filter_map(|connection| {
+            let ((admin, id), session) = (connection.set.as_ref()?, connection.session.as_ref()?);
+            Some((admin.clone(), *id, session.session_id.clone()))
+        })
+        .collect();
+    close_all(sessions).await;
 }

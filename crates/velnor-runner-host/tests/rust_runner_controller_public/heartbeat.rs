@@ -11,13 +11,18 @@ use super::harness::World;
 
 const STALE_MS: u64 = 31_000;
 
-fn beat(world: &World, hash: &str, phase: &str, age_ms: u64) -> TestResult<()> {
-    let now = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())?;
+fn beat_at(world: &World, hash: &str, phase: &str, offset_ms: i64) -> TestResult<()> {
+    let now = i64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())?;
     std::fs::write(
         world.state.join("rust-runner-controller.json"),
-        json!({"config_sha256": hash, "phase": phase, "updated_unix_ms": now - age_ms}).to_string(),
+        json!({"config_sha256": hash, "phase": phase, "updated_unix_ms": now + offset_ms})
+            .to_string(),
     )?;
     Ok(())
+}
+
+fn beat(world: &World, hash: &str, phase: &str, age_ms: u64) -> TestResult<()> {
+    beat_at(world, hash, phase, -i64::try_from(age_ms)?)
 }
 
 pub(super) fn run() -> TestResult<()> {
@@ -41,5 +46,11 @@ pub(super) fn run() -> TestResult<()> {
             "a {phase} heartbeat older than 30 s must read as Degraded"
         );
     }
+    beat_at(&world, &hash, "ready", 3_600_000)?;
+    assert_eq!(
+        controller_readiness(&world.state),
+        Readiness::Degraded,
+        "a heartbeat stamped in the future must read as Degraded"
+    );
     Ok(())
 }

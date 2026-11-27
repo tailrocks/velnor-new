@@ -1,24 +1,43 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use velnor_runner_github::QueueSession;
 
 use super::{Event, Run, blocking, github};
 use crate::launch_blocking::ListenFault;
 
-impl Run<'_> {
-    pub(super) async fn close_sessions(&mut self) {
-        for live in &self.connections {
-            let admin = live.admin.clone();
-            let (id, session_id) = (live.scale_set_id, live.session.session_id.clone());
-            if let Err(error) =
-                blocking(move || github::close_session(&admin, id, &session_id)).await
-            {
+const CLOSE_WAIT: Duration = Duration::from_secs(10);
+
+pub(super) async fn close_all(sessions: Vec<(github::Admin, i64, String)>) {
+    let closes = sessions.into_iter().map(|(admin, id, session_id)| {
+        blocking(move || github::close_session(&admin, id, &session_id))
+    });
+    match tokio::time::timeout(CLOSE_WAIT, futures_util::future::join_all(closes)).await {
+        Ok(results) => {
+            for error in results.into_iter().filter_map(Result::err) {
                 eprintln!("rust-runner session close held: {error}");
             }
         }
+        Err(_) => eprintln!("rust-runner session close held: not finished within {CLOSE_WAIT:?}"),
+    }
+}
+
+impl Run<'_> {
+    pub(super) async fn close_sessions(&mut self) {
+        let sessions = self
+            .connections
+            .iter()
+            .map(|live| {
+                (
+                    live.admin.clone(),
+                    live.scale_set_id,
+                    live.session.session_id.clone(),
+                )
+            })
+            .collect();
+        close_all(sessions).await;
     }
 
     pub(super) fn spawn_due_renewals(&mut self) {

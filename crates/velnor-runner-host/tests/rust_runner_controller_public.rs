@@ -31,6 +31,8 @@ mod once;
 mod organization;
 #[path = "rust_runner_controller_public/runners.rs"]
 mod runners;
+#[path = "rust_runner_controller_public/scope.rs"]
+mod scope;
 #[path = "rust_runner_controller_public/shutdown.rs"]
 mod shutdown;
 #[path = "rust_runner_controller_public/signals.rs"]
@@ -282,5 +284,113 @@ fn rust_runner_controller_ends_an_orb_call_that_hangs() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),
         None => deadline::run("rust_runner_controller_ends_an_orb_call_that_hangs"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_holds_api_calls_until_a_primary_rate_limit_resets() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => unavailable::held_until_reset(
+            "rust_runner_controller_holds_api_calls_until_a_primary_rate_limit_resets",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_admits_merge_group_offers() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => source::merge_groups("rust_runner_controller_admits_merge_group_offers"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_retries_a_failed_jit_for_the_acquired_job() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => failure::retries_a_failed_jit_for_the_acquired_job(
+            "rust_runner_controller_retries_a_failed_jit_for_the_acquired_job",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_refuses_a_jit_for_another_runner() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => failure::refuses_a_jit_for_another_runner(
+            "rust_runner_controller_refuses_a_jit_for_another_runner",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_forgets_its_intent_after_a_refused_create() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::forgets_its_intent_after_a_refused_create(
+            "rust_runner_controller_forgets_its_intent_after_a_refused_create",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_refuses_a_created_set_that_keeps_other_labels() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => organization::refuses_a_created_set_that_keeps_other_labels(
+            "rust_runner_controller_refuses_a_created_set_that_keeps_other_labels",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_waits_while_another_controller_holds_the_store() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => startup::waits_while_the_store_is_held(
+            "rust_runner_controller_waits_while_another_controller_holds_the_store",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_probes_the_machine_while_idle() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => admission::probes_the_machine_while_idle(
+            "rust_runner_controller_probes_the_machine_while_idle",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_closes_sessions_under_one_deadline() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => shutdown::closes_sessions_under_one_deadline(
+            "rust_runner_controller_closes_sessions_under_one_deadline",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_proves_a_job_that_will_not_stop() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => shutdown::proves_a_job_that_will_not_stop(
+            "rust_runner_controller_proves_a_job_that_will_not_stop",
+        ),
+    }
+}
+
+#[test]
+fn rust_runner_controller_leaves_a_runner_of_another_scale_set() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => scope::leaves_a_runner_of_another_scale_set(
+            "rust_runner_controller_leaves_a_runner_of_another_scale_set",
+        ),
     }
 }

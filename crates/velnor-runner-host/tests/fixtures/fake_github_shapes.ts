@@ -19,7 +19,7 @@ export interface Pull {
 }
 export interface Offer {
   request_id: number;
-  event: "push" | "pull_request";
+  event: "push" | "pull_request" | "merge_group";
   run_id: number;
   ref: string;
   branch: string;
@@ -27,7 +27,8 @@ export interface Offer {
   workflow_content: string;
   pr?: Pull;
   acquire_returns?: "none";
-  jit_returns?: 500;
+  jit_failures?: number;
+  jit_identity?: "id" | "scale_set" | "name";
   head_repository_id?: number;
   run_repository_id?: number;
 }

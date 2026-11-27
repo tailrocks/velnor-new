@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::task::{JoinError, JoinSet};
 use velnor_runner_github::QueueSession;
@@ -32,6 +32,7 @@ mod runner;
 mod sessions;
 mod source;
 mod startup;
+mod stop;
 
 use admission::{Admission, Closed, JobExit, Slots};
 use cleanup::CleanupProof;
@@ -48,9 +49,7 @@ pub(crate) use run_blocking::{Handover, run_blocking};
 
 const TICK: Duration = Duration::from_secs(2);
 const POLL_WAKE: Duration = Duration::from_millis(500);
-const JOB_STOP_WAIT: Duration = Duration::from_secs(15);
-const PROOF_WAIT: Duration = Duration::from_secs(30);
-const PROOF_RETRY: Duration = Duration::from_secs(1);
+const MACHINE_PROBE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RustRunnerExit {
@@ -101,7 +100,6 @@ enum Event {
     Acquired {
         connection: usize,
         reservation: ReservationId,
-        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     },
     Acked {
@@ -147,6 +145,7 @@ struct Run<'a> {
     tasks: JoinSet<Event>,
     machine_ok: bool,
     machine_checking: bool,
+    machine_probed: Instant,
     runner: &'a mut RunnerHealth,
     stopping: bool,
 }
@@ -196,8 +195,8 @@ async fn run_with_health(
         config_sha256,
         launcher,
     };
-    let connections = match startup::start(&cx, &config, &pats, shutdown).await? {
-        Started::Ready(connections) => connections,
+    let (connections, _hold) = match startup::start(&cx, &config, &pats, shutdown).await? {
+        Started::Ready(connections, hold) => (connections, hold),
         Started::Shutdown => return Ok(RustRunnerExit::Shutdown),
         Started::ConfigChanged => return Ok(RustRunnerExit::ConfigChanged),
     };
@@ -213,6 +212,7 @@ async fn run_with_health(
         tasks: JoinSet::new(),
         machine_ok: true,
         machine_checking: false,
+        machine_probed: Instant::now(),
         runner: health,
         stopping: false,
     };
@@ -272,9 +272,8 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
-                request_id,
                 result,
-            } => self.on_acquired(connection, reservation, request_id, result),
+            } => self.on_acquired(connection, reservation, result),
             Event::Acked {
                 connection,
                 message_id,
@@ -299,9 +298,13 @@ impl Run<'_> {
             }
             Event::Machine(result) => {
                 self.machine_checking = false;
+                self.machine_probed = Instant::now();
                 match result {
                     Ok(()) => self.machine_ok = true,
-                    Err(error) => eprintln!("rust-runner machine check held: {error}"),
+                    Err(error) => {
+                        eprintln!("rust-runner machine check held: {error}");
+                        self.machine_ok = false;
+                    }
                 }
             }
         }
@@ -351,36 +354,5 @@ impl Run<'_> {
                 free: self.slots.free(),
             }
         }
-    }
-
-    async fn stop(&mut self) -> Result<(), ListenFault> {
-        self.stopping = true;
-        self.slots.stop_all();
-        let jobs_deadline = tokio::time::Instant::now() + JOB_STOP_WAIT;
-        while !self.slots.settled() {
-            match tokio::time::timeout_at(jobs_deadline, self.tasks.join_next()).await {
-                Ok(Some(joined)) => self.handle(joined)?,
-                Ok(None) | Err(_) => break,
-            }
-        }
-        for (reservation, connection) in self.slots.prove_launching() {
-            eprintln!(
-                "rust-runner stopping with reservation {reservation} launching; the proof removes runner {}",
-                self.runner_name(connection, reservation)
-            );
-        }
-        let proofs_deadline = tokio::time::Instant::now() + PROOF_WAIT;
-        let mut retry = tokio::time::interval(PROOF_RETRY);
-        retry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        while self.slots.proving() {
-            tokio::select! {
-                biased;
-                () = tokio::time::sleep_until(proofs_deadline) => break,
-                Some(joined) = self.tasks.join_next() => self.handle(joined)?,
-                _ = retry.tick() => self.spawn_due_proofs(),
-            }
-        }
-        self.close_sessions().await;
-        Ok(())
     }
 }

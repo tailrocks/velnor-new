@@ -3,7 +3,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+use crate::error::HostError;
 
 mod controller;
 mod job;
@@ -18,6 +21,7 @@ pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
+pub use store::HostHold;
 
 pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
@@ -30,7 +34,6 @@ const ORB_DEADLINE: Duration = Duration::from_secs(60);
 const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
-const HOST_STORE_ENVIRONMENT: &str = "VELNOR_HOST_STORE";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
 const PID_NAMESPACE: [&str; 6] = [
     "unshare",
@@ -45,6 +48,12 @@ const HOST_DIRECTORIES: [&str; 8] = [
 ];
 const JIT_DIRECTORY: &str = "jit";
 const WORK_DIRECTORY: &str = "work";
+
+static INSTALLED: OnceLock<RustRunnerLauncher> = OnceLock::new();
+
+pub fn install_rust_runner_launcher(launcher: RustRunnerLauncher) -> Result<(), HostError> {
+    INSTALLED.set(launcher).map_err(|_| HostError::Config)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRunnerLauncher {
@@ -71,12 +80,11 @@ impl RustRunnerLauncher {
 
     #[must_use]
     pub fn from_environment() -> Self {
-        let orb = std::env::var_os(ORB_ENVIRONMENT).map_or_else(|| DEFAULT_ORB.into(), Into::into);
-        let store = std::env::var_os(HOST_STORE_ENVIRONMENT).map_or_else(
-            || Path::new("/").join(DEFAULT_HOST_STORE_UNDER_ROOT),
-            Into::into,
-        );
-        Self::new(orb, store)
+        INSTALLED.get().cloned().unwrap_or_else(|| {
+            let orb =
+                std::env::var_os(ORB_ENVIRONMENT).map_or_else(|| DEFAULT_ORB.into(), Into::into);
+            Self::new(orb, Path::new("/").join(DEFAULT_HOST_STORE_UNDER_ROOT))
+        })
     }
 
     #[must_use]

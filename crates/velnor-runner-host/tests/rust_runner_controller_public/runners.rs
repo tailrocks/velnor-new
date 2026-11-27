@@ -92,17 +92,7 @@ pub(super) fn keeps_the_health_across_a_config_reload(test: &str) -> TestResult<
     let mut world = World::new("T10b", 1, true)?;
     world.configure_orb(FAILING)?;
     queue(&world, 1)?;
-    let orb = world.root.join("orb");
-    let store = world.store.clone();
-    world.spawn_controller(
-        test,
-        &[
-            (HOST_BLOCKING, "1"),
-            (SERVED_SECRET, "pat"),
-            ("VELNOR_ORB", &orb.to_string_lossy()),
-            ("VELNOR_HOST_STORE", &store.to_string_lossy()),
-        ],
-    )?;
+    world.spawn_controller(test, &[(HOST_BLOCKING, "1"), (SERVED_SECRET, "pat")])?;
     proven(&world, failed(&world, 1));
     queue(&world, 2)?;
     proven(&world, failed(&world, 2));
@@ -145,6 +135,12 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         world.heartbeat_phase().as_deref() == Some("runner_failing")
     });
     assert_eq!(controller_readiness(&world.state), Readiness::Degraded);
+    assert!(
+        world
+            .child_stderr()
+            .contains("until the runner binary changes or the daemon restarts"),
+        "the log must say how to reopen admission"
+    );
     closed_until_the_binary_changes(&world)?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     assert_clean(&world, "1");

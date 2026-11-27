@@ -227,7 +227,6 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
-                request_id,
                 result,
             }
         });
@@ -237,7 +236,6 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         reservation: ReservationId,
-        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     ) {
         match result {
@@ -249,7 +247,6 @@ impl Run<'_> {
             Ok(Acquisition::NotAcquired) => self.slots.abandon_launch(reservation),
             Err(error) => {
                 eprintln!("rust-runner acquire failed for reservation {reservation}: {error}");
-                self.taken.remove(&(connection, request_id));
                 self.defer(connection);
                 self.begin_proof(reservation, JobExit::AcquireFailed);
             }

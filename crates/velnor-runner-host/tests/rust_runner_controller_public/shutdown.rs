@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 
@@ -94,12 +94,82 @@ fn launching(test: &str) -> TestResult<()> {
     });
     let held = world.events().last().map_or(0, |event| event.seq);
     world.stop()?;
-    world.wait_for_event("the proof of the launching slot", 60, |events| {
-        events.iter().any(|event| {
-            event.seq > held && event.label == "runner.get" && event.field("name") == runner_name(1)
-        })
-    });
+    let stopped = Instant::now();
+    world.wait_for_event_unless(
+        "the job deadline to pass with the acquire still in flight",
+        40,
+        |_| stopped.elapsed() > Duration::from_secs(17),
+        |events| {
+            events
+                .iter()
+                .any(|event| event.seq > held && event.label == "runner.list")
+                .then(|| "the proof of a launching slot began before its acquire ended".to_owned())
+        },
+    );
     std::fs::write(world.seen.join("release-acquire"), "")?;
-    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    let events = world.events();
+    let created = events
+        .iter()
+        .find(|event| event.label == "jit")
+        .ok_or("the late acquire never created its runner")?;
+    let removal = events
+        .iter()
+        .rfind(|event| event.label == "runner.delete" && event.field("name") == runner_name(1))
+        .ok_or("the runner of the late acquire was never removed")?;
+    assert!(removal.seq > created.seq);
+    let state: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
+    assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));
+    Ok(())
+}
+
+pub(super) fn closes_sessions_under_one_deadline(test: &str) -> TestResult<()> {
+    let mut world = World::new("T5c", 1, true)?;
+    std::fs::write(world.seen.join("hold-session"), "")?;
+    world.spawn_controller(test, &[])?;
+    wait_for("the ready heartbeat", 40, || {
+        world.heartbeat_phase().as_deref() == Some("ready")
+    });
+    world.stop()?;
+    wait_for(
+        "the controller to return while the session close hangs",
+        25,
+        || {
+            std::fs::read_to_string(world.root.join("child.out"))
+                .is_ok_and(|text| text.contains("CONTROLLER_EXIT"))
+        },
+    );
+    std::fs::write(world.seen.join("release-session"), "")?;
+    assert_eq!(world.finish(40)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn proves_a_job_that_will_not_stop(test: &str) -> TestResult<()> {
+    let mut world = World::new("T5d", 1, true)?;
+    world.configure_orb("FAKE_RUNNER_HOLD=1\nFAKE_RUNNER_ESCAPE=1\n")?;
+    world.queue_message(54, &[push_offer(1, 5401, "main", WORKFLOW)])?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event("the jit of the job", 40, |events| {
+        events.iter().any(|event| event.label == "jit")
+    });
+    let job = reservation(&world.gh("jit")[0]);
+    let name = jit_name(job);
+    wait_for("the stand-in and its child", 20, || {
+        world.pid_of(&name).is_some() && world.seen.join(format!("{name}.child")).exists()
+    });
+    world.stop()?;
+    assert_eq!(world.finish(60)?, "Ok(Shutdown)");
+    let removed = world.events().iter().any(|event| {
+        event.label == "runner.delete"
+            && event.field("name") == runner_name(job)
+            && event.field("status") == "204"
+    });
+    assert!(
+        removed,
+        "the runner of a job that would not stop was never removed"
+    );
+    assert!(!world.store.join("work").join(job.to_string()).exists());
+    world.release(&name)?;
     Ok(())
 }

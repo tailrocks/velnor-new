@@ -4,6 +4,7 @@
 use serde_json::{Value, json};
 
 use super::checks::{assert_clean, heartbeat_advances};
+use super::events::wait_for;
 use super::fixtures::TestResult;
 use super::harness::World;
 
@@ -134,6 +135,65 @@ pub(super) fn refuses_a_set_with_other_labels(test: &str) -> TestResult<()> {
     plant_records(&world, &json!({"created": {"lab": 7}}))?;
     started(&mut world, test, Some(&["velnor", "another-label"]))?;
     held(&world, "a recorded set that carries other labels");
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn forgets_its_intent_after_a_refused_create(test: &str) -> TestResult<()> {
+    let mut world = World::new("T12f", 1, false)?;
+    world.script_refusals(&json!({"scaleset.create": {"statuses": [409], "repeat_last": true}}))?;
+    started(&mut world, test, None)?;
+    world.wait_for_event("the refused create", 60, |events| {
+        events
+            .iter()
+            .any(|event| event.label == "scaleset.create" && event.field("status") == "409")
+    });
+    wait_for(
+        "the create-intent to be forgotten after a definite refusal",
+        20,
+        || recorded(&world).is_ok_and(|records| records["intended"] == json!([])),
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    std::fs::remove_file(world.seen.join("stop"))?;
+    world.write_state(true, &[("another-host-1", 300)])?;
+    started(&mut world, test, None)?;
+    let refused = world.gh("scaleset.create")[0].seq;
+    world.wait_for_event("the lookup after the restart", 60, |events| {
+        events
+            .iter()
+            .any(|event| event.label == "scaleset.get" && event.seq > refused)
+    });
+    heartbeat_advances(&world, 2);
+    assert!(
+        world.gh("session.create").is_empty(),
+        "a set made by another host was adopted after a refused create"
+    );
+    assert!(
+        world.gh("runner.delete").is_empty(),
+        "a runner of a set made by another host was deleted"
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    Ok(())
+}
+
+pub(super) fn refuses_a_created_set_that_keeps_other_labels(test: &str) -> TestResult<()> {
+    let mut world = World::new("T12g", 1, false)?;
+    started(&mut world, test, Some(&["velnor", "another-label"]))?;
+    world.wait_for_event("the create of the set", 60, |events| {
+        events.iter().any(|event| event.label == "scaleset.create")
+    });
+    heartbeat_advances(&world, 3);
+    assert!(
+        world.gh("session.create").is_empty(),
+        "a created set that persisted other labels was used"
+    );
+    assert!(
+        recorded(&world)?["created"]["lab"].is_null(),
+        "a created set that persisted other labels was recorded"
+    );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())

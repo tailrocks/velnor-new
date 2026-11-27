@@ -6,7 +6,7 @@ use velnor_runner_github::EncodedJit;
 
 use super::admission::JobExit;
 use super::cleanup::{CleanupProof, ProofInputs, prove};
-use super::{Event, Run, blocking};
+use super::{Event, MACHINE_PROBE, Run, blocking};
 use crate::launch_blocking::ListenFault;
 use crate::rust_runner::{ReservationId, RunningJob};
 
@@ -73,7 +73,7 @@ impl Run<'_> {
         };
         if let Some(failures) = self.runner.exited(status.success(), binary) {
             eprintln!(
-                "rust-runner closing admission after {failures} consecutive failed runner exits until the runner binary changes"
+                "rust-runner closing admission after {failures} consecutive failed runner exits until the runner binary changes or the daemon restarts"
             );
         }
     }
@@ -98,6 +98,7 @@ impl Run<'_> {
             let inputs = ProofInputs {
                 launcher: self.cx.launcher.clone(),
                 admin: live.admin.clone(),
+                scale_set_id: live.scale_set_id,
                 runner_name: self.runner_name(connection, reservation),
                 reservation,
             };
@@ -144,7 +145,9 @@ impl Run<'_> {
     }
 
     pub(super) fn check_machine(&mut self) {
-        if self.machine_ok || self.machine_checking {
+        if self.machine_checking
+            || (self.machine_ok && self.machine_probed.elapsed() < MACHINE_PROBE)
+        {
             return;
         }
         self.machine_checking = true;

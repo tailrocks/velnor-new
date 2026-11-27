@@ -18,11 +18,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     );
     world.write_host_toml_text(&host_toml_for(&world.root, 1, &reference)?)?;
     let first = file_hash(&world)?;
-    let orb = world.root.join("orb");
-    world.spawn_controller(
-        test,
-        &[(HOST_BLOCKING, "1"), ("VELNOR_ORB", &orb.to_string_lossy())],
-    )?;
+    world.spawn_controller(test, &[(HOST_BLOCKING, "1")])?;
     wait_for("the wait for credentials", 40, || {
         world.heartbeat_phase().as_deref() == Some("waiting_for_credentials")
             && world.heartbeat_hash().as_deref() == Some(first.as_str())

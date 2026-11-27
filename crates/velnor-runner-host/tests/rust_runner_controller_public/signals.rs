@@ -14,16 +14,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T7b", 1, true)?;
     let docker = UnixListener::bind(world.root.join("no-such-docker.sock"))?;
     docker.set_nonblocking(true)?;
-    let orb = world.root.join("orb");
-    let store = world.store.clone();
-    world.spawn_controller(
-        test,
-        &[
-            (HOST_BLOCKING, "1"),
-            ("VELNOR_ORB", &orb.to_string_lossy()),
-            ("VELNOR_HOST_STORE", &store.to_string_lossy()),
-        ],
-    )?;
+    world.spawn_controller(test, &[(HOST_BLOCKING, "1")])?;
     wait_for("the wait for credentials", 40, || {
         world.heartbeat_phase().as_deref() == Some("waiting_for_credentials")
     });

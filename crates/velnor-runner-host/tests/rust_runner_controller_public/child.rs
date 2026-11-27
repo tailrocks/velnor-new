@@ -9,7 +9,8 @@ use std::path::PathBuf;
 
 use velnor_runner_host::{
     ConnectionId, ConnectionPats, DaemonLock, HostConfig, HostError, RustRunnerLauncher,
-    SecretSource, install_secret_source, run_host_blocking, run_rust_runner_host,
+    SecretSource, install_rust_runner_launcher, install_secret_source, run_host_blocking,
+    run_rust_runner_host,
 };
 use zeroize::Zeroizing;
 
@@ -19,6 +20,7 @@ pub(super) const PASSED_MAX_JOBS: &str = "VELNOR_CHILD_PASSED_MAX_JOBS";
 pub(super) const HOST_BLOCKING: &str = "VELNOR_CHILD_HOST_BLOCKING";
 pub(super) const ORB_DEADLINE_MS: &str = "VELNOR_CHILD_ORB_DEADLINE_MS";
 pub(super) const SERVED_SECRET: &str = "VELNOR_CHILD_SERVED_SECRET";
+pub(super) const HOLD_STORE: &str = "VELNOR_CHILD_HOLD_STORE";
 pub(super) const SECRET_LOOKUPS: &str = "secret-lookups";
 
 struct InjectedSecrets {
@@ -56,6 +58,9 @@ pub(super) fn run(root: &Path) -> TestResult<()> {
     let pats = ConnectionPats::from_secrets(&config, [(ConnectionId::parse("lab")?, secret)])?;
     let lock = DaemonLock::try_acquire_daemon(&state)?;
     let mut launcher = RustRunnerLauncher::new(root.join("orb"), root.join("store"));
+    let _held = std::env::var_os(HOLD_STORE)
+        .map(|_| launcher.hold_host())
+        .transpose()?;
     if let Ok(milliseconds) = std::env::var(ORB_DEADLINE_MS) {
         launcher = launcher.with_orb_deadline(Duration::from_millis(milliseconds.parse()?));
     }
@@ -84,6 +89,10 @@ fn blocking(state: &Path, text: &str) -> TestResult<()> {
     let served = std::env::var_os(SERVED_SECRET)
         .map(|path| std::fs::read(root.join(path)))
         .transpose()?;
+    install_rust_runner_launcher(RustRunnerLauncher::new(
+        root.join("orb"),
+        root.join("store"),
+    ))?;
     install_secret_source(Box::new(InjectedSecrets {
         served,
         lookups: root.join("seen").join(SECRET_LOOKUPS),

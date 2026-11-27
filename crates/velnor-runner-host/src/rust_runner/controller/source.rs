@@ -252,16 +252,22 @@ fn branch_claim(
     run: &WorkflowRun,
 ) -> Result<SourceClaim, HostError> {
     let reference = verified.job_workflow.reference.as_str();
-    if !(reference.starts_with("refs/heads/") || reference.starts_with("refs/tags/")) {
+    let queue = verified.event_name == "merge_group" && reference.starts_with("refs/merge-queue/");
+    if !(queue || reference.starts_with("refs/heads/") || reference.starts_with("refs/tags/")) {
         return Err(HostError::Identity);
     }
-    base_claim(
+    let mut claim = base_claim(
         connection,
         verified,
         run,
         reference.to_owned(),
         run.head_sha.clone(),
-    )
+    )?;
+    if queue {
+        let branch = run.head_branch.as_deref().ok_or(HostError::Identity)?;
+        claim.event_ref = format!("refs/heads/{branch}");
+    }
+    Ok(claim)
 }
 
 fn pull_claim(
