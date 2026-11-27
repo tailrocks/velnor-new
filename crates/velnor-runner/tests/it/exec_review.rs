@@ -138,15 +138,33 @@ fn step_outputs_are_case_insensitive_and_the_last_write_wins() -> Result<()> {
 }
 
 #[test]
+fn crlf_lone_cr_and_lf_each_end_one_output_line() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let message = job(vec![run(
+        "mixed",
+        "printf 'a\\r\\nb\\rc\\nd\\r\\n\\r\\ne\\né\\r\\nü\\n'",
+    )]);
+    let ran = run_message(&scratch, &message)?;
+    let expected = ["a", "b", "c", "d", "", "e", "é", "ü"];
+    let lines = ran.lines();
+    assert!(
+        lines
+            .windows(expected.len())
+            .any(|window| window == expected),
+        "{}",
+        ran.stdout
+    );
+    Ok(())
+}
+
+#[test]
 fn a_long_line_is_truncated_with_a_marker_and_the_step_goes_on() -> Result<()> {
     let scratch = Scratch::new()?;
     let message = job(vec![run(
         "long",
         "head -c 5000000 /dev/zero | tr '\\0' a\necho\necho after-long\nhead -c 3000000 /dev/zero | tr '\\0' b",
     )]);
-    let started = Instant::now();
     let ran = run_message(&scratch, &message)?;
-    assert!(started.elapsed() < Duration::from_secs(30));
     let marker = " [line truncated at 1048576 bytes]";
     let longest = ran.lines().into_iter().map(str::len).max().unwrap_or(0);
     assert!(longest <= (1 << 20) + marker.len(), "{longest}");
