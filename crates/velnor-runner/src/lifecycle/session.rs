@@ -53,9 +53,16 @@ impl MessageKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Freshness {
+    Valid,
+    Stale,
+}
+
 #[derive(Debug, Clone)]
 struct Auth {
     token: Secret<String>,
+    freshness: Freshness,
     broker: BrokerClient,
     id: String,
 }
@@ -193,6 +200,7 @@ impl Session {
             recovery: config.settings.session_recovery,
             auth: Mutex::new(Auth {
                 token: Secret::new(String::new()),
+                freshness: Freshness::Valid,
                 broker,
                 id: String::new(),
             }),
@@ -230,6 +238,7 @@ impl Session {
         let broker = BrokerClient::new(&self.base_url, self.os, token.clone())?;
         let mut auth = self.auth();
         auth.token = Secret::new(token);
+        auth.freshness = Freshness::Valid;
         auth.broker = broker;
         Ok(())
     }
@@ -239,6 +248,9 @@ impl Session {
         F: Fn(BrokerClient) -> Fut,
         Fut: Future<Output = anyhow::Result<T>>,
     {
+        if self.auth().freshness == Freshness::Stale {
+            self.refresh().await?;
+        }
         let broker = self.auth().broker.clone();
         match call(broker).await {
             Err(error) if is_auth_failure(&error) => {
@@ -283,7 +295,9 @@ impl Session {
     ) -> anyhow::Result<Option<TaskAgentMessage>> {
         match message {
             Some(message) if MessageKind::of(&message) == MessageKind::ForceTokenRefresh => {
-                self.refresh().await.map(|()| None)
+                self.refresh().await.map(|()| None).inspect_err(|_| {
+                    self.auth().freshness = Freshness::Stale;
+                })
             }
             message => Ok(message),
         }

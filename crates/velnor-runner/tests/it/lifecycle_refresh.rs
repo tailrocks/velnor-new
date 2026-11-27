@@ -12,6 +12,7 @@ use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run
 use super::support::mock_github::{Behavior, Cancel, MockGithub, OAuthTokens, Online};
 
 const SIGN_IN_AND_ACQUIRE: usize = 2;
+const SIGN_IN_AND_FAILED_REFRESH: usize = 2;
 const DELETED: OAuthTokens =
     OAuthTokens::RejectedAfterSignIn("invalid_client", "The client was deleted");
 const REFUSED_AFTER_ACQUIRE: OAuthTokens = OAuthTokens::Fails {
@@ -47,7 +48,11 @@ async fn idle_run_ends_with_a_poll_error(oauth: OAuthTokens) -> Result<()> {
         matches!(outcome, Err(LifecycleError::Poll(_))),
         "{outcome:?}"
     );
-    assert_eq!(mock.requests_to("POST", "/oauth/token")?.len(), 2);
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        SIGN_IN_AND_FAILED_REFRESH + 1,
+        "the sign-in, the failed refresh and the exchange that the session delete makes first"
+    );
     assert_eq!(mock.polls("Online")?, 1);
     assert!(mock.requests_to("POST", "/run/acquirejob")?.is_empty());
     Ok(())
@@ -122,7 +127,8 @@ async fn lifecycle_cancels_the_job_when_the_forced_refresh_of_the_busy_poll_is_r
     assert_eq!(mock.polls("Busy")?, 1);
     assert_eq!(
         mock.requests_to("POST", "/oauth/token")?.len(),
-        SIGN_IN_AND_ACQUIRE + 1
+        SIGN_IN_AND_ACQUIRE + 2,
+        "the failed refresh and the exchange that the session delete makes first"
     );
     Ok(())
 }

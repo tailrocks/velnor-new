@@ -62,21 +62,6 @@ impl WorkDirs {
             runner_name: agent_name.to_owned(),
             os: options.os,
         };
-        if let Some(cleared) = [&run.workspace, &run.temp, &logs]
-            .into_iter()
-            .find(|directory| run.tool_cache.starts_with(directory))
-        {
-            return Err(work_dir_error(
-                &run.tool_cache,
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    format!(
-                        "the tool cache is inside {}, which is cleared for every job",
-                        cleared.display()
-                    ),
-                ),
-            ));
-        }
         Ok(Self {
             root,
             logs,
