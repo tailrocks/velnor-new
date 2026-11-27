@@ -12,6 +12,7 @@ use crate::expr::glob::{DirLinks, Hidden, PatternSet, WalkOptions};
 
 #[derive(Debug)]
 pub(super) struct Found {
+    pub(super) skipped: usize,
     pub(super) files: Vec<(PathBuf, PathBuf)>,
     pub(super) root: PathBuf,
 }
@@ -111,7 +112,8 @@ pub(super) fn find(
         stop: Some(stop),
     };
     let mut named = BTreeMap::new();
-    for file in patterns.walk_following(Path::new("/"), options) {
+    let mut walk = patterns.walk_following(Path::new("/"), options);
+    for file in walk.by_ref() {
         let walked = file.map_err(|error| invalid(&error))?;
         named.insert(roots[walked.root].named(&walked.path), walked.path);
     }
@@ -128,5 +130,9 @@ pub(super) fn find(
         many => common_ancestor(many),
     };
     let files = named.into_iter().map(|(name, real)| (real, name)).collect();
-    Ok(Found { files, root })
+    Ok(Found {
+        skipped: walk.skipped(),
+        files,
+        root,
+    })
 }

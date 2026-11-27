@@ -131,5 +131,7 @@ async fn a_matched_pipe_socket_or_link_to_a_pipe_is_skipped() -> Result<()> {
     let ran = upload(&scratch, &fake, &[])?;
     assert_eq!(ran.code, Some(0), "{}", ran.stdout);
     assert_eq!(uploaded(&fake)?, ["ok.txt"]);
+    let warning = "::warning::A non-blocking warning has occurred during artifact zip creation: ENTRYNOTSUPPORTED";
+    assert_eq!(ran.stdout.matches(warning).count(), 3, "{}", ran.stdout);
     Ok(())
 }

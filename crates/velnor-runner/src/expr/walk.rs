@@ -27,6 +27,7 @@ pub(crate) struct Walk<'a> {
     root: Option<Rc<OwnedFd>>,
     roots: std::iter::Enumerate<std::vec::IntoIter<Vec<String>>>,
     stack: Vec<Visit>,
+    skipped: usize,
 }
 
 impl Iterator for Walk<'_> {
@@ -73,6 +74,7 @@ impl<'a> Walk<'a> {
             options,
             root: None,
             roots: patterns.roots().into_iter().enumerate(),
+            skipped: 0,
             stack: Vec::new(),
         }
     }
@@ -193,8 +195,13 @@ impl<'a> Walk<'a> {
         }
     }
 
-    fn not_regular_file(&self, path: &Path) -> Result<Option<Found>, GlobError> {
+    pub(crate) fn skipped(&self) -> usize {
+        self.skipped
+    }
+
+    fn not_regular_file(&mut self, path: &Path) -> Result<Option<Found>, GlobError> {
         if self.lenient() {
+            self.skipped += 1;
             Ok(None)
         } else {
             Err(not_regular(path))
