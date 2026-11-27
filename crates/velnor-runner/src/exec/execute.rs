@@ -12,10 +12,10 @@ use super::preflight::reference;
 use super::shell;
 use super::step::{Limits, ScriptStep, run_script};
 use super::step_info::step_timeout;
-use super::timeout::{Timeout, settle};
+use super::timeout::{Survival, Timeout, settle, stop_unless_surviving};
 use super::token;
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
-use crate::expr::ExprEnv;
+use crate::expr::{ExprEnv, JobStatus};
 use crate::job_message::ActionStep;
 
 pub(super) struct Executed {
@@ -28,12 +28,36 @@ pub(super) struct Executed {
 type Ran = Result<(StepResult, Vec<(String, String)>), ExecError>;
 
 impl Job<'_> {
-    pub(super) async fn execute(
+    pub(super) async fn execute_watched(
         &mut self,
         step: &ActionStep,
         step_env: Vec<(String, String)>,
         env: &ExprEnv,
-        cancel: Option<&JobCancel>,
+        step_vars: &[(String, String)],
+        already_cancelled: bool,
+        out: &mut Output<'_>,
+    ) -> Result<Executed, ExecError> {
+        let halt = JobCancel::new();
+        let survival = (!already_cancelled).then(|| {
+            Survival::new(
+                step.condition.as_deref().unwrap_or_default(),
+                self.ctx.expr_env(JobStatus::Cancelled, step_vars),
+            )
+        });
+        let watcher = stop_unless_surviving(self.cancel.clone(), halt.clone(), survival.as_ref());
+        let signal = survival.is_some().then_some(&halt);
+        tokio::select! {
+            executed = self.execute(step, step_env, env, (signal, survival.as_ref()), out) => executed,
+            never = watcher => match never {},
+        }
+    }
+
+    async fn execute(
+        &mut self,
+        step: &ActionStep,
+        step_env: Vec<(String, String)>,
+        env: &ExprEnv,
+        (cancel, survival): (Option<&JobCancel>, Option<&Survival<'_>>),
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
         let timeout = Timeout::start(step_timeout(step, env, out));
@@ -59,7 +83,7 @@ impl Job<'_> {
                 (StepResult::Failed, Vec::new())
             }
         };
-        let result = settle(result, cancel, timeout, out);
+        let result = settle(result, survival, &self.cancel, timeout, out);
         let collected = files.collect().await;
         self.finish(result, adapter_outputs, collected, out).await
     }

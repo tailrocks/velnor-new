@@ -10,7 +10,9 @@ use velnor_runner::exec::{
     AdapterRegistry, Inputs, JobCancel, JobResult, StepAdapter, StepContext, StepFuture, StepResult,
 };
 
-use crate::exec_builder::{execute, expression, job, mapping, run, run_message, step, with};
+use crate::exec_builder::{
+    bounded, execute, expression, finished, job, mapping, run, run_message, step, with,
+};
 use crate::exec_support::Scratch;
 
 const BOM: &str = "\\357\\273\\277";
@@ -311,4 +313,71 @@ fn adapter_inputs_are_keyed_by_ordinal_ignore_case() {
         (both.len(), both.get("\u{3c3}")),
         (1, Some(&"two".to_owned()))
     );
+}
+
+#[test]
+fn a_payload_that_is_not_a_job_request_is_rejected() -> Result<()> {
+    let scratch = Scratch::new()?;
+    for (index, body) in [
+        "{}",
+        "{\"MessageType\": \"PipelineAgentJobResponse\", \"Steps\": []}",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let path = scratch
+            .options()
+            .temp
+            .with_extension(format!("{index}.json"));
+        std::fs::write(&path, body)?;
+        let ran = finished(bounded(&scratch, &path))?;
+        assert_eq!(ran.code, Some(2), "{body}: {}", ran.stderr);
+        assert!(ran.stderr.contains("MessageType"), "{}", ran.stderr);
+        assert!(ran.stdout.is_empty(), "{}", ran.stdout);
+    }
+    Ok(())
+}
+
+#[test]
+fn the_message_type_is_matched_without_regard_to_case() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let mut message = job(vec![run("a", "echo cased")]);
+    message["MessageType"] = json!("pipelineagentjobrequest");
+    let ran = run_message(&scratch, &message)?;
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(ran.has_line("cased"), "{}", ran.stdout);
+    Ok(())
+}
+
+#[tokio::test]
+async fn columns_are_dropped_when_the_two_line_values_are_spelled_differently() -> Result<()> {
+    let script = "echo '::error line=5,endLine=5,col=2::same'\necho '::error line=05,endLine=5,col=2::spelled'";
+    let (finished, _) = run_steps(&job(vec![run("a", script)])).await?;
+    let column_of = |message: &str| {
+        finished
+            .annotations
+            .iter()
+            .find(|annotation| annotation.message == message)
+            .map(|annotation| annotation.column)
+    };
+    assert_eq!(column_of("same"), Some(Some(2)));
+    assert_eq!(column_of("spelled"), Some(None));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_job_output_name_that_holds_a_secret_is_masked_in_the_log_and_kept_in_the_result()
+-> Result<()> {
+    let mut message = job(vec![run("a", "echo hi")]);
+    message["Variables"] = json!({"S": {"Value": "result", "IsSecret": true}});
+    message["JobOutputs"] = mapping(&[("result", crate::exec_builder::literal("ok"))]);
+    let (finished, _) = run_steps(&message).await?;
+    assert_eq!(
+        finished.outputs.get("result").map(String::as_str),
+        Some("ok")
+    );
+    let ran = run_message(&Scratch::new()?, &message)?;
+    assert!(ran.has_line("output ***=ok"), "{}", ran.stdout);
+    assert!(!ran.stdout.contains("result"), "{}", ran.stdout);
+    Ok(())
 }

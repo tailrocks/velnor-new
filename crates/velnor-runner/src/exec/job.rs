@@ -26,7 +26,7 @@ pub(super) struct Job<'a> {
     pub(super) groups: Groups,
     pub(super) ctx: JobContext,
     message: &'a AgentJobRequestMessage,
-    cancel: JobCancel,
+    pub(super) cancel: JobCancel,
     status: JobStatus,
 }
 
@@ -92,7 +92,15 @@ pub async fn run_job(
         commands::relativize(annotation, &workspace);
         mask::mask_annotation(&masker, annotation);
     }
-    sink.job_finished(&run);
+    let logged = JobRun {
+        outputs: run
+            .outputs
+            .iter()
+            .map(|(name, value)| (masker.mask(name).into_owned(), value.clone()))
+            .collect(),
+        ..run.clone()
+    };
+    sink.job_finished(&logged);
     run
 }
 
@@ -168,26 +176,19 @@ impl Job<'_> {
             conclusion: StepResult::Skipped,
             summary_path: None,
         };
+        let condition_text = step.condition.as_deref().unwrap_or_default();
         let condition = match (step.enabled, &step_env) {
             (false, _) => Ok(false),
             (true, Err(_)) => Ok(true),
-            (true, Ok(_)) => {
-                evaluate_condition(step.condition.as_deref().unwrap_or_default(), &env)
-            }
+            (true, Ok(_)) => evaluate_condition(condition_text, &env),
         };
         let condition_failed = condition.is_err() || step_env.is_err();
-        let survives_cancel = !already_cancelled
-            && evaluate_condition(
-                step.condition.as_deref().unwrap_or_default(),
-                &self.ctx.expr_env(JobStatus::Cancelled, &step_vars),
-            ) == Ok(true);
-        let cancel = (!already_cancelled && !survives_cancel).then(|| self.cancel.clone());
         let mut outputs = Vec::new();
         if !matches!(condition, Ok(false)) {
             out.sink.step_started(number, &record.name);
             let executed = match (condition, prepared, step_env) {
                 (Ok(_), Ok(()), Ok(step_env)) => {
-                    self.execute(step, step_env, &env, cancel.as_ref(), out)
+                    self.execute_watched(step, step_env, &env, &step_vars, already_cancelled, out)
                         .await
                 }
                 (Err(error), _, _) => Err(error.into()),

@@ -24,6 +24,7 @@ const TIMED_OUT: &str = "step 1 timed out after 0.00000001 minutes";
 
 struct Probe {
     cancel: Option<JobCancel>,
+    on_ready: Option<JobCancel>,
     lines: Vec<String>,
 }
 
@@ -35,6 +36,11 @@ impl LogSink for Probe {
     }
 
     fn line(&mut self, _number: u32, text: &str) {
+        if text == "ready"
+            && let Some(cancel) = &self.on_ready
+        {
+            cancel.cancel();
+        }
         self.lines.push(text.to_owned());
     }
 
@@ -48,6 +54,7 @@ enum Cancels {
     Never,
     AtStart,
     InAdapter,
+    OnReady,
 }
 
 struct Ends {
@@ -92,6 +99,7 @@ async fn go(message: &Value, fail: bool, cancels: Cancels) -> Result<(JobRun, Ve
     }));
     let mut probe = Probe {
         cancel: (cancels == Cancels::AtStart).then(|| cancel.clone()),
+        on_ready: (cancels == Cancels::OnReady).then(|| cancel.clone()),
         lines: Vec::new(),
     };
     let finished = tokio::time::timeout(
@@ -225,6 +233,68 @@ async fn a_cancel_during_an_always_step_that_fails_with_continue_on_error_cancel
     let (finished, lines) = go(&job(vec![action]), true, Cancels::InAdapter).await?;
     assert_eq!(finished.steps[0].outcome, StepResult::Failed, "{lines:?}");
     assert_eq!(finished.steps[0].conclusion, StepResult::Succeeded);
+    assert_eq!(finished.result, JobResult::Cancelled);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_deadline_under_a_job_cancel_cancels_a_script_step_whatever_continue_on_error_says()
+-> Result<()> {
+    let keeper = with(
+        with(
+            with(run("a", "sleep 5"), "TimeoutInMinutes", json!(EXPIRED)),
+            "Condition",
+            json!("always()"),
+        ),
+        "ContinueOnError",
+        json!(true),
+    );
+    let (finished, lines) = go(&job(vec![keeper]), false, Cancels::AtStart).await?;
+    assert_eq!(
+        finished.steps[0].outcome,
+        StepResult::Cancelled,
+        "{lines:?}"
+    );
+    assert_eq!(finished.steps[0].conclusion, StepResult::Cancelled);
+    assert_eq!(timeout_lines(&lines), 0, "{lines:?}");
+    assert_eq!(finished.result, JobResult::Cancelled);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_deadline_under_a_job_cancel_cancels_an_adapter_step_whatever_continue_on_error_says()
+-> Result<()> {
+    let action = uses(&[
+        ("TimeoutInMinutes", json!(EXPIRED)),
+        ("Condition", json!("always()")),
+        ("ContinueOnError", json!(true)),
+    ]);
+    let (finished, lines) = go(&job(vec![action]), true, Cancels::AtStart).await?;
+    assert_eq!(
+        finished.steps[0].outcome,
+        StepResult::Cancelled,
+        "{lines:?}"
+    );
+    assert_eq!(finished.steps[0].conclusion, StepResult::Cancelled);
+    assert_eq!(timeout_lines(&lines), 0, "{lines:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_step_condition_is_evaluated_against_the_workspace_when_the_cancel_fires() -> Result<()> {
+    let guarded = with(
+        run("a", "touch marker\necho ready\nsleep 20"),
+        "Condition",
+        json!("always() && hashFiles('marker') == ''"),
+    );
+    let started = Instant::now();
+    let (finished, lines) = go(&job(vec![guarded]), false, Cancels::OnReady).await?;
+    assert_eq!(
+        finished.steps[0].outcome,
+        StepResult::Cancelled,
+        "{lines:?}"
+    );
+    assert!(started.elapsed() < Duration::from_secs(15), "{lines:?}");
     assert_eq!(finished.result, JobResult::Cancelled);
     Ok(())
 }

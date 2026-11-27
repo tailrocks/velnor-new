@@ -291,7 +291,7 @@ pub(super) async fn run(
             );
             StepResult::Failed
         }
-        Ending::Interrupted => stop_result(limits.cancel, limits.timeout),
+        Ending::Interrupted => stop_result(limits.cancel),
     })
 }
 
