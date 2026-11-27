@@ -226,3 +226,49 @@ fn mise_action_accepts_table_options_inside_the_safe_set() -> Result<()> {
     assert_eq!(world.mise_installs().len(), 1);
     Ok(())
 }
+
+#[test]
+fn mise_action_refuses_a_lock_entry_without_a_backend_that_install_args_names() -> Result<()> {
+    let rows: [(&str, &str, &str, &str); 4] = [
+        (
+            "prefixed key",
+            "[[tools.\"npm:cowsay\"]]\nversion = \"1.6.0\"\n",
+            "npm:cowsay",
+            "backend 'npm' of tool 'npm:cowsay'",
+        ),
+        (
+            "plain key",
+            "[[tools.foo]]\nversion = \"1\"\n",
+            "foo",
+            "tool 'foo' without a backend in mise.lock",
+        ),
+        (
+            "second entry",
+            "[[tools.foo]]\nversion = \"1\"\nbackend = \"core:node\"\n\n[[tools.foo]]\nversion = \"2\"\n",
+            "foo",
+            "tool 'foo' without a backend in mise.lock",
+        ),
+        (
+            "entry that is not a table",
+            "[tools]\nfoo = \"1\"\n",
+            "foo",
+            "tool 'foo' without a backend in mise.lock",
+        ),
+    ];
+    each_row(&rows, |(label, lock, words, expected)| {
+        let world = World::new()?;
+        world.install_mise()?;
+        world.init_workspace_with_lock(HEAD, lock)?;
+        let job = world.with_text(
+            &job_fixture("mise_action_install_args"),
+            &[("jactionlint shellcheck node", words)],
+        )?;
+        let ran = world.run(&job, &[])?;
+        assert_failed(
+            &ran,
+            &format!("unsupported: mise policy: {expected} is not supported by velnor-runner"),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{label}");
+        Ok(())
+    })
+}

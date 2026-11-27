@@ -6,6 +6,7 @@ use std::path::Path;
 use rustix::fs::{Mode, OFlags, StatVfsMountFlags, fstatvfs, open};
 use rustix::io::Errno;
 
+use super::mounts::require_no_writable_mount_under;
 use crate::exec::ExecError;
 
 #[cfg(feature = "test-support")]
@@ -26,6 +27,10 @@ fn check(role: &str, directory: &Path) -> Result<(), ExecError> {
             "mise policy: {role} {} is missing from the tools store",
             directory.display()
         )),
+        Errno::LOOP | Errno::NOTDIR => ExecError::Invalid(format!(
+            "mise policy: {role} {} is reached through a link; the tools store holds only real directories",
+            directory.display()
+        )),
         other => ExecError::io(format!("open {}", directory.display()), other.into()),
     })?;
     let stats = fstatvfs(&descriptor)
@@ -39,8 +44,11 @@ fn check(role: &str, directory: &Path) -> Result<(), ExecError> {
     )))
 }
 
-pub(super) fn require_read_only_store(directories: &[(&str, &Path)]) -> Result<(), ExecError> {
+pub(super) async fn require_read_only_store(
+    directories: &[(&str, &Path)],
+) -> Result<(), ExecError> {
     directories
         .iter()
-        .try_for_each(|(role, directory)| check(role, directory))
+        .try_for_each(|(role, directory)| check(role, directory))?;
+    require_no_writable_mount_under(directories).await
 }

@@ -33,6 +33,7 @@ pub(crate) enum StoreMode {
     Sealed,
     Writable(Dir),
     Missing(Dir),
+    Linked(Dir),
     Real,
     Bits,
 }
@@ -95,14 +96,37 @@ impl World {
         [self.data_dir(), self.rustup_dir(), self.cargo_dir()]
     }
 
+    fn linked(&self, directory: &Path) -> bool {
+        matches!(self.store_mode, StoreMode::Linked(dir) if self.dir(dir) == directory)
+    }
+
+    fn link_home(&self, directory: &Path) -> Result<()> {
+        let real = self
+            .root
+            .join("linked")
+            .join(directory.file_name().context("the home name")?);
+        std::fs::create_dir_all(&real).context("create the linked home")?;
+        if let Some(parent) = directory.parent() {
+            std::fs::create_dir_all(parent).context("create the tools directory")?;
+        }
+        if directory.symlink_metadata().is_err() {
+            std::os::unix::fs::symlink(&real, directory).context("link the home")?;
+        }
+        Ok(())
+    }
+
     fn present(&self, directory: &Path) -> bool {
         !matches!(self.store_mode, StoreMode::Missing(dir) if self.dir(dir) == directory)
     }
 
     pub(crate) fn seal_store(&self) -> Result<()> {
         for directory in self.homes().iter().filter(|home| self.present(home)) {
-            std::fs::create_dir_all(directory)
-                .with_context(|| format!("create {}", directory.display()))?;
+            if self.linked(directory) {
+                self.link_home(directory)?;
+            } else {
+                std::fs::create_dir_all(directory)
+                    .with_context(|| format!("create {}", directory.display()))?;
+            }
         }
         if self.data_dir().is_dir() {
             for name in ["installs", "downloads"] {
@@ -119,14 +143,30 @@ impl World {
                 _ => walk(&home, 0o555)?,
             }
         }
-        for directory in [self.store.join("tools"), self.store.clone()] {
-            chmod(&directory, 0o555)?;
+        let binary = self.binary_dir();
+        if binary.is_dir() && !matches!(self.store_mode, StoreMode::Writable(Dir::Binary)) {
+            chmod(&binary, 0o555)?;
+        }
+        for directory in [
+            self.store.join("tools/mise"),
+            self.store.join("tools"),
+            self.store.clone(),
+        ] {
+            if directory.is_dir() {
+                chmod(&directory, 0o555)?;
+            }
         }
         Ok(())
     }
 
     pub(crate) fn unseal_store(&self) -> Result<()> {
-        for directory in [self.store.clone(), self.store.join("tools")] {
+        let tools = self.store.join("tools");
+        for directory in [
+            self.store.clone(),
+            tools.clone(),
+            tools.join("mise"),
+            self.binary_dir(),
+        ] {
             if directory.exists() {
                 chmod(&directory, 0o755)?;
             }
@@ -145,7 +185,7 @@ impl World {
             StoreMode::Writable(dir) | StoreMode::Missing(dir) => {
                 declared.retain(|directory| *directory != self.dir(dir));
             }
-            StoreMode::Sealed => {}
+            StoreMode::Sealed | StoreMode::Linked(_) => {}
         }
         if let Ok(list) = std::env::join_paths(declared) {
             command.env("VELNOR_TEST_READ_ONLY_DIRS", list);

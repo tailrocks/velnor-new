@@ -148,6 +148,7 @@ impl World {
         std::fs::write(&tool, TOOL).context("write the tool")?;
         std::fs::set_permissions(&tool, std::os::unix::fs::PermissionsExt::from_mode(0o755))
             .context("make the tool executable")?;
+        self.configure_double(&[])?;
         Ok(binary)
     }
 

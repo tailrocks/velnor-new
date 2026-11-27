@@ -20,6 +20,17 @@ pub(super) struct StoreEnv {
     pub(super) rustup_home: PathBuf,
 }
 
+impl StoreEnv {
+    pub(super) fn directories(&self) -> [(&'static str, &Path); 4] {
+        [
+            ("MISE_DATA_DIR", &self.data),
+            ("MISE_RUSTUP_HOME", &self.rustup_home),
+            ("MISE_CARGO_HOME", &self.cargo_home),
+            ("the mise binary directory", &self.bin),
+        ]
+    }
+}
+
 pub(super) struct Isolation {
     root: PathBuf,
     workspace: PathBuf,

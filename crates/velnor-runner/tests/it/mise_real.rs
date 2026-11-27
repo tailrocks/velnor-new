@@ -110,8 +110,9 @@ impl World {
         self.unseal_store()?;
         let directory = self.binary_dir();
         std::fs::create_dir_all(&directory).context("create the tools store")?;
-        std::os::unix::fs::symlink(&real.binary, directory.join("mise"))
-            .context("link the real mise binary")
+        std::fs::copy(&real.binary, directory.join("mise"))
+            .map(drop)
+            .context("copy the real mise binary")
     }
 
     pub(crate) fn ceiling(&self) -> PathBuf {

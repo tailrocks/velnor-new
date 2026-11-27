@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 bindir=$(dirname "$0")
 conf() { sed -n "s/^$1=//p" "$bindir/double.conf" 2>/dev/null | head -n 1; }
-mkdir -p "$bindir/calls"
-number=$(($(ls "$bindir/calls" | wc -l) + 1))
-call="$bindir/calls/$(printf '%03d' "$number")"
+calls=$(conf CALLS)
+mkdir -p "$calls"
+number=$(($(ls "$calls" | wc -l) + 1))
+call="$calls/$(printf '%03d' "$number")"
 mkdir -p "$call/files"
 here=$(pwd -P)
 printf '%s\n' "$*" > "$call/argv"

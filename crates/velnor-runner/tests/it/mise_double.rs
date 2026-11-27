@@ -75,8 +75,13 @@ impl Call {
 }
 
 impl World {
+    pub(crate) fn calls_dir(&self) -> PathBuf {
+        self.root.join("calls")
+    }
+
     pub(crate) fn configure_double(&self, settings: &[(&str, &str)]) -> Result<()> {
-        let mut body = String::new();
+        self.unseal_store()?;
+        let mut body = format!("CALLS={}\n", self.calls_dir().display());
         for (key, value) in settings {
             ensure!(!value.contains('\n'), "{key} holds a newline");
             let _ = writeln!(body, "{key}={value}");
@@ -87,7 +92,7 @@ impl World {
     }
 
     pub(crate) fn calls(&self) -> Vec<Call> {
-        let directory = self.binary_dir().join("calls");
+        let directory = self.calls_dir();
         let mut numbered: Vec<PathBuf> = std::fs::read_dir(directory)
             .map_or_default(|entries| entries.filter_map(Result::ok).map(|e| e.path()).collect());
         numbered.sort();

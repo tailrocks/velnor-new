@@ -109,9 +109,16 @@ fn snapshot(root: &Path, directory: &Path, found: &mut Vec<String>) -> Result<()
     Ok(())
 }
 
-fn tree(directory: &Path) -> Result<Vec<String>> {
+fn store_tree(world: &World) -> Result<Vec<String>> {
     let mut found = Vec::new();
-    snapshot(directory, directory, &mut found)?;
+    for directory in [
+        world.data_dir(),
+        world.rustup_dir(),
+        world.cargo_dir(),
+        world.binary_dir(),
+    ] {
+        snapshot(&directory, &directory, &mut found)?;
+    }
     Ok(found)
 }
 
@@ -122,7 +129,7 @@ fn mise_action_runs_the_repository_config_against_a_read_only_store() -> Result<
     let job = world.with_final_script(&job_fixture("mise_action_ok"), SCRIPT)?;
     let data = world.data_dir();
     world.seal_store()?;
-    let before = tree(&data)?;
+    let before = store_tree(&world)?;
     let ran = World::finish(world.start_clean(&job, &[])?)?;
     ensure!(
         ran.has_line("job succeeded") && ran.code == Some(0),
@@ -143,7 +150,7 @@ fn mise_action_runs_the_repository_config_against_a_read_only_store() -> Result<
         mode & 0o222 == 0,
         "the data directory is writable: {mode:o}"
     );
-    let after = tree(&data)?;
+    let after = store_tree(&world)?;
     ensure!(
         after == before,
         "the job changed the tools store: before only {:?}, after only {:?}",
@@ -228,6 +235,23 @@ fn mise_action_refuses_a_directory_missing_from_the_store() -> Result<()> {
             &ran,
             &format!(
                 "mise policy: {} {} is missing from the tools store",
+                dir.role(),
+                world.dir(dir).display()
+            ),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{dir:?}");
+        Ok(())
+    })
+}
+
+#[test]
+fn mise_action_refuses_a_store_directory_that_is_a_link() -> Result<()> {
+    each_row(&[Dir::Data, Dir::Rustup, Dir::Cargo], |dir| {
+        let (world, ran) = run_with(StoreMode::Linked(dir))?;
+        assert_failed(
+            &ran,
+            &format!(
+                "mise policy: {} {} is reached through a link; the tools store holds only real directories",
                 dir.role(),
                 world.dir(dir).display()
             ),

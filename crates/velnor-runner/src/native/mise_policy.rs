@@ -92,11 +92,23 @@ fn require_supported_backend(key: &str, backend: &str) -> Result<(), ExecError> 
 fn require_supported_lock(lock: &toml::Table) -> Result<(), ExecError> {
     let tools = lock.get("tools").and_then(toml::Value::as_table);
     for (key, value) in tools.into_iter().flatten() {
-        for backend in entries(value).into_iter().filter_map(backend_of) {
+        if key.contains(':') {
+            require_supported_backend(key, key)?;
+        }
+        let locked = entries(value);
+        if locked.is_empty() {
+            return Err(without_backend(key));
+        }
+        for entry in locked {
+            let backend = backend_of(entry).ok_or_else(|| without_backend(key))?;
             require_supported_backend(key, backend)?;
         }
     }
     Ok(())
+}
+
+fn without_backend(key: &str) -> ExecError {
+    refuse(&format!("tool '{key}' without a backend in mise.lock"))
 }
 
 fn require_backend(lock: &toml::Table, key: &str) -> Result<(), ExecError> {
@@ -106,14 +118,12 @@ fn require_backend(lock: &toml::Table, key: &str) -> Result<(), ExecError> {
     let locked = lock
         .get("tools")
         .and_then(toml::Value::as_table)
-        .and_then(|tools| tools.get(key))
-        .map_or_default(entries);
-    if locked.is_empty() || locked.iter().any(|entry| backend_of(entry).is_none()) {
-        return Err(refuse(&format!(
-            "tool '{key}' without a backend in mise.lock"
-        )));
+        .is_some_and(|tools| tools.contains_key(key));
+    if locked {
+        Ok(())
+    } else {
+        Err(without_backend(key))
     }
-    Ok(())
 }
 
 fn require_supported_tool(

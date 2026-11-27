@@ -6,17 +6,20 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use futures_util::FutureExt;
-use ring::digest;
-use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
+mod binary;
 mod inputs;
 mod isolation;
+mod mounts;
+mod paths;
 mod pin;
 mod readonly;
 
+use self::binary::locate_binary;
 use self::inputs::MiseInputs;
 use self::isolation::{Isolation, StoreEnv};
+use self::paths::require_confined;
 use self::pin::require_pinned_revision;
 use self::readonly::require_read_only_store;
 use super::composite::SetupVelnor;
@@ -26,7 +29,6 @@ use crate::exec::{
     AdapterRegistry, ExecError, ProcessEnv, ProcessOutcome, StepAdapter, StepContext, StepFuture,
     StepResult,
 };
-use crate::expr::hex_digest;
 use crate::store::store_root;
 
 const ACTION: &str = "jdx/mise-action";
@@ -38,42 +40,6 @@ pub(super) fn register(registry: &mut AdapterRegistry, facts: Result<TrustedFact
         facts: facts.clone(),
     }));
     registry.register(Box::new(SetupVelnor { facts }));
-}
-
-async fn sha256_hex(path: &Path) -> Result<String, ExecError> {
-    let io = |source| ExecError::io(format!("read {}", path.display()), source);
-    let mut file = tokio::fs::File::open(path).await.map_err(io)?;
-    let mut context = digest::Context::new(&digest::SHA256);
-    let mut chunk = vec![0_u8; 1 << 16];
-    loop {
-        let read = file.read(&mut chunk).await.map_err(io)?;
-        if read == 0 {
-            break;
-        }
-        context.update(&chunk[..read]);
-    }
-    Ok(hex_digest(context.finish().as_ref()))
-}
-
-async fn locate_binary(inputs: &MiseInputs, tools: &Path) -> Result<PathBuf, ExecError> {
-    let binary = tools.join("mise").join(&inputs.version).join("mise");
-    if !tokio::fs::try_exists(&binary).await.unwrap_or(false) {
-        return Err(ExecError::Invalid(format!(
-            "mise {} is not in the tools store at {}; run the tools store task first",
-            inputs.version,
-            binary.display()
-        )));
-    }
-    if !inputs.sha256.is_empty() {
-        let actual = sha256_hex(&binary).await?;
-        if !actual.eq_ignore_ascii_case(&inputs.sha256) {
-            return Err(ExecError::Invalid(format!(
-                "mise {} sha256 mismatch",
-                inputs.version
-            )));
-        }
-    }
-    Ok(binary)
 }
 
 async fn append(path: &str, text: &str) -> Result<(), ExecError> {
@@ -295,6 +261,7 @@ async fn export(
             let mut added = managed
                 .clone()
                 .unwrap_or_else(|| path_additions(value, &mise.inherited_path, &dir));
+            require_confined(&added, &install.store.directories()).await?;
             added.reverse();
             paths.extend(added);
         } else if name != "CARGO_HOME" || Path::new(value) != install.store.cargo_home {
@@ -317,12 +284,7 @@ async fn mise_action(
         .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
-    require_read_only_store(&[
-        ("MISE_DATA_DIR", &install.store.data),
-        ("MISE_RUSTUP_HOME", &install.store.rustup_home),
-        ("MISE_CARGO_HOME", &install.store.cargo_home),
-        ("the mise binary directory", &install.store.bin),
-    ])?;
+    require_read_only_store(&install.store.directories()).await?;
     let isolation = Isolation::create(ctx.temp, ctx.workspace, &accepted).await?;
     let mise = Mise::new(&install, &isolation);
     let loaded = mise.capture(ctx, &["config", "ls", "--json"]).await?;
