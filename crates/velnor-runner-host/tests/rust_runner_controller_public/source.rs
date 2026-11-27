@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::fixtures::{
     OTHER_WORKFLOW, TestResult, WORKFLOW, merge_group_host_toml, merge_group_offer, pull_offer,
-    push_offer, sha, with_acquire_none, with_head_repository, with_run_repository,
+    push_offer, sha, with_acquire_returns, with_head_repository, with_run_repository,
 };
 use super::harness::World;
 
@@ -60,7 +60,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         &world,
         "m24",
         24,
-        with_acquire_none(push_offer(5, 2005, "main", WORKFLOW)),
+        with_acquire_returns(push_offer(5, 2005, "main", WORKFLOW), "none"),
     )?;
     feed(
         &world,

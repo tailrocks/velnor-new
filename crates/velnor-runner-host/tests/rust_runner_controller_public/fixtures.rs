@@ -86,8 +86,8 @@ pub(super) fn pull_offer(
     })
 }
 
-pub(super) fn with_acquire_none(mut offer: Value) -> Value {
-    offer["acquire_returns"] = json!("none");
+pub(super) fn with_acquire_returns(mut offer: Value, shape: &str) -> Value {
+    offer["acquire_returns"] = json!(shape);
     offer
 }
 

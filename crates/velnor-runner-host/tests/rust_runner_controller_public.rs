@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "rust_runner_controller_public/acquire_shape.rs"]
+mod acquire_shape;
 #[path = "rust_runner_controller_public/admission.rs"]
 mod admission;
 #[path = "rust_runner_controller_public/checks.rs"]

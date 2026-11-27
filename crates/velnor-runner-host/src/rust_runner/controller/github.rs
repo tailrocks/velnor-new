@@ -9,7 +9,7 @@ use velnor_runner_github::{
     RunnerReference, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, WireError, ack,
     acquire, create_runner_scale_set, create_session, delete_session, get_runner_scale_set,
     get_runner_scale_set_by_id, jit, jit_request, list_runner_groups, list_scale_set_runners,
-    refresh_session, remove_runner,
+    refresh_session, remove_runner, sole_grant,
 };
 
 use zeroize::Zeroizing;
@@ -295,11 +295,10 @@ pub(super) fn acquire_and_jit(
         || Err(WireError::RefreshExhausted),
     )
     .map_err(map_listen)?;
-    let AcquireOutcome::Acquired(ids) = outcome else {
-        return Ok(Acquisition::NotAcquired);
-    };
-    if !ids.contains(&request_id) {
-        return Ok(Acquisition::NotAcquired);
+    match outcome {
+        AcquireOutcome::Acquired(ids) if ids.is_empty() => return Ok(Acquisition::NotAcquired),
+        AcquireOutcome::Acquired(ids) if sole_grant(&ids, request_id) => {}
+        _ => return Err(EnsureError::Uncertain.into()),
     }
     let request = jit_request(runner_name).map_err(|_| EnsureError::Rejected)?;
     let result = generate_jit(&mut transport, scale_set_id, &admin.token, &request)?;
