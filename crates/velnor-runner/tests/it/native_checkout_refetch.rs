@@ -134,6 +134,7 @@ fn packs(mirror: &std::path::Path) -> Result<usize> {
 fn warm_and_break_main(rig: &Rig) -> Result<()> {
     let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    git(&rig.mirror(), &["config", "transfer.unpackLimit", "1"])?;
     std::fs::write(
         rig.mirror().join("refs/heads/main"),
         format!("{}\n", "1".repeat(40)),
@@ -154,6 +155,7 @@ fn a_broken_ref_the_job_fetches_is_removed_and_main_advances_without_new_packs()
         assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
         assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, next);
         assert_eq!(git(&mirror, &["rev-parse", "refs/heads/main"])?, next);
+        assert_eq!(rig.refetches(), 0);
         counts.push((said(&ran, "removed refs/heads/main"), packs(&mirror)?));
     }
     assert!(counts[0].0 && !counts[1].0, "{counts:?}");

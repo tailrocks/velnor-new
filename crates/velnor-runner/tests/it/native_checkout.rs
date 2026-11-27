@@ -222,6 +222,14 @@ impl Rig {
             .filter(|line| line.contains("\"event\":\"cmd_name\"") && line.contains(&named))
             .count()
     }
+
+    pub(crate) fn refetches(&self) -> usize {
+        std::fs::read_to_string(self.trace())
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| line.contains("\"event\":\"start\"") && line.contains("\"--refetch\""))
+            .count()
+    }
 }
 
 impl Drop for Rig {

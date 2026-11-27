@@ -217,3 +217,32 @@ async fn refusal_annotations_are_masked() -> Result<()> {
     assert_eq!(messages, ["unsupported: uses ***"]);
     Ok(())
 }
+
+#[tokio::test]
+async fn workflow_command_annotations_mask_message_title_and_file() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let body = std::fs::read_to_string(fixture_path("annotations"))?
+        .replace(
+            "\"Steps\": [",
+            "\"Variables\": {\"HIDDEN\": {\"Value\": \"sekret-token\", \"IsSecret\": true}},\n  \"Steps\": [",
+        )
+        .replace("T%3A1,file=a.rs", "t-sekret-token,file=sekret-token.rs")
+        .replace("bad%0Athing", "bad sekret-token");
+    let run = run_job(
+        &AgentJobRequestMessage::parse_json(&body)?,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+    let error = run
+        .annotations
+        .iter()
+        .find(|annotation| annotation.level == AnnotationLevel::Error && annotation.line == Some(3))
+        .context("the error annotation")?;
+    assert_eq!(error.message, "bad ***");
+    assert_eq!(error.title.as_deref(), Some("t-***"));
+    assert_eq!(error.file.as_deref(), Some("***.rs"));
+    Ok(())
+}

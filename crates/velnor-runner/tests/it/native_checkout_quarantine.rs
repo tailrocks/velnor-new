@@ -56,7 +56,7 @@ fn a_sound_object_named_by_a_damage_report_is_not_quarantined() -> Result<()> {
         &rig.root,
         &format!(
             "case \" $* \" in\n\
-             *\" checkout \"*) [ -f '{once}' ] || {{ : > '{once}'; echo checkout-refused >&2; exit 1; }};;\n\
+             *\" checkout-index \"*) [ -f '{once}' ] || {{ : > '{once}'; echo checkout-refused >&2; exit 1; }};;\n\
              *\" --verify-objects \"*\" {head} \"*) echo 'error: hash mismatch {blob}' >&2; exit 1;;\n\
              esac\n",
             once = once.display(),
@@ -70,4 +70,53 @@ fn a_sound_object_named_by_a_damage_report_is_not_quarantined() -> Result<()> {
     assert_eq!(quarantined(&rig), Vec::<String>::new());
     git(&rig.mirror(), &["cat-file", "blob", &blob])?;
     Ok(())
+}
+
+fn warm_then_damage(
+    rig: &Rig,
+    damage: impl FnOnce(&std::path::Path, &str) -> Result<()>,
+) -> Result<String> {
+    let live = Scratch::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &live)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let mirror = rig.mirror();
+    let blob = git(&mirror, &["rev-parse", &format!("{}:second", rig.head)])?;
+    damage(&mirror, &blob)?;
+    Ok(blob)
+}
+
+fn assert_repaired(rig: &Rig, blob: &str) -> Result<()> {
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    let workspace = scratch.workspace();
+    assert_eq!(git(&workspace, &["rev-parse", "HEAD"])?, rig.head);
+    assert_eq!(std::fs::read_to_string(workspace.join("second"))?, "second");
+    assert_eq!(git(&workspace, &["status", "--porcelain"])?, "");
+    let moved = quarantined(rig);
+    assert_eq!(moved.len(), 1, "{moved:?}");
+    assert!(moved[0].starts_with(blob), "{moved:?}");
+    git(&rig.mirror(), &["cat-file", "blob", blob])?;
+    Ok(())
+}
+
+#[test]
+fn an_empty_loose_blob_is_repaired_and_the_workspace_is_complete() -> Result<()> {
+    let rig = Rig::new()?;
+    let blob = warm_then_damage(&rig, |mirror, blob| {
+        overwrite(&object_path(mirror, blob), b"")
+    })?;
+    assert_repaired(&rig, &blob)
+}
+
+#[test]
+fn a_loose_blob_replaced_by_an_object_of_another_type_is_repaired() -> Result<()> {
+    let rig = Rig::new()?;
+    let blob = warm_then_damage(&rig, |mirror, blob| {
+        let tree = git(mirror, &["rev-parse", &format!("{}^{{tree}}", rig.head)])?;
+        std::fs::remove_file(object_path(mirror, blob))?;
+        std::fs::copy(object_path(mirror, &tree), object_path(mirror, blob))?;
+        Ok(())
+    })?;
+    assert_repaired(&rig, &blob)
 }

@@ -159,7 +159,7 @@ fn a_checkout_that_fails_on_a_sound_mirror_neither_refetches_nor_quarantines() -
     let rig = Rig::new()?;
     wrapper_env(
         &rig.root,
-        "case \" $* \" in *\" checkout \"*) echo checkout-refused >&2; exit 1;; esac\n",
+        "case \" $* \" in *\" checkout-index \"*) echo checkout-refused >&2; exit 1;; esac\n",
     )?;
     let scratch = Scratch::new()?;
     let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;

@@ -296,3 +296,19 @@ fn an_input_name_that_is_not_a_literal_refuses_the_job_before_its_first_step() -
     assert!(!rig.trace().exists(), "git ran");
     Ok(())
 }
+
+#[test]
+fn a_null_fetch_depth_takes_the_default_instead_of_refusing_the_job() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_depth1",
+        &rig.head,
+        &rig.server_url(),
+        &[("\"type\": 0,\n              \"lit\": \"1\"", "\"type\": 7")],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    Ok(())
+}

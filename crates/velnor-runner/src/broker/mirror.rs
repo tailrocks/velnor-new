@@ -305,19 +305,28 @@ async fn is_dir(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_dir())
 }
 
+async fn is_file(path: &Path) -> bool {
+    tokio::fs::symlink_metadata(path)
+        .await
+        .is_ok_and(|meta| meta.is_file())
+}
+
 async fn prepare(mirror: &Path) -> Result<()> {
     let config = mirror.join("config");
     let objects = mirror.join("objects");
-    let config_is_file = tokio::fs::symlink_metadata(&config)
-        .await
-        .is_ok_and(|meta| meta.is_file());
-    let objects_is_dir = is_dir(&objects).await;
-    if !(config_is_file && objects_is_dir) {
-        if !config_is_file {
-            remove_entry(&config).await?;
+    let refs = mirror.join("refs");
+    let mut broken = Vec::new();
+    if !is_file(&config).await {
+        broken.push(&config);
+    }
+    for dir in [&objects, &refs] {
+        if !is_dir(dir).await {
+            broken.push(dir);
         }
-        if !objects_is_dir {
-            remove_entry(&objects).await?;
+    }
+    if !broken.is_empty() {
+        for path in broken {
+            remove_entry(path).await?;
         }
         let mirror_arg = mirror
             .to_str()

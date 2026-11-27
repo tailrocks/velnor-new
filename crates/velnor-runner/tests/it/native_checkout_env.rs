@@ -95,7 +95,7 @@ fn proxy_and_ca_variables_reach_the_broker_fetch_and_not_the_workspace_git() -> 
     wrapper_env(
         &rig.root,
         &format!(
-            "case \" $* \" in *\" fetch \"*) k=fetch;; *\" init \"*) k=init;; *\" remote \"*) k=remote;; *\" checkout \"*) k=checkout;; *) k=other;; esac\n\
+            "case \" $* \" in *\" fetch \"*) k=fetch;; *\" init \"*) k=init;; *\" remote \"*) k=remote;; *\" checkout-index \"*) k=checkout;; *) k=other;; esac\n\
              for v in {names}; do eval \"s=\\${{$v+set}}\"; if [ -n \"$s\" ]; then eval \"x=\\$$v\"; echo \"$k $v=$x\" >> '{seen}'; fi; done\n",
             names = NETWORK_ENV.join(" "),
             seen = seen.display()

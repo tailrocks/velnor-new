@@ -79,3 +79,20 @@ fn a_mirror_whose_object_database_vanished_is_initialised_again() -> Result<()> 
     assert_eq!(rig.fetches(), 2);
     Ok(())
 }
+
+#[test]
+fn a_mirror_whose_refs_directory_became_a_file_is_initialised_again() -> Result<()> {
+    let rig = Rig::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let refs = rig.mirror().join("refs");
+    std::fs::remove_dir_all(&refs)?;
+    std::fs::write(&refs, "not a directory")?;
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, rig.head);
+    assert!(refs.is_dir());
+    git(&rig.mirror(), &["for-each-ref"])?;
+    Ok(())
+}

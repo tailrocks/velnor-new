@@ -42,7 +42,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
     for (name, value) in inputs {
         match (name.to_ascii_lowercase().as_str(), value) {
             ("fetch-depth", InputValue::Literal(depth)) => {
-                if depth.parse::<u64>().is_err() {
+                if !depth.is_empty() && depth.parse::<u64>().is_err() {
                     return Err(format!(
                         "actions/checkout input 'fetch-depth' must be a number, got '{depth}'"
                     ));
@@ -152,21 +152,20 @@ async fn materialize(
     if let Some(ended) = require(ctx, &remote).await? {
         return Ok(Materialized::Ended(ended));
     }
-    let detach = [
-        "-C",
-        dest_arg,
-        "-c",
-        "advice.detachedHead=false",
-        "checkout",
-        "-q",
-        "--detach",
-        facts.sha.as_str(),
+    let sha = facts.sha.as_str();
+    let steps: [&[&str]; 3] = [
+        &["-C", dest_arg, "read-tree", sha],
+        &["-C", dest_arg, "checkout-index", "-a", "-f", "-u"],
+        &["-C", dest_arg, "update-ref", "--no-deref", "HEAD", sha],
     ];
-    Ok(match git(ctx, None, &detach, false).await? {
-        ProcessOutcome::Succeeded => Materialized::Done,
-        ProcessOutcome::Cancelled => Materialized::Ended(StepResult::Cancelled),
-        ProcessOutcome::Failed => Materialized::CheckoutFailed,
-    })
+    for step in steps {
+        match git(ctx, None, step, false).await? {
+            ProcessOutcome::Succeeded => {}
+            ProcessOutcome::Cancelled => return Ok(Materialized::Ended(StepResult::Cancelled)),
+            ProcessOutcome::Failed => return Ok(Materialized::CheckoutFailed),
+        }
+    }
+    Ok(Materialized::Done)
 }
 
 async fn ask(

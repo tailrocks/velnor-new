@@ -95,6 +95,13 @@ fn first_id(text: &str) -> Option<String> {
     text.split_whitespace().next().and_then(object_id)
 }
 
+fn empty_file_id(path: &str) -> Option<String> {
+    let path = Path::new(path);
+    let name = path.file_name()?.to_str()?;
+    let fan_out = path.parent()?.file_name()?.to_str()?;
+    object_id(&format!("{fan_out}{name}"))
+}
+
 fn damage(line: &str) -> Option<Damage> {
     let message = line
         .strip_prefix("error: ")
@@ -113,6 +120,9 @@ fn damage(line: &str) -> Option<Damage> {
     }
     if let Some(rest) = message.strip_prefix("hash mismatch ") {
         return first_id(rest).map(Damage::Loose);
+    }
+    if let Some(rest) = message.strip_prefix("object file ") {
+        return empty_file_id(rest.strip_suffix(" is empty")?).map(Damage::Loose);
     }
     let rest = message.strip_prefix("packed object ")?;
     let id = first_id(rest)?;
@@ -191,11 +201,11 @@ pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<bool>
     let mut damaged = false;
     for _ in 0..MAX_ROUNDS {
         let verified = verify(mirror, sha).await?;
-        if verified.succeeded {
+        let found = reported(&verified.stderr);
+        if verified.succeeded && found.is_empty() {
             return Ok(damaged);
         }
         damaged = true;
-        let found = reported(&verified.stderr);
         if let Some(error) = packed_error(&found) {
             return Err(error);
         }
