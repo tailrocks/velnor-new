@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use super::git;
+use super::{git, output};
 
 fn state(pid: &str) -> String {
     let out = Command::new("ps")
@@ -112,4 +112,12 @@ async fn the_leader_stays_a_zombie_until_the_group_kill_is_sent() {
         "the group member outlived the dropped future"
     );
     assert_eq!(leader_left, "", "the leader was never reaped");
+}
+
+#[tokio::test]
+async fn git_runs_in_the_c_locale_whatever_the_host_locale_is() {
+    let alias = "alias.s=!echo \"[$LC_ALL][${LANG-}][${LANGUAGE-}]\"".to_owned();
+    let args = ["-c".to_owned(), alias, "s".to_owned()];
+    let out = output(&args, None).await.expect("run git");
+    assert_eq!(out.stdout.trim(), "[C][][]");
 }

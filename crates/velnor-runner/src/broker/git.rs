@@ -43,12 +43,13 @@ const NETWORK_ENV: [&str; 11] = [
 
 pub(crate) fn isolate(command: &mut Command) -> &mut Command {
     command.env_clear();
-    for name in ["PATH", "LANG", "LC_ALL"] {
-        if let Some(value) = std::env::var_os(name) {
-            command.env(name, value);
-        }
+    if let Some(path) = std::env::var_os("PATH") {
+        command.env("PATH", path);
     }
-    command.env("HOME", "/dev/null").envs(GIT_ENV)
+    command
+        .env("HOME", "/dev/null")
+        .env("LC_ALL", "C")
+        .envs(GIT_ENV)
 }
 
 pub(crate) fn git_args(git_dir: Option<&Path>, args: &[&str]) -> Vec<String> {
