@@ -149,6 +149,17 @@ impl Cold<'_> {
         )
     }
 
+    pub(crate) fn trusted_refs(&self) -> Result<String> {
+        git(
+            &self.rig.mirror(),
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/velnor/trusted/",
+            ],
+        )
+    }
+
     pub(crate) fn mirror_refs(&self) -> Result<String> {
         git(&self.rig.mirror(), &["for-each-ref", "--format=%(refname)"])
     }
@@ -165,12 +176,7 @@ fn setup_velnor_without_checkout_fetches_pinned_commit() -> Result<()> {
     assert!(first.has_line(RAN), "{}", first.stdout);
     assert!(cold.mirror_has(&pinned));
     assert_eq!(rig.fetches(), 1);
-    assert!(
-        cold.mirror_refs()?.starts_with("refs/velnor/trusted/"),
-        "{}",
-        cold.mirror_refs()?
-    );
-    assert_eq!(cold.mirror_refs()?.lines().count(), 1);
+    assert_eq!(cold.trusted_refs()?, "");
     let next = rig.advance("third")?;
     let second = cold.run_job(&cold.job_at(&pinned, &next)?)?;
     assert_eq!(second.code, Some(0), "{}\n{}", second.stdout, second.stderr);
@@ -198,10 +204,7 @@ fn an_impostor_pin_is_never_fetched_and_the_step_fails() -> Result<()> {
         assert!(!ran.has_line(RAN), "{}", ran.stdout);
         assert!(!cold.mirror_has(&impostor), "{advertised}");
         assert_eq!(rig.fetches(), 1, "{advertised}");
-        assert!(
-            cold.mirror_refs()?.starts_with("refs/velnor/trusted/"),
-            "{advertised}"
-        );
+        assert_eq!(cold.trusted_refs()?, "", "{advertised}");
     }
     Ok(())
 }

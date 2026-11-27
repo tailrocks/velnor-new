@@ -7,8 +7,9 @@ use std::sync::Arc;
 use futures_util::FutureExt;
 use serde::Deserialize;
 
-use super::git::{ask, is_ancestor, read_blob};
-use crate::broker::{Request, StoreWriter, TrustedFacts, TrustedRef, mirror_path};
+use super::git::{ask, read_blob};
+use crate::broker::facts::CommitId;
+use crate::broker::{Request, StoreWriter, TrustedFacts, mirror_path};
 use crate::context_value::{ContextValue, ContextValueError};
 use crate::exec::{
     DeclaredInputs, ExecError, InputValue, StepAdapter, StepContext, StepFuture, StepResult,
@@ -237,32 +238,30 @@ fn names_action_path(text: &str) -> bool {
     })
 }
 
-fn require_commit_sha(sha: &str) -> Result<(), ExecError> {
-    if sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Ok(());
-    }
-    Err(ExecError::Invalid(format!(
-        "setup-velnor reference '{sha}' is not a 40 digit commit sha"
-    )))
+fn require_commit_sha(sha: &str) -> Result<CommitId, ExecError> {
+    CommitId::try_from(sha.to_owned()).map_err(|_| {
+        ExecError::Invalid(format!(
+            "setup-velnor reference '{sha}' is not a 40 digit commit sha"
+        ))
+    })
 }
 
 async fn pinned_action_yml(
     store: &StoreWriter,
     ctx: &mut StepContext<'_>,
     facts: &TrustedFacts,
-    sha: &str,
+    pin: CommitId,
 ) -> Result<String, ExecError> {
     let mirror = mirror_path(&store_root(), facts)
         .map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
-    let trusted = TrustedRef::of(facts).map_err(ExecError::Invalid)?;
-    ask(store, ctx, |token| Request::FetchTrusted { token }).await?;
-    if !is_ancestor(ctx, &mirror, sha, trusted.local()).await? {
-        return Err(ExecError::Invalid(format!(
-            "setup-velnor: the pin {sha} is not reachable from {}",
-            trusted.remote()
-        )));
-    }
-    read_blob(ctx, &mirror, sha, ACTION_PATH).await
+    let sha = pin.as_str().to_owned();
+    ask(store, ctx, |token| Request::VerifyPin {
+        token,
+        pin,
+        path: ACTION_PATH.to_owned(),
+    })
+    .await?;
+    read_blob(ctx, &mirror, &sha, ACTION_PATH).await
 }
 
 pub(super) struct SetupVelnor {
@@ -294,7 +293,7 @@ impl SetupVelnor {
         &'a self,
         reference: &'a str,
         inputs: &BTreeMap<String, InputValue>,
-    ) -> Result<(&'a TrustedFacts, &'a str), ExecError> {
+    ) -> Result<(&'a TrustedFacts, CommitId), ExecError> {
         let facts = self.store.facts().map_err(ExecError::Invalid)?;
         if !facts
             .repository
@@ -307,9 +306,9 @@ impl SetupVelnor {
             )));
         }
         let sha = reference.strip_prefix(PREFIX).unwrap_or(reference);
-        require_commit_sha(sha)?;
+        let pin = require_commit_sha(sha)?;
         require_inputs(inputs)?;
-        Ok((facts, sha))
+        Ok((facts, pin))
     }
 }
 
@@ -342,8 +341,8 @@ impl StepAdapter for SetupVelnor {
                 .iter()
                 .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
                 .collect();
-            let (facts, sha) = self.accepted(&reference, &admitted)?;
-            let yml = pinned_action_yml(&self.store, ctx, facts, sha).await?;
+            let (facts, pin) = self.accepted(&reference, &admitted)?;
+            let yml = pinned_action_yml(&self.store, ctx, facts, pin).await?;
             let steps = expand(&yml, &given, &ctx.expressions)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));

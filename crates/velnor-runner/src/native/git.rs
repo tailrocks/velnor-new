@@ -36,20 +36,6 @@ pub(super) async fn read_blob(
         .map_err(|_| ExecError::Invalid(format!("{path} in the trusted commit is not valid UTF-8")))
 }
 
-pub(super) async fn is_ancestor(
-    ctx: &mut StepContext<'_>,
-    mirror: &Path,
-    sha: &str,
-    local_ref: &str,
-) -> Result<bool, ExecError> {
-    let args = ["merge-base", "--is-ancestor", sha, local_ref];
-    match capture_bytes(ctx, Some(mirror), &args).await {
-        Ok(_) => Ok(true),
-        Err(ExecError::Cancelled) => Err(ExecError::Cancelled),
-        Err(_) => Ok(false),
-    }
-}
-
 pub(super) async fn ask(
     store: &StoreWriter,
     ctx: &mut StepContext<'_>,

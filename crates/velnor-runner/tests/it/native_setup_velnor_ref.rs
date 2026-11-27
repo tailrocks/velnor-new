@@ -76,6 +76,20 @@ fn a_pin_left_in_the_mirror_by_a_tag_deleted_upstream_is_not_trusted() -> Result
 }
 
 #[test]
+fn no_trusted_ref_outlives_a_job_however_many_distinct_tags_the_jobs_run_on() -> Result<()> {
+    let rig = Rig::new()?;
+    let cold = Cold::new(&rig)?;
+    for name in ["v1", "v2", "v3"] {
+        let tagged = foreign_commit(&rig, &format!("refs/tags/{name}"))?;
+        let event = format!(r#"{{"kind": "tag", "name": "{name}"}}"#);
+        let tag = facts(&rig, "push", &event, &tagged)?;
+        assert_ran(&cold.run_as(&tagged, &tag)?);
+        assert_eq!(cold.trusted_refs()?, "", "{name}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_merge_queue_branch_never_vouches_for_a_pin_even_while_it_is_left_in_the_mirror() -> Result<()>
 {
     let rig = Rig::new()?;

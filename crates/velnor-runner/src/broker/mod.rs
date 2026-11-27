@@ -60,7 +60,6 @@ pub(crate) use git::{TREE_PROBE, git_args, isolate};
 use layout::Layout;
 pub(crate) use location::mirror_path;
 pub(crate) use proto::{FailedStep, Request, Response, Token, Window};
-pub(crate) use trusted::TrustedRef;
 use upload::Session;
 
 const REPAIR_CAP: Duration = Duration::from_mins(10);
@@ -187,9 +186,9 @@ impl Broker {
                         .map(|notices| Response::Done { notices }),
                 )
             }
-            Request::FetchTrusted { token } => {
+            Request::VerifyPin { token, pin, path } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::fetch_trusted(&self.root, &self.facts, token)
+                mirror::verify_pin(&self.root, &self.facts, token, &pin, &path)
                     .await
                     .map(|notices| Response::Done { notices })
             }

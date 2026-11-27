@@ -11,7 +11,8 @@ use super::{is_file, missing_tree, remove_entry, sound};
 use crate::broker::facts::TrustedFacts;
 use crate::broker::git::{git, git_args, has_tree, update};
 use crate::broker::repair::refs;
-use crate::broker::transfer::{Transfer, fetch_wanted};
+use crate::broker::transfer::{Transfer, fetch_trusted, fetch_wanted};
+use crate::broker::trusted::TrustedRef;
 
 const STAGE: &str = "refetch.velnor";
 
@@ -80,46 +81,61 @@ async fn adopt_refs(stage: &Path, mirror: &Path) -> Result<()> {
     update_refs(mirror, &updates).await
 }
 
+fn hinted(error: anyhow::Error) -> anyhow::Error {
+    if format!("{error:#}").contains("unknown option") {
+        error.context("repair the mirror with git fetch --refetch, which needs git 2.36 or newer")
+    } else {
+        error
+    }
+}
+
+pub(in crate::broker) enum Refetch<'a> {
+    Job(&'a TrustedFacts),
+    Pin(&'a TrustedRef),
+}
+
 async fn adopt(
     mirror: &Path,
     stage: &Path,
     clone_url: &str,
-    facts: &TrustedFacts,
+    what: &Refetch<'_>,
     env: &[(OsString, OsString)],
 ) -> Result<()> {
-    let sha = facts.sha.as_str();
     let stage_arg = stage
         .to_str()
         .with_context(|| format!("path {} is not UTF-8", stage.display()))?;
     git(&git_args(None, &["init", "-q", "--bare", stage_arg]), &[]).await?;
-    fetch_wanted(stage, clone_url, facts, env, Transfer::Refetch)
-        .await
-        .map_err(|error| {
-            if format!("{error:#}").contains("unknown option") {
-                error.context(
-                    "repair the mirror with git fetch --refetch, which needs git 2.36 or newer",
-                )
-            } else {
-                error
+    match what {
+        Refetch::Job(facts) => {
+            let sha = facts.sha.as_str();
+            fetch_wanted(stage, clone_url, facts, env, Transfer::Refetch)
+                .await
+                .map_err(hinted)?;
+            if !has_tree(stage, sha).await {
+                return Err(missing_tree(stage, sha, clone_url).await);
             }
-        })?;
-    if !has_tree(stage, sha).await {
-        return Err(missing_tree(stage, sha, clone_url).await);
+            adopt_packs(stage, mirror).await?;
+            adopt_refs(stage, mirror).await
+        }
+        Refetch::Pin(trusted) => {
+            fetch_trusted(stage, clone_url, trusted, env, Transfer::Refetch)
+                .await
+                .map_err(hinted)?;
+            adopt_packs(stage, mirror).await
+        }
     }
-    adopt_packs(stage, mirror).await?;
-    adopt_refs(stage, mirror).await
 }
 
-pub(super) async fn refetch(
+pub(in crate::broker) async fn refetch(
     mirror: &Path,
     clone_url: &str,
-    facts: &TrustedFacts,
+    what: Refetch<'_>,
     env: &[(OsString, OsString)],
 ) -> Result<()> {
     sound::clear(mirror).await?;
     let stage = mirror.join(STAGE);
     remove_entry(&stage).await?;
-    let adopted = adopt(mirror, &stage, clone_url, facts, env).await;
+    let adopted = adopt(mirror, &stage, clone_url, &what, env).await;
     let cleared = remove_entry(&stage).await;
     adopted?;
     cleared?;

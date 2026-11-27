@@ -5,7 +5,7 @@ use std::num::NonZeroU64;
 
 use serde::{Deserialize, Serialize};
 
-use super::facts::TrustedFacts;
+use super::facts::{CommitId, TrustedFacts};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -58,8 +58,10 @@ pub(crate) enum Request {
     FetchMirror {
         token: Option<Token>,
     },
-    FetchTrusted {
+    VerifyPin {
         token: Option<Token>,
+        pin: CommitId,
+        path: String,
     },
     RepairMirror {
         token: Option<Token>,
