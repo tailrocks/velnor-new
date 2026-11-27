@@ -144,6 +144,8 @@ mod process;
 mod protocol_acquire_renew;
 mod native_mise;
 mod native_mise_attack;
+mod native_mise_homes;
+mod native_mise_include;
 mod native_mise_inputs;
 mod native_mise_isolation;
 mod native_mise_policy;

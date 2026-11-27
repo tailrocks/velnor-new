@@ -13,9 +13,9 @@ use crate::mise_world::{World, git};
 
 pub(crate) const STATE_IDS: [&str; 7] = ["S1", "S2", "S3", "P1", "P2", "P3", "P4"];
 
-const RUST_CONFIG: &str =
+pub(crate) const RUST_CONFIG: &str =
     "[settings]\nlockfile = true\n\n[env]\nACCEPTED = \"1\"\n\n[tools]\nrust = \"1.90.0\"\n";
-const RUST_LOCK: &str =
+pub(crate) const RUST_LOCK: &str =
     "[[tools.rust]]\nversion = \"1.90.0\"\nbackend = \"core:rust\"\nspecifiers = [\"1.90.0\"]\n";
 const RUST_SCRIPT: &str =
     "echo \"accepted=$ACCEPTED\"\necho \"$PATH\" | tr ':' '\\n' | sed 's/^/pathentry=/'";

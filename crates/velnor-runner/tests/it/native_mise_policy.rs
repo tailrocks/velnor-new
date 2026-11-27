@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::mise_double::git_bytes;
+use crate::mise_double::{each_row, git_bytes};
 use crate::mise_world::{CONFIG, World, assert_failed, git, job_fixture, pinned_mise_action};
 
 const LISTED: &str = "jactionlint shellcheck node";
@@ -143,4 +143,108 @@ fn mise_action_rejects_a_symlinked_mise_config_or_lock() -> Result<()> {
         assert_eq!(world.mise_calls(), Vec::<String>::new(), "{name}");
     }
     Ok(())
+}
+
+const REPO_MISE_CONFIG: &str = include_str!("../../../../mise.toml");
+const FOOTER: &str = "\n[settings]\nlockfile = true\n";
+
+#[test]
+fn mise_action_refuses_every_top_level_key_outside_the_allowed_set() -> Result<()> {
+    let rows = [
+        ("include", "include = [\"../../evil.toml\"]\n"),
+        (
+            "include",
+            "include = [\"git::https://example.com/x//m.toml\"]\n",
+        ),
+        ("env_file", "env_file = \".env\"\n"),
+        ("dotenv", "dotenv = \".env\"\n"),
+        ("env_path", "env_path = [\"bin\"]\n"),
+        ("hooks", "[hooks]\nenter = \"true\"\n"),
+        ("plugins", "[plugins]\nfoo = \"https://example.com/foo\"\n"),
+        ("task_config", "[task_config]\nincludes = [\"tasks\"]\n"),
+        ("alias", "[alias.node]\nlts = \"26\"\n"),
+        (
+            "watch_files",
+            "[[watch_files]]\npatterns = [\"x\"]\nrun = \"true\"\n",
+        ),
+        ("secrets", "[secrets]\nTOKEN = { command = \"true\" }\n"),
+    ];
+    each_row(&rows, |(key, snippet)| {
+        let world = World::new()?;
+        world.install_mise()?;
+        world.init_workspace_with(&format!("{snippet}{FOOTER}"), true)?;
+        let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+        assert_failed(
+            &ran,
+            &format!(
+                "unsupported: mise policy: mise.toml key '{key}' is not supported by velnor-runner"
+            ),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{key}");
+        Ok(())
+    })
+}
+
+#[test]
+fn mise_action_refuses_every_setting_outside_the_allowed_set() -> Result<()> {
+    let rows = [
+        ("env_file", "env_file = [\".env\"]\n"),
+        ("rust.cargo_home", "[settings.rust]\ncargo_home = \"/c\"\n"),
+        ("ceiling_paths", "ceiling_paths = []\n"),
+        (
+            "override_config_filenames",
+            "override_config_filenames = [\"evil.toml\"]\n",
+        ),
+        ("trusted_config_paths", "trusted_config_paths = [\"/\"]\n"),
+    ];
+    each_row(&rows, |(key, snippet)| {
+        let world = World::new()?;
+        world.install_mise()?;
+        let config =
+            format!("[tools]\nnode = \"26.13.1\"\n\n[settings]\nlockfile = true\n{snippet}");
+        world.init_workspace_with(&config, true)?;
+        let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+        assert_failed(
+            &ran,
+            &format!(
+                "unsupported: mise policy: [settings] key '{key}' is not supported by velnor-runner"
+            ),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{key}");
+        Ok(())
+    })
+}
+
+#[test]
+fn mise_action_accepts_the_repository_mise_config() -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace_with(REPO_MISE_CONFIG, true)?;
+    let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+    assert!(ran.has_line("job succeeded"), "{}", ran.stdout);
+    assert_eq!(world.mise_installs().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn mise_action_refuses_a_config_or_lock_that_is_not_valid_utf8() -> Result<()> {
+    let truncated: &[u8] = &[0xF0, 0x9F, 0x98];
+    each_row(&["mise.toml", "mise.lock"], |name| {
+        let world = World::new()?;
+        world.install_mise()?;
+        let comment = [b"# ", truncated, b"\n"].concat();
+        let (config, lock) = if name == "mise.toml" {
+            ([CONFIG.as_bytes(), &comment].concat(), Vec::new())
+        } else {
+            (CONFIG.as_bytes().to_vec(), comment)
+        };
+        world.write_workspace(&config, &lock, true)?;
+        let ran = world.run(&job_fixture("mise_action_ok"), &[])?;
+        assert_failed(
+            &ran,
+            &format!("{name} in the trusted commit is not valid UTF-8"),
+        );
+        assert_eq!(world.mise_calls(), Vec::<String>::new(), "{name}");
+        Ok(())
+    })
 }

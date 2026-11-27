@@ -69,6 +69,7 @@ fn mise_action_rewrites_only_a_leading_private_prefix() -> Result<()> {
         format!("emb=pre{private}-post"),
         format!("sib={private}2/x"),
         format!("pathentry={workspace}/bin"),
+        format!("pathentry={workspace}/late"),
         format!("pathentry={private}2/bin"),
     ] {
         assert!(ran.has_line(&expected), "{expected}\n{}", ran.stdout);

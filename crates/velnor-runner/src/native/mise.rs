@@ -239,6 +239,14 @@ impl Install {
                 ctx.temp.join("mise-cache").to_string_lossy().into_owned(),
             ),
             ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
+            (
+                "MISE_CARGO_HOME".to_owned(),
+                store.cargo_home.to_string_lossy().into_owned(),
+            ),
+            (
+                "MISE_RUSTUP_HOME".to_owned(),
+                store.rustup_home.to_string_lossy().into_owned(),
+            ),
         ];
         for (name, value) in [
             (
@@ -292,7 +300,7 @@ async fn export(
                 .unwrap_or_else(|| path_additions(value, &mise.inherited_path, &dir));
             added.reverse();
             paths.extend(added);
-        } else {
+        } else if name != "CARGO_HOME" || Path::new(value) != install.store.cargo_home {
             variables.push_str(&env_command(name, value));
         }
     }

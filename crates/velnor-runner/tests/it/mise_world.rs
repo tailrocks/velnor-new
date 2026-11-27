@@ -152,14 +152,19 @@ impl World {
     }
 
     pub(crate) fn init_workspace_with(&self, config: &str, commit_lock: bool) -> Result<()> {
-        self.write_workspace(config, LOCK, commit_lock)
+        self.write_workspace(config.as_bytes(), LOCK.as_bytes(), commit_lock)
     }
 
     pub(crate) fn init_workspace_with_lock(&self, config: &str, lock: &str) -> Result<()> {
-        self.write_workspace(config, lock, true)
+        self.write_workspace(config.as_bytes(), lock.as_bytes(), true)
     }
 
-    fn write_workspace(&self, config: &str, lock: &str, commit_lock: bool) -> Result<()> {
+    pub(crate) fn write_workspace(
+        &self,
+        config: &[u8],
+        lock: &[u8],
+        commit_lock: bool,
+    ) -> Result<()> {
         let workspace = self.workspace();
         std::fs::create_dir_all(&workspace).context("create the workspace")?;
         git(&workspace, &["init", "--quiet"])?;

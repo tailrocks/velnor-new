@@ -14,6 +14,25 @@ use crate::store::store_root;
 
 const CONFIG: &str = "mise.toml";
 const LOCK: &str = "mise.lock";
+const TOP_LEVEL_KEYS: [&str; 7] = [
+    "env",
+    "min_version",
+    "settings",
+    "tasks",
+    "tools",
+    "vars",
+    "wrappers",
+];
+const SETTINGS: [&str; 8] = [
+    "cargo.binstall",
+    "http_retries",
+    "http_timeout",
+    "idiomatic_version_file",
+    "idiomatic_version_file_enable_tools",
+    "jobs",
+    "locked",
+    "lockfile",
+];
 
 fn invalid(message: impl Into<String>) -> ExecError {
     ExecError::Invalid(message.into())
@@ -96,35 +115,19 @@ pub(super) fn require_sole_config(expected: &Path, config_listing: &str) -> Resu
     )))
 }
 
-async fn read_committed_file(
-    ctx: &mut StepContext<'_>,
-    mirror: &Path,
-    sha: &str,
-    listing: &str,
-    name: &str,
-) -> Result<String, ExecError> {
-    let size = listing
-        .lines()
-        .find_map(|line| {
-            let (meta, path) = line.split_once('\t')?;
+fn require_regular_file(listing: &str, name: &str) -> Result<(), ExecError> {
+    let regular = listing.lines().any(|line| {
+        line.split_once('\t').is_some_and(|(meta, path)| {
             let fields: Vec<&str> = meta.split_whitespace().collect();
-            match (path == name, fields.as_slice()) {
-                (true, ["100644" | "100755", "blob", _, size]) => size.parse::<usize>().ok(),
-                _ => None,
-            }
+            path == name && matches!(fields.as_slice(), ["100644" | "100755", "blob", _])
         })
-        .ok_or_else(|| {
-            invalid(format!(
-                "mise policy: {name} is missing from the trusted commit or is not a regular file"
-            ))
-        })?;
-    let text = git::read_blob(ctx, mirror, sha, name).await?;
-    if text.len() != size {
-        return Err(invalid(format!(
-            "mise policy: {name} in the trusted commit is not valid UTF-8"
-        )));
+    });
+    if regular {
+        return Ok(());
     }
-    Ok(text)
+    Err(invalid(format!(
+        "mise policy: {name} is missing from the trusted commit or is not a regular file"
+    )))
 }
 
 async fn read_committed(
@@ -134,12 +137,47 @@ async fn read_committed(
     let mirror =
         mirror_path(&store_root(), facts).map_err(|error| invalid(format!("{error:#}")))?;
     let sha = facts.sha.as_str();
-    let args = ["ls-tree", "-l", sha, "--", CONFIG, LOCK];
+    let args = ["ls-tree", sha, "--", CONFIG, LOCK];
     let listing = git::capture(ctx, Some(&mirror), &args).await?;
+    require_regular_file(&listing, CONFIG)?;
+    require_regular_file(&listing, LOCK)?;
     Ok(AcceptedConfig {
-        config: read_committed_file(ctx, &mirror, sha, &listing, CONFIG).await?,
-        lock: read_committed_file(ctx, &mirror, sha, &listing, LOCK).await?,
+        config: git::read_blob(ctx, &mirror, sha, CONFIG).await?,
+        lock: git::read_blob(ctx, &mirror, sha, LOCK).await?,
     })
+}
+
+fn refuse(what: &str) -> ExecError {
+    ExecError::Unsupported(format!(
+        "mise policy: {what} is not supported by velnor-runner"
+    ))
+}
+
+fn setting_names(prefix: &str, settings: &toml::Table, names: &mut Vec<String>) {
+    for (key, value) in settings {
+        let name = format!("{prefix}{key}");
+        match value {
+            toml::Value::Table(inner) => setting_names(&format!("{name}."), inner, names),
+            _ => names.push(name),
+        }
+    }
+}
+
+fn require_supported_keys(config: &toml::Table) -> Result<(), ExecError> {
+    if let Some(key) = config
+        .keys()
+        .find(|key| !TOP_LEVEL_KEYS.contains(&key.as_str()))
+    {
+        return Err(refuse(&format!("{CONFIG} key '{key}'")));
+    }
+    let mut names = Vec::new();
+    if let Some(settings) = config.get("settings").and_then(toml::Value::as_table) {
+        setting_names("", settings, &mut names);
+    }
+    match names.iter().find(|name| !SETTINGS.contains(&name.as_str())) {
+        Some(name) => Err(refuse(&format!("[settings] key '{name}'"))),
+        None => Ok(()),
+    }
 }
 
 fn require_supported_directives(config: &toml::Table) -> Result<(), ExecError> {
@@ -161,9 +199,7 @@ fn require_supported_directives(config: &toml::Table) -> Result<(), ExecError> {
                 Some(_) => Some("_".to_owned()),
             };
             if let Some(name) = unsupported {
-                return Err(ExecError::Unsupported(format!(
-                    "mise policy: [{section}] {name} is not supported by velnor-runner"
-                )));
+                return Err(refuse(&format!("[{section}] {name}")));
             }
         }
     }
@@ -190,6 +226,7 @@ async fn resolve_locked_mise_config(
             "mise policy: {CONFIG} does not set [settings] lockfile = true"
         )));
     }
+    require_supported_keys(&config)?;
     require_supported_directives(&config)?;
     Ok(accepted)
 }
