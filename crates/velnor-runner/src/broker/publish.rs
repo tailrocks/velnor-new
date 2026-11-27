@@ -52,25 +52,46 @@ fn create_synced(entry: BorrowedFd<'_>, name: &str, bytes: &[u8]) -> Result<()> 
         .with_context(|| format!("write {name} in the cache entry"))
 }
 
-fn finish(entry: &OwnedFd, target: &Target, now: u64) -> Result<()> {
+fn seal(entry: &OwnedFd, target: &Target, now: u64) -> Result<()> {
     create_synced(entry.as_fd(), KEY, target.key.as_bytes())?;
     create_synced(entry.as_fd(), VERSION, target.version.as_bytes())?;
     create_synced(entry.as_fd(), ACCESSED, b"")?;
     stamp_access(entry.as_fd(), now)?;
     create_synced(entry.as_fd(), MARKER, b"")?;
-    fchmod(entry, Mode::from_bits_truncate(FROZEN_DIRECTORY))?;
-    sync_directory(entry, "the cache entry")
+    sync_fd(entry, "the staged cache entry")
 }
 
 #[cfg(test)]
-pub(super) static SYNCED: std::sync::Mutex<Vec<(u64, u64)>> = std::sync::Mutex::new(Vec::new());
+pub(super) struct Synced {
+    pub(super) what: String,
+    pub(super) identity: (u64, u64),
+    pub(super) mode: RawMode,
+}
 
-pub(super) fn sync_directory(directory: &impl AsFd, what: &str) -> Result<()> {
-    #[cfg(test)]
-    if let (Ok(stat), Ok(mut synced)) = (fstat(directory), SYNCED.lock()) {
-        synced.push((u64::try_from(stat.st_dev).unwrap_or_default(), stat.st_ino));
+#[cfg(test)]
+pub(super) static SYNCED: std::sync::Mutex<Vec<Synced>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn record(fd: &impl AsFd, what: &str) {
+    if let (Ok(stat), Ok(mut synced)) = (fstat(fd), SYNCED.lock()) {
+        synced.push(Synced {
+            what: what.to_owned(),
+            identity: (u64::try_from(stat.st_dev).unwrap_or_default(), stat.st_ino),
+            mode: stat.st_mode & 0o7777,
+        });
     }
-    fsync(directory).with_context(|| format!("sync {what}"))
+}
+
+pub(super) fn sync_fd(fd: &impl AsFd, what: &str) -> Result<()> {
+    #[cfg(test)]
+    record(fd, what);
+    fsync(fd).with_context(|| format!("sync {what}"))
+}
+
+fn sync_file(file: &File, what: &str) -> Result<()> {
+    #[cfg(test)]
+    record(file, what);
+    file.sync_all().with_context(|| format!("sync {what}"))
 }
 
 fn same_file(left: &Stat, right: &Stat) -> bool {
@@ -105,8 +126,8 @@ fn attempt(
     data: &File,
     abandoned: &AtomicBool,
 ) -> Result<Outcome> {
-    data.sync_all().context("sync the cache data")?;
     fchmod(data, Mode::from_bits_truncate(FROZEN_FILE)).context("freeze the cache data")?;
+    sync_file(data, "the cache data")?;
     let scope = layout.open_scope(target)?;
     let _lock = layout.lock(target, abandoned)?;
     ensure!(
@@ -129,17 +150,20 @@ fn attempt(
         let aside = layout.open_aside()?;
         move_aside(scope.as_fd(), &entry, aside.as_fd()).context("set the leftover aside")?;
     }
+    seal(&upload.dir, target, layout.now())?;
     upload
         .rename_into(scope.as_fd(), &entry)
         .context("publish the cache entry")?;
-    let sealed = openat(scope.as_fd(), &entry, directory_flags(), Mode::empty())
+    let committed = openat(scope.as_fd(), &entry, directory_flags(), Mode::empty())
         .context("reopen the published cache entry")
         .and_then(|published| {
             is_streamed(&published, upload, data)?;
-            finish(&published, target, layout.now())
+            fchmod(&published, Mode::from_bits_truncate(FROZEN_DIRECTORY))
+                .context("freeze the cache entry")?;
+            sync_fd(&published, "the cache entry")
         })
-        .and_then(|()| sync_directory(&scope, "the cache scope"));
-    if let Err(error) = sealed {
+        .and_then(|()| sync_fd(&scope, "the cache scope"));
+    if let Err(error) = committed {
         if let Ok(aside) = layout.open_aside() {
             let _ = move_aside(scope.as_fd(), &entry, aside.as_fd());
         }

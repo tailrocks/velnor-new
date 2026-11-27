@@ -11,7 +11,7 @@ use rustix::fs::{
     AtFlags, FlockOperation, Mode, OFlags, flock, fstat, openat, renameat, statat, unlinkat,
 };
 
-use super::layout::{PRIVATE, ensure_private};
+use super::layout::{PRIVATE, ensure_private, open_store};
 use super::safe_fs::{directory_flags, enter_directory_as, names, open_path, purge};
 
 pub(super) const LIVE: &str = "live";
@@ -19,8 +19,7 @@ const TREES: [&str; 2] = ["incoming", "aside"];
 const CLAIM_ATTEMPTS: usize = 8;
 
 pub(super) fn open_live(root: &Path) -> Result<OwnedFd> {
-    std::fs::create_dir_all(root).with_context(|| format!("create {}", root.display()))?;
-    let root = open_path(root).with_context(|| format!("open {}", root.display()))?;
+    let root = open_store(root)?;
     let (live, _) = enter_directory_as(root.as_fd(), OsStr::new(LIVE), PRIVATE)
         .context("open the liveness directory")?;
     ensure_private(&live, "the liveness directory")?;

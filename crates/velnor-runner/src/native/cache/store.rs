@@ -12,8 +12,10 @@ use rustix::fs::CWD;
 use rustix::io::Errno;
 use velnor_cache_rules::{Access, Entry, Scope, Timestamp, lookup};
 
+use super::archive::checkpoint;
 use crate::broker::cache::{CacheOwner, DATA, KEY, MARKER, VERSION, entry_dir, scope_dir};
 use crate::broker::safe_fs::open_regular;
+use crate::exec::JobCancel;
 
 const MAX_TEXT: u64 = 4096;
 
@@ -119,11 +121,13 @@ pub(super) fn find(
     key: &str,
     restore_keys: &[String],
     version: &str,
+    cancel: Option<&JobCancel>,
 ) -> Result<Option<CacheEntry>> {
     let mut entries = Vec::new();
     for scope in &access.read {
         entries.extend(read_scope(root, owner, scope)?);
     }
+    checkpoint(cancel)?;
     Ok(
         lookup(&entries, access, key, restore_keys, version).map(|hit| CacheEntry {
             scope: hit.scope.clone(),

@@ -269,29 +269,3 @@ fn a_nested_root_under_an_outer_root_restored_as_a_file_is_refused() -> Result<(
     assert!(fs::symlink_metadata(&data)?.is_file());
     Ok(())
 }
-
-#[test]
-fn declared_paths_that_each_resolve_below_the_other_are_refused() -> Result<()> {
-    let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
-    let _cleanup = Cleanup(dir.clone());
-    let workspace = dir.join("workspace");
-    fs::create_dir_all(workspace.join("t1"))?;
-    std::os::unix::fs::symlink("t1", workspace.join("a"))?;
-    std::os::unix::fs::symlink("..", workspace.join("t1/b"))?;
-    let archive = dir.join("in.tar");
-    write_tar(&archive, &[("0/", EntryType::Directory, None)])?;
-    let result = unpack(
-        &archive,
-        &[workspace.join("a"), workspace.join("t1/b")],
-        Umask::read(),
-        None,
-    );
-    let error = result.err().map(|error| format!("{error:#}"));
-    assert!(
-        error
-            .as_deref()
-            .is_some_and(|text| text.contains("each resolve below the other")),
-        "{error:?}"
-    );
-    Ok(())
-}

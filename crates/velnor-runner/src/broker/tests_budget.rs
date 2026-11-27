@@ -253,7 +253,10 @@ fn synced_count(directory: &Path) -> Result<usize> {
     let synced = SYNCED
         .lock()
         .map_err(|_| anyhow::anyhow!("the sync record is poisoned"))?;
-    Ok(synced.iter().filter(|seen| **seen == identity).count())
+    Ok(synced
+        .iter()
+        .filter(|seen| seen.identity == identity)
+        .count())
 }
 
 #[tokio::test]
@@ -295,6 +298,30 @@ async fn a_publish_waits_for_the_store_wide_lock() -> Result<()> {
     failed(&response, "timed out waiting for the cache store lock");
     fixture.assert_nothing_published();
     drop(held);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_renewed_access_stamp_is_synced_before_the_touch_is_answered() -> Result<()> {
+    let (fixture, now) = timed(u64::MAX)?;
+    let response = fixture.upload("k-a", &bytes(10)).await;
+    assert!(published(&response), "{response:?}");
+    let stamp = fs::metadata(fixture.entry("k-a")?.join(ACCESSED))?;
+    let identity = (stamp.dev(), stamp.ino());
+    let synced = || -> Result<usize> {
+        let seen = SYNCED
+            .lock()
+            .map_err(|_| anyhow::anyhow!("the sync record is poisoned"))?;
+        Ok(seen
+            .iter()
+            .filter(|seen| seen.what.contains("access stamp") && seen.identity == identity)
+            .count())
+    };
+    let before = synced()?;
+    at(&now, DAY);
+    let renewed = touch(&fixture, "k-a").await;
+    assert!(matches!(renewed, Response::Done { .. }), "{renewed:?}");
+    assert_eq!(synced()?, before + 1);
     Ok(())
 }
 

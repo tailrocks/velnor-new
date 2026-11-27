@@ -13,7 +13,7 @@ use velnor_cache_rules::{Entry, Scope, Timestamp, evict};
 
 use super::cache::{ACCESSED, DATA, MARKER};
 use super::layout::Layout;
-use super::publish::{Target, sync_directory};
+use super::publish::{Target, sync_fd};
 use super::safe_fs::{directory_flags, is_regular_mode, names, remove_entry};
 
 fn seconds(value: i64) -> Timestamp {
@@ -84,7 +84,7 @@ pub(super) fn make_room(layout: &Layout, target: &Target, incoming: u64) -> Resu
             .context("evict a cache entry")?;
     }
     for scope in changed.values() {
-        sync_directory(scope, "the cache scope of an evicted entry")?;
+        sync_fd(scope, "the cache scope of an evicted entry")?;
     }
     Ok(())
 }

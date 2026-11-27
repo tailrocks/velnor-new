@@ -4,15 +4,15 @@
 use std::ffi::OsStr;
 use std::fs::File;
 use std::os::fd::{AsFd, OwnedFd};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail, ensure};
 use rustix::fs::{
-    AtFlags, CWD, FlockOperation, Mode, OFlags, RawMode, fchmod, flock, fstat, mkdirat, openat,
-    unlinkat,
+    AtFlags, CWD, FlockOperation, Mode, OFlags, RawMode, RenameFlags, fchmod, flock, fstat,
+    mkdirat, openat, renameat_with, unlinkat,
 };
 use rustix::io::Errno;
 use rustix::process::geteuid;
@@ -21,11 +21,36 @@ use velnor_cache_rules::DEFAULT_CACHE_BUDGET_BYTES;
 use super::cache::{CacheOwner, DATA, MAX_DATA_BYTES, owner_parts, scope_hash, scope_parts};
 use super::incoming::Upload;
 use super::live::{LIVE, claim, reclaim};
-use super::publish::{Target, sync_directory};
+use super::publish::{Target, sync_fd};
 use super::safe_fs::{directory_flags, enter_directory_as, open_path, purge};
 
 pub(super) const PRIVATE: RawMode = 0o700;
-const SHARED: RawMode = 0o755;
+pub(super) const SHARED: RawMode = 0o755;
+
+pub(super) fn share(directory: &OwnedFd) -> Result<()> {
+    let stat = fstat(directory).context("inspect the directory")?;
+    if stat.st_uid == geteuid().as_raw() && stat.st_mode & SHARED != SHARED {
+        fchmod(
+            directory,
+            Mode::from_bits_truncate(stat.st_mode & 0o7777 | SHARED),
+        )
+        .context("open the directory to the step uid")?;
+    }
+    Ok(())
+}
+
+pub(super) fn open_store(root: &Path) -> Result<OwnedFd> {
+    if let Some(parent) = root.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    match mkdirat(CWD, root, Mode::from_bits_truncate(SHARED)) {
+        Ok(()) | Err(Errno::EXIST) => {}
+        Err(error) => return Err(error).with_context(|| format!("create {}", root.display())),
+    }
+    let store = open_path(root).with_context(|| format!("open {}", root.display()))?;
+    share(&store)?;
+    Ok(store)
+}
 
 pub(super) fn ensure_private(directory: &OwnedFd, what: &str) -> Result<()> {
     let stat = fstat(directory).context("inspect the directory")?;
@@ -111,17 +136,20 @@ impl Layout {
         }
     }
 
-    pub(super) fn create_incoming(&self, name: &str) -> Result<(Arc<Upload>, File)> {
+    fn open_incoming(&self) -> Result<OwnedFd> {
         self.require_live()?;
-        std::fs::create_dir_all(&self.root)
-            .with_context(|| format!("create {}", self.root.display()))?;
-        let root = self.open_root()?;
+        let root = open_store(&self.root)?;
         let (parent, _) = enter_directory_as(root.as_fd(), OsStr::new("incoming"), PRIVATE)
             .context("open the incoming directory")?;
         ensure_private(&parent, "the incoming directory")?;
         let (own, _) = enter_directory_as(parent.as_fd(), OsStr::new(&self.id), PRIVATE)
             .context("open the incoming directory of this broker")?;
         ensure_private(&own, "the incoming directory of this broker")?;
+        Ok(own)
+    }
+
+    pub(super) fn create_incoming(&self, name: &str) -> Result<(Arc<Upload>, File)> {
+        let own = self.open_incoming()?;
         mkdirat(own.as_fd(), name, Mode::from_bits_truncate(PRIVATE))
             .context("create the incoming upload directory")?;
         let dir = openat(own.as_fd(), name, directory_flags(), Mode::empty())
@@ -161,16 +189,46 @@ impl Layout {
     fn open_chain(&self, parts: &[String]) -> Result<OwnedFd> {
         let mut directory = self.open_root()?;
         for part in parts {
-            let (child, created) = enter_directory_as(directory.as_fd(), OsStr::new(part), SHARED)
+            directory = self
+                .enter_shared(&directory, part)
                 .with_context(|| format!("open the cache directory {part}"))?;
-            if created {
-                fchmod(&child, Mode::from_bits_truncate(SHARED))
-                    .with_context(|| format!("open the cache directory {part} to the step uid"))?;
-                sync_directory(&directory, "the parent of a new cache directory")?;
-            }
-            directory = child;
         }
         Ok(directory)
+    }
+
+    fn enter_shared(&self, parent: &OwnedFd, name: &str) -> Result<OwnedFd> {
+        loop {
+            match openat(parent, name, directory_flags(), Mode::empty()) {
+                Ok(existing) => {
+                    share(&existing)?;
+                    return Ok(existing);
+                }
+                Err(Errno::NOENT) => {}
+                Err(error) => return Err(error.into()),
+            }
+            let own = self.open_incoming()?;
+            let staged = format!("chain-{}", self.next_name());
+            mkdirat(own.as_fd(), &staged, Mode::from_bits_truncate(PRIVATE))
+                .context("stage the cache directory")?;
+            let fresh = openat(own.as_fd(), &staged, directory_flags(), Mode::empty())
+                .context("open the staged cache directory")?;
+            let moved = fchmod(&fresh, Mode::from_bits_truncate(SHARED)).and_then(|()| {
+                renameat_with(own.as_fd(), &staged, parent, name, RenameFlags::NOREPLACE)
+            });
+            match moved {
+                Ok(()) => {
+                    sync_fd(parent, "the parent of a new cache directory")?;
+                    return Ok(fresh);
+                }
+                Err(Errno::EXIST | Errno::NOTEMPTY) => {
+                    let _ = unlinkat(own.as_fd(), &staged, AtFlags::REMOVEDIR);
+                }
+                Err(error) => {
+                    let _ = unlinkat(own.as_fd(), &staged, AtFlags::REMOVEDIR);
+                    return Err(error).context("move the staged cache directory into place");
+                }
+            }
+        }
     }
 
     pub(super) fn lock(&self, target: &Target, abandoned: &AtomicBool) -> Result<OwnedFd> {

@@ -130,6 +130,7 @@ fn restore(plan: &Plan, cancel: Option<&JobCancel>) -> anyhow::Result<Done> {
         &inputs.key,
         &inputs.restore_keys,
         &plan.version,
+        cancel,
     )?
     else {
         return Ok(Done {

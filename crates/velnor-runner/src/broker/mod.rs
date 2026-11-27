@@ -20,6 +20,8 @@ mod tests;
 #[cfg(test)]
 mod tests_budget;
 #[cfg(test)]
+mod tests_commit;
+#[cfg(test)]
 mod tests_enter;
 #[cfg(test)]
 mod tests_entry;

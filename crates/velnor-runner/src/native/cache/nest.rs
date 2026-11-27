@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{HashMap, VecDeque};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::ErrorKind;
 use std::os::fd::{AsFd, OwnedFd};
-use std::path::{Path, PathBuf};
+use std::os::unix::fs::MetadataExt;
+use std::path::{Component, Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use rustix::fs::{CWD, Mode, OFlags, openat};
 
 use super::descent::enter;
@@ -51,56 +53,88 @@ fn open_parent(path: &Path) -> Result<OwnedFd> {
     Ok(directory)
 }
 
-fn outer_of(declared: &[PathBuf], index: usize) -> Option<usize> {
-    let path = &declared[index];
-    declared
-        .iter()
-        .enumerate()
-        .filter(|(_, other)| *other != path && path.starts_with(other))
-        .max_by_key(|(_, other)| other.components().count())
-        .map(|(outer, _)| outer)
+type Identity = (u64, u64);
+
+const LINK_LIMIT: usize = 40;
+
+fn identity(path: &Path) -> Option<Identity> {
+    let meta = fs::symlink_metadata(path).ok()?;
+    Some((meta.dev(), meta.ino()))
 }
 
-fn resolved(path: &Path) -> PathBuf {
-    let mut existing = path;
-    let mut missing = Vec::new();
-    loop {
-        if let Ok(base) = fs::canonicalize(existing) {
-            return missing.iter().rev().fold(base, |at, part| at.join(part));
+fn names(path: &Path) -> impl DoubleEndedIterator<Item = OsString> + '_ {
+    path.components().filter_map(|part| match part {
+        Component::Normal(name) => Some(name.to_owned()),
+        Component::ParentDir => Some(OsString::from("..")),
+        _ => None,
+    })
+}
+
+fn outer_of(declared: &HashMap<&Path, usize>, path: &Path) -> Option<usize> {
+    path.ancestors()
+        .skip(1)
+        .find_map(|ancestor| declared.get(ancestor).copied())
+}
+
+fn walk(
+    roots: &HashMap<Identity, usize>,
+    path: &Path,
+    index: usize,
+) -> Result<Option<(usize, Vec<OsString>)>> {
+    let Some(parent) = path.parent() else {
+        return Ok(None);
+    };
+    let mut at = PathBuf::from("/");
+    let mut queue: VecDeque<OsString> = names(parent).collect();
+    let mut links = 0;
+    while let Some(part) = queue.pop_front() {
+        if part == ".." {
+            at.pop();
+            continue;
         }
-        match (existing.parent(), existing.file_name()) {
-            (Some(above), Some(part)) => {
-                missing.push(part.to_owned());
-                existing = above;
+        let next = at.join(&part);
+        let Some(here) = identity(&next) else {
+            return Ok(None);
+        };
+        if let Some(&outer) = roots.get(&here).filter(|outer| **outer != index) {
+            let below: Vec<OsString> = queue.into_iter().collect();
+            ensure!(
+                below.iter().all(|name| name != ".."),
+                "the declared path {} leaves another declared path through a link",
+                path.display()
+            );
+            return Ok(Some((outer, below)));
+        }
+        match fs::read_link(&next) {
+            Ok(target) => {
+                links += 1;
+                ensure!(
+                    links <= LINK_LIMIT,
+                    "resolve {}: too many links",
+                    path.display()
+                );
+                if target.is_absolute() {
+                    at = PathBuf::from("/");
+                }
+                for name in names(&target).rev() {
+                    queue.push_front(name);
+                }
             }
-            _ => return path.to_path_buf(),
+            Err(_) => at = next,
         }
     }
+    Ok(None)
 }
 
-fn aliased_outer(declared: &[PathBuf], index: usize) -> Option<(usize, Vec<OsString>)> {
+fn parent_of(
+    declared: &[PathBuf],
+    texts: &HashMap<&Path, usize>,
+    roots: &HashMap<Identity, usize>,
+    index: usize,
+) -> Result<Parent> {
     let path = &declared[index];
-    let parent = resolved(path.parent()?);
-    let (outer, root) = declared
-        .iter()
-        .enumerate()
-        .filter(|(other, _)| *other != index)
-        .map(|(other, root)| (other, resolved(root)))
-        .filter(|(_, root)| parent.starts_with(root))
-        .max_by_key(|(_, root)| root.components().count())?;
-    let below = parent
-        .strip_prefix(&root)
-        .ok()?
-        .iter()
-        .map(OsStr::to_owned)
-        .collect();
-    Some((outer, below))
-}
-
-fn parent_of(declared: &[PathBuf], index: usize) -> Result<Parent> {
-    let path = &declared[index];
-    let Some(outer) = outer_of(declared, index) else {
-        return Ok(match aliased_outer(declared, index) {
+    let Some(outer) = outer_of(texts, path) else {
+        return Ok(match walk(roots, path, index)? {
             Some((outer, below)) => Parent::Under { outer, below },
             None => Parent::Ready(open_parent(path)?),
         });
@@ -116,22 +150,17 @@ fn parent_of(declared: &[PathBuf], index: usize) -> Result<Parent> {
 }
 
 pub(super) fn parents_of(declared: &[PathBuf]) -> Result<Vec<Parent>> {
-    let parents = (0..declared.len())
-        .map(|index| parent_of(declared, index))
-        .collect::<Result<Vec<_>>>()?;
-    for (start, path) in declared.iter().enumerate() {
-        let mut at = start;
-        for _ in 0..parents.len() {
-            match &parents[at] {
-                Parent::Under { outer, .. } => at = *outer,
-                Parent::Ready(_) => break,
-            }
-        }
-        anyhow::ensure!(
-            matches!(parents[at], Parent::Ready(_)),
-            "the declared path {} and another declared path each resolve below the other",
-            path.display()
-        );
-    }
-    Ok(parents)
+    let texts: HashMap<&Path, usize> = declared
+        .iter()
+        .enumerate()
+        .map(|(index, path)| (path.as_path(), index))
+        .collect();
+    let roots: HashMap<Identity, usize> = declared
+        .iter()
+        .enumerate()
+        .filter_map(|(index, path)| identity(path).map(|id| (id, index)))
+        .collect();
+    (0..declared.len())
+        .map(|index| parent_of(declared, &texts, &roots, index))
+        .collect()
 }

@@ -134,11 +134,22 @@ fn a_lookup_fails_on_an_entry_the_step_may_not_read_instead_of_skipping_it() -> 
         "k-1",
         &[],
         &plan.version,
+        None,
     );
     let error = found.err().map(|error| format!("{error:#}"));
     assert!(
         error.as_deref().is_some_and(|text| text.contains(MARKER)),
         "{error:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_lookup_that_ends_after_the_job_was_cancelled_is_cancelled_not_a_miss() -> Result<()> {
+    let root = scratch_root();
+    let cancel = JobCancel::new();
+    cancel.cancel();
+    let error = restore(&plan(root)?, Some(&cancel)).err();
+    assert!(error.is_some_and(|error| error.is::<archive::Cancelled>()));
     Ok(())
 }

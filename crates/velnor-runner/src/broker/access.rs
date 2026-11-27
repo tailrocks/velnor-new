@@ -12,6 +12,7 @@ use velnor_cache_rules::Scope;
 use super::cache::{ACCESSED, CacheOwner, MARKER, check_request, entry_name, scope_parts};
 use super::facts::TrustedFacts;
 use super::layout::Layout;
+use super::publish::sync_fd;
 use super::safe_fs::{directory_flags, is_regular_mode, open_path};
 
 pub(super) fn stamp_access(entry: BorrowedFd<'_>, now: u64) -> Result<()> {
@@ -39,7 +40,8 @@ pub(super) fn stamp_access(entry: BorrowedFd<'_>, now: u64) -> Result<()> {
             },
         },
     )
-    .context("set the access stamp of the cache entry")
+    .context("set the access stamp of the cache entry")?;
+    sync_fd(&file, "the access stamp of the cache entry")
 }
 
 pub(super) fn touch(
