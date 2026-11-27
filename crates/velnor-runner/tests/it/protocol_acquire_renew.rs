@@ -5,8 +5,8 @@ use anyhow::{Context, Result, bail};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use velnor_runner::protocol::{
-    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, GitHubApiError,
-    RetryDelays, acquire_job, is_transient_acquire_error, renew_failure_is_job_gone,
+    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, GitHubApiError, RetryDelays,
+    acquire_job, is_transient_acquire_error, renew_failure_is_job_gone,
 };
 
 use super::support::{
@@ -47,8 +47,7 @@ async fn acquire_job_retries_failures_and_then_acquires() -> Result<()> {
         ]),
     )?;
 
-    let outcome = acquire(&server, "Linux")
-        .await?;
+    let outcome = acquire(&server, "Linux").await?;
 
     let AcquireJobOutcome::Acquired(job) = outcome else {
         bail!("expected an acquired job");
@@ -103,8 +102,7 @@ async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
         server.reset()?;
         server.respond("POST", ACQUIRE_PATH, scripted(script))?;
 
-        let outcome = acquire(&server, "Linux")
-            .await;
+        let outcome = acquire(&server, "Linux").await;
 
         let error = outcome
             .err()
@@ -208,8 +206,7 @@ async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
             Reply::json(status.as_u16(), &reply_body)
         })?;
 
-        let outcome = acquire(&server, std::env::consts::OS)
-            .await?;
+        let outcome = acquire(&server, std::env::consts::OS).await?;
         let AcquireJobOutcome::Skipped {
             status: actual,
             body,

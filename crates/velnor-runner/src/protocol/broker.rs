@@ -13,8 +13,7 @@ use super::error::{
     github_api_error_categorized, github_api_error_with, is_retriable_status,
 };
 use super::http::{
-    RunnerOs, github_json_request, runner_architecture, slash_url,
-    validate_authenticated_url,
+    RunnerOs, github_json_request, runner_architecture, slash_url, validate_authenticated_url,
 };
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
 use crate::secret::Secret;

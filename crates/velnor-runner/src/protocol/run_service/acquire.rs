@@ -11,7 +11,9 @@ use serde_json::Value;
 
 use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::{GithubHttpResponse, github_json_http_response};
-use super::{Failure, REQUEST_TIMEOUT, RetryDelays, RunServiceClient, retry, run_service_error_code};
+use super::{
+    Failure, REQUEST_TIMEOUT, RetryDelays, RunServiceClient, retry, run_service_error_code,
+};
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 

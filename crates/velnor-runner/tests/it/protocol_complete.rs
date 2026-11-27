@@ -6,7 +6,7 @@ use serde_json::json;
 use std::time::{Duration, Instant};
 use velnor_runner::protocol::{
     BrokerErrorCategory, RetryDelays, RunServiceClient, RunServiceStepResult, ServiceErrorKind,
-    TaskResult, TimelineRecordState, broker_error_category, service_error_kind,
+    TaskResult, TimelineRecordState, TokenBackoff, broker_error_category, service_error_kind,
 };
 
 use super::support::{
@@ -200,6 +200,7 @@ fn default_retry_delays_match_upstream() {
         RetryDelays {
             min: Duration::from_secs(5),
             max: Duration::from_secs(15),
+            token: TokenBackoff::default(),
         }
     );
 }
@@ -217,8 +218,11 @@ async fn complete_job_waits_at_least_the_minimum_delay_between_attempts() -> Res
             Scripted::Text(204, ""),
         ]),
     )?;
-    let run_service =
-        RunServiceClient::new("token")?.with_retry_delays(RetryDelays { min: MIN, max: MIN });
+    let run_service = RunServiceClient::new("token")?.with_retry_delays(RetryDelays {
+        min: MIN,
+        max: MIN,
+        token: TokenBackoff::IMMEDIATE,
+    });
 
     let started = Instant::now();
     run_service

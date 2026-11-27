@@ -19,13 +19,13 @@ mod exec_cli;
 mod exec_declared_inputs;
 #[path = "exec_support.rs"]
 mod exec_support;
+#[path = "exec_tool_cache.rs"]
+mod exec_tool_cache;
 #[cfg(target_os = "linux")]
 #[path = "expr/format_allocation.rs"]
 mod expr_format_allocation;
 #[path = "expr/from_json.rs"]
 mod expr_from_json;
-#[path = "exec_tool_cache.rs"]
-mod exec_tool_cache;
 #[path = "expr/functions.rs"]
 mod expr_functions;
 #[path = "expr/generated_workflow.rs"]
@@ -117,13 +117,6 @@ mod native_checkout_upkeep;
 mod native_checkout_walk;
 mod native_checkout_window;
 mod native_checkout_workspace;
-#[path = "exec_offload.rs"]
-mod offload;
-#[path = "exec_parity.rs"]
-mod parity;
-#[path = "exec_process.rs"]
-mod process;
-mod protocol_acquire_renew;
 mod lifecycle;
 mod lifecycle_abandon;
 mod lifecycle_busy;
@@ -139,7 +132,15 @@ mod lifecycle_support;
 mod lifecycle_timespan;
 mod lifecycle_token;
 mod lifecycle_token_retry;
+#[path = "exec_offload.rs"]
+mod offload;
+#[path = "exec_parity.rs"]
+mod parity;
+#[path = "exec_process.rs"]
+mod process;
+mod protocol_acquire_renew;
 mod protocol_broker;
+mod protocol_broker_refusals;
 mod protocol_complete;
 mod protocol_complete_ack;
 mod protocol_feed;

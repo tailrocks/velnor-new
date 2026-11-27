@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::{ExecError, RunOptions, evaluate, private, token};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};

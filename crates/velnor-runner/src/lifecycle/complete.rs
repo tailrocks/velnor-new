@@ -49,6 +49,7 @@ fn annotation(annotation: &Annotation) -> RunServiceAnnotation {
         start_column: annotation.column.map(i64::from),
         end_column: annotation.end_column.map(i64::from),
         step_number: annotation.step.map(i64::from),
+        raw_details: None,
         is_infrastructure_issue: false,
     }
 }
@@ -68,16 +69,24 @@ fn step_result(
             .and_then(|step| step.id.clone()),
         number: Some(i64::from(record.number)),
         name: record.name.clone(),
+        action_name: None,
+        reference: None,
+        kind: None,
         status: TimelineRecordState::Completed,
         conclusion: step_conclusion(record.conclusion),
         started_at: times.and_then(|times| times.started_at.clone()),
         completed_at: times.and_then(|times| times.completed_at.clone()),
+        completed_log_url: None,
+        completed_log_lines: 0,
         annotations: run
             .annotations
             .iter()
             .filter(|annotation| annotation.step == Some(record.number))
             .map(annotation)
             .collect(),
+        is_background: false,
+        background_control_type: None,
+        background_control_step_ids: Vec::new(),
     }
 }
 

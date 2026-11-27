@@ -15,10 +15,9 @@ use velnor_runner::job_message::{AgentJobRequestMessage, ContainerResource};
 use velnor_runner::lifecycle::RunJitOptions;
 use velnor_runner::protocol::{
     BrokerClient, DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings,
-    FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken,
-    OAuthJwtCredentials, RetryDelays, RunServiceClient, RunServiceVariableValue, RunnerOs,
-    TaskAgentMessage, TaskAgentSession, TaskAgentSessionKey, TwirpResultsClient, acquire_job,
-    github_json_http_response,
+    FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken, OAuthJwtCredentials,
+    RetryDelays, RunServiceClient, RunServiceVariableValue, RunnerOs, SessionRecovery,
+    TaskAgentMessage, TaskAgentSession, TwirpResultsClient, acquire_job, github_json_http_response,
 };
 use velnor_runner::secret::Secret;
 
@@ -187,6 +186,7 @@ fn jit_config() -> DecodedJitConfig {
             use_v2_flow: true,
             ephemeral: true,
             disable_update: true,
+            session_recovery: SessionRecovery::default(),
         },
         credentials: DecodedJitCredentials {
             scheme: "OAuth".to_owned(),
@@ -209,13 +209,7 @@ fn sentinel_url() -> Result<Url> {
 
 fn credential_values() -> Result<Rendered> {
     let jit = jit_config();
-    let session = TaskAgentSession {
-        encryption_key: Some(TaskAgentSessionKey {
-            encrypted: true,
-            value: SENTINEL.to_owned(),
-        }),
-        ..TaskAgentSession::new("host", 1, "runner")
-    };
+    let session = TaskAgentSession::new("host", 1, "runner");
     let token = OAuthAccessToken {
         token: SENTINEL.to_owned(),
         expires_in: Some(Duration::from_secs(60)),
@@ -223,20 +217,16 @@ fn credential_values() -> Result<Rendered> {
     let jwt = OAuthJwtCredentials {
         client_id: "client".to_owned(),
         authorization_url: sentinel_url()?.to_string(),
+        token_url: sentinel_url()?.to_string(),
         private_key_pem: SENTINEL.to_owned(),
     };
     let variable = RunServiceVariableValue {
         value: SENTINEL.to_owned(),
         is_secret: true,
     };
-    let key = TaskAgentSessionKey {
-        encrypted: false,
-        value: SENTINEL.to_owned(),
-    };
     Ok(vec![
         ("OAuthAccessToken", format!("{token:?}")),
         ("RunServiceVariableValue", format!("{variable:?}")),
-        ("TaskAgentSessionKey", format!("{key:?}")),
         ("TaskAgentSession", format!("{session:#?}")),
         ("DecodedJitConfig", format!("{jit:#?}")),
         ("DecodedJitCredentials", format!("{:#?}", jit.credentials)),
@@ -262,7 +252,6 @@ fn protocol_values() -> Result<Rendered> {
         message_id: 1,
         message_type: "RunnerJobRequest".to_owned(),
         body: SENTINEL.to_owned(),
-        iv_base64: None,
     };
     let response = GithubHttpResponse {
         status: 200,

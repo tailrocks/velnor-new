@@ -175,8 +175,9 @@ impl TwirpResultsClient {
                 let content = tokio::fs::read(path)
                     .await
                     .with_context(|| format!("read {}", path.display()))?;
-                blocks.lines = i64::try_from(content.iter().filter(|byte| **byte == b'\n').count())
-                    .context("log line count")?;
+                blocks.lines =
+                    i64::try_from(content.split_inclusive(|byte| *byte == b'\n').count())
+                        .context("log line count")?;
                 put(&url, label, budget, content, &[]).await?;
             } else if size <= BLOCK_SIZE as u64 {
                 let (content, _) = blocks.next().await?.unwrap_or_default();
@@ -225,8 +226,19 @@ impl TwirpResultsClient {
                 .into());
             }
             let (url, azure) = Self::blob_url(kind, signed)?;
-            let headers: &[(&str, &str)] = if azure { &[(BLOB_TYPE, "BlockBlob")] } else { &[] };
-            put(&url, kind.label, self.block_budget, content.clone(), headers).await?;
+            let headers: &[(&str, &str)] = if azure {
+                &[(BLOB_TYPE, "BlockBlob")]
+            } else {
+                &[]
+            };
+            put(
+                &url,
+                kind.label,
+                self.block_budget,
+                content.clone(),
+                headers,
+            )
+            .await?;
             self.create_metadata(kind, scope, None, Some(size)).await
         })
         .await

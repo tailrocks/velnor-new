@@ -104,7 +104,7 @@ async fn handshake_of(client: FeedStreamClient, listener: TcpListener) -> Result
 }
 
 #[tokio::test]
-async fn feed_stream_handshake_authenticates_and_routes_by_plan_and_job() -> Result<()> {
+async fn feed_stream_handshake_authenticates_without_routing_parameters() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let client = FeedStreamClient::new(&format!("http://{address}/feed"), TOKEN)?;
@@ -114,22 +114,6 @@ async fn feed_stream_handshake_authenticates_and_routes_by_plan_and_job() -> Res
     assert_eq!(plain.authorization, Some(format!("Bearer {TOKEN}")));
     assert_eq!(plain.user_agent.as_deref(), Some(RUNNER_USER_AGENT));
     assert_eq!(plain.query, Vec::<(String, String)>::new());
-
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let address = listener.local_addr()?;
-    let routed = FeedStreamClient::new(&format!("http://{address}/feed"), TOKEN)?
-        .with_context("plan-1", "job-1");
-
-    let routed = handshake_of(routed, listener).await?;
-
-    assert_eq!(routed.authorization, Some(format!("Bearer {TOKEN}")));
-    assert_eq!(
-        routed.query,
-        [
-            ("planId".to_owned(), "plan-1".to_owned()),
-            ("jobId".to_owned(), "job-1".to_owned())
-        ]
-    );
     Ok(())
 }
 

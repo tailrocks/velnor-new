@@ -171,9 +171,9 @@ async fn blob_uploads_send_the_azure_header_only_for_azure_storage() -> Result<(
             Reply::json(200, &json!({"ok": true}))
         })?;
 
-        client
-            .upload_step_log(RUN, JOB, STEP, &["one".to_owned()])
-            .await?;
+        let scratch = Scratch::new()?;
+        let log = scratch.write("step.log", b"one\n")?;
+        client.upload_step_log(RUN, JOB, STEP, &log).await?;
 
         let put = server.only_request("PUT", "/blob/log")?;
         assert_eq!(put.header("x-ms-blob-type"), header, "{storage:?}");
@@ -271,7 +271,10 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log", server.uri());
     server.respond("POST", &receiver("GetStepLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
     server.respond("POST", &receiver("CreateStepLogsMetadata"), |_| {

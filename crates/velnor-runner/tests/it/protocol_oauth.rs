@@ -11,8 +11,8 @@ use ring::signature::{RSA_PKCS1_2048_8192_SHA256, RsaKeyPair, UnparsedPublicKey}
 use serde_json::{Value, json};
 use velnor_runner::protocol::oauth::build_client_assertion;
 use velnor_runner::protocol::{
-    DecodedJitConfig, OAuthClient, OAuthJwtCredentials, OAuthRegistrationNotFound,
-    decode_jit_config,
+    DecodedJitConfig, OAuthClient, OAuthErrorKind, OAuthJwtCredentials, OAuthTokenError,
+    TokenBackoff, decode_jit_config,
 };
 
 use super::support::{Scripted, TestServer, scripted};
@@ -116,6 +116,10 @@ fn oauth_credentials(config: &DecodedJitConfig) -> Result<OAuthJwtCredentials> {
     Ok(OAuthJwtCredentials {
         client_id: data.get("clientId").context("clientId")?.clone(),
         authorization_url: data
+            .get("authorizationUrl")
+            .context("authorizationUrl")?
+            .clone(),
+        token_url: data
             .get("authorizationUrl")
             .context("authorizationUrl")?
             .clone(),
@@ -278,7 +282,7 @@ fn token_cases() -> Vec<(&'static str, Scripted, TokenOutcome)> {
         (
             "empty access token",
             Scripted::Json(200, json!({"access_token": ""})),
-            TokenOutcome::Failed("missing access_token"),
+            TokenOutcome::Failed("no access_token"),
         ),
     ]
 }
@@ -293,7 +297,7 @@ async fn oauth_exchange_signs_the_assertion_and_classifies_the_response() -> Res
         server.reset()?;
         server.respond("POST", TOKEN_PATH, scripted(vec![script]))?;
 
-        let outcome = OAuthClient::new()?
+        let outcome = OAuthClient::new(TokenBackoff::IMMEDIATE)
             .exchange_client_credentials(&credentials)
             .await;
 
@@ -304,13 +308,16 @@ async fn oauth_exchange_signs_the_assertion_and_classifies_the_response() -> Res
             }
             (TokenOutcome::RegistrationGone(description), Err(error)) => {
                 let gone = error
-                    .downcast_ref::<OAuthRegistrationNotFound>()
+                    .downcast_ref::<OAuthTokenError>()
+                    .filter(|gone| gone.kind == OAuthErrorKind::RegistrationDeleted)
                     .with_context(|| format!("{name}: {error:#}"))?;
-                assert_eq!(gone.0, description, "{name}");
+                assert!(gone.to_string().contains(description), "{name}");
             }
             (TokenOutcome::Failed(fragment), Err(error)) => {
                 assert!(
-                    error.downcast_ref::<OAuthRegistrationNotFound>().is_none(),
+                    error
+                        .downcast_ref::<OAuthTokenError>()
+                        .is_none_or(|other| other.kind != OAuthErrorKind::RegistrationDeleted),
                     "{name}"
                 );
                 assert!(format!("{error:#}").contains(fragment), "{name}: {error:#}");
@@ -318,7 +325,10 @@ async fn oauth_exchange_signs_the_assertion_and_classifies_the_response() -> Res
             (_, outcome) => bail!("{name}: unexpected outcome {outcome:?}"),
         }
 
-        let request = server.only_request("POST", TOKEN_PATH)?;
+        let requests = server.requests_to("POST", TOKEN_PATH)?;
+        let attempts = if name == "server error" { 6 } else { 1 };
+        assert_eq!(requests.len(), attempts, "{name}");
+        let request = requests.first().context(name)?;
         assert_eq!(request.header("authorization"), None, "{name}");
         assert_eq!(
             request.header("content-type"),
@@ -344,7 +354,7 @@ async fn oauth_exchange_signs_the_assertion_and_classifies_the_response() -> Res
 async fn oauth_exchange_refuses_a_plain_http_token_endpoint_off_loopback() -> Result<()> {
     let config = decoded_config("http://token.example.test/oauth/token")?;
 
-    let error = OAuthClient::new()?
+    let error = OAuthClient::new(TokenBackoff::IMMEDIATE)
         .exchange_client_credentials(&oauth_credentials(&config)?)
         .await
         .err()

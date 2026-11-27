@@ -20,7 +20,10 @@ async fn job_log_over_one_block_is_appended_in_blocks_without_losing_a_line() ->
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log?sig=1", server.uri());
     server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
     server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
@@ -78,7 +81,10 @@ async fn job_log_of_one_block_is_a_single_block_blob() -> Result<()> {
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log", server.uri());
     server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
     server.respond("POST", &receiver("CreateJobLogsMetadata"), |_| {
@@ -106,7 +112,10 @@ async fn job_log_whose_seal_fails_fails_the_upload_and_reports_no_metadata() -> 
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log?sig=1", server.uri());
     server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |put| {
         Reply::status(if put.query("seal").is_some() {
@@ -181,7 +190,10 @@ async fn log_block_slower_than_the_block_budget_fails_the_upload() -> Result<()>
         .with_block_budget(Duration::from_millis(200));
     let blob_url = format!("{}/blob/log", server.uri());
     server.respond("POST", &receiver("GetJobLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| {
         Reply::status(201).after(Duration::from_millis(600))
