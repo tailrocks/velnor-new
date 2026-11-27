@@ -145,7 +145,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
         temp,
         tool_cache: tool_cache_from_env().unwrap_or_else(|| root.join("_tool")),
         runner_name: "velnor-exec".to_owned(),
-        os: RunnerOs::detect()?,
+        os: RunnerOs::Linux,
     };
     Ok((options, scratch))
 }
@@ -172,6 +172,21 @@ impl Signals {
             _ = self.hangup.recv() => {}
         }
     }
+}
+
+fn cancel_on_signal() -> Result<JobCancel> {
+    let mut terminate = signal(SignalKind::terminate()).context("listen for SIGTERM")?;
+    let mut interrupt = signal(SignalKind::interrupt()).context("listen for SIGINT")?;
+    let cancel = JobCancel::new();
+    let trigger = cancel.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = terminate.recv() => {}
+            _ = interrupt.recv() => {}
+        }
+        trigger.cancel();
+    });
+    Ok(cancel)
 }
 
 async fn exec(args: &ExecArgs) -> Result<ExitCode> {

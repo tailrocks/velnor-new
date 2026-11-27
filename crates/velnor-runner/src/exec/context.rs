@@ -66,13 +66,12 @@ impl JobContext {
             }
         }
         private::create_dir(&options.temp).await?;
-        for directory in [&options.workspace, &options.tool_cache] {
-            create_dir(directory, SHARED_DIR_MODE)
-                .await
-                .map_err(|source| {
-                    ExecError::io(format!("create {}", directory.display()), source)
-                })?;
-        }
+        private::create_dir(&options.workspace).await?;
+        create_dir(&options.tool_cache, SHARED_DIR_MODE)
+            .await
+            .map_err(|source| {
+                ExecError::io(format!("create {}", options.tool_cache.display()), source)
+            })?;
         let contexts = message
             .materialize_context_values_ordered()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?
