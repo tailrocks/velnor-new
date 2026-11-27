@@ -42,6 +42,7 @@ impl Job<'_> {
             }
             Err(error) => {
                 out.message(&error.to_string());
+                out.annotate(AnnotationLevel::Error, error.to_string());
                 if self.status == JobStatus::Success {
                     self.status = JobStatus::Failure;
                 }

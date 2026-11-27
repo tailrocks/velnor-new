@@ -10,6 +10,7 @@ use super::contexts::{
     secrets_context, service_variables, set_pair, string, with_action, write_event,
 };
 use super::host_env::host_env;
+use super::tracking::Tracking;
 use super::{ExecError, RunOptions, SHARED_DIR_MODE, StepResult};
 use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
@@ -39,6 +40,7 @@ pub(super) struct JobContext {
     runner: ContextValue,
     event_path: PathBuf,
     host: Vec<(String, String)>,
+    tracking: Option<Tracking>,
     runtime: Vec<(String, String)>,
     service: Vec<(String, String)>,
     env: Vec<(String, String)>,
@@ -100,8 +102,10 @@ impl JobContext {
             base.set_context(RootContext::Env, &object(&env, true));
         }
         let defaults = run_defaults(message, &base).await?;
+        let tracking = Tracking::for_job(message);
         Ok(Self {
-            host: host_env(),
+            host: host_env(tracking.as_ref()),
+            tracking,
             runtime: exported_variables(&github, &runner),
             service: service_variables(message),
             github,
@@ -113,6 +117,10 @@ impl JobContext {
             path_prepend: Vec::new(),
             steps: Vec::new(),
         })
+    }
+
+    pub(super) fn tracking(&self) -> Option<Tracking> {
+        self.tracking.clone()
     }
 
     pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {

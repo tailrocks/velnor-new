@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::super::error::{BrokerErrorCategory, github_api_error_categorized, is_retriable_status};
+use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::github_json_request;
 use super::super::timeline::{TaskResult, TimelineRecordState};
 use super::{REQUEST_TIMEOUT, RunServiceClient, is_run_service_job_not_found};
@@ -132,8 +132,8 @@ fn classify(status: u16, body: &str) -> Classification {
         status if status != 0 && is_run_service_job_not_found(body) => {
             Classification::RemoteObservedTerminal
         }
-        status if is_retriable_status(status) => Classification::Retryable,
-        _ => Classification::Permanent,
+        401 => Classification::Permanent,
+        _ => Classification::Retryable,
     }
 }
 

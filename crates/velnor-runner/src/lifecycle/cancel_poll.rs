@@ -14,6 +14,7 @@ use crate::exec::JobCancel;
 use crate::protocol::{RunnerStatus, TaskAgentMessage};
 
 const KILL_RESERVE: Duration = Duration::from_secs(15);
+const MAX_TIMESPAN_SECONDS: u64 = 922_337_203_685;
 
 pub(super) type CancelPollHandle = BackgroundTask;
 
@@ -61,15 +62,13 @@ fn parse_timespan(text: &str) -> Option<Duration> {
     let clock = clock.split_once('.').map_or(clock, |(clock, _)| clock);
     let mut parts = clock.split(':').map(|part| part.parse::<u64>().ok());
     let (hours, minutes, seconds) = (parts.next()??, parts.next()??, parts.next()??);
-    if parts.next().is_some() {
+    if parts.next().is_some() || hours > 23 || minutes > 59 || seconds > 59 {
         return None;
     }
-    Some(Duration::from_secs(
-        days.saturating_mul(86_400)
-            .saturating_add(hours.saturating_mul(3_600))
-            .saturating_add(minutes.saturating_mul(60))
-            .saturating_add(seconds),
-    ))
+    let total = days
+        .checked_mul(86_400)?
+        .checked_add(hours * 3_600 + minutes * 60 + seconds)?;
+    (total <= MAX_TIMESPAN_SECONDS).then(|| Duration::from_secs(total))
 }
 
 fn cancellation(message: &TaskAgentMessage, job_id: &str) -> Option<JobCancelBody> {

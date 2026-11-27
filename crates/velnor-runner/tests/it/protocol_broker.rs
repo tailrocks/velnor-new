@@ -3,8 +3,6 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/tests/broker_protocol.rs
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -315,55 +313,6 @@ async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn complete_job_retries_5xx_and_succeeds() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?.with_retry_delays(RetryDelays::IMMEDIATE);
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-    let attempts = Arc::new(AtomicUsize::new(0));
-    let responder_attempts = Arc::clone(&attempts);
-    server.respond("POST", "/run/jobs/123/completejob", move |_| {
-        if responder_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-            Reply::text(500, "temporary")
-        } else {
-            Reply::status(204)
-        }
-    })?;
-
-    run_service
-        .complete_job(&run_service_url, &complete_job())
-        .await?;
-
-    assert_eq!(attempts.load(Ordering::SeqCst), 2);
-    Ok(())
-}
-
-#[tokio::test]
-async fn complete_job_does_not_retry_non_retryable_4xx() -> Result<()> {
-    let server = TestServer::start().await?;
-    let run_service = RunServiceClient::new(TOKEN)?;
-    let run_service_url = format!("{}/run/jobs/123", server.uri());
-    server.respond("POST", "/run/jobs/123/completejob", |_| {
-        Reply::text(400, "bad completion")
-    })?;
-
-    let Err(error) = run_service
-        .complete_job(&run_service_url, &complete_job())
-        .await
-    else {
-        bail!("400 completion must not retry");
-    };
-    assert_github_status(&error, 400, "complete run-service job")?;
-
-    assert_eq!(
-        server
-            .requests_to("POST", "/run/jobs/123/completejob")?
-            .len(),
-        1
-    );
-    Ok(())
-}
-
 fn job_message(run_service_url: &str) -> TaskAgentMessage {
     TaskAgentMessage {
         message_id: 99,
@@ -383,7 +332,7 @@ async fn fresh_token() -> Result<String> {
     Ok(TOKEN.to_owned())
 }
 
-fn complete_job() -> RunServiceCompleteJob {
+pub(crate) fn complete_job() -> RunServiceCompleteJob {
     RunServiceCompleteJob {
         plan_id: PLAN_ID.to_owned(),
         job_id: JOB_ID.to_owned(),

@@ -171,11 +171,11 @@ async fn lifecycle_cancel_message_timeout_below_the_floor_still_lets_the_cleanup
     Ok(())
 }
 
-fn step_started_file(scratch: &Scratch) -> std::path::PathBuf {
+pub(crate) fn step_started_file(scratch: &Scratch) -> std::path::PathBuf {
     scratch.work_dir().with_file_name("step.started")
 }
 
-fn hanging_cleanup(scratch: &Scratch) -> Result<serde_json::Value> {
+pub(crate) fn hanging_cleanup(scratch: &Scratch) -> Result<serde_json::Value> {
     let pid_file = scratch.work_dir().with_file_name("cleanup.pid");
     let script = format!(
         "sleep 4343 >/dev/null 2>&1 &\necho $! > {}\nwait",
@@ -190,7 +190,7 @@ fn hanging_cleanup(scratch: &Scratch) -> Result<serde_json::Value> {
     Ok(job)
 }
 
-fn assert_stopped_at_the_deadline(
+pub(crate) fn assert_stopped_at_the_deadline(
     mock: &MockGithub,
     scratch: &Scratch,
     outcome: LifecycleOutcome,

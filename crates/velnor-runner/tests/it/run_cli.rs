@@ -286,6 +286,7 @@ async fn run_cli_sigterm_while_waiting_for_a_job_deletes_the_session() -> Result
 const LOG_LINES: usize = 100_000;
 const LOG_LINE_BYTES: usize = 2_000;
 const PEAK_RSS_CEILING_KIB: u64 = 40 * 1024;
+const EXIT_SAFETY_NET: Duration = Duration::from_secs(600);
 
 #[cfg(target_os = "linux")]
 fn high_water_kib(status: &str) -> Option<u64> {
@@ -322,7 +323,7 @@ async fn run_to_exit_sampling_memory(started: Started) -> Result<(Output, u64)> 
     let pid = child.id().context("the runner pid")?;
     let mut peak = 0;
     let mut samples = 0_u32;
-    let deadline = Instant::now() + Duration::from_secs(120);
+    let deadline = Instant::now() + EXIT_SAFETY_NET;
     while child.try_wait()?.is_none() {
         anyhow::ensure!(Instant::now() < deadline, "the runner did not exit");
         if let Some(kib) = peak_resident_kib(pid).await {

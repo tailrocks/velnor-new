@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -203,5 +204,42 @@ async fn log_block_slower_than_the_block_budget_fails_the_upload() -> Result<()>
             .requests_to("POST", &receiver("CreateJobLogsMetadata"))?
             .is_empty()
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn step_summary_is_read_once_and_uploaded_whole_when_the_upload_is_retried() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    let blob_url = format!("{}/blob/summary", server.uri());
+    let scratch = Scratch::new()?;
+    let summary = scratch.write("summary.md", b"the whole summary")?;
+    let attempts = AtomicUsize::new(0);
+    let rewritten = summary.clone();
+    server.respond(
+        "POST",
+        &receiver("GetStepSummarySignedBlobURL"),
+        move |_| {
+            if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                let _ = std::fs::write(&rewritten, b"a longer text written after the first read");
+                Reply::text(500, "temporary")
+            } else {
+                Reply::json(200, &json!({"summary_url": blob_url}))
+            }
+        },
+    )?;
+    server.respond("PUT", "/blob/summary", |_| Reply::status(201))?;
+    server.respond("POST", &receiver("CreateStepSummaryMetadata"), |_| {
+        Reply::json(200, &json!({"ok": true}))
+    })?;
+
+    client.upload_step_summary(RUN, JOB, STEP, &summary).await?;
+
+    let put = server.only_request("PUT", "/blob/summary")?;
+    assert_eq!(put.text(), "the whole summary");
+    let metadata = server
+        .only_request("POST", &receiver("CreateStepSummaryMetadata"))?
+        .json()?;
+    assert_eq!(metadata["size"], "the whole summary".len());
     Ok(())
 }
