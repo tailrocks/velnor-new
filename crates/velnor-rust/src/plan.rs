@@ -19,7 +19,7 @@ use crate::lane::{
 };
 use crate::mbx_steps::MBX_OUT_DIR_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, workflow};
-use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
+use crate::plan_tools::{mirror_step, tools_save, tools_tree};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::{lane_jobs, root_jobs};
 use crate::shape::{decisions, helper_root, single_job};
@@ -188,7 +188,7 @@ pub(crate) fn mbx(facts: &RepoFacts, gate: Option<&Gate>) -> Vec<Step> {
     [Some(store), out_dirs].into_iter().flatten().collect()
 }
 
-pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
+pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: Option<&RustRoot>) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> =
@@ -206,7 +206,7 @@ pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> V
         ] {
             if !names.is_empty() {
                 steps.push(Step {
-                    directory: root.manifest.parent(),
+                    directory: root.and_then(|root| root.manifest.parent()),
                     ..step(kind)
                 });
             }
@@ -249,14 +249,9 @@ pub(crate) fn setup_units(
     steps.extend(mbx(facts, lane.steps().as_ref()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
-        .chain(tools_restore(facts, lane.plan.as_ref()))
-        .chain(tools_install(facts))
+        .chain(tools_tree(facts, lane.plan.as_ref(), Some(root)))
         .collect();
-    if !facts.tools.tools.is_empty() {
-        toolchain.extend(mirror_step(facts));
-    }
     let declared = facts.toolchain.as_ref();
-    toolchain.extend(rust_additions(declared, root));
     let prepare = step(StepKind::Prepare(PrepareLocks::All));
     if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
         toolchain.push(prepare);

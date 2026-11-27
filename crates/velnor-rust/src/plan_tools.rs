@@ -3,10 +3,10 @@
 
 use velnor_model::{
     AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, RepoFacts, RunnerLabel,
-    Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+    RustRoot, Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
 };
 
-use crate::plan::{TOOLS_LOCAL_HELPER, step};
+use crate::plan::{TOOLS_LOCAL_HELPER, rust_additions, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
@@ -348,6 +348,20 @@ pub(crate) fn tools_save(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step> {
     ]);
     steps.extend(saved_key);
     steps.extend(checked.then(|| saving(ToolsLocalVerb::RecordSave)));
+    steps
+}
+
+pub(crate) fn tools_tree(
+    facts: &RepoFacts,
+    plan: Option<&JobId>,
+    root: Option<&RustRoot>,
+) -> Vec<Step> {
+    let mut steps = tools_restore(facts, plan);
+    steps.extend(tools_install(facts));
+    if !facts.tools.tools.is_empty() {
+        steps.extend(mirror_step(facts));
+    }
+    steps.extend(rust_additions(facts.toolchain.as_ref(), root));
     steps
 }
 
