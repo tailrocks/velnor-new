@@ -22,26 +22,28 @@ impl StepAdapter for Checkout {
         reference.starts_with("actions/checkout@")
     }
 
+    fn problem(&self, inputs: &BTreeMap<String, String>) -> Option<String> {
+        validate_inputs(inputs).err()
+    }
+
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         Box::pin(checkout(&self.store, ctx))
     }
 }
 
-fn unsupported_input(name: &str) -> ExecError {
-    ExecError::Unsupported(format!(
-        "actions/checkout input '{name}' is not supported by velnor-runner"
-    ))
+fn unsupported_input(name: &str) -> String {
+    format!("actions/checkout input '{name}' is not supported by velnor-runner")
 }
 
-fn validate_inputs(inputs: &BTreeMap<String, String>) -> Result<(), ExecError> {
+fn validate_inputs(inputs: &BTreeMap<String, String>) -> Result<(), String> {
     let mut persist_false = false;
     for (name, value) in inputs {
         match name.to_ascii_lowercase().as_str() {
             "fetch-depth" => {
                 if value.parse::<u64>().is_err() {
-                    return Err(ExecError::Invalid(format!(
+                    return Err(format!(
                         "actions/checkout input 'fetch-depth' must be a number, got '{value}'"
-                    )));
+                    ));
                 }
             }
             "persist-credentials" => persist_false = !value.eq_ignore_ascii_case("true"),
@@ -51,9 +53,7 @@ fn validate_inputs(inputs: &BTreeMap<String, String>) -> Result<(), ExecError> {
     if persist_false {
         Ok(())
     } else {
-        Err(ExecError::Unsupported(
-            "actions/checkout requires persist-credentials: false in velnor-runner".to_owned(),
-        ))
+        Err("actions/checkout requires persist-credentials: false in velnor-runner".to_owned())
     }
 }
 
@@ -117,14 +117,20 @@ async fn require(
     }
 }
 
+enum Materialized {
+    Done,
+    Ended(StepResult),
+    CheckoutFailed,
+}
+
 async fn materialize(
     ctx: &mut StepContext<'_>,
     mirror: &Path,
     facts: &TrustedFacts,
     dest_arg: &str,
-) -> Result<Option<StepResult>, ExecError> {
+) -> Result<Materialized, ExecError> {
     if let Some(ended) = require(ctx, &["init", "-q", dest_arg]).await? {
-        return Ok(Some(ended));
+        return Ok(Materialized::Ended(ended));
     }
     let objects = std::path::absolute(mirror)
         .with_context(|| format!("resolve {}", mirror.display()))
@@ -136,25 +142,46 @@ async fn materialize(
         .with_context(|| format!("write {}", alternates.display()))
         .map_err(invalid)?;
     let clone_url = facts.clone_url();
-    let sha = facts.sha.as_str();
-    for args in [
-        vec!["-C", dest_arg, "remote", "add", "origin", &clone_url],
-        vec![
-            "-C",
-            dest_arg,
-            "-c",
-            "advice.detachedHead=false",
-            "checkout",
-            "-q",
-            "--detach",
-            sha,
-        ],
-    ] {
-        if let Some(ended) = require(ctx, &args).await? {
-            return Ok(Some(ended));
-        }
+    let remote = ["-C", dest_arg, "remote", "add", "origin", &clone_url];
+    if let Some(ended) = require(ctx, &remote).await? {
+        return Ok(Materialized::Ended(ended));
     }
-    Ok(None)
+    let detach = [
+        "-C",
+        dest_arg,
+        "-c",
+        "advice.detachedHead=false",
+        "checkout",
+        "-q",
+        "--detach",
+        facts.sha.as_str(),
+    ];
+    Ok(match git(ctx, None, &detach, false).await? {
+        ProcessOutcome::Succeeded => Materialized::Done,
+        ProcessOutcome::Cancelled => Materialized::Ended(StepResult::Cancelled),
+        ProcessOutcome::Failed => Materialized::CheckoutFailed,
+    })
+}
+
+async fn ask(
+    store: &StoreWriter,
+    ctx: &mut StepContext<'_>,
+    request: fn(Option<Token>) -> Request,
+) -> Result<bool, ExecError> {
+    let token = ctx.github_token.clone().map(Token::new);
+    match store.request(request(token)).await {
+        Response::Done { notices } => {
+            for notice in notices {
+                ctx.log(&notice);
+            }
+            Ok(true)
+        }
+        Response::Sound => Ok(false),
+        Response::Failed { message } => Err(ExecError::Invalid(message)),
+        Response::Hello(_) => Err(ExecError::Invalid(
+            "store broker protocol error: Hello answered a mirror request".to_owned(),
+        )),
+    }
 }
 
 async fn populate(
@@ -175,28 +202,30 @@ async fn populate(
         return Ok(StepResult::Cancelled);
     }
     if present == ProcessOutcome::Failed {
-        let token = ctx.github_token.clone().map(Token::new);
-        match store.request(Request::FetchMirror { token }).await {
-            Response::Done => {}
-            Response::Failed { message } => return Err(ExecError::Invalid(message)),
-            Response::Hello(_) => {
-                return Err(ExecError::Invalid(
-                    "store broker protocol error: Hello answered a FetchMirror request".to_owned(),
-                ));
-            }
-        }
+        ask(store, ctx, |token| Request::FetchMirror { token }).await?;
     }
     for guarded in [&store_root().join("git"), ctx.temp] {
         ensure_disjoint(ctx.workspace, guarded).map_err(invalid)?;
     }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
-    Ok(materialize(ctx, &mirror, facts, &dest)
-        .await?
-        .unwrap_or(StepResult::Succeeded))
+    let mut state = materialize(ctx, &mirror, facts, &dest).await?;
+    if matches!(state, Materialized::CheckoutFailed)
+        && ask(store, ctx, |token| Request::RepairMirror { token }).await?
+    {
+        empty_directory(ctx.workspace).await.map_err(invalid)?;
+        state = materialize(ctx, &mirror, facts, &dest).await?;
+    }
+    match state {
+        Materialized::Done => Ok(StepResult::Succeeded),
+        Materialized::Ended(ended) => Ok(ended),
+        Materialized::CheckoutFailed => Err(ExecError::Invalid(
+            "checkout: git checkout failed".to_owned(),
+        )),
+    }
 }
 
 async fn checkout(store: &StoreWriter, ctx: &mut StepContext<'_>) -> Result<StepResult, ExecError> {
-    validate_inputs(&ctx.inputs)?;
+    validate_inputs(&ctx.inputs).map_err(ExecError::Unsupported)?;
     let facts = store.facts().map_err(ExecError::Invalid)?;
     let cancel = ctx.cancel.clone();
     let work = populate(store, facts, ctx);

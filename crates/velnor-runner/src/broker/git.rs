@@ -14,8 +14,8 @@ use rustix::process::{
     Pid, Signal, WaitId, WaitIdOptions, kill_process_group, test_kill_process_group, waitid,
 };
 use std::os::unix::process::CommandExt;
-use tokio::io::AsyncReadExt;
-use tokio::process::ChildStderr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 use tokio::runtime::{Handle, RuntimeFlavor};
 use url::Url;
 
@@ -93,6 +93,18 @@ struct Leader {
     group: Pid,
 }
 
+pub(super) struct Output {
+    pub(super) succeeded: bool,
+    pub(super) stdout: String,
+    pub(super) stderr: String,
+}
+
+#[derive(Clone, Copy)]
+enum Pipes {
+    Discard,
+    Capture { feed: bool },
+}
+
 fn wait_for_exit(leader: Pid) -> Result<bool, Errno> {
     loop {
         match waitid(
@@ -109,13 +121,18 @@ fn wait_for_exit(leader: Pid) -> Result<bool, Errno> {
 }
 
 impl Leader {
-    fn spawn(args: &[String], env: &[(OsString, OsString)]) -> Result<Self> {
+    fn spawn(args: &[String], env: &[(OsString, OsString)], pipes: Pipes) -> Result<Self> {
+        let (stdin, stdout) = match pipes {
+            Pipes::Discard => (Stdio::null(), Stdio::null()),
+            Pipes::Capture { feed: false } => (Stdio::null(), Stdio::piped()),
+            Pipes::Capture { feed: true } => (Stdio::piped(), Stdio::piped()),
+        };
         let mut command = Command::new("git");
         let child = isolate(&mut command)
             .args(args)
             .envs(env.iter().map(|(name, value)| (name, value)))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdin(stdin)
+            .stdout(stdout)
             .stderr(Stdio::piped())
             .process_group(0)
             .spawn()
@@ -127,20 +144,52 @@ impl Leader {
         Ok(Self { child, group })
     }
 
-    async fn finish(&mut self) -> Result<(bool, String)> {
+    async fn finish(&mut self, input: &str) -> Result<Output> {
         let stderr = self.child.stderr.take().context("git has no stderr")?;
         let mut stderr = ChildStderr::from_std(stderr).context("watch git stderr")?;
+        let stdout = self
+            .child
+            .stdout
+            .take()
+            .map(ChildStdout::from_std)
+            .transpose()
+            .context("watch git stdout")?;
+        let stdin = self
+            .child
+            .stdin
+            .take()
+            .map(ChildStdin::from_std)
+            .transpose()
+            .context("feed git stdin")?;
         let exit = tokio::task::spawn_blocking({
             let leader = self.group;
             move || wait_for_exit(leader)
         });
-        let mut text = Vec::new();
-        let (read, exit) = tokio::join!(stderr.read_to_end(&mut text), exit);
+        let feed = async move {
+            if let Some(mut stdin) = stdin {
+                let _ = stdin.write_all(input.as_bytes()).await;
+            }
+        };
+        let mut out = Vec::new();
+        let drain = async {
+            match stdout {
+                Some(mut stdout) => stdout.read_to_end(&mut out).await.map(|_| ()),
+                None => Ok(()),
+            }
+        };
+        let mut err = Vec::new();
+        let ((), drained, read, exit) =
+            tokio::join!(feed, drain, stderr.read_to_end(&mut err), exit);
         let succeeded = exit
             .context("wait for the git exit task")?
             .context("wait for git")?;
+        drained.context("read git stdout")?;
         read.context("read git stderr")?;
-        Ok((succeeded, String::from_utf8_lossy(&text).trim().to_owned()))
+        Ok(Output {
+            succeeded,
+            stdout: String::from_utf8_lossy(&out).into_owned(),
+            stderr: String::from_utf8_lossy(&err).trim().to_owned(),
+        })
     }
 
     fn reap_group(&mut self) {
@@ -165,12 +214,21 @@ impl Drop for Leader {
 }
 
 pub(super) async fn git(args: &[String], env: &[(OsString, OsString)]) -> Result<()> {
-    let mut leader = Leader::spawn(args, env)?;
-    let (succeeded, stderr) = leader.finish().await?;
-    if !succeeded {
-        bail!("git {}: {stderr}", args.join(" "));
+    let mut leader = Leader::spawn(args, env, Pipes::Discard)?;
+    let out = leader.finish("").await?;
+    if !out.succeeded {
+        bail!("git {}: {}", args.join(" "), out.stderr);
     }
     Ok(())
+}
+
+pub(super) async fn output(args: &[String], input: Option<&str>) -> Result<Output> {
+    let pipes = Pipes::Capture {
+        feed: input.is_some(),
+    };
+    Leader::spawn(args, &[], pipes)?
+        .finish(input.unwrap_or_default())
+        .await
 }
 
 pub(super) async fn has_commit(git_dir: &Path, sha: &str) -> bool {

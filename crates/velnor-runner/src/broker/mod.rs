@@ -5,8 +5,12 @@ pub(crate) mod facts;
 mod git;
 mod mirror;
 pub(crate) mod proto;
+mod repair;
+mod transfer;
 
 use std::path::PathBuf;
+
+use mirror::Repair;
 
 pub(crate) use facts::TrustedFacts;
 pub(crate) use git::{TREE_PROBE, git_args, isolate};
@@ -27,17 +31,26 @@ impl Broker {
     }
 
     pub(crate) async fn handle(&self, request: Request) -> Response {
-        match request {
+        let result = match request {
             Request::FetchMirror { token } => {
                 let token = token.as_ref().map(Token::expose);
-                match mirror::fetch(&self.root, &self.facts, token).await {
-                    Ok(()) => Response::Done,
-                    Err(error) => Response::Failed {
-                        message: format!("{error:#}"),
-                    },
-                }
+                mirror::fetch(&self.root, &self.facts, token)
+                    .await
+                    .map(|notices| Response::Done { notices })
             }
-        }
+            Request::RepairMirror { token } => {
+                let token = token.as_ref().map(Token::expose);
+                mirror::repair(&self.root, &self.facts, token)
+                    .await
+                    .map(|repair| match repair {
+                        Repair::Sound => Response::Sound,
+                        Repair::Repaired(notices) => Response::Done { notices },
+                    })
+            }
+        };
+        result.unwrap_or_else(|error| Response::Failed {
+            message: format!("{error:#}"),
+        })
     }
 }
 

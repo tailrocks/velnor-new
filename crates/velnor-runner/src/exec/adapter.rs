@@ -21,6 +21,10 @@ pub type StepFuture<'a> = BoxFuture<'a, Result<StepResult, ExecError>>;
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
+    fn problem(&self, _inputs: &BTreeMap<String, String>) -> Option<String> {
+        None
+    }
+
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a>;
 }
 

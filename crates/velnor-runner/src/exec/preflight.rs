@@ -4,6 +4,7 @@
 use super::adapter::AdapterRegistry;
 use super::context::JobContext;
 use super::shell;
+use super::token;
 use crate::job_message::{ActionReferenceType, ActionStep, ActionStepKind, AgentJobRequestMessage};
 
 pub(super) fn reference(step: &ActionStep) -> Option<String> {
@@ -51,10 +52,14 @@ fn step_problem(
         return Some("step without a definition reference".to_owned());
     }
     if let Some(reference) = reference(step) {
-        return adapters
-            .find(&reference)
-            .is_none()
-            .then(|| format!("uses {reference}"));
+        let Some(adapter) = adapters.find(&reference) else {
+            return Some(format!("uses {reference}"));
+        };
+        let inputs = match step.inputs.as_ref() {
+            Some(inputs) => token::mapping(inputs, context.base_env()).ok()?,
+            None => Vec::new(),
+        };
+        return adapter.problem(&inputs.into_iter().collect());
     }
     shell_problem(step, context)
 }

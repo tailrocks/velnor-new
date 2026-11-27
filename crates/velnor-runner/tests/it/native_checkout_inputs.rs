@@ -153,3 +153,50 @@ fn workspace_inside_another_repositorys_mirror_is_refused_and_that_mirror_surviv
     assert!(other.join("HEAD").is_file());
     Ok(())
 }
+
+const MARKER_STEP: &str = r#""Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000002",
+      "Name": "__run",
+      "ContextName": "__run",
+      "Reference": { "Type": "script" },
+      "DisplayNameToken": { "type": 0, "lit": "Marker" },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": { "type": 0, "lit": "script" },
+            "value": { "type": 0, "lit": "echo step-one-marker" }
+          }
+        ]
+      }
+    },"#;
+
+#[test]
+fn an_unsupported_input_refuses_the_job_before_its_first_step() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_unsupported_ref",
+        &rig.head,
+        &rig.server_url(),
+        &[("\"Steps\": [", MARKER_STEP)],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(
+        ran.has_line("unsupported: actions/checkout input 'ref' is not supported by velnor-runner"),
+        "{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(
+        !ran.stdout.contains("step-one-marker") && !ran.stderr.contains("step-one-marker"),
+        "step 1 ran\n{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(!rig.trace().exists(), "git ran");
+    Ok(())
+}

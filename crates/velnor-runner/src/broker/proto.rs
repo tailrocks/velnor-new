@@ -29,12 +29,14 @@ impl std::fmt::Debug for Token {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Request {
     FetchMirror { token: Option<Token> },
+    RepairMirror { token: Option<Token> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Response {
     Hello(Box<TrustedFacts>),
-    Done,
+    Done { notices: Vec<String> },
+    Sound,
     Failed { message: String },
 }
