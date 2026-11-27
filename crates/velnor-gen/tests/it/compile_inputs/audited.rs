@@ -4,8 +4,13 @@
 use velnor_model::InputKey;
 use velnor_rust::detect;
 
-use super::embed::{Evidence, audited, embedding, selections, unresolved};
+use super::embed::{
+    Evidence, audited, embedding, pinned, selected, selections, unresolved, view_of,
+};
+use crate::base_save::pinned as generated;
+use crate::base_save::pull_request_audit::audit_step_runs;
 use crate::facts::{TestResult, lib, repo};
+use crate::pipeline::workflow;
 use crate::select::path;
 
 const MANIFEST_DIR_FILES: [(&str, &str); 4] = [
@@ -115,5 +120,62 @@ fn a_root_package_and_a_nested_member_resolve_against_their_own_manifest_dir() -
     assert_eq!(owners("README.md"), Some(vec!["top".to_owned()]));
     assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
     assert!(!facts.compile_inputs.contains_key(&InputKey::Unresolved));
+    Ok(())
+}
+
+const EVERYTHING: &str = "on_main = \"everything\"\n";
+
+const CONFIGURED: [(&str, &str); 2] = [
+    (
+        "manifest dir",
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../docs/guide.md\"));",
+    ),
+    (
+        "out dir",
+        "include_str!(concat!(env!(\"OUT_DIR\"), \"/gen.md\"));",
+    ),
+];
+
+#[test]
+fn a_manifest_dir_or_out_dir_include_is_trusted_exactly_when_the_generated_audit_runs_on_pull_requests()
+-> TestResult {
+    for (kind, source) in CONFIGURED {
+        for helper in ["0.1.116", "0.1.117"] {
+            for config in ["", EVERYTHING] {
+                let mut view = view_of(
+                    &["app", "reader"],
+                    &[
+                        ("crates/reader/src/lib.rs", source),
+                        ("crates/app/src/lib.rs", ""),
+                        ("docs/guide.md", ""),
+                    ],
+                )?;
+                pinned(&mut view, helper)?;
+                if !config.is_empty() {
+                    let file = path(".velnor/rust-ci.toml");
+                    view.tracked_paths.insert(file.clone());
+                    view.files.insert(file, config.as_bytes().to_vec());
+                }
+                let audited = audit_step_runs(
+                    &workflow(&generated(helper, config)?)?,
+                    "pull_request",
+                    false,
+                )?;
+                assert_eq!(audited, helper == "0.1.117", "{kind} {helper} {config}");
+                let trusted = selected(&view, "docs/other.md")?.is_empty();
+                assert_eq!(
+                    trusted, audited,
+                    "{kind} {helper} {config}: the plan trusts the include only where the audit runs"
+                );
+                if !audited {
+                    assert_eq!(
+                        selected(&view, "docs/other.md")?,
+                        [("reader".to_owned(), "unresolved-include".to_owned())],
+                        "{kind} {helper} {config}"
+                    );
+                }
+            }
+        }
+    }
     Ok(())
 }

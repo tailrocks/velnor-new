@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, HelperCommand, HelperRelease, Job, JobId, RepoFacts, RootSlug, StepKind,
+    CacheKey, CargoCommand, FullRun, HelperCommand, HelperRelease, Job, JobId, OnMain, RepoFacts,
+    RootSlug, RustCiConfig, StepKind, When,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
@@ -27,12 +28,18 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(PER_ROOT_AUDIT_HELPER))
 }
 
-pub(crate) fn audits_pull_requests(facts: &RepoFacts) -> bool {
-    pull_request_audit(facts.helper.as_ref())
+fn pull_request_audit(helper: Option<&HelperRelease>) -> bool {
+    helper.is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
 }
 
-pub(crate) fn pull_request_audit(helper: Option<&HelperRelease>) -> bool {
-    helper.is_some_and(|release| release.version().at_least(PULL_REQUEST_AUDIT_HELPER))
+pub(crate) fn audited_on_pull_requests(
+    helper: Option<&HelperRelease>,
+    config: &RustCiConfig,
+) -> bool {
+    matches!(
+        audit_condition(helper, config),
+        Some(When::FullAuditOrPullRequest | When::FullAuditOrPushOrPullRequest)
+    )
 }
 
 pub(crate) fn audits_before_saves(facts: &RepoFacts) -> bool {
@@ -104,16 +111,19 @@ pub(crate) enum AuditLocation {
     Separate,
 }
 
-pub(crate) fn audit_when(facts: &RepoFacts) -> Option<velnor_model::When> {
-    use velnor_model::{FullRun, OnMain, When};
-    if !crate::base_cache::has_saving_helper(facts) {
-        return match (facts.config.on_main, &facts.config.full_run) {
+pub(crate) fn audit_when(facts: &RepoFacts) -> Option<When> {
+    audit_condition(facts.helper.as_ref(), &facts.config)
+}
+
+fn audit_condition(helper: Option<&HelperRelease>, config: &RustCiConfig) -> Option<When> {
+    if !crate::base_cache::saving_helper(helper) {
+        return match (config.on_main, &config.full_run) {
             (OnMain::Everything, _) => Some(When::ScheduledOrPush),
             (OnMain::Affected, FullRun::Off) => None,
             (OnMain::Affected, _) => Some(When::Scheduled),
         };
     }
-    Some(match (facts.config.on_main, audits_pull_requests(facts)) {
+    Some(match (config.on_main, pull_request_audit(helper)) {
         (OnMain::Everything, false) => When::FullAuditOrPush,
         (OnMain::Everything, true) => When::FullAuditOrPushOrPullRequest,
         (OnMain::Affected, false) => When::FullAudit,

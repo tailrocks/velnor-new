@@ -30,7 +30,11 @@ pub(super) fn selections(
 }
 
 pub(super) fn audited(view: &mut RepoView) -> TestResult {
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", "0.1.117", 1);
+    pinned(view, "0.1.117")
+}
+
+pub(super) fn pinned(view: &mut RepoView, version: &str) -> TestResult {
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", version, 1);
     view.files
         .insert(path(".velnor/rust-ci.lock"), lock.into_bytes());
     Ok(())

@@ -70,6 +70,7 @@ mod delta_source;
 mod delta_target_paths;
 mod delta_tree;
 mod delta_trim;
+mod docs_only_plan;
 mod event;
 mod fetch;
 mod fetch_git_home;

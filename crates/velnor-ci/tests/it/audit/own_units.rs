@@ -108,6 +108,13 @@ pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&s
             format!("out.d: {text}\n")
         };
         unit(repo, &format!("{directory}/{file}"), &text);
+        if let Some(folder) = file.strip_suffix("/output") {
+            unit(
+                repo,
+                &format!("{directory}/{folder}/root-output"),
+                &format!("/velnor-test-out/{folder}/out\n"),
+            );
+        }
         if !fingerprint.is_empty() {
             unit(repo, &format!("{directory}/.fingerprint/{fingerprint}"), "");
         }

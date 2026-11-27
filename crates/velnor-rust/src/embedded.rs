@@ -4,10 +4,11 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CompileInputs, HelperRelease, InputKey, InputOwner, RepoPath, RepoView, RustMember, RustRoot,
+    CompileInputs, HelperRelease, InputKey, InputOwner, RepoPath, RepoView, RustCiConfig,
+    RustMember, RustRoot,
 };
 
-use crate::audit_job::pull_request_audit;
+use crate::audit_job::audited_on_pull_requests;
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
 use crate::lock::{LOCK_PATH, parse_lock};
@@ -42,8 +43,8 @@ pub(crate) enum IncludeEvidence {
 }
 
 impl IncludeEvidence {
-    pub(crate) fn of(helper: Option<&HelperRelease>) -> Self {
-        if pull_request_audit(helper) {
+    pub(crate) fn of(helper: Option<&HelperRelease>, config: &RustCiConfig) -> Self {
+        if audited_on_pull_requests(helper, config) {
             Self::Audited
         } else {
             Self::SourceOnly
@@ -279,12 +280,14 @@ pub fn is_rust_source(path: &RepoPath) -> bool {
 pub(crate) fn locked_and_embedded(
     view: &RepoView,
     roots: &[RustRoot],
+    config: &RustCiConfig,
 ) -> Result<CompileInputs, DetectError> {
     let evidence = IncludeEvidence::of(
         view.files
             .get(&LOCK_PATH)
             .and_then(|bytes| parse_lock(bytes).ok())
             .as_ref(),
+        config,
     );
     let mut inputs = view.files.get(&INPUTS_LOCK).map_or_else(
         || Ok(CompileInputs::new()),

@@ -18,7 +18,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
     unit(
         &repo,
         &format!("{target}/deps/app-0000000000000001.d"),
-        "out.d: app/src/lib.rs app/data.txt app/src/../../../shared/greeting.txt /elsewhere/src/lib.rs target/debug/build/lib-0000000000000005/out/gen.rs\n",
+        "out.d: app/src/lib.rs app/data.txt app/src/../../../shared/greeting.txt target/debug/build/lib-0000000000000005/out/gen.rs\n",
     );
     unit(
         &repo,

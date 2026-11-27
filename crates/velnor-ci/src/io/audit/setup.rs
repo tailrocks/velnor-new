@@ -8,6 +8,7 @@ use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
 use velnor_rust::{Located, Owners, locate, resolve};
 
+use super::dep_info::BuildOutputs;
 use super::inventory::unresolved;
 use super::{Audit, REBUILD};
 use crate::coverage::{Built, gaps};
@@ -67,7 +68,7 @@ pub(super) fn begin<'a>(
             .map(|workspace| workspace.root.clone())
             .collect(),
         members,
-        undeclared: BTreeSet::new(),
+        outputs: BuildOutputs::default(),
         found: CompileInputs::new(),
         target_bytes: vec![0; workspaces.len()],
         stale: Vec::new(),

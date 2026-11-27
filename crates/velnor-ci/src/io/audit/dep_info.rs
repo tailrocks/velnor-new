@@ -1,17 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::SystemTime;
 
 use velnor_model::RepoPath;
 use velnor_rust::{Located, dep_info_paths, locate, normalize, rerun_if_changed};
 
 use super::super::units::UnitFile;
-use super::{Audit, modified};
+use super::{Audit, REBUILD, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
+
+#[derive(Default)]
+pub(super) struct BuildOutputs {
+    directories: BTreeSet<PathBuf>,
+    undeclared: BTreeSet<(String, Option<PathBuf>)>,
+}
 
 impl Audit<'_> {
     pub(in crate::io) fn dep_info(
@@ -41,6 +49,7 @@ impl Audit<'_> {
             }
             return Ok(None);
         }
+        self.refuse_unexplained_reads(workspace, file, &paths)?;
         let unseen = self.reads_unseen_output(workspace, package, &paths);
         for owner in self.owners.of(package, &source) {
             self.credit(&owner, workspace, &paths, false);
@@ -54,7 +63,7 @@ impl Audit<'_> {
 }
 
 impl Audit<'_> {
-    pub(in crate::io) fn note_undeclared_outputs(
+    pub(in crate::io) fn note_build_outputs(
         &mut self,
         files: &[(UnitFile, PathBuf, Vec<usize>)],
     ) -> Result<(), CiError> {
@@ -69,16 +78,16 @@ impl Audit<'_> {
                 SOURCE_TOTAL_LIMIT,
                 "build-script output",
             )?;
-            let Some(recorded) = output
+            let recorded = output
                 .parent()
                 .map(|directory| directory.join("root-output"))
                 .and_then(|file| std::fs::read_to_string(file).ok())
-            else {
-                continue;
-            };
+                .map(|text| normalize(Path::new(text.trim())));
+            if let Some(directory) = &recorded {
+                self.outputs.directories.insert(directory.clone());
+            }
             if rerun_if_changed(&text).is_empty() {
-                self.undeclared
-                    .insert((package.clone(), normalize(Path::new(recorded.trim()))));
+                self.outputs.undeclared.insert((package.clone(), recorded));
             }
         }
         Ok(())
@@ -90,12 +99,47 @@ impl Audit<'_> {
         package: Option<&str>,
         paths: &[String],
     ) -> bool {
-        paths.iter().any(|path| {
-            let full = normalize(&workspace.join(path));
-            self.undeclared.iter().any(|(owner, out)| {
-                package.is_none_or(|name| name == owner) && full.starts_with(out)
+        self.outputs
+            .undeclared
+            .iter()
+            .any(|(owner, directory)| match directory {
+                Some(directory) => {
+                    package.is_none_or(|name| name == owner)
+                        && paths
+                            .iter()
+                            .any(|path| normalize(&workspace.join(path)).starts_with(directory))
+                }
+                None => package == Some(owner.as_str()),
             })
-        })
+    }
+
+    fn refuse_unexplained_reads(
+        &self,
+        workspace: &Path,
+        file: &Path,
+        paths: &[String],
+    ) -> Result<(), CiError> {
+        let outside: Vec<PathBuf> = paths
+            .iter()
+            .filter(|path| matches!(locate(self.repository, workspace, path), Located::Outside))
+            .map(|path| normalize(&workspace.join(path)))
+            .filter(|full| !self.outputs.directories.iter().any(|d| full.starts_with(d)))
+            .collect();
+        if outside.is_empty() {
+            return Ok(());
+        }
+        let roots = read_only_roots();
+        let Some(first) = outside
+            .iter()
+            .find(|full| !roots.iter().any(|root| full.starts_with(root)))
+        else {
+            return Ok(());
+        };
+        Err(CiError::new(format!(
+            "{} names {}, which is outside the repository, in no build-script output directory and in no read-only source root (the CARGO_HOME registry or git folders, the Rust sysroot); the target was built in another environment or a build reads a file this audit cannot see: rebuild every observed target in this checkout through {REBUILD}",
+            file.display(),
+            first.display()
+        )))
     }
 
     fn unit_source(
@@ -132,6 +176,31 @@ impl Audit<'_> {
             "build-script output",
         )
     }
+}
+
+fn read_only_roots() -> Vec<PathBuf> {
+    let home = std::env::var_os("CARGO_HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+    let mut roots: Vec<PathBuf> = home
+        .into_iter()
+        .flat_map(|home| [home.join("registry"), home.join("git")])
+        .collect();
+    let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    if let Ok(output) = Command::new(compiler).args(["--print", "sysroot"]).output()
+        && output.status.success()
+    {
+        roots.push(PathBuf::from(
+            String::from_utf8_lossy(&output.stdout).trim(),
+        ));
+    }
+    let resolved: Vec<PathBuf> = roots
+        .iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .collect();
+    roots.extend(resolved);
+    roots
 }
 
 fn read(file: &Path, total: &mut u64, file_limit: u64, kind: &str) -> Result<String, CiError> {
