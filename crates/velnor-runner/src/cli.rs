@@ -154,9 +154,11 @@ fn run(cli: &Cli) -> Result<ExitCode> {
         .enable_all()
         .build()
         .context("start the async runtime")?;
-    match &cli.command {
+    let code = match &cli.command {
         Command::Exec(args) => runtime.block_on(exec(args)),
-    }
+    };
+    runtime.shutdown_background();
+    code
 }
 
 pub fn main() -> ExitCode {

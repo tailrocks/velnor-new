@@ -8,6 +8,7 @@ mod context;
 mod contexts;
 mod encode;
 mod env_files;
+mod evaluate;
 mod execute;
 mod host_env;
 mod inputs;

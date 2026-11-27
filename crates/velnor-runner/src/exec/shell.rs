@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::Value as Json;
 
 use super::context::JobContext;
-use super::{ExecError, token};
+use super::{ExecError, evaluate, token};
 use crate::expr::ExprEnv;
 use crate::job_message::ActionStep;
 use crate::job_message::template_token::token_literal;
@@ -93,13 +93,14 @@ pub(super) fn command(spec: &str, script: &Path) -> Option<(String, Vec<String>)
     Some((program, args))
 }
 
-pub(super) fn resolve(
+pub(super) async fn resolve(
     step: &ActionStep,
     context: &JobContext,
     env: &ExprEnv,
 ) -> Result<String, ExecError> {
-    let chosen =
-        token::input(step.inputs.as_ref(), "shell", env)?.filter(|shell| !shell.trim().is_empty());
+    let chosen = evaluate::input(step.inputs.as_ref(), "shell", env)
+        .await?
+        .filter(|shell| !shell.trim().is_empty());
     if let Some(shell) = chosen {
         return Ok(shell);
     }

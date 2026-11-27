@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use super::adapter::{AdapterCall, invoke};
 use super::contexts::set_output;
 use super::env_files::{Collected, FileCommands, failure, save_summary};
+use super::evaluate;
 use super::job::Job;
 use super::output::Output;
 use super::preflight::reference;
@@ -13,7 +14,6 @@ use super::shell;
 use super::step::{Limits, ScriptStep, run_script};
 use super::step_info::step_timeout;
 use super::timeout::{Survival, Timeout, settle, stop_unless_surviving};
-use super::token;
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
 use crate::expr::{ExprEnv, JobStatus};
 use crate::job_message::ActionStep;
@@ -60,7 +60,7 @@ impl Job<'_> {
         (cancel, survival): (Option<&JobCancel>, Option<&Survival<'_>>),
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
-        let timeout = Timeout::start(step_timeout(step, env, out));
+        let timeout = Timeout::start(step_timeout(step, env, out).await);
         let files = FileCommands::create(&self.options.temp).await?;
         let process_env = self.ctx.process_env(&step_env, &files.variables());
         let limits = Limits {
@@ -83,7 +83,7 @@ impl Job<'_> {
                 (StepResult::Failed, Vec::new())
             }
         };
-        let result = settle(result, survival, &self.cancel, timeout, out);
+        let result = settle(result, survival, &self.cancel, timeout, out).await;
         let collected = files.collect().await;
         self.finish(result, adapter_outputs, collected, out).await
     }
@@ -97,19 +97,25 @@ impl Job<'_> {
         out: &mut Output<'_>,
     ) -> Ran {
         let script = ScriptStep {
-            script: token::input(step.inputs.as_ref(), "script", env)?.unwrap_or_default(),
-            shell: shell::resolve(step, &self.ctx, env)?,
-            dir: self.working_directory(step, env)?,
+            script: evaluate::input(step.inputs.as_ref(), "script", env)
+                .await?
+                .unwrap_or_default(),
+            shell: shell::resolve(step, &self.ctx, env).await?,
+            dir: self.working_directory(step, env).await?,
             env: process_env,
         };
         let result = run_script(&script, &self.options.temp, limits, out).await?;
         Ok((result, Vec::new()))
     }
 
-    fn working_directory(&self, step: &ActionStep, env: &ExprEnv) -> Result<PathBuf, ExecError> {
-        let chosen = match token::input(step.inputs.as_ref(), "workingDirectory", env)? {
+    async fn working_directory(
+        &self,
+        step: &ActionStep,
+        env: &ExprEnv,
+    ) -> Result<PathBuf, ExecError> {
+        let chosen = match evaluate::input(step.inputs.as_ref(), "workingDirectory", env).await? {
             Some(directory) => Some(directory),
-            None => token::input(step.inputs.as_ref(), "working-directory", env)?,
+            None => evaluate::input(step.inputs.as_ref(), "working-directory", env).await?,
         };
         let directory = match chosen.filter(|directory| !directory.is_empty()) {
             Some(directory) => Some(directory),
@@ -135,7 +141,7 @@ impl Job<'_> {
             .find(reference)
             .ok_or_else(|| ExecError::Unsupported(format!("uses {reference}")))?;
         let inputs = match step.inputs.as_ref() {
-            Some(inputs) => token::mapping(inputs, env)?.into_iter().collect(),
+            Some(inputs) => evaluate::mapping(inputs, env).await?.into_iter().collect(),
             None => Inputs::default(),
         };
         let call = AdapterCall {
