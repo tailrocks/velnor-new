@@ -93,6 +93,7 @@ mod job_message;
 mod late;
 mod mise_attack_state;
 mod mise_double;
+mod mise_helpers;
 mod mise_real;
 mod mise_repo;
 mod mise_store;
