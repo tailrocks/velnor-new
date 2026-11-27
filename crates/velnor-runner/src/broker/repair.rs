@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 
-use super::git::{Output, git, git_args, has_commit, output};
+use super::git::{Output, git, git_args, has_commit, line_per, output};
 use super::proto::Window;
+use super::walk::{Walk, walk};
 
 const MAX_ROUNDS: usize = 64;
 
@@ -33,7 +33,7 @@ fn parsed_refs(listed: &Output) -> Result<Vec<(String, String)>> {
         .collect())
 }
 
-async fn refs(mirror: &Path) -> Result<Vec<(String, String)>> {
+pub(super) async fn refs(mirror: &Path) -> Result<Vec<(String, String)>> {
     parsed_refs(&list_refs(mirror).await?)
 }
 
@@ -99,49 +99,42 @@ pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
     Ok(notices)
 }
 
-async fn parents_of(mirror: &Path, level: &[String]) -> Option<Vec<String>> {
-    let mut words = vec!["rev-list", "--parents", "--no-walk=unsorted"];
-    words.extend(level.iter().map(String::as_str));
-    let listed = output(&git_args(Some(mirror), &words), None).await.ok()?;
-    listed.succeeded.then(|| {
-        listed
-            .stdout
-            .lines()
-            .flat_map(|line| line.split_whitespace().skip(1))
-            .filter_map(object_id)
-            .collect()
+enum Scope {
+    Walked(Walk),
+    History,
+}
+
+struct Verified {
+    succeeded: bool,
+    stderr: String,
+}
+
+async fn scope(mirror: &Path, sha: &str, window: Window) -> Result<Scope> {
+    Ok(match window {
+        Window::Last(count) => Scope::Walked(walk(mirror, sha, count).await?),
+        Window::All => Scope::History,
     })
 }
 
-async fn commits_within(mirror: &Path, sha: &str, count: NonZeroU64) -> Vec<String> {
-    let mut seen = BTreeSet::from([sha.to_owned()]);
-    let mut level = vec![sha.to_owned()];
-    for _ in 1..count.get() {
-        let Some(parents) = parents_of(mirror, &level).await else {
-            break;
-        };
-        level = parents
-            .into_iter()
-            .filter(|id| seen.insert(id.clone()))
-            .collect();
-        if level.is_empty() {
-            break;
-        }
-    }
-    seen.into_iter().collect()
-}
-
-async fn verify(mirror: &Path, sha: &str, window: Window) -> Result<Output> {
+async fn verify(mirror: &Path, sha: &str, scope: &Scope) -> Result<Verified> {
     let mut words = vec!["rev-list", "--objects", "--verify-objects", "--quiet"];
-    let commits = match window {
-        Window::Last(count) => {
-            words.push("--no-walk");
-            commits_within(mirror, sha, count).await
+    let (input, walked) = match scope {
+        Scope::Walked(walk) => {
+            words.extend(["--no-walk", "--stdin"]);
+            let intact = walk.commits.iter().filter(|id| !walk.damaged.contains(*id));
+            (Some(line_per(intact.map(String::as_str))), Some(walk))
         }
-        Window::All => vec![sha.to_owned()],
+        Scope::History => {
+            words.push(sha);
+            (None, None)
+        }
     };
-    words.extend(commits.iter().map(String::as_str));
-    output(&git_args(Some(mirror), &words), None).await
+    let listed = output(&git_args(Some(mirror), &words), input.as_deref()).await?;
+    let (clean, noted) = walked.map_or((true, ""), |walk| (walk.damaged.is_empty(), &walk.stderr));
+    Ok(Verified {
+        succeeded: listed.succeeded && clean,
+        stderr: format!("{noted}\n{}", listed.stderr),
+    })
 }
 
 fn object_id(word: &str) -> Option<String> {
@@ -233,7 +226,7 @@ async fn confirmed_loose(mirror: &Path, found: &[Damage]) -> Result<Vec<(String,
         if !is_file {
             continue;
         }
-        let alone = verify(mirror, id, Window::COMMIT).await?;
+        let alone = verify(mirror, id, &Scope::Walked(Walk::commit(id))).await?;
         let again = reported(&alone.stderr)
             .iter()
             .any(|found| matches!(found, Damage::Loose(again) if again == id));
@@ -280,8 +273,9 @@ async fn was_quarantined(mirror: &Path, id: &str) -> bool {
 
 pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str, window: Window) -> Result<Scan> {
     let mut scan = Scan::Sound;
+    let scope = scope(mirror, sha, window).await?;
     for _ in 0..MAX_ROUNDS {
-        let verified = verify(mirror, sha, window).await?;
+        let verified = verify(mirror, sha, &scope).await?;
         let found = reported(&verified.stderr);
         if verified.succeeded && found.is_empty() {
             return Ok(scan);

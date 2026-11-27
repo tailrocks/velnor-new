@@ -14,11 +14,21 @@ fn trusted_facts(
     sha: &str,
     event: &str,
 ) -> Result<std::path::PathBuf> {
+    trusted_facts_of(rig, "tailrocks/velnor-new", repository_id, sha, event)
+}
+
+fn trusted_facts_of(
+    rig: &Rig,
+    repository: &str,
+    repository_id: u64,
+    sha: &str,
+    event: &str,
+) -> Result<std::path::PathBuf> {
     let path = rig.root.join(format!("trusted-{repository_id}-{sha}.json"));
     std::fs::write(
         &path,
         format!(
-            r#"{{"repository_id": {repository_id}, "repository": "tailrocks/velnor-new",
+            r#"{{"repository_id": {repository_id}, "repository": "{repository}",
 "server_url": "{}", "default_branch": "main", "sha": "{sha}", "run_id": 1,
 "run_attempt": 1, "event_name": "push", "event": {event}}}"#,
             rig.server_url()
@@ -241,5 +251,30 @@ fn branches_named_x_and_x_slash_y_both_fetch_their_commit_by_sha() -> Result<()>
         .collect();
     expected.sort();
     assert_eq!(refs.lines().collect::<Vec<_>>(), expected);
+    Ok(())
+}
+
+#[test]
+fn a_repository_named_with_a_leading_dot_is_checked_out() -> Result<()> {
+    let rig = Rig::new()?;
+    let source = rig.root.join("up/tailrocks/velnor-new.git");
+    let dotted = rig.root.join("up/tailrocks/.github.git");
+    git(
+        &rig.root,
+        &[
+            "clone",
+            "-q",
+            "--bare",
+            &source.to_string_lossy(),
+            &dotted.to_string_lossy(),
+        ],
+    )?;
+    let branch = r#"{"kind": "branch", "branch": "main"}"#;
+    let facts = trusted_facts_of(&rig, "tailrocks/.github", 7, &rig.head, branch)?;
+    assert_eq!(checkout_trusted(&rig, &facts)?, (Some(0), rig.head.clone()));
+    let dots = trusted_facts_of(&rig, "tailrocks/..", 8, &rig.head, branch)?;
+    let (ran, head) = checkout_ran(&rig, &dots)?;
+    assert_eq!((ran.code, head.as_str()), (Some(2), ""));
+    assert!(ran.stderr.contains("repository"), "{}", ran.stderr);
     Ok(())
 }

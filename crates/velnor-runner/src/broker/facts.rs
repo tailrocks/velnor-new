@@ -21,8 +21,7 @@ pub(crate) enum FactsError {
 }
 
 fn valid_part(part: &str) -> bool {
-    !part.is_empty()
-        && !part.starts_with('.')
+    !matches!(part, "" | "." | "..")
         && part
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'))

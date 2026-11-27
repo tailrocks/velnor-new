@@ -8,8 +8,13 @@ mod mirror;
 pub(crate) mod proto;
 mod repair;
 mod transfer;
+mod walk;
 
+use std::future::Future;
 use std::path::PathBuf;
+use std::time::Duration;
+
+use anyhow::{Result, anyhow};
 
 use mirror::Repair;
 
@@ -18,9 +23,21 @@ pub(crate) use git::{TREE_PROBE, git_args, isolate};
 pub(crate) use location::mirror_path;
 pub(crate) use proto::{Request, Response, Token, Window};
 
+const REPAIR_CAP: Duration = Duration::from_mins(10);
+
+async fn within<T>(cap: Duration, work: impl Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout(cap, work).await.unwrap_or_else(|_| {
+        Err(anyhow!(
+            "repairing the mirror took longer than {} seconds",
+            cap.as_secs()
+        ))
+    })
+}
+
 pub(crate) struct Broker {
     facts: Box<TrustedFacts>,
     root: PathBuf,
+    repair_cap: Duration,
 }
 
 impl Broker {
@@ -28,7 +45,14 @@ impl Broker {
         Self {
             facts: Box::new(facts),
             root,
+            repair_cap: REPAIR_CAP,
         }
+    }
+
+    #[cfg(test)]
+    fn with_repair_cap(mut self, cap: Duration) -> Self {
+        self.repair_cap = cap;
+        self
     }
 
     pub(crate) async fn handle(&self, request: Request) -> Response {
@@ -41,7 +65,8 @@ impl Broker {
             }
             Request::RepairMirror { token, window } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::repair(&self.root, &self.facts, token, window)
+                let repair = mirror::repair(&self.root, &self.facts, token, window);
+                within(self.repair_cap, repair)
                     .await
                     .map(|repair| match repair {
                         Repair::Sound => Response::Sound,
@@ -77,3 +102,6 @@ impl StoreWriter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

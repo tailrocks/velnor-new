@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/git_mirror.rs
 
-use std::ffi::OsString;
 use std::fs::TryLockError;
 use std::io::{Read, Write};
 use std::os::fd::OwnedFd;
@@ -10,7 +9,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use rustix::fs::{AtFlags, CWD, Dir, FileType, Mode, OFlags};
 use rustix::io::Errno;
 
@@ -20,6 +19,11 @@ use super::location::mirror_path;
 use super::proto::Window;
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
+
+mod refetch;
+mod sound;
+
+use refetch::refetch;
 
 async fn lock(path: &Path) -> Result<std::fs::File> {
     let file = tokio::fs::OpenOptions::new()
@@ -126,6 +130,7 @@ fn read_head(path: &Path) -> Option<String> {
 
 async fn reset_mirror(mirror: &Path) -> Result<()> {
     remove_entry(&mirror.join("commondir")).await?;
+    remove_entry(&mirror.join("shallow")).await?;
     remove_entry(&mirror.join(".git")).await?;
     let head = {
         let path = mirror.join("HEAD");
@@ -231,25 +236,6 @@ async fn open(root: &Path, facts: &TrustedFacts) -> Result<(PathBuf, std::fs::Fi
     Ok((mirror, lock))
 }
 
-async fn refetch(
-    mirror: &Path,
-    clone_url: &str,
-    facts: &TrustedFacts,
-    env: &[(OsString, OsString)],
-) -> Result<()> {
-    fetch_wanted(mirror, clone_url, facts, env, Transfer::Refetch)
-        .await
-        .map_err(|error| {
-            if format!("{error:#}").contains("unknown option") {
-                error.context(
-                    "repair the mirror with git fetch --refetch, which needs git 2.36 or newer",
-                )
-            } else {
-                error
-            }
-        })
-}
-
 fn refused_by_the_server(error: &anyhow::Error) -> bool {
     format!("{error:#}").contains("upload-pack: not our ref ")
 }
@@ -285,10 +271,15 @@ pub(crate) async fn fetch(
         return Ok(notices);
     }
     fetched?;
-    if has_commit(&mirror, sha).await {
-        bail!("checkout: commit {sha} from {clone_url} arrived without all of its objects");
+    Err(missing_tree(&mirror, sha, &clone_url).await)
+}
+
+async fn missing_tree(git_dir: &Path, sha: &str, clone_url: &str) -> anyhow::Error {
+    if has_commit(git_dir, sha).await {
+        anyhow!("checkout: commit {sha} from {clone_url} arrived without all of its objects")
+    } else {
+        anyhow!("checkout: commit {sha} not found in {clone_url}")
     }
-    bail!("checkout: commit {sha} not found in {clone_url}")
 }
 
 pub(crate) enum Repair {
@@ -303,7 +294,12 @@ pub(crate) async fn repair(
     window: Window,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
-    if quarantine_corrupt(&mirror, facts.sha.as_str(), window).await? == Scan::Sound {
+    let sha = facts.sha.as_str();
+    if sound::is_fresh(&mirror, sha, window).await {
+        return Ok(Repair::Sound);
+    }
+    if quarantine_corrupt(&mirror, sha, window).await? == Scan::Sound {
+        let _ = sound::record(&mirror, sha, window).await;
         return Ok(Repair::Sound);
     }
     remove_ref_locks(&mirror).await?;

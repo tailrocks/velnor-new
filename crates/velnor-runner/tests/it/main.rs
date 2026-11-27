@@ -109,6 +109,8 @@ mod native_checkout_sink;
 mod native_checkout_unsound;
 mod native_checkout_window;
 mod native_checkout_workspace;
+mod native_checkout_upkeep;
+mod native_checkout_walk;
 mod protocol_broker;
 mod protocol_complete;
 mod protocol_feed;

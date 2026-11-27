@@ -38,15 +38,12 @@ async fn fetch_refs(
     env: &[(OsString, OsString)],
     transfer: Transfer,
 ) -> Result<()> {
-    let refetch: &[&str] = match transfer {
-        Transfer::Incremental => &[],
-        Transfer::Refetch => &["--refetch"],
+    let (keep_pack, refetch): (&[&str], &[&str]) = match transfer {
+        Transfer::Incremental => (&[], &[]),
+        Transfer::Refetch => (&["-c", "fetch.unpackLimit=1"], &["--refetch"]),
     };
-    let base = [
-        "-c",
-        "protocol.version=2",
-        "-c",
-        "gc.auto=0",
+    let base = ["-c", "protocol.version=2", "-c", "gc.auto=0"];
+    let fetch = [
         "fetch",
         "--no-auto-maintenance",
         "--prune",
@@ -55,7 +52,7 @@ async fn fetch_refs(
     ];
     let mut args = git_args(
         Some(mirror),
-        &[&base[..], refetch, &["--", clone_url]].concat(),
+        &[&base[..], keep_pack, &fetch, refetch, &["--", clone_url]].concat(),
     );
     args.extend(specs);
     let fetched = git(&args, env).await;

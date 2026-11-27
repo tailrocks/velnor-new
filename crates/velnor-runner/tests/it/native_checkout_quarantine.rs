@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::exec_support::Scratch;
 use crate::native_checkout::{Rig, git};
-use crate::native_checkout_env::wrapper_env;
+use crate::native_checkout_env::{real_git, wrapper_env};
 use crate::native_checkout_repair::{assert_workspace_intact, object_path, overwrite};
 
 pub(crate) fn quarantined(rig: &Rig) -> Vec<String> {
@@ -57,10 +57,11 @@ fn a_sound_object_named_by_a_damage_report_is_not_quarantined() -> Result<()> {
         &format!(
             "case \" $* \" in\n\
              *\" checkout-index \"*) [ -f '{once}' ] || {{ : > '{once}'; echo checkout-refused >&2; exit 1; }};;\n\
-             *\" --verify-objects \"*\" {head} \"*) echo 'error: hash mismatch {blob}' >&2; exit 1;;\n\
+             *\" --verify-objects \"*\" --stdin \"*) listed=$(cat); case \"$listed\" in *{head}*) echo 'error: hash mismatch {blob}' >&2; exit 1;; esac; printf '%s\\n' \"$listed\" | '{real}' \"$@\"; exit $?;;\n\
              esac\n",
             once = once.display(),
-            head = rig.head
+            head = rig.head,
+            real = real_git()?
         ),
     )?;
     let scratch = Scratch::new()?;

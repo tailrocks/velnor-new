@@ -97,7 +97,10 @@ fn a_server_that_sends_the_commit_without_its_tree_fails_the_step() -> Result<()
     wrapper_env(
         &rig.root,
         &format!(
-            "case \" $* \" in *\" fetch \"*) '{real}' \"$@\"; s=$?; rm -f '{object}'; exit $s;; esac\n",
+            "case \" $* \" in\n\
+             *\"/refetch.velnor rev-list \"*\"^{{tree}}\"*) echo 'fatal: bad object' >&2; exit 1;;\n\
+             *\" fetch \"*) '{real}' \"$@\"; s=$?; rm -f '{object}'; exit $s;;\n\
+             esac\n",
             real = real_git()?,
             object = object.display()
         ),

@@ -227,7 +227,11 @@ impl Rig {
         std::fs::read_to_string(self.trace())
             .unwrap_or_default()
             .lines()
-            .filter(|line| line.contains("\"event\":\"start\"") && line.contains("\"--refetch\""))
+            .filter(|line| {
+                line.contains("\"event\":\"start\"")
+                    && line.contains("\"--refetch\"")
+                    && !line.contains("refs/velnor/sha/")
+            })
             .count()
     }
 }

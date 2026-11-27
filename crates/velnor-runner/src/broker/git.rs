@@ -19,6 +19,10 @@ use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 use tokio::runtime::{Handle, RuntimeFlavor};
 use url::Url;
 
+mod batch;
+
+pub(crate) use batch::{Batch, Commit};
+
 const GIT_ENV: [(&str, &str); 3] = [
     ("GIT_CONFIG_NOSYSTEM", "1"),
     ("GIT_CONFIG_GLOBAL", "/dev/null"),
@@ -50,6 +54,15 @@ pub(crate) fn isolate(command: &mut Command) -> &mut Command {
         .env("HOME", "/dev/null")
         .env("LC_ALL", "C")
         .envs(GIT_ENV)
+}
+
+pub(crate) fn line_per<'a>(words: impl IntoIterator<Item = &'a str>) -> String {
+    let mut text = String::new();
+    for word in words {
+        text.push_str(word);
+        text.push('\n');
+    }
+    text
 }
 
 pub(crate) fn git_args(git_dir: Option<&Path>, args: &[&str]) -> Vec<String> {

@@ -261,3 +261,43 @@ fn a_server_url_that_is_not_http_https_or_file_is_refused_without_echoing_it() -
     }
     Ok(())
 }
+
+fn facts_of_repository(repository: &str) -> Result<TrustedFacts, FactsError> {
+    let mut job = job().expect("fixture");
+    let github = github(&mut job).expect("github context");
+    github.retain(|entry| entry["k"] != "repository");
+    github.push(entry("repository", &string(repository)));
+    parse(&job)
+}
+
+#[test]
+fn a_repository_named_with_a_leading_dot_has_facts_as_on_github() {
+    for repository in ["tailrocks/.github", "tailrocks/.dotfiles", ".org/.github"] {
+        let facts = facts_of_repository(repository).expect(repository);
+        assert_eq!(facts.repository.as_str(), repository);
+    }
+}
+
+#[test]
+fn a_repository_part_that_names_a_directory_is_refused() {
+    for repository in [
+        "tailrocks/.",
+        "tailrocks/..",
+        "./velnor-new",
+        "../velnor-new",
+        "tailrocks/",
+        "/velnor-new",
+        "tailrocks/a b",
+    ] {
+        assert!(
+            matches!(
+                facts_of_repository(repository),
+                Err(FactsError::Invalid {
+                    field: "repository",
+                    ..
+                })
+            ),
+            "{repository}"
+        );
+    }
+}
