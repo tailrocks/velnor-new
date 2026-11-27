@@ -15,7 +15,6 @@ mod store;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
