@@ -308,7 +308,7 @@ fn pull_claim(
 }
 
 fn root_workflow_path(path: &str, repository: &str) -> Result<String, HostError> {
-    let path = path.split_once('@').map_or(path, |(path, _)| path);
+    let path = without_ref(path);
     let path = path.strip_prefix("./").unwrap_or(path);
     let path = path.strip_prefix(&format!("{repository}/")).unwrap_or(path);
     if path.starts_with(".github/workflows/") {
@@ -317,3 +317,14 @@ fn root_workflow_path(path: &str, repository: &str) -> Result<String, HostError>
         Err(HostError::Identity)
     }
 }
+
+fn without_ref(path: &str) -> &str {
+    [".yml@", ".yaml@"]
+        .iter()
+        .filter_map(|extension| path.find(extension).map(|at| at + extension.len() - 1))
+        .min()
+        .map_or(path, |end| &path[..end])
+}
+
+#[cfg(test)]
+mod tests;

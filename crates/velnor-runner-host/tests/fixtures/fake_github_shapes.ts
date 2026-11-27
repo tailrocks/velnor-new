@@ -26,7 +26,7 @@ export interface Offer {
   sha: string;
   workflow_content: string;
   pr?: Pull;
-  acquire_returns?: "none";
+  acquire_returns?: "none" | "duplicate" | "extra";
   jit_failures?: number;
   jit_identity?: "id" | "scale_set" | "name";
   head_repository_id?: number;

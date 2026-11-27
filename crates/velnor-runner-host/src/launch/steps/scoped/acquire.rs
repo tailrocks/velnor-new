@@ -4,7 +4,7 @@
 use std::cell::Cell;
 
 use velnor_runner_github::{
-    AcquireOutcome, RefreshGate, SessionError, Transport, WireError, acquire,
+    AcquireOutcome, RefreshGate, SessionError, Transport, WireError, acquire, sole_grant,
 };
 
 use crate::journal::{
@@ -252,7 +252,7 @@ pub(super) fn classify(
     request_id: i64,
 ) -> (AssignedAcquireResult, AcquireDisposition) {
     match result {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.as_slice() == [request_id] => (
+        Ok(AcquireOutcome::Acquired(ids)) if sole_grant(ids, request_id) => (
             AssignedAcquireResult::Returned(ids.clone()),
             AcquireDisposition::Acquired,
         ),

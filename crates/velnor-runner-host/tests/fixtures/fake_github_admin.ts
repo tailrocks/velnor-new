@@ -85,8 +85,14 @@ function jobs(path: string): void {
     snapshot(record("acquire", { ids: requested.join(",") }));
     mutate((state) => (state.pending_jit = requested));
     held("acquire");
-    const none = new Set(offers().filter((offer) => offer.acquire_returns === "none").map((offer) => offer.request_id));
-    const value = requested.filter((id) => !none.has(id));
+    const returned = (id: number): number[] => {
+      const shape = offers().find((offer) => offer.request_id === id)?.acquire_returns;
+      if (shape === "none") return [];
+      if (shape === "duplicate") return [id, id];
+      if (shape === "extra") return [id, id + 1000];
+      return [id];
+    };
+    const value = requested.flatMap(returned);
     reply(200, { count: value.length, value });
   }
   if (method === "POST" && /\/generatejitconfig$/.test(path)) {
