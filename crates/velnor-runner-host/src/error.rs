@@ -33,6 +33,9 @@ pub enum RustRunnerFailure {
     #[error("orb could not be run")]
     OrbUnavailable,
 
+    #[error("an orb call did not finish before its deadline")]
+    OrbTimeout,
+
     #[error("orb list did not return machine names")]
     MachineList,
 

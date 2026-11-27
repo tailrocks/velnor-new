@@ -21,6 +21,7 @@ pub(crate) enum Phase {
     WaitingForCredentials,
     MachineUnavailable,
     RunnerFailing,
+    SessionFailing,
     Ready,
 }
 
@@ -72,6 +73,8 @@ pub(crate) fn assess(state: &Path, config_sha256: &str) -> Readiness {
         Phase::WaitingForCredentials => Readiness::WaitingForCredentials,
         Phase::Ready if record.config_sha256 == config_sha256 => Readiness::Ready,
         Phase::Startup | Phase::Ready => Readiness::Reconciling,
-        Phase::MachineUnavailable | Phase::RunnerFailing => Readiness::Degraded,
+        Phase::MachineUnavailable | Phase::RunnerFailing | Phase::SessionFailing => {
+            Readiness::Degraded
+        }
     }
 }

@@ -1,12 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::time::Duration;
 
 use serde::Deserialize;
 
 use super::store::Store;
-use super::{GUEST_RUNNER, GUEST_STORE, MACHINE_NAME, RustRunnerLauncher};
+use super::{
+    GUEST_RUNNER, GUEST_STORE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb,
+};
 use crate::error::{HostError, RustRunnerFailure};
 
 const MACHINE_DISTRO: &str = "ubuntu";
@@ -34,14 +37,14 @@ impl RustRunnerLauncher {
         self.require_runner_binary()
     }
 
+    pub fn runner_digest(&self) -> Result<String, HostError> {
+        Store::open(&self.host_store)?.runner_digest()
+    }
+
     fn machine_exists(&self) -> Result<bool, HostError> {
-        let output = self
-            .orb()
-            .args(["list", "-f", "json"])
-            .stdin(Stdio::null())
-            .stderr(Stdio::inherit())
-            .output()
-            .map_err(|_| failure(RustRunnerFailure::OrbUnavailable))?;
+        let mut command = self.orb();
+        command.args(["list", "-f", "json"]);
+        let output = orb::run(command, self.deadline, true).map_err(failure)?;
         if !output.status.success() {
             return Err(failure(RustRunnerFailure::MachineList));
         }
@@ -59,31 +62,34 @@ impl RustRunnerLauncher {
     fn create_machine(&self) -> Result<(), HostError> {
         let mut command = self.orb();
         command.args(["create", "-a", "arm64", "ubuntu", MACHINE_NAME]);
-        succeeds(&mut command, RustRunnerFailure::MachineCreate)
+        succeeds(
+            command,
+            self.deadline.max(ORB_CREATE_DEADLINE),
+            RustRunnerFailure::MachineCreate,
+        )
     }
 
     fn link_store(&self) -> Result<(), HostError> {
         let target = format!("/mnt/mac{}", self.host_store.display());
         let mut command = self.as_root();
         command.args(["ln", "-sfnT", &target, GUEST_STORE]);
-        succeeds(&mut command, RustRunnerFailure::MachineLink)
+        succeeds(command, self.deadline, RustRunnerFailure::MachineLink)
     }
 
     fn require_runner_binary(&self) -> Result<(), HostError> {
         let mut command = self.in_machine();
         command.args(["test", "-x", GUEST_RUNNER]);
-        succeeds(&mut command, RustRunnerFailure::BinaryMissing)
+        succeeds(command, self.deadline, RustRunnerFailure::BinaryMissing)
     }
 }
 
-fn succeeds(command: &mut Command, otherwise: RustRunnerFailure) -> Result<(), HostError> {
-    let status = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|_| failure(RustRunnerFailure::OrbUnavailable))?;
-    if status.success() {
+fn succeeds(
+    command: Command,
+    deadline: Duration,
+    otherwise: RustRunnerFailure,
+) -> Result<(), HostError> {
+    let finished = orb::run(command, deadline, false).map_err(failure)?;
+    if finished.status.success() {
         Ok(())
     } else {
         Err(failure(otherwise))

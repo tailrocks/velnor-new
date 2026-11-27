@@ -2,20 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{DirBuilder, File};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, fstat, fsync, mkdirat, openat, renameat};
+use rustix::fs::{
+    AtFlags, Dir, FileType, Mode, OFlags, chmodat, fchmod, fstat, fsync, mkdirat, openat, renameat,
+};
 use rustix::fs::{statat, unlinkat};
 use rustix::io::Errno;
 use rustix::path::Arg;
 use rustix::process::geteuid;
+use sha2::{Digest, Sha256};
 
 use super::machine::failure;
 use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
+use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
 
 const RUNNER_BINARY: &str = "velnor-runner";
@@ -101,6 +105,33 @@ impl Store {
             require_no_acl(&path)?;
         }
         Ok(())
+    }
+
+    pub(super) fn runner_digest(&self) -> Result<String, HostError> {
+        let bin = self.directory(
+            BIN_DIRECTORY,
+            others_can_write(),
+            RustRunnerFailure::StoreUnsafe,
+        )?;
+        let descriptor = openat(
+            &bin,
+            RUNNER_BINARY,
+            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|_| failure(RustRunnerFailure::BinaryMissing))?;
+        let mut file = File::from(descriptor);
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0_u8; 64 * 1024];
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .map_err(|_| failure(RustRunnerFailure::HostStore))?;
+            if read == 0 {
+                return Ok(lowercase_hex(&hasher.finalize()));
+            }
+            hasher.update(&buffer[..read]);
+        }
     }
 
     pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
@@ -263,7 +294,14 @@ fn remove_tree(directory: &OwnedFd, name: impl Arg + Copy) -> Result<(), Errno> 
     if FileType::from_raw_mode(stat.st_mode) != FileType::Directory {
         return remove_entry(directory, name);
     }
-    let child = openat(directory, name, directory_flags(), Mode::empty())?;
+    let child = match openat(directory, name, directory_flags(), Mode::empty()) {
+        Err(Errno::ACCESS) => {
+            chmodat(directory, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)?;
+            openat(directory, name, directory_flags(), Mode::empty())?
+        }
+        opened => opened?,
+    };
+    fchmod(&child, Mode::RWXU)?;
     empty(&child)?;
     unlinkat(directory, name, AtFlags::REMOVEDIR)
 }

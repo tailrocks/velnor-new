@@ -110,14 +110,6 @@ pub(super) fn heartbeat_advances(world: &World, count: usize) {
     });
 }
 
-pub(super) fn orb_calls_after(world: &World, seq: u64, needle: &str) -> Vec<Event> {
-    world
-        .events()
-        .into_iter()
-        .filter(|event| event.seq > seq && event.is_orb(needle))
-        .collect()
-}
-
 pub(super) fn call_number(event: &Event) -> String {
     event
         .text

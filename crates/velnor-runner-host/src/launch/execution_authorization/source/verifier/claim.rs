@@ -13,6 +13,7 @@ use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 
+use super::fault::SourceFault;
 use super::workflow_verification::{
     VerifiedWorkflowClosure, WorkflowVerification, root_source_commit_matches,
     verify_workflow_closure,
@@ -56,9 +57,9 @@ pub(crate) fn verify_source_claim(
     claim: &SourceClaim,
     token: &str,
     deadline: Instant,
-) -> Result<VerifiedClaim, HostError> {
+) -> Result<VerifiedClaim, SourceFault> {
     if Instant::now() >= deadline {
-        return Err(HostError::Identity);
+        return Err(SourceFault::TIMEOUT);
     }
     policy.validate_for(connection)?;
     let (owner, repository) = split_repository(&connection.repository)?;
@@ -76,10 +77,10 @@ pub(crate) fn verify_source_claim(
         i64::from(claim.run_attempt),
         token,
     )
-    .map_err(|_| HostError::Identity)?;
+    .map_err(SourceFault::lookup)?;
     let hook_input = hook_input(claim, &run)?;
     let compared = compare_hook_source(&mut transport, &hook_input, target, token)
-        .map_err(|_| HostError::Identity)?;
+        .map_err(SourceFault::compare)?;
     verify_compared_claim(claim, &compared)?;
     let closure = verify_workflow_closure(
         WorkflowVerification {
@@ -96,7 +97,7 @@ pub(crate) fn verify_source_claim(
         token,
     )?;
     if Instant::now() >= deadline {
-        return Err(HostError::Identity);
+        return Err(SourceFault::TIMEOUT);
     }
     Ok(VerifiedClaim { compared, closure })
 }

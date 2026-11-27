@@ -8,6 +8,7 @@ use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::launch::ImageAuthority;
 use crate::launch_blocking::ListenFault;
+use crate::rust_runner::Handover;
 
 #[path = "loop/connection_poll.rs"]
 mod connection_poll;
@@ -34,14 +35,21 @@ pub fn run_host_blocking(
     state: &Path,
     daemon_lock: &DaemonLock,
 ) -> Result<(), ListenFault> {
-    match config.host.launch_mode {
-        LaunchMode::OfficialRunner => run_official_blocking(config, state, daemon_lock),
-        LaunchMode::RustRunner => match crate::rust_runner::run_blocking(state, daemon_lock)? {
-            crate::rust_runner::Handover::Stopped => Ok(()),
-            crate::rust_runner::Handover::OfficialRunner(next) => {
-                run_official_blocking(&next, state, daemon_lock)
+    let mut mode = config.host.launch_mode;
+    let mut config = config.clone();
+    loop {
+        let handover = match mode {
+            LaunchMode::OfficialRunner => run_official_blocking(&config, state, daemon_lock)?,
+            LaunchMode::RustRunner => crate::rust_runner::run_blocking(state, daemon_lock)?,
+        };
+        match handover {
+            Handover::Stopped => return Ok(()),
+            Handover::OfficialRunner(next) => {
+                mode = LaunchMode::OfficialRunner;
+                config = *next;
             }
-        },
+            Handover::RustRunner => mode = LaunchMode::RustRunner,
+        }
     }
 }
 
@@ -49,7 +57,7 @@ fn run_official_blocking(
     config: &HostConfig,
     state: &Path,
     daemon_lock: &DaemonLock,
-) -> Result<(), ListenFault> {
+) -> Result<Handover, ListenFault> {
     let _controller_run = daemon_lock.begin_controller_run()?;
     let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state_root.is_dir() {

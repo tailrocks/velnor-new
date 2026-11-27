@@ -15,6 +15,7 @@ pub(super) enum Closed {
     Draining,
     ConfigChanged,
     MachineUnavailable,
+    RunnerFailing,
     Stopping,
 }
 
@@ -187,16 +188,10 @@ impl Slots {
         }
     }
 
-    pub(super) fn attempting(&self) -> bool {
-        self.entries.values().any(|slot| {
-            matches!(
-                slot.phase,
-                Phase::Proving {
-                    attempting: true,
-                    ..
-                }
-            )
-        })
+    pub(super) fn proving(&self) -> bool {
+        self.entries
+            .values()
+            .any(|slot| matches!(slot.phase, Phase::Proving { .. }))
     }
 
     pub(super) fn settled(&self) -> bool {

@@ -9,14 +9,17 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use super::events::{Event, parse_events, wait_for, wait_unless};
-use super::fixtures::{TestResult, host_toml};
+use super::fixtures::{TestResult, host_toml, organization_host_toml};
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.sh");
-const FAKE_CURL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_curl.ts");
-const FAKE_SHAPES: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/tests/fixtures/fake_github_shapes.ts"
-);
+const FAKE_GITHUB: [&str; 6] = [
+    "fake_curl.ts",
+    "fake_github_admin.ts",
+    "fake_github_api.ts",
+    "fake_github_core.ts",
+    "fake_github_queue.ts",
+    "fake_github_shapes.ts",
+];
 pub(super) const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_CONTROLLER_CHILD";
 
 pub(super) struct World {
@@ -92,8 +95,14 @@ impl World {
         let runner = world.store.join("bin/velnor-runner");
         std::fs::write(&runner, "")?;
         std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755))?;
-        std::fs::copy(FAKE_CURL, world.root.join("fake_curl.ts"))?;
-        std::fs::copy(FAKE_SHAPES, world.root.join("fake_github_shapes.ts"))?;
+        for name in FAKE_GITHUB {
+            std::fs::copy(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures")
+                    .join(name),
+                world.root.join(name),
+            )?;
+        }
         let curl = world.root.join("bin/curl");
         std::fs::write(&curl, curl_wrapper(&bun()?))?;
         std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o700))?;
@@ -123,6 +132,14 @@ impl World {
         });
         std::fs::write(self.github.join("config.json"), config.to_string())?;
         Ok(())
+    }
+
+    pub(super) fn use_organization(&self) -> TestResult<()> {
+        let path = self.github.join("config.json");
+        let mut config: Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
+        config["organization"] = json!("tailrocks");
+        std::fs::write(path, config.to_string())?;
+        self.write_host_toml_text(&organization_host_toml(&self.root, 1)?)
     }
 
     pub(super) fn write_state(
@@ -197,8 +214,10 @@ impl World {
             self.root.join("bin").display(),
             std::env::var("PATH")?
         );
+        std::fs::create_dir_all(self.root.join("tmp"))?;
         let child = Command::new(std::env::current_exe()?)
             .args(["--exact", test, "--nocapture"])
+            .env("TMPDIR", self.root.join("tmp"))
             .env(CHILD_MARKER, &self.root)
             .env("PATH", path)
             .env("VELNOR_FAKE_DIR", &self.root)

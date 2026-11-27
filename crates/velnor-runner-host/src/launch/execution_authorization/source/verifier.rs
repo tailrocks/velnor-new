@@ -12,9 +12,12 @@ use crate::worker::execution_authorization::VerifiedProofChannelBinding;
 
 #[path = "verifier/claim.rs"]
 mod claim;
+#[path = "verifier/fault.rs"]
+mod fault;
 #[path = "verifier/workflow_verification.rs"]
 mod workflow_verification;
 pub(crate) use claim::{PullClaim, SourceClaim, verify_source_claim};
+pub(crate) use fault::SourceFault;
 use workflow_verification::VerifiedWorkflowClosure;
 
 use super::{
@@ -46,7 +49,8 @@ pub(crate) fn verify_live_source(
         return Err(HostError::Identity);
     }
     let claim = claim_of(request, native)?;
-    let verified = verify_source_claim(connection, policy, &claim, token, deadline)?;
+    let verified = verify_source_claim(connection, policy, &claim, token, deadline)
+        .map_err(SourceFault::into_host)?;
     let source = persist_verified_source(request, channel, &verified.compared, verified.closure)?;
     if Instant::now() >= deadline {
         return Err(HostError::Identity);

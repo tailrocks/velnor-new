@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::QueueSession;
 use zeroize::Zeroizing;
 
-use super::connection::{Live, Pending};
+use super::connection::{ADMIN_RENEWAL, Live, Pending};
 use super::github::{self, Admin};
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
@@ -36,6 +36,19 @@ enum Step {
     Clear(usize),
 }
 
+impl Step {
+    const fn held_renewal(self) -> Option<usize> {
+        match self {
+            Self::Session(index) | Self::Clear(index) => Some(index),
+            Self::Machine | Self::Sweep | Self::Set(_) | Self::Renew(_) => None,
+        }
+    }
+}
+
+fn renew_held(step: Step, admin_age: Duration) -> Option<usize> {
+    step.held_renewal().filter(|_| admin_age >= ADMIN_RENEWAL)
+}
+
 enum Done {
     Machine,
     Swept,
@@ -44,6 +57,9 @@ enum Done {
     Session(usize, QueueSession),
     Cleared(usize),
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(super) struct Guarded<T> {
     pub(super) value: Option<T>,
@@ -113,9 +129,11 @@ pub(super) async fn start(
             Some(Err(error)) => {
                 eprintln!("rust-runner startup held: {error}");
                 held = true;
-                if let Step::Session(index) | Step::Clear(index) = step
-                    && pending[index].admin_expired(Instant::now())
-                {
+                let age = step
+                    .held_renewal()
+                    .and_then(|index| pending.get(index))
+                    .map(|connection| connection.admin_age(Instant::now()));
+                if let Some(index) = age.and_then(|age| renew_held(step, age)) {
                     pending[index].renew = true;
                 }
             }

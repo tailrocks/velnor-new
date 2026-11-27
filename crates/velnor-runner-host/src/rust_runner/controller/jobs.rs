@@ -6,7 +6,7 @@ use velnor_runner_github::EncodedJit;
 
 use super::admission::JobExit;
 use super::cleanup::{CleanupProof, ProofInputs, prove};
-use super::{Event, RUNNER_FAILURE_LIMIT, Run, blocking};
+use super::{Event, Run, blocking};
 use crate::launch_blocking::ListenFault;
 use crate::rust_runner::{ReservationId, RunningJob};
 
@@ -66,17 +66,10 @@ impl Run<'_> {
         let JobExit::Exited(status) = exit else {
             return;
         };
-        if status.success() {
-            self.runner_failures = 0;
-            return;
-        }
-        self.runner_failures = self.runner_failures.saturating_add(1);
-        if self.runner_failures >= RUNNER_FAILURE_LIMIT {
+        if let Some(failures) = self.runner.exited(status.success()) {
             eprintln!(
-                "rust-runner closing admission after {} consecutive failed runner exits",
-                self.runner_failures
+                "rust-runner closing admission after {failures} consecutive failed runner exits until the runner binary changes"
             );
-            self.machine_ok = false;
         }
     }
 
@@ -132,6 +125,17 @@ impl Run<'_> {
                 self.slots.proof_failed(reservation);
             }
         }
+    }
+
+    pub(super) fn check_runner(&mut self) {
+        if !self.runner.begin_check() {
+            return;
+        }
+        let launcher = self.cx.launcher.clone();
+        self.tasks.spawn(async move {
+            let result = blocking(move || launcher.runner_digest().map_err(Into::into)).await;
+            Event::RunnerBinary(result)
+        });
     }
 
     pub(super) fn check_machine(&mut self) {

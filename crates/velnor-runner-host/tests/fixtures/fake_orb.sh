@@ -68,6 +68,15 @@ add_to_table() {
   unlock
 }
 
+hang() {
+  [ "$FAKE_ORB_HANG" = "$1" ] || return 0
+  echo $$ > "$seen/hang.$call.pid"
+  while [ ! -e "$seen/unhang" ] && ! gone; do
+    sleep 0.05
+  done
+  exit 70
+}
+
 immortal() {
   [ -e "$seen/release" ] && return 1
   for pid in $(echo "$FAKE_ORB_PS_IMMORTAL" | tr ',' ' '); do
@@ -78,6 +87,7 @@ immortal() {
 
 case "$1" in
 list)
+  hang list
   cat "$FAKE_ORB_LIST"
   exit 0
   ;;
@@ -144,7 +154,6 @@ kill)
   mkdir -p "$work"
   entry=${FAKE_RUNNER_PS_PID:-$$}
   add_to_table "$entry $*"
-  echo $$ > "$seen/$name.pid"
   if [ -z "$FAKE_RUNNER_PS_PID" ]; then
     trap 'drop_from_table $$; echo $? > "$seen/calls/$call.status"' EXIT
   fi
@@ -156,6 +165,9 @@ kill)
   if [ -n "$FAKE_RUNNER_HOLD" ]; then
     sleep 60 &
     echo $! > "$seen/$name.child"
+  fi
+  echo $$ > "$seen/$name.pid"
+  if [ -n "$FAKE_RUNNER_HOLD" ]; then
     while [ ! -e "$seen/release-$name" ] && ! gone; do
       sleep 0.05
     done

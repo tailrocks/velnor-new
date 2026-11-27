@@ -10,7 +10,7 @@ pub(crate) use request::ExecutionSourceRequest;
 
 pub use source::verify_persisted_execution_source_role;
 pub(crate) use source::{
-    AuthorizedExecutionSource, PersistedExecutionSource, PullClaim, SourceClaim,
+    AuthorizedExecutionSource, PersistedExecutionSource, PullClaim, SourceClaim, SourceFault,
     VerifiedWorkflowIdentity, verify_source_claim,
 };
 pub(crate) use verifier::verify_execution_source;

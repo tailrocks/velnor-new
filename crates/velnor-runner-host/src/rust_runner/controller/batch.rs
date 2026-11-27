@@ -75,6 +75,9 @@ impl Run<'_> {
         let Some(live) = self.connections.get_mut(connection) else {
             return;
         };
+        if matches!(result, Ok(PollPathResult::Response(_))) {
+            live.session_healthy();
+        }
         match result {
             Err(error) => {
                 eprintln!("rust-runner poll held: {error}");

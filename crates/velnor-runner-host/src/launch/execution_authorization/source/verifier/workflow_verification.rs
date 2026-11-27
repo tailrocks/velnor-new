@@ -13,6 +13,7 @@ use crate::https::HttpsTransport;
 
 use super::super::VerifiedWorkflowIdentity;
 use super::claim::SourceClaim;
+use super::fault::SourceFault;
 
 #[derive(Clone, Copy)]
 pub(super) struct WorkflowVerification<'a> {
@@ -36,7 +37,7 @@ pub(super) fn verify_workflow_closure(
     input: WorkflowVerification<'_>,
     transport: &mut HttpsTransport,
     token: &str,
-) -> Result<VerifiedWorkflowClosure, HostError> {
+) -> Result<VerifiedWorkflowClosure, SourceFault> {
     let WorkflowVerification {
         connection,
         policy,
@@ -54,7 +55,7 @@ pub(super) fn verify_workflow_closure(
     let root_path = workflow_path(&claim.workflow_ref, owner, repository)?;
     let (leaf_ref, leaf_source_sha) = compared.job_workflow();
     if claim.job_workflow_ref != leaf_ref {
-        return Err(HostError::Identity);
+        return Err(HostError::Identity.into());
     }
     let leaf_path = workflow_path(leaf_ref, owner, repository)?;
     let root_sha = claim.workflow_sha.as_str();
@@ -65,19 +66,19 @@ pub(super) fn verify_workflow_closure(
             .is_some_and(|sha| sha != root_sha)
             || leaf_source_sha.is_some()
         {
-            return Err(HostError::Identity);
+            return Err(HostError::Identity.into());
         }
         root_sha
     } else {
         let source_sha = leaf_source_sha.ok_or(HostError::Identity)?;
         if claim.workflow_source_sha.as_deref() != Some(source_sha) {
-            return Err(HostError::Identity);
+            return Err(HostError::Identity.into());
         }
         source_sha
     };
     let source_refs = workflow_sources(run, owner, repository, &root_path, root_sha)?;
     if source_refs.get(&leaf_path).map(String::as_str) != Some(leaf_sha) {
-        return Err(HostError::Identity);
+        return Err(HostError::Identity.into());
     }
     ensure_approved_closure(&workflow_inventory, &root_path, &source_refs, connection)?;
     let identities = fetch_workflow_identities(
@@ -102,18 +103,18 @@ fn fetch_workflow_identities(
     target: RepositoryTarget<'_>,
     transport: &mut HttpsTransport,
     token: &str,
-) -> Result<Vec<VerifiedWorkflowIdentity>, HostError> {
+) -> Result<Vec<VerifiedWorkflowIdentity>, SourceFault> {
     let mut identities = Vec::with_capacity(source_refs.len());
     for (path, commit_sha) in source_refs {
         let approved = inventory.get(path.as_str()).ok_or(HostError::Identity)?;
         let content = get_workflow_content(transport, target, commit_sha, path, token)
-            .map_err(|_| HostError::Identity)?;
+            .map_err(SourceFault::lookup)?;
         if content.repository_id() != connection.repository_id
             || content.path() != path
             || content.commit_sha() != commit_sha
             || content.content_sha256() != approved.content_sha256()
         {
-            return Err(HostError::Identity);
+            return Err(HostError::Identity.into());
         }
         identities.push(VerifiedWorkflowIdentity {
             repository_id: u64::try_from(connection.repository_id)

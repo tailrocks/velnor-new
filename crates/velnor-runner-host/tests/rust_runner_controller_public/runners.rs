@@ -11,7 +11,6 @@ use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
 const FAILING: &str = "FAKE_RUNNER_EXIT=1\n";
-const FAILING_HELD: &str = "FAKE_RUNNER_EXIT=1\nFAKE_RUNNER_HOLD=1\n";
 const HELD: &str = "FAKE_RUNNER_HOLD=1\n";
 
 fn proven(world: &World, job: u64) {
@@ -42,12 +41,19 @@ fn queue(world: &World, number: u64) -> TestResult<()> {
     )
 }
 
-fn binary_mode(world: &World, mode: u32) -> TestResult<()> {
-    std::fs::set_permissions(
-        world.store.join("bin/velnor-runner"),
-        std::fs::Permissions::from_mode(mode),
-    )?;
+fn replace_binary(world: &World) -> TestResult<()> {
+    let staging = world.store.join("bin/velnor-runner.next");
+    std::fs::write(&staging, "a different runner build")?;
+    std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::rename(staging, world.store.join("bin/velnor-runner"))?;
     Ok(())
+}
+
+fn failed(world: &World, count: usize) -> u64 {
+    world.wait_for_event("a failed job", 60, |events| {
+        events.iter().filter(|event| event.label == "jit").count() >= count
+    });
+    reservation(&world.gh("jit")[count - 1])
 }
 
 pub(super) fn run(test: &str) -> TestResult<()> {
@@ -59,29 +65,19 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     queue(&world, 2)?;
     proven(&world, failed(&world, 2));
     assert_eq!(controller_readiness(&world.state), Readiness::Ready);
-    world.configure_orb(FAILING_HELD)?;
     queue(&world, 3)?;
-    let third = held(&world, 3);
-    binary_mode(&world, 0o775)?;
-    world.release(&jit_name(third))?;
-    wait_for("the machine_unavailable heartbeat", 30, || {
-        world.heartbeat_phase().as_deref() == Some("machine_unavailable")
+    proven(&world, failed(&world, 3));
+    wait_for("the runner_failing heartbeat", 30, || {
+        world.heartbeat_phase().as_deref() == Some("runner_failing")
     });
     assert_eq!(controller_readiness(&world.state), Readiness::Degraded);
-    closed_until_verified(&world)?;
+    closed_until_the_binary_changes(&world)?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     Ok(())
 }
 
-fn failed(world: &World, count: usize) -> u64 {
-    world.wait_for_event("a failed job", 60, |events| {
-        events.iter().filter(|event| event.label == "jit").count() >= count
-    });
-    reservation(&world.gh("jit")[count - 1])
-}
-
-fn closed_until_verified(world: &World) -> TestResult<()> {
+fn closed_until_the_binary_changes(world: &World) -> TestResult<()> {
     world.configure_orb(HELD)?;
     queue(world, 4)?;
     let marker = world.events().last().map_or(0, |event| event.seq);
@@ -101,15 +97,21 @@ fn closed_until_verified(world: &World) -> TestResult<()> {
                 .then(|| "offer 4 was acquired after three failed runner exits".to_owned())
         },
     );
-    binary_mode(world, 0o755)?;
-    let fourth = held(world, 4);
     assert_eq!(world.heartbeat_phase().as_deref(), Some("runner_failing"));
-    assert_eq!(controller_readiness(&world.state), Readiness::Degraded);
-    world.release(&jit_name(fourth))?;
-    wait_for("the ready heartbeat after a completed job", 30, || {
+    wait_for("the failing binary to be recorded", 30, || {
+        world
+            .child_stderr()
+            .contains("rust-runner recorded the failing runner binary")
+    });
+    replace_binary(world)?;
+    let fourth = held(world, 4);
+    assert_eq!(acquire_ids(world), ["1", "2", "3", "4"]);
+    wait_for("the ready heartbeat after the binary changed", 30, || {
         world.heartbeat_phase().as_deref() == Some("ready")
     });
     assert_eq!(controller_readiness(&world.state), Readiness::Ready);
+    world.release(&jit_name(fourth))?;
+    proven(world, fourth);
     world.stop()?;
     Ok(())
 }

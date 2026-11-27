@@ -6,17 +6,25 @@ use std::{path::Path, sync::Arc};
 use bollard::Docker;
 
 use crate::{
-    config::{HostConfig, RepositoryConnection},
+    config::{HostConfig, LaunchMode, RepositoryConnection},
     controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
     launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages},
+    rust_runner::Handover,
 };
 
 use super::{
     setup,
     state::{PreparedConnection, setup_receipt_inputs},
 };
+
+pub(super) fn handover_to(previous: &HostConfig, next: &HostConfig) -> Option<Handover> {
+    match (previous.host.launch_mode, next.host.launch_mode) {
+        (LaunchMode::OfficialRunner, LaunchMode::RustRunner) => Some(Handover::RustRunner),
+        _ => None,
+    }
+}
 
 pub(crate) trait TransitionEffects {
     async fn configure_shared_budget(&mut self, config: &HostConfig) -> Result<(), HostError>;

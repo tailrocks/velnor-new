@@ -88,8 +88,14 @@ pub(super) fn open_scale_set(
     let shared = binding.organization.is_some();
     let id = match found {
         ScaleSetFound::Found(view) => {
-            if shared && owned::created(state, &binding.connection_id)? != Some(view.id) {
-                return Err(EnsureError::Uncertain.into());
+            if shared {
+                match owned::created(state, &binding.connection_id)? {
+                    Some(recorded) if recorded != view.id => {
+                        return Err(EnsureError::Uncertain.into());
+                    }
+                    Some(_) => {}
+                    None => owned::record_created(state, &binding.connection_id, view.id)?,
+                }
             }
             view.id
         }
