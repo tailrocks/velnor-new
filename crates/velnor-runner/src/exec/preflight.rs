@@ -64,7 +64,7 @@ fn step_problem(
             },
             None => DeclaredInputs::Known(BTreeMap::new()),
         };
-        return adapter.problem(&inputs);
+        return adapter.problem(&reference, &inputs);
     }
     shell_problem(step, context)
 }

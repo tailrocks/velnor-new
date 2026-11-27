@@ -13,6 +13,7 @@ use crate::broker::{Broker, StoreWriter, TrustedFacts};
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
+use crate::native::Umask;
 use crate::store::store_root;
 
 const USAGE_ERROR: u8 = 2;
@@ -137,7 +138,7 @@ impl Signals {
     }
 }
 
-async fn exec(args: &ExecArgs) -> Result<ExitCode> {
+async fn exec(args: &ExecArgs, umask: Umask) -> Result<ExitCode> {
     let body = std::fs::read_to_string(&args.job)
         .with_context(|| format!("read {}", args.job.display()))?;
     let message = AgentJobRequestMessage::parse_json(&body)?;
@@ -151,7 +152,7 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     let mut signals = Signals::listen()?;
     let cancel = JobCancel::new();
     let store = store_writer(args, &message)?;
-    let adapters = crate::native::registry(store);
+    let adapters = crate::native::registry(store, umask);
     let mut sink = StdoutSink;
     let job = run_job(&message, &options, &adapters, &mut sink, cancel.clone());
     let escalation = async {
@@ -172,13 +173,14 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
 }
 
 fn run(cli: &Cli) -> Result<ExitCode> {
+    let umask = Umask::read();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .context("start the async runtime")?;
     let code = match &cli.command {
-        Command::Exec(args) => runtime.block_on(exec(args)),
+        Command::Exec(args) => runtime.block_on(exec(args, umask)),
     };
     runtime.shutdown_background();
     code

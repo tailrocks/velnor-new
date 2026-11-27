@@ -12,3 +12,4 @@ pub mod protocol;
 pub mod runner_json;
 pub mod secret;
 mod store;
+mod width;

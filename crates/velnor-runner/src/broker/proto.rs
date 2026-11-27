@@ -63,6 +63,19 @@ pub(crate) enum Request {
         window: Window,
         failed: FailedStep,
     },
+    BeginCache {
+        key: String,
+        version: String,
+    },
+    SealCache {
+        bytes: u64,
+    },
+    AbortCache,
+    TouchCache {
+        scope: String,
+        key: String,
+        version: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,5 +84,25 @@ pub(crate) enum Response {
     Hello(Box<TrustedFacts>),
     Done { notices: Vec<String> },
     Sound,
+    Ready,
+    Published { scope: String },
+    AlreadyExists,
+    Denied(Denied),
     Failed { message: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Denied {
+    ForkPullRequest,
+    ReadOnlyEvent,
+}
+
+impl std::fmt::Display for Denied {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::ForkPullRequest => "fork pull request",
+            Self::ReadOnlyEvent => "event without write access",
+        })
+    }
 }

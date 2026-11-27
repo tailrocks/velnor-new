@@ -1,185 +1,296 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::TcpListener;
-use std::time::Duration;
+use std::fs;
+use std::io::Write as _;
+use std::os::unix::fs::symlink;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::{Broker, FailedStep, Request, Response, TrustedFacts, Window};
+use anyhow::{Context, Result, bail};
 
-fn facts(server: &str) -> TrustedFacts {
-    facts_at(server, &"a".repeat(40))
+use super::cache::{CacheOwner, KEY, MARKER, VERSION, entry_dir, sha256_hex};
+use super::facts::TrustedFacts;
+use super::proto::Response;
+use super::{Broker, CacheUpload};
+
+pub(super) const TAR: &[u8] = b"archive";
+pub(super) const FORK: &str =
+    r#"{"kind": "pull_request", "number": 7, "base_branch": "main", "head": "fork"}"#;
+pub(super) const BRANCH: &str = r#"{"kind": "branch", "branch": "main"}"#;
+
+pub(super) struct Scratch(pub(super) PathBuf);
+
+impl Scratch {
+    pub(super) fn new() -> Result<Self> {
+        let path = std::env::temp_dir().join(format!("velnor-broker-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&path)?;
+        Ok(Self(path))
+    }
 }
 
-fn facts_at(server: &str, sha: &str) -> TrustedFacts {
-    TrustedFacts::parse(
-        format!(
-            r#"{{"repository_id": 1, "repository": "tailrocks/velnor-new",
-"server_url": "{server}", "default_branch": "main", "sha": "{sha}", "run_id": 1,
-"run_attempt": 1, "event_name": "push", "event": {{"kind": "branch", "branch": "main"}}}}"#
-        )
-        .as_bytes(),
-    )
-    .expect("facts")
+fn unlock(path: &Path) {
+    use std::os::unix::fs::PermissionsExt as _;
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) {
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
+        for item in fs::read_dir(path).into_iter().flatten().flatten() {
+            unlock(&item.path());
+        }
+    }
 }
 
-#[tokio::test]
-async fn a_repair_that_outlives_its_cap_reports_failure_and_stops_git() {
-    let silent = TcpListener::bind("127.0.0.1:0").expect("listen");
-    let server = format!(
-        "http://127.0.0.1:{}",
-        silent.local_addr().expect("addr").port()
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        unlock(&self.0);
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+pub(super) struct Fixture {
+    pub(super) scratch: Scratch,
+    pub(super) broker: Arc<Broker>,
+    pub(super) facts: TrustedFacts,
+}
+
+fn paths_below(directory: &Path, found: &mut Vec<PathBuf>) {
+    for item in fs::read_dir(directory).into_iter().flatten().flatten() {
+        let path = item.path();
+        if fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_dir()) {
+            paths_below(&path, found);
+        }
+        found.push(path);
+    }
+}
+
+pub(super) fn facts_named(name: &str, event: &str) -> Result<TrustedFacts> {
+    let body = format!(
+        r#"{{"repository_id": 4242, "repository": "tailrocks/velnor-new",
+            "server_url": "https://github.com", "default_branch": "main",
+            "sha": "0123456789abcdef0123456789abcdef01234567", "run_id": 1,
+            "run_attempt": 1, "event_name": "{name}", "event": {event}}}"#
     );
-    let root = std::env::temp_dir().join(format!("velnor-cap-{}", std::process::id()));
-    let broker = Broker::new(facts(&server), root.clone()).with_repair_cap(Duration::from_secs(1));
-    let request = Request::RepairMirror {
-        token: None,
-        window: Window::COMMIT,
-        failed: FailedStep::CheckoutIndex,
+    Ok(TrustedFacts::parse(body.as_bytes())?)
+}
+
+pub(super) fn facts_of(event: &str) -> Result<TrustedFacts> {
+    let name = if event.contains("pull_request") {
+        "pull_request"
+    } else {
+        "push"
     };
-    let response = tokio::time::timeout(Duration::from_secs(60), broker.handle(request)).await;
-    let _ = std::fs::remove_dir_all(&root);
-    match response {
-        Ok(Response::Failed { message }) => {
-            assert!(message.contains("longer than 1 seconds"), "{message}");
-        }
-        other => panic!("the cap did not end the repair: {other:?}"),
+    facts_named(name, event)
+}
+
+impl Fixture {
+    pub(super) fn new() -> Result<Self> {
+        Self::with(BRANCH, |broker| broker)
+    }
+
+    pub(super) fn with(event: &str, configure: impl FnOnce(Broker) -> Broker) -> Result<Self> {
+        Self::from_facts(facts_of(event)?, configure)
+    }
+
+    pub(super) fn from_facts(
+        facts: TrustedFacts,
+        configure: impl FnOnce(Broker) -> Broker,
+    ) -> Result<Self> {
+        let scratch = Scratch::new()?;
+        let broker = Arc::new(configure(Broker::new(
+            facts.clone(),
+            scratch.0.join("store"),
+        )));
+        Ok(Self {
+            scratch,
+            broker,
+            facts,
+        })
+    }
+
+    pub(super) fn root(&self) -> PathBuf {
+        self.scratch.0.join("store")
+    }
+
+    pub(super) fn incoming(&self) -> PathBuf {
+        self.broker.layout.incoming()
+    }
+
+    pub(super) fn upload_dir(&self) -> Result<PathBuf> {
+        let layout = &self.broker.layout;
+        let name = layout.next_name();
+        let _ = layout.create_incoming(&name)?;
+        Ok(layout.incoming().join(name))
+    }
+
+    pub(super) fn incoming_names(&self) -> Vec<String> {
+        fs::read_dir(self.incoming())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|item| item.file_name().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    pub(super) fn paths_in_the_store(&self) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        paths_below(&self.root().join("cache").join("v1"), &mut found);
+        found
+    }
+
+    pub(super) fn assert_nothing_published(&self) {
+        let published: Vec<_> = self
+            .paths_in_the_store()
+            .into_iter()
+            .filter(|path| path.file_name().is_some_and(|name| name == MARKER))
+            .collect();
+        assert_eq!(published, Vec::<PathBuf>::new());
+    }
+
+    pub(super) fn assert_no_leftover(&self) {
+        let root = self.root().join("cache").join("v1");
+        let leftovers: Vec<_> = self
+            .paths_in_the_store()
+            .into_iter()
+            .filter(|path| {
+                path.strip_prefix(&root)
+                    .is_ok_and(|rest| rest.components().count() > 2)
+            })
+            .collect();
+        assert_eq!(leftovers, Vec::<PathBuf>::new());
+        assert_eq!(self.incoming_names(), Vec::<String>::new());
+    }
+
+    pub(super) fn entry(&self, key: &str) -> Result<PathBuf> {
+        Ok(entry_dir(
+            &self.scratch.0.join("store"),
+            &CacheOwner::of(&self.facts),
+            &self
+                .facts
+                .cache_write_scope()
+                .map_err(|denied| anyhow::anyhow!("{denied}"))?,
+            &version(),
+            key,
+        ))
+    }
+
+    pub(super) fn victim(&self) -> Result<PathBuf> {
+        let victim = self.scratch.0.join("victim");
+        fs::write(&victim, "untouched")?;
+        Ok(victim)
+    }
+
+    pub(super) async fn upload(&self, key: &str, bytes: &[u8]) -> Response {
+        upload(&self.broker, key, bytes).await
     }
 }
 
-#[tokio::test]
-async fn the_cap_does_not_count_the_wait_for_the_mirror_lock() {
-    let root = std::env::temp_dir().join(format!("velnor-cap-lock-{}", std::process::id()));
-    let facts = facts("file:///nonexistent-velnor-server");
-    let mirror = super::mirror_path(&root, &facts).expect("mirror path");
-    let mut lock_file = mirror.clone().into_os_string();
-    lock_file.push(".lock");
-    std::fs::create_dir_all(mirror.parent().expect("parent")).expect("parent dir");
-    let held = std::fs::File::create(&lock_file).expect("lock file");
-    held.lock().expect("take the lock");
-    let release = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(11));
-        drop(held);
-    });
-    let broker = Broker::new(facts, root.clone()).with_repair_cap(Duration::from_secs(10));
-    let request = Request::RepairMirror {
-        token: None,
-        window: Window::COMMIT,
-        failed: FailedStep::CheckoutIndex,
+pub(super) fn version() -> String {
+    sha256_hex("paths")
+}
+
+pub(super) async fn write_all(upload: &mut CacheUpload<'_>, bytes: Vec<u8>) -> Result<u64> {
+    let mut writer = upload.take_writer().context("the pipe was taken")?;
+    tokio::task::spawn_blocking(move || {
+        writer.write_all(&bytes)?;
+        Ok(bytes.len() as u64)
+    })
+    .await?
+}
+
+pub(super) async fn upload(broker: &Broker, key: &str, bytes: &[u8]) -> Response {
+    let mut upload = match broker.begin_cache(key, &version()).await {
+        Ok(upload) => upload,
+        Err(response) => return response,
     };
-    let response = tokio::time::timeout(Duration::from_secs(120), broker.handle(request)).await;
-    release.join().expect("release the lock");
-    let _ = std::fs::remove_dir_all(&root);
-    match response {
-        Ok(Response::Failed { message }) => {
-            assert!(!message.contains("took longer than"), "{message}");
-        }
-        other => panic!("the repair did not fail on the missing server: {other:?}"),
+    match write_all(&mut upload, bytes.to_vec()).await {
+        Ok(count) => upload.seal(count).await,
+        Err(error) => Response::Failed {
+            message: format!("{error:#}"),
+        },
     }
 }
 
-#[tokio::test]
-async fn a_fetch_that_outlives_its_cap_reports_failure_stops_git_and_keeps_the_marker() {
-    let silent = TcpListener::bind("127.0.0.1:0").expect("listen");
-    let server = format!(
-        "http://127.0.0.1:{}",
-        silent.local_addr().expect("addr").port()
-    );
-    let root = std::env::temp_dir().join(format!("velnor-fetch-cap-{}", std::process::id()));
-    let facts = facts(&server);
-    let mirror = super::mirror_path(&root, &facts).expect("mirror path");
-    let broker = Broker::new(facts, root.clone()).with_fetch_cap(Duration::from_secs(1));
-    let request = Request::FetchMirror { token: None };
-    let response = tokio::time::timeout(Duration::from_secs(60), broker.handle(request)).await;
-    let marked = mirror.join("sweep-needed").exists();
-    let survivors = std::process::Command::new("pgrep")
-        .arg("-f")
-        .arg(root.display().to_string())
-        .status()
-        .expect("pgrep");
-    let _ = std::fs::remove_dir_all(&root);
-    match response {
-        Ok(Response::Failed { message }) => {
-            assert!(
-                message.contains("fetching into the mirror took longer than 1 seconds"),
-                "{message}"
-            );
-        }
-        other => panic!("the cap did not end the fetch: {other:?}"),
-    }
-    assert!(marked, "the interrupted fetch left no marker");
-    assert!(!survivors.success(), "a git of the fetch survived the cap");
+pub(super) async fn begin<'a>(broker: &'a Broker, key: &str) -> Result<CacheUpload<'a>> {
+    broker
+        .begin_cache(key, &version())
+        .await
+        .map_err(|response| anyhow::anyhow!("{response:?}"))
 }
 
-fn git(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args(args)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .expect("run git");
-    assert!(out.status.success(), "git {args:?}: {out:?}");
-    String::from_utf8_lossy(&out.stdout).trim().to_owned()
+pub(super) fn untouched(victim: &Path) -> Result<()> {
+    assert_eq!(fs::read_to_string(victim)?, "untouched");
+    Ok(())
 }
 
-#[tokio::test]
-async fn a_pipe_where_an_object_belongs_is_cut_off_by_the_cap_and_swept_by_the_next_fetch() {
-    let base = std::env::temp_dir().join(format!("velnor-pipe-{}", std::process::id()));
-    let work = base.join("work");
-    let upstream = base.join("up/tailrocks/velnor-new.git");
-    std::fs::create_dir_all(&work).expect("work");
-    std::fs::create_dir_all(&upstream).expect("upstream");
-    git(&upstream, &["init", "-q", "--bare"]);
-    git(&work, &["init", "-q", "-b", "main"]);
-    std::fs::write(work.join("file"), "x").expect("file");
-    git(&work, &["add", "file"]);
-    git(&work, &["commit", "-q", "-m", "first"]);
-    git(
-        &work,
-        &["push", "-q", &upstream.display().to_string(), "main"],
-    );
-    let sha = git(&work, &["rev-parse", "HEAD"]);
-    let tree = git(&work, &["rev-parse", "HEAD^{tree}"]);
-    let server = format!("file://{}", base.join("up").display());
-    let root = base.join("store");
-    let fetch = |cap: u64| {
-        let broker = Broker::new(facts_at(&server, &sha), root.clone())
-            .with_fetch_cap(Duration::from_secs(cap));
-        async move { broker.handle(Request::FetchMirror { token: None }).await }
-    };
-    assert!(matches!(fetch(60).await, Response::Done { .. }));
-    let mirror = super::mirror_path(&root, &facts_at(&server, &sha)).expect("mirror path");
-    let object = mirror.join("objects").join(&tree[..2]).join(&tree[2..]);
-    assert!(object.is_file(), "the tree is not a loose object");
-    std::fs::remove_file(&object).expect("remove the tree");
-    let made = std::process::Command::new("mkfifo")
-        .arg(&object)
-        .status()
-        .expect("mkfifo");
-    assert!(made.success());
-    let stuck = tokio::time::timeout(Duration::from_secs(60), fetch(3)).await;
-    let survivors = std::process::Command::new("pgrep")
-        .arg("-f")
-        .arg(base.display().to_string())
-        .status()
-        .expect("pgrep");
-    let recovered = tokio::time::timeout(Duration::from_secs(60), fetch(60)).await;
-    let swept = object.symlink_metadata().map_or(true, |meta| {
-        !std::os::unix::fs::FileTypeExt::is_fifo(&meta.file_type())
-    });
-    let _ = std::fs::remove_dir_all(&base);
-    match stuck {
-        Ok(Response::Failed { message }) => {
-            assert!(message.contains("took longer than 3 seconds"), "{message}");
-        }
-        other => panic!("the cap did not end the fetch: {other:?}"),
-    }
-    assert!(!survivors.success(), "a git of the fetch survived the cap");
+pub(super) fn published(response: &Response) -> bool {
+    matches!(response, Response::Published { .. })
+}
+
+pub(super) fn failed(response: &Response, message: &str) {
     assert!(
-        matches!(recovered, Ok(Response::Done { .. })),
-        "{recovered:?}"
+        matches!(response, Response::Failed { message: text } if text.contains(message)),
+        "{message}: {response:?}"
     );
-    assert!(swept, "the pipe is still where the object belongs");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_link_planted_in_the_entry_during_publish_is_never_written_through() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let victim = fixture.victim()?;
+    for round in 0..20 {
+        let key = format!("k-{round}");
+        let entry = fixture.entry(&key)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let planter = {
+            let (stop, victim, entry) = (stop.clone(), victim.clone(), entry.clone());
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    for name in [KEY, VERSION, MARKER] {
+                        let _ = symlink(&victim, entry.join(name));
+                    }
+                    std::thread::yield_now();
+                }
+            })
+        };
+        let response = fixture.upload(&key, TAR).await;
+        stop.store(true, Ordering::Relaxed);
+        assert!(planter.join().is_ok());
+        untouched(&victim)?;
+        match response {
+            Response::Published { .. } => {
+                for name in [KEY, VERSION, MARKER] {
+                    assert!(fs::symlink_metadata(entry.join(name))?.is_file());
+                }
+            }
+            Response::Failed { .. } => {}
+            other => bail!("unexpected answer {other:?}"),
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_publishers_of_one_key_publish_exactly_once() -> Result<()> {
+    const PUBLISHERS: usize = 16;
+    let fixture = Fixture::new()?;
+    let mut tasks = Vec::new();
+    for _ in 0..PUBLISHERS {
+        let broker = fixture.broker.clone();
+        tasks.push(tokio::spawn(
+            async move { upload(&broker, "k-1", TAR).await },
+        ));
+    }
+    let mut answers = Vec::new();
+    for task in tasks {
+        answers.push(task.await?);
+    }
+    let published = answers.iter().filter(|answer| published(answer)).count();
+    let existing = answers
+        .iter()
+        .filter(|answer| matches!(answer, Response::AlreadyExists))
+        .count();
+    assert_eq!((published, existing), (1, PUBLISHERS - 1), "{answers:?}");
+    assert_eq!(fs::read(fixture.entry("k-1")?.join("data.tar"))?, TAR);
+    assert_eq!(fixture.incoming_names(), Vec::<String>::new());
+    Ok(())
 }
