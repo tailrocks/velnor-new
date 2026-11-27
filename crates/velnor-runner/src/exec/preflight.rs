@@ -47,6 +47,9 @@ fn step_problem(
     if step.background || step.kind == ActionStepKind::BackgroundStepControl {
         return Some("background step".to_owned());
     }
+    if step.reference.is_none() {
+        return Some("step without a definition reference".to_owned());
+    }
     if let Some(reference) = reference(step) {
         return adapters
             .find(&reference)

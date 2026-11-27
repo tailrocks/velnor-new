@@ -108,6 +108,8 @@ mod semantics;
 mod shells;
 #[path = "exec_stopped.rs"]
 mod stopped;
+#[path = "exec_strict.rs"]
+mod strict;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;

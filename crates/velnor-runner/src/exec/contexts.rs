@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::{ExecError, RunOptions, evaluate, private, token};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
@@ -75,13 +75,25 @@ pub(super) fn string(value: &str) -> ContextValue {
 }
 
 pub(super) fn object(pairs: &[(String, String)], case_sensitive: bool) -> ContextValue {
+    let mut unique = Vec::new();
+    for (name, value) in pairs {
+        if case_sensitive {
+            set_pair(&mut unique, name, value);
+        } else {
+            set_output(&mut unique, name, value);
+        }
+    }
     ContextValue::Object {
         case_sensitive,
-        entries: pairs
+        entries: unique
             .iter()
             .map(|(name, value)| (name.clone(), string(value)))
             .collect(),
     }
+}
+
+pub(super) fn tool_cache(options: &RunOptions) -> PathBuf {
+    options.temp.join("tool_cache")
 }
 
 pub(super) fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a str> {
@@ -206,11 +218,7 @@ pub(super) fn runner_context(
         ),
         (
             "tool_cache".to_owned(),
-            options
-                .temp
-                .join("tool_cache")
-                .to_string_lossy()
-                .into_owned(),
+            tool_cache(options).to_string_lossy().into_owned(),
         ),
         ("environment".to_owned(), environment.to_owned()),
     ];
@@ -273,7 +281,7 @@ pub(super) async fn run_defaults(
 ) -> Result<Vec<(String, String)>, ExecError> {
     let mut run = Vec::new();
     for defaults in &message.defaults {
-        if let Some(entry) = token::find(defaults, "run") {
+        if let Some(entry) = token::find(defaults, "run")? {
             run.clear();
             for (name, value) in evaluate::mapping(entry, env).await? {
                 if !value.is_empty() {

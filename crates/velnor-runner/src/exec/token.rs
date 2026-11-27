@@ -54,30 +54,44 @@ pub(super) fn scalar(token: &Json, env: &ExprEnv) -> Result<String, ExprError> {
     }
 }
 
-pub(super) fn pairs(token: &Json) -> Vec<(&Json, &Json)> {
-    let Some(entries) = token
-        .as_object()
-        .and_then(|object| member(object, "map"))
-        .and_then(Json::as_array)
-    else {
-        return Vec::new();
+fn malformed(what: &str) -> ExprError {
+    ExprError::evaluation(format!("Unexpected template token: {what}"))
+}
+
+pub(super) fn pairs(token: &Json) -> Result<Vec<(&Json, &Json)>, ExprError> {
+    let object = match token {
+        Json::Null => return Ok(Vec::new()),
+        Json::Object(object) => object,
+        _ => return Err(malformed("a mapping was expected")),
     };
-    entries
+    if member(object, "type").and_then(Json::as_i64) == Some(NULL) {
+        return Ok(Vec::new());
+    }
+    member(object, "map")
+        .and_then(Json::as_array)
+        .ok_or_else(|| malformed("a mapping was expected"))?
         .iter()
-        .filter_map(Json::as_object)
-        .filter_map(|pair| Some((member(pair, "key")?, member(pair, "value")?)))
+        .map(|pair| {
+            let pair = pair
+                .as_object()
+                .ok_or_else(|| malformed("a mapping entry was expected"))?;
+            Ok((
+                member(pair, "key").ok_or_else(|| malformed("a mapping entry has no key"))?,
+                member(pair, "value").ok_or_else(|| malformed("a mapping entry has no value"))?,
+            ))
+        })
         .collect()
 }
 
-pub(super) fn find<'a>(token: &'a Json, name: &str) -> Option<&'a Json> {
-    pairs(token)
+pub(super) fn find<'a>(token: &'a Json, name: &str) -> Result<Option<&'a Json>, ExprError> {
+    Ok(pairs(token)?
         .into_iter()
         .find(|(key, _)| token_literal(key).is_some_and(|key| key.eq_ignore_ascii_case(name)))
-        .map(|(_, value)| value)
+        .map(|(_, value)| value))
 }
 
 pub(super) fn mapping(token: &Json, env: &ExprEnv) -> Result<Vec<(String, String)>, ExprError> {
-    pairs(token)
+    pairs(token)?
         .into_iter()
         .map(|(key, value)| Ok((scalar(key, env)?, scalar(value, env)?)))
         .collect()
@@ -89,7 +103,9 @@ pub(super) fn input(
     env: &ExprEnv,
 ) -> Result<Option<String>, ExprError> {
     inputs
-        .and_then(|inputs| find(inputs, name))
+        .map(|inputs| find(inputs, name))
+        .transpose()?
+        .flatten()
         .map(|token| scalar(token, env))
         .transpose()
 }
