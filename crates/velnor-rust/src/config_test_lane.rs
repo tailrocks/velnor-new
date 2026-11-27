@@ -283,13 +283,13 @@ fn lane_commands(
     let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
-            packages: scope(peers, &normalized, |lane| lane.lint),
+            packages: scope(peers, root, &normalized, |lane| lane.lint),
             features: features(),
         });
     }
     if lane.doc && documented.insert(normalized.clone()) {
         commands.push(CargoCommand::DocFeatures {
-            packages: scope(peers, &normalized, |lane| lane.doc),
+            packages: scope(peers, root, &normalized, |lane| lane.doc),
             features: features(),
         });
     }
@@ -298,6 +298,7 @@ fn lane_commands(
 
 fn scope(
     peers: &[&TestLane],
+    root: &RustRoot,
     normalized: &LaneFeatures,
     wants: fn(&TestLane) -> bool,
 ) -> Vec<PackageName> {
@@ -314,7 +315,27 @@ fn scope(
         }
         packages.extend(lane.packages.iter().cloned());
     }
+    if !packages.is_empty() {
+        packages.extend(
+            root.members
+                .iter()
+                .filter(|member| {
+                    normalized
+                        .names
+                        .iter()
+                        .any(|feature| defines(&member.name, &member.features, feature))
+                })
+                .map(|member| member.name.clone()),
+        );
+    }
     packages.into_iter().collect()
+}
+
+fn defines(package: &PackageName, features: &[String], feature: &str) -> bool {
+    match feature.split_once('/') {
+        Some((prefix, _)) => prefix == package.as_str(),
+        None => features.iter().any(|declared| declared == feature),
+    }
 }
 
 pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

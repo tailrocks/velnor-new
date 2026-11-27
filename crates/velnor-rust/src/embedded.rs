@@ -33,9 +33,10 @@ impl<'a> Argument<'a> {
                     Token::Punct(')'),
                     Token::Punct(','),
                     Token::Str(tail),
-                    ..,
+                    ending @ ..,
                 ],
-            ) if !tail.contains('\\') => match *variable {
+            ) if tail.starts_with('/') && !tail.contains('\\') && closes(ending) => match *variable
+            {
                 "CARGO_MANIFEST_DIR" => Self::ManifestDir(tail),
                 "OUT_DIR" if !tail.split('/').any(|part| part == "..") => Self::BuildOutput,
                 _ => Self::Unknown,
@@ -43,6 +44,13 @@ impl<'a> Argument<'a> {
             _ => Self::Unknown,
         }
     }
+}
+
+fn closes(ending: &[Token<'_>]) -> bool {
+    matches!(
+        ending,
+        [Token::Punct(')'), ..] | [Token::Punct(','), Token::Punct(')'), ..]
+    )
 }
 
 const MACROS: &[&str] = &["include_str", "include_bytes", "include"];

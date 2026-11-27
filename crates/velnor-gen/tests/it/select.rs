@@ -40,6 +40,7 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
             .collect(),
         targets: Vec::new(),
         custom_harnesses: Vec::new(),
+        features: Vec::new(),
     }
 }
 

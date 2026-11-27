@@ -11,7 +11,7 @@ use velnor_model::{
 use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
-use crate::harness::custom_harnesses;
+use crate::harness::{custom_harnesses, declared_features};
 use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
@@ -347,6 +347,7 @@ fn member(
             .collect(),
         targets: package.targets.clone(),
         custom_harnesses: custom_harnesses(view, package)?,
+        features: declared_features(view, package),
     })
 }
 

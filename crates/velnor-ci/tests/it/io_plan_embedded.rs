@@ -52,3 +52,40 @@ fn a_manifest_dir_include_reads_only_the_file_it_names() {
         "Cargo.toml: some\n  b input:shared/h.txt\ntools/Cargo.toml: none\n"
     );
 }
+
+#[test]
+fn a_manifest_dir_include_split_across_literals_can_read_anything() {
+    let include =
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/\", \"../notes/x.md\"));\n";
+    let planned = explained(include, "notes/x.md");
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
+
+#[test]
+fn a_build_output_include_split_across_literals_can_read_anything() {
+    let include = "include_str!(concat!(env!(\"OUT_DIR\"), \"/\", \"../../../notes/x.md\"));\n";
+    let planned = explained(include, "notes/x.md");
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
+
+fn assert_slashless_tail_reads_anything(variable: &str, tail: &str) {
+    let include = format!("include_str!(concat!(env!(\"{variable}\"), \"{tail}\"));\n");
+    let planned = explained(&include, "notes/x.md");
+    assert!(planned.contains("b input:notes/x.md"), "{planned}");
+}
+
+#[test]
+fn a_manifest_dir_include_tail_without_a_leading_slash_can_read_anything() {
+    assert_slashless_tail_reads_anything("CARGO_MANIFEST_DIR", "shared/h.txt");
+}
+
+#[test]
+fn a_build_output_include_tail_without_a_leading_slash_can_read_anything() {
+    assert_slashless_tail_reads_anything("OUT_DIR", "gen.rs");
+}
+
+#[test]
+fn a_manifest_dir_include_with_a_trailing_comma_still_reads_only_the_file_it_names() {
+    let include = "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../shared/h.txt\",));\n";
+    assert_eq!(explained(include, "notes/x.md"), NOTHING);
+}
