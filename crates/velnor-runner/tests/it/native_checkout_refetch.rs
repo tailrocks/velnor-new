@@ -179,3 +179,32 @@ fn a_dropped_broken_ref_triggers_a_refetch_when_the_fetch_brought_nothing() -> R
     assert!(said(&ran, "removed refs/heads/main"));
     Ok(())
 }
+
+#[test]
+fn a_malformed_packed_refs_is_quarantined_and_the_checkout_proceeds() -> Result<()> {
+    let rig = Rig::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let mirror = rig.mirror();
+    let malformed = "not a packed refs file\n";
+    std::fs::write(mirror.join("packed-refs"), malformed)?;
+    let next = rig.advance("third")?;
+    let scratch = Scratch::new()?;
+    let ran = rig.run("checkout_depth1", &next, &scratch)?;
+    assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(git(&scratch.workspace(), &["rev-parse", "HEAD"])?, next);
+    assert!(said(&ran, "moved the unreadable packed-refs to quarantine"));
+    let kept = std::fs::read_dir(mirror.join("quarantine"))?
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("packed-refs.")
+        })
+        .map(|entry| std::fs::read_to_string(entry.path()))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(kept, [malformed]);
+    git(&mirror, &["cat-file", "-e", &rig.head])?;
+    Ok(())
+}

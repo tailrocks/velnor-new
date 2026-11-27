@@ -35,10 +35,31 @@ pub(super) async fn holds_commit(mirror: &Path, sha: &str) -> bool {
             .is_ok_and(|refs| refs.iter().any(|(id, _)| id == sha))
 }
 
+async fn refs_past_malformed_packed_refs(
+    mirror: &Path,
+) -> Result<(Vec<(String, String)>, Vec<String>)> {
+    match refs(mirror).await {
+        Ok(all) => Ok((all, Vec::new())),
+        Err(error) if format!("{error:#}").contains("packed-refs") => {
+            let packed = mirror.join("packed-refs");
+            if !tokio::fs::symlink_metadata(&packed)
+                .await
+                .is_ok_and(|meta| meta.is_file())
+            {
+                return Err(error);
+            }
+            quarantine(mirror, "packed-refs", &packed).await?;
+            let notice = "mirror: moved the unreadable packed-refs to quarantine".to_owned();
+            Ok((refs(mirror).await?, vec![notice]))
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
-    let all = refs(mirror).await?;
+    let (all, mut notices) = refs_past_malformed_packed_refs(mirror).await?;
     if all.is_empty() {
-        return Ok(Vec::new());
+        return Ok(notices);
     }
     let ids = all
         .iter()
@@ -52,7 +73,6 @@ pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
         .lines()
         .filter_map(|line| line.strip_suffix(" missing"))
         .collect();
-    let mut notices = Vec::new();
     for (id, name) in all.iter().filter(|(id, _)| missing.contains(id.as_str())) {
         let delete = git_args(Some(mirror), &["update-ref", "--no-deref", "-d", name, id]);
         git(&delete, &[]).await?;
