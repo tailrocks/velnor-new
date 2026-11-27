@@ -150,6 +150,7 @@ impl Job<'_> {
             reference: reference.to_owned(),
             inputs,
             env: process_env.iter().cloned().collect(),
+            job: self.ctx.facts(),
             workspace: &self.options.workspace,
             temp: &self.options.temp,
             github_token: github_token(self.message),

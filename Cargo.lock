@@ -4465,12 +4465,14 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha2",
+ "tar",
  "thiserror",
  "time",
  "tokio",
  "tokio-tungstenite",
  "url",
  "uuid",
+ "velnor-cache-rules",
  "velnor-model",
 ]
 
@@ -4604,6 +4606,7 @@ dependencies = [
  "tera",
  "toml",
  "url",
+ "velnor-cache-rules",
  "velnor-model",
 ]
 

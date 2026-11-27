@@ -20,7 +20,7 @@ use crate::store::store_root;
 use super::depth::{Depth, js_trim};
 
 pub(super) struct Checkout {
-    pub(super) store: StoreWriter,
+    pub(super) store: std::sync::Arc<StoreWriter>,
 }
 
 impl StepAdapter for Checkout {
@@ -28,7 +28,7 @@ impl StepAdapter for Checkout {
         reference.starts_with("actions/checkout@")
     }
 
-    fn problem(&self, inputs: &DeclaredInputs) -> Option<String> {
+    fn problem(&self, _reference: &str, inputs: &DeclaredInputs) -> Option<String> {
         self.store.facts().err().or_else(|| match inputs {
             DeclaredInputs::Known(inputs) => validate_inputs(inputs).err(),
             DeclaredInputs::Unknown => Some(
@@ -251,8 +251,12 @@ async fn ask(
         }
         Response::Sound => Ok(()),
         Response::Failed { message } => Err(ExecError::Invalid(message)),
-        Response::Hello(_) => Err(ExecError::Invalid(
-            "store broker protocol error: Hello answered a mirror request".to_owned(),
+        Response::Hello(_)
+        | Response::Ready
+        | Response::Published { .. }
+        | Response::AlreadyExists
+        | Response::Denied(_) => Err(ExecError::Invalid(
+            "store broker protocol error: unexpected answer to a mirror request".to_owned(),
         )),
     }
 }

@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
-    secrets_context, service_variables, set_pair, string, with_action, write_event,
+    secrets_context, service_variables, set_pair, string, variable, with_action, write_event,
 };
 use super::host_env::host_env;
 use super::tracking::Tracking;
-use super::{ExecError, RunOptions, SHARED_DIR_MODE, StepResult};
+use super::{ExecError, JobFacts, RunOptions, SHARED_DIR_MODE, StepResult};
 use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
@@ -21,6 +21,7 @@ fn put(env: &mut ExprEnv, root: RootContext, value: &ContextValue) -> Result<(),
     env.set_context(root, value)
         .map_err(|error| ExecError::Invalid(format!("{error:#}")))
 }
+const CACHE_MODE_VARIABLE: &str = "actions_cache_mode";
 
 #[derive(Debug, Clone)]
 pub(super) struct StepEntry {
@@ -41,6 +42,7 @@ async fn create_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
 #[derive(Debug)]
 pub(super) struct JobContext {
     base: ExprEnv,
+    facts: JobFacts,
     github: ContextValue,
     runner: ContextValue,
     event_path: PathBuf,
@@ -108,10 +110,13 @@ impl JobContext {
         }
         let defaults = run_defaults(message, &base).await?;
         let tracking = Tracking::for_job(message);
+        let cache_mode = variable(message, CACHE_MODE_VARIABLE).filter(|mode| !mode.is_empty());
+        let facts = JobFacts::new(&github, cache_mode);
         Ok(Self {
             host: host_env(tracking.as_ref()),
             tracking,
             runtime: exported_variables(&github, &runner),
+            facts,
             service: service_variables(message),
             github,
             runner,
@@ -153,6 +158,10 @@ impl JobContext {
         put(&mut self.base, RootContext::Github, &self.github)?;
         self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await
+    }
+
+    pub(super) fn facts(&self) -> &JobFacts {
+        &self.facts
     }
 
     pub(super) fn base_env(&self) -> ExprEnv {

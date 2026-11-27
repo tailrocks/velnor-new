@@ -24,12 +24,17 @@ fn escaped(text: &str) -> String {
     key
 }
 
-fn server_key(url: &Url) -> Result<String> {
+pub(super) fn server_identity(url: &Url) -> String {
     let mut identity = format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default());
     if let Some(port) = url.port() {
         let _ = write!(identity, ":{port}");
     }
     identity.push_str(url.path().trim_end_matches('/'));
+    identity
+}
+
+fn server_key(url: &Url) -> Result<String> {
+    let identity = server_identity(url);
     let key = escaped(&identity);
     if key.len() > MAX_SERVER_KEY {
         bail!("mirror: server identity '{identity}' is too long for a mirror directory");

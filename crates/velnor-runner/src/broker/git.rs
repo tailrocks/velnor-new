@@ -23,6 +23,8 @@ use url::Url;
 
 mod batch;
 
+use super::safe_fs::uninterrupted;
+
 pub(crate) use batch::{Batch, Commit};
 
 tokio::task_local! {
@@ -127,18 +129,13 @@ enum Pipes {
 }
 
 fn wait_for_exit(leader: Pid) -> Result<bool, Errno> {
-    loop {
-        match waitid(
+    let status = uninterrupted(|| {
+        waitid(
             WaitId::Pid(leader),
             WaitIdOptions::EXITED | WaitIdOptions::NOWAIT,
-        ) {
-            Ok(status) => {
-                return Ok(status.is_some_and(|status| status.exit_status() == Some(0)));
-            }
-            Err(Errno::INTR) => {}
-            Err(error) => return Err(error),
-        }
-    }
+        )
+    })?;
+    Ok(status.is_some_and(|status| status.exit_status() == Some(0)))
 }
 
 impl Leader {

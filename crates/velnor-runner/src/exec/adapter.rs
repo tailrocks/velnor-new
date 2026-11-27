@@ -12,7 +12,7 @@ use super::contexts::set_output;
 use super::output::Output;
 use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
 use super::timeout::{Timeout, interrupted, stop_result};
-use super::{AnnotationLevel, ExecError, Inputs, JobCancel, StepResult};
+use super::{AnnotationLevel, ExecError, Inputs, JobCancel, JobFacts, StepResult};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(KILL_GRACE.as_secs() + 1);
 
@@ -33,7 +33,7 @@ pub enum DeclaredInputs {
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
-    fn problem(&self, _inputs: &DeclaredInputs) -> Option<String> {
+    fn problem(&self, _reference: &str, _inputs: &DeclaredInputs) -> Option<String> {
         None
     }
 
@@ -77,6 +77,7 @@ pub struct StepContext<'a> {
     pub reference: String,
     pub inputs: Inputs,
     pub env: BTreeMap<String, String>,
+    pub job: &'a JobFacts,
     pub workspace: &'a Path,
     pub temp: &'a Path,
     pub github_token: Option<String>,
@@ -188,6 +189,7 @@ pub(super) struct AdapterCall<'a> {
     pub(super) reference: String,
     pub(super) inputs: Inputs,
     pub(super) env: BTreeMap<String, String>,
+    pub(super) job: &'a JobFacts,
     pub(super) workspace: &'a Path,
     pub(super) temp: &'a Path,
     pub(super) github_token: Option<String>,
@@ -212,6 +214,7 @@ pub(super) async fn invoke(
         reference: call.reference,
         inputs: call.inputs,
         env: call.env,
+        job: call.job,
         workspace: call.workspace,
         temp: call.temp,
         github_token: call.github_token,

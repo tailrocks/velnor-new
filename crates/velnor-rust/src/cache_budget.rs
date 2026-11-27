@@ -3,11 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_cache_rules::DEFAULT_CACHE_BUDGET_BYTES;
 use velnor_model::{PRIVATE_SOURCES_TAG, PRIVATE_TARGET_TAG, SHARED_SOURCES_OWNER};
 
 pub type CacheId = u64;
 pub type Timestamp = i64;
-pub const DEFAULT_CACHE_BUDGET_BYTES: u64 = 8_000_000_000;
 const DAY: i64 = 86_400;
 const ANCHOR_GENERATIONS: usize = 2;
 
