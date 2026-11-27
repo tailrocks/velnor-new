@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 AND ISC
 // SPDX-FileContributor: isaacs/minimatch@3.1.2 minimatch.js
 
-use super::js_class::{Raw, check_raw};
+use super::js_regex::{Raw, check_raw};
 use super::pattern::GlobError;
 
 const RE_SPECIALS: &str = "().*{}+?[]^$\\!";

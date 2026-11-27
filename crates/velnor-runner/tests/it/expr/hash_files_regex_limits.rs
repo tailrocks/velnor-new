@@ -19,6 +19,13 @@ fn workspace() -> Result<(TempDir, ExprEnv)> {
     Ok((dir, env))
 }
 
+fn assert_fails_with(outcome: &str, reason: &str, case: &str) {
+    assert!(
+        outcome.ends_with(reason),
+        "{case} should fail with {reason:?}, but the call ended: {outcome:?}"
+    );
+}
+
 fn wildcards(count: usize) -> String {
     "?".repeat(count)
 }
@@ -28,13 +35,19 @@ fn expr_hash_files_fails_a_run_of_text_past_the_v8_regex_limit() -> Result<()> {
     let (_dir, mut env) = workspace()?;
 
     assert_eq!(hash_outcome(&mut env, &wildcards(V8_TEXT_RUN))?, FITS);
-    let wildcards_over = hash_outcome(&mut env, &wildcards(V8_TEXT_RUN + 1))?;
-    assert!(wildcards_over.ends_with(TOO_LARGE), "{wildcards_over}");
+    assert_fails_with(
+        &hash_outcome(&mut env, &wildcards(V8_TEXT_RUN + 1))?,
+        TOO_LARGE,
+        "one wildcard more than the V8 text run",
+    );
 
     let letters = |count: usize| format!("{}*", "a".repeat(count));
     assert_eq!(hash_outcome(&mut env, &letters(V8_TEXT_RUN))?, FITS);
-    let letters_over = hash_outcome(&mut env, &letters(V8_TEXT_RUN + 1))?;
-    assert!(letters_over.ends_with(TOO_LARGE), "{letters_over}");
+    assert_fails_with(
+        &hash_outcome(&mut env, &letters(V8_TEXT_RUN + 1))?,
+        TOO_LARGE,
+        "one letter more than the V8 text run",
+    );
     Ok(())
 }
 
@@ -54,8 +67,11 @@ fn expr_hash_files_fails_the_v8_limit_only_when_a_path_reaches_the_segment() -> 
     let huge = wildcards(V8_TEXT_RUN + 1);
 
     assert_eq!(hash_outcome(&mut env, &format!("missing/{huge}"))?, FITS);
-    let reached = hash_outcome(&mut env, &format!("sub/{huge}"))?;
-    assert!(reached.ends_with(TOO_LARGE), "{reached}");
+    assert_fails_with(
+        &hash_outcome(&mut env, &format!("sub/{huge}"))?,
+        TOO_LARGE,
+        "an oversized segment under a directory that exists",
+    );
     Ok(())
 }
 
@@ -70,8 +86,11 @@ fn expr_hash_files_caps_nested_unclosed_classes_without_crashing() -> Result<()>
         hash_outcome(&mut env, &nested(NESTING_LIMIT, "", ""))?,
         FITS
     );
-    let over = hash_outcome(&mut env, &nested(NESTING_LIMIT + 1, "", ""))?;
-    assert!(over.ends_with(TOO_DEEP), "{over}");
+    assert_fails_with(
+        &hash_outcome(&mut env, &nested(NESTING_LIMIT + 1, "", ""))?,
+        TOO_DEEP,
+        "one unclosed class more than the nesting limit",
+    );
 
     let closed_early = format!("{}]", "a".repeat(1_000));
     let patterns = [
@@ -86,7 +105,11 @@ fn expr_hash_files_caps_nested_unclosed_classes_without_crashing() -> Result<()>
             let (_dir, mut env) = workspace()?;
             hash_outcome(&mut env, &pattern)
         })?;
-        assert!(message.ends_with(TOO_DEEP), "{message}");
+        assert_fails_with(
+            &message,
+            TOO_DEEP,
+            "a pattern of thousands of unclosed classes",
+        );
     }
     Ok(())
 }

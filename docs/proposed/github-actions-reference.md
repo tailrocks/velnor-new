@@ -980,7 +980,10 @@ differ on purpose:
   chain of each search root and the target of each matched symlink, and drops
   every path whose real location leaves the canonical workspace. The search
   root itself is examined with `lstat` and never resolved, as in the runner
-  ([index.js:1362](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1362)).
+  ([index.js:1362](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1362)),
+  and it is examined before its parents are resolved, so a path too long for
+  the system fails the call with `ENAMETOOLONG` even when a parent is
+  missing, as it does in the runner.
 - **Search roots are clamped to the workspace.** The runner walks every search
   root a pattern yields, wherever it lies
   ([index.js:1358](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1358)), and only afterwards drops matches outside the
@@ -995,15 +998,23 @@ differ on purpose:
   and follows links
   ([index.js:1446](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L1446)). Velnor never
   follows symlinks and returns the runner's `Invalid glob option` error for it.
-- **A class that starts with `]` and holds regular-expression syntax is
-  refused.** Velnor translates every segment the way minimatch 3.1.2 does and
-  matches it over UTF-16 code units. minimatch tests each class by compiling
-  `RegExp('[' + class + ']')` from the pattern text. When that text starts with
-  `]`, the compiled expression is an empty class followed by the rest of the
-  text, so whether it is valid depends on the whole JavaScript regular
-  expression grammar. Velnor accepts such a class when the rest holds none of
-  `( ) [ { * + ? | ^ $ \` and fails the call with `which is not supported`
-  otherwise, for example for `[](]`.
+- **A class that holds a named or modified group is refused.** Velnor
+  translates every segment the way minimatch 3.1.2 does and matches it over
+  UTF-16 code units. minimatch tests each class by compiling
+  `RegExp('[' + class + ']')` from the pattern text, and JavaScript closes that
+  class at the first `]` that no backslash escapes in the regular-expression
+  text, which can come before the `]` the pattern's own scan stops at: after
+  `\@` the pattern keeps its escape but the regular expression does not, so
+  `[a\@])]` compiles as `[a\@]` followed by `)]` and fails, and `[\@]z-a]`
+  compiles. Velnor validates the class up to that `]`, then the rest of the
+  text as a regular expression (groups, lookarounds, quantifiers including
+  braces, escapes and further classes, in the non-unicode grammar of V8 13.6),
+  and takes the same fallback minimatch takes when the compilation fails. Two
+  syntaxes stay out of reach and fail the call with `which is not supported`:
+  a named group (`(?<name>`), whose identifier and duplicate rules need the
+  Unicode identifier tables, and a flag group (`(?i:`), which Node 24 accepts
+  and Node 20 rejects. Velnor refuses them even where V8 would reject the
+  same text for another reason, such as a repeated name.
 - **A segment past V8's regular-expression limit fails the call.** minimatch
   builds one `RegExp` per segment and V8 compiles it at the first `test`, so
   the runner's process fails with `Regular expression too large` when a path
@@ -1022,18 +1033,23 @@ differ on purpose:
   one-byte name cannot match, so a run that holds a character above U+00FF
   fails in the runner only against a name that holds such a character, while
   Velnor fails it for every name. Thousands of wildcards in one segment end in
-  V8's `Stack overflow` at a count that depends on the platform's stack
-  frames (the shipped bundle fails from 14,681 `*` characters on Node 24.22.1
-  for macOS arm64).
+  V8's `Stack overflow` at a count that depends on the stack the process has
+  left, which the size of its environment reduces. The shipped bundle on
+  Node 24.22.1 for macOS arm64 fails from 14,678 `*` characters with a
+  one-byte environment variable, from 13,140 with a 100,000-byte one and from
+  8,524 with a 400,000-byte one.
 - **Unclosed classes nest at most 4,096 deep.** minimatch translates the text
   after an unclosed `[` again, once per bracket, and the shipped bundle fails
-  with `RangeError: Maximum call stack size exceeded` from 4,704 nested
-  brackets on Node 24.22.1 for macOS arm64, a depth that depends on the
-  platform's stack frames, and runs out of memory far above that. Velnor
-  translates the chain iteratively, in time and memory linear in the pattern,
-  and fails the call above `MAX_CLASS_NESTING` (4,096) in
-  `crates/velnor-runner/src/expr/translate.rs`, so a pattern with 4,097 to
-  4,703 nested brackets fails here and hashes upstream.
+  with `RangeError: Maximum call stack size exceeded` once the nesting passes a
+  depth that depends on the stack the process has left, which the size of its
+  environment reduces: on Node 24.22.1 for macOS arm64, `*/` followed by
+  brackets hashes up to 4,702 brackets and fails from 4,703 with a one-byte
+  environment variable, fails from 4,223 with a 100,000-byte one and from
+  2,784 with a 400,000-byte one, and the bundle runs out of memory far above
+  that. Velnor translates the chain iteratively, in time and memory linear in
+  the pattern, and fails the call above `MAX_CLASS_NESTING` (4,096) in
+  `crates/velnor-runner/src/expr/translate.rs`, so a pattern with 4,097 or
+  more nested brackets fails here and may hash upstream.
 - **A matched file that is not regular fails the call.** A FIFO, or a symlink
   that resolves to one, makes the runner block while `createReadStream` opens
   it, until the function timeout fires. A socket already fails at once in the

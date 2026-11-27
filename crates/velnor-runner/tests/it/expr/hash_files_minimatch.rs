@@ -50,17 +50,44 @@ fn expr_hash_files_reproduces_minimatch_fallbacks_for_broken_classes() -> Result
 }
 
 #[test]
-fn expr_hash_files_refuses_a_class_minimatch_would_need_a_regular_expression_parser_for()
+fn expr_hash_files_judges_a_class_by_the_text_up_to_the_first_bracket_the_regexp_leaves_open()
+-> Result<()> {
+    hashes_only("[a\\@])]", &["a", "[a@])]", "@", "]"], &["[a@])]"])?;
+    hashes_only(
+        "*/[\\@]z-a]",
+        &["d/a", "d/@z-a]", "d/[@]z-a]", "d/[\\@]z-a]", "d/z-a]"],
+        &[],
+    )?;
+    hashes_only("[\\@]**]", &["@", "]", "*", "[@]**]", "@x]"], &["[@]**]"])?;
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_judges_a_class_that_starts_with_a_bracket_as_a_whole_regular_expression()
+-> Result<()> {
+    hashes_only("*[](]", &["x[](]", "x]", "x(", "x", "x]("], &["x[](]"])?;
+    hashes_only(
+        "*[]a|b]",
+        &["xa", "x]", "xb", "x|", "x", "x[]a|b]"],
+        &["x[]a|b]", "x]", "xa", "xb", "x|"],
+    )?;
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_refuses_a_class_that_holds_a_named_or_modified_regular_expression_group()
 -> Result<()> {
     let dir = TempDir::new()?;
     dir.write("ws/xa", "xa")?;
-    let message = error_text("hashFiles('[](]')", &dir.env())?;
-    assert!(
-        message.ends_with(
-            "pattern segment '[](]' has a character class that starts with ']' and holds regular expression syntax, which is not supported"
-        ),
-        "{message}"
-    );
+    for pattern in ["[](?<n>a)]", "[\\@](?i:a)]"] {
+        let message = error_text(&format!("hashFiles('{pattern}')"), &dir.env())?;
+        assert!(
+            message.ends_with(&format!(
+                "pattern segment '{pattern}' holds a named or modified regular expression group inside a character class, which is not supported"
+            )),
+            "{message}"
+        );
+    }
     assert_eq!(
         text("hashFiles('*[]a]')", &dir.env())?,
         expected_digest(&[b"xa"])

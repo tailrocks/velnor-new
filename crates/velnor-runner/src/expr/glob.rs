@@ -193,13 +193,15 @@ impl Walk<'_> {
 
     fn start(&self, root: &[String]) -> Result<Option<Visit>, GlobError> {
         let relative = &root[self.patterns.workspace.len()..];
-        let path = match relative.split_last() {
-            None => self.workspace.to_path_buf(),
-            Some((name, parents)) => {
-                let parent = parents
-                    .iter()
-                    .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
-                let Some(real) = skip_missing(fs::canonicalize(&parent), &parent)? else {
+        let searched = relative
+            .iter()
+            .fold(self.workspace.to_path_buf(), |path, name| path.join(name));
+        if skip_missing(fs::symlink_metadata(&searched), &searched)?.is_none() {
+            return Ok(None);
+        }
+        let path = match (searched.parent(), relative.last()) {
+            (Some(parent), Some(name)) => {
+                let Some(real) = skip_missing(fs::canonicalize(parent), parent)? else {
                     return Ok(None);
                 };
                 if !real.starts_with(self.workspace) {
@@ -207,6 +209,7 @@ impl Walk<'_> {
                 }
                 real.join(name)
             }
+            _ => self.workspace.to_path_buf(),
         };
         let Some(metadata) = skip_missing(fs::symlink_metadata(&path), &path)? else {
             return Ok(None);

@@ -25,7 +25,7 @@ const PATH_SUFFIX = "/z";
 const MAX_CODE_POINT = 0x10ffff;
 const SURROGATES = [0xd800, 0xdfff] as const;
 const REFUSED = "refused";
-const NOT_INERT = /[()[{*+?|^$\\]/;
+const OPAQUE_GROUP = /^(?:<[^=!]|[ims-])/;
 
 const HANDWRITTEN = [
   "[a-c-e]é", "*[a\\-c]*", "[\\]]?", "*[!]", "[a-c-e]*", "[!]", "[^]", "[]", "[]]", "[]a]", "[](]", "[]**]", "[]\\]]",
@@ -41,10 +41,15 @@ const HANDWRITTEN = [
   "[\\c1-\\c_]", "[\\c-]", "[\\x]", "[\\x4-a]", "[\\u00-a]", "[\\d-]", "[\\D-a]", "[\\s-\\w]", "[a\\d-z]", "a\\\u2028b", "a\\\nb", "a\\\rb",
   "[\\c-a]", "[\\b]", "[\\b-\\t]", "[z-a*]", "[z-a?]", "*[z-a]", "*[z-a]x",
   "foo[*", "x[?", "[😀?", "foo[", "[*", "[?", "x[*y", "[a*", "[a?b", "[*[", "[*]", "[**", "x[**y", "[\\*", " ", "  ", "\t", " a", "a ", " a ", "a b", "[ ]", "[ a]", "* ", " *", "\u2028", "a\u2028", "[\u2028]", "[^\n]", "\r", "*\n*", "\u00a0", "\ufeff*", "[ -~]",
+  "[a\\@])]", "[\\@]z-a]", "[\\@]]", "[\\@]]]", "[\\@](]", "[\\@]()]", "[\\@](a)]", "[\\@](?:a)]", "[\\@](?=a)*]", "[\\@](?<=a)*]", "[\\@](?<=a)]",
+  "[\\@]*]", "[\\@]+]", "[\\@]?]", "[\\@]??]", "[\\@]*?]", "[\\@]**]", "[\\@]{1}]", "[\\@]{2,1}]", "[\\@]{,}]", "[\\@]{1,2}?]", "[\\@]{]", "[\\@]}]",
+  "[\\@]^*]", "[\\@]$?]", "[\\@]\\b*]", "[\\@]\\b]", "[\\@]|*]", "[\\@]|]", "[\\@]\\]]", "[\\@][z-a]]", "[\\@][a]]", "[\\@\\@]x]", "[\\@@]x]", "[\\\\@]x]",
+  "[\\@](?x)]", "[\\@](?<n>a)]", "[\\@](?<1>a)]", "[\\@](?i:a)]", "[\\@](?ii:a)]", "[\\@](?-:a)]", "[a\\@]", "[a\\@]*", "*[a\\@]b]", "[\\@é]é]", "[\\@😀]😀]",
+  "[]{1}]", "[]a|b]", "[](?:)]", "[](?!a)+]", "[]\\b+]", "[]\\]]", "[](?<n>a)]", "[]a{2,1}]", "[]*]", "[]|*]", "[]x{1,2}{3}]",
   "é", "é*", "*é", "?é", "é?", "[é]", "[!é]", "[é]?", "[a-é]", "[a-c-é]", "\\é", "\\😀", "[\\😀]", "*😀*",
 ];
 
-const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "1", " ", "\n", "\u2028"];
+const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "\\@", "\\@]", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "1", " ", "\n", "\u2028"];
 const NAME_BAG = ["a", "b", "c", "e", "é", "x", "-", "!", "^", "[", "]", "\\", "*", "?", "@", "😀", ".", "1", "\n", " ", "d", "ü", "A", "{", "("];
 const BOUNDARY_NAMES = [
   "\u0001", "\u0008", "\t", "\n", "\u000b", "\u000c", "\r", "\u001f", " ", "\u007f", "\u0080", "\u00a0", "\u2027", "\u2028", "\u2029", "\u202a",
@@ -83,14 +88,26 @@ function loadMinimatch(directory: string): MatcherConstructor {
   return loaded.Minimatch as MatcherConstructor;
 }
 
+function holdsOpaqueGroup(source: string): boolean {
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    if (character === "\\") index++;
+    else if (character === "[") {
+      for (index++; index < source.length && source[index] !== "]"; index++) if (source[index] === "\\") index++;
+    } else if (character === "(" && source[index + 1] === "?" && OPAQUE_GROUP.test(source.slice(index + 2, index + 4))) return true;
+  }
+  return false;
+}
+
 function refusedProbe(Minimatch: MatcherConstructor, pattern: string): boolean {
   const native = globalThis.RegExp;
   let refused = false;
   globalThis.RegExp = new Proxy(native, {
     apply(target, receiver, args: [string, string?]) {
+      const compiled: unknown = Reflect.apply(target, receiver, args);
       const [source] = args;
-      if (source.startsWith("[]") && source.endsWith("]") && NOT_INERT.test(source.slice(2, -1))) refused = true;
-      return Reflect.apply(target, receiver, args);
+      if (source.startsWith("[") && source.endsWith("]") && holdsOpaqueGroup(source)) refused = true;
+      return compiled;
     },
   });
   try {

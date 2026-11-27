@@ -147,6 +147,34 @@ fn expr_numbers_format_and_parse_like_github() -> Result<()> {
 }
 
 #[test]
+fn expr_strings_parse_infinity_the_way_dotnet_does() -> Result<()> {
+    let env = empty_env();
+
+    for expression in [
+        "'infinity' == Infinity",
+        "'INFINITY' == Infinity",
+        "'+Infinity' == Infinity",
+        "'+infinity' == Infinity",
+        "' +iNfInItY ' == Infinity",
+        "'-infinity' == -Infinity",
+        "'-INFINITY' == -Infinity",
+    ] {
+        assert!(truthy(expression, &env)?, "{expression}");
+    }
+    for expression in [
+        "'infinit' == Infinity",
+        "'++Infinity' == Infinity",
+        "'+-Infinity' == -Infinity",
+        "'--Infinity' == -Infinity",
+        "'+ Infinity' == Infinity",
+        "'ınfinity' == Infinity",
+    ] {
+        assert!(!truthy(expression, &env)?, "{expression}");
+    }
+    Ok(())
+}
+
+#[test]
 fn expr_malformed_expressions_are_parse_errors() -> Result<()> {
     let env = empty_env();
 

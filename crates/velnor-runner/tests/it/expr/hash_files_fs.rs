@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::expr_support::{TempDir, error_text, expected_digest, text};
+use crate::expr_support::{TempDir, error_text, expected_digest, hash_outcome, text};
 use anyhow::Result;
 use std::fs;
+use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
@@ -245,5 +246,43 @@ fn expr_hash_files_fails_on_a_matched_file_that_is_not_regular() -> Result<()> {
         expected_digest(&[b"a"])
     );
     assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
+    Ok(())
+}
+
+fn longest_missing_parent(workspace: &Path, segment: &str) -> Vec<String> {
+    let mut parent = vec![String::from("missing")];
+    loop {
+        let candidate = parent
+            .iter()
+            .fold(workspace.to_path_buf(), |path, name| path.join(name))
+            .join(segment);
+        match fs::symlink_metadata(&candidate) {
+            Err(error) if error.kind() == ErrorKind::InvalidFilename => return parent,
+            _ => parent.push(segment.to_owned()),
+        }
+    }
+}
+
+#[test]
+fn expr_hash_files_fails_a_search_path_too_long_for_the_system_below_a_missing_parent() -> Result<()>
+{
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+    let segment = "a".repeat(250);
+    let parent = longest_missing_parent(&dir.workspace()?, &segment);
+    let too_long = format!("{}/{segment}", parent.join("/"));
+
+    let outcome = hash_outcome(&mut env, &too_long)?;
+    assert!(
+        outcome.contains("File name too long"),
+        "a search path one segment past the system limit, under a parent that is only missing, \
+         should fail like the runner's lstat; got {outcome:?}"
+    );
+    let parent_only = hash_outcome(&mut env, &parent.join("/"))?;
+    assert_eq!(
+        parent_only, "ok: ",
+        "the missing parent alone is within the limit and hashes nothing"
+    );
     Ok(())
 }

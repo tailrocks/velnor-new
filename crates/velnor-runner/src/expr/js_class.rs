@@ -6,8 +6,6 @@ pub(super) type Range = (u16, u16);
 const DASH: u16 = b'-' as u16;
 const CARET: u16 = b'^' as u16;
 const BACKSLASH: u16 = b'\\' as u16;
-const CLOSE: u16 = b']' as u16;
-const NOT_INERT: &[u8] = b"()[{*+?|^$\\";
 
 #[derive(Clone, Copy, PartialEq)]
 enum Token {
@@ -41,27 +39,8 @@ impl Class {
     }
 }
 
-pub(super) enum Raw {
-    Valid,
-    Invalid,
-    Unsupported,
-}
-
-pub(super) fn check_raw(body: &[u16]) -> Raw {
-    match body.split_first() {
-        Some((&CLOSE, rest)) => {
-            if rest
-                .iter()
-                .any(|&unit| u8::try_from(unit).is_ok_and(|byte| NOT_INERT.contains(&byte)))
-            {
-                Raw::Unsupported
-            } else {
-                Raw::Valid
-            }
-        }
-        _ if parse(body, true).is_some() => Raw::Valid,
-        _ => Raw::Invalid,
-    }
+pub(super) fn is_valid_raw(body: &[u16]) -> bool {
+    parse(body, true).is_some()
 }
 
 pub(super) fn parse_translated(body: &[u16]) -> Option<Class> {

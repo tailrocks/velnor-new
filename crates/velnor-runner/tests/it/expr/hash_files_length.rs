@@ -50,6 +50,13 @@ impl Room {
     }
 }
 
+fn assert_too_long(outcome: &str, units: usize) {
+    assert!(
+        outcome.ends_with(TOO_LONG),
+        "a pattern of {units} units is one over the {LIMIT}-unit limit once the working directory is counted, so the call should fail with {TOO_LONG:?}, but it ended: {outcome:?}"
+    );
+}
+
 fn spread(units: usize) -> String {
     let mut text = String::from("*");
     let mut left = units - text.len();
@@ -71,8 +78,7 @@ fn expr_hash_files_limits_the_whole_rooted_pattern_not_one_segment() -> Result<(
     let units = room.units;
 
     assert_eq!(room.fits_explicitly(units)?, FITS);
-    let over = room.fits_explicitly(units + 1)?;
-    assert!(over.ends_with(TOO_LONG), "{over}");
+    assert_too_long(&room.fits_explicitly(units + 1)?, units + 1);
     Ok(())
 }
 
@@ -82,8 +88,7 @@ fn expr_hash_files_counts_the_escaped_working_directory_in_the_limit() -> Result
     let units = room.units;
 
     assert_eq!(room.fits_explicitly(units)?, FITS);
-    let over = room.fits_explicitly(units + 1)?;
-    assert!(over.ends_with(TOO_LONG), "{over}");
+    assert_too_long(&room.fits_explicitly(units + 1)?, units + 1);
     Ok(())
 }
 
@@ -94,8 +99,7 @@ fn expr_hash_files_leaves_a_working_directory_bracket_unescaped_when_no_class_cl
     let units = room.units;
 
     assert_eq!(room.fits_explicitly(units)?, FITS);
-    let over = room.fits_explicitly(units + 1)?;
-    assert!(over.ends_with(TOO_LONG), "{over}");
+    assert_too_long(&room.fits_explicitly(units + 1)?, units + 1);
     Ok(())
 }
 
@@ -105,8 +109,10 @@ fn expr_hash_files_limits_the_descendant_pattern_the_runner_adds() -> Result<()>
     let units = room.units;
 
     assert_eq!(room.fits_implicitly(units - EXPLICIT_SUFFIX.len())?, FITS);
-    let over = room.fits_implicitly(units - EXPLICIT_SUFFIX.len() + 1)?;
-    assert!(over.ends_with(TOO_LONG), "{over}");
+    assert_too_long(
+        &room.fits_implicitly(units - EXPLICIT_SUFFIX.len() + 1)?,
+        units + 1,
+    );
     assert_eq!(room.fits_explicitly(units)?, FITS);
     Ok(())
 }

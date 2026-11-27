@@ -15,7 +15,7 @@ pub(crate) enum GlobError {
     #[error("Invalid pattern '{0}'. Relative pathing '.' and '..' is not allowed.")]
     RelativePathing(String),
     #[error(
-        "pattern segment '{0}' has a character class that starts with ']' and holds regular expression syntax, which is not supported"
+        "pattern segment '{0}' holds a named or modified regular expression group inside a character class, which is not supported"
     )]
     UnsupportedClass(String),
     #[error("pattern is too long")]

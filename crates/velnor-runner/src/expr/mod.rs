@@ -9,6 +9,7 @@ mod glob;
 mod hash_files;
 mod index;
 mod js_class;
+mod js_regex;
 mod lexer;
 mod memory;
 mod node;
