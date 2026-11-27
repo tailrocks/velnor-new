@@ -1,0 +1,279 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::expr_support::{TempDir, error_text, expected_digest, hash_outcome, lock, text};
+use anyhow::{Result, bail};
+use std::fs;
+use std::io::ErrorKind;
+use std::path::Path;
+use std::process::Command;
+
+#[test]
+fn expr_hash_files_ignores_symlinks_that_leave_the_workspace() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("outside/secret.txt", "secret")?;
+    dir.symlink("ws/link.txt", &dir.path().join("outside/secret.txt"))?;
+    dir.symlink("ws/linkdir", &dir.path().join("outside"))?;
+    let env = dir.env();
+    let expected = expected_digest(&[b"a"]);
+
+    assert_eq!(text("hashFiles('*.txt')", &env)?, expected);
+    assert_eq!(text("hashFiles('**/*.txt')", &env)?, expected);
+    assert_eq!(text("hashFiles('**')", &env)?, expected);
+    assert_eq!(text("hashFiles('linkdir/*.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir/**')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir')", &env)?, "");
+    assert_eq!(text("hashFiles('link.txt')", &env)?, "");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reads_file_symlinks_that_stay_inside_the_workspace() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/real/x.txt", "x")?;
+    dir.write("ws/real/sub/y.txt", "y")?;
+    dir.write("ws/a.txt", "a")?;
+    dir.symlink("ws/alias.txt", &dir.workspace()?.join("real/x.txt"))?;
+    dir.symlink("ws/dirlink", &dir.workspace()?.join("real"))?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('**/*.txt')", &env)?,
+        expected_digest(&[b"a", b"x", b"y", b"x"])
+    );
+    assert_eq!(text("hashFiles('dirlink/*.txt')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('dirlink/sub/*.txt')", &env)?,
+        expected_digest(&[b"y"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reports_unreadable_directories_and_files() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/locked/x.txt", "x")?;
+    dir.write("ws/sealed.md", "s")?;
+    let env = dir.env();
+    let workspace = dir.workspace()?;
+
+    let locked = workspace.join("locked");
+    let _directory = lock(&locked)?;
+    let message = error_text("hashFiles('**/*.txt')", &env)?;
+    assert!(
+        message.starts_with("hashFiles('**/*.txt') failed. Fail to hash files under directory '"),
+        "{message}"
+    );
+    assert!(message.contains("locked"), "{message}");
+
+    let sealed = workspace.join("sealed.md");
+    let _file = lock(&sealed)?;
+    let message = error_text("hashFiles('*.md')", &env)?;
+    assert!(message.contains("sealed.md"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_does_not_enter_directories_no_pattern_can_match() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/target/deep/x.txt", "x")?;
+    dir.write("ws/src/b.txt", "b")?;
+    let env = dir.env();
+    let workspace = dir.workspace()?;
+
+    let target = workspace.join("target");
+    let _target = lock(&target)?;
+    assert_eq!(text("hashFiles('*.txt')", &env)?, expected_digest(&[b"a"]));
+    assert_eq!(
+        text("hashFiles('src/*.txt', '!target/**')", &env)?,
+        expected_digest(&[b"b"])
+    );
+    assert!(error_text("hashFiles('**/*.txt')", &env)?.contains("target"));
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_walks_many_siblings_and_deep_trees() -> Result<()> {
+    let dir = TempDir::new()?;
+    let nested = (0..60).fold(String::from("ws"), |path, level| format!("{path}/d{level}"));
+    dir.write(&format!("{nested}/leaf.txt"), "leaf")?;
+    for index in 0..1500 {
+        dir.write(&format!("ws/many/f{index:04}.txt"), "m")?;
+    }
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('d0/**/leaf.txt')", &env)?,
+        expected_digest(&[b"leaf"])
+    );
+    let many = vec![b"m".as_slice(); 1500];
+    assert_eq!(
+        text("hashFiles('many/*.txt')", &env)?,
+        expected_digest(&many)
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_ignores_search_roots_reached_through_an_outside_symlinked_parent() -> Result<()>
+{
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("outside/sub/secret.txt", "secret")?;
+    dir.symlink("ws/linkdir", &dir.path().join("outside"))?;
+    let env = dir.env();
+
+    assert_eq!(text("hashFiles('linkdir/sub/*.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir/sub/secret.txt')", &env)?, "");
+    assert_eq!(text("hashFiles('linkdir/sub')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('a.txt', 'linkdir/sub/*.txt')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_reads_search_roots_reached_through_an_inside_symlinked_parent() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/real/sub/y.txt", "y")?;
+    dir.symlink("ws/alias", &dir.workspace()?.join("real"))?;
+    let env = dir.env();
+
+    assert_eq!(
+        text("hashFiles('alias/sub/*.txt')", &env)?,
+        expected_digest(&[b"y"])
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_looks_at_a_symlinked_search_root_without_resolving_it() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.symlink("ws/loop", Path::new("loop"))?;
+    let env = dir.env();
+
+    assert_eq!(text("hashFiles('loop/*.txt')", &env)?, "");
+    assert_eq!(
+        text("hashFiles('a.txt', 'loop/**/*.txt')", &env)?,
+        expected_digest(&[b"a"])
+    );
+    let message = error_text("hashFiles('loop')", &env)?;
+    assert!(
+        message.starts_with("hashFiles('loop') failed."),
+        "{message}"
+    );
+    assert!(message.contains("loop"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_errors_on_a_dangling_symlink_it_would_hash() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.symlink("ws/dangling.txt", &dir.workspace()?.join("missing.txt"))?;
+    let env = dir.env();
+
+    for pattern in ["*.txt", "dangling.txt", "dangling.txt/**", "**"] {
+        let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+        assert!(
+            message.starts_with(&format!("hashFiles('{pattern}') failed.")),
+            "{message}"
+        );
+        assert!(message.contains("dangling.txt"), "{message}");
+    }
+    assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
+    Ok(())
+}
+
+fn make_fifo(path: &Path) -> Result<()> {
+    let status = Command::new("mkfifo").arg(path).status()?;
+    assert!(status.success(), "mkfifo failed for {}", path.display());
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_fails_on_a_matched_file_that_is_not_regular() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/sub/b.txt", "b")?;
+    fs::create_dir_all(dir.path().join("ws"))?;
+    make_fifo(&dir.path().join("ws/pipe.txt"))?;
+    dir.symlink("ws/link.txt", &dir.workspace()?.join("pipe.txt"))?;
+    dir.symlink("ws/dirlink.txt", &dir.workspace()?.join("sub"))?;
+    let env = dir.env();
+
+    for pattern in ["*.txt", "pipe.txt", "link.txt", "**"] {
+        let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+        assert!(
+            message.starts_with(&format!("hashFiles('{pattern}') failed.")),
+            "{message}"
+        );
+        assert!(
+            message.ends_with("pipe.txt: not a regular file"),
+            "{message}"
+        );
+    }
+    assert_eq!(
+        text(
+            "hashFiles('*.txt', '!pipe.txt', '!link.txt', '!dirlink.txt')",
+            &env
+        )?,
+        expected_digest(&[b"a"])
+    );
+    assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
+    Ok(())
+}
+
+const PROBE_SEGMENTS: usize = 256;
+const OS_ERROR_SUFFIX: &str = " (os error";
+
+fn longest_missing_parent(workspace: &Path, segment: &str) -> Result<(Vec<String>, String)> {
+    let mut parent = vec![String::from("missing")];
+    for _ in 0..PROBE_SEGMENTS {
+        let candidate = parent
+            .iter()
+            .fold(workspace.to_path_buf(), |path, name| path.join(name))
+            .join(segment);
+        match fs::symlink_metadata(&candidate) {
+            Err(error) if error.kind() == ErrorKind::InvalidFilename => {
+                let shown = error.to_string();
+                let reason = shown.split(OS_ERROR_SUFFIX).next().unwrap_or(&shown);
+                return Ok((parent, reason.to_owned()));
+            }
+            _ => parent.push(segment.to_owned()),
+        }
+    }
+    bail!(
+        "no path of {PROBE_SEGMENTS} segments of {} characters is too long for lstat",
+        segment.len()
+    )
+}
+
+#[test]
+fn expr_hash_files_fails_a_search_path_too_long_for_the_system_below_a_missing_parent() -> Result<()>
+{
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    let mut env = dir.env();
+    let segment = "a".repeat(250);
+    let (parent, reason) = longest_missing_parent(&dir.workspace()?, &segment)?;
+    let too_long = format!("{}/{segment}", parent.join("/"));
+
+    let outcome = hash_outcome(&mut env, &too_long)?;
+    assert!(
+        outcome.contains(&reason),
+        "a search path one segment past the system limit, under a parent that is only missing, \
+         should fail like the runner's lstat; got {outcome:?}"
+    );
+    let parent_only = hash_outcome(&mut env, &parent.join("/"))?;
+    assert_eq!(
+        parent_only, "ok: ",
+        "the missing parent alone is within the limit and hashes nothing"
+    );
+    Ok(())
+}

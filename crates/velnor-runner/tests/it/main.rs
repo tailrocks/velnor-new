@@ -1,6 +1,57 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(target_os = "linux")]
+#[path = "expr/format_allocation.rs"]
+mod expr_format_allocation;
+#[path = "expr/functions.rs"]
+mod expr_functions;
+#[path = "expr/hash_files.rs"]
+mod expr_hash_files;
+#[path = "expr/hash_files_depth.rs"]
+mod expr_hash_files_depth;
+#[path = "expr/hash_files_fs.rs"]
+mod expr_hash_files_fs;
+#[path = "expr/hash_files_length.rs"]
+mod expr_hash_files_length;
+#[path = "expr/hash_files_minimatch.rs"]
+mod expr_hash_files_minimatch;
+#[path = "expr/hash_files_non_utf8.rs"]
+mod expr_hash_files_non_utf8;
+#[path = "expr/hash_files_patterns.rs"]
+mod expr_hash_files_patterns;
+#[path = "expr/hash_files_race.rs"]
+mod expr_hash_files_race;
+#[path = "expr/hash_files_regex_limits.rs"]
+mod expr_hash_files_regex_limits;
+#[path = "expr/hash_files_relative.rs"]
+mod expr_hash_files_relative;
+#[path = "expr/hash_files_special.rs"]
+mod expr_hash_files_special;
+#[path = "expr/hash_files_unicode.rs"]
+mod expr_hash_files_unicode;
+#[path = "expr/indexing.rs"]
+mod expr_indexing;
+#[path = "expr/limits.rs"]
+mod expr_limits;
+#[path = "expr/memory.rs"]
+mod expr_memory;
+#[path = "expr/memory_json.rs"]
+mod expr_memory_json;
+#[path = "expr/minimatch_corpus.rs"]
+mod expr_minimatch_corpus;
+#[path = "expr/operators.rs"]
+mod expr_operators;
+#[path = "expr/ordinal_case.rs"]
+mod expr_ordinal_case;
+#[path = "expr/status.rs"]
+mod expr_status;
+#[path = "expr/support.rs"]
+mod expr_support;
+#[path = "expr/template.rs"]
+mod expr_template;
+#[path = "expr/unsupported.rs"]
+mod expr_unsupported;
 mod job_message;
 mod protocol_acquire_renew;
 mod protocol_broker;
