@@ -53,7 +53,9 @@ async fn the_step_timeout_ends_the_drain_of_a_finished_step() -> Result<()> {
 
 #[tokio::test]
 async fn a_background_flood_is_cut_at_the_drain_limit() -> Result<()> {
-    let script = format!("(yes {} &)\necho started", "x".repeat(1000));
+    // The marker goes first: once the flood shares the pipe, its writes do not
+    // end on line boundaries and would swallow the marker mid-line.
+    let script = format!("echo started\n(yes {} &)", "x".repeat(1000));
     let (run, lines) = execute(
         &job(vec![run("a", &script)]),
         &Scratch::new()?,
