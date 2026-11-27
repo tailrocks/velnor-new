@@ -54,6 +54,10 @@ fn expr_from_json_replaces_exact_repeats_then_merges_case_insensitively() -> Res
         "{\n  \"s\": 1,\n  \"\u{17f}\": 2\n}"
     );
     assert_eq!(
+        dump("{\"i\":1,\"\u{131}\":2}")?,
+        "{\n  \"i\": 1,\n  \"\u{131}\": 2\n}"
+    );
+    assert_eq!(
         dump("{\"k\":1,\"\u{212a}\":2}")?,
         "{\n  \"k\": 1,\n  \"\u{212a}\": 2\n}"
     );
@@ -282,6 +286,8 @@ fn expr_from_json_quotes_a_path_name_for_each_special_character() -> Result<()> 
         ("a\\u0085b", "['a\\u0085b']"),
         ("a\\u2028b", "['a\\u2028b']"),
         ("a\\u2029b", "['a\\u2029b']"),
+        ("\u{1f600}", "\u{1f600}"),
+        ("\u{e9}", "\u{e9}"),
         ("a-b_c:d", "a-b_c:d"),
         ("a\\u0001b", "a\u{1}b"),
     ] {
