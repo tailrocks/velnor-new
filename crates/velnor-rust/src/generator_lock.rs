@@ -11,13 +11,17 @@ use crate::roots::CARGO_LOCK;
 use crate::toml_file::table;
 
 pub(crate) const EXTERNALS: RepoPath = RepoPath::from_static(".velnor/generator-externals.lock");
-const REGISTRIES: [&str; 2] = ["registry+", "sparse+"];
+const CRATES_IO: [&str; 2] = [
+    "registry+https://github.com/rust-lang/crates.io-index",
+    "sparse+https://index.crates.io/",
+];
 
 type Id<'a> = (&'a str, &'a str, Option<&'a str>);
 
 struct Locked<'a> {
     id: Id<'a>,
     dependencies: Vec<&'a str>,
+    replaced: bool,
 }
 
 fn packages(lock: &toml::Table) -> Vec<Locked<'_>> {
@@ -39,6 +43,7 @@ fn packages(lock: &toml::Table) -> Vec<Locked<'_>> {
                     .flatten()
                     .filter_map(Value::as_str)
                     .collect(),
+                replaced: package.get("replace").is_some(),
             })
         })
         .collect()
@@ -80,11 +85,13 @@ pub(crate) fn unmodelled(view: &RepoView, manifest: &RepoPath) -> bool {
         return true;
     };
     let packages = packages(&lock);
-    packages
-        .iter()
-        .filter_map(|package| package.id.2)
-        .any(|source| !REGISTRIES.iter().any(|scheme| source.starts_with(scheme)))
-        || unlisted(view, &packages)
+    packages.iter().any(|package| {
+        package.replaced
+            || package
+                .id
+                .2
+                .is_some_and(|source| !CRATES_IO.contains(&source))
+    }) || unlisted(view, &packages)
 }
 
 fn listed(view: &RepoView) -> BTreeSet<String> {
@@ -112,8 +119,7 @@ fn reached(packages: &[Locked<'_>]) -> BTreeSet<String> {
         }
     }
     seen.iter()
-        .filter(|(_, _, source)| source.is_some())
-        .map(|(name, version, _)| format!("{name} {version}"))
+        .filter_map(|(name, version, source)| Some(format!("{name} {version} {}", (*source)?)))
         .collect()
 }
 

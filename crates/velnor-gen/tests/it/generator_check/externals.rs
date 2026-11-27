@@ -7,6 +7,7 @@ use super::world::{QUIET, put, runs_every, skips_every, world};
 use crate::facts::TestResult;
 
 const EXTERNALS: &str = ".velnor/generator-externals.lock";
+const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
 const REGISTRY: &str =
     "source = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"sum\"\n";
 
@@ -31,6 +32,14 @@ fn locked(engine: &[&str], other: &[&str]) -> String {
     .concat()
 }
 
+fn listing(entry: &str) -> String {
+    format!("{entry} {CRATES_IO}\n")
+}
+
+fn both() -> String {
+    listing("ext 0.1.0") + &listing("ext 0.2.0")
+}
+
 fn viewing(lock: &str, list: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = world()?;
     put(&mut view, "Cargo.lock", lock)?;
@@ -49,7 +58,7 @@ fn a_registry_package_the_generator_reaches_must_be_on_the_externals_list() -> T
         "empty list"
     );
     assert!(
-        runs_every(&viewing(&lock, Some("ext 0.1.0\n"))?, &QUIET)?,
+        runs_every(&viewing(&lock, Some(&listing("ext 0.1.0")))?, &QUIET)?,
         "another version"
     );
     assert!(
@@ -57,11 +66,15 @@ fn a_registry_package_the_generator_reaches_must_be_on_the_externals_list() -> T
         "a name without a version"
     );
     assert!(
-        skips_every(&viewing(&lock, Some("ext 0.2.0\n"))?, &QUIET)?,
+        runs_every(&viewing(&lock, Some("ext 0.2.0\n"))?, &QUIET)?,
+        "a line without a source"
+    );
+    assert!(
+        skips_every(&viewing(&lock, Some(&listing("ext 0.2.0")))?, &QUIET)?,
         "the reached version"
     );
     assert!(
-        skips_every(&viewing(&lock, Some("ext 0.1.0\next 0.2.0\n"))?, &QUIET)?,
+        skips_every(&viewing(&lock, Some(&both()))?, &QUIET)?,
         "an entry the closure no longer needs"
     );
     Ok(())
@@ -75,7 +88,7 @@ fn a_registry_package_reached_through_any_depth_or_by_name_alone_is_listed_too()
         + &package("ext", "0.2.0", true, &[]);
     assert!(runs_every(&viewing(&unversioned, None)?, &QUIET)?);
     assert!(skips_every(
-        &viewing(&unversioned, Some("ext 0.2.0\n"))?,
+        &viewing(&unversioned, Some(&listing("ext 0.2.0")))?,
         &QUIET
     )?);
     Ok(())

@@ -153,11 +153,21 @@ fn a_cargo_config_that_redirects_a_source_seals_the_check() -> TestResult {
 #[test]
 fn a_locked_package_from_outside_a_registry_seals_the_check() -> TestResult {
     let git = "version = 4\n\n[[package]]\nname = \"fork\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/fork#abc\"\n";
-    let sparse = "version = 4\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.7\"\nsource = \"sparse+https://index.example.invalid/\"\n";
+    let sparse = |index: &str| {
+        format!(
+            "version = 4\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.7\"\nsource = \"sparse+{index}\"\n"
+        )
+    };
     let mut view = world()?;
     put(&mut view, "Cargo.lock", git)?;
     assert!(runs_every(&view, &QUIET)?);
-    put(&mut view, "Cargo.lock", sparse)?;
+    put(
+        &mut view,
+        "Cargo.lock",
+        &sparse("https://index.example.invalid/"),
+    )?;
+    assert!(runs_every(&view, &QUIET)?);
+    put(&mut view, "Cargo.lock", &sparse("https://index.crates.io/"))?;
     assert!(skips_every(&view, &QUIET)?);
     put(&mut view, "Cargo.lock", "version = 4\n[[package\n")?;
     assert!(runs_every(&view, &QUIET)?);
