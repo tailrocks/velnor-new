@@ -41,6 +41,7 @@ pub(super) fn begin<'a>(
         freshness,
         diagnostic,
         fingerprints: BTreeMap::new(),
+        foreign: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
         placed: BTreeSet::new(),

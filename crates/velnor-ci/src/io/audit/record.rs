@@ -39,7 +39,14 @@ impl Audit<'_> {
                 hash,
                 name,
             } => {
-                for index in self.member_owners(&package, indices) {
+                let owners = self.member_owners(&package, indices);
+                for index in indices.iter().filter(|index| !owners.contains(index)) {
+                    self.foreign.insert(
+                        (*index, configuration.clone(), hash.clone()),
+                        package.clone(),
+                    );
+                }
+                for index in owners {
                     self.fingerprint(
                         index,
                         configuration.clone(),
@@ -109,8 +116,20 @@ impl Audit<'_> {
         }
         let budget = hits.first().map_or(indices[0], |(index, _)| *index);
         let base = self.roots[budget].clone();
-        let package = hits.first().map(|(_, (package, _))| package.as_str());
-        let Some((source, _)) = self.dep_info(&base, budget, file, package)? else {
+        let package = hits
+            .first()
+            .map(|(_, (package, _))| package.clone())
+            .or_else(|| {
+                indices.iter().find_map(|index| {
+                    let key = (
+                        *index,
+                        configuration.to_owned(),
+                        hash.unwrap_or(stem).to_owned(),
+                    );
+                    self.foreign.get(&key).cloned()
+                })
+            });
+        let Some((source, _)) = self.dep_info(&base, budget, file, package.as_deref())? else {
             return Ok(());
         };
         for (index, (package, fingerprint)) in hits {

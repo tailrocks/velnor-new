@@ -3,6 +3,7 @@
 
 mod fixture;
 mod oracle;
+mod two_roots;
 
 use std::collections::BTreeSet;
 use std::fs;

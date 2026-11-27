@@ -48,6 +48,7 @@ pub(super) struct Audit<'a> {
     freshness: freshness::Freshness,
     diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) foreign: BTreeMap<(usize, String, String), String>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
     pub(super) placed: BTreeSet<(usize, String)>,

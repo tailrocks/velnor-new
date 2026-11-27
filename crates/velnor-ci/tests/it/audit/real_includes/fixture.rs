@@ -74,6 +74,21 @@ pub(super) fn fixture() -> Repo {
     repo
 }
 
+pub(super) fn pinned_lock(repo: &Repo) {
+    let committed = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/rust-ci.lock"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let version = committed
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \""))
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or_else(|| unreachable!("{committed}"));
+    let lock = committed.replacen(version, PIN, 1);
+    assert!(lock.starts_with(&format!("version = \"{PIN}\"")), "{lock}");
+    unit(repo, ".velnor/rust-ci.lock", &lock);
+}
+
 fn workspace() -> Repo {
     let repo = Repo::new("audit-includes");
     unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
@@ -87,18 +102,7 @@ fn workspace() -> Repo {
         ),
     );
     unit(&repo, "Cargo.lock", "version = 4\n");
-    let committed = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/rust-ci.lock"),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    let version = committed
-        .lines()
-        .find_map(|line| line.strip_prefix("version = \""))
-        .and_then(|rest| rest.split('"').next())
-        .unwrap_or_else(|| unreachable!("{committed}"));
-    let lock = committed.replacen(version, PIN, 1);
-    assert!(lock.starts_with(&format!("version = \"{PIN}\"")), "{lock}");
-    unit(&repo, ".velnor/rust-ci.lock", &lock);
+    pinned_lock(&repo);
     repo
 }
 

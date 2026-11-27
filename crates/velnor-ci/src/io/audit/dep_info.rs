@@ -262,12 +262,13 @@ fn read_only_roots() -> Vec<PathBuf> {
             String::from_utf8_lossy(&output.stdout).trim(),
         ));
     }
+    roots.retain(|root| trusted(root));
     let resolved: Vec<PathBuf> = roots
         .iter()
         .filter_map(|root| std::fs::canonicalize(root).ok())
+        .filter(|root| trusted(root))
         .collect();
     roots.extend(resolved);
-    roots.retain(|root| trusted(root));
     roots
 }
 

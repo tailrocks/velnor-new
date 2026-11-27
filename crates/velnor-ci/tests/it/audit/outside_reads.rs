@@ -13,20 +13,38 @@ const LIB_OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008";
 const APP_OUTPUT: &str = "rust/target/debug/build/app-f000000000000004/output";
 const SOMEWHERE: &str = "/velnor-test-elsewhere";
 
-fn units() -> Repo {
+struct Fixture {
+    repo: Repo,
+    alias: Repo,
+}
+
+impl std::ops::Deref for Fixture {
+    type Target = Repo;
+
+    fn deref(&self) -> &Repo {
+        &self.repo
+    }
+}
+
+impl Fixture {
+    fn lib_output(&self, leaf: &str) -> String {
+        format!("{}/repo/{LIB_OUTPUT}/{leaf}", self.alias.root().display())
+    }
+}
+
+fn units() -> Fixture {
     let repo = workspace_below_the_root();
     own_units(&repo, TARGET, &[]);
     unit(&repo, APP_OUTPUT, "cargo:rerun-if-changed=build.rs\n");
     super::inventory::build(&repo, APP_OUTPUT, None);
-    repo
+    let alias = Repo::empty("alias");
+    std::os::unix::fs::symlink(repo.root(), alias.root().join("repo"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    Fixture { repo, alias }
 }
 
 fn recorded(repo: &Repo, root_output: &str) {
     unit(repo, &format!("{LIB_OUTPUT}/root-output"), root_output);
-}
-
-fn own_out(repo: &Repo) -> String {
-    format!("{}/{LIB_OUTPUT}/out", repo.root().display())
 }
 
 fn fake_compiler(repo: &Repo, prints: &str) -> std::path::PathBuf {
@@ -78,7 +96,7 @@ fn a_dep_info_read_outside_the_repository_in_no_output_directory_refuses_the_aud
 fn a_dep_info_read_under_the_own_output_directory_of_an_undeclared_build_script_credits_a_dot_line()
 {
     let repo = units();
-    let out = own_out(&repo);
+    let out = repo.lib_output("out");
     recorded(&repo, &format!("{out}\n"));
     unit(
         &repo,
@@ -112,7 +130,7 @@ fn an_undeclared_build_script_without_a_root_output_credits_a_dot_line_to_its_pa
 #[test]
 fn a_package_reading_the_output_directory_of_another_package_refuses_the_audit() {
     let repo = units();
-    let out = own_out(&repo);
+    let out = repo.lib_output("out");
     recorded(&repo, &format!("{out}\n"));
     unit(
         &repo,
@@ -128,8 +146,8 @@ fn a_package_reading_the_output_directory_of_another_package_refuses_the_audit()
 
 #[test]
 fn a_root_output_outside_the_unit_own_output_directory_is_missing_and_never_disables_the_refusal() {
-    let own = |repo: &Repo| own_out(repo).replace("/out", "/other");
-    let recordings: [&dyn Fn(&Repo) -> String; 6] = [
+    let own = |repo: &Fixture| repo.lib_output("other");
+    let recordings: [&dyn Fn(&Fixture) -> String; 6] = [
         &|_| String::new(),
         &|_| "  \n".to_owned(),
         &|_| "relative/out\n".to_owned(),
@@ -235,4 +253,30 @@ fn the_read_only_roots_are_computed_once_per_audit() {
     assert!(result.status.success(), "{result:?}");
     let runs = fs::read_to_string(&log).unwrap_or_default();
     assert_eq!(runs.lines().count(), 1, "{runs}");
+}
+
+#[test]
+fn a_sysroot_naming_a_parent_directory_never_makes_a_read_explained() {
+    let repo = units();
+    let compiler = fake_compiler(&repo, "echo ..");
+    let parent = fs::canonicalize(repo.root())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .parent()
+        .map_or_default(std::path::Path::to_path_buf);
+    unit(
+        &repo,
+        APP_DEPS,
+        &format!("out.d: app/src/lib.rs {}/elsewhere.md\n", parent.display()),
+    );
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_HOME", format!("{SOMEWHERE}/cargo-home"))
+        .env("RUSTC", &compiler)
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{message}");
+    assert!(message.contains("outside the repository"), "{message}");
+    assert!(lock(&repo).is_none());
 }

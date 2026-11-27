@@ -24,6 +24,10 @@ pub(super) enum Layout {
 }
 
 pub(super) fn build(repo: &Repo, share: Share, layout: Layout) {
+    build_in(repo, "", share, layout);
+}
+
+pub(super) fn build_in(repo: &Repo, directory: &str, share: Share, layout: Layout) {
     for arguments in [&["build", "--all-targets"][..], &["check"][..]] {
         let mut command = velnor_ci();
         command
@@ -38,7 +42,7 @@ pub(super) fn build(repo: &Repo, share: Share, layout: Layout) {
             Share::Shared => command.env("MBX_SHARE_OUT_DIR", "1"),
         };
         let output = command
-            .current_dir(repo.root())
+            .current_dir(repo.root().join(directory))
             .args(["inputs", "build", "--", "cargo"])
             .args(arguments)
             .arg("--offline")
