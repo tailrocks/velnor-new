@@ -18,12 +18,6 @@ use crate::exec_builder::{job, run};
 use crate::exec_support::{Scratch, fixture_message, run_fixture, run_path};
 use crate::lifecycle_support::job_replacing;
 
-const HOST_OS: &str = if cfg!(target_os = "macos") {
-    "macOS"
-} else {
-    "Linux"
-};
-
 #[test]
 fn shell_forms_expand_like_github() -> Result<()> {
     let ran = run_fixture("shell-forms", &Scratch::new()?)?;
@@ -47,9 +41,7 @@ fn github_context_exports_env_and_event_file() -> Result<()> {
     let ran = run_fixture("github-context", &scratch)?;
     assert!(
         ran.has_line(
-            &format!(
-                "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os={HOST_OS} run=42"
-            )
+            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os=Linux run=42"
         ),
         "{}",
         ran.stdout

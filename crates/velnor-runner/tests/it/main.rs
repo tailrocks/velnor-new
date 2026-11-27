@@ -52,12 +52,6 @@ mod hardening;
 mod job_message;
 #[path = "exec_late.rs"]
 mod late;
-#[path = "exec_offload.rs"]
-mod offload;
-#[path = "exec_parity.rs"]
-mod parity;
-#[path = "exec_process.rs"]
-mod process;
 mod lifecycle;
 mod lifecycle_busy;
 mod lifecycle_cancel;
@@ -70,6 +64,12 @@ mod lifecycle_session_create;
 mod lifecycle_support;
 mod lifecycle_token;
 mod lifecycle_token_retry;
+#[path = "exec_offload.rs"]
+mod offload;
+#[path = "exec_parity.rs"]
+mod parity;
+#[path = "exec_process.rs"]
+mod process;
 mod protocol_broker;
 mod protocol_feed;
 mod protocol_results;
