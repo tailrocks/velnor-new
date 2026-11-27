@@ -21,7 +21,15 @@ const CREDENTIAL_RETRY: Duration = Duration::from_secs(30);
 const CREDENTIAL_BUDGET: Duration = Duration::from_secs(30);
 const CONFIG_RETRY: Duration = Duration::from_secs(5);
 
-pub(crate) fn run_blocking(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenFault> {
+pub(crate) enum Handover {
+    Stopped,
+    OfficialRunner(Box<HostConfig>),
+}
+
+pub(crate) fn run_blocking(
+    state: &Path,
+    daemon_lock: &DaemonLock,
+) -> Result<Handover, ListenFault> {
     let _controller_run = daemon_lock.begin_controller_run()?;
     let state = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
@@ -57,7 +65,7 @@ impl Signals {
     }
 }
 
-async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenFault> {
+async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<Handover, ListenFault> {
     let mut signals = Signals::install()?;
     let mut snapshot = Some(controller_config(state).ok_or(HostError::Config)?);
     loop {
@@ -65,11 +73,14 @@ async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenF
             Some(current) => current,
             None => match reread(state, &mut signals).await {
                 Some(next) => next,
-                None => return Ok(()),
+                None => return Ok(Handover::Stopped),
             },
         };
         if config.host.launch_mode != LaunchMode::RustRunner {
-            return Ok(());
+            eprintln!(
+                "rust-runner controller: launch mode changed; handing over to the official-runner controller"
+            );
+            return Ok(Handover::OfficialRunner(Box::new(config)));
         }
         let cx = Context {
             state: state.to_path_buf(),
@@ -80,7 +91,7 @@ async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenF
         let pats = match load_pats(&cx, &config, &mut shutdown).await {
             Credentials::Loaded(pats) => pats,
             Credentials::ConfigChanged => continue,
-            Credentials::Stopped => return Ok(()),
+            Credentials::Stopped => return Ok(Handover::Stopped),
         };
         let exit = run_rust_runner_host(
             config,
@@ -92,7 +103,7 @@ async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<(), ListenF
         )
         .await?;
         match exit {
-            RustRunnerExit::Shutdown => return Ok(()),
+            RustRunnerExit::Shutdown => return Ok(Handover::Stopped),
             RustRunnerExit::ConfigChanged => {}
         }
     }

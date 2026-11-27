@@ -26,6 +26,7 @@ interface Config {
   admin_url: string;
   store: string;
   ps_table: string;
+  default_branch?: string;
 }
 interface Message {
   id: number;
@@ -44,11 +45,16 @@ interface State {
   attempts: Record<string, number>;
   next_runner_id: number;
   next_session: number;
+  pending_jit?: number[];
 }
 interface Refusal {
   statuses: number[];
   repeat_last: boolean;
   until?: string;
+}
+interface Reply {
+  status?: number;
+  patch?: Record<string, unknown>;
 }
 
 const root = process.env.VELNOR_FAKE_DIR;
@@ -145,11 +151,16 @@ function api(path: string): never {
   const base = `/repos/${repository}`;
   if (method === "POST" && path === `${base}/actions/runners/registration-token`) reply(201, { token: "registration-token" });
   if (method === "POST" && path === "/actions/runner-registration") reply(200, { url: config.admin_url, token: "admin-token" });
-  if (method === "GET" && path === base) reply(200, repositoryJson(config));
+  if (method === "GET" && path === base) {
+    const scripted = scriptedReply("repo.get");
+    record("repo.get", { status: scripted?.status ?? 200 });
+    if (scripted?.status && scripted.status !== 200) reply(scripted.status, { message: "unavailable" });
+    reply(200, { ...repositoryJson(config), ...scripted?.patch });
+  }
   const run = /^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/.exec(path);
   if (method === "GET" && run?.[1]) {
     const offer = offers().find((candidate) => candidate.run_id === Number(run[1]));
-    if (offer) reply(200, runJson(config, offer));
+    if (offer) reply(200, runJson(config, offer, path.includes("/attempts/")));
   }
   const pull = /^\/repos\/[^/]+\/[^/]+\/pulls\/(\d+)$/.exec(path);
   if (method === "GET" && pull?.[1]) {
@@ -207,6 +218,20 @@ function refusal(name: string): { status: number } | undefined {
   return entry.repeat_last ? { status: entry.statuses[entry.statuses.length - 1] ?? 400 } : undefined;
 }
 
+function firstJit(requestId: number): boolean {
+  return mutate((state) => (state.attempts[`jit-${requestId}`] = (state.attempts[`jit-${requestId}`] ?? 0) + 1)) === 1;
+}
+
+function scriptedReply(name: string): Reply | undefined {
+  const file = `${github}/script.json`;
+  if (!existsSync(file)) return undefined;
+  const entry = (JSON.parse(readFileSync(file, "utf8")) as Record<string, { replies?: Reply[]; after_session?: boolean }>)[name];
+  const replies = entry?.replies;
+  if (!replies || (entry.after_session && readState().sessions.length === 0)) return undefined;
+  const attempt = mutate((state) => (state.attempts[name] = (state.attempts[name] ?? 0) + 1));
+  return replies[attempt - 1];
+}
+
 function admin(path: string): never {
   const sets = "/_apis/runtime/runnerscalesets";
   const agents = "/_apis/distributedtask/pools/0/agents";
@@ -239,6 +264,7 @@ function admin(path: string): never {
   if (method === "POST" && /\/acquirejobs$/.test(path)) {
     const requested = JSON.parse(body) as number[];
     snapshot(record("acquire", { ids: requested.join(",") }));
+    mutate((state) => (state.pending_jit = requested));
     const none = new Set(offers().filter((offer) => offer.acquire_returns === "none").map((offer) => offer.request_id));
     const value = requested.filter((id) => !none.has(id));
     reply(200, { count: value.length, value });
@@ -252,7 +278,9 @@ function admin(path: string): never {
       state.runners.push(created);
       return created;
     });
-    record("jit", { name });
+    const failing = offers().some((offer) => offer.jit_returns === 500 && readState().pending_jit?.includes(offer.request_id) && firstJit(offer.request_id));
+    record("jit", { name, status: failing ? 500 : 200 });
+    if (failing) reply(500, { message: "jit failed" });
     reply(200, { encodedJITConfig: canary, runner });
   }
   if (method === "GET" && path === agents) {

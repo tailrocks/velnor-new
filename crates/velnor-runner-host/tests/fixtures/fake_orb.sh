@@ -117,7 +117,7 @@ ps)
     fi
   fi
   {
-    printf '1 /sbin/init\n'
+    [ -z "$FAKE_ORB_PS_NO_INIT" ] && printf '1 /sbin/init\n'
     [ -f "$FAKE_ORB_PS" ] && cat "$FAKE_ORB_PS"
   } | tee "$seen/calls/$call.out"
   exit 0

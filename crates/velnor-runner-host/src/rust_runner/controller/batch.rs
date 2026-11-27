@@ -8,7 +8,7 @@ use velnor_runner_github::{ParsedBatch, Poll, SourceMetadata};
 
 use super::admission::{Admission, JobExit};
 use super::github::{self, Acquisition};
-use super::source::LaunchGrant;
+use super::source::{LaunchGrant, Refusal};
 use super::{Event, Run, blocking};
 use crate::assign::is_active_offer_job;
 use crate::launch::steady::RETRY;
@@ -142,7 +142,7 @@ impl Run<'_> {
         let binding = live.binding.clone();
         let policy = live.policy.clone();
         let pat = live.pat.clone();
-        let default_branch = live.default_branch.clone();
+        let default_branch = live.known_default_branch(Instant::now());
         self.tasks.spawn(async move {
             let result = blocking(move || {
                 Ok(super::source::check_offer(
@@ -155,7 +155,7 @@ impl Run<'_> {
                 ))
             })
             .await
-            .unwrap_or(Err("check_failed"));
+            .unwrap_or(Err(Refusal::Unavailable("check_failed")));
             Event::Checked {
                 connection,
                 request_id,
@@ -168,18 +168,26 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         request_id: i64,
-        result: Result<LaunchGrant, &'static str>,
+        result: Result<LaunchGrant, Refusal>,
     ) {
         let grant = match result {
             Ok(grant) => grant,
-            Err(code) => {
-                eprintln!("source_admission=blocked reason={code}");
+            Err(refusal) => {
+                let verdict = if refusal.is_unavailable() {
+                    self.defer(connection);
+                    "deferred"
+                } else {
+                    "blocked"
+                };
+                eprintln!("source_admission={verdict} reason={}", refusal.code());
                 self.advance(connection);
                 return;
             }
         };
-        if let Some(live) = self.connections.get_mut(connection) {
-            live.default_branch = Some(grant.default_branch().to_owned());
+        if grant.fetched_default_branch()
+            && let Some(live) = self.connections.get_mut(connection)
+        {
+            live.remember_default_branch(grant.default_branch(), Instant::now());
         }
         if !matches!(self.admission(), Admission::Open { free } if free > 0) {
             self.defer(connection);
@@ -216,6 +224,7 @@ impl Run<'_> {
             Event::Acquired {
                 connection,
                 reservation,
+                request_id,
                 result,
             }
         });
@@ -225,6 +234,7 @@ impl Run<'_> {
         &mut self,
         connection: usize,
         reservation: ReservationId,
+        request_id: i64,
         result: Result<Acquisition, ListenFault>,
     ) {
         match result {
@@ -236,6 +246,7 @@ impl Run<'_> {
             Ok(Acquisition::NotAcquired) => self.slots.abandon_launch(reservation),
             Err(error) => {
                 eprintln!("rust-runner acquire failed for reservation {reservation}: {error}");
+                self.taken.remove(&(connection, request_id));
                 self.defer(connection);
                 self.begin_proof(reservation, JobExit::AcquireFailed);
             }

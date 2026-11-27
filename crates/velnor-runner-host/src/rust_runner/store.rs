@@ -5,7 +5,7 @@ use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, fstat, fsync, mkdirat, openat, renameat};
@@ -35,14 +35,18 @@ fn directory_flags() -> OFlags {
 
 pub(super) struct Store {
     root: OwnedFd,
+    path: PathBuf,
 }
 
 impl Store {
     pub(super) fn open(path: &Path) -> Result<Self, HostError> {
         let root = rustix::fs::open(path, directory_flags(), Mode::empty())
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-        require_directory(&root, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
-        Ok(Self { root })
+        require_directory(&root, others_can_reach(), RustRunnerFailure::StoreUnsafe)?;
+        Ok(Self {
+            root,
+            path: path.to_path_buf(),
+        })
     }
 
     pub(super) fn prepare(path: &Path) -> Result<Self, HostError> {
@@ -52,7 +56,6 @@ impl Store {
             .create(path)
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         let store = Self::open(path)?;
-        require_no_acl(path)?;
         for name in HOST_DIRECTORIES {
             let forbidden = if name == WORK_DIRECTORY {
                 others_can_reach()
@@ -86,11 +89,18 @@ impl Store {
             && stat.st_uid == geteuid().as_raw()
             && !mode.intersects(others_can_write())
             && mode.contains(Mode::XUSR);
-        if safe {
-            Ok(())
-        } else {
-            Err(failure(RustRunnerFailure::BinaryUnsafe))
+        if !safe {
+            return Err(failure(RustRunnerFailure::BinaryUnsafe));
         }
+        let bin_path = self.path.join(BIN_DIRECTORY);
+        for path in [
+            self.path.clone(),
+            bin_path.clone(),
+            bin_path.join(RUNNER_BINARY),
+        ] {
+            require_no_acl(&path)?;
+        }
+        Ok(())
     }
 
     pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {

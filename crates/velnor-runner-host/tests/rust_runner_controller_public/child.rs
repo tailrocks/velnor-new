@@ -5,15 +5,27 @@ use std::path::Path;
 use std::time::Duration;
 
 use velnor_runner_host::{
-    ConnectionId, ConnectionPats, DaemonLock, HostConfig, RustRunnerLauncher, run_rust_runner_host,
+    ConnectionId, ConnectionPats, DaemonLock, HostConfig, RustRunnerLauncher, run_host_blocking,
+    run_rust_runner_host,
 };
 use zeroize::Zeroizing;
 
-use super::fixtures::TestResult;
+use super::fixtures::{TestResult, host_toml};
+
+pub(super) const PASSED_MAX_JOBS: &str = "VELNOR_CHILD_PASSED_MAX_JOBS";
+pub(super) const HOST_BLOCKING: &str = "VELNOR_CHILD_HOST_BLOCKING";
 
 pub(super) fn run(root: &Path) -> TestResult<()> {
     let state = root.join("state");
-    let config = HostConfig::parse(&std::fs::read_to_string(state.join("host.toml"))?)?;
+    let text = std::fs::read_to_string(state.join("host.toml"))?;
+    if std::env::var_os(HOST_BLOCKING).is_some() {
+        return blocking(&state, &text);
+    }
+    let passed = match std::env::var(PASSED_MAX_JOBS) {
+        Ok(max_jobs) => host_toml(root, max_jobs.parse()?)?,
+        Err(_) => text,
+    };
+    let config = HostConfig::parse(&passed)?;
     let secret = Zeroizing::new(std::fs::read(root.join("pat"))?);
     let pats = ConnectionPats::from_secrets(&config, [(ConnectionId::parse("lab")?, secret)])?;
     let lock = DaemonLock::try_acquire_daemon(&state)?;
@@ -32,6 +44,16 @@ pub(super) fn run(root: &Path) -> TestResult<()> {
     ));
     match exit {
         Ok(exit) => println!("CONTROLLER_EXIT Ok({exit:?})"),
+        Err(error) => println!("CONTROLLER_EXIT Err({error})"),
+    }
+    Ok(())
+}
+
+fn blocking(state: &Path, text: &str) -> TestResult<()> {
+    let config = HostConfig::parse(text)?;
+    let lock = DaemonLock::try_acquire_daemon(state)?;
+    match run_host_blocking(&config, state, &lock) {
+        Ok(()) => println!("CONTROLLER_EXIT Ok(())"),
         Err(error) => println!("CONTROLLER_EXIT Err({error})"),
     }
     Ok(())

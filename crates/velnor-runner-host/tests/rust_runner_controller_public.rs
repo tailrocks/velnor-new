@@ -7,14 +7,20 @@ mod admission;
 mod checks;
 #[path = "rust_runner_controller_public/child.rs"]
 mod child;
+#[path = "rust_runner_controller_public/credentials.rs"]
+mod credentials;
 #[path = "rust_runner_controller_public/events.rs"]
 mod events;
+#[path = "rust_runner_controller_public/failure.rs"]
+mod failure;
 #[path = "rust_runner_controller_public/fixtures.rs"]
 mod fixtures;
 #[path = "rust_runner_controller_public/harness.rs"]
 mod harness;
 #[path = "rust_runner_controller_public/once.rs"]
 mod once;
+#[path = "rust_runner_controller_public/runners.rs"]
+mod runners;
 #[path = "rust_runner_controller_public/shutdown.rs"]
 mod shutdown;
 #[path = "rust_runner_controller_public/slot.rs"]
@@ -23,6 +29,8 @@ mod slot;
 mod source;
 #[path = "rust_runner_controller_public/sweep.rs"]
 mod sweep;
+#[path = "rust_runner_controller_public/unavailable.rs"]
+mod unavailable;
 
 use fixtures::TestResult;
 
@@ -67,6 +75,30 @@ fn rust_runner_controller_stops_jobs_on_shutdown() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),
         None => shutdown::run("rust_runner_controller_stops_jobs_on_shutdown"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_proves_cleanup_after_a_failed_launch() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => failure::run("rust_runner_controller_proves_cleanup_after_a_failed_launch"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_defers_a_check_github_could_not_answer() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => unavailable::run("rust_runner_controller_defers_a_check_github_could_not_answer"),
+    }
+}
+
+#[test]
+fn rust_runner_controller_degrades_after_three_failed_runner_exits() -> TestResult<()> {
+    match child_root() {
+        Some(root) => child::run(&root),
+        None => runners::run("rust_runner_controller_degrades_after_three_failed_runner_exits"),
     }
 }
 

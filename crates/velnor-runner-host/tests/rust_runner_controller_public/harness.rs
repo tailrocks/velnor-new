@@ -83,6 +83,7 @@ impl World {
         ] {
             std::fs::create_dir_all(path)?;
         }
+        std::fs::set_permissions(&world.store, std::fs::Permissions::from_mode(0o700))?;
         std::fs::copy(FAKE_ORB, world.root.join("orb"))?;
         std::fs::write(
             world.root.join("list.json"),
@@ -99,14 +100,14 @@ impl World {
         let pat = world.root.join("pat");
         std::fs::write(&pat, format!("PAT-CANARY-{tag}"))?;
         std::fs::set_permissions(&pat, std::fs::Permissions::from_mode(0o600))?;
-        world.write_config()?;
+        world.write_config("main")?;
         world.write_state(scale_set_exists, &[])?;
         world.write_host_toml(max_jobs)?;
         world.configure_orb("")?;
         Ok(world)
     }
 
-    fn write_config(&self) -> TestResult<()> {
+    pub(super) fn write_config(&self, default_branch: &str) -> TestResult<()> {
         let config = json!({
             "owner": "tailrocks",
             "repo": "velnor-lab",
@@ -118,6 +119,7 @@ impl World {
             "admin_url": "https://pipelines.example.com/",
             "store": self.store,
             "ps_table": self.root.join("ps.table"),
+            "default_branch": default_branch,
         });
         std::fs::write(self.github.join("config.json"), config.to_string())?;
         Ok(())
@@ -146,7 +148,10 @@ impl World {
     }
 
     pub(super) fn write_host_toml(&self, max_jobs: u32) -> TestResult<()> {
-        let text = host_toml(&self.root, max_jobs)?;
+        self.write_host_toml_text(&host_toml(&self.root, max_jobs)?)
+    }
+
+    pub(super) fn write_host_toml_text(&self, text: &str) -> TestResult<()> {
         let staging = self.state.join("host.toml.staging");
         std::fs::write(&staging, text)?;
         std::fs::rename(staging, self.state.join("host.toml"))?;
@@ -294,6 +299,13 @@ impl World {
     pub(super) fn heartbeat_ms(&self) -> Option<u64> {
         let text = std::fs::read_to_string(self.state.join("rust-runner-controller.json")).ok()?;
         serde_json::from_str::<Value>(&text).ok()?["updated_unix_ms"].as_u64()
+    }
+
+    pub(super) fn heartbeat_hash(&self) -> Option<String> {
+        let text = std::fs::read_to_string(self.state.join("rust-runner-controller.json")).ok()?;
+        serde_json::from_str::<Value>(&text).ok()?["config_sha256"]
+            .as_str()
+            .map(str::to_owned)
     }
 
     pub(super) fn heartbeat_phase(&self) -> Option<String> {

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::future::Future;
-use std::time::Duration;
+use std::path::Path;
+use std::time::{Duration, Instant};
 
 use velnor_runner_github::QueueSession;
 use zeroize::Zeroizing;
@@ -11,7 +12,7 @@ use super::connection::{Live, Pending};
 use super::github::{self, Admin};
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
-use super::{Context, Shutdown, TICK, blocking};
+use super::{Context, Shutdown, TICK, blocking, host_toml_sha256};
 use crate::config::HostConfig;
 use crate::error::HostError;
 use crate::launch_blocking::ListenFault;
@@ -22,6 +23,7 @@ const STARTUP_RETRY: Duration = Duration::from_secs(30);
 pub(super) enum Started {
     Ready(Vec<Live>),
     Shutdown,
+    ConfigChanged,
 }
 
 #[derive(Clone, Copy)]
@@ -29,6 +31,7 @@ enum Step {
     Machine,
     Sweep,
     Set(usize),
+    Renew(usize),
     Session(usize),
     Clear(usize),
 }
@@ -37,6 +40,7 @@ enum Done {
     Machine,
     Swept,
     Set(usize, Admin, i64),
+    Renewed(usize, Admin),
     Session(usize, QueueSession),
     Cleared(usize),
 }
@@ -80,7 +84,11 @@ pub(super) async fn start(
     let mut pending = pending_connections(config, pats)?;
     let (mut machine, mut swept) = (false, false);
     while let Some(step) = next_step(&pending, machine, swept) {
-        let work = prepare(step, &cx.launcher, &pending)?;
+        if config_changed(cx) {
+            close_pending(&pending).await;
+            return Ok(Started::ConfigChanged);
+        }
+        let work = prepare(step, &cx.launcher, &cx.state, &pending)?;
         let finish = matches!(step, Step::Session(_));
         let outcome = guarded(cx, shutdown, Phase::Startup, blocking(work), finish).await;
         let mut held = false;
@@ -88,13 +96,28 @@ pub(super) async fn start(
             Some(Ok(done)) => match done {
                 Done::Machine => machine = true,
                 Done::Swept => swept = true,
-                Done::Set(index, admin, id) => pending[index].set = Some((admin, id)),
+                Done::Set(index, admin, id) => {
+                    pending[index].set = Some((admin, id));
+                    pending[index].admin_at = Instant::now();
+                }
+                Done::Renewed(index, admin) => {
+                    if let Some((current, _)) = pending[index].set.as_mut() {
+                        *current = admin;
+                    }
+                    pending[index].admin_at = Instant::now();
+                    pending[index].renew = false;
+                }
                 Done::Session(index, session) => pending[index].session = Some(session),
                 Done::Cleared(index) => pending[index].cleared = true,
             },
             Some(Err(error)) => {
                 eprintln!("rust-runner startup held: {error}");
                 held = true;
+                if let Step::Session(index) | Step::Clear(index) = step
+                    && pending[index].admin_expired(Instant::now())
+                {
+                    pending[index].renew = true;
+                }
             }
             None => {}
         }
@@ -103,17 +126,24 @@ pub(super) async fn start(
             return Ok(Started::Shutdown);
         }
         if held {
-            let wait = guarded(
-                cx,
-                shutdown,
-                Phase::Startup,
-                tokio::time::sleep(STARTUP_RETRY),
-                false,
-            )
-            .await;
-            if wait.stopped {
-                close_pending(&pending).await;
-                return Ok(Started::Shutdown);
+            let retry_at = Instant::now() + STARTUP_RETRY;
+            while Instant::now() < retry_at {
+                let wait = guarded(
+                    cx,
+                    shutdown,
+                    Phase::Startup,
+                    tokio::time::sleep(TICK),
+                    false,
+                )
+                .await;
+                if wait.stopped {
+                    close_pending(&pending).await;
+                    return Ok(Started::Shutdown);
+                }
+                if config_changed(cx) {
+                    close_pending(&pending).await;
+                    return Ok(Started::ConfigChanged);
+                }
             }
         }
     }
@@ -122,6 +152,10 @@ pub(super) async fn start(
         live.push(connection.into_live()?);
     }
     Ok(Started::Ready(live))
+}
+
+fn config_changed(cx: &Context) -> bool {
+    host_toml_sha256(&cx.state).as_deref() != Some(cx.config_sha256.as_str())
 }
 
 fn pending_connections(
@@ -142,6 +176,8 @@ fn pending_connections(
                 .ok_or(HostError::Config)?
                 .clone(),
             set: None,
+            admin_at: Instant::now(),
+            renew: false,
             session: None,
             cleared: false,
         });
@@ -159,6 +195,8 @@ fn next_step(pending: &[Pending], machine: bool, swept: bool) -> Option<Step> {
     pending.iter().enumerate().find_map(|(index, connection)| {
         if connection.set.is_none() {
             Some(Step::Set(index))
+        } else if connection.renew {
+            Some(Step::Renew(index))
         } else if connection.session.is_none() {
             Some(Step::Session(index))
         } else if !connection.cleared {
@@ -174,9 +212,11 @@ type Work = Box<dyn FnOnce() -> Result<Done, ListenFault> + Send>;
 fn prepare(
     step: Step,
     launcher: &RustRunnerLauncher,
+    state: &Path,
     pending: &[Pending],
 ) -> Result<Work, ListenFault> {
     let launcher = launcher.clone();
+    let state = state.to_path_buf();
     Ok(match step {
         Step::Machine => Box::new(move || {
             launcher
@@ -189,8 +229,15 @@ fn prepare(
             let connection = pending.get(index).ok_or(HostError::Config)?;
             let (pat, binding) = (connection.pat.clone(), connection.binding.clone());
             Box::new(move || {
-                github::open_scale_set(&pat, &binding)
+                github::open_scale_set(&pat, &binding, &state)
                     .map(|(admin, id)| Done::Set(index, admin, id))
+            })
+        }
+        Step::Renew(index) => {
+            let connection = pending.get(index).ok_or(HostError::Config)?;
+            let (pat, binding) = (connection.pat.clone(), connection.binding.clone());
+            Box::new(move || {
+                github::renew_admin(&pat, &binding).map(|admin| Done::Renewed(index, admin))
             })
         }
         Step::Session(index) => {
