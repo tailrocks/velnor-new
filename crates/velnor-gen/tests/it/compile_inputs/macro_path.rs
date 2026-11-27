@@ -95,3 +95,26 @@ fn a_macro_use_extern_crate_marks_its_package_unresolved() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn an_extern_crate_renamed_to_a_bundled_crate_marks_its_package_unresolved() -> TestResult {
+    let include = format!("const A: &str = include_str!({OUT});");
+    for item in [
+        "extern crate ext as std;",
+        "extern crate ext as core;",
+        "extern crate ext as alloc;",
+        "extern crate core as std;",
+        "#[cfg(unix)]\nextern crate ext as std;",
+    ] {
+        unresolved(&format!("{item}\n{include}"))?;
+    }
+    for item in [
+        "extern crate std as std;",
+        "extern crate core as core;",
+        "extern crate ext as e;",
+        "extern crate std as s;",
+    ] {
+        resolved(&format!("{item}\n{include}"))?;
+    }
+    Ok(())
+}

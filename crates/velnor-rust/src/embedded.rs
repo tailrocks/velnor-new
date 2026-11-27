@@ -261,7 +261,7 @@ fn directory_of(file: &RepoPath) -> Vec<&str> {
     parts
 }
 
-fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
+pub(crate) fn resolve(view: &RepoView, base: &[&str], literal: &str) -> Option<RepoPath> {
     if literal.starts_with('/') {
         return None;
     }

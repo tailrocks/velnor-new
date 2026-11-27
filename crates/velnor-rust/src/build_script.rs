@@ -3,6 +3,7 @@
 
 use velnor_model::{PackageName, RepoPath, RepoView, RustMember, TargetKind};
 
+use crate::build_modules::reach;
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::macro_names::group_end;
 
@@ -43,17 +44,21 @@ pub(crate) struct Declared {
 #[must_use]
 pub(crate) fn declared(view: &RepoView, member: &RustMember) -> Declared {
     let mut found = Declared::default();
-    for bytes in member
+    for source in member
         .targets
         .iter()
         .filter(|target| target.kinds.contains(&TargetKind::BuildScript))
         .filter_map(|target| target.source.as_ref())
-        .filter_map(|source| view.files.get(source))
+        .filter(|source| view.files.contains_key(source))
     {
-        let text = String::from_utf8_lossy(bytes);
-        let found_tokens = tokens(&text);
-        found.tracks_changes |= declares(&found_tokens);
-        found.overrides_environment |= overrides(&found_tokens);
+        let reached = reach(view, source);
+        found.overrides_environment |= reached.unresolved;
+        for (at, file) in reached.files.iter().enumerate() {
+            let text = String::from_utf8_lossy(&view.files[file]);
+            let found_tokens = tokens(&text);
+            found.tracks_changes |= at == 0 && declares(&found_tokens);
+            found.overrides_environment |= overrides(&found_tokens);
+        }
     }
     found
 }
@@ -180,16 +185,10 @@ fn top_level_print(body: &[Token<'_>]) -> bool {
 }
 
 fn overrides(found: &[Token<'_>]) -> bool {
-    let diverted = found.iter().enumerate().any(|(at, token)| match token {
-        Token::Ident("mod") => true,
-        Token::Ident("include") => found.get(at + 1) == Some(&Token::Punct('!')),
-        _ => false,
-    });
     let constants = constants(found);
-    diverted
-        || found
-            .iter()
-            .any(|token| matches!(token, Token::Str(text) if sets_reserved(text, &constants)))
+    found
+        .iter()
+        .any(|token| matches!(token, Token::Str(text) if sets_reserved(text, &constants)))
 }
 
 fn constants<'t>(found: &[Token<'t>]) -> Vec<(&'t str, &'t str)> {

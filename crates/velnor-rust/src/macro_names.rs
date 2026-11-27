@@ -32,6 +32,11 @@ pub(crate) fn shadows(tokens: &[Token<'_>]) -> bool {
                 tokens[at + 1..],
                 [Token::Ident("crate"), Token::Ident(name), ..] if !BUNDLED.contains(&name)
             ) && macro_use_attribute(&tokens[..at])
+                || matches!(
+                    tokens[at + 1..],
+                    [Token::Ident("crate"), Token::Ident(name), Token::Ident("as"), Token::Ident(alias), ..]
+                        if BUNDLED.contains(&alias) && name != alias
+                )
         }
         Token::Ident(name) if in_use && SHADOWABLE.contains(name) => {
             !from_std(&tokens[..at])

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::build_output::{DECLARES, OUT, UNRESOLVED, outcome, owed};
+use super::build_output::{OUT, UNRESOLVED, outcome, owed};
 use crate::facts::TestResult;
 
 const RESOLVED: &str = "const A: &str = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/x.md\"));\nconst B: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/g.md\"));";
@@ -149,27 +149,5 @@ fn a_rustc_env_key_is_read_from_any_literal_and_a_formatted_key_fails_closed() -
         "println!(\"cargo:rustc-env={OTHER}=abc\");",
     );
     assert_eq!(outcome(RESOLVED, &[("c", &harmless)])?, Vec::new());
-    Ok(())
-}
-
-#[test]
-fn a_build_script_with_a_module_or_an_include_makes_its_package_unresolved() -> TestResult {
-    for (what, prelude) in [
-        ("a module file", "mod helper;"),
-        ("a path module", "#[path = \"other.rs\"]\nmod helper;"),
-        ("an inline module", "mod helper { pub fn f() {} }"),
-        ("an include", "include!(\"src/x.md\");"),
-    ] {
-        let script = format!("{prelude}\n{DECLARES}");
-        for source in [RESOLVED, ""] {
-            assert_eq!(
-                outcome(source, &[("c", &script)])?,
-                owed(&UNRESOLVED),
-                "{what}"
-            );
-        }
-    }
-    let plain = format!("use std::fs;\n{DECLARES}");
-    assert_eq!(outcome(RESOLVED, &[("c", &plain)])?, Vec::new());
     Ok(())
 }

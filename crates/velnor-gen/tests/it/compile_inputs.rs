@@ -3,6 +3,7 @@
 
 use velnor_rust::{dep_info_paths, rerun_if_changed};
 
+mod build_modules;
 mod build_output;
 mod build_rules;
 mod embed;
