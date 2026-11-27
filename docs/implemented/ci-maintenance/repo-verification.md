@@ -18,141 +18,97 @@ file alone does not make Cargo discover or execute it: register or enable the
 Cargo target, confirm the generated task plan selects it, and check execution
 evidence to confirm that it ran.
 
-`scripts/verify-local.sh` first installs the exact Bun version declared in the
-root `mise.toml` and verifies that `mise.lock` declares the same version. It
-checks the resolved Bun binary with `bun --version` and fails if installation
-changes the committed lock. This Bun prerequisite is separate from the Rust
-policy `SPECS` comparison below. The repository-owned orchestrator test suite
-uses that same project Bun pin in its preparation step and tools-cache identity.
-
-`scripts/verify-local.sh` uses offline Cargo metadata to identify packages
-with Nextest-applicable targets (`test = true`). A successful empty result
-skips Nextest only for that workspace; metadata errors fail verification. The
-root workspace runs per-package and workspace-wide Nextest scopes with
-`--no-tests fail` when applicable targets exist. The
-`test-maintenance-helpers` task (a local full run: no generated workflow job runs it, so it is
-not a required check) applies the same metadata rule to its two named
-package scopes and first runs the `pin-mirror` repository-policy action against
-the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
-Nextest scope fails when its selected suite is empty. The task generator
-separately uses `--no-tests warn` for hash-partitioned selections so an
-individual empty shard is allowed; that does not prove complete suite coverage.
-As suites return, generated verification must enforce fail-on-empty at each
-declared required-suite scope, while intentional filtered or partitioned subruns
-may allow an empty selection only when the generated plan selects the complete
-suite and execution evidence confirms its tasks ran. V1 has no permanent empty-suite exception.
-
-Before either root verification entry point runs `velnor-archive-guard` tests,
-it builds the `qualification-diagnostics` CLI example and resolves its Cargo
-compiler artifact through the repository-policy executable selector with kind
-`example`. It exports the absolute executable path in
-`VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE`. A missing or invalid artifact fails
-the test scope; tests do not invoke Cargo to build it.
-
 ---
 
 ## The Verification Suite
 
-For complete Rust verification, run `bash scripts/verify-local.sh` from the repo
-root. It checks the root workspace, including formatting, Clippy,
-metadata-gated Nextest, docs, and freshness. Run the independent repository
-checks alongside it. For each change, run narrow checks that exercise it and
-complete the full relevant verification scope before finishing.
+No single script runs the full gate. The full local gate is the `run:` steps of the jobs in `.github/workflows/ci.yml` and `.github/workflows/repository-checks.yml` that the changed paths select. Read the steps from the workflow files: they are the source of truth, and `velnor-gen` generates `ci.yml`. Run them from the repo root, in a checkout where `cargo` resolves to the mbx wrapper (see [Everything goes through mbx](#everything-goes-through-mbx)). Skip a job only when the changed paths do not select it, and run every job when you are unsure.
 
-If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
-commands do not hold an MBX cache lease. Use a separately owned absolute
-`CARGO_TARGET_DIR` for the entire verification run so automatic cache collection
-cannot remove active test binaries. During the reset, Nextest has no test target
-to build the CLI. Leave `VELNOR_ACTIONS_BIN` unset so the freshness script uses
-its pinned-Mise `cargo run` fallback, or set it to an already built executable
-such as `$CARGO_TARGET_DIR/debug/velnor-actions`. Preserve the managed symlink
-and global cache settings. Bounded build/test parallelism is permitted; it must
-not omit any required test or gate.
+Run the steps with the shell the workflow sets: `bash -p {0}` for `ci.yml`, `bash -e {0}` for the jobs of `repository-checks.yml`.
 
-```bash
-bash scripts/verify-local.sh
-alint validate-config && alint check --fail-on-warning
-cargo deny check
-```
+**The translation rule.** A `ci.yml` step runs `$VELNOR_EXEC`, the released helper that only the runner has. Translate each `run:` line once, in this order:
 
-The local script also runs `scripts/check-freshness.sh`.
+1. `. "$VELNOR_EXEC" run -- <command>` becomes `<command>`.
+2. `. "$VELNOR_EXEC" <subcommand>` becomes `target/debug/velnor-ci <subcommand>`.
+3. A `<command>` that starts with `velnor-ci`, such as `velnor-ci inputs build --` or `velnor-ci lane-guard`, runs as `target/debug/velnor-ci ...`, because `velnor-ci` is not on `PATH` in a checkout.
+4. Drop output-format flags (`--message-format=json-render-diagnostics` and `--cargo-message-format=json-render-diagnostics`) and keep every other argument.
 
-Tests that need a fixture or an environment variable that only the verification
-entry points set are run with the recipe in
-[Local recipe for fixture-dependent tests](#local-recipe-for-fixture-dependent-tests).
+Build the binary first with `cargo build --locked -p velnor-ci --bin velnor-ci`. In a checkout that uses mbx, `target` is a symlink into the mbx store, and `target/debug/velnor-ci` works through it. Do not use `cargo run` for it: `cargo run` sets `CARGO` to the toolchain's cargo, so the nested builds of `lane-guard` skip mbx.
 
-## Local recipe for fixture-dependent tests
+Run the checking steps. `velnor-ci inputs build --` runs its own checks before the command starts, such as the `outside_selection` check and the build-directory declarations. `check-metadata` runs in every `rust` job. CI runs `inputs audit --root .` on a schedule, on a manual dispatch and when the restored build directory has expired. Run it for the same audit after a full `target/debug/velnor-ci inputs build -- cargo clippy --workspace --all-targets` and `target/debug/velnor-ci inputs build -- cargo build --workspace --all-targets` in the checkout. On a partial build directory it fails with `found no current dep-info`. Skip the steps that only prepare the runner: the `uses:` steps, the launcher install, and the subcommands that restore, save or report runner state (`plan` is covered below, and the others are `prepare`, `delta`, `inputs restore-all`, `restored`, `inputs save`, `cache`, `report`, `tools-verify`, `tools-local`, `crates-mirror`, `mbx-store`, `sources`, `merge-queue-check`, `merge-group-passed`, `bench` and `gate`). Skip the plain `rustup` steps that install components and targets, and the `echo` and `printf` steps that write job environment or outputs. Also skip the two `repository-checks.yml` steps that run `scripts/test-install-secret-scanners.sh` and `scripts/install-secret-scanners.sh`. Both handle Linux binaries only and fail on macOS with `no pinned secret scanner assets for Darwin/arm64`. Run the `git fetch --no-tags --unshallow` step of the `secret-scan` job only in a shallow clone, because it fails in a full clone.
 
-A plain `cargo nextest run --workspace` fails the tests of `velnor-actions-cli`,
-`velnor-actions-mise` and `velnor-archive-guard` when their fixture variable is
-missing. Each such failure names this section. Run a crate with its recipe
-below, or run `bash scripts/verify-local.sh`, which sets every variable and runs
-the whole suite.
-
-| Variable | Value | Set by | Read by |
-|---|---|---|---|
-| `VELNOR_IMAGE_PUBLICATION_FIXTURE` | Absolute path to the `image-publication-fixture` example executable | `scripts/verify-local.sh`, CI | `velnor-actions-cli` `image_publication_public` |
-| `VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE` | Absolute path to the `qualification-diagnostics` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
-| `VELNOR_QUALIFICATION_CLOCK_DRIVER` | Absolute path to the `golden_collector_clock` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
-| `VELNOR_GROUP_PROBE_RECEIPT` | Receipt written by `scripts/provision-group-signal-interposer.sh` (macOS) | `scripts/verify-local.sh` on macOS | `velnor-actions-mise` `permission_retry_darwin` |
-
-`velnor-actions-cli` `check_runtime_identity_public` also needs the `mise` on
-`PATH` to be the exact pinned release (`MISE_VERSION` in
-`crates/velnor-actions-mise/src/catalog.rs`). A different mise build fails with
-`mise_binary_unreadable`, because the orchestrator reads at most the pinned byte
-count; the progress test states this precondition before it runs. `mise.toml`
-does not pin mise itself, so install the release with
-`mise install aqua:jdx/mise@2026.11.1` and put its binary first on `PATH`:
+CI runs the helper that the `Install velnor-ci <version>` step of `ci.yml` pins, and it publishes Linux binaries only, so the pinned helper cannot run on macOS. The binary you build from the checkout reports its own version with `target/debug/velnor-ci --version`, and that version can differ from the pin. When the two differ, build the pinned release in its own worktree through mbx and run that binary from your change's own checkout:
 
 ```sh
-PATH="$HOME/.local/share/mise/installs/aqua-jdx-mise/2026.11.1/mise/bin:$PATH" \
-  "$HOME/.cargo/bin/cargo" nextest run -p velnor-actions-cli --test check_runtime_identity_public progress
+git worktree add --detach <path> tools-v<pinned version>
+( cd <path> && export MISE_TRUSTED_CONFIG_PATHS=$PWD && mise install && git checkout -- mise.lock && mbx doctor && cargo build --locked -p velnor-ci --bin velnor-ci )
+<path>/target/debug/velnor-ci <subcommand>
 ```
 
-The `~/.local/bin/mise` shim does not satisfy this check, so the pinned binary
-must come first on `PATH` for the run. Call `$HOME/.cargo/bin/cargo` directly:
-the MBX `cargo` wrapper on the default `PATH` rebuilds `PATH` before it runs
-the test, which drops the pinned binary from the front.
+The worktree supplies only the binary. The binary reads the checkout it runs in, so do not run it from `<path>`.
 
-The example paths must be canonical, so each recipe resolves the examples
-directory with `cd -P`. It uses `CARGO_TARGET_DIR` when it is set, and `target`
-otherwise.
+A nextest step reads `-E "$TEST_FILTER"`. The skipped `velnor-ci plan` step computes that value, so take it from the local plan. Set `GITHUB_OUTPUT` to a file and run `target/debug/velnor-ci plan --explain --changed $(git diff --name-only origin/<base>...HEAD)`, with a `--base-file` argument for each changed `Cargo.lock`, `Cargo.toml` or configuration file, as the plan section below describes. Pass every changed path of the change, not one path, so that the value covers every changed crate. Then set `TEST_FILTER` to the value after `rust_root_test_filter=` in that file, not the whole line. The plan includes the packages that depend on a changed crate, so this value can be wider than the crate you changed. Use `all()` to run the whole workspace when you are unsure. Unset or empty, nextest fails with a filterset parse error.
 
-### velnor-actions-cli
+The table applies the translation rule to the steps of the `rust` job and lists the commands of the other jobs. It is not the gate and it can fall behind the workflows. When the table and a workflow step differ, the workflow step wins.
 
-```bash
-cargo build --locked -p velnor-actions-cli --example image-publication-fixture && \
-VELNOR_IMAGE_PUBLICATION_FIXTURE="$(cd -P "${CARGO_TARGET_DIR:-target}/debug/examples" && pwd)/image-publication-fixture" \
-  cargo nextest run --locked --no-fail-fast -p velnor-actions-cli
+| CI job | Local command |
+|---|---|
+| `rust`, metadata | `target/debug/velnor-ci check-metadata` |
+| `rust`, format | `cargo-fmt --all --check` |
+| `rust`, lint | `target/debug/velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings` |
+| `rust`, docs | `target/debug/velnor-ci inputs build -- cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'` |
+| `rust`, per-package check | `target/debug/velnor-ci inputs build -- cargo check -p <pkg> --locked`, once for each selected package. CI runs these steps on a push, a schedule or a manual dispatch |
+| `rust`, test tool setup | `mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4` and `mise --no-config --no-env --no-hooks install gh@2.104.0` |
+| `rust`, tests | `target/debug/velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --profile ci --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass` |
+| `rust`, tests with the `test-support` feature | `target/debug/velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --features 'test-support' --profile ci --no-fail-fast --ignore-default-filter --status-level pass -E "($TEST_FILTER) and (package(velnor-runner))" --no-tests=fail` |
+| `rust`, test lane guard with the `test-support` feature | `target/debug/velnor-ci lane-guard --features 'test-support' --filter 'package(velnor-runner)'` |
+| `rust`, lint with the `test-support` feature | `target/debug/velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked --features 'test-support' -- -D warnings` |
+| `rust`, tests with the `local-mode` feature | `target/debug/velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --features 'local-mode' --profile ci --no-fail-fast --ignore-default-filter --status-level pass -E "($TEST_FILTER) and (package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public)))" --no-tests=fail` |
+| `rust`, test lane guard with the `local-mode` feature | `target/debug/velnor-ci lane-guard --features 'local-mode' --filter 'package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))'` |
+| `rust`, lint with the `local-mode` feature | `target/debug/velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked --features 'local-mode' -- -D warnings` |
+| `rust`, docs with the `local-mode` feature | `target/debug/velnor-ci inputs build -- cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]' --features 'local-mode'` |
+| `rust`, input audit | `target/debug/velnor-ci inputs audit --root .` |
+| `policy`, dependencies | `cargo deny --config deny.toml --locked check` |
+| `policy`, unused dependencies | `cargo machete` |
+| `lint-alint` | `alint validate-config && alint check --fail-on-warning`, then `bash scripts/alint-line-cap-probe.sh` |
+| `lint-jactionlint` | `jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --no-color --pyflakes= --shellcheck=shellcheck` |
+| `lint-generator-samples` | `mise run lint-generator-samples` |
+| `lint-hosted-phase-measurement` | `mise run lint-hosted-phase-measurement` |
+| `lint-mise-binary-digests` | `mise run test-mise-binary-digests` |
+| `lint-validate-hk` | `mise run validate-hk` |
+| `lint-generated-check` | `cargo run --locked -p velnor-gen --bin velnor-gen -- --root . check --verify-release` |
+| `helper-gates`, fetch and check the added gates | `git fetch --force --tags --quiet origin`, then `bash scripts/check-helper-gates.sh origin/<base>`, where `<base>` is the branch your pull request targets |
+| `helper-gates`, self-test the gate check | The `run:` block of the self-test step of the `helper-gates` job in `repository-checks.yml`, run verbatim under `bash -e` |
+| `helper-gates`, merge-queue test | `bash scripts/test-helper-gates-merge-queue.sh` |
+| `secret-scan`, scans | Every step of the job in `repository-checks.yml` except the two installers, run in this order with the scanners that `mise install` installs from `mise.toml`: `bash scripts/test-secret-scan-worktree.sh`, the `Print scanner versions` step (`gitleaks version`, `betterleaks version` and `kingfisher --version`), `bash scripts/test-secret-scan-config.sh`, `gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"`, `betterleaks git . --redact -c .betterleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"` and `bash scripts/secret-scan-worktree.sh`. The unshallow step is handled above |
+
+`cargo doc` is the third exception in [Everything goes through mbx](#everything-goes-through-mbx).
+
+The nextest rows read `$TEST_FILTER`, which `velnor-ci plan` computes from the diff in CI, so set it as described above. The `test-support` and `local-mode` rows narrow it with their own `-E` condition and enable their feature. CI skips such a lane, with a `Skip test lane` step, when the plan selects none of its packages. The tests row passes `--ignore-default-filter`, as the generated `ci.yml` step does, so the default filter of the nextest profile skips no test. It passes `--no-tests=pass` because an empty selection is valid there. Both feature lanes pass `--no-tests=fail`.
+
+The `test-maintenance-helpers` mise task runs the repository-only maintenance helper tests. No generated workflow job runs it, so it is a local full run and not a required check. It first runs `scripts/test-setup-velnor-action.py`, the mise binary digest tests, the tag ruleset drift test and `cargo fetch --locked`, then runs the `velnor-archive-guard` tests with `--no-tests fail`.
+
+`hk.pkl` defines the other local checks: `rumdl` (pinned in `mise.toml`), `tofu`, the toolchain mirror check (`scripts/check-rust-toolchain-mirror.sh`), the `cargo test` ban check (`scripts/check-test-cargo.sh`) and the secret scans. The `pre-commit` and `pre-push` hooks run the secret scans.
+
+For any change, run the jobs that `velnor-ci plan` selects, plus the always-on jobs. CI computes the selection in its `rust-plan` job with `. "$VELNOR_EXEC" plan --explain`. In CI the plan lists the changed files with git and reads the old text of each changed `Cargo.lock`, root `Cargo.toml`, workflow file, file of a lint task and file that holds a setting weakening from the first parent of the merge commit. Locally, build the binary, then pass the changed paths, relative to the repository root, and the old text of each changed file that the plan compares with `--base-file <path>=<file>`. `<file>` holds the text from the base branch, and a process substitution works:
+
+```sh
+cargo build --locked -p velnor-ci --bin velnor-ci
+target/debug/velnor-ci plan --explain --changed Cargo.lock --base-file Cargo.lock=<(git show origin/<base>:Cargo.lock)
 ```
 
-### velnor-archive-guard
+Give `--base-file` once for each changed `Cargo.lock`, `Cargo.toml` or configuration file the plan reads, such as `.velnor/rust-ci.toml` or a cargo, mise or nextest configuration. Without it, a changed `Cargo.lock` or root `Cargo.toml` selects everything, which is more than CI selects. For a changed configuration file, `--base-file` does not change the selection. It decides which `check does less` lines the explanation marks `(new in this change)`, and which settings the plan reports as `::warning` annotations: without it, the plan treats every setting in the file as new and annotates each one. Without `--changed` and without a pull request event, the plan selects everything.
 
-```bash
-cargo build --locked -p velnor-actions-cli --example qualification-diagnostics && \
-cargo build --locked -p velnor-archive-guard --example golden_collector_clock && \
-examples="$(cd -P "${CARGO_TARGET_DIR:-target}/debug/examples" && pwd)" && \
-VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$examples/qualification-diagnostics" \
-VELNOR_QUALIFICATION_CLOCK_DRIVER="$examples/golden_collector_clock" \
-  cargo nextest run --locked --no-fail-fast -p velnor-archive-guard
-```
+Set `GITHUB_OUTPUT` to a file to read the `rust_*` and `lint_*` values that the plan writes. The plan reads the files in the working tree and the paths you pass. It also reads the `origin` remote to place the hashed `full_run` schedule, and it fails with `origin must identify a hosted repository to place a hashed full_run schedule` when `origin` is a local path or a `file://` URL. It works when `origin` is absent or a hosted URL, over SSH or HTTPS.
 
-### velnor-actions-mise (macOS)
+The always-on jobs run for every change:
 
-The receipt names a private interposer library. The recipe provisions it in a
-temporary directory, resolved to its canonical path, that is removed when the
-command exits:
+- `Jactionlint` (`lint-jactionlint` job in `ci.yml`). Its `if:` checks the event, the draft state, the labels and the merge-queue skip output, and no path.
+- `Alint` (`lint-alint` job in `ci.yml`). Its `if:` is the same as the `Jactionlint` job.
+- `Helper gates` (`helper-gates` job in `repository-checks.yml`). It runs for a pull request from the same repository and for a merge group.
+- `Secret scanners` (`secret-scan` job in `repository-checks.yml`). It runs for a pull request from the same repository, for a push and for a merge group.
 
-```bash
-set -eu
-probe_root="$(cd -P "$(mktemp -d)" && pwd)"
-trap 'rm -rf "$probe_root"' EXIT
-bash scripts/provision-group-signal-interposer.sh "$probe_root/fixture"
-VELNOR_GROUP_PROBE_RECEIPT="$probe_root/fixture/group_signal_zero_interpose.json" \
-  cargo nextest run --locked --no-fail-fast -p velnor-actions-mise
-```
-
-The tests verify the receipt, fixture source, and library before use.
+The `required` job in `ci.yml` collects the results of the other jobs and runs no check. Run the table rows for the always-on jobs locally: the `alint` and `jactionlint` rows, the three `helper-gates` rows and the `secret-scan` row. `rumdl` is not a CI job. `mise.toml` pins it and `hk.pkl` runs it, so run `rumdl check` on the changed Markdown files as well.
 
 ---
 
@@ -173,9 +129,9 @@ The tests verify the receipt, fixture source, and library before use.
   - `--all-targets`: Ensures tests and benchmarks meet the same lint standards as product crates.
   - `-D warnings`: Prevents warning accumulation.
 
-### 3. Test Suite Execution: `bash scripts/verify-local.sh`
+### 3. Test Suite Execution: `cargo nextest run --workspace --locked --profile ci --no-fail-fast --ignore-default-filter --no-tests=fail`
 
-- **Purpose**: Runs root per-package and workspace Nextest scopes. Cargo metadata decides whether each workspace or named package scope has a `test = true` target; only a successful empty result skips Nextest. Metadata errors fail, and each invoked Nextest scope uses `--no-tests fail`.
+- **Purpose**: Runs the workspace Nextest suite with the `ci` profile from `.config/nextest.toml`. `--no-tests=fail` makes an empty selection fail.
 - **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
 - **Focused Execution**:
   - Run a package whose Cargo metadata reports a test-enabled target: `cargo nextest run --locked -p <package_name> --no-tests fail`
@@ -191,30 +147,7 @@ The tests verify the receipt, fixture source, and library before use.
 - **Purpose**: Checks crate dependencies against security advisories, approved licenses, duplicate versions, and source registries.
 - **Why It Matters**: Prevents unapproved licenses, yanked dependencies, duplicate conflicting dependencies, and vulnerable crates from entering the dependency graph.
 
-### 6. Toolchain & Pin Freshness: `bash scripts/check-freshness.sh`
-
-- **Purpose**: Verifies that toolchain pins, GitHub Actions versions, and external dependencies adhere to `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
-- **Why It Matters**: Prevents unrecorded drift from upstream tooling and validates active pin exceptions.
-- **Checks**:
-  - `local-pin`: Compiled-in constants match reviewed inventory pins, including
-    the policy mirror and cargo-mutants pin.
-  - `effective-identity`: Declared requirements match every Cargo.lock
-    resolution across discovered workspaces and dependency scopes.
-  - `upstream-freshness`: Reviewed pins have fresh upstream evidence; stale pins,
-    stale evidence, and lookup failures fail closed.
-  - `advisories`: Deny policy and optional live scans cover every Cargo
-    workspace, with no ignored advisories.
-- **Output**: Each `row: {...}` line is a compact JSON object with `check`,
-  `subject`, `status`, and `detail` keys. A row with `status: fail` makes the
-  command exit nonzero.
-- **Options**: `--root DIR` validates a fixture tree instead of the repository.
-  `--check-upstream` performs a bounded, read-only latest-stable lookup with a
-  10-second timeout and 512 KiB encoded/decoded cap; it writes nothing and runs
-  weekly in CI outside build gates. `--with-advisories` runs the live Cargo Deny
-  scan for every workspace, with a 180-second timeout per workspace, and the
-  local deny-policy checks.
-
-### 7. Private Names: `python3 scripts/private-names-guard.py`
+### 6. Private Names: `python3 scripts/private-names-guard.py`
 
 - **Purpose**: Keeps private downstream organization and repository names out of tracked files.
 - **Authority**: `scripts/private-names-guard.py` alone decides whether a private name is present. It reads the bytes of every tracked path, file and symlink target, independent of file type, extension case or structure, and compares them with the salted digests in `scripts/private-names-hashes.txt`. Matching is case-insensitive and also runs on the URL-decoded, `\uXXXX`-unescaped, `\/`-unescaped and HTML-unescaped text, after Unicode NFKC normalization with zero-width characters and combining marks removed. It matches a name inside identifiers, an `org/repo` pair with spaces around the slash or a `.git` suffix, and a name written with spaces, tabs, hyphens, underscores, dots or nothing between its letters and words, such as `Title Case Spaced`, `hyphen-form`, `under_score` or `dot.form`. A private name that is also an ordinary phrase therefore flags that phrase; reword the prose.
@@ -227,18 +160,19 @@ The tests verify the receipt, fixture source, and library before use.
 
 Every Rust build and test runs through mise and mbx. `mise.toml` sets `[wrappers.cargo] command = "mbx"`, so `cargo` on `PATH` is the mise wrapper that runs mbx, and mbx keeps the compiler results in its store. Do not run `~/.cargo/bin/cargo` or the rustup toolchain directly.
 
-Four exceptions are allowed. Nothing else may skip mbx.
+Three exceptions are allowed. Nothing else may skip mbx.
 
-1. **Token fetch.** The `velnor-ci fetch` step runs the real `cargo fetch --locked` for each Cargo root, with the private token in the environment of that one command. It never runs a mise shim or a command wrapper, so the token never reaches a wrapper from the repository or `PATH`. The fetch downloads and does not compile, so mbx has nothing to cache.
+1. **Token fetch.** The `velnor-ci fetch` subcommand, which a generated workflow runs when `[private_sources]` is set and which no workflow of this repository runs, runs the real `cargo fetch --locked` for each Cargo root, with the private token in the environment of that one command. It never runs a mise shim or a command wrapper, so the token never reaches a wrapper from the repository or `PATH`. The fetch downloads and does not compile, so mbx has nothing to cache.
 2. **Bootstrap of mbx and mise.** Building mise and mbx from source (`scripts/build-owned-tool.py`) uses the pinned official mbx release, checked by digest, as its cargo driver. A tool cannot be its own compiler wrapper while it is being built.
 3. **Rustdoc and doctests.** `cargo doc` and doctests run without mbx, because mbx cannot cache them yet. This is accepted for now and is revisited when mbx caches them.
-4. **Release-plz `cargo package` and `cargo publish`.** The `release_pr` and `tag` jobs run release-plz, which runs `cargo package` and `cargo publish` itself, without mbx and without `jdx/mise-action`. Both jobs hold the release App token, and the generator rule `MiseActionInTokenJob` forbids mise in a job that holds a token, so a repository-declared cargo wrapper must not run there. Token safety wins over mbx for these two jobs. Build jobs hold no token and do run through mise and mbx.
+
+The release workflow `release.yml` runs no `cargo package`, `cargo publish` or release-plz. Its `family` job holds the release App token and runs only `velnor-ci` subcommands. The generator rule `MiseActionInTokenJob` (`crates/velnor-render/src/rules.rs`) forbids `jdx/mise-action` in a job that holds the release App token, so no repository-declared cargo wrapper runs there. The release build jobs hold no token and run through mise and mbx with a private store.
 
 MBX is fail closed when the crates mirror runs. The mirror step reads the mise configuration in the workspace (`mise.toml`, `.mise.toml`, `mise/config.toml`, `.mise/config.toml`, `.config/mise.toml` or `.config/mise/config.toml`) with the same detector `velnor-ci report-waste` uses. If it declares MBX (a `[wrappers.cargo]` command that runs `mbx`, including a path such as `/opt/tools/bin/mbx`, or `mr_boxington = true` on a tool, including the array form), the step records `VELNOR_CARGO_MBX=required` for the rest of the job. From then on the wrapper refuses to run any `cargo` that is not the mise wrapper and fails with `mbx is declared but cargo on PATH isn't the mise mbx wrapper: <path>`. When mise's launch finishes without creating its cargo wrapper, the wrapper fails with `mbx is declared but mise's cargo wrapper is missing after activation` instead of running a plain `cargo`. It never falls back to a cargo found elsewhere on `PATH`. `VELNOR_CRATES_MIRROR=off` does not switch MBX off: with MBX declared, the step writes no mirror config but still exports `CARGO` and `VELNOR_CARGO_WRAPPER` pointing at velnor-ci's forwarding wrapper. Every run of the step exports its complete mode: `VELNOR_CARGO_CONFIG` is empty when the mirror is off, and `VELNOR_CARGO_MBX` is empty when nothing declares MBX, so a later run clears what an earlier run in the same job exported. The MBX check runs when each `cargo` is called, not at setup, because setup runs before the tools install and mise's wrapper may not exist yet. A call fails when the first `cargo` on `PATH` is not the mise wrapper. Repositories that do not declare MBX are unchanged. The mirror mode and the MBX requirement are not read from the job's environment alone. Setup writes a record, `velnor-cargo-mode`, in the `velnor-cargo` directory beside the wrapper, and the wrapper finds it from its own executable path, never from an environment variable. A step `env:` block cannot undo it: with the mirror on, a missing or empty `VELNOR_CARGO_CONFIG` fails, and so does a value that names a different file than the config path the record holds, and `VELNOR_CRATES_MIRROR=off` set after setup fails with a message instead of switching the mirror off; the only way to turn it off is to run the crates-mirror step with `VELNOR_CRATES_MIRROR=off`. The crates-mirror step reads `VELNOR_CRATES_MIRROR` from the environment it is started with, so an `off` that an earlier step exported through `GITHUB_ENV` is honored the same as a step-level `env:` value: the rerun stays off and writes no mirror config. Only an explicit empty `VELNOR_CRATES_MIRROR` on the step turns a later run back on, and that is the empty reset the mirror-on setup itself appends to `GITHUB_ENV`. `VELNOR_CARGO_MBX` can only add the MBX requirement, never remove it. `VELNOR_CARGO_MISE_PHASE` and `VELNOR_CARGO_REAL` are state that the wrapper passes to its own child cargo calls while a chain runs, not something setup writes, so they are trusted from the job environment: a step that sets `VELNOR_CARGO_MISE_PHASE=wrapped` already needs control of the step's environment, which this check does not claim to stop. The requirement applies only to a `cargo` that a step starts, not to one that a running Cargo or test starts (the environment has `CARGO_MANIFEST_DIR`, which Cargo and nextest set for build scripts and tests), and only when its project declares MBX: the project is the directory of its `--manifest-path`, or else the working directory, resolved after cargo's `-C <dir>` (`-C dir`, `-Cdir`, `-C=dir`, also inside a short-flag cluster such as `-vCdir`) changes into it, and a script or manifest named as the command is scoped by its own path, following a symlink to the file it names (cargo's own rule for a manifest command under `-Zscript`: a `.rs` file or any path of more than one component such as `a/b/c`, `./tool`, `../tool` or `a/Cargo.toml`; without `-Zscript` cargo runs a bare `foo.rs`, or a multi-component name such as `a/b`, as an external subcommand when an executable of that name is on `PATH` (`cargo-foo.rs`, `cargo-a/b`), so the directories of both the script and its `--manifest-path` count; a bare name such as `nextest` or `tool` is a subcommand even under `-Zscript` and is scoped like any other, by its `--manifest-path`; a path that cannot be resolved because of `..` components requires MBX); inside `GITHUB_WORKSPACE` the directories up to the workspace root count too. A `cargo` that a test starts for a scratch project outside the workspace therefore runs as before, while a build of the checkout still fails closed. The `-m` shorthand for `--manifest-path` is honored for the built-in manifest commands, their built-in aliases (`b`, `c`, `d`, `t`, `r`, `rm`) and aliases defined in `.cargo/config.toml`, `.cargo/config`, `CARGO_ALIAS_*` or `$CARGO_HOME`, which are resolved to their expansion first. A user alias may override only cargo's short aliases (`b`, `c`, `d`, `t`, `r`, `rm`) and `clippy`, so an alias with one of those names is expanded and scoped by its expansion; an alias named like any other built-in, such as `test`, `add`, `info`, `remove` or `report`, is ignored, so the scope follows the built-in. `.cargo/config` wins over `.cargo/config.toml` in the same directory. An alias definition that cannot be read, an `include` in a config file, or an alias given with `--config` makes a call require MBX when its subcommand is one an alias could expand to: `b`, `c`, `clippy`, `d`, `r`, `rm`, `t`, or a name that is not a cargo built-in, because the alias could expand to a manifest in the checkout. A `GITHUB_WORKSPACE` that is set but cannot be resolved to an existing directory, for example a missing path, a file or a path with an inaccessible component, also requires MBX. When it is unset or empty, the MBX declaration scan covers the project directory alone and reads no directory above it; the `-m` alias lookup above still reads `.cargo/config.toml` and `.cargo/config` in every ancestor directory. So does a call whose options before the subcommand cannot be classified the way cargo parses them: `-C` without a value or with an empty one, `-C` given twice, or an unknown option. This is a guard against a misconfigured job, not a sandbox: step code that sets `CARGO_MANIFEST_DIR` or runs its own `cargo` on a project outside the checkout is not stopped, as it could already run any command. velnor-ci releases before 0.1.110 do not have this check, and releases before 0.1.111 apply it to every `cargo` on the job's `PATH`. The `-C` rule (every spelling, a `-C` that names a symlink, and the fail-closed cases above) first ships in velnor-ci 0.1.112; 0.1.111 still chooses the project from the launch directory and ignores `-C`.
 
 **Release builds always use a fresh private mbx store; never shared, never restored.** mbx's action records are unsigned: rewriting the records in a writable store makes a clean checkout serve the writer's output. A self-hosted runner's `~/.cache/mbx`, a shared store or a restored Actions cache would therefore be a poisoning path into release binaries. Every generated release job that runs cargo through mise (the `build-*` jobs and `family-versions`) has the step `Private mbx store` right after its checkout, before `jdx/mise-action` and any cargo: `echo "MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-<job>" >> "$GITHUB_ENV"`. The runner empties `$RUNNER_TEMP` for every job, so the store starts empty and no other job can write it. Release jobs never set `MBX_REMOTE` or mount the shared store, and never restore or save an mbx cache. The generator tests in `crates/velnor-gen/tests/it/release_mbx.rs` pin all of this.
 
-No script may add a fifth exception. `scripts/build-owned-archive-guard.sh` builds its guard through the repository's mise and mbx, with a fresh private mbx store per run. `scripts/local-cargo.sh` was removed: it called rustup's cargo directly and only its own test used it. Exceptions 1 and 3 do not build mbx or mise, so the bootstrap rule does not cover them; the owner must decide whether they stay.
+No script may add a fourth exception. `scripts/build-owned-archive-guard.sh` builds its guard through the repository's mise and mbx, with a fresh private mbx store per run. It sets its own `CARGO_TARGET_DIR` inside that hermetic build so the guard binary lands in a path that depends on the source fingerprint. This is not an exception to the mbx rule and is no template for other scripts or for your shell: do not set `CARGO_TARGET_DIR` yourself. `scripts/local-cargo.sh` was removed: it called rustup's cargo directly and only its own test used it. Exceptions 1 and 3 do not build mbx or mise, so the bootstrap rule does not cover them; the owner must decide whether they stay.
 
 To verify a local checkout:
 
@@ -246,13 +180,14 @@ To verify a local checkout:
 export MISE_TRUSTED_CONFIG_PATHS=$PWD
 mise install
 type -a cargo | head -1   # must show a path under mise/command-wrappers/bin/
+mbx doctor               # must report 0 failures
 ```
 
-Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]: object cache: H hits, M misses, ...` lines in its output. If they are missing, the build did not go through mbx.
+Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]` lines in its output. The counts change from build to build, for example `mbx[cache]: 8 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally`. If they are missing, the build did not go through mbx.
 
 ## Runner Crates (`crates/velnor-runner-*`)
 
-The runner controller and supervisor crates (`crates/velnor-runner-*` and `crates/velnor-resource-probe`) are members of the root workspace. They use the root `Cargo.toml`, `Cargo.lock` and `deny.toml`, and `scripts/verify-local.sh` verifies them with the root stages.
+The runner controller and supervisor crates (`crates/velnor-runner-*` and `crates/velnor-resource-probe`) are members of the root workspace. They use the root `Cargo.toml`, `Cargo.lock` and `deny.toml`, and the root verification commands in [The Verification Suite](#the-verification-suite) cover them.
 
 The Docker-readiness fixture rewrites the entrypoint to no-op its absolute-path
 `wait-docker-sock` and `clear-dockerenv` commands because the fixture stub root
