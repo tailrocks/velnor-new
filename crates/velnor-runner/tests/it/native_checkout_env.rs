@@ -26,7 +26,7 @@ pub(crate) fn install_wrapper(root: &Path) -> Result<()> {
     std::fs::write(
         &wrapper,
         format!(
-            "#!/bin/sh\n[ -f '{root}/wrapper.env' ] && . '{root}/wrapper.env'\nGIT_TRACE2_EVENT='{root}/trace.json'\nexport GIT_TRACE2_EVENT\nexec '{real}' \"$@\"\n",
+            "#!/bin/sh\n[ -f '{root}/wrapper.env' ] && . '{root}/wrapper.env'\n[ -f '{root}/packed' ] && set -- -c transfer.unpackLimit=1 \"$@\"\nGIT_TRACE2_EVENT='{root}/trace.json'\nexport GIT_TRACE2_EVENT\nexec '{real}' \"$@\"\n",
             root = root.display()
         ),
     )?;
