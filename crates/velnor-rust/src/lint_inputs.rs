@@ -23,9 +23,9 @@ pub fn lint_runs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
-    observed: &BTreeSet<RepoPath>,
+    unplain: &BTreeSet<RepoPath>,
 ) -> BTreeMap<RootSlug, bool> {
-    let tree = Tree::new(facts, tracked, symlinks, base, observed);
+    let tree = Tree::new(facts, tracked, symlinks, base, unplain);
     facts
         .config
         .lint
@@ -39,7 +39,7 @@ struct Tree<'a> {
     tracked: &'a BTreeSet<RepoPath>,
     symlinks: &'a BTreeSet<RepoPath>,
     base: &'a BTreeMap<RepoPath, String>,
-    observed: &'a BTreeSet<RepoPath>,
+    unplain: &'a BTreeSet<RepoPath>,
     generator: Option<Generator>,
 }
 
@@ -49,7 +49,7 @@ impl<'a> Tree<'a> {
         tracked: &'a BTreeSet<RepoPath>,
         symlinks: &'a BTreeSet<RepoPath>,
         base: &'a BTreeMap<RepoPath, String>,
-        observed: &'a BTreeSet<RepoPath>,
+        unplain: &'a BTreeSet<RepoPath>,
     ) -> Self {
         let from_source = facts
             .config
@@ -60,7 +60,7 @@ impl<'a> Tree<'a> {
             tracked,
             symlinks,
             base,
-            observed,
+            unplain,
             generator: from_source.then(|| Generator::of(facts)),
         }
     }
@@ -113,10 +113,10 @@ pub fn unmatched_inputs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
     base: &BTreeMap<RepoPath, String>,
-    observed: &BTreeSet<RepoPath>,
+    unplain: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
     let changed = changed.filter(|_| event == EventKind::PullRequest);
-    let tree = Tree::new(facts, tracked, symlinks, base, observed);
+    let tree = Tree::new(facts, tracked, symlinks, base, unplain);
     let entries = facts
         .config
         .lint
@@ -234,11 +234,14 @@ fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) ->
         || (names_a_lint_task(facts, path) && !tree.edited(path))
 }
 
+fn is_markdown(path: &RepoPath) -> bool {
+    Path::new(path.as_str())
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+}
+
 fn inert(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
-    !read_by_the_generator(facts, path, tree)
-        && Path::new(path.as_str())
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+    !read_by_the_generator(facts, path, tree) && is_markdown(path)
 }
 
 fn generated_check_reached(
@@ -250,14 +253,10 @@ fn generated_check_reached(
     let Some(generator) = tree.generator.as_ref().filter(|_| from_source) else {
         return from_source || !inert(facts, path, tree);
     };
-    if read_by_the_generator(facts, path, tree) || generator.reads(path) {
-        return true;
-    }
-    if is_rust_source(path) {
-        tree.observed.contains(path)
-    } else {
-        !inert(facts, path, tree)
-    }
+    tree.unplain.contains(path)
+        || read_by_the_generator(facts, path, tree)
+        || generator.reads(path)
+        || !(is_rust_source(path) || is_markdown(path))
 }
 
 fn declared(lint: &LintJob, path: &RepoPath) -> bool {

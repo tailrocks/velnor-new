@@ -7,7 +7,6 @@ use velnor_model::{CompileInputs, InputOwner, RepoPath, RepoView, RustMember, Ru
 
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
-use crate::path_attributes::{mentions_path_attribute, path_attributes};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::select::relative;
 
@@ -92,17 +91,6 @@ impl<'a> Scan<'a> {
 
     fn scan(&mut self, file: &RepoPath, text: &str) {
         let tokens = tokens(text);
-        for literal in path_attributes(&tokens) {
-            match literal.and_then(|path| resolve(file, path)) {
-                Some(resolved) => {
-                    self.follow(&resolved);
-                    self.reads.insert(Some(resolved));
-                }
-                None => {
-                    self.reads.insert(None);
-                }
-            }
-        }
         for (at, token) in tokens.iter().enumerate() {
             let Token::Ident(name) = token else { continue };
             if !MACROS.contains(name) {
@@ -197,7 +185,5 @@ pub(crate) fn locked_and_embedded(
 
 #[must_use]
 pub fn is_plain_source(path: &RepoPath, bytes: &[u8]) -> bool {
-    is_rust_source(path)
-        && !bytes.windows(7).any(|window| window == b"include")
-        && !mentions_path_attribute(bytes)
+    is_rust_source(path) && !bytes.windows(7).any(|window| window == b"include")
 }

@@ -92,7 +92,6 @@ mod mise_template;
 mod mise_template_context;
 mod os_pins;
 mod owners;
-mod path_attributes;
 mod plan;
 mod plan_budget;
 mod plan_check;

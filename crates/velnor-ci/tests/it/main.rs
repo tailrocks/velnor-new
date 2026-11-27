@@ -143,7 +143,6 @@ mod plan_api;
 mod plan_diff;
 mod plan_diff_paths;
 mod plan_diff_repo;
-mod plan_generator_check;
 mod plan_git;
 mod plan_main;
 mod plan_main_groups;

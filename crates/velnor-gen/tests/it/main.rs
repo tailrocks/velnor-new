@@ -103,7 +103,6 @@ mod generated_check;
 mod generated_check_repo;
 mod generated_check_source;
 mod generated_selection;
-mod generator_skip;
 mod golden;
 mod golden_env;
 mod golden_modes;

@@ -6,7 +6,7 @@ use std::fs;
 
 use velnor_gen::io::{Checkout, read_files};
 use velnor_model::{ChangeSet, EventKind, RepoFacts, RepoPath};
-use velnor_rust::{cargo_files, is_rust_source, is_workflow_file, task_files};
+use velnor_rust::{cargo_files, is_workflow_file, task_files};
 
 use super::git;
 use crate::cli::{BaseFile, PlanArgs};
@@ -23,7 +23,7 @@ pub(super) fn changes(
     kind: EventKind,
     event: Option<&Event>,
 ) -> Result<Option<Changed>, CiError> {
-    let (paths, base_files, observed) = if args.changed.is_empty() {
+    let (paths, base_files, unplain) = if args.changed.is_empty() {
         match event_changes(checkout, facts, kind, event) {
             Ok(found) => found,
             Err(error) => {
@@ -36,12 +36,8 @@ pub(super) fn changes(
         }
     } else {
         let paths: BTreeSet<RepoPath> = args.changed.iter().cloned().collect();
-        let observed = paths
-            .iter()
-            .filter(|path| is_rust_source(path))
-            .cloned()
-            .collect();
-        (paths, read_base_files(&args.base_files)?, observed)
+        let unplain = paths.clone();
+        (paths, read_base_files(&args.base_files)?, unplain)
     };
     Ok(Some(Changed {
         set: ChangeSet {
@@ -49,13 +45,13 @@ pub(super) fn changes(
             head_files: read_head_files(checkout, &paths)?,
             paths,
         },
-        observed,
+        unplain,
     }))
 }
 
 pub(super) struct Changed {
     pub(super) set: ChangeSet,
-    pub(super) observed: BTreeSet<RepoPath>,
+    pub(super) unplain: BTreeSet<RepoPath>,
 }
 
 type Found = (
@@ -97,8 +93,8 @@ fn event_changes(
         .into_iter()
         .collect();
     let files = git::base_files(&checkout.root, &base, &wanted);
-    let observed = git::observed_sources(&checkout.root, &base, &paths)?;
-    Ok((paths, files, observed))
+    let unplain = git::unplain_paths(&checkout.root, &base)?;
+    Ok((paths, files, unplain))
 }
 
 fn is_lock(path: &RepoPath) -> bool {

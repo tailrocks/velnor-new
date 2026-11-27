@@ -74,7 +74,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let Chosen {
         selections,
         changes,
-        observed,
+        unplain,
         kind,
         listed,
     } = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
@@ -112,7 +112,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         &checkout.view.tracked_paths,
         &checkout.view.symlinks,
         &changes.base_files,
-        &observed,
+        &unplain,
     );
     ansible_output(
         &checkout, &facts, kind, listed, &changes, &unknown, &mut lints,
@@ -152,7 +152,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
                 &checkout.view.tracked_paths,
                 &checkout.view.symlinks,
                 &changes.base_files,
-                &observed,
+                &unplain,
             ))
             + &weakened(&facts.weakenings, &new)
     } else {
@@ -214,7 +214,7 @@ fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
 struct Chosen {
     selections: BTreeMap<RepoPath, RustSelection>,
     changes: ChangeSet,
-    observed: BTreeSet<RepoPath>,
+    unplain: BTreeSet<RepoPath>,
     kind: EventKind,
     listed: bool,
 }
@@ -231,9 +231,9 @@ fn choose(
     } else {
         event_kind(name, !args.changed.is_empty())
     };
-    let (diff, observed) = if selects_by_diff(kind, &facts.config) {
+    let (diff, unplain) = if selects_by_diff(kind, &facts.config) {
         changes(args, checkout, facts, kind, event)?.map_or((None, BTreeSet::new()), |found| {
-            (Some(found.set), found.observed)
+            (Some(found.set), found.unplain)
         })
     } else {
         (None, BTreeSet::new())
@@ -243,7 +243,7 @@ fn choose(
     Ok(Chosen {
         selections,
         changes,
-        observed,
+        unplain,
         kind,
         listed,
     })

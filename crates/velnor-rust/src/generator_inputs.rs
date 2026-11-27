@@ -8,8 +8,8 @@ use velnor_model::{
     TargetKind,
 };
 
+use crate::audit_job::audits_pull_requests;
 use crate::detect_checks::{generator_root, is_generator};
-use crate::select::relative;
 use crate::select_paths::contains;
 
 struct Node<'a> {
@@ -30,17 +30,6 @@ impl Node<'_> {
                     .any(|kind| matches!(kind, TargetKind::BuildScript | TargetKind::ProcMacro))
             })
         })
-    }
-
-    fn directories(&self) -> impl Iterator<Item = Option<RepoPath>> + '_ {
-        let outside = self
-            .targets
-            .into_iter()
-            .flatten()
-            .filter_map(|target| target.source.as_ref())
-            .filter(|source| relative(self.directory.as_ref(), source).is_none())
-            .map(RepoPath::parent);
-        std::iter::once(self.directory.clone()).chain(outside)
     }
 }
 
@@ -84,7 +73,7 @@ fn generator_manifest(facts: &RepoFacts) -> Option<&RepoPath> {
         .map(|member| &member.manifest)
 }
 
-fn closure_of<'a>(
+fn generator_closure<'a>(
     facts: &RepoFacts,
     nodes: &'a BTreeMap<&RepoPath, Node<'a>>,
 ) -> Vec<&'a Node<'a>> {
@@ -107,37 +96,25 @@ fn closure_of<'a>(
         .collect()
 }
 
-fn owns_unresolved_input(facts: &RepoFacts, closure: &[&Node<'_>]) -> bool {
-    facts
-        .compile_inputs
-        .iter()
-        .filter(|(key, _)| key.is_none())
-        .flat_map(|(_, owners)| owners)
-        .any(|owner| {
-            closure
-                .iter()
-                .any(|node| owner.is(node.name, node.manifest))
-        })
-}
-
 pub(crate) struct Generator {
     sealed: bool,
     directories: Vec<Option<RepoPath>>,
-    files: BTreeSet<RepoPath>,
+    locked: Vec<Option<RepoPath>>,
     named: Vec<String>,
 }
 
 impl Generator {
     pub(crate) fn of(facts: &RepoFacts) -> Self {
         let nodes = nodes(facts);
-        let closure = closure_of(facts, &nodes);
+        let closure = generator_closure(facts, &nodes);
         let sealed = closure.is_empty()
-            || closure.iter().any(|node| node.is_opaque())
-            || owns_unresolved_input(facts, &closure);
+            || !facts.inputs_lock_identified
+            || !audits_pull_requests(facts)
+            || closure.iter().any(|node| node.is_opaque());
         Self {
             sealed,
-            directories: closure.iter().flat_map(|node| node.directories()).collect(),
-            files: files(facts),
+            directories: closure.iter().map(|node| node.directory.clone()).collect(),
+            locked: locked(facts, &closure),
             named: named(facts),
         }
     }
@@ -148,25 +125,25 @@ impl Generator {
                 .directories
                 .iter()
                 .any(|directory| contains(directory.as_ref(), path))
-            || self.files.contains(path)
+            || self.locked.iter().any(|entry| {
+                entry.as_ref().is_none_or(|entry| entry == path) || contains(entry.as_ref(), path)
+            })
             || self.named.iter().any(|name| overlaps(name, path.as_str()))
     }
 }
 
-fn files(facts: &RepoFacts) -> BTreeSet<RepoPath> {
-    let scripts = facts
-        .rust_roots
-        .iter()
-        .flat_map(|root| &root.members)
-        .flat_map(|member| &member.targets)
-        .filter(|target| target.kinds.contains(&TargetKind::BuildScript))
-        .filter_map(|target| target.source.clone());
+fn locked(facts: &RepoFacts, closure: &[&Node<'_>]) -> Vec<Option<RepoPath>> {
     facts
         .compile_inputs
-        .keys()
-        .flatten()
-        .cloned()
-        .chain(scripts)
+        .iter()
+        .filter(|(_, owners)| {
+            owners.iter().any(|owner| {
+                closure
+                    .iter()
+                    .any(|node| owner.is(node.name, node.manifest))
+            })
+        })
+        .map(|(path, _)| path.clone())
         .collect()
 }
 
