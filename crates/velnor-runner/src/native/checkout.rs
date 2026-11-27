@@ -9,7 +9,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use crate::broker::{
-    Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, git_args, mirror_path,
+    Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, Window, git_args, mirror_path,
 };
 use crate::exec::{
     ExecError, InputValue, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
@@ -34,6 +34,10 @@ impl StepAdapter for Checkout {
     }
 }
 
+fn js_trim(value: &str) -> &str {
+    value.trim_matches(|ch: char| ch == '\u{feff}' || (ch.is_whitespace() && ch != '\u{85}'))
+}
+
 fn unsupported_input(name: &str) -> String {
     format!("actions/checkout input '{name}' is not supported by velnor-runner")
 }
@@ -43,7 +47,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
     for (name, value) in inputs {
         match (name.to_ascii_lowercase().as_str(), value) {
             ("fetch-depth", InputValue::Literal(depth)) => {
-                let depth = depth.trim();
+                let depth = js_trim(depth);
                 if !depth.is_empty() && depth.parse::<u64>().is_err() {
                     return Err(format!(
                         "actions/checkout input 'fetch-depth' must be a number, got '{depth}'"
@@ -52,7 +56,7 @@ fn validate_inputs(inputs: &BTreeMap<String, InputValue>) -> Result<(), String> 
             }
             ("fetch-depth", InputValue::Deferred) => {}
             ("persist-credentials", InputValue::Literal(flag)) => {
-                persist_false = !flag.trim().eq_ignore_ascii_case("true");
+                persist_false = !js_trim(flag).eq_ignore_ascii_case("true");
             }
             ("persist-credentials", InputValue::Deferred) => persist_false = true,
             _ => return Err(unsupported_input(name)),
@@ -136,10 +140,10 @@ impl Depth {
         matches!(self, Self::Last(count) if count > 1)
     }
 
-    fn window(self) -> NonZeroU64 {
+    fn window(self) -> Window {
         match self {
-            Self::Last(count) => NonZeroU64::new(count).unwrap_or(NonZeroU64::MIN),
-            Self::Full => NonZeroU64::MIN,
+            Self::Last(count) => Window::Last(NonZeroU64::new(count).unwrap_or(NonZeroU64::MIN)),
+            Self::Full => Window::All,
         }
     }
 }
@@ -148,7 +152,7 @@ fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
     let given = inputs
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("fetch-depth"))
-        .map(|(_, value)| value.trim())
+        .map(|(_, value)| js_trim(value))
         .filter(|value| !value.is_empty());
     match given.map(str::parse::<u64>) {
         None => Ok(Depth::Last(1)),
@@ -200,7 +204,12 @@ async fn materialize(
     }
     let sha = facts.sha.as_str();
     match depth {
-        Depth::Full => {}
+        Depth::Full => {
+            let check = [&["-C", dest_arg], TREE_PROBE.as_slice(), &[sha]].concat();
+            if let Some(ended) = step(ctx, &check).await? {
+                return Ok(ended);
+            }
+        }
         Depth::Last(1) => {
             let shallow = Path::new(dest_arg).join(".git/shallow");
             tokio::fs::write(&shallow, format!("{sha}\n"))

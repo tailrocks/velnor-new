@@ -5,7 +5,6 @@
 use std::ffi::OsString;
 use std::fs::TryLockError;
 use std::io::{Read, Write};
-use std::num::NonZeroU64;
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -18,6 +17,7 @@ use rustix::io::Errno;
 use super::facts::TrustedFacts;
 use super::git::{fetch_env, git, git_args, has_commit, has_tree};
 use super::location::mirror_path;
+use super::proto::Window;
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
 
@@ -270,7 +270,7 @@ pub(crate) async fn fetch(
     let env = fetch_env(facts.server_url.url(), token);
     let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
     if !has_tree(&mirror, sha).await {
-        let scan = quarantine_corrupt(&mirror, sha, NonZeroU64::MIN).await?;
+        let scan = quarantine_corrupt(&mirror, sha, Window::COMMIT).await?;
         if scan == Scan::Quarantined
             || !notices.is_empty()
             || holds_commit(&mirror, sha).await
@@ -300,7 +300,7 @@ pub(crate) async fn repair(
     root: &Path,
     facts: &TrustedFacts,
     token: Option<&str>,
-    window: NonZeroU64,
+    window: Window,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
     if quarantine_corrupt(&mirror, facts.sha.as_str(), window).await? == Scan::Sound {

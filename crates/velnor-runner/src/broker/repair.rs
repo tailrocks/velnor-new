@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 
 use super::git::{Output, git, git_args, has_commit, output};
+use super::proto::Window;
 
 const MAX_ROUNDS: usize = 64;
 
@@ -98,23 +99,49 @@ pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
     Ok(notices)
 }
 
-async fn verify(mirror: &Path, sha: &str, window: NonZeroU64) -> Result<Output> {
-    let walk = match window.get() {
-        1 => "--no-walk".to_owned(),
-        count => format!("--max-count={count}"),
+async fn parents_of(mirror: &Path, level: &[String]) -> Option<Vec<String>> {
+    let mut words = vec!["rev-list", "--parents", "--no-walk=unsorted"];
+    words.extend(level.iter().map(String::as_str));
+    let listed = output(&git_args(Some(mirror), &words), None).await.ok()?;
+    listed.succeeded.then(|| {
+        listed
+            .stdout
+            .lines()
+            .flat_map(|line| line.split_whitespace().skip(1))
+            .filter_map(object_id)
+            .collect()
+    })
+}
+
+async fn commits_within(mirror: &Path, sha: &str, count: NonZeroU64) -> Vec<String> {
+    let mut seen = BTreeSet::from([sha.to_owned()]);
+    let mut level = vec![sha.to_owned()];
+    for _ in 1..count.get() {
+        let Some(parents) = parents_of(mirror, &level).await else {
+            break;
+        };
+        level = parents
+            .into_iter()
+            .filter(|id| seen.insert(id.clone()))
+            .collect();
+        if level.is_empty() {
+            break;
+        }
+    }
+    seen.into_iter().collect()
+}
+
+async fn verify(mirror: &Path, sha: &str, window: Window) -> Result<Output> {
+    let mut words = vec!["rev-list", "--objects", "--verify-objects", "--quiet"];
+    let commits = match window {
+        Window::Last(count) => {
+            words.push("--no-walk");
+            commits_within(mirror, sha, count).await
+        }
+        Window::All => vec![sha.to_owned()],
     };
-    let args = git_args(
-        Some(mirror),
-        &[
-            "rev-list",
-            "--objects",
-            "--verify-objects",
-            &walk,
-            "--quiet",
-            sha,
-        ],
-    );
-    output(&args, None).await
+    words.extend(commits.iter().map(String::as_str));
+    output(&git_args(Some(mirror), &words), None).await
 }
 
 fn object_id(word: &str) -> Option<String> {
@@ -206,7 +233,7 @@ async fn confirmed_loose(mirror: &Path, found: &[Damage]) -> Result<Vec<(String,
         if !is_file {
             continue;
         }
-        let alone = verify(mirror, id, NonZeroU64::MIN).await?;
+        let alone = verify(mirror, id, Window::COMMIT).await?;
         let again = reported(&alone.stderr)
             .iter()
             .any(|found| matches!(found, Damage::Loose(again) if again == id));
@@ -251,11 +278,7 @@ async fn was_quarantined(mirror: &Path, id: &str) -> bool {
     false
 }
 
-pub(super) async fn quarantine_corrupt(
-    mirror: &Path,
-    sha: &str,
-    window: NonZeroU64,
-) -> Result<Scan> {
+pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str, window: Window) -> Result<Scan> {
     let mut scan = Scan::Sound;
     for _ in 0..MAX_ROUNDS {
         let verified = verify(mirror, sha, window).await?;

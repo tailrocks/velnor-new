@@ -16,7 +16,7 @@ use mirror::Repair;
 pub(crate) use facts::TrustedFacts;
 pub(crate) use git::{TREE_PROBE, git_args, isolate};
 pub(crate) use location::mirror_path;
-pub(crate) use proto::{Request, Response, Token};
+pub(crate) use proto::{Request, Response, Token, Window};
 
 pub(crate) struct Broker {
     facts: Box<TrustedFacts>,

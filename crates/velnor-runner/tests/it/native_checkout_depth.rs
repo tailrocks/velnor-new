@@ -67,6 +67,15 @@ fn a_padded_depth_is_trimmed_like_core_get_input() -> Result<()> {
 }
 
 #[test]
+fn a_depth_padded_with_a_byte_order_mark_is_trimmed_like_core_get_input() -> Result<()> {
+    assert_eq!(
+        history_after("checkout_depth1", Some("\"lit\": \"\\ufeff2\\ufeff\""))?,
+        ("3".to_owned(), true)
+    );
+    Ok(())
+}
+
+#[test]
 fn a_blank_depth_means_one() -> Result<()> {
     assert_eq!(
         history_after("checkout_depth1", Some("\"lit\": \"  \""))?,

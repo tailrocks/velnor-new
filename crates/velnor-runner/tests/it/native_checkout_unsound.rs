@@ -12,7 +12,7 @@ use crate::native_checkout_repair::{object_path, overwrite};
 const PLAIN_FETCH_BRINGS_NOTHING: &str =
     "case \" $* \" in *\" --refetch \"*) ;; *\" fetch \"*) exit 0;; esac\n";
 
-fn warm_behind_a_second_commit(rig: &Rig) -> Result<()> {
+pub(crate) fn warm_behind_a_second_commit(rig: &Rig) -> Result<()> {
     let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
     let next = rig.advance("third")?;
@@ -21,7 +21,7 @@ fn warm_behind_a_second_commit(rig: &Rig) -> Result<()> {
     Ok(())
 }
 
-fn checks_out(rig: &Rig, fixture: &str, sha: &str, commits: &str) -> Result<()> {
+pub(crate) fn checks_out(rig: &Rig, fixture: &str, sha: &str, commits: &str) -> Result<()> {
     let scratch = Scratch::new()?;
     let ran = rig.run(fixture, sha, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
@@ -45,7 +45,7 @@ fn a_missing_ancestor_commit_behind_a_live_ref_is_refetched_once() -> Result<()>
     Ok(())
 }
 
-fn quarantine_then_fail_the_first_refetch(rig: &Rig, plain_fetch: &str) -> Result<()> {
+pub(crate) fn quarantine_then_fail_the_first_refetch(rig: &Rig, plain_fetch: &str) -> Result<()> {
     warm_behind_a_second_commit(rig)?;
     overwrite(&object_path(&rig.mirror(), &rig.head), b"")?;
     let once = rig.root.join("refetch-failed-once");

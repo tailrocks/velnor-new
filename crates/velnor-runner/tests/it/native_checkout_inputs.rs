@@ -76,6 +76,21 @@ fn non_numeric_fetch_depth_is_rejected() -> Result<()> {
 }
 
 #[test]
+fn a_depth_padded_with_a_next_line_is_rejected_like_core_get_input() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_depth1",
+        &rig.head,
+        &rig.server_url(),
+        &[("\"lit\": \"1\"", "\"lit\": \"\\u00851\"")],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_rejected_without_git(&rig, &ran, &scratch, "'fetch-depth' must be a number");
+    Ok(())
+}
+
+#[test]
 fn leftover_workspace_files_are_removed() -> Result<()> {
     let rig = Rig::new()?;
     let scratch = Scratch::new()?;

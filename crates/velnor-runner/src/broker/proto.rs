@@ -27,6 +27,17 @@ impl std::fmt::Debug for Token {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Window {
+    Last(NonZeroU64),
+    All,
+}
+
+impl Window {
+    pub(crate) const COMMIT: Self = Self::Last(NonZeroU64::MIN);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Request {
@@ -35,7 +46,7 @@ pub(crate) enum Request {
     },
     RepairMirror {
         token: Option<Token>,
-        window: NonZeroU64,
+        window: Window,
     },
 }
 
