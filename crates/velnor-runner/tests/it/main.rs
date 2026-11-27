@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_support;
 #[path = "exec_cancel.rs"]
 mod cancel;
 #[path = "exec_commands.rs"]
@@ -68,6 +69,8 @@ mod expr_operators;
 mod expr_ordinal_case;
 #[path = "expr/status.rs"]
 mod expr_status;
+#[path = "expr/step_state.rs"]
+mod expr_step_state;
 #[path = "expr/support.rs"]
 mod expr_support;
 #[path = "expr/template.rs"]
@@ -80,6 +83,7 @@ mod expr_vars;
 mod extra;
 #[path = "exec_failures.rs"]
 mod failures;
+mod fake_results;
 #[path = "exec_followup.rs"]
 mod followup;
 #[path = "exec_hardening.rs"]
@@ -94,6 +98,26 @@ mod mise_repo;
 mod mise_store;
 mod mise_trust;
 mod mise_world;
+mod native_artifact;
+mod native_artifact_admission;
+mod native_artifact_blobs;
+mod native_artifact_cases;
+mod native_artifact_disposition;
+mod native_artifact_fs;
+mod native_artifact_inputs;
+mod native_artifact_limits;
+mod native_artifact_patterns;
+mod native_artifact_retry;
+mod native_artifact_review;
+mod native_artifact_search;
+mod native_artifact_skips;
+mod native_artifact_stall;
+mod native_artifact_texts;
+mod native_artifact_toolkit;
+mod native_artifact_upstream;
+mod native_artifact_zone_icu;
+mod native_artifact_zone_names;
+mod native_artifact_zones;
 mod native_cache;
 mod native_cache_access;
 mod native_cache_alias;
@@ -188,3 +212,4 @@ mod threads;
 mod triage;
 #[path = "exec_unsettled.rs"]
 mod unsettled;
+mod zip_forgery;

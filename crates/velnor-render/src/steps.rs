@@ -26,11 +26,10 @@ pub(crate) use crate::install_steps::install_helper;
 use crate::install_steps::{
     generator_check_step, install_generator_step, install_mise, install_tools,
 };
-use crate::permission_pairs;
-use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
+use crate::{permission_pairs, plan_modes::plan_modes};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -346,6 +345,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::Prepare(locks) => crate::helper_steps::prepare_step(locks),
+        StepKind::ToolsComponents => crate::helper_steps::components_step(),
         StepKind::InputsAuditRoot(directory) => {
             crate::helper_steps::audit_root_step(directory.as_ref())
         }

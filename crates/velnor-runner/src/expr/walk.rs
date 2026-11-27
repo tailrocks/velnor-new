@@ -3,85 +3,31 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
 use super::anchor::{Anchor, READ_DIRECTORY, READ_ENTRY, open_directory_below};
-use super::glob::PatternSet;
+use super::glob::{DirLinks, Hidden, PatternSet, WalkOptions};
 use super::pattern::GlobError;
 use super::seam::Seam;
-use rustix::fs::{CWD, Dir, FileType, Mode, fstat, openat};
+use super::walk_entry::{Child, Found, Hint, Visit, kind_of, not_regular, skip_missing};
+use rustix::fs::{CWD, Dir, FileType, Mode, openat};
 use rustix::io::Errno;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
-use std::io;
 use std::os::fd::OwnedFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
-
-pub(crate) struct Found {
-    pub(crate) path: PathBuf,
-    pub(crate) file: File,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Hint {
-    Directory,
-    File,
-    Symlink,
-    Other,
-    Unknown,
-}
-
-impl Hint {
-    fn of(kind: FileType) -> Self {
-        match kind {
-            FileType::Directory => Self::Directory,
-            FileType::RegularFile => Self::File,
-            FileType::Symlink => Self::Symlink,
-            FileType::Unknown => Self::Unknown,
-            _ => Self::Other,
-        }
-    }
-}
-
-struct Visit {
-    path: PathBuf,
-    comps: Vec<String>,
-    anchor: Anchor,
-    name: OsString,
-    hint: Hint,
-    matched: bool,
-    partial: bool,
-    missing_ok: bool,
-}
-
-struct Child {
-    anchor: Anchor,
-    name: OsString,
-    hint: Hint,
-}
 
 pub(crate) struct Walk<'a> {
     patterns: &'a PatternSet,
     workspace: &'a Path,
     deadline: Instant,
     seam: &'a Seam,
+    options: WalkOptions<'a>,
     root: Option<Rc<OwnedFd>>,
-    roots: std::vec::IntoIter<Vec<String>>,
+    roots: std::iter::Enumerate<std::vec::IntoIter<Vec<String>>>,
     stack: Vec<Visit>,
-}
-
-fn skip_missing<T>(result: io::Result<T>, path: &Path) -> Result<Option<T>, GlobError> {
-    match result {
-        Ok(value) => Ok(Some(value)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(GlobError::io(path, error)),
-    }
-}
-
-fn kind_of(fd: &OwnedFd, path: &Path) -> Result<FileType, GlobError> {
-    fstat(fd)
-        .map(|stat| FileType::from_raw_mode(stat.st_mode))
-        .map_err(|error| GlobError::io(path, error.into()))
+    skipped: usize,
 }
 
 impl Iterator for Walk<'_> {
@@ -89,6 +35,13 @@ impl Iterator for Walk<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if self
+                .options
+                .stop
+                .is_some_and(|stop| stop.load(Ordering::Relaxed))
+            {
+                return None;
+            }
             if Instant::now() >= self.deadline {
                 return Some(Err(GlobError::TimedOut));
             }
@@ -111,14 +64,17 @@ impl<'a> Walk<'a> {
         workspace: &'a Path,
         deadline: Instant,
         seam: &'a Seam,
+        options: WalkOptions<'a>,
     ) -> Self {
         Self {
             patterns,
             workspace,
             deadline,
             seam,
+            options,
             root: None,
-            roots: patterns.roots().into_iter(),
+            roots: patterns.roots().into_iter().enumerate(),
+            skipped: 0,
             stack: Vec::new(),
         }
     }
@@ -136,8 +92,8 @@ impl<'a> Walk<'a> {
 
     fn next_visit(&mut self) -> Option<Result<Visit, GlobError>> {
         while self.stack.is_empty() {
-            let root = self.roots.next()?;
-            match self.start(&root) {
+            let (index, root) = self.roots.next()?;
+            match self.start(index, &root) {
                 Ok(Some(visit)) => return Some(Ok(visit)),
                 Ok(None) => {}
                 Err(error) => return Some(Err(error)),
@@ -148,18 +104,25 @@ impl<'a> Walk<'a> {
 
     fn classify(
         &self,
+        root: usize,
         comps: Vec<String>,
         path: PathBuf,
         child: Child,
         missing_ok: bool,
     ) -> Result<Option<Visit>, GlobError> {
+        let hidden = comps.last().is_some_and(|name| name.starts_with('.'));
+        if hidden && self.options.hidden == Hidden::Skip {
+            return Ok(None);
+        }
         let matched = self.patterns.matches_file(&comps)?;
         let partial = self.patterns.may_contain(&comps)?;
         if !matched && !partial {
             return Ok(None);
         }
         Ok(Some(Visit {
+            root,
             path,
+            reals: Vec::new(),
             comps,
             anchor: child.anchor,
             name: child.name,
@@ -205,7 +168,7 @@ impl<'a> Walk<'a> {
         Ok(Some((real.join(name), child)))
     }
 
-    fn start(&mut self, root: &[String]) -> Result<Option<Visit>, GlobError> {
+    fn start(&mut self, index: usize, root: &[String]) -> Result<Option<Visit>, GlobError> {
         let relative = &root[self.patterns.workspace().len()..];
         let searched = relative
             .iter()
@@ -216,14 +179,45 @@ impl<'a> Walk<'a> {
         let Some((path, child)) = self.locate(&searched, relative.last())? else {
             return Ok(None);
         };
-        self.classify(root.to_vec(), path, child, true)
+        self.classify(index, root.to_vec(), path, child, true)
     }
 
-    fn visit(&mut self, visit: Visit) -> Result<Option<Found>, GlobError> {
+    fn lenient(&self) -> bool {
+        self.options.links == DirLinks::Follow
+    }
+
+    fn canonical(&self, path: &Path) -> Result<Option<PathBuf>, GlobError> {
+        let result = fs::canonicalize(path);
+        if self.lenient() {
+            skip_missing(result, path)
+        } else {
+            result.map(Some).map_err(|error| GlobError::io(path, error))
+        }
+    }
+
+    pub(crate) fn skipped(&self) -> usize {
+        self.skipped
+    }
+
+    fn not_regular_file(&mut self, path: &Path) -> Result<Option<Found>, GlobError> {
+        if self.lenient() {
+            self.skipped += 1;
+            Ok(None)
+        } else {
+            Err(not_regular(path))
+        }
+    }
+
+    fn enters_links(&self, visit: &Visit) -> bool {
+        self.options.links == DirLinks::Follow && visit.partial
+    }
+
+    fn visit(&mut self, mut visit: Visit) -> Result<Option<Found>, GlobError> {
         match visit.hint {
             Hint::Directory if !visit.partial => return Ok(None),
-            Hint::File | Hint::Symlink | Hint::Other if !visit.matched => return Ok(None),
-            Hint::Other => return Err(not_regular(&visit.path)),
+            Hint::Symlink if !visit.matched && !self.enters_links(&visit) => return Ok(None),
+            Hint::File | Hint::Other if !visit.matched => return Ok(None),
+            Hint::Other => return self.not_regular_file(&visit.path),
             Hint::Symlink => return self.follow(&visit),
             Hint::Directory | Hint::File | Hint::Unknown => {}
         }
@@ -241,36 +235,51 @@ impl<'a> Walk<'a> {
         let fd = match openat(&*parent, visit.name.as_os_str(), flags, Mode::empty()) {
             Ok(fd) => fd,
             Err(Errno::LOOP) if flags == READ_ENTRY => return self.follow(&visit),
-            Err(Errno::NOENT) if visit.missing_ok => return Ok(None),
+            Err(Errno::NOENT) if visit.missing_ok || self.lenient() => return Ok(None),
             Err(Errno::NOTDIR | Errno::LOOP | Errno::NXIO | Errno::OPNOTSUPP)
                 if possible_directory =>
             {
-                return Ok(None);
+                return if self.enters_links(&visit) {
+                    self.follow(&visit)
+                } else {
+                    Ok(None)
+                };
             }
             Err(Errno::NXIO | Errno::OPNOTSUPP) if visit.matched => {
-                return Err(not_regular(&visit.path));
+                return self.not_regular_file(&visit.path);
             }
             Err(error) => return Err(GlobError::io(&visit.path, error.into())),
         };
         match kind_of(&fd, &visit.path)? {
             FileType::Directory => {
                 if visit.partial {
+                    if self.options.links == DirLinks::Follow {
+                        let Some(real) = self.canonical(&visit.path)? else {
+                            return Ok(None);
+                        };
+                        if visit.reals.contains(&real) {
+                            return Ok(None);
+                        }
+                        visit.reals.push(real);
+                    }
                     self.push_children(&visit, fd)?;
                 }
                 Ok(None)
             }
             FileType::RegularFile if visit.matched => Ok(Some(Found {
+                root: visit.root,
                 path: visit.path,
                 file: File::from(fd),
             })),
             _ if !visit.matched => Ok(None),
-            _ => Err(not_regular(&visit.path)),
+            _ => self.not_regular_file(&visit.path),
         }
     }
 
     fn follow(&mut self, visit: &Visit) -> Result<Option<Found>, GlobError> {
-        let real =
-            fs::canonicalize(&visit.path).map_err(|error| GlobError::io(&visit.path, error))?;
+        let Some(real) = self.canonical(&visit.path)? else {
+            return Ok(None);
+        };
         let Ok(inside) = real.strip_prefix(self.workspace) else {
             return Ok(None);
         };
@@ -278,21 +287,50 @@ impl<'a> Walk<'a> {
             return Ok(None);
         };
         let top = self.root()?;
-        let parent = open_directory_below(&top, directory.iter())
-            .map_err(|(error, walked)| GlobError::io(&self.workspace.join(walked), error.into()))?;
+        let parent = match open_directory_below(&top, directory.iter()) {
+            Ok(parent) => parent,
+            Err((Errno::NOENT, _)) if self.lenient() => return Ok(None),
+            Err((error, walked)) => {
+                return Err(GlobError::io(&self.workspace.join(walked), error.into()));
+            }
+        };
         self.seam.before_open(&real);
         let fd = match openat(&*parent, name, READ_ENTRY, Mode::empty()) {
             Ok(fd) => fd,
-            Err(Errno::NXIO | Errno::OPNOTSUPP) => return Err(not_regular(&real)),
+            Err(Errno::NOENT) if self.lenient() => return Ok(None),
+            Err(Errno::NXIO | Errno::OPNOTSUPP) => return self.not_regular_file(&real),
             Err(error) => return Err(GlobError::io(&real, error.into())),
         };
         match kind_of(&fd, &real)? {
+            FileType::Directory if self.enters_links(visit) && !visit.reals.contains(&real) => {
+                let mut reals = visit.reals.clone();
+                reals.push(real.clone());
+                let entered = Visit {
+                    root: visit.root,
+                    path: visit.path.clone(),
+                    reals,
+                    comps: visit.comps.clone(),
+                    anchor: Anchor::root(parent),
+                    name: name.to_owned(),
+                    hint: Hint::Directory,
+                    matched: visit.matched,
+                    partial: true,
+                    missing_ok: false,
+                };
+                self.push_children(&entered, fd)?;
+                Ok(None)
+            }
             FileType::Directory => Ok(None),
+            _ if !visit.matched => Ok(None),
             FileType::RegularFile => Ok(Some(Found {
-                path: real,
+                root: visit.root,
+                path: match self.options.links {
+                    DirLinks::Follow => visit.path.clone(),
+                    DirLinks::Ignore => real,
+                },
                 file: File::from(fd),
             })),
-            _ => Err(not_regular(&real)),
+            _ => self.not_regular_file(&real),
         }
     }
 
@@ -330,14 +368,11 @@ impl<'a> Walk<'a> {
                 name,
                 hint,
             };
-            if let Some(visit) = self.classify(comps, path, child, false)? {
+            if let Some(mut visit) = self.classify(parent.root, comps, path, child, false)? {
+                visit.reals.clone_from(&parent.reals);
                 self.stack.push(visit);
             }
         }
         Ok(())
     }
-}
-
-fn not_regular(path: &Path) -> GlobError {
-    GlobError::NotRegularFile(path.display().to_string())
 }

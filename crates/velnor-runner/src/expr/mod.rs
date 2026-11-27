@@ -9,7 +9,7 @@ mod format;
 mod from_json;
 mod from_json_depth;
 mod from_json_number;
-mod glob;
+pub(crate) mod glob;
 mod hash_files;
 mod index;
 mod js_class;
@@ -28,11 +28,12 @@ mod token;
 mod translate;
 mod value;
 mod walk;
+mod walk_entry;
 
 pub use env::{ExprEnv, JobStatus, RootContext};
 pub use error::{ExprError, ParseError, ParseErrorKind};
-pub use eval::{evaluate_condition, evaluate_expression};
-pub use template::evaluate_template;
+pub use eval::{evaluate_condition, evaluate_expression, expression_reads_step_state};
+pub use template::{evaluate_template, template_reads_step_state};
 pub use value::{ArrayValue, ObjectValue, Value};
 
 #[cfg(feature = "test-support")]

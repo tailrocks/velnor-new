@@ -43,6 +43,33 @@ impl Node {
             Node::Function { args, .. } => args.iter().collect(),
         }
     }
+
+    pub(crate) fn reads_step_state(&self) -> bool {
+        let own = match self {
+            Node::NamedValue(root, _) => matches!(root, RootContext::Steps | RootContext::Env),
+            Node::Function { function, .. } => match function {
+                Function::HashFiles
+                | Function::Success
+                | Function::Cancelled
+                | Function::Failure => true,
+                Function::Format
+                | Function::Contains
+                | Function::StartsWith
+                | Function::EndsWith
+                | Function::ToJson
+                | Function::FromJson
+                | Function::Always => false,
+            },
+            Node::Literal(_)
+            | Node::Wildcard
+            | Node::Not(_)
+            | Node::Index(..)
+            | Node::Binary(..)
+            | Node::And(_)
+            | Node::Or(_) => false,
+        };
+        own || self.children().into_iter().any(Node::reads_step_state)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
