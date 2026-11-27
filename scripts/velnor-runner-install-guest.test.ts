@@ -2,16 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import { expect, test } from "bun:test";
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   binary,
   calls,
   checkout,
+  HOST_MOUNT_LINE,
   install,
   installCleanup,
   MASKED_MOUNTS,
   MOUNT_INFO,
+  RAW_TAIL,
   sandbox,
+  SLOW_TEST_TIMEOUT_MS,
   TEMP_PREFIX,
   TEST_TIMEOUT_MS,
   type Call,
@@ -22,6 +27,9 @@ installCleanup();
 const BUILD_ROOT = "/var/lib/velnor-build";
 const WORK = `${BUILD_ROOT}/work`;
 const NAMESPACE_HOLDER = "/run/velnor-build-namespace";
+const BUILT = `${WORK}/src/target/aarch64-unknown-linux-gnu/release/velnor-runner`;
+const OUTPUT = `${WORK}/out/velnor-runner`;
+const sha256 = (text: string): string => createHash("sha256").update(text).digest("hex");
 const guestCalls = (all: Call[]): Call[] => all.filter((call) => call.command !== undefined);
 const isCargoBuild = (call: Call): boolean => call.operands?.includes("cargo") === true && call.operands.includes("build");
 const indexOf = (all: Call[], match: (call: Call) => boolean): number => all.findIndex(match);
@@ -32,7 +40,9 @@ test(
     const steps = [
       [{ command: "/mise", operand: "install" }, "toolchain"],
       [{ command: "/mise", operand: "build" }, "build"],
-      [{ command: "sha256sum", operand: `${WORK}/out/velnor-runner` }, "hash"],
+      [{ command: "dd", operand: `if=${BUILT}` }, "collect-read"],
+      [{ command: "sha256sum", operand: BUILT }, "collect-hash"],
+      [{ command: "dd", operand: `of=${OUTPUT}` }, "collect-write"],
       [{ command: "cp" }, "copy"],
     ] as const;
     const outcomes = await Promise.all(
@@ -86,8 +96,17 @@ test(
     const copyAt = indexOf(guest, (call) => call.command === "cp");
     expect(hashAt).toBeGreaterThan(-1);
     expect(copyAt).toBeGreaterThan(hashAt);
-    expect(guest[copyAt]?.operands?.[0]).toBe(`${WORK}/out/velnor-runner`);
+    expect(guest[copyAt]?.operands?.[0]).toBe(OUTPUT);
     expect(guest[copyAt]?.operands?.[1]?.startsWith(`/var/lib/velnor/bin/${TEMP_PREFIX}`)).toBe(true);
+    const touchingBuilt = guest.filter((call) => call.operands?.some((operand) => operand.includes(BUILT)));
+    expect(touchingBuilt.map((call) => [call.command, call.user])).toEqual([
+      ["find", "root"],
+      ["dd", "velnor-build"],
+      ["sha256sum", "velnor-build"],
+    ]);
+    expect(touchingBuilt[1]?.operands).toContain("iflag=nofollow");
+    const written = guest.find((call) => call.command === "dd" && call.operands?.includes(`of=${OUTPUT}`));
+    expect([written?.user, written?.stdinSha256]).toEqual(["root", sha256(binary("0.1.82"))]);
   },
   TEST_TIMEOUT_MS,
 );
@@ -106,6 +125,9 @@ test(
     }
     const unshare = guest.find((call) => call.command === "unshare");
     expect(unshare?.operands).toEqual([`--mount=${NAMESPACE_HOLDER}/mnt`, "--propagation", "private", "--", "true"]);
+    const makePrivate = indexOf(guest, (call) => call.command === "mount" && call.operands?.includes("--make-private") === true);
+    expect(makePrivate).toBeGreaterThan(-1);
+    expect(makePrivate).toBeLessThan(indexOf(guest, (call) => call.command === "unshare"));
     const firstBuildUser = indexOf(guest, (call) => call.user === "velnor-build");
     const checkAt = indexOf(guest, (call) => call.command === "find" && call.operands?.includes("-mindepth") === true);
     expect(guest[checkAt]?.user).toBe("velnor-build");
@@ -123,7 +145,7 @@ test(
     const leaky = await sandbox();
     const leaked = await install(leaky, await checkout(leaky), binary("0.1.82"), { maskIneffective: true });
     const bare = await sandbox();
-    const noMounts = MOUNT_INFO.split("\n").filter((line) => !line.includes("virtiofs") && !line.includes("/mnt/machines")).join("\n");
+    const noMounts = MOUNT_INFO.split("\n").filter((line) => !HOST_MOUNT_LINE.test(line)).join("\n");
     const none = await install(bare, await checkout(bare), binary("0.1.82"), { mountInfo: noMounts });
     expect(leaked.status).not.toBe(0);
     expect(leaked.stderr).toContain("step 'namespace-check'");
@@ -159,7 +181,67 @@ test(
     expect(outcome.status).not.toBe(0);
     expect(outcome.stderr).toContain("step 'collect-check'");
     const guest = guestCalls(await calls(box));
-    expect(guest.some((call) => call.command === "install" && call.operands?.at(-1) === `${WORK}/out/velnor-runner`)).toBe(false);
+    expect(guest.some((call) => call.command === "dd")).toBe(false);
+    expect(guest.some((call) => call.command === "cp")).toBe(false);
+    expect(await readdir(box.bin)).not.toContain("velnor-runner");
+  },
+  TEST_TIMEOUT_MS,
+);
+
+const tailOf = (all: Call[], count: number): Array<[string | undefined, string | undefined]> => all.slice(-count).map((call) => [call.command, call.operands?.at(-1)]);
+const CLEANUP_TAIL: Array<[string, string]> = [
+  ["pkill", "velnor-build"],
+  ["pgrep", "velnor-build"],
+  ["mountpoint", NAMESPACE_HOLDER],
+  ["umount", NAMESPACE_HOLDER],
+  ["rmdir", NAMESPACE_HOLDER],
+  ["rm", WORK],
+];
+
+test(
+  "processes of the build user are killed at the start, repeatedly until none is left after the build, and none is running when the output is read",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { survivors: 3 });
+    expect(outcome.status, outcome.stderr).toBe(0);
+    const guest = guestCalls(await calls(box));
+    const wipeAt = indexOf(guest, (call) => call.command === "rm" && call.operands?.at(-1) === WORK);
+    expect(guest.findIndex((call) => call.command === "pkill")).toBeLessThan(wipeAt);
+    const buildAt = indexOf(guest, isCargoBuild);
+    const checkAt = indexOf(guest, (call) => call.command === "find" && call.operands?.includes("-maxdepth") === true);
+    expect(guest.slice(buildAt, checkAt).filter((call) => call.command === "pkill")).toHaveLength(3);
+    expect(guest.slice(buildAt, checkAt).at(-1)?.command).toBe("pgrep");
+    const readAt = indexOf(guest, (call) => call.command === "dd" && call.operands?.some((operand) => operand.startsWith("if=")) === true);
+    expect(guest[readAt - 1]?.command).toBe("pgrep");
+    expect(guest[readAt - 2]?.command).toBe("find");
+    expect(guest[readAt]?.user).toBe("velnor-build");
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a build user process that survives every kill round fails the install before anything is read",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { survivors: 999 });
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stderr).toContain("step 'reap': processes of velnor-build survive");
+    const guest = guestCalls(await calls(box));
+    expect(guest.some((call) => call.command === "dd" || call.command === "cp")).toBe(false);
+    expect(await readdir(box.bin)).not.toContain("velnor-runner");
+  },
+  SLOW_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the build output is read by the build user without following a symlink, so a symlink swapped in after the check is refused and nothing is written",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { swapAfterReap: true });
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stderr).toContain("step 'collect-read'");
+    const guest = guestCalls(await calls(box));
+    expect(guest.some((call) => call.command === "dd" && call.operands?.some((operand) => operand.startsWith("of=")) === true)).toBe(false);
     expect(guest.some((call) => call.command === "cp")).toBe(false);
     expect(await readdir(box.bin)).not.toContain("velnor-runner");
   },
@@ -167,29 +249,70 @@ test(
 );
 
 test(
-  "the build user's processes are killed before the output is collected, and the namespace and work directory are removed after a success and after a failure",
+  "bytes that differ from the build user's own digest of the file are not written or installed",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { truncateRead: true });
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stderr).toContain("step 'collect-verify'");
+    const guest = guestCalls(await calls(box));
+    expect(guest.some((call) => call.command === "dd" && call.operands?.some((operand) => operand.startsWith("of=")) === true)).toBe(false);
+    expect(await readdir(box.bin)).not.toContain("velnor-runner");
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a build output that is not valid UTF-8 reaches the host store byte for byte",
+  async () => {
+    const box = await sandbox();
+    const outcome = await install(box, await checkout(box), binary("0.1.82"), { rawTail: RAW_TAIL });
+    expect(outcome.status, outcome.stderr).toBe(0);
+    const installed = Buffer.from(await Bun.file(join(box.bin, "velnor-runner")).arrayBuffer());
+    expect(installed.equals(Buffer.concat([Buffer.from(binary("0.1.82")), Buffer.from(RAW_TAIL)]))).toBe(true);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "the namespace and work directory are removed after a success and after a failure, and a cleanup step that fails fails the run after the rest of the cleanup ran",
   async () => {
     const box = await sandbox();
     expect((await install(box, await checkout(box), binary("0.1.82"))).status).toBe(0);
-    const guest = guestCalls(await calls(box));
-    const reaps = guest.flatMap((call, index) => (call.command === "pkill" ? [index] : []));
-    expect(reaps).toHaveLength(2);
-    expect(reaps[0]).toBeGreaterThan(indexOf(guest, isCargoBuild));
-    expect(reaps[0]).toBeLessThan(indexOf(guest, (call) => call.command === "find" && call.operands?.includes("-maxdepth") === true));
-    const tail = guest.slice(reaps[1]);
-    expect(tail.map((call) => [call.command, call.operands?.at(-1)])).toEqual([
-      ["pkill", "velnor-build"],
-      ["mountpoint", NAMESPACE_HOLDER],
-      ["umount", NAMESPACE_HOLDER],
-      ["rmdir", NAMESPACE_HOLDER],
-      ["rm", WORK],
-    ]);
+    expect(tailOf(guestCalls(await calls(box)), CLEANUP_TAIL.length)).toEqual(CLEANUP_TAIL);
     const failed = await sandbox();
     const outcome = await install(failed, await checkout(failed), binary("0.1.82"), { failOn: { command: "/mise", operand: "build" } });
     expect(outcome.status).not.toBe(0);
     const afterFailure = guestCalls(await calls(failed));
-    expect(afterFailure.slice(-5).map((call) => [call.command, call.operands?.at(-1)])).toEqual(tail.map((call) => [call.command, call.operands?.at(-1)]));
+    expect(tailOf(afterFailure, CLEANUP_TAIL.length)).toEqual(CLEANUP_TAIL);
     expect(afterFailure.some((call) => call.command === "cp")).toBe(false);
+    const stuck = await sandbox();
+    const unmounted = await install(stuck, await checkout(stuck), binary("0.1.82"), { failOn: { command: "umount", operand: NAMESPACE_HOLDER } });
+    expect(unmounted.status).not.toBe(0);
+    expect(unmounted.stderr).toContain("step 'cleanup-namespace': umount exited with 3");
+    expect(tailOf(guestCalls(await calls(stuck)), 2)).toEqual([["rmdir", NAMESPACE_HOLDER], ["rm", WORK]]);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "a namespace holder left mounted by a crashed install is unmounted before the next one is made, and none is left after it",
+  async () => {
+    const box = await sandbox();
+    const repo = await checkout(box);
+    expect((await install(box, repo, binary("0.1.81"))).status).toBe(0);
+    const seeded = JSON.parse(await Bun.file(box.state).text()) as Record<string, unknown>;
+    await writeFile(box.state, JSON.stringify({ ...seeded, holder: 1, shared: false, namespace: true, masked: ["/mnt/mac"] }));
+    const earlier = (await calls(box)).length;
+    const outcome = await install(box, repo, binary("0.1.82"));
+    expect(outcome.status, outcome.stderr).toBe(0);
+    const guest = guestCalls((await calls(box)).slice(earlier));
+    const mountAt = indexOf(guest, (call) => call.command === "mount" && call.operands?.at(-1) === NAMESPACE_HOLDER && call.operands.includes("tmpfs"));
+    const resetAt = indexOf(guest, (call) => call.command === "umount");
+    expect(resetAt).toBeGreaterThan(-1);
+    expect(resetAt).toBeLessThan(mountAt);
+    expect(guest.filter((call) => call.command === "umount")).toHaveLength(2);
+    expect(((JSON.parse(await Bun.file(box.state).text()) as { holder: number }).holder)).toBe(0);
   },
   TEST_TIMEOUT_MS,
 );

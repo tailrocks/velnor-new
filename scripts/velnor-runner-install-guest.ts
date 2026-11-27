@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import type { Machine, MiseBinary } from "./velnor-runner-install-config";
-import { InstallError, orb, type Outcome } from "./velnor-runner-install-lib";
+import { InstallError, messageOf, orb, type Outcome } from "./velnor-runner-install-lib";
 import type { Source } from "./velnor-runner-install-source";
 
 const BUILD_USER = "velnor-build";
@@ -14,6 +14,8 @@ const APT_LOCK = "DPkg::Lock::Timeout=120";
 const USERNAME_IN_USE = 9;
 const PASSWD_LOCKED = 1;
 const USER_ATTEMPTS = 5;
+const REAP_ATTEMPTS = 50;
+const REAP_PAUSE_MS = 100;
 const ABSENT = 1;
 const NOT_A_MOUNT_POINT = 32;
 const NAMESPACE_DIRECTORY = "/run/velnor-build-namespace";
@@ -30,6 +32,7 @@ type StepOptions = {
   readonly env?: Readonly<Record<string, string>>;
   readonly stdin?: Uint8Array;
   readonly capture?: true;
+  readonly bytes?: true;
   readonly accept?: readonly number[];
 };
 
@@ -110,9 +113,10 @@ export function guestArgv(context: Context, command: readonly string[], options:
 }
 
 export async function step(context: Context, label: string, command: readonly string[], options: StepOptions = {}): Promise<Outcome> {
+  const output = options.bytes === undefined ? (options.capture === undefined ? undefined : ("capture" as const)) : ("bytes" as const);
   const outcome = await orb(guestArgv(context, command, options), {
     ...(options.stdin === undefined ? {} : { stdin: options.stdin }),
-    ...(options.capture === undefined ? {} : { output: "capture" as const }),
+    ...(output === undefined ? {} : { output }),
   });
   if (outcome.status !== 0 && !(options.accept ?? []).includes(outcome.status)) {
     throw new InstallError(`step '${label}': ${command[0] ?? ""} exited with ${outcome.status}`);
@@ -255,6 +259,7 @@ export async function provision(context: Context, mise: MiseBinary, source: Sour
   await step(context, "layout", ["install", "-d", "-m", "0755", ...root, paths.root, paths.bin, paths.toolchain, ...paths.toolchainDirectories]);
   await step(context, "layout-private", ["install", "-d", "-m", "0700", ...root, paths.home, paths.tmp]);
   await ensureUser(context);
+  await reap(context, "reap-start");
   await ensurePackages(context);
   await ensureMise(context, mise);
   await step(context, "wipe", ["rm", "-rf", paths.work]);
@@ -268,7 +273,46 @@ export async function provision(context: Context, mise: MiseBinary, source: Sour
   await step(context, "link-cargo", ["ln", "-s", `${paths.toolchain}/cargo/bin`, `${paths.work}/cargo/bin`], { as: "build" });
 }
 
-const reap = (context: Context, label: string): Promise<Outcome> => step(context, label, ["pkill", "-KILL", "-u", BUILD_USER], { accept: [1] });
+const survivors = async (context: Context, label: string): Promise<boolean> =>
+  (await step(context, label, ["pgrep", "-u", BUILD_USER], { capture: true, accept: [ABSENT] })).status === 0;
+
+export async function reap(context: Context, label: string): Promise<void> {
+  for (let attempt = 1; attempt <= REAP_ATTEMPTS; attempt += 1) {
+    await step(context, label, ["pkill", "-KILL", "-u", BUILD_USER], { accept: [ABSENT] });
+    if (!(await survivors(context, label))) {
+      return;
+    }
+    await Bun.sleep(REAP_PAUSE_MS);
+  }
+  throw new InstallError(`step '${label}': processes of ${BUILD_USER} survive ${REAP_ATTEMPTS} kill rounds`);
+}
+
+const digestOf = (outcome: Outcome, label: string): string => {
+  const sha256 = /^([0-9a-f]{64}) /m.exec(outcome.stdout)?.[1];
+  if (sha256 === undefined) {
+    throw new InstallError(`step '${label}': sha256sum printed ${JSON.stringify(outcome.stdout.slice(0, 200))}, stderr ${JSON.stringify(outcome.stderr.slice(-200))}`);
+  }
+  return sha256;
+};
+
+export async function collect(context: Context): Promise<string> {
+  const { paths } = context;
+  const regular = await step(context, "collect-check", ["find", paths.built, "-maxdepth", "0", "-type", "f", "-user", BUILD_USER, "-print"], { capture: true });
+  if (regular.stdout.trim() !== paths.built) {
+    throw new InstallError(`step 'collect-check': ${paths.built} is not a regular file built by ${BUILD_USER}`);
+  }
+  if (await survivors(context, "collect-reaped")) {
+    throw new InstallError(`step 'collect-reaped': a process of ${BUILD_USER} is running, so the build output could change while it is read`);
+  }
+  const read = await step(context, "collect-read", ["dd", "iflag=nofollow", `if=${paths.built}`, "bs=1M", "status=none"], { as: "build", bytes: true });
+  const sha256 = new Bun.CryptoHasher("sha256").update(read.bytes).digest("hex");
+  const reference = digestOf(await step(context, "collect-hash", ["sha256sum", paths.built], { as: "build", capture: true }), "collect-hash");
+  if (sha256 !== reference) {
+    throw new InstallError(`step 'collect-verify': ${read.bytes.length} bytes were read with sha256 ${sha256}, but ${BUILD_USER} hashes the file as ${reference}`);
+  }
+  await step(context, "collect-write", ["dd", `of=${paths.output}`, "bs=1M", "status=none"], { stdin: read.bytes });
+  return sha256;
+}
 
 export async function build(context: Context): Promise<string> {
   const { paths } = context;
@@ -282,29 +326,21 @@ export async function build(context: Context): Promise<string> {
   await step(context, "mbx-doctor", [paths.mise, "exec", "--", "mbx", "doctor"], inSource);
   await step(context, "build", [paths.mise, "exec", "--", "cargo", "build", "--release", "--locked", "-p", "velnor-runner", "--target", TRIPLE], inSource);
   await reap(context, "reap");
-  const regular = await step(context, "collect-check", ["find", paths.built, "-maxdepth", "0", "-type", "f", "-user", BUILD_USER, "-print"], { capture: true });
-  if (regular.stdout.trim() !== paths.built) {
-    throw new InstallError(`step 'collect-check': ${paths.built} is not a regular file built by ${BUILD_USER}`);
-  }
-  await step(context, "collect", ["install", "-m", "0755", "-o", "root", "-g", "root", paths.built, paths.output]);
-  const hashed = await step(context, "hash", ["sha256sum", paths.output], { capture: true });
-  const sha256 = /^([0-9a-f]{64}) /m.exec(hashed.stdout)?.[1];
-  if (sha256 === undefined) {
-    throw new InstallError(`step 'hash': sha256sum printed ${JSON.stringify(hashed.stdout.slice(0, 200))}, stderr ${JSON.stringify(hashed.stderr.slice(-200))}`);
-  }
-  return sha256;
+  return collect(context);
 }
 
-export async function cleanup(context: Context): Promise<void> {
+export async function cleanup(context: Context): Promise<string[]> {
   const attempts = [
     () => reap(context, "cleanup-reap"),
     () => unmountHolder(context, "cleanup-namespace"),
     () => step(context, "cleanup-namespace", ["rmdir", NAMESPACE_DIRECTORY], { accept: [1] }),
     () => step(context, "cleanup-work", ["rm", "-rf", context.paths.work]),
   ];
+  const failures: string[] = [];
   for (const attempt of attempts) {
     await attempt().catch((error: unknown) => {
-      process.stderr.write(`velnor-runner:install: ${error instanceof Error ? error.message : String(error)}\n`);
+      failures.push(messageOf(error));
     });
   }
+  return failures;
 }

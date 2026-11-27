@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-type State = { machines: string[]; link: string | null; mise: boolean; packages: boolean; user: boolean; useraddTries: number; holder: boolean; namespace: boolean; masked: string[] };
+type State = { machines: string[]; link: string | null; mise: boolean; packages: boolean; user: boolean; useraddTries: number; holder: number; shared: boolean; namespace: boolean; masked: string[]; busy: number };
 type Failure = { readonly command: string; readonly operand?: string };
 type Config = {
   readonly state: string;
@@ -14,7 +14,11 @@ type Config = {
   readonly who: string;
   readonly bytes: string;
   readonly mountInfo: string;
-  readonly guestSha?: string;
+  readonly copyCorrupt?: boolean;
+  readonly truncateRead?: boolean;
+  readonly swapAfterReap?: boolean;
+  readonly survivors?: number;
+  readonly rawTail?: readonly number[];
   readonly catFail?: boolean;
   readonly catStarted?: string;
   readonly catGate?: string;
@@ -35,9 +39,10 @@ const MOUNT = "/mnt/mac";
 const GUEST_STORE = "/var/lib/velnor";
 const HOLDER = "/run/velnor-build-namespace";
 const NAMESPACE = `${HOLDER}/mnt`;
+const SECRET = "root-only secret\n";
 
 const config = JSON.parse(readFileSync(join(import.meta.dir, "config.json"), "utf8")) as Config;
-const fresh: State = { machines: [], link: null, mise: false, packages: false, user: false, useraddTries: 0, holder: false, namespace: false, masked: [] };
+const fresh: State = { machines: [], link: null, mise: false, packages: false, user: false, useraddTries: 0, holder: 0, shared: false, namespace: false, masked: [], busy: 0 };
 const state: State = existsSync(config.state) ? { ...fresh, ...(JSON.parse(readFileSync(config.state, "utf8")) as Partial<State>) } : fresh;
 const save = (): void => writeFileSync(config.state, JSON.stringify(state));
 const sha = (data: Uint8Array | string): string => createHash("sha256").update(data).digest("hex");
@@ -60,7 +65,8 @@ function hostPath(guest: string): string {
 
 async function copyOut(destination: string): Promise<void> {
   const target = hostPath(destination);
-  const half = config.bytes.slice(0, Math.floor(config.bytes.length / 2));
+  const stored = readFileSync(`${config.state}.out`);
+  const half = stored.subarray(0, Math.floor(stored.length / 2));
   writeFileSync(target, half);
   if (config.catFail === true) {
     process.exit(1);
@@ -76,7 +82,22 @@ async function copyOut(destination: string): Promise<void> {
   if (gate !== undefined && !existsSync(gate)) {
     fail("the gate never opened");
   }
-  appendFileSync(target, config.bytes.slice(half.length));
+  appendFileSync(target, stored.subarray(half.length));
+  if (config.copyCorrupt === true) {
+    appendFileSync(target, "!");
+  }
+}
+
+const payload = (): Buffer => Buffer.concat([Buffer.from(config.bytes), Buffer.from(config.rawTail ?? [])]);
+
+function readBuilt(operands: string[]): void {
+  if (config.swapAfterReap !== true) {
+    process.stdout.write(config.truncateRead === true ? payload().subarray(0, Math.floor(payload().length / 2)) : payload());
+  } else if (operands.includes("iflag=nofollow")) {
+    fail("dd: failed to open: Too many levels of symbolic links");
+  } else {
+    process.stdout.write(SECRET);
+  }
 }
 
 function version(command: string): void {
@@ -103,6 +124,10 @@ async function checkDigest(): Promise<void> {
 
 function runMise(operands: string[], env: Record<string, string>): void {
   const tail = operands.slice(operands.indexOf("--") + 1).join(" ");
+  if (tail.startsWith("cargo build")) {
+    state.busy = config.survivors ?? 0;
+    save();
+  }
   if (operands[0] === "exec" && tail === "which -a cargo") {
     const wrapper = `${env.MISE_DATA_DIR ?? ""}/command-wrappers/bin/cargo`;
     process.stdout.write(config.cargoOutsideWrapper === true ? `/usr/bin/cargo\n${wrapper}\n` : `${wrapper}\n/somewhere/else/cargo\n`);
@@ -174,24 +199,30 @@ function findOutput(operands: string[]): string {
 
 function setUp(command: string, operands: string[]): boolean {
   if (command === "mountpoint") {
-    process.exit(state.holder ? 0 : 32);
+    process.exit(state.holder > 0 ? 0 : 32);
   } else if (command === "umount") {
-    if (!state.holder) {
+    if (state.holder === 0) {
       fail("umount: not mounted", 1);
     }
-    state.holder = false;
-    state.namespace = false;
-    state.masked = [];
+    state.holder -= 1;
+    if (state.holder === 0) {
+      state.shared = false;
+      state.namespace = false;
+      state.masked = [];
+    }
     save();
   } else if (command === "mount" && operands.includes("--make-private")) {
-    if (!state.holder) {
+    if (state.holder === 0) {
       fail("mount: not a mount point", 32);
     }
+    state.shared = false;
+    save();
   } else if (command === "mount" && operands[operands.length - 1] === HOLDER) {
-    state.holder = true;
+    state.holder += 1;
+    state.shared = true;
     save();
   } else if (command === "unshare") {
-    if (!state.holder || operands[0] !== `--mount=${NAMESPACE}`) {
+    if (state.holder === 0 || state.shared || operands[0] !== `--mount=${NAMESPACE}`) {
       fail("unshare: mount /proc/1/ns/mnt failed: Invalid argument");
     }
     state.namespace = true;
@@ -212,7 +243,9 @@ function setUp(command: string, operands: string[]): boolean {
 
 async function guestCommand(rest: string[]): Promise<void> {
   const { call, command, operands } = parse(rest);
-  record({ ...call, ...(command === "tar" ? { stdinSha256: sha(await stdinBytes()) } : {}) });
+  const writes = command === "tar" || (command === "dd" && operands.some((operand) => operand.startsWith("of=")));
+  const input = writes ? await stdinBytes() : undefined;
+  record({ ...call, ...(input === undefined ? {} : { stdinSha256: sha(input) }) });
   if (config.failOn !== undefined && matches(config.failOn, call)) {
     fail("boom", 3);
   }
@@ -248,7 +281,7 @@ async function guestCommand(rest: string[]): Promise<void> {
   } else if (command === "sha256sum" && operands.includes("--check")) {
     await checkDigest();
   } else if (command === "sha256sum") {
-    process.stdout.write(`${config.guestSha ?? sha(config.bytes)}  ${operands[0] ?? ""}\n`);
+    process.stdout.write(`${sha(payload())}  ${operands[0] ?? ""}\n`);
   } else if (command === "mv" && (operands[2] ?? "").endsWith("/bin/mise")) {
     state.mise = true;
     save();
@@ -257,7 +290,19 @@ async function guestCommand(rest: string[]): Promise<void> {
   } else if (command === "cat" && operands[0] === "/proc/self/mountinfo") {
     process.stdout.write(config.mountInfo);
   } else if (command === "pkill") {
-    process.exit(1);
+    const found = state.busy > 0;
+    state.busy = Math.max(0, state.busy - 1);
+    save();
+    process.exit(found ? 0 : 1);
+  } else if (command === "pgrep") {
+    process.stdout.write(state.busy > 0 ? "4242\n" : "");
+    process.exit(state.busy > 0 ? 0 : 1);
+  } else if (command === "dd") {
+    if (input === undefined) {
+      readBuilt(operands);
+    } else {
+      writeFileSync(`${config.state}.out`, input);
+    }
   } else if (command.endsWith("/mise")) {
     runMise(operands, call.assignments);
   } else if (command === "cp") {

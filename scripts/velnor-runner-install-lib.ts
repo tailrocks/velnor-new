@@ -4,12 +4,14 @@
 
 export class InstallError extends Error {}
 
-export type Outcome = { readonly status: number; readonly stdout: string; readonly stderr: string };
+export const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+export type Outcome = { readonly status: number; readonly stdout: string; readonly stderr: string; readonly bytes: Uint8Array };
 export type RunOptions = {
   readonly env: Readonly<Record<string, string>>;
   readonly stdin?: Uint8Array;
   readonly cwd?: string;
-  readonly output?: "stderr" | "stdout" | "capture";
+  readonly output?: "stderr" | "stdout" | "capture" | "bytes";
 };
 
 export const EX_TEMPFAIL = 75;
@@ -51,12 +53,13 @@ export async function run(argv: readonly string[], options: RunOptions): Promise
     stdout: "pipe",
     stderr: "pipe",
   });
+  const binary = options.output === "bytes";
   const [stdout, stderr, status] = await Promise.all([
-    pump(child.stdout, { stderr: process.stderr, stdout: process.stdout, capture: undefined }[options.output ?? "stderr"]),
+    binary ? new Response(child.stdout).bytes() : pump(child.stdout, { stderr: process.stderr, stdout: process.stdout, capture: undefined, bytes: undefined }[options.output ?? "stderr"]),
     pump(child.stderr, process.stderr),
     child.exited,
   ]);
-  return { status, stdout, stderr };
+  return typeof stdout === "string" ? { status, stdout, stderr, bytes: new Uint8Array() } : { status, stdout: "", stderr, bytes: stdout };
 }
 
 export const orb = (args: readonly string[], options: Omit<RunOptions, "env"> = {}): Promise<Outcome> =>

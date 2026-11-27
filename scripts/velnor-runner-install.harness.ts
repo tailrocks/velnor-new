@@ -16,6 +16,9 @@ const SCRIPTS = import.meta.dir;
 const REPOSITORY = join(SCRIPTS, "..");
 const FAKE_ORB = join(SCRIPTS, "fixtures/velnor-runner-install-orb.ts");
 const FAKE_GIT = join(SCRIPTS, "fixtures/velnor-runner-install-git.ts");
+const HOLDER = join(SCRIPTS, "fixtures/velnor-runner-install-hold.ts");
+export const MARKER = join(SCRIPTS, "fixtures/velnor-runner-install-marker.ts");
+const LOCKF = "/usr/bin/lockf";
 export const FORCE_LINUX = join(SCRIPTS, "fixtures/velnor-runner-install-linux.ts");
 const INSTALLER_FILES = [
   "velnor-runner-install.ts",
@@ -31,6 +34,7 @@ export const UNDER_LOCK = "--run-under-install-lock";
 export const TEMP_PREFIX = ".velnor-runner.tmp-";
 export const WAIT_LIMIT_MS = 8_000;
 export const TEST_TIMEOUT_MS = 30_000;
+export const SLOW_TEST_TIMEOUT_MS = 90_000;
 
 export type Outcome = { readonly stdout: string; readonly stderr: string; readonly status: number };
 export type Running = {
@@ -39,7 +43,7 @@ export type Running = {
   readonly finished: () => boolean;
   readonly done: Promise<Outcome>;
 };
-export type Box = { readonly root: string; readonly store: string; readonly bin: string; readonly state: string; readonly log: string; readonly home: string };
+export type Box = { readonly root: string; readonly store: string; readonly bin: string; readonly state: string; readonly log: string; readonly home: string; readonly tmp: string };
 export type Repo = { readonly dir: string; readonly script: string };
 export type Launch = { readonly preload?: string; readonly args?: readonly string[] };
 export type Extra = Record<string, unknown>;
@@ -69,12 +73,17 @@ export const MOUNT_INFO = [
   "418 253 0:37 /private /private rw,relatime shared:307 - virtiofs mac rw",
   "425 416 0:61 /Shared/Nested /Users/Nested rw,relatime shared:310 - virtiofs extra rw",
   "426 253 0:62 /Shared /Extra\\040Disk rw,relatime shared:311 - virtiofs extra rw",
+  "427 253 0:72 / /mnt/ninep rw,relatime shared:312 - 9p share rw,trans=virtio",
+  "428 253 0:73 / /mnt/sshfs rw,nosuid,nodev,relatime shared:313 - fuse.sshfs sshfs rw,user_id=0",
+  "429 253 0:74 / /sys/fs/fuse/connections rw,relatime shared:314 - fusectl fusectl rw",
+  "430 253 0:75 / /mnt/blockfuse rw,relatime shared:315 - fuseblk /dev/vdc rw",
   "419 253 0:50 / /mnt/machines rw,relatime shared:308 - tmpfs tmpfs rw",
   "420 419 0:38 /scon/containers/BBB/rootfs /mnt/machines/other rw,noatime shared:309 - btrfs /dev/vdb1 rw",
   "424 416 0:38 /scon/containers/BBB/rootfs /Users/someone/OrbStack/other rw,noatime shared:304 - btrfs /dev/vdb1 rw",
   "",
 ].join("\n");
-export const MASKED_MOUNTS = ["/Extra Disk", "/Applications", "/Library", "/Users", "/Volumes", "/mnt/mac", "/mnt/machines", "/private"];
+export const MASKED_MOUNTS = ["/Extra Disk", "/Applications", "/Library", "/Users", "/Volumes", "/mnt/mac", "/mnt/machines", "/mnt/ninep", "/mnt/sshfs", "/private"];
+export const HOST_MOUNT_LINE = /virtiofs| 9p |fuse\.|\/mnt\/machines/;
 
 const scratch: string[] = [];
 const gates: string[] = [];
@@ -163,7 +172,9 @@ export async function sandbox(): Promise<Box> {
   const home = join(root, "home");
   await mkdir(home);
   const store = join(root, "store");
-  return { root, store, bin: join(store, "bin"), state: join(root, "orb-state.json"), log: join(root, "orb-log.jsonl"), home };
+  const tmp = join(root, "tmp");
+  await mkdir(tmp);
+  return { root, store, bin: join(store, "bin"), state: join(root, "orb-state.json"), log: join(root, "orb-log.jsonl"), home, tmp };
 }
 
 export const gitEnvironment = (box: Box): Record<string, string> => ({ PATH: "/usr/bin:/bin", HOME: box.home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" });
@@ -217,16 +228,10 @@ async function fakeOrb(box: Box, who: string, built: string, extra: Extra): Prom
 }
 
 export const binary = (version: string): string => `#!fake-binary-${version}\nvelnor-runner ${version}\npayload-${version}\n`;
+export const RAW_TAIL = [0x00, 0x80, 0xff, 0xc3, 0x28];
 export const half = (text: string): string => text.slice(0, Math.floor(text.length / 2));
 
-export async function start(box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Running> {
-  const command = [process.execPath, ...(launch.preload === undefined ? [] : ["--preload", launch.preload]), repo.script, ...(launch.args ?? [])];
-  const child = Bun.spawn(command, {
-    env: { PATH: await fakeOrb(box, who, built, extra), HOME: box.home, VELNOR_HOST_STORE: box.store, SSH_AUTH_SOCK: join(box.root, "agent.sock"), ORBENV: "LEAK" },
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+function track(child: Subprocess<"ignore", "pipe", "pipe">): Running {
   let stderr = "";
   let finished = false;
   const decoder = new TextDecoder();
@@ -242,6 +247,40 @@ export async function start(box: Box, repo: Repo, built: string, extra: Extra = 
   const run = { child, stderr: () => stderr, finished: () => finished, done };
   running.push(run);
   return run;
+}
+
+export async function start(box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Running> {
+  const command = [process.execPath, ...(launch.preload === undefined ? [] : ["--preload", launch.preload]), repo.script, ...(launch.args ?? [])];
+  return track(
+    Bun.spawn(command, {
+      env: {
+        PATH: await fakeOrb(box, who, built, extra),
+        HOME: box.home,
+        TMPDIR: box.tmp,
+        VELNOR_HOST_STORE: box.store,
+        SSH_AUTH_SOCK: join(box.root, "agent.sock"),
+        ORBENV: "LEAK",
+      },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
+  );
+}
+
+export async function holdLock(box: Box): Promise<Running> {
+  await mkdir(dirname(lockFile(box)), { recursive: true, mode: 0o700 });
+  const started = join(box.root, "holder-started");
+  const gate = gateFile(box, "holder-gate");
+  const child = Bun.spawn([LOCKF, "-k", "-t", "10", lockFile(box), process.execPath, HOLDER, started, gate], {
+    env: { PATH: "/usr/bin:/bin", HOME: box.home },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const held = track(child);
+  await waitFor("the unrelated holder to take the lock", () => Bun.file(started).exists());
+  return held;
 }
 
 export const install = async (box: Box, repo: Repo, built: string, extra: Extra = {}, who = "run", launch: Launch = {}): Promise<Outcome> =>

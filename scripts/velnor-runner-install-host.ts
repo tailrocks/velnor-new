@@ -10,6 +10,7 @@ import { step, type Context } from "./velnor-runner-install-guest";
 import { EX_TEMPFAIL, hostEnvironment, InstallError, run } from "./velnor-runner-install-lib";
 
 const LOCKF = "/usr/bin/lockf";
+const PS = "/bin/ps";
 const LOCK_WAIT_SECONDS = 900;
 const LOCK_DIRECTORY = ".velnor-runner-install";
 const LOCK_NAME = "install.lock";
@@ -51,22 +52,25 @@ export async function prepareLock(): Promise<string> {
   return lock;
 }
 
+const lockCommand = (lock: string, command: readonly string[]): string[] => [LOCKF, "-k", "-t", String(LOCK_WAIT_SECONDS), lock, ...command];
+
 const probe = (lock: string): Promise<{ status: number }> => run([LOCKF, "-s", "-k", "-t", "0", lock, "/usr/bin/true"], { env: hostEnvironment(), output: "capture" });
 
 export async function underLock(lock: string, command: readonly string[], extra: Record<string, string>): Promise<number> {
   if ((await probe(lock)).status === EX_TEMPFAIL) {
     process.stderr.write(`velnor-runner:install: waiting for ${lock}\n`);
   }
-  const held = await run([LOCKF, "-k", "-t", String(LOCK_WAIT_SECONDS), lock, ...command], { env: hostEnvironment(extra), output: "stdout" });
+  const held = await run(lockCommand(lock, command), { env: hostEnvironment(extra), output: "stdout" });
   if (held.status === EX_TEMPFAIL) {
     throw new InstallError(`${lock} stayed locked for ${LOCK_WAIT_SECONDS} seconds`);
   }
   return held.status;
 }
 
-export async function requireLockHeld(): Promise<void> {
-  if ((await probe(lockPath())).status !== EX_TEMPFAIL) {
-    throw new InstallError("this mode runs only under the install lock; use `mise run velnor-runner:install`");
+export async function requireLockHeld(command: readonly string[]): Promise<void> {
+  const parent = await run([PS, "-ww", "-o", "args=", "-p", String(process.ppid)], { env: hostEnvironment(), output: "capture" });
+  if (parent.status !== 0 || parent.stdout.trim() !== lockCommand(lockPath(), command).join(" ")) {
+    throw new InstallError("this mode runs only under the install lock, as the child of the lockf that holds it; use `mise run velnor-runner:install`");
   }
 }
 

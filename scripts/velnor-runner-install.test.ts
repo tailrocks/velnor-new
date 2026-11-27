@@ -3,7 +3,7 @@
 "use strict";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   alive,
@@ -14,6 +14,7 @@ import {
   FORCE_LINUX,
   gateFile,
   half,
+  holdLock,
   install,
   installCleanup,
   killAll,
@@ -52,6 +53,7 @@ test(
     expect(await mode(join(box.bin, "velnor-runner"))).toBe(0o755);
     expect(await entries(box)).toEqual(settled());
     expect(await machines(box)).toEqual(["velnor"]);
+    expect(await readdir(box.tmp)).toEqual([]);
   },
   TEST_TIMEOUT_MS,
 );
@@ -155,6 +157,21 @@ test(
   async () => {
     const box = await sandbox();
     const outcome = await install(box, await checkout(box), binary("0.1.82"), {}, "run", { args: [UNDER_LOCK] });
+    expect(outcome.status).not.toBe(0);
+    expect(outcome.stderr).toContain("only under the install lock");
+    expect(await calls(box)).toEqual([]);
+    expect(existsSync(box.store)).toBe(false);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
+  "the internal mode refuses to run while an unrelated process holds the install lock",
+  async () => {
+    const box = await sandbox();
+    const repo = await checkout(box);
+    await holdLock(box);
+    const outcome = await install(box, repo, binary("0.1.82"), {}, "run", { args: [UNDER_LOCK] });
     expect(outcome.status).not.toBe(0);
     expect(outcome.stderr).toContain("only under the install lock");
     expect(await calls(box)).toEqual([]);

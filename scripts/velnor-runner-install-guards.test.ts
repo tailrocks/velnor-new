@@ -20,6 +20,7 @@ import {
   installCleanup,
   lockFile,
   machines,
+  MARKER,
   sandbox,
   settled,
   start,
@@ -104,13 +105,12 @@ test(
     git(box, repo.dir, "commit", "-q", "-m", "attributes");
     const expected = expectedArchive(box, repo);
     const marker = (name: string): string => join(box.root, `marker-${name}`);
-    const filter = (name: string): string => `touch ${marker(name)}; cat`;
-    const hook = join(box.root, "fsmonitor.sh");
-    await writeFile(hook, `#!/bin/sh\ntouch ${marker("fsmonitor")}\n`);
-    await chmod(hook, 0o755);
+    const quoted = (value: string): string => `'${value}'`;
+    const hook = (name: string, role: string): string => [process.execPath, MARKER, marker(name), role].map(quoted).join(" ");
+    const filter = (name: string): string => hook(name, "filter");
     git(box, repo.dir, "config", "filter.repoevil.smudge", filter("repo-smudge"));
     git(box, repo.dir, "config", "filter.repoevil.clean", filter("repo-clean"));
-    git(box, repo.dir, "config", "core.fsmonitor", hook);
+    git(box, repo.dir, "config", "core.fsmonitor", hook("fsmonitor", "fsmonitor"));
     await writeFile(join(repo.dir, ".git/info/attributes"), "* filter=repoevil\n");
     await writeFile(join(box.home, ".gitconfig"), `[filter "globalevil"]\n\tsmudge = ${filter("global-smudge")}\n\tclean = ${filter("global-clean")}\n`);
     const head = git(box, repo.dir, "rev-parse", "HEAD").trim();
@@ -168,12 +168,12 @@ test(
 );
 
 test(
-  "a copy whose sha256 differs from the machine's digest is not installed",
+  "a copy whose sha256 differs from the bytes that were verified is not installed",
   async () => {
     const box = await sandbox();
     const repo = await checkout(box);
     expect((await install(box, repo, binary("0.1.81"))).status).toBe(0);
-    const failed = await install(box, repo, binary("0.1.82"), { guestSha: "0".repeat(64) });
+    const failed = await install(box, repo, binary("0.1.82"), { copyCorrupt: true });
     expect(failed.status).not.toBe(0);
     expect(failed.stderr).toContain("step 'integrity'");
     expect(failed.stdout).toBe("");
