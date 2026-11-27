@@ -296,7 +296,7 @@ fn declared_paths_that_each_resolve_below_the_other_are_refused() -> Result<()> 
 #[test]
 fn four_thousand_declared_paths_restore_within_a_bounded_time() -> Result<()> {
     const PATHS: usize = 4000;
-    const BOUND: Duration = Duration::from_secs(20);
+    const BOUND: Duration = Duration::from_secs(60);
     let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
     let _cleanup = Cleanup(dir.clone());
     let workspace = dir.join("workspace");

@@ -5,7 +5,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use rustix::fs::{FlockOperation, flock};
@@ -14,7 +14,7 @@ use super::cache::{CacheOwner, MARKER};
 use super::incoming::Upload;
 use super::publish::{Target, publish};
 use super::tests::{BRANCH, Fixture, failed, published, version};
-use super::tests_entry::scope_name;
+use super::tests_entry::{BOUND, scope_name};
 
 const ENTRY: usize = 100;
 const BUDGET: u64 = 150;
@@ -77,7 +77,10 @@ async fn a_publish_abandoned_while_it_waited_for_the_store_lock_evicts_nothing()
     let response = std::thread::scope(|threads| {
         let publishing =
             threads.spawn(|| publish(&fixture.broker.layout, &target, &upload, &data, &abandoned));
-        while flock(&scope, FlockOperation::NonBlockingLockExclusive).is_ok() {
+        let started = Instant::now();
+        while started.elapsed() < BOUND
+            && flock(&scope, FlockOperation::NonBlockingLockExclusive).is_ok()
+        {
             let _ = flock(&scope, FlockOperation::Unlock);
             std::thread::sleep(Duration::from_millis(2));
         }
