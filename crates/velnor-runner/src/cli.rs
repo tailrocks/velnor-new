@@ -9,6 +9,7 @@ use clap::{Args, Parser, Subcommand};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
 
+use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::{AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job};
 use crate::job_message::AgentJobRequestMessage;
 
@@ -29,7 +30,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    #[command(about = "Run a saved job message on this machine without GitHub")]
+    #[command(
+        about = "Run a saved job message on this machine without GitHub",
+        after_help = "A SIGTERM, SIGINT or SIGHUP cancels the job; a second signal ends the runner.\n\nExit codes:\n  0    the job succeeded\n  1    the job failed or was cancelled\n  2    usage error or an unreadable job message\n  130  a second signal ended the runner"
+    )]
     Exec(ExecArgs),
 }
 
@@ -116,7 +120,7 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
         .with_context(|| format!("read {}", args.job.display()))?;
     let message = AgentJobRequestMessage::parse_json(&body)?;
     anyhow::ensure!(
-        message.message_type == JOB_MESSAGE_TYPE,
+        ordinal_ignore_case_eq(&message.message_type, JOB_MESSAGE_TYPE),
         "{} is not a {JOB_MESSAGE_TYPE} job message (MessageType is {:?})",
         args.job.display(),
         message.message_type

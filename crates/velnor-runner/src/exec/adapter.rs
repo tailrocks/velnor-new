@@ -193,6 +193,6 @@ pub(super) async fn invoke(
             out.annotate(AnnotationLevel::Error, error.to_string());
             Ok((StepResult::Failed, outputs))
         }
-        None => Ok((stop_result(call.cancel.as_ref(), call.timeout), outputs)),
+        None => Ok((stop_result(call.cancel.as_ref()), outputs)),
     }
 }
