@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, PrepareLocks, RepoFacts,
-    RunnerLabel, RustRoot, Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+    AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, RepoFacts, RunnerLabel,
+    RustRoot, Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
 };
 
 use crate::plan::{TOOLS_LOCAL_HELPER, complete_profile, rust_additions, step};
@@ -363,7 +363,7 @@ pub(crate) fn tools_tree(
     }
     steps.extend(rust_additions(facts.toolchain.as_ref(), root));
     if complete_profile(facts) {
-        steps.push(step(StepKind::Prepare(PrepareLocks::All)));
+        steps.push(step(StepKind::ToolsComponents));
     }
     steps
 }

@@ -259,9 +259,7 @@ pub(crate) fn setup_units(
         .chain(tools_tree(facts, lane.plan.as_ref(), Some(root)))
         .collect();
     toolchain.extend(tools_save(facts, lane.plan.as_ref()));
-    if !complete_profile(facts) {
-        toolchain.push(step(StepKind::Prepare(PrepareLocks::All)));
-    }
+    toolchain.push(step(StepKind::Prepare(PrepareLocks::All)));
     for (index, (unit, family)) in units.iter().zip(families).enumerate() {
         for member in &unit.roots {
             toolchain.push(Step {

@@ -46,6 +46,17 @@ fn rendered_jobs(version: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(yaml["jobs"].clone())
 }
 
+fn complete_jobs(version: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    let mut repo = repo(version, false)?;
+    let path = RepoPath::new("rust-toolchain.toml")?;
+    repo.tracked_paths.insert(path.clone());
+    repo.files.insert(
+        path,
+        b"[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n".to_vec(),
+    );
+    Ok(document(&workflow(&repo)?)?["jobs"].clone())
+}
+
 fn step_names(jobs: &Value, id: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let job = jobs.get(id).ok_or_else(|| format!("no {id} job"))?;
     Ok(job["steps"]
@@ -94,6 +105,29 @@ fn an_idle_job_and_the_archive_test_job_render_no_shared_store_steps() -> TestRe
         }),
         "rust-test-default no longer runs the archive"
     );
+    Ok(())
+}
+
+#[test]
+fn the_complete_profile_keeps_the_policy_job_free_of_shared_store_steps() -> TestResult {
+    let jobs = complete_jobs("0.1.112")?;
+    let policy = job_steps(&jobs, "policy")?;
+    assert!(
+        policy.iter().any(|step| step["run"]
+            .as_str()
+            .is_some_and(|run| run.ends_with("prepare --no-locks"))),
+        "policy no longer completes the components"
+    );
+    for id in IDLE_JOBS {
+        let names = step_names(&jobs, id)?;
+        assert!(!names.iter().any(|name| name == STORE), "{id}");
+    }
+    for id in COMPILING_JOBS {
+        assert!(
+            step_names(&jobs, id)?.iter().any(|name| name == STORE),
+            "{id}"
+        );
+    }
     Ok(())
 }
 

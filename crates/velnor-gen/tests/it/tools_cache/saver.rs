@@ -107,22 +107,56 @@ fn savers(text: &str) -> Result<Vec<Saver>, Box<dyn std::error::Error>> {
     Ok(found)
 }
 
+const TREE_IDS: [&str; 6] = [
+    "tools",
+    "toolslocal",
+    "tools_restored",
+    "toolsverify",
+    "toolsrecord",
+    "toolsanchor",
+];
+const TREE_USES: [&str; 2] = ["actions/cache/", "jdx/mise-action@"];
+const TREE_RUNS: [&str; 4] = [
+    ". \"$VELNOR_EXEC\" tools-local ",
+    ". \"$VELNOR_EXEC\" tools-verify ",
+    "rustup component add ",
+    "rustup target add ",
+];
+const TREE_COMPONENTS: &str = ". \"$VELNOR_EXEC\" prepare --no-locks";
+
 fn belongs_to_the_tree(step: &Value) -> bool {
-    let text = step.to_string();
-    [
-        "tools-local",
-        "tools-verify",
-        "cache/",
-        "mise",
-        "rustup",
-        "crates mirror",
-        "anchor",
-    ]
-    .iter()
-    .any(|word| text.contains(word))
-        || step["id"]
+    step["id"].as_str().is_some_and(|id| TREE_IDS.contains(&id))
+        || step["uses"]
             .as_str()
-            .is_some_and(|id| id.starts_with("tools") || id == "prepare")
+            .is_some_and(|uses| TREE_USES.iter().any(|action| uses.starts_with(action)))
+        || step["run"].as_str().is_some_and(|run| {
+            run == TREE_COMPONENTS || TREE_RUNS.iter().any(|prefix| run.starts_with(prefix))
+        })
+}
+
+#[test]
+fn only_tool_steps_belong_to_the_tree() {
+    let rows = [
+        (
+            serde_json::json!({"run": "rustup component add clippy"}),
+            true,
+        ),
+        (serde_json::json!({"run": TREE_COMPONENTS}), true),
+        (serde_json::json!({"uses": "actions/cache/save@x"}), true),
+        (serde_json::json!({"run": "mise run db-up"}), false),
+        (
+            serde_json::json!({"run": "cargo build", "name": "mise tools"}),
+            false,
+        ),
+        (
+            serde_json::json!({"run": ". \"$VELNOR_EXEC\" prepare"}),
+            false,
+        ),
+        (serde_json::json!({"uses": "actions/checkout@x"}), false),
+    ];
+    for (step, expected) in rows {
+        assert_eq!(belongs_to_the_tree(&step), expected, "{step}");
+    }
 }
 
 #[test]

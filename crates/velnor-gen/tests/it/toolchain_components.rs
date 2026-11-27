@@ -71,7 +71,10 @@ fn a_default_profile_adds_its_docs_and_a_minimal_one_adds_nothing() -> TestResul
     Ok(())
 }
 
-fn lane_step_order(profile: &str) -> Result<(usize, usize), Box<dyn std::error::Error>> {
+fn lane_step_order(
+    profile: &str,
+    before: &str,
+) -> Result<(usize, usize), Box<dyn std::error::Error>> {
     let file = RepoPath::new("rust-toolchain.toml")?;
     let mut declared = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     declared.tracked_paths.insert(file.clone());
@@ -93,21 +96,23 @@ fn lane_step_order(profile: &str) -> Result<(usize, usize), Box<dyn std::error::
         .collect();
     let at = |name: &str| names.iter().position(|found| *found == name);
     let save = at("Save the tools cache").ok_or("no tools save")?;
-    let prepare = at("velnor-ci prepare").ok_or("no prepare")?;
+    let prepare = at(before).ok_or("no prepare")?;
     Ok((save, prepare))
 }
 
 #[test]
 fn a_complete_profile_installs_its_components_before_the_tools_cache_is_saved() -> TestResult {
-    let (save, prepare) = lane_step_order("complete")?;
+    let (save, prepare) = lane_step_order("complete", "velnor-ci prepare components")?;
     assert!(prepare < save, "prepare at {prepare}, tools save at {save}");
+    let (_, last) = lane_step_order("complete", "velnor-ci prepare")?;
+    assert!(save < last, "tools save at {save}, prepare at {last}");
     Ok(())
 }
 
 #[test]
 fn a_default_or_minimal_profile_keeps_saving_the_tools_cache_before_prepare() -> TestResult {
     for profile in ["default", "minimal"] {
-        let (save, prepare) = lane_step_order(profile)?;
+        let (save, prepare) = lane_step_order(profile, "velnor-ci prepare")?;
         assert!(
             save < prepare,
             "{profile}: tools save at {save}, prepare at {prepare}"
