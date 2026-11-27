@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    CheckConfigurations, MemberDependency, PackageName, RepoFacts, RepoPath, RustCiConfig, Target,
-    TargetKind,
+    CheckConfigurations, MemberDependency, PackageName, RepoFacts, RepoPath, RustCiConfig,
+    RustRoot, Target, TargetKind, UnownedPackage,
 };
 
 use crate::audit_job::audits_pull_requests;
@@ -33,24 +33,23 @@ impl Node<'_> {
     }
 }
 
-fn nodes(facts: &RepoFacts) -> BTreeMap<&RepoPath, Node<'_>> {
-    let members = facts
-        .rust_roots
-        .iter()
-        .flat_map(|root| &root.members)
-        .map(|member| {
-            (
-                &member.manifest,
-                Node {
-                    name: &member.name,
-                    manifest: &member.manifest,
-                    directory: member.directory.clone(),
-                    dependencies: &member.dependencies,
-                    targets: Some(&member.targets),
-                },
-            )
-        });
-    let unowned = facts.unowned.iter().map(|(manifest, package)| {
+fn nodes<'a>(
+    roots: &'a [RustRoot],
+    unowned: &'a BTreeMap<RepoPath, UnownedPackage>,
+) -> BTreeMap<&'a RepoPath, Node<'a>> {
+    let members = roots.iter().flat_map(|root| &root.members).map(|member| {
+        (
+            &member.manifest,
+            Node {
+                name: &member.name,
+                manifest: &member.manifest,
+                directory: member.directory.clone(),
+                dependencies: &member.dependencies,
+                targets: Some(&member.targets),
+            },
+        )
+    });
+    let unowned = unowned.iter().map(|(manifest, package)| {
         (
             manifest,
             Node {
@@ -65,8 +64,8 @@ fn nodes(facts: &RepoFacts) -> BTreeMap<&RepoPath, Node<'_>> {
     members.chain(unowned).collect()
 }
 
-fn generator_manifest(facts: &RepoFacts) -> Option<&RepoPath> {
-    generator_root(&facts.rust_roots)?
+fn generator_manifest(roots: &[RustRoot]) -> Option<&RepoPath> {
+    generator_root(roots)?
         .members
         .iter()
         .find(|member| is_generator(member))
@@ -74,10 +73,10 @@ fn generator_manifest(facts: &RepoFacts) -> Option<&RepoPath> {
 }
 
 fn generator_closure<'a>(
-    facts: &RepoFacts,
+    roots: &[RustRoot],
     nodes: &'a BTreeMap<&RepoPath, Node<'a>>,
 ) -> Vec<&'a Node<'a>> {
-    let mut pending: Vec<&RepoPath> = generator_manifest(facts).into_iter().collect();
+    let mut pending: Vec<&RepoPath> = generator_manifest(roots).into_iter().collect();
     let mut seen: BTreeSet<&RepoPath> = BTreeSet::new();
     while let Some(manifest) = pending.pop() {
         if !seen.insert(manifest) {
@@ -96,6 +95,17 @@ fn generator_closure<'a>(
         .collect()
 }
 
+pub(crate) fn closure_manifests(
+    roots: &[RustRoot],
+    unowned: &BTreeMap<RepoPath, UnownedPackage>,
+) -> Vec<RepoPath> {
+    let nodes = nodes(roots, unowned);
+    generator_closure(roots, &nodes)
+        .into_iter()
+        .map(|node| node.manifest.clone())
+        .collect()
+}
+
 pub(crate) struct Generator {
     sealed: bool,
     directories: Vec<Option<RepoPath>>,
@@ -105,9 +115,10 @@ pub(crate) struct Generator {
 
 impl Generator {
     pub(crate) fn of(facts: &RepoFacts) -> Self {
-        let nodes = nodes(facts);
-        let closure = generator_closure(facts, &nodes);
+        let nodes = nodes(&facts.rust_roots, &facts.unowned);
+        let closure = generator_closure(&facts.rust_roots, &nodes);
         let sealed = closure.is_empty()
+            || facts.generator_unmodelled
             || !facts.inputs_lock_identified
             || !audits_pull_requests(facts)
             || closure.iter().any(|node| node.is_opaque());

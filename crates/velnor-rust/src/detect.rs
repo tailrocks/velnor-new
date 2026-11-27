@@ -201,6 +201,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
     Ok(RepoFacts {
+        generator_unmodelled: crate::generator_sources::unmodelled(view, &rust_roots, &unowned),
         policy,
         deny_configs,
         repository,

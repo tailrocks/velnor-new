@@ -82,6 +82,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         helper: None,
         compile_inputs: BTreeMap::new(),
         inputs_lock_identified: false,
+        generator_unmodelled: false,
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,

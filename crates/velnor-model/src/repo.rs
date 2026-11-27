@@ -120,6 +120,10 @@ pub struct RepoFacts {
     /// The inputs lock names packages by manifest, which only a velnor-ci that knows the third
     /// column can read.
     pub inputs_lock_identified: bool,
+    /// The generator build reads sources the facts cannot name: a cargo config that redirects a
+    /// source, a locked package from outside a registry, or a closure package whose features or
+    /// platform dependencies pick a different build from the one the inputs lock recorded.
+    pub generator_unmodelled: bool,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,

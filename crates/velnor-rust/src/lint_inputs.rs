@@ -99,10 +99,20 @@ fn triggered(
     changed: &BTreeSet<RepoPath>,
     tree: &Tree<'_>,
 ) -> bool {
-    tree.symlinks
-        .iter()
-        .chain(changed)
-        .any(|path| reached(facts, lint, path, tree))
+    changed.iter().any(|path| reached(facts, lint, path, tree))
+        || tree
+            .symlinks
+            .iter()
+            .any(|symlink| linked(facts, lint, symlink, tree))
+}
+
+fn linked(facts: &RepoFacts, lint: &LintJob, symlink: &RepoPath, tree: &Tree<'_>) -> bool {
+    match (&lint.kind, tree.generator.as_ref()) {
+        (LintKind::GeneratedCheck { from_source: true }, Some(generator)) => {
+            generator.reads(symlink)
+        }
+        _ => reached(facts, lint, symlink, tree),
+    }
 }
 
 #[must_use]
@@ -227,11 +237,14 @@ fn names_a_lint_task(facts: &RepoFacts, path: &RepoPath) -> bool {
     })
 }
 
-fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
+fn in_generator_folder(path: &RepoPath) -> bool {
     GENERATOR_FOLDERS
         .iter()
         .any(|folder| path.as_str().starts_with(folder))
-        || (names_a_lint_task(facts, path) && !tree.edited(path))
+}
+
+fn read_by_the_generator(facts: &RepoFacts, path: &RepoPath, tree: &Tree<'_>) -> bool {
+    in_generator_folder(path) || (names_a_lint_task(facts, path) && !tree.edited(path))
 }
 
 fn is_markdown(path: &RepoPath) -> bool {
@@ -254,7 +267,8 @@ fn generated_check_reached(
         return from_source || !inert(facts, path, tree);
     };
     tree.unplain.contains(path)
-        || read_by_the_generator(facts, path, tree)
+        || in_generator_folder(path)
+        || names_a_lint_task(facts, path)
         || generator.reads(path)
         || !(is_rust_source(path) || is_markdown(path))
 }
