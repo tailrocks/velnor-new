@@ -122,9 +122,12 @@ fn deferred(
         "offer 1 after its check was answered",
         60,
         |_| acquire_ids(&world) == ["1"],
-        |_| {
-            deleted_messages(&world)
-                .contains(&"91".to_owned())
+        |events| {
+            let answered = events.iter().any(|event| event.label == "acquire");
+            let deleted = events
+                .iter()
+                .any(|event| event.label == "message.delete" && event.field("id") == "91");
+            (deleted && !answered)
                 .then(|| "message 91 was deleted although its check was never answered".to_owned())
         },
     );
