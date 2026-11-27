@@ -212,6 +212,24 @@ fn setup_velnor_refuses_a_step_that_reads_the_action_path() -> Result<()> {
 }
 
 #[test]
+fn setup_velnor_allows_a_name_that_only_contains_action_path() -> Result<()> {
+    let world = World::new()?;
+    let action = real_action()?.replace(
+        "set -euo pipefail\n",
+        "set -euo pipefail\n        echo \"TRANSACTION_PATH=${TRANSACTION_PATH:-}\"\n",
+    );
+    ensure!(action != real_action()?, "the run row was not applied");
+    let sha = world.publish_action(&action)?;
+    let ran = world.run(&job(&world, &sha, &[])?, &[])?;
+    ensure!(
+        ran.has_line(REAL_ERROR) && !ran.stdout.contains("reads github.action_path"),
+        "{}",
+        ran.stdout
+    );
+    Ok(())
+}
+
+#[test]
 fn setup_velnor_refuses_an_input_default_that_is_an_expression() -> Result<()> {
     let world = World::new()?;
     let action = real_action()?.replacen("default: ''", "default: ${{ github.sha }}", 1);

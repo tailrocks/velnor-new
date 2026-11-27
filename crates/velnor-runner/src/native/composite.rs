@@ -23,6 +23,7 @@ const INPUTS: [&str; 4] = [
     "sha256-macos-arm64",
 ];
 const ACTION_PATH_NAME: &str = "action_path";
+const ACTION_PATH_PREFIX: &str = "github_";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -181,7 +182,7 @@ pub(crate) fn expand(
             .into_iter()
             .flatten()
             .chain(raw.env.values().map(String::as_str))
-            .any(|text| text.to_ascii_lowercase().contains(ACTION_PATH_NAME));
+            .any(names_action_path);
         if reads_action_path {
             return Err(ExecError::Unsupported(
                 "setup-velnor step that reads github.action_path or GITHUB_ACTION_PATH".to_owned(),
@@ -210,6 +211,18 @@ pub(crate) fn expand(
         ));
     }
     Ok(steps)
+}
+
+fn names_action_path(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let is_word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+    lower.match_indices(ACTION_PATH_NAME).any(|(start, found)| {
+        let end = start + found.len();
+        let head = &lower[..start];
+        let head = head.strip_suffix(ACTION_PATH_PREFIX).unwrap_or(head);
+        !head.bytes().next_back().is_some_and(is_word)
+            && !lower.as_bytes().get(end).copied().is_some_and(is_word)
+    })
 }
 
 fn require_commit_sha(sha: &str) -> Result<(), ExecError> {
