@@ -37,15 +37,10 @@ async fn remove_dir(directory: &Path) -> std::io::Result<()> {
     }
 }
 
-async fn fresh_private_dir(directory: &Path) -> std::io::Result<()> {
+async fn fresh_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
     remove_dir(directory).await?;
-    create_dir_with_mode(directory, PRIVATE_DIR_MODE).await
-}
-
-async fn fresh_shared_dir(directory: &Path) -> std::io::Result<()> {
-    remove_dir(directory).await?;
-    create_dir_with_mode(directory, SHARED_DIR_MODE).await?;
-    tokio::fs::set_permissions(directory, Permissions::from_mode(SHARED_DIR_MODE)).await
+    create_dir_with_mode(directory, mode).await?;
+    tokio::fs::set_permissions(directory, Permissions::from_mode(mode)).await
 }
 
 impl WorkDirs {
@@ -87,11 +82,11 @@ impl WorkDirs {
                 .await
                 .map_err(|source| work_dir_error(&self.root, source))?;
         }
-        fresh_shared_dir(&self.run.workspace)
+        fresh_dir(&self.run.workspace, SHARED_DIR_MODE)
             .await
             .map_err(|source| work_dir_error(&self.run.workspace, source))?;
         for directory in [&self.run.temp, &self.logs] {
-            fresh_private_dir(directory)
+            fresh_dir(directory, PRIVATE_DIR_MODE)
                 .await
                 .map_err(|source| work_dir_error(directory, source))?;
         }

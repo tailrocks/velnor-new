@@ -122,7 +122,7 @@ async fn lifecycle_keeps_renewing_the_job_lock_until_the_completion_is_sent() ->
 }
 
 #[tokio::test]
-async fn lifecycle_cancels_the_job_when_a_later_renew_finds_it_gone() -> Result<()> {
+async fn lifecycle_renew_404_cancels_job() -> Result<()> {
     let behavior = Behavior {
         renew: Renew::RenewedThenJobGone,
         ..Behavior::default()

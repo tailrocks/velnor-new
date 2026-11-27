@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use rustix::process::{Pid, Signal, kill_process};
+use rustix::process::{Pid, Signal, kill_process, test_kill_process};
 use serde_json::{Value, json};
 use velnor_runner::exec::{AdapterRegistry, JobCancel, JobRun, LogSink, StepResult, run_job};
 use velnor_runner::job_message::AgentJobRequestMessage;
@@ -166,16 +166,17 @@ pub(crate) fn wait_for_file(path: &Path) -> Result<()> {
 }
 
 pub(crate) fn is_running(pid: Pid) -> bool {
+    if test_kill_process(pid).is_err() {
+        return false;
+    }
     let listing = Command::new("ps")
         .args(["-o", "stat=", "-p"])
         .arg(pid.as_raw_nonzero().to_string())
         .output();
-    listing.is_ok_and(|listing| {
+    !listing.is_ok_and(|listing| {
         String::from_utf8_lossy(&listing.stdout)
             .trim_start()
-            .chars()
-            .next()
-            .is_some_and(|state| state != 'Z')
+            .starts_with('Z')
     })
 }
 

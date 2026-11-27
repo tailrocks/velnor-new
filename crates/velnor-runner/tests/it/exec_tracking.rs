@@ -157,7 +157,7 @@ async fn run_leaving_a_child_in_the_step_group(clean: &str) -> Result<Pid> {
     let scratch = Scratch::new()?;
     let pid_file = pid_file_of(&scratch, "grouped.pid");
     let script = format!(
-        "{COPY_SLEEP}set +m\n\"$tool\" 4324 >/dev/null 2>&1 &\npid=$!\necho \"$pid\" > {}\nsleep 0.3\nkill -0 \"$pid\"",
+        "{COPY_SLEEP}set +m\nenv -u RUNNER_TRACKING_ID \"$tool\" 4324 >/dev/null 2>&1 &\npid=$!\necho \"$pid\" > {}\nsleep 0.3\nkill -0 \"$pid\"",
         pid_file.display()
     );
     let mut message = job(vec![run("grouped", &script)]);
