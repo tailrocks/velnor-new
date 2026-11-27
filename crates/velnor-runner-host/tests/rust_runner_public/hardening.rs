@@ -7,7 +7,7 @@ use std::path::Path;
 
 use velnor_runner_host::{HostError, RustRunnerFailure};
 
-use super::support::{Fixture, SECRET_JIT, jit, reservation, wait_for};
+use super::support::{Fixture, SECRET_JIT, facts, jit, reservation, wait_for};
 
 const CHILD_MARKER: &str = "VELNOR_RUST_RUNNER_PUBLIC_CHILD";
 
@@ -85,10 +85,10 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
     let fixture = Fixture::new("[]")?;
     let launcher = fixture.launcher();
     launcher.ensure_machine()?;
-    let mut job = launcher.start_job(reservation(41)?, &jit(SECRET_JIT))?;
+    let mut job = launcher.start_job(reservation(41)?, &jit(SECRET_JIT), &facts())?;
     assert!(job.wait().await?.success());
     fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
-    let held = launcher.start_job(reservation(42)?, &jit(SECRET_JIT))?;
+    let held = launcher.start_job(reservation(42)?, &jit(SECRET_JIT), &facts())?;
     wait_for(&fixture.seen("42.jit.pid")).await?;
     held.stop().await?;
     std::fs::write(fixture.root.join("ps.table"), "4242 sleep 600\n")?;
@@ -101,7 +101,7 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
         "create -a arm64 ubuntu velnor",
         "-m velnor -u root ln -sfn",
         "-m velnor test -x /var/lib/velnor/bin/velnor-runner",
-        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/41.jit",
+        "--jit /var/lib/velnor/jit/41.jit --trusted /var/lib/velnor/jit/41.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit -",
         "-m velnor -u root ps -eo pid=,args=",
         "-m velnor -u root kill -9 4242",
     ] {

@@ -12,6 +12,7 @@ autotests = false
 
 [features]
 test-support = []
+live-sandbox = ["test-support"]
 
 [lints]
 workspace = true
@@ -29,6 +30,11 @@ test = false
 name = "it"
 path = "tests/it/main.rs"
 required-features = ["test-support"]
+
+[[test]]
+name = "sandbox_live"
+path = "tests/sandbox_live/main.rs"
+required-features = ["live-sandbox"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -48,6 +54,11 @@ tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = { workspace = true }
+libc = { workspace = true }
+seccompiler = { workspace = true }
 
 [dev-dependencies]
 rsa = { workspace = true }

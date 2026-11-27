@@ -17,6 +17,7 @@ use crate::exec::{
 use crate::job_message::AgentJobRequestMessage;
 use crate::lifecycle::{RunJitOptions, run_jit};
 use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
+use crate::sandbox::{ApplyArgs, SandboxArgs};
 use crate::secret::Secret;
 
 const USAGE_ERROR: u8 = 2;
@@ -53,6 +54,13 @@ pub enum Command {
     Exec(ExecArgs),
     #[command(about = "Wait for one job from GitHub with a JIT configuration, run it and exit")]
     Run(RunArgs),
+    #[command(
+        about = "Run a command in the job sandbox: a constructed root, its own mount and pid namespaces, a cgroup and a disk limit",
+        after_help = "Linux only, as root. The exit code is the one of the command.\n\nExit codes:\n  2    the sandbox could not start the command"
+    )]
+    Sandbox(SandboxArgs),
+    #[command(name = "sandbox-apply", hide = true)]
+    SandboxApply(ApplyArgs),
 }
 
 #[derive(Debug, Args)]
@@ -261,6 +269,8 @@ fn run(cli: &Cli) -> Result<ExitCode> {
     let code = match &cli.command {
         Command::Exec(args) => runtime.block_on(exec(args)),
         Command::Run(args) => runtime.block_on(run_command(args)),
+        Command::Sandbox(args) => runtime.block_on(crate::sandbox::run(args)),
+        Command::SandboxApply(args) => crate::sandbox::apply(args),
     };
     runtime.shutdown_background();
     code

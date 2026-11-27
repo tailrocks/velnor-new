@@ -151,12 +151,10 @@ function text(value: string | undefined): string {
 function inGuest(args: string[]): never {
   let rest = args.slice(2);
   if (rest[0] === "-u") rest = rest.slice(2);
-  if (rest[0] === "unshare") {
-    const start = rest.indexOf(RUNNER);
-    if (start < 0) finish(64);
-    rest = rest.slice(start);
-  }
   switch (rest[0]) {
+    case "sh":
+      writeSync(1, "501 501 /home/live\n");
+      return finish(0);
     case "ln":
       return finish(0);
     case "test": {
@@ -211,10 +209,14 @@ function escapeGroup(): void {
 
 function runner(rest: string[]): never {
   if (setting("FAKE_RUNNER_ESCAPE") !== "") escapeGroup();
-  const jit = `${setting("FAKE_ORB_STORE")}${text(rest[3]).replace(`@${GUEST}`, "")}`;
-  const work = `${setting("FAKE_ORB_STORE")}${text(rest[5]).replace(GUEST, "")}`;
+  if (rest[1] !== "sandbox") finish(64);
+  const option = (flag: string): string => text(rest[rest.indexOf(flag) + 1]);
+  const jit = `${setting("FAKE_ORB_STORE")}${option("--jit").replace(GUEST, "")}`;
+  const trusted = `${setting("FAKE_ORB_STORE")}${option("--trusted").replace(GUEST, "")}`;
+  const work = `${setting("FAKE_ORB_STORE")}/work/${basename(option("--work-dir"))}`;
   const name = basename(jit);
   copyFileSync(jit, `${seen}/${name}`);
+  copyFileSync(trusted, `${seen}/${basename(trusted)}`);
   writeFileSync(`${seen}/${name}.env`, environment());
   writeFileSync(`${seen}/${name}.mode`, `${(statSync(jit).mode & 0o777).toString(8)}\n`);
   mkdirSync(work, { recursive: true });

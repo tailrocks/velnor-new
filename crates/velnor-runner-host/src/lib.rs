@@ -107,8 +107,9 @@ pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use rust_runner::{
-    ConnectionPats, HostHold, MachineProcess, ReservationId, RunningJob, RustRunnerExit,
-    RustRunnerLauncher, install_rust_runner_launcher, run_rust_runner_host,
+    ConnectionPats, HostHold, MachineProcess, PullRequestHead, ReservationId, RunningJob,
+    RustRunnerExit, RustRunnerLauncher, TrustedEvent, TrustedFacts, install_rust_runner_launcher,
+    run_rust_runner_host,
 };
 pub use scale_set::{EnsureError, EnsuredSet, product_runner_groups};
 pub use stage::remove_recorded;

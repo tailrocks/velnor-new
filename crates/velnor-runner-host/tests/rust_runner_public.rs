@@ -17,7 +17,9 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_host::{HostConfig, HostError, LaunchMode, RunningJob, RustRunnerFailure};
 
-use support::{Fixture, SECRET_JIT, jit, process_exists, reservation, runner_lines, wait_for};
+use support::{
+    Fixture, SECRET_JIT, facts, jit, process_exists, reservation, runner_lines, wait_for,
+};
 
 #[test]
 fn rust_runner_creates_missing_machine() -> Result<(), Box<dyn Error>> {
@@ -98,8 +100,8 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
     let fixture =
         Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     let launcher = fixture.launcher();
-    let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"))?;
-    let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"))?;
+    let mut first = launcher.start_job(reservation(11)?, &jit("first-jit"), &facts())?;
+    let mut second = launcher.start_job(reservation(12)?, &jit("second-jit"), &facts())?;
     assert!(first.wait().await?.success());
     assert!(second.wait().await?.success());
 
@@ -108,14 +110,14 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
     assert_eq!(lines.len(), 2, "{log:?}");
     assert!(
         lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/11.jit --work-dir /var/lib/velnor/work/11"
+            &&"-m velnor -u root /var/lib/velnor/bin/velnor-runner sandbox --profile job --reservation 11 --uid 501 --gid 501 --home /home/live --work-dir /srv/velnor/gen/work/11 --jit /var/lib/velnor/jit/11.jit --trusted /var/lib/velnor/jit/11.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/11"
                 .to_owned()
         ),
         "{lines:?}"
     );
     assert!(
         lines.contains(
-            &&"-m velnor unshare --user --map-current-user --pid --fork --kill-child /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/12.jit --work-dir /var/lib/velnor/work/12"
+            &&"-m velnor -u root /var/lib/velnor/bin/velnor-runner sandbox --profile job --reservation 12 --uid 501 --gid 501 --home /home/live --work-dir /srv/velnor/gen/work/12 --jit /var/lib/velnor/jit/12.jit --trusted /var/lib/velnor/jit/12.trusted.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/12"
                 .to_owned()
         ),
         "{lines:?}"
@@ -136,12 +138,31 @@ async fn rust_runner_starts_run_jit_per_job_with_distinct_files() -> Result<(), 
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn rust_runner_writes_the_trusted_facts_the_runner_parses() -> Result<(), Box<dyn Error>> {
+    let fixture =
+        Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+    let mut job = fixture
+        .launcher()
+        .start_job(reservation(13)?, &jit("jit"), &facts())?;
+    assert!(job.wait().await?.success());
+    assert_eq!(
+        std::fs::read(fixture.seen("13.trusted.json"))?,
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../velnor-runner/tests/fixtures/trusted/pull_request.json"
+        ))?
+    );
+    assert!(!fixture.store.join("jit/13.trusted.json").exists());
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn rust_runner_keeps_jit_out_of_argv() -> Result<(), Box<dyn Error>> {
     let fixture =
         Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
     let mut job = fixture
         .launcher()
-        .start_job(reservation(21)?, &jit(SECRET_JIT))?;
+        .start_job(reservation(21)?, &jit(SECRET_JIT), &facts())?;
     assert!(job.wait().await?.success());
 
     assert_eq!(std::fs::read_to_string(fixture.seen("21.jit"))?, SECRET_JIT);
@@ -161,15 +182,16 @@ async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>>
     fixture.configure("FAKE_RUNNER_EXIT=3\n")?;
     let mut job = fixture
         .launcher()
-        .start_job(reservation(31)?, &jit(SECRET_JIT))?;
+        .start_job(reservation(31)?, &jit(SECRET_JIT), &facts())?;
     let status = job.wait().await?;
     assert_eq!(status.code(), Some(3));
     assert!(!fixture.jit_file(31).exists());
 
     fixture.configure("FAKE_RUNNER_HOLD=1\n")?;
-    let job: RunningJob = fixture
-        .launcher()
-        .start_job(reservation(32)?, &jit(SECRET_JIT))?;
+    let job: RunningJob =
+        fixture
+            .launcher()
+            .start_job(reservation(32)?, &jit(SECRET_JIT), &facts())?;
     let child_file = fixture.seen("32.jit.child");
     wait_for(&child_file).await?;
     let child = std::fs::read_to_string(&child_file)?.trim().to_owned();
@@ -181,7 +203,7 @@ async fn rust_runner_removes_jit_file_after_exit() -> Result<(), Box<dyn Error>>
 
     let job = fixture
         .launcher()
-        .start_job(reservation(33)?, &jit(SECRET_JIT))?;
+        .start_job(reservation(33)?, &jit(SECRET_JIT), &facts())?;
     let pid_file = fixture.seen("33.jit.pid");
     wait_for(&pid_file).await?;
     wait_for(&fixture.seen("33.jit.child")).await?;

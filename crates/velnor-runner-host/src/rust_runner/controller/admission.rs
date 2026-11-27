@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 
 use super::cleanup::CleanupProof;
 use super::source::LaunchGrant;
-use crate::rust_runner::ReservationId;
+use crate::rust_runner::{ReservationId, TrustedFacts};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Closed {
@@ -101,6 +101,13 @@ impl Slots {
             },
         );
         true
+    }
+
+    pub(super) fn launching_facts(&self, reservation: ReservationId) -> Option<TrustedFacts> {
+        match &self.entries.get(&reservation)?.phase {
+            Phase::Launching { grant } => grant.trusted_facts(),
+            Phase::Running { .. } | Phase::Proving { .. } => None,
+        }
     }
 
     pub(super) fn abandon_launch(&mut self, reservation: ReservationId) {

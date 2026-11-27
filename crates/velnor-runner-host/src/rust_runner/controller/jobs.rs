@@ -51,7 +51,13 @@ impl Run<'_> {
     }
 
     pub(super) fn launch(&mut self, reservation: ReservationId, jit: &EncodedJit) {
-        match self.cx.launcher.start_job(reservation, jit) {
+        let Some(facts) = self.slots.launching_facts(reservation) else {
+            eprintln!("rust-runner has no trusted facts for reservation {reservation}");
+            self.machine_ok = false;
+            self.begin_proof(reservation, JobExit::SpawnFailed);
+            return;
+        };
+        match self.cx.launcher.start_job(reservation, jit, &facts) {
             Ok(job) => {
                 let (stop, stopped) = oneshot::channel();
                 if self.slots.start_running(reservation, stop) {

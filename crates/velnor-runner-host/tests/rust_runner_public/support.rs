@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::EncodedJit;
-use velnor_runner_host::{ReservationId, RustRunnerLauncher};
+use velnor_runner_host::{
+    PullRequestHead, ReservationId, RustRunnerLauncher, TrustedEvent, TrustedFacts,
+};
 
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 pub(super) const SECRET_JIT: &str = "eyJ2ZWxub3IiOiJzZWNyZXQtaml0LWNvbmZpZyJ9";
@@ -79,6 +81,24 @@ impl Fixture {
 
 pub(super) fn reservation(value: u64) -> Result<ReservationId, Box<dyn Error>> {
     ReservationId::new(value).ok_or_else(|| "zero reservation".into())
+}
+
+pub(super) fn facts() -> TrustedFacts {
+    TrustedFacts {
+        repository_id: 42,
+        repository: "tailrocks/velnor-lab".to_owned(),
+        server_url: "https://github.com".to_owned(),
+        default_branch: "main".to_owned(),
+        sha: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        run_id: 1001,
+        run_attempt: 1,
+        event_name: "pull_request".to_owned(),
+        event: TrustedEvent::PullRequest {
+            number: 7,
+            base_branch: "main".to_owned(),
+            head: PullRequestHead::SameRepository,
+        },
+    }
 }
 
 pub(super) fn jit(text: &str) -> EncodedJit {

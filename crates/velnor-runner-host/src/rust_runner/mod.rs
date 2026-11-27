@@ -16,18 +16,21 @@ mod paths;
 mod processes;
 mod store;
 mod sweep;
+mod trusted;
 
 pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
 pub use store::HostHold;
+pub use trusted::{PullRequestHead, TrustedEvent, TrustedFacts};
 
 pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
 const GUEST_STORE: &str = "/var/lib/velnor";
+const GUEST_GENERATIONS: &str = "/srv/velnor/gen";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
 const ORB_DEADLINE: Duration = Duration::from_secs(60);
@@ -35,14 +38,6 @@ const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
-const PID_NAMESPACE: [&str; 6] = [
-    "unshare",
-    "--user",
-    "--map-current-user",
-    "--pid",
-    "--fork",
-    "--kill-child",
-];
 const HOST_DIRECTORIES: [&str; 8] = [
     "bin", "crates", "tools", "git", "gen", "cache", "records", "work",
 ];

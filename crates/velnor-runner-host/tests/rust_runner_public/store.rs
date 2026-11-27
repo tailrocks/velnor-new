@@ -8,7 +8,7 @@ use std::process::Command;
 
 use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
-use super::support::{Fixture, SECRET_JIT, jit, reservation};
+use super::support::{Fixture, SECRET_JIT, facts, jit, reservation};
 
 const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
 
@@ -215,11 +215,13 @@ fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
 async fn acl_after_a_started_job() -> Check {
     let fixture = fixture_with_directories()?;
     let launcher = fixture.launcher();
-    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT))?;
+    let mut job = launcher.start_job(reservation(51)?, &jit(SECRET_JIT), &facts())?;
     assert!(job.wait().await?.success());
     add_acl(&fixture.store.join("bin/velnor-runner"))?;
     assert_eq!(
-        launcher.start_job(reservation(52)?, &jit(SECRET_JIT)).err(),
+        launcher
+            .start_job(reservation(52)?, &jit(SECRET_JIT), &facts())
+            .err(),
         Some(refused(RustRunnerFailure::StoreUnsafe))
     );
     Ok(())

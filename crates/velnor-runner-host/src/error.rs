@@ -57,6 +57,12 @@ pub enum RustRunnerFailure {
     #[error("the JIT file could not be written")]
     JitFile,
 
+    #[error("the trusted facts of the job could not be written")]
+    TrustedFile,
+
+    #[error("the default user of the velnor machine could not be read")]
+    GuestUser,
+
     #[error("velnor-runner could not be started in the velnor machine")]
     Spawn,
 

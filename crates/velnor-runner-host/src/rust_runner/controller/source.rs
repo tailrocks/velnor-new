@@ -16,6 +16,7 @@ use crate::launch::execution_authorization::{
     PullClaim, SourceClaim, SourceFault, VerifiedWorkflowIdentity, verify_source_claim,
 };
 use crate::launch::steps::source::{SourceBlock, authorize_source};
+use crate::rust_runner::{PullRequestHead, TrustedEvent, TrustedFacts};
 
 const GITHUB_API: &str = "https://api.github.com";
 const GITHUB_SERVER_URL: &str = "https://github.com";
@@ -87,6 +88,43 @@ impl LaunchGrant {
 
     pub(super) const fn fetched_default_branch(&self) -> bool {
         self.fetched_default_branch
+    }
+
+    pub(super) fn trusted_facts(&self) -> Option<TrustedFacts> {
+        let event = match (self.event.as_str(), &self.pull_request) {
+            ("pull_request", Some(pull)) => TrustedEvent::PullRequest {
+                number: pull.number,
+                base_branch: pull.base_ref.clone(),
+                head: PullRequestHead::SameRepository,
+            },
+            ("pull_request", None) => return None,
+            ("merge_group", _) => TrustedEvent::MergeGroup {
+                queue_branch: self.event_ref.strip_prefix("refs/heads/")?.to_owned(),
+            },
+            _ => match (
+                self.event_ref.strip_prefix("refs/tags/"),
+                self.event_ref.strip_prefix("refs/heads/"),
+            ) {
+                (Some(name), _) => TrustedEvent::Tag {
+                    name: name.to_owned(),
+                },
+                (None, Some(branch)) => TrustedEvent::Branch {
+                    branch: branch.to_owned(),
+                },
+                (None, None) => return None,
+            },
+        };
+        Some(TrustedFacts {
+            repository_id: self.repository_id,
+            repository: self.repository.clone(),
+            server_url: self.server_url.to_owned(),
+            default_branch: self.default_branch.clone(),
+            sha: self.tested_sha.clone(),
+            run_id: self.run_id,
+            run_attempt: self.run_attempt,
+            event_name: self.event.clone(),
+            event,
+        })
     }
 
     pub(super) fn describe(&self) -> String {
