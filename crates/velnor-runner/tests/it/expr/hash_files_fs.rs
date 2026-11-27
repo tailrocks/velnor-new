@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::expr_support::{TempDir, error_text, expected_digest, hash_outcome, text};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use std::fs;
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
@@ -249,18 +249,29 @@ fn expr_hash_files_fails_on_a_matched_file_that_is_not_regular() -> Result<()> {
     Ok(())
 }
 
-fn longest_missing_parent(workspace: &Path, segment: &str) -> Vec<String> {
+const PROBE_SEGMENTS: usize = 256;
+const OS_ERROR_SUFFIX: &str = " (os error";
+
+fn longest_missing_parent(workspace: &Path, segment: &str) -> Result<(Vec<String>, String)> {
     let mut parent = vec![String::from("missing")];
-    loop {
+    for _ in 0..PROBE_SEGMENTS {
         let candidate = parent
             .iter()
             .fold(workspace.to_path_buf(), |path, name| path.join(name))
             .join(segment);
         match fs::symlink_metadata(&candidate) {
-            Err(error) if error.kind() == ErrorKind::InvalidFilename => return parent,
+            Err(error) if error.kind() == ErrorKind::InvalidFilename => {
+                let shown = error.to_string();
+                let reason = shown.split(OS_ERROR_SUFFIX).next().unwrap_or(&shown);
+                return Ok((parent, reason.to_owned()));
+            }
             _ => parent.push(segment.to_owned()),
         }
     }
+    bail!(
+        "no path of {PROBE_SEGMENTS} segments of {} characters is too long for lstat",
+        segment.len()
+    )
 }
 
 #[test]
@@ -270,12 +281,12 @@ fn expr_hash_files_fails_a_search_path_too_long_for_the_system_below_a_missing_p
     dir.write("ws/a.txt", "a")?;
     let mut env = dir.env();
     let segment = "a".repeat(250);
-    let parent = longest_missing_parent(&dir.workspace()?, &segment);
+    let (parent, reason) = longest_missing_parent(&dir.workspace()?, &segment)?;
     let too_long = format!("{}/{segment}", parent.join("/"));
 
     let outcome = hash_outcome(&mut env, &too_long)?;
     assert!(
-        outcome.contains("File name too long"),
+        outcome.contains(&reason),
         "a search path one segment past the system limit, under a parent that is only missing, \
          should fail like the runner's lstat; got {outcome:?}"
     );

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 
@@ -44,12 +44,12 @@ const HANDWRITTEN = [
   "[a\\@])]", "[\\@]z-a]", "[\\@]]", "[\\@]]]", "[\\@](]", "[\\@]()]", "[\\@](a)]", "[\\@](?:a)]", "[\\@](?=a)*]", "[\\@](?<=a)*]", "[\\@](?<=a)]",
   "[\\@]*]", "[\\@]+]", "[\\@]?]", "[\\@]??]", "[\\@]*?]", "[\\@]*??]", "[\\@]???]", "[\\@]{1}??]", "[\\@]**]", "[\\@]{1}]", "[\\@]{2,1}]", "[\\@]{,}]", "[\\@]{1,2}?]", "[\\@]{]", "[\\@]}]",
   "[\\@]^*]", "[\\@]$?]", "[\\@]\\b*]", "[\\@]\\b]", "[\\@]|*]", "[\\@]|]", "[\\@]\\]]", "[\\@][z-a]]", "[\\@][a]]", "[\\@\\@]x]", "[\\@@]x]", "[\\\\@]x]",
-  "[\\@](?x)]", "[\\@](?<n>a)]", "[\\@](?<1>a)]", "[\\@](?i:a)]", "[\\@](?ii:a)]", "[\\@](?-:a)]", "[a\\@]", "[a\\@]*", "*[a\\@]b]", "[\\@é]é]", "[\\@😀]😀]",
+  "[\\@](?x)]", "[\\@](?<é>a)]", "[\\@]{1,}]", "[\\@]a{1,1}]", "[\\@]a{2147483648,2147483647}]", "[\\@]a{1,99999999999999999999}]", "[\\@]a{99999999999999999999,1}]", "[\\@]\\k]", "[\\@]\\k<a>]", "[\\@](?<n>a)]", "[\\@](?<1>a)]", "[\\@](?i:a)]", "[\\@](?ii:a)]", "[\\@](?-:a)]", "[a\\@]", "[a\\@]*", "*[a\\@]b]", "[\\@é]é]", "[\\@😀]😀]",
   "[]{1}]", "[]a|b]", "[](?:)]", "[](?!a)+]", "[]\\b+]", "[]\\]]", "[](?<n>a)]", "[]a{2,1}]", "[]*]", "[]|*]", "[]x{1,2}{3}]",
   "é", "é*", "*é", "?é", "é?", "[é]", "[!é]", "[é]?", "[a-é]", "[a-c-é]", "\\é", "\\😀", "[\\😀]", "*😀*",
 ];
 
-const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "\\@", "\\@]", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "1", " ", "\n", "\u2028"];
+const PATTERN_BAG = ["a", "a", "b", "c", "e", "é", "-", "-", "!", "^", "[", "[", "]", "]", "\\", "\\", "\\@", "\\@]", "*", "*", "?", "?", "@", "x", "😀", ".", "{", "(", ")", "|", "$", "+", "<", "1", " ", "\n", "\u2028"];
 const NAME_BAG = ["a", "b", "c", "e", "é", "x", "-", "!", "^", "[", "]", "\\", "*", "?", "@", "😀", ".", "1", "\n", " ", "d", "ü", "A", "{", "("];
 const BOUNDARY_NAMES = [
   "\u0001", "\u0008", "\t", "\n", "\u000b", "\u000c", "\r", "\u001f", " ", "\u007f", "\u0080", "\u00a0", "\u2027", "\u2028", "\u2029", "\u202a",
@@ -238,7 +238,7 @@ function entry(random: () => number, Minimatch: MatcherConstructor, pattern: str
 
 const [minimatchDirectory, output, requested, seed] = process.argv.slice(2);
 if (minimatchDirectory === undefined || output === undefined) {
-  throw new Error("usage: bun scripts/minimatch-corpus.ts <directory holding node_modules/minimatch@3.1.2, the version bundled in actions/runner v2.338.2> <output.json> [pattern count] [seed]");
+  throw new Error("usage: node (24.22.1, the V8 of the shipped runner) scripts/minimatch-corpus.ts <directory holding node_modules/minimatch@3.1.2, the version bundled in actions/runner v2.338.2> <output.json> [pattern count] [seed]");
 }
 const Minimatch = loadMinimatch(minimatchDirectory);
 const random = generator(seed === undefined ? DEFAULT_SEED : Number(seed));
@@ -247,6 +247,6 @@ const lines: string[] = [];
 for (let start = 0; start < entries.length; start += ENTRIES_PER_LINE) {
   lines.push(entries.slice(start, start + ENTRIES_PER_LINE).join(","));
 }
-await Bun.write(output, `[\n${lines.join(",\n")}\n]\n`);
+writeFileSync(output, `[\n${lines.join(",\n")}\n]\n`);
 const cases = entries.reduce((total, line) => total + (JSON.parse(line) as string[]).length - 2, 0);
 console.log(`${entries.length} patterns, ${cases} cases, ${lines.length + 2} lines`);

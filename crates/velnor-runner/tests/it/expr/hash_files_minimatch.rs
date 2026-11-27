@@ -79,7 +79,7 @@ fn expr_hash_files_refuses_a_class_that_holds_a_named_or_modified_regular_expres
 -> Result<()> {
     let dir = TempDir::new()?;
     dir.write("ws/xa", "xa")?;
-    for pattern in ["[](?<n>a)]", "[\\@](?i:a)]"] {
+    for pattern in ["[](?<n>a)]", "[\\@](?i:a)]", "[\\@](?<é>a)]"] {
         let message = error_text(&format!("hashFiles('{pattern}')"), &dir.env())?;
         assert!(
             message.ends_with(&format!(

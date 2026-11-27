@@ -116,7 +116,7 @@ fn braced(source: &[u16], at: usize) -> Option<Brace> {
 fn identifier(name: &[u16]) -> bool {
     let mut at = 0;
     while let Some(&unit) = name.get(at) {
-        let Ok(byte) = u8::try_from(unit) else {
+        let Some(byte) = u8::try_from(unit).ok().filter(u8::is_ascii) else {
             at += 1;
             continue;
         };
