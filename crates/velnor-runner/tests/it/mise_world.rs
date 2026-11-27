@@ -130,7 +130,8 @@ impl World {
     }
 
     pub(crate) fn mirror(&self) -> PathBuf {
-        self.store.join("git/_local/tailrocks/velnor-new.git")
+        self.store
+            .join("git/file%3A%2F%2F%2Fvelnor-test/tailrocks/velnor-new/1.git")
     }
 
     pub(crate) fn binary_dir(&self) -> PathBuf {

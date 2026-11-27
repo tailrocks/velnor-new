@@ -13,8 +13,6 @@ mod defaults;
 mod drain;
 #[path = "exec_builder.rs"]
 mod exec_builder;
-#[path = "exec_capture.rs"]
-mod exec_capture;
 #[path = "exec_cli.rs"]
 mod exec_cli;
 #[path = "exec_declared_inputs.rs"]

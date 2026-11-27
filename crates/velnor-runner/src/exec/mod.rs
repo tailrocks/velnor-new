@@ -39,7 +39,6 @@ pub use facts::JobFacts;
 pub use inputs::Inputs;
 pub use job::run_job;
 pub use sink::{LogSink, StdoutSink};
-pub use step::ProcessEnv;
 
 use crate::expr::ExprError;
 
@@ -170,13 +169,6 @@ pub enum ExecError {
 }
 
 impl ExecError {
-    pub(crate) fn step_result(&self) -> StepResult {
-        match self {
-            Self::Cancelled => StepResult::Cancelled,
-            _ => StepResult::Failed,
-        }
-    }
-
     pub(crate) fn io(context: impl Into<String>, source: std::io::Error) -> Self {
         Self::Io {
             context: context.into(),

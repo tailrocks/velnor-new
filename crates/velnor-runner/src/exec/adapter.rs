@@ -10,7 +10,7 @@ use futures_util::future::BoxFuture;
 use super::cancel::{Groups, KILL_GRACE};
 use super::contexts::set_output;
 use super::output::Output;
-use super::step::{Limits, ProcessSpec, capture, run, run_isolated};
+use super::step::{Limits, ProcessSpec, ScriptStep, capture, run, run_isolated, run_script};
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, Inputs, JobCancel, JobFacts, StepResult};
 
@@ -109,13 +109,30 @@ impl StepContext<'_> {
         spec: (&str, &[String], &Path, &[(String, String)]),
         quiet: bool,
     ) -> Result<ProcessOutcome, ExecError> {
+        self.run_spec(spec, true, quiet).await
+    }
+
+    pub(crate) async fn run_exact(
+        &mut self,
+        spec: (&str, &[String], &Path, &[(String, String)]),
+        quiet: bool,
+    ) -> Result<ProcessOutcome, ExecError> {
+        self.run_spec(spec, false, quiet).await
+    }
+
+    async fn run_spec(
+        &mut self,
+        spec: (&str, &[String], &Path, &[(String, String)]),
+        isolated: bool,
+        quiet: bool,
+    ) -> Result<ProcessOutcome, ExecError> {
         let (program, args, dir, env) = spec;
         let spec = ProcessSpec {
             program,
             args,
             dir,
             env,
-            isolated: true,
+            isolated,
         };
         let limits = Limits {
             timeout: None,
@@ -123,6 +140,51 @@ impl StepContext<'_> {
             groups: self.groups,
         };
         run_isolated(&spec, &limits, (!quiet).then_some(&mut *self.out)).await
+    }
+
+    pub(crate) async fn capture_bytes(
+        &mut self,
+        spec: (&str, &[String], &Path, &[(String, String)]),
+        isolated: bool,
+    ) -> Result<Vec<u8>, ExecError> {
+        let (program, args, dir, env) = spec;
+        let spec = ProcessSpec {
+            program,
+            args,
+            dir,
+            env,
+            isolated,
+        };
+        let limits = Limits {
+            timeout: None,
+            cancel: self.cancel.as_ref(),
+            groups: self.groups,
+        };
+        capture(&spec, &limits).await
+    }
+
+    pub(crate) async fn run_script(
+        &mut self,
+        script: &str,
+        shell: &str,
+        extra_env: &[(String, String)],
+    ) -> Result<StepResult, ExecError> {
+        let step = ScriptStep {
+            script: script.to_owned(),
+            shell: shell.to_owned(),
+            dir: self.workspace.to_path_buf(),
+            env: self.env_with(extra_env),
+        };
+        let limits = Limits {
+            timeout: None,
+            cancel: self.cancel.as_ref(),
+            groups: self.groups,
+        };
+        run_script(&step, self.temp, &limits, self.out).await
+    }
+
+    pub(crate) fn add_mask(&mut self, value: &str) {
+        self.out.masker.add(value);
     }
 
     pub fn log(&mut self, text: &str) {
@@ -181,7 +243,8 @@ impl StepContext<'_> {
             cancel: self.cancel.as_ref(),
             groups: self.groups,
         };
-        capture(&spec, &limits).await
+        let bytes = capture(&spec, &limits).await?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 }
 

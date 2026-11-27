@@ -28,8 +28,7 @@ use super::composite::SetupVelnor;
 use super::mise_lock::{enforce_locked_mise_policy, require_sole_config};
 use crate::broker::TrustedFacts;
 use crate::exec::{
-    AdapterRegistry, ExecError, ProcessEnv, ProcessOutcome, StepAdapter, StepContext, StepFuture,
-    StepResult,
+    AdapterRegistry, ExecError, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
 };
 use crate::store::store_root;
 
@@ -84,13 +83,10 @@ impl Mise {
 
     async fn capture(&self, ctx: &mut StepContext<'_>, args: &[&str]) -> Result<String, ExecError> {
         let words: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
-        ctx.capture((
-            &self.program,
-            &words,
-            &self.cwd,
-            ProcessEnv::Exact(&self.env),
-        ))
-        .await
+        let bytes = ctx
+            .capture_bytes((&self.program, &words, &self.cwd, &self.env), false)
+            .await?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     async fn json(
@@ -304,9 +300,9 @@ async fn mise_action(
         mise.program.as_str(),
         args.as_slice(),
         mise.cwd.as_path(),
-        ProcessEnv::Exact(&mise.env),
+        mise.env.as_slice(),
     );
-    match ctx.run_process(spec, false).await? {
+    match ctx.run_exact(spec, false).await? {
         ProcessOutcome::Succeeded => {}
         ProcessOutcome::Cancelled => return Ok(StepResult::Cancelled),
         ProcessOutcome::Failed => {
@@ -333,7 +329,12 @@ impl StepAdapter for MiseAction {
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
             require_pinned_revision(&ctx.reference)?;
-            let inputs = MiseInputs::parse(&ctx.inputs)?;
+            let given = ctx
+                .inputs
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect();
+            let inputs = MiseInputs::parse(&given)?;
             require_pinned_version(&inputs.version)?;
             ctx.set_output("cache-hit", "false");
             mise_action(&inputs, &self.facts, ctx).await

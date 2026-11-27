@@ -1179,6 +1179,11 @@
               ]
             },
             {
+              "name": "serde-saphyr",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "serde_json",
               "kind": "normal",
               "manifest": null,
@@ -1232,6 +1237,11 @@
               "features": [
                 "native-tls"
               ]
+            },
+            {
+              "name": "toml",
+              "kind": "normal",
+              "manifest": null
             },
             {
               "name": "url",

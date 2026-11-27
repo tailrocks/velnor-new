@@ -197,7 +197,12 @@ impl StepAdapter for SetupVelnor {
                     facts.repository.as_str()
                 )));
             }
-            let steps = expand(&pinned_action_yml(ctx, facts, &sha).await?, &ctx.inputs)?;
+            let given = ctx
+                .inputs
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect();
+            let steps = expand(&pinned_action_yml(ctx, facts, &sha).await?, &given)?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));
                 let result = ctx.run_script(&step.script, &step.shell, &step.env).await?;

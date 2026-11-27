@@ -36,7 +36,11 @@ fn mise_action_leaves_cargo_home_to_the_job_and_pins_mises_homes() -> Result<()>
         let ran = World::finish(world.start_clean(&job, &process_env)?)?;
         ensure!(ran.has_line("job succeeded"), "{}", ran.stdout);
         let tools = world.store.join("tools");
-        let wanted_cargo = if row == "none" { "unset" } else { "/c" };
+        let wanted_cargo = if row == "job message env" {
+            "/c"
+        } else {
+            "unset"
+        };
         ensure!(
             value(&ran.stdout, "cargo_home") == wanted_cargo,
             "CARGO_HOME of the later step:\n{}",

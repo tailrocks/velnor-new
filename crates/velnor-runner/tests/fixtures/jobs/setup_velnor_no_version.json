@@ -79,6 +79,20 @@
             "t": 0,
             "s": "file:///velnor-test"
           }
+        },
+        {
+          "k": "repository_id",
+          "v": {
+            "t": 0,
+            "s": "1"
+          }
+        },
+        {
+          "k": "event_name",
+          "v": {
+            "t": 0,
+            "s": "push"
+          }
         }
       ]
     }

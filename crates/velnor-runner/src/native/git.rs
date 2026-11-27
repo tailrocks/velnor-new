@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use crate::broker::{GIT_ENV, git_args};
-use crate::exec::{ExecError, ProcessEnv, StepContext};
+use crate::broker::git_args;
+use crate::exec::{ExecError, StepContext};
 
 pub(super) async fn capture(
     ctx: &mut StepContext<'_>,
@@ -21,11 +21,7 @@ async fn capture_bytes(
     args: &[&str],
 ) -> Result<Vec<u8>, ExecError> {
     let args = git_args(git_dir, args);
-    let env: Vec<(String, String)> = GIT_ENV
-        .iter()
-        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-        .collect();
-    ctx.capture_bytes(("git", &args, ctx.workspace, ProcessEnv::Overlay(&env)))
+    ctx.capture_bytes(("git", &args, ctx.workspace, &[]), true)
         .await
 }
 

@@ -31,7 +31,7 @@ impl World {
             format!(
                 r#"{{"repository_id": 1, "repository": "tailrocks/velnor-new",
 "server_url": "file:///velnor-test", "default_branch": "main", "sha": "{sha}",
-"run_id": 1, "run_attempt": 1, "event": {{"kind": "branch", "branch": "main"}}}}"#
+"run_id": 1, "run_attempt": 1, "event_name": "push", "event": {{"kind": "branch", "branch": "main"}}}}"#
             ),
         )
         .context("write the trusted facts")?;
