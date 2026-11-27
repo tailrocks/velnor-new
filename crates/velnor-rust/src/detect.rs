@@ -166,6 +166,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         })
         .transpose()?;
     crate::config_test_lane::check(&config, &rust_roots)?;
+    crate::config_workspace_features::check(view, &config, &rust_roots)?;
     crate::config_root_timeouts::check(&config, &rust_roots)?;
     crate::config_check_configurations::check(view, &config, &rust_roots, helper.as_ref())?;
     let toolchain = toolchain(&view.files)?;

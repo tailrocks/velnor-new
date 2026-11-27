@@ -200,19 +200,15 @@ impl fmt::Display for Reason {
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
             | Self::UnknownTestLanePackage(_)
-            | Self::TestLaneFeatureConflict { .. } => self.fmt_test_lane(f),
-            Self::UnknownRootTimeoutRoot(root) => write!(
-                f,
-                "root_timeouts names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
-            Self::UnknownCheckConfigurationsRoot(root) => write!(
-                f,
-                "check_configurations names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
-            Self::UnknownTestSetupRoot(root) => write!(
-                f,
-                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
+            | Self::TestLaneFeatureConflict { .. }
+            | Self::UnknownWorkspaceFeature { .. }
+            | Self::TestLaneDuplicatesWorkspaceFeatures { .. }
+            | Self::GatedHarnessWithWorkspaceFeatures { .. } => self.fmt_test_lane(f),
+            Self::UnknownRootTimeoutRoot(root) => unknown_root(f, "root_timeouts", root),
+            Self::UnknownCheckConfigurationsRoot(root) => {
+                unknown_root(f, "check_configurations", root)
+            }
+            Self::UnknownTestSetupRoot(root) => unknown_root(f, "test_setup", root),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
@@ -260,4 +256,11 @@ impl fmt::Display for Reason {
             }
         }
     }
+}
+
+fn unknown_root(f: &mut fmt::Formatter<'_>, key: &str, root: &str) -> fmt::Result {
+    write!(
+        f,
+        "{key} names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+    )
 }

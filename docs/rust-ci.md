@@ -115,6 +115,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `shape` | `"auto"` | `one-job`, `lint-test`, `groups` or `auto` |
 | `test_groups` | none | `[[test_groups]]` entries, see above |
 | `test_lane` | none | `[[test_lane]]` feature test lanes; a lane with `filter` also gets a `Test lane guard` step, `job = "parallel"` runs the lane as its own job (needs velnor-ci 0.1.107 or later), and any lane needs velnor-ci 0.1.93 or later, see `generator/CONFIG.md` |
+| `workspace_features` | none | features the workspace-wide `Lint`, `Documentation`, `Test` and `Doctests` steps, the test archive, the audit build and `test-groups check` build with, so one compile serves them all (needs velnor-ci 0.1.117 or later; refused when a name is not a plain `[features]` key of a package of every root, or a package has a `harness = false` target with `required-features`), see `generator/CONFIG.md` |
 | `on_main` | `"affected"` | what a push or merge queue run selects: `affected` or `everything` |
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |

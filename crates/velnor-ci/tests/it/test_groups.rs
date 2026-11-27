@@ -47,8 +47,12 @@ fn list_for(repo: &Repo, name: &str, filter: &str, suites: &[Suite<'_>]) {
 }
 
 fn check(repo: &Repo, groups: &[(&str, &str)]) -> Output {
+    check_with(repo, &[], groups)
+}
+
+fn check_with(repo: &Repo, options: &[&str], groups: &[(&str, &str)]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command.args(["test-groups", "check"]);
+    command.args(["test-groups", "check"]).args(options);
     for (name, filter) in groups {
         command.args(["--group", &format!("{name}={filter}")]);
     }
@@ -163,6 +167,26 @@ fn it_lists_each_group_once_with_its_filter_unchanged() {
         format!("{LIST_ARGS} -E {DATABASE}\n{LIST_ARGS} -E {SHELL}\n")
     );
     assert!(text(&output.stderr).contains("Compiling fake"));
+}
+
+#[test]
+fn the_features_of_the_build_reach_every_listing_so_it_reuses_the_build() {
+    let repo = fixture("test-groups-features");
+    let none: &[Case] = &[];
+    list_for(&repo, "database", DATABASE, &[(APP, "listed", none)]);
+    list_for(&repo, "shell", SHELL, &[(APP, "listed", none)]);
+    let output = check_with(
+        &repo,
+        &["--features", "local-mode,extra"],
+        &[("database", DATABASE), ("shell", SHELL)],
+    );
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    assert_eq!(
+        calls(&repo),
+        format!(
+            "{LIST_ARGS} --features local-mode,extra -E {DATABASE}\n{LIST_ARGS} --features local-mode,extra -E {SHELL}\n"
+        )
+    );
 }
 
 #[test]

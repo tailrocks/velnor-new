@@ -462,6 +462,30 @@ job = "parallel"
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
+## Workspace features
+
+A repository whose workspace-wide lint, docs and tests should build with a Cargo feature on lists it once, at the top of the file. The clippy, rustdoc, nextest and doctest commands of every Rust root then build the workspace with those features, so the workspace is compiled once instead of once with the default features and again for a `[[test_lane]]`.
+
+```toml
+workspace_features = ["local-mode"]
+```
+
+`workspace_features` is a list of distinct plain feature names; each name uses letters, digits and `_-+.`. The key is optional; without it, or with an empty list, the commands build with the default features.
+
+Each affected command gains `--features 'local-mode'` and keeps its name: the `Lint`, `Documentation`, `Test` and `Doctests` steps, the `Build tests` step and the nextest archive when the shape has them, and the `Build every target` step of the inputs audit (including the one that runs before the doctests). A root with two or more `[[test_groups]]` also passes the features to `velnor-ci test-groups check` as `--features`, so its `cargo nextest list` calls reuse the build the archive holds and list the tests the archive holds. Their ids, gates and filters do not change. The per-package `Check <package> alone` steps, the feature lanes and the direct test targets (`cargo test -p <package> --test <target>` for a `harness = false` binary that nextest does not run) never take the key. The `-p` package may not define the feature, and cargo refuses a feature the selected package lacks, so these commands keep the features their own configuration names. The feature-off build stays compiled by the alone checks, which run under `velnor-ci inputs build` in a job that audits, so their reads are in `.velnor/rust-inputs.lock`; the group jobs run from the archive and build nothing. `velnor-ci inputs audit` keeps skipping a target with `required-features` when it checks that a build is complete, because the generator cannot predict which of those targets cargo builds; it still reads the dependency information of every target the build made.
+
+`velnor-gen generate` does not resolve Cargo features, so it refuses every configuration whose outcome would depend on resolution:
+
+- A name is a plain feature name. A name with a slash (`package/feature`, `package?/feature`) or `dep:` is refused as an invalid value.
+- Each name must be a key of the `[features]` table of at least one package of every root, or `velnor-gen generate` refuses the key, naming the root and the feature. An implicit feature of an optional dependency does not count until a `[features]` entry of the same name exists. When the root manifest is a package and the resolver is 1 (`resolver = "1"`, or no `resolver` key and an edition before 2021; an edition inherited with `edition.workspace = true` is read from `[workspace.package]`), cargo applies a plain name to the root package alone, so that package must define it and a member's definition does not count.
+- The key is refused when a package of a root has a `harness = false` target with a non-empty `required-features`, naming the package and the target, because the generator cannot tell whether cargo builds that target with the features on. This covers a `[[test]]`, `[[bin]]`, `[[example]]` and `[[bench]]` target, so a repository with a gated `harness = false` bench is refused too. A repository with such a target keeps a `[[test_lane]]`.
+
+The input lock follows the build that CI runs. The audit in CI builds with the workspace features on and records every unit it built, so a lock written there is complete. A local `velnor-ci inputs audit --write` that ran without the features (for example after `velnor-ci inputs build -- cargo build --workspace --all-targets`) writes a lock that lacks the units the feature-on build adds, and the audit then fails the pull request in CI with the units the lock does not list. It fails loudly and never passes silently. Run the local builds with the same `--features '<names>'` as the generated steps, then `velnor-ci inputs audit --write`, and commit the result.
+
+A `[[test_lane]]` whose `features` are all listed in `workspace_features` is refused as well: the main steps already build and run those tests with the features, so the lane would compile the workspace a second time. Delete the lane; a lane that selects other features, or `all_features` or `no_default_features`, stays valid.
+
+The key needs velnor-ci 0.1.117 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know; `velnor-gen generate` refuses an older pin when the key is written, and `velnor-gen pin-helper 0.1.117` fixes it.
+
 ## Unused dependencies
 
 The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool. `cargo machete` reads every `Cargo.toml` below the root, not only the workspace members, and it skips what `.gitignore` and `.ignore` exclude. A repository that tracks manifests which are not crates (test samples, fixtures) lists them in a root `.ignore`; velnor-new does so for `generator/samples/velnor-new/view/crates/`.

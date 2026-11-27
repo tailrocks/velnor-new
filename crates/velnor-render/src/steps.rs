@@ -339,6 +339,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
+            &step.features,
             audit,
             lane,
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
@@ -350,7 +351,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         }
         StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::MergeQueueCheck => crate::helper_steps::merge_queue_step(),
-        StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
+        StepKind::TestGroupsCheck(g) => crate::helper_steps::test_groups_step(g, &step.features),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),
         StepKind::RestoredTargets {

@@ -32,6 +32,30 @@ impl CargoCommand {
     }
 
     #[must_use]
+    pub const fn takes_workspace_features(&self) -> bool {
+        match self {
+            Self::Clippy { .. }
+            | Self::Doc
+            | Self::NextestBuild
+            | Self::NextestArchive { .. }
+            | Self::NextestRun { .. }
+            | Self::Doctest
+            | Self::BuildAll => true,
+            Self::BuildBinary { .. }
+            | Self::FmtCheck
+            | Self::CheckAlone { .. }
+            | Self::NextestFeatures { .. }
+            | Self::ClippyFeatures { .. }
+            | Self::DocFeatures { .. }
+            | Self::LaneGuard { .. }
+            | Self::NextestRunArchive { .. }
+            | Self::TestTarget { .. }
+            | Self::Deny { .. }
+            | Self::Machete => false,
+        }
+    }
+
+    #[must_use]
     pub const fn is_compile_check(&self) -> bool {
         match self {
             Self::Clippy { .. }

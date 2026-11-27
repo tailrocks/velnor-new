@@ -13,7 +13,7 @@ const PREFIX: &str = "velnor-ci test-groups";
 const LISTED_LIMIT: usize = 50;
 
 pub fn run(args: &TestGroupsCheckArgs) -> ExitCode {
-    match check(&args.groups) {
+    match check(&args.groups, args.features.as_deref()) {
         Ok(report) => {
             print!("{report}");
             ExitCode::SUCCESS
@@ -25,7 +25,7 @@ pub fn run(args: &TestGroupsCheckArgs) -> ExitCode {
     }
 }
 
-fn check(groups: &[GroupFilter]) -> Result<String, CiError> {
+fn check(groups: &[GroupFilter], features: Option<&str>) -> Result<String, CiError> {
     let mut names = BTreeSet::new();
     for group in groups {
         if !names.insert(group.name.as_str()) {
@@ -37,7 +37,12 @@ fn check(groups: &[GroupFilter]) -> Result<String, CiError> {
     }
     let mut owners: BTreeMap<TestKey, Vec<&str>> = BTreeMap::new();
     for group in groups {
-        let listing = list(PREFIX, &["-E".to_owned(), group.filter.clone()])?;
+        let arguments: Vec<String> = features
+            .into_iter()
+            .flat_map(|features| ["--features".to_owned(), features.to_owned()])
+            .chain(["-E".to_owned(), group.filter.clone()])
+            .collect();
+        let listing = list(PREFIX, &arguments)?;
         let selected = listing.selected();
         for (key, case) in listing.cases() {
             if !case.ignored && selected.contains(&key) {

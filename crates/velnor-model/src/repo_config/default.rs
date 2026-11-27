@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    CacheDebug, CheckoutScope, CiDebugInfo, DocsRun, FullRun, MbxRemote, MbxStore, OnMain, PrCi,
-    PushAfterMergeGroup, RustCiConfig,
+    CacheDebug, CheckoutScope, CiDebugInfo, DocsRun, FullRun, LaneFeatures, MbxRemote, MbxStore,
+    OnMain, PrCi, PushAfterMergeGroup, RustCiConfig,
 };
 use crate::hosted::HostedRunners;
 use crate::ids::RunnerLabel;
@@ -46,6 +46,7 @@ impl Default for RustCiConfig {
             test_setup: Vec::new(),
             check_configurations: Vec::new(),
             test_lanes: Vec::new(),
+            workspace_features: LaneFeatures::default(),
             budget: None,
             lint: Vec::new(),
             test_groups: Vec::new(),

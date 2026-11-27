@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, GroupFilter, HelperCommand, InputsCli, MBX_ACTION_RELEASE, MERGE_GROUP_STEP,
-    PrepareLocks, RepoPath,
+    CratesMirror, GroupFilter, HelperCommand, InputsCli, LaneFeatures, MBX_ACTION_RELEASE,
+    MERGE_GROUP_STEP, PrepareLocks, RepoPath,
 };
 
 use crate::base_steps::base_age;
@@ -217,8 +217,11 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     }
 }
 
-pub(crate) fn test_groups_step(groups: &[GroupFilter]) -> RenderedStep {
-    let mut run = "velnor-ci test-groups check".to_owned();
+pub(crate) fn test_groups_step(groups: &[GroupFilter], features: &LaneFeatures) -> RenderedStep {
+    let mut run = format!(
+        "velnor-ci test-groups check{}",
+        crate::cargo::feature_flag(&features.names)
+    );
     for group in groups {
         run.push_str(" --group ");
         run.push_str(&shell_word(&format!("{}={}", group.name, group.filter)));
