@@ -6,6 +6,7 @@ use anyhow::Result;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 
 struct Restore<'a>(&'a Path);
 
@@ -204,6 +205,45 @@ fn expr_hash_files_errors_on_a_dangling_symlink_it_would_hash() -> Result<()> {
         );
         assert!(message.contains("dangling.txt"), "{message}");
     }
+    assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
+    Ok(())
+}
+
+fn make_fifo(path: &Path) -> Result<()> {
+    let status = Command::new("mkfifo").arg(path).status()?;
+    assert!(status.success(), "mkfifo failed for {}", path.display());
+    Ok(())
+}
+
+#[test]
+fn expr_hash_files_fails_on_a_matched_file_that_is_not_regular() -> Result<()> {
+    let dir = TempDir::new()?;
+    dir.write("ws/a.txt", "a")?;
+    dir.write("ws/sub/b.txt", "b")?;
+    fs::create_dir_all(dir.path().join("ws"))?;
+    make_fifo(&dir.path().join("ws/pipe.txt"))?;
+    dir.symlink("ws/link.txt", &dir.workspace()?.join("pipe.txt"))?;
+    dir.symlink("ws/dirlink.txt", &dir.workspace()?.join("sub"))?;
+    let env = dir.env();
+
+    for pattern in ["*.txt", "pipe.txt", "link.txt", "**"] {
+        let message = error_text(&format!("hashFiles('{pattern}')"), &env)?;
+        assert!(
+            message.starts_with(&format!("hashFiles('{pattern}') failed.")),
+            "{message}"
+        );
+        assert!(
+            message.ends_with("pipe.txt: not a regular file"),
+            "{message}"
+        );
+    }
+    assert_eq!(
+        text(
+            "hashFiles('*.txt', '!pipe.txt', '!link.txt', '!dirlink.txt')",
+            &env
+        )?,
+        expected_digest(&[b"a"])
+    );
     assert_eq!(text("hashFiles('a.txt')", &env)?, expected_digest(&[b"a"]));
     Ok(())
 }

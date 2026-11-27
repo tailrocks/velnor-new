@@ -7,6 +7,8 @@ mod expr_functions;
 mod expr_hash_files;
 #[path = "expr/hash_files_fs.rs"]
 mod expr_hash_files_fs;
+#[path = "expr/hash_files_minimatch.rs"]
+mod expr_hash_files_minimatch;
 #[path = "expr/hash_files_patterns.rs"]
 mod expr_hash_files_patterns;
 #[path = "expr/hash_files_unicode.rs"]
@@ -17,6 +19,8 @@ mod expr_indexing;
 mod expr_limits;
 #[path = "expr/memory.rs"]
 mod expr_memory;
+#[path = "expr/minimatch_corpus.rs"]
+mod expr_minimatch_corpus;
 #[path = "expr/operators.rs"]
 mod expr_operators;
 #[path = "expr/ordinal_case.rs"]

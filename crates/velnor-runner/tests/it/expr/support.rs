@@ -14,7 +14,7 @@ use velnor_runner::context_value::ContextValue;
 use velnor_runner::expr::{ExprEnv, RootContext, Value, evaluate_expression, evaluate_template};
 
 const LINEAR_TIME_LIMIT: Duration = Duration::from_secs(10);
-const MISMATCH_PREFIX_CHARS: usize = 200;
+const MISMATCH_WINDOW_CHARS: usize = 100;
 
 pub(crate) fn env_with(contexts: &[(RootContext, &str)]) -> Result<ExprEnv> {
     let mut env = ExprEnv::new(PathBuf::from("/nonexistent-workspace"));
@@ -78,13 +78,23 @@ pub(crate) fn same_text(actual: &str, expected: &str) -> Result<()> {
     if actual == expected {
         return Ok(());
     }
-    let prefix = |text: &str| text.chars().take(MISMATCH_PREFIX_CHARS).collect::<String>();
+    let index = actual
+        .chars()
+        .zip(expected.chars())
+        .take_while(|(left, right)| left == right)
+        .count();
+    let window = |text: &str| {
+        text.chars()
+            .skip(index.saturating_sub(MISMATCH_WINDOW_CHARS / 2))
+            .take(MISMATCH_WINDOW_CHARS)
+            .collect::<String>()
+    };
     bail!(
-        "text differs: actual has {} chars and starts {:?}; expected has {} chars and starts {:?}",
+        "text differs at char {index}: actual has {} chars and reads {:?} there; expected has {} chars and reads {:?} there",
         actual.chars().count(),
-        prefix(actual),
+        window(actual),
         expected.chars().count(),
-        prefix(expected)
+        window(expected)
     )
 }
 
@@ -170,4 +180,24 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root);
     }
+}
+
+#[test]
+fn support_same_text_shows_the_first_difference_far_from_the_start() {
+    let expected = "x".repeat(5_000);
+    let actual = format!("{}y{}", "x".repeat(3_000), "x".repeat(1_999));
+
+    let message = same_text(&actual, &expected)
+        .expect_err("different texts")
+        .to_string();
+
+    assert!(
+        message.starts_with("text differs at char 3000:"),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("{}y{}", "x".repeat(50), "x".repeat(49))),
+        "{message}"
+    );
+    assert!(message.len() < 500, "{} bytes", message.len());
 }

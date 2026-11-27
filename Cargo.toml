@@ -29,7 +29,6 @@ resolver = "3"
 [workspace.dependencies]
 base64 = { version = "=0.23.1" }
 sha2 = { version = "=0.11.1" }
-globset = { version = "=0.4.20" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
 serde_path_to_error = { version = "=0.1.20" }

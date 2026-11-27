@@ -8,6 +8,7 @@ mod format;
 mod glob;
 mod hash_files;
 mod index;
+mod js_class;
 mod lexer;
 mod memory;
 mod node;
@@ -15,9 +16,10 @@ mod number;
 mod parser;
 mod pattern;
 mod render;
+mod segment;
 mod template;
 mod token;
-mod unit_glob;
+mod translate;
 mod value;
 
 pub use env::{ExprEnv, JobStatus, RootContext};
@@ -25,3 +27,10 @@ pub use error::{ExprError, ParseError, ParseErrorKind};
 pub use eval::{evaluate_condition, evaluate_expression};
 pub use template::evaluate_template;
 pub use value::{ArrayValue, ObjectValue, Value};
+
+#[cfg(feature = "test-support")]
+pub fn segment_matches(pattern: &str, name: &str) -> Result<bool, String> {
+    pattern::Seg::compile(pattern)
+        .map(|segment| segment.is_match(name))
+        .map_err(|error| error.to_string())
+}
