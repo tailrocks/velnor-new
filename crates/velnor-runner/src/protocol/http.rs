@@ -130,7 +130,17 @@ pub async fn github_json_request(
 pub(crate) struct OAuthResponse {
     pub(crate) status: u16,
     pub(crate) body: String,
+    pub(crate) json: bool,
     pub(crate) retry_after: Option<String>,
+}
+
+fn is_json_content(headers: &HeaderMap, body: &str) -> bool {
+    !body.is_empty()
+        && headers
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(';').next())
+            .is_some_and(|media| media.trim().eq_ignore_ascii_case("application/json"))
 }
 
 pub(crate) async fn oauth_form_request(
@@ -160,6 +170,7 @@ pub(crate) async fn oauth_form_request(
         .get(RETRY_AFTER)
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned);
+    let headers = response.headers().clone();
     let body = response.text().await.map_err(|error| {
         anyhow::anyhow!(
             "read OAuth token response: {}",
@@ -168,6 +179,7 @@ pub(crate) async fn oauth_form_request(
     })?;
     Ok(OAuthResponse {
         status,
+        json: is_json_content(&headers, &body),
         body,
         retry_after,
     })

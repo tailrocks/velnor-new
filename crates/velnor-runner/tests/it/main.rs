@@ -62,6 +62,7 @@ mod lifecycle;
 mod lifecycle_busy;
 mod lifecycle_cancel;
 mod lifecycle_logs;
+mod lifecycle_refresh;
 mod lifecycle_renew;
 mod lifecycle_report;
 mod lifecycle_session;

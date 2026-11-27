@@ -35,20 +35,18 @@ struct Failures {
 
 impl Failures {
     fn allow_retry(&mut self, error: &anyhow::Error) -> bool {
-        match oauth_error_kind(error) {
-            Some(OAuthErrorKind::RegistrationDeleted | OAuthErrorKind::Refused) => false,
-            Some(OAuthErrorKind::ClockSkew) => {
-                self.clock_skews += 1;
-                self.clock_skews < CLOCK_SKEW_ATTEMPTS
-            }
-            Some(OAuthErrorKind::Other) | None => match broker_error_category(error) {
-                Some(BrokerErrorCategory::Conflict) => {
-                    self.conflicts += 1;
-                    self.conflicts < SESSION_CONFLICT_ATTEMPTS
-                }
-                _ => is_retriable(error),
-            },
+        if !is_retriable(error) {
+            return false;
         }
+        if oauth_error_kind(error) == Some(OAuthErrorKind::ClockSkew) {
+            self.clock_skews += 1;
+            return self.clock_skews < CLOCK_SKEW_ATTEMPTS;
+        }
+        if broker_error_category(error) == Some(BrokerErrorCategory::Conflict) {
+            self.conflicts += 1;
+            return self.conflicts < SESSION_CONFLICT_ATTEMPTS;
+        }
+        true
     }
 }
 

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use velnor_runner::exec::JobResult;
-use velnor_runner::lifecycle::LifecycleOutcome;
+use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in};
@@ -152,5 +152,52 @@ async fn lifecycle_keeps_the_tool_cache_after_a_job() -> Result<()> {
         "kept\n"
     );
     assert!(!scratch.work_dir().join("workspace").exists());
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_refuses_a_tool_cache_inside_a_directory_it_clears_for_every_job() -> Result<()> {
+    let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
+    for inside in ["workspace", "workspace/tools", "temp/tools", "logs"] {
+        let scratch = Scratch::new()?;
+        let cache = scratch.work_dir().join(inside);
+
+        let outcome = run_in(
+            &mock,
+            &scratch,
+            Settings::new()
+                .caching_tools_in(cache)
+                .within(CANCEL_BUDGET),
+        )
+        .await?;
+
+        assert!(
+            matches!(outcome, Err(LifecycleError::WorkDir { .. })),
+            "{inside}: {outcome:?}"
+        );
+    }
+    assert!(mock.requests_to("POST", "/broker/session")?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_accepts_a_tool_cache_whose_name_only_starts_like_a_cleared_directory()
+-> Result<()> {
+    let script = "echo kept > \"$RUNNER_TOOL_CACHE/marker\"";
+    let mock = MockGithub::start(fixture_job("hello", Some(script))?, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+    let cache = scratch.work_dir().join("workspace-cache");
+
+    let outcome = run_in(
+        &mock,
+        &scratch,
+        Settings::new()
+            .caching_tools_in(cache.clone())
+            .within(CANCEL_BUDGET),
+    )
+    .await??;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    assert_eq!(std::fs::read_to_string(cache.join("marker"))?, "kept\n");
     Ok(())
 }

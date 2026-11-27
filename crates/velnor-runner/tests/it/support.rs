@@ -64,6 +64,7 @@ pub(crate) struct Reply {
     content_type: &'static str,
     body: String,
     stall: bool,
+    hang_up: bool,
     delay: Duration,
     header: Option<(&'static str, &'static str)>,
 }
@@ -79,6 +80,7 @@ impl Reply {
             content_type: "text/plain",
             body: body.to_owned(),
             stall: false,
+            hang_up: false,
             delay: Duration::ZERO,
             header: None,
         }
@@ -87,6 +89,13 @@ impl Reply {
     pub(crate) fn stall() -> Self {
         Self {
             stall: true,
+            ..Self::status(200)
+        }
+    }
+
+    pub(crate) fn hang_up() -> Self {
+        Self {
+            hang_up: true,
             ..Self::status(200)
         }
     }
@@ -107,6 +116,7 @@ impl Reply {
             content_type: "application/json",
             body: body.to_string(),
             stall: false,
+            hang_up: false,
             delay: Duration::ZERO,
             header: None,
         }
@@ -242,6 +252,9 @@ async fn serve_connection(mut stream: TcpStream, state: Arc<Mutex<State>>) {
     };
     if reply.stall {
         std::future::pending::<()>().await;
+    }
+    if reply.hang_up {
+        return;
     }
     tokio::time::sleep(reply.delay).await;
     if let Ok(mut state) = lock(&state)

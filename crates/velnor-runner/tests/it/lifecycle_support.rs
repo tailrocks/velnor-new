@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -11,6 +12,7 @@ use velnor_runner::protocol::{RetryDelays, RunnerOs, TokenBackoff};
 use velnor_runner::secret::Secret;
 
 use super::exec_support::{Scratch, fixture_path};
+use super::run_cli::until;
 use super::support::mock_github::MockGithub;
 
 pub(crate) const RUN_BUDGET: Duration = Duration::from_secs(60);
@@ -20,7 +22,7 @@ pub(crate) fn fixture_job(name: &str, script: Option<&str>) -> Result<Value> {
     job_replacing(name, script.map(|script| ("echo hello", script)))
 }
 
-fn replace_literal(value: &mut Value, from: &str, to: &str) -> bool {
+pub(crate) fn replace_literal(value: &mut Value, from: &str, to: &str) -> bool {
     match value {
         Value::String(text) if text == from => {
             to.clone_into(text);
@@ -61,6 +63,8 @@ pub(crate) struct Settings {
     pub(crate) cancel_timeout_floor: Duration,
     pub(crate) upload_block_budget: Duration,
     pub(crate) session_retry_interval: Duration,
+    pub(crate) session_close_timeout: Duration,
+    pub(crate) tool_cache: Option<PathBuf>,
     pub(crate) poll_error_delay: Duration,
     pub(crate) report_budget: Duration,
     pub(crate) upload_drain_budget: Duration,
@@ -79,6 +83,8 @@ impl Settings {
             cancel_timeout_floor: Duration::from_secs(60),
             upload_block_budget: Duration::from_secs(60),
             session_retry_interval: Duration::from_millis(50),
+            session_close_timeout: Duration::from_secs(30),
+            tool_cache: None,
             poll_error_delay: Duration::from_millis(50),
             report_budget: Duration::from_secs(10),
             upload_drain_budget: Duration::from_secs(600),
@@ -107,6 +113,16 @@ impl Settings {
 
     pub(crate) fn retrying_sessions_every(mut self, interval: Duration) -> Self {
         self.session_retry_interval = interval;
+        self
+    }
+
+    pub(crate) fn closing_the_session_within(mut self, timeout: Duration) -> Self {
+        self.session_close_timeout = timeout;
+        self
+    }
+
+    pub(crate) fn caching_tools_in(mut self, directory: PathBuf) -> Self {
+        self.tool_cache = Some(directory);
         self
     }
 
@@ -167,6 +183,7 @@ pub(crate) async fn run_in(
         upload_block_budget: settings.upload_block_budget,
         cancel_poll_error_delay: settings.poll_error_delay,
         session_retry_interval: settings.session_retry_interval,
+        session_close_timeout: settings.session_close_timeout,
         report_budget: settings.report_budget,
         upload_drain_budget: settings.upload_drain_budget,
         feed_flush_interval: settings.feed_flush_interval,
@@ -174,7 +191,7 @@ pub(crate) async fn run_in(
             token: settings.token_backoff,
             ..RetryDelays::IMMEDIATE
         },
-        tool_cache: None,
+        tool_cache: settings.tool_cache,
         os: settings.os,
         adapters: AdapterRegistry::empty(),
     };
@@ -197,14 +214,23 @@ pub(crate) async fn run_with(mock: &MockGithub, settings: Settings) -> Result<Li
     Ok(outcome)
 }
 
-pub(crate) fn shutdown_after(delay: Duration) -> JobCancel {
-    let shutdown = JobCancel::new();
-    let signal = shutdown.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(delay).await;
+pub(crate) async fn run_until(
+    mock: &MockGithub,
+    scratch: &Scratch,
+    mut settings: Settings,
+    what: &str,
+    mut happened: impl FnMut() -> Result<bool>,
+) -> Result<Result<LifecycleOutcome, LifecycleError>> {
+    let signal = JobCancel::new();
+    settings.shutdown = signal.clone();
+    let trigger = async {
+        until(what, || Ok(happened()?.then_some(()))).await?;
         signal.cancel();
-    });
-    shutdown
+        anyhow::Ok(())
+    };
+    let (outcome, triggered) = tokio::join!(run_in(mock, scratch, settings), trigger);
+    triggered?;
+    outcome
 }
 
 pub(crate) async fn run(mock: &MockGithub, renew_interval: Duration) -> Result<LifecycleOutcome> {

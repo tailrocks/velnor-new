@@ -4,11 +4,12 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use velnor_runner::exec::{JobCancel, JobResult};
+use velnor_runner::exec::JobResult;
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
+use velnor_runner::protocol::TokenBackoff;
 
 use super::exec_support::Scratch;
-use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run_with};
+use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run_until, run_with};
 use super::support::mock_github::{
     Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, Online, STALE_OAUTH_TOKEN,
 };
@@ -43,12 +44,7 @@ async fn lifecycle_stops_acquiring_after_five_failed_token_exchanges() -> Result
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
     let scratch = Scratch::new()?;
 
-    let outcome = run_in(
-        &mock,
-        &scratch,
-        Settings::new().within(Duration::from_secs(5)),
-    )
-    .await?;
+    let outcome = run_in(&mock, &scratch, Settings::new().within(CANCEL_BUDGET)).await?;
 
     assert!(
         matches!(outcome, Err(LifecycleError::Acquire(_))),
@@ -64,19 +60,42 @@ async fn lifecycle_stops_acquiring_after_five_failed_token_exchanges() -> Result
     Ok(())
 }
 
+const POLL_RETRY_DELAY: Duration = Duration::from_millis(400);
+
 #[tokio::test]
-async fn lifecycle_keeps_waiting_for_a_job_when_a_forced_token_refresh_fails_once() -> Result<()> {
+async fn lifecycle_keeps_waiting_for_a_job_when_a_forced_token_refresh_loses_the_connection()
+-> Result<()> {
     let behavior = Behavior {
         online: Online::ForceTokenRefreshThenJob,
-        oauth: OAuthTokens::UnavailableAfterSignIn(1),
+        oauth: OAuthTokens::HangsUpAfterSignIn,
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
 
-    let outcome = run_with(&mock, Settings::new().within(CANCEL_BUDGET)).await?;
+    let outcome = run_with(
+        &mock,
+        Settings::new()
+            .retrying_polls_every(POLL_RETRY_DELAY)
+            .within(CANCEL_BUDGET),
+    )
+    .await?;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
-    assert_eq!(mock.polls("Online")?, 2);
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        3,
+        "the sign-in, the refresh that lost the connection and the exchange for the acquire"
+    );
+    let polls: Vec<_> = mock
+        .requests_to("GET", "/broker/message")?
+        .into_iter()
+        .filter(|poll| poll.query("status") == Some("Online"))
+        .collect();
+    assert_eq!(polls.len(), 2);
+    assert!(
+        polls[1].at.duration_since(polls[0].at) >= POLL_RETRY_DELAY,
+        "the poll waited for the retry delay after the failed refresh"
+    );
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");
     Ok(())
 }
@@ -90,16 +109,13 @@ async fn lifecycle_deletes_the_session_with_a_fresh_token_when_the_last_one_expi
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-    let shutdown = JobCancel::new();
-    let signal = shutdown.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        signal.cancel();
-    });
-    let mut settings = Settings::new().within(CANCEL_BUDGET);
-    settings.shutdown = shutdown;
+    let settings = Settings::new().within(CANCEL_BUDGET);
+    let scratch = Scratch::new()?;
 
-    let outcome = run_with(&mock, settings).await?;
+    let outcome = run_until(&mock, &scratch, settings, "the first poll", || {
+        Ok(mock.polls("Online")? >= 1)
+    })
+    .await??;
 
     assert_eq!(outcome, LifecycleOutcome::NoJob);
     let deletes = mock.requests_to("DELETE", "/broker/session")?;
@@ -114,5 +130,41 @@ async fn lifecycle_deletes_the_session_with_a_fresh_token_when_the_last_one_expi
             Some(format!("Bearer {OAUTH_TOKEN}").as_str())
         ]
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_stops_waiting_for_the_session_delete_after_its_timeout() -> Result<()> {
+    let behavior = Behavior {
+        oauth: OAuthTokens::StaleThenFails(503),
+        online: Online::Idle,
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+    let backoff = TokenBackoff {
+        min: Duration::from_secs(2),
+        max: Duration::from_secs(2),
+        coefficient: Duration::ZERO,
+        spread: Duration::ZERO,
+    };
+    let settings = Settings::new()
+        .backing_off_tokens(backoff)
+        .closing_the_session_within(Duration::from_millis(300))
+        .within(CANCEL_BUDGET);
+    let scratch = Scratch::new()?;
+    let started = std::time::Instant::now();
+
+    let outcome = run_until(&mock, &scratch, settings, "the first poll", || {
+        Ok(mock.polls("Online")? >= 1)
+    })
+    .await??;
+
+    assert_eq!(outcome, LifecycleOutcome::NoJob);
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "the five retries of the token client, 10 s, were not waited for: {:?}",
+        started.elapsed()
+    );
+    mock.server.only_request("DELETE", "/broker/session")?;
     Ok(())
 }

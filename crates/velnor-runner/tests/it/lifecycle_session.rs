@@ -10,7 +10,7 @@ use velnor_runner::protocol::RunnerOs;
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::{
-    CANCEL_BUDGET, Settings, fixture_job, job_replacing, run, run_in, run_with, shutdown_after,
+    CANCEL_BUDGET, Settings, fixture_job, job_replacing, run, run_in, run_until, run_with,
 };
 use super::support::RecordedRequest;
 use super::support::mock_github::{
@@ -208,11 +208,13 @@ async fn lifecycle_stops_acquiring_when_shutdown_arrives() -> Result<()> {
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-    let mut settings = Settings::new().within(CANCEL_BUDGET);
-    settings.shutdown = shutdown_after(Duration::from_millis(500));
+    let settings = Settings::new().within(CANCEL_BUDGET);
 
     let scratch = Scratch::new()?;
-    let outcome = run_in(&mock, &scratch, settings).await??;
+    let outcome = run_until(&mock, &scratch, settings, "the acquire request", || {
+        Ok(!mock.requests_to("POST", "/run/acquirejob")?.is_empty())
+    })
+    .await??;
 
     assert_eq!(outcome, LifecycleOutcome::NoJob);
     assert!(mock.requests_to("POST", "/run/completejob")?.is_empty());
