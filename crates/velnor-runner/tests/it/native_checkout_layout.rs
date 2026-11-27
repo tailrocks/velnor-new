@@ -95,3 +95,13 @@ fn a_mirror_whose_refs_directory_vanished_is_initialised_again() -> Result<()> {
     git(&rig.mirror(), &["for-each-ref"])?;
     Ok(())
 }
+
+#[test]
+fn the_test_git_helper_never_finds_a_repository_above_its_directory() -> Result<()> {
+    let rig = Rig::new()?;
+    let inner = rig.root.join("work/inner");
+    std::fs::create_dir_all(&inner)?;
+    assert!(git(&rig.root.join("work"), &["rev-parse", "HEAD"]).is_ok());
+    assert!(git(&inner, &["rev-parse", "HEAD"]).is_err());
+    Ok(())
+}

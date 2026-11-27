@@ -6,9 +6,10 @@ use std::time::{Duration, SystemTime};
 use anyhow::Result;
 
 use crate::exec_support::Scratch;
-use crate::native_checkout::{Rig, git};
+use crate::native_checkout::{Rig, finish, git};
+use crate::native_checkout_env::wrapper_env;
 use crate::native_checkout_repair::{object_path, overwrite};
-use crate::native_checkout_walk::{import, publish, started};
+use crate::native_checkout_walk::{checks_out, import, publish, started, warm};
 
 const VERIFIED: &str = "--verify-objects";
 const WALKED: &str = "\"cat-file\",\"--batch\"]";
@@ -167,5 +168,37 @@ fn a_repair_replaces_a_branch_by_one_under_its_name() -> Result<()> {
         &rig.mirror(),
         &["rev-parse", "--verify", "-q", "refs/heads/topic/part"],
     )?;
+    Ok(())
+}
+
+#[test]
+fn a_sound_result_from_a_transient_failure_does_not_hide_later_damage_to_the_window() -> Result<()>
+{
+    let rig = Rig::new()?;
+    let parent = rig.advance("parent")?;
+    let tip = rig.advance("tip")?;
+    warm(&rig, &tip)?;
+    let transient = rig.root.join("transient");
+    std::fs::write(&transient, "")?;
+    wrapper_env(
+        &rig.root,
+        &format!(
+            "case \" $* \" in *\" checkout-index \"*) [ -f '{}' ] && {{ echo 'No space left on device' >&2; exit 1; }};; esac\n",
+            transient.display()
+        ),
+    )?;
+    let job = rig.job_edit(
+        "checkout_depth2",
+        &tip,
+        &rig.server_url(),
+        &[("\"lit\": \"2\"", "\"lit\": \"3\"")],
+    )?;
+    let ran = finish(rig.start(&job, &Scratch::new()?)?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    std::fs::remove_file(&transient)?;
+    let tree = git(&rig.mirror(), &["rev-parse", &format!("{parent}^{{tree}}")])?;
+    overwrite(&object_path(&rig.mirror(), &tree), b"")?;
+    checks_out(&rig, &tip, 3)?;
+    assert_eq!(rig.refetches(), 1);
     Ok(())
 }

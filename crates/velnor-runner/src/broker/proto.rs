@@ -38,6 +38,20 @@ impl Window {
     pub(crate) const COMMIT: Self = Self::Last(NonZeroU64::MIN);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum FailedStep {
+    ReadTree,
+    CheckoutIndex,
+    Other,
+}
+
+impl FailedStep {
+    pub(crate) fn reads_only_the_commit(self) -> bool {
+        matches!(self, Self::ReadTree | Self::CheckoutIndex)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum Request {
@@ -47,6 +61,7 @@ pub(crate) enum Request {
     RepairMirror {
         token: Option<Token>,
         window: Window,
+        failed: FailedStep,
     },
 }
 

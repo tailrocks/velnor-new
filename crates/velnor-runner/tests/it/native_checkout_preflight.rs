@@ -93,3 +93,27 @@ fn a_job_whose_facts_cannot_be_built_is_refused_before_its_first_step() -> Resul
     assert!(!rig.trace().exists(), "git ran");
     Ok(())
 }
+
+#[test]
+fn a_sha_256_commit_is_refused_before_its_first_step() -> Result<()> {
+    let rig = Rig::new()?;
+    let job = rig.job_edit(
+        "checkout_depth1",
+        &"a".repeat(64),
+        &rig.server_url(),
+        &[("\"Steps\": [", MARKER_STEP)],
+    )?;
+    let scratch = Scratch::new()?;
+    let ran = finish(rig.start(&job, &scratch)?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert!(
+        ran.stdout
+            .contains("SHA-256 repositories are not supported by velnor-runner"),
+        "{}\n{}",
+        ran.stdout,
+        ran.stderr
+    );
+    assert!(!ran_step_one(&ran), "step 1 ran");
+    assert!(!rig.trace().exists(), "git ran");
+    Ok(())
+}

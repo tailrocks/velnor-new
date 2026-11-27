@@ -16,7 +16,7 @@ use rustix::io::Errno;
 use super::facts::TrustedFacts;
 use super::git::{fetch_env, git, git_args, has_commit, has_tree};
 use super::location::mirror_path;
-use super::proto::Window;
+use super::proto::{FailedStep, Window};
 use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
 use super::within;
@@ -95,6 +95,9 @@ async fn install(mirror: &Path, name: &str, body: &str) -> Result<()> {
         .await
         .context("wait for the mirror write")?
         .with_context(|| format!("write {}", staged.display()))?;
+    if is_dir(&target).await {
+        remove_entry(&target).await?;
+    }
     tokio::fs::rename(&staged, &target)
         .await
         .with_context(|| format!("replace {}", target.display()))
@@ -294,12 +297,14 @@ async fn repair_locked(
     facts: &TrustedFacts,
     token: Option<&str>,
     window: Window,
+    failed: FailedStep,
 ) -> Result<Repair> {
     let sha = facts.sha.as_str();
-    let cached = sound::is_fresh(mirror, sha, window).await;
+    let remembers = failed.reads_only_the_commit();
+    let cached = remembers && sound::is_fresh(mirror, sha, window).await;
     let scanned = if cached { Window::COMMIT } else { window };
     if quarantine_corrupt(mirror, sha, scanned).await? == Scan::Sound {
-        if !cached {
+        if remembers && !cached {
             let _ = sound::record(mirror, sha, window).await;
         }
         return Ok(Repair::Sound);
@@ -316,10 +321,11 @@ pub(crate) async fn repair(
     facts: &TrustedFacts,
     token: Option<&str>,
     window: Window,
+    failed: FailedStep,
     cap: Duration,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
-    within(cap, repair_locked(&mirror, facts, token, window)).await
+    within(cap, repair_locked(&mirror, facts, token, window, failed)).await
 }
 
 async fn is_dir(path: &Path) -> bool {

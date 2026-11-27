@@ -15,7 +15,7 @@ use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::adapter::ProcessOutcome;
-use super::cancel::{Groups, group_of, terminate};
+use super::cancel::{GroupGuard, Groups, group_of, terminate};
 use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
@@ -233,6 +233,7 @@ async fn drive(
     })?;
     limits.groups.track(&child);
     let group = group_of(&child);
+    let mut guard = GroupGuard::arm(group);
     let (sender, mut lines) = mpsc::channel(LINE_BUFFER);
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
@@ -265,13 +266,15 @@ async fn drive(
             reader.abort();
         }
     }
-    match drained {
+    let ended = match drained {
         Drained::Stopped(stopped) => {
             terminate(&mut child, group).await;
             Ok(stopped)
         }
         Drained::Closed | Drained::Cut => ending,
-    }
+    };
+    guard.disarm();
+    ended
 }
 
 fn log_chunk(out: &mut Output<'_>, chunk: Chunk) {

@@ -22,6 +22,12 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
         .args(args)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env(
+            "GIT_CEILING_DIRECTORIES",
+            dir.parent()
+                .and_then(|parent| parent.canonicalize().ok())
+                .unwrap_or_default(),
+        )
         .env("GIT_AUTHOR_NAME", "Test")
         .env("GIT_AUTHOR_EMAIL", "test@example.com")
         .env("GIT_COMMITTER_NAME", "Test")

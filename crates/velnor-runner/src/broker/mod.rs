@@ -21,7 +21,7 @@ use mirror::Repair;
 pub(crate) use facts::TrustedFacts;
 pub(crate) use git::{TREE_PROBE, git_args, isolate};
 pub(crate) use location::mirror_path;
-pub(crate) use proto::{Request, Response, Token, Window};
+pub(crate) use proto::{FailedStep, Request, Response, Token, Window};
 
 const REPAIR_CAP: Duration = Duration::from_mins(10);
 
@@ -63,9 +63,14 @@ impl Broker {
                     .await
                     .map(|notices| Response::Done { notices })
             }
-            Request::RepairMirror { token, window } => {
+            Request::RepairMirror {
+                token,
+                window,
+                failed,
+            } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::repair(&self.root, &self.facts, token, window, self.repair_cap)
+                let cap = self.repair_cap;
+                mirror::repair(&self.root, &self.facts, token, window, failed, cap)
                     .await
                     .map(|repair| match repair {
                         Repair::Sound => Response::Sound,

@@ -9,7 +9,8 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use crate::broker::{
-    Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, Window, git_args, mirror_path,
+    FailedStep, Request, Response, StoreWriter, TREE_PROBE, Token, TrustedFacts, Window, git_args,
+    mirror_path,
 };
 use crate::exec::{
     ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
@@ -169,14 +170,18 @@ fn fetch_depth(inputs: &Inputs) -> Result<Depth, ExecError> {
 enum Materialized {
     Done,
     Ended(StepResult),
-    CheckoutFailed,
+    CheckoutFailed(FailedStep),
 }
 
-async fn step(ctx: &mut StepContext<'_>, args: &[&str]) -> Result<Option<Materialized>, ExecError> {
+async fn step(
+    ctx: &mut StepContext<'_>,
+    args: &[&str],
+    failed: FailedStep,
+) -> Result<Option<Materialized>, ExecError> {
     Ok(match git(ctx, None, args, false).await? {
         ProcessOutcome::Succeeded => None,
         ProcessOutcome::Cancelled => Some(Materialized::Ended(StepResult::Cancelled)),
-        ProcessOutcome::Failed => Some(Materialized::CheckoutFailed),
+        ProcessOutcome::Failed => Some(Materialized::CheckoutFailed(failed)),
     })
 }
 
@@ -208,7 +213,7 @@ async fn materialize(
     match depth {
         Depth::Full => {
             let check = [&["-C", dest_arg], TREE_PROBE.as_slice(), &[sha]].concat();
-            if let Some(ended) = step(ctx, &check).await? {
+            if let Some(ended) = step(ctx, &check, FailedStep::Other).await? {
                 return Ok(ended);
             }
         }
@@ -240,18 +245,24 @@ async fn materialize(
                 source.as_str(),
                 sha,
             ];
-            if let Some(ended) = step(ctx, &fetch).await? {
+            if let Some(ended) = step(ctx, &fetch, FailedStep::Other).await? {
                 return Ok(ended);
             }
         }
     }
-    let steps: [&[&str]; 3] = [
-        &["-C", dest_arg, "read-tree", sha],
-        &["-C", dest_arg, "checkout-index", "-a", "-f", "-u"],
-        &["-C", dest_arg, "update-ref", "--no-deref", "HEAD", sha],
+    let steps: [(FailedStep, &[&str]); 3] = [
+        (FailedStep::ReadTree, &["-C", dest_arg, "read-tree", sha]),
+        (
+            FailedStep::CheckoutIndex,
+            &["-C", dest_arg, "checkout-index", "-a", "-f", "-u"],
+        ),
+        (
+            FailedStep::Other,
+            &["-C", dest_arg, "update-ref", "--no-deref", "HEAD", sha],
+        ),
     ];
-    for args in steps {
-        if let Some(ended) = step(ctx, args).await? {
+    for (failed, args) in steps {
+        if let Some(ended) = step(ctx, args, failed).await? {
             return Ok(ended);
         }
     }
@@ -305,10 +316,11 @@ async fn populate(
     }
     empty_directory(ctx.workspace).await.map_err(invalid)?;
     let mut state = materialize(ctx, &mirror, facts, &dest, depth).await?;
-    if matches!(state, Materialized::CheckoutFailed) {
+    if let Materialized::CheckoutFailed(failed) = state {
         ask(store, ctx, |token| Request::RepairMirror {
             token,
             window: depth.window(),
+            failed,
         })
         .await?;
         empty_directory(ctx.workspace).await.map_err(invalid)?;
@@ -317,7 +329,7 @@ async fn populate(
     match state {
         Materialized::Done => Ok(StepResult::Succeeded),
         Materialized::Ended(ended) => Ok(ended),
-        Materialized::CheckoutFailed => Err(ExecError::Invalid(
+        Materialized::CheckoutFailed(_) => Err(ExecError::Invalid(
             "checkout: git checkout failed".to_owned(),
         )),
     }

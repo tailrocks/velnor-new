@@ -4,7 +4,7 @@
 use std::net::TcpListener;
 use std::time::Duration;
 
-use super::{Broker, Request, Response, TrustedFacts, Window};
+use super::{Broker, FailedStep, Request, Response, TrustedFacts, Window};
 
 fn facts(server: &str) -> TrustedFacts {
     TrustedFacts::parse(
@@ -31,6 +31,7 @@ async fn a_repair_that_outlives_its_cap_reports_failure_and_stops_git() {
     let request = Request::RepairMirror {
         token: None,
         window: Window::COMMIT,
+        failed: FailedStep::CheckoutIndex,
     };
     let response = tokio::time::timeout(Duration::from_secs(60), broker.handle(request)).await;
     let _ = std::fs::remove_dir_all(&root);
@@ -60,6 +61,7 @@ async fn the_cap_does_not_count_the_wait_for_the_mirror_lock() {
     let request = Request::RepairMirror {
         token: None,
         window: Window::COMMIT,
+        failed: FailedStep::CheckoutIndex,
     };
     let response = tokio::time::timeout(Duration::from_secs(120), broker.handle(request)).await;
     release.join().expect("release the lock");

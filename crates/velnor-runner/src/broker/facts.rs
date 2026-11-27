@@ -18,6 +18,10 @@ pub(crate) enum FactsError {
     Missing { field: &'static str },
     #[error("trusted facts: {field} '{value}' is not valid")]
     Invalid { field: &'static str, value: String },
+    #[error(
+        "trusted facts: sha '{0}' is a SHA-256 commit id; SHA-256 repositories are not supported by velnor-runner"
+    )]
+    Sha256(String),
 }
 
 fn valid_part(part: &str) -> bool {
@@ -76,8 +80,10 @@ impl TryFrom<String> for CommitId {
 
     fn try_from(value: String) -> Result<Self, FactsError> {
         let hex = value.bytes().all(|byte| byte.is_ascii_hexdigit());
-        if hex && matches!(value.len(), 40 | 64) {
+        if hex && value.len() == 40 {
             Ok(Self(value.to_ascii_lowercase()))
+        } else if hex && value.len() == 64 {
+            Err(FactsError::Sha256(value))
         } else {
             Err(FactsError::Invalid {
                 field: "sha",
