@@ -38,31 +38,64 @@ fn hdiutil(args: &[&std::ffi::OsStr]) -> Result<()> {
     Ok(())
 }
 
-fn mount_read_only(world: &World) -> Result<Mounted> {
+fn mount_store(world: &World, device_read_only: bool) -> Result<Mounted> {
     let image = world.root.join("store.dmg");
     let mountpoint = world.root.join("mnt");
     std::fs::create_dir_all(&mountpoint).context("create the mount point")?;
-    hdiutil(&[
-        "create".as_ref(),
-        "-fs".as_ref(),
-        "HFS+".as_ref(),
-        "-volname".as_ref(),
-        "velnorstore".as_ref(),
-        "-srcfolder".as_ref(),
-        world.store.as_os_str(),
-        image.as_os_str(),
-    ])?;
+    let format: &[&std::ffi::OsStr] = if device_read_only {
+        &[]
+    } else {
+        &["-format".as_ref(), "UDRW".as_ref()]
+    };
+    hdiutil(
+        &[
+            &["create".as_ref()],
+            format,
+            &[
+                "-fs".as_ref(),
+                "HFS+".as_ref(),
+                "-volname".as_ref(),
+                "velnorstore".as_ref(),
+                "-srcfolder".as_ref(),
+                world.store.as_os_str(),
+                image.as_os_str(),
+            ],
+        ]
+        .concat(),
+    )?;
     let mounted = Mounted { mountpoint };
-    hdiutil(&[
-        "attach".as_ref(),
-        "-readonly".as_ref(),
-        "-nobrowse".as_ref(),
-        "-noverify".as_ref(),
-        "-mountpoint".as_ref(),
-        mounted.mountpoint.as_os_str(),
-        image.as_os_str(),
-    ])?;
+    let readonly: &[&std::ffi::OsStr] = if device_read_only {
+        &["-readonly".as_ref()]
+    } else {
+        &[]
+    };
+    hdiutil(
+        &[
+            &["attach".as_ref()],
+            readonly,
+            &[
+                "-nobrowse".as_ref(),
+                "-noverify".as_ref(),
+                "-mountpoint".as_ref(),
+                mounted.mountpoint.as_os_str(),
+                image.as_os_str(),
+            ],
+        ]
+        .concat(),
+    )?;
+    if !device_read_only {
+        let status = Command::new("/sbin/mount")
+            .args(["-u", "-r"])
+            .arg(&mounted.mountpoint)
+            .status()
+            .context("run mount")?;
+        ensure!(status.success(), "mount -u -r failed");
+    }
     Ok(mounted)
+}
+
+fn mount_read_only(world: &World) -> Result<Mounted> {
+    mount_store(world, true)
 }
 
 fn run_on_mount(world: &World, mut command: Command, mounted: &Mounted) -> Result<Ran> {
@@ -218,5 +251,56 @@ fn mise_action_scans_the_store_once_per_step() -> Result<()> {
         "the store was scanned {} times:\n{scans}",
         scans.lines().count()
     );
+    Ok(())
+}
+
+fn remounts_writable_during(call: &str) -> Result<()> {
+    let world = World::new()?;
+    world.install_mise()?;
+    world.init_workspace(true)?;
+    world.install_store_homes()?;
+    let flip = world.root.join("flip.sh");
+    let mountpoint = world.root.join("mnt");
+    std::fs::write(
+        &flip,
+        format!("/sbin/mount -u -w '{}'\n", mountpoint.display()),
+    )
+    .context("write the remount hook")?;
+    world.configure_double(&[(&format!("HOOK_{call}"), &flip.to_string_lossy())])?;
+    let command = world.command(&job_fixture("mise_action_ok"))?;
+    let mounted = mount_store(&world, false)?;
+    let ran = run_on_mount(&world, command, &mounted)?;
+    let expected = "is not on a read-only mount; the tools store must be mounted read-only";
+    ensure!(
+        ran.stdout.contains(expected) && ran.has_line("job failed"),
+        "{call}: {expected}\n{}",
+        ran.stdout
+    );
+    let calls = world.mise_calls();
+    let probed = calls.iter().any(|argv| argv.starts_with("argv=env"));
+    ensure!(
+        (call == "env") == probed,
+        "{call}: mise calls {calls:?}\n{}",
+        ran.stdout
+    );
+    ensure!(
+        std::fs::create_dir(mounted.mountpoint.join("tools/data/probe")).is_ok(),
+        "the hook did not remount the store writable"
+    );
+    Ok(())
+}
+
+#[test]
+fn mise_action_rechecks_the_mount_after_install_and_before_export() -> Result<()> {
+    let failed: Vec<String> = ["install", "env"]
+        .iter()
+        .filter_map(|call| {
+            Some(format!(
+                "{call}: {:#}",
+                remounts_writable_during(call).err()?
+            ))
+        })
+        .collect();
+    ensure!(failed.is_empty(), "{}", failed.join("\n"));
     Ok(())
 }

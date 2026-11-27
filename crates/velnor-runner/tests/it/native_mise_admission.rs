@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 
 use crate::exec_support::Ran;
 use crate::mise_world::{
@@ -144,4 +144,35 @@ fn setup_velnor_is_refused_before_any_step_runs() -> Result<()> {
         &fork,
         "unsupported: setup-velnor is only supported in tailrocks/velnor-new, not someone/fork",
     )
+}
+
+fn without_facts() -> Result<World> {
+    let world = World::new()?;
+    world.install_mise()?;
+    std::fs::create_dir_all(world.workspace()).context("create the workspace")?;
+    Ok(world)
+}
+
+#[test]
+fn mise_action_without_trusted_facts_is_refused_before_any_step_runs() -> Result<()> {
+    let world = without_facts()?;
+    refused_before_any_step(
+        &world,
+        &job_fixture("mise_action_ok"),
+        "unsupported: trusted facts: github context is missing",
+    )
+}
+
+#[test]
+fn setup_velnor_without_trusted_facts_is_refused_before_any_step_runs() -> Result<()> {
+    let world = without_facts()?;
+    let sha = world.publish_action(&real_action()?)?;
+    let job = world.with_text(
+        &job_fixture("setup_velnor_real_action"),
+        &[
+            (SHA_PLACEHOLDER, &sha),
+            ("\"k\": \"repository_id\"", "\"k\": \"renamed_id\""),
+        ],
+    )?;
+    refused_before_any_step(&world, &job, "repository_id")
 }

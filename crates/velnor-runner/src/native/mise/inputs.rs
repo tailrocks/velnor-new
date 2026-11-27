@@ -30,14 +30,6 @@ pub(super) struct MiseInputs {
 }
 
 impl MiseInputs {
-    pub(super) fn parse(inputs: &BTreeMap<String, String>) -> Result<Self, ExecError> {
-        let literal = inputs
-            .iter()
-            .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
-            .collect();
-        Self::validate(&literal)
-    }
-
     pub(super) fn validate(inputs: &BTreeMap<String, InputValue>) -> Result<Self, ExecError> {
         let mut parsed = Self {
             version: String::new(),

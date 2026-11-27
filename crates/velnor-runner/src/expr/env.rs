@@ -169,6 +169,14 @@ impl ExprEnv {
         Ok(())
     }
 
+    pub fn merge_strings(&mut self, root: RootContext, pairs: &[(String, String)]) {
+        let merged = match self.context(root) {
+            Value::Object(object) => object.with_strings(pairs),
+            _ => ObjectValue::new(Vec::new()).with_strings(pairs),
+        };
+        self.contexts.insert(root, Value::Object(merged));
+    }
+
     pub fn withhold(&mut self, root: RootContext) {
         self.contexts.remove(&root);
     }

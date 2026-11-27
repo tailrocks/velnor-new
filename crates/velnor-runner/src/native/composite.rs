@@ -93,6 +93,15 @@ fn resolve_inputs(
             .get(&name.to_ascii_lowercase())
             .copied()
             .or(definition.default.as_ref());
+        if definition
+            .default
+            .as_deref()
+            .is_some_and(|default| default.contains("${{"))
+        {
+            return Err(ExecError::Unsupported(format!(
+                "setup-velnor input '{name}' has a default that is an expression"
+            )));
+        }
         match value {
             Some(value) => entries.push((name.clone(), ContextValue::String(value.clone()))),
             None if definition.required => {
@@ -120,10 +129,15 @@ fn refuse(error: ExprError) -> ExecError {
     }
 }
 
+fn render(text: &str, env: &ExprEnv) -> Result<String, ExecError> {
+    evaluate_template(text, env).map_err(refuse)
+}
+
 pub(crate) fn expand(
     action_yml: &str,
     inputs: &BTreeMap<String, String>,
     outer: &ExprEnv,
+    action_path: &str,
 ) -> Result<Vec<ExpandedStep>, ExecError> {
     let action: Action = serde_saphyr::from_str(action_yml)
         .map_err(|error| ExecError::Invalid(format!("setup-velnor action.yml: {error}")))?;
@@ -143,9 +157,12 @@ pub(crate) fn expand(
         RootContext::Steps,
         &ContextValue::object(Vec::new()).map_err(|error| ExecError::Invalid(error.to_string()))?,
     );
+    env.merge_strings(
+        RootContext::Github,
+        &[("action_path".to_owned(), action_path.to_owned())],
+    );
     env.withhold(RootContext::Secrets);
     env.withhold(RootContext::Needs);
-    let render = |text: &str| evaluate_template(text, &env).map_err(refuse);
     let mut steps = Vec::new();
     for raw in &action.runs.steps {
         if raw.uses.is_some() {
@@ -158,18 +175,21 @@ pub(crate) fn expand(
                 "a setup-velnor step needs both run and shell".to_owned(),
             ));
         };
+        let step_env: Vec<(String, String)> = raw
+            .env
+            .iter()
+            .map(|(name, value)| Ok((name.clone(), render(value, &env)?)))
+            .collect::<Result<_, ExecError>>()?;
+        let mut scoped = env.clone();
+        scoped.merge_strings(RootContext::Env, &step_env);
         steps.push(ExpandedStep {
             name: raw
                 .name
                 .as_deref()
-                .map_or_else(|| Ok(String::new()), render)?,
-            shell: render(shell)?,
-            env: raw
-                .env
-                .iter()
-                .map(|(name, value)| Ok((name.clone(), render(value)?)))
-                .collect::<Result<_, ExecError>>()?,
-            script: render(script)?,
+                .map_or_else(|| Ok(String::new()), |name| render(name, &scoped))?,
+            shell: render(shell, &scoped)?,
+            env: step_env,
+            script: render(script, &scoped)?,
         });
     }
     if steps.len() > 1 {
@@ -248,7 +268,16 @@ impl StepAdapter for SetupVelnor {
                 .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();
             let yml = pinned_action_yml(ctx, facts, sha).await?;
-            let steps = expand(&yml, &given, &ctx.expressions)?;
+            let action_path = store_root()
+                .join("actions")
+                .join(OWNER_REPOSITORY)
+                .join(sha);
+            let steps = expand(
+                &yml,
+                &given,
+                &ctx.expressions,
+                &action_path.to_string_lossy(),
+            )?;
             for step in steps {
                 ctx.log(&format!("setup-velnor step: {}", step.name));
                 let result = ctx.run_script(&step.script, &step.shell, &step.env).await?;

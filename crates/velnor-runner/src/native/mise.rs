@@ -280,14 +280,11 @@ async fn export(
 
 async fn mise_action(
     inputs: &MiseInputs,
-    facts: &Result<TrustedFacts, String>,
+    facts: &TrustedFacts,
     ctx: &mut StepContext<'_>,
 ) -> Result<StepResult, ExecError> {
     let tools = store_root().join("tools");
     let binary = locate_binary(inputs, &tools).await?;
-    let facts = facts
-        .as_ref()
-        .map_err(|reason| ExecError::Invalid(reason.clone()))?;
     let accepted = enforce_locked_mise_policy(ctx, facts, &inputs.install_args).await?;
     let install = Install::new(ctx, &tools, &accepted.lock, binary);
     install.require_read_only(true).await?;
@@ -322,29 +319,41 @@ struct MiseAction {
     facts: Result<TrustedFacts, String>,
 }
 
+impl MiseAction {
+    fn accepted(
+        &self,
+        reference: &str,
+        inputs: &BTreeMap<String, InputValue>,
+    ) -> Result<(MiseInputs, &TrustedFacts), ExecError> {
+        require_pinned_revision(reference)?;
+        let inputs = MiseInputs::validate(inputs)?;
+        let facts = self
+            .facts
+            .as_ref()
+            .map_err(|reason| ExecError::Invalid(reason.clone()))?;
+        Ok((inputs, facts))
+    }
+}
+
 impl StepAdapter for MiseAction {
     fn handles(&self, reference: &str) -> bool {
         reference.starts_with(PREFIX)
     }
 
     fn problem(&self, reference: &str, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        require_pinned_revision(reference)
-            .and_then(|()| MiseInputs::validate(inputs).map(drop))
-            .err()
-            .map(super::reason)
+        self.accepted(reference, inputs).err().map(super::reason)
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {
         async move {
-            require_pinned_revision(&ctx.reference)?;
             let given = ctx
                 .inputs
                 .iter()
-                .map(|(name, value)| (name.clone(), value.clone()))
+                .map(|(name, value)| (name.clone(), InputValue::Literal(value.clone())))
                 .collect();
-            let inputs = MiseInputs::parse(&given)?;
+            let (inputs, facts) = self.accepted(&ctx.reference, &given)?;
             ctx.set_output("cache-hit", "false");
-            mise_action(&inputs, &self.facts, ctx).await
+            mise_action(&inputs, facts, ctx).await
         }
         .boxed()
     }
