@@ -278,16 +278,17 @@ fn a_macos_x64_runner_is_refused_because_no_x64_velnor_gen_archive_is_pinned() -
 
 #[test]
 fn the_generated_check_job_saves_the_tools_it_restored() -> TestResult {
-    let text = crate::tools_saver::rendered(crate::events::DENY_MISE)?;
-    let steps = crate::tools_saver::steps_of(&text, ID)?;
+    let text = crate::tools_cache::saver::rendered(crate::events::DENY_MISE)?;
+    let steps = crate::tools_cache::saver::steps_of(&text, ID)?;
     let at = |matches: &dyn Fn(&Value) -> bool| steps.iter().position(matches);
     let restore = at(&|step| step["id"] == "toolslocal" || step["id"] == "tools")
         .ok_or("no tools restore")?;
-    let record = at(&crate::tools_saver::named("Record anchor")).ok_or("no Record anchor")?;
-    let save = at(&|step| crate::tools_saver::runs(step, "tools-local save"))
+    let record =
+        at(&crate::tools_cache::saver::named("Record anchor")).ok_or("no Record anchor")?;
+    let save = at(&|step| crate::tools_cache::saver::runs(step, "tools-local save"))
         .ok_or("no tools-local save")?;
-    let check =
-        at(&|step| crate::tools_saver::runs(step, "velnor-gen")).ok_or("no generator check")?;
+    let check = at(&|step| crate::tools_cache::saver::runs(step, "velnor-gen"))
+        .ok_or("no generator check")?;
     assert!(
         restore < record && record < save && save < check,
         "{steps:?}"

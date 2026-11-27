@@ -5,6 +5,8 @@ use velnor_gen::{GenerateError, expected_files};
 use velnor_model::RepoPath;
 use velnor_rust::DetectError;
 
+pub(crate) mod saver;
+
 use crate::archive::jobs_of;
 use crate::events::DENY_MISE;
 use crate::facts::{TestResult, lock_pinned_tools};
@@ -99,8 +101,13 @@ fn the_policy_job_restores_the_tools_and_saves_what_it_installed() -> TestResult
     let restore = position(lane, "Restore the tools cache").ok_or("no tools restore")?;
     assert_eq!(position(lane, "Install tools"), Some(restore + 1), "{lane}");
     assert_eq!(
-        position(lane, "Save the tools cache"),
+        position(lane, "Add Rust components"),
         Some(restore + 2),
+        "{lane}"
+    );
+    assert_eq!(
+        position(lane, "Save the tools cache"),
+        Some(restore + 3),
         "{lane}"
     );
     Ok(())
