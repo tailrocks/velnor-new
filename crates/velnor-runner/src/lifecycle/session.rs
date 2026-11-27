@@ -17,10 +17,13 @@ use crate::protocol::{
     Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
     OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerOs,
     RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, broker_error_category,
+    oauth_error_kind,
 };
 use crate::secret::Secret;
+use create::Token;
 
 const SESSION_CONFLICT_ATTEMPTS: u32 = 8;
+const CLOCK_SKEW_ATTEMPTS: u32 = 60;
 const MAX_CONSECUTIVE_POLL_ERRORS: u32 = 10;
 const MAX_POLL_ERROR_DELAY: Duration = Duration::from_secs(60);
 const JOB_CANCELLATION: &str = "JobCancellation";
@@ -172,13 +175,8 @@ impl Session {
             .ok_or_else(|| LifecycleError::Config(anyhow!("JIT settings have no AgentId")))?;
         let agent_name = config.settings.agent_name.clone().unwrap_or_default();
         let oauth = OAuthClient::new().map_err(LifecycleError::SignIn)?;
-        let token = oauth
-            .exchange_client_credentials(&credentials)
-            .await
-            .map_err(LifecycleError::SignIn)?
-            .token;
         let broker =
-            BrokerClient::new(&base_url, os, token.clone()).map_err(LifecycleError::Session)?;
+            BrokerClient::new(&base_url, os, String::new()).map_err(LifecycleError::Session)?;
         let owner = format!("{agent_name} (PID: {})", std::process::id());
         let template = TaskAgentSession::new(owner, agent_id, agent_name);
         let session = Self {
@@ -190,12 +188,17 @@ impl Session {
             retry_interval,
             recovery: config.settings.session_recovery,
             auth: Mutex::new(Auth {
-                token: Secret::new(token),
+                token: Secret::new(String::new()),
                 broker,
                 id: String::new(),
             }),
         };
-        session.establish().await.map_err(LifecycleError::Session)?;
+        session.establish(Token::Missing).await.map_err(|error| {
+            match oauth_error_kind(&error) {
+                Some(_) => LifecycleError::SignIn(error),
+                None => LifecycleError::Session(error),
+            }
+        })?;
         Ok(session)
     }
 
@@ -259,7 +262,7 @@ impl Session {
                 Err(error)
                     if self.recovery == SessionRecovery::Recreate && is_session_expired(&error) =>
                 {
-                    if let Err(failure) = self.establish().await {
+                    if let Err(failure) = self.establish(Token::Held).await {
                         return Err(error
                             .context(format!("recreate the expired broker session: {failure:#}")));
                     }

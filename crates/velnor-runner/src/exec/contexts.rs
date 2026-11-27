@@ -92,10 +92,6 @@ pub(super) fn object(pairs: &[(String, String)], case_sensitive: bool) -> Contex
     }
 }
 
-pub(super) fn tool_cache(options: &RunOptions) -> PathBuf {
-    options.temp.join("tool_cache")
-}
-
 pub(super) fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a str> {
     message
         .variables
@@ -222,7 +218,7 @@ pub(super) fn runner_context(
         ),
         (
             "tool_cache".to_owned(),
-            tool_cache(options).to_string_lossy().into_owned(),
+            options.tool_cache.to_string_lossy().into_owned(),
         ),
         ("environment".to_owned(), environment.to_owned()),
     ];

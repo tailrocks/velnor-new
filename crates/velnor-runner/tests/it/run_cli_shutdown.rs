@@ -110,3 +110,32 @@ async fn run_cli_clears_the_temp_directory_on_shutdown_though_it_skips_the_works
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn run_cli_keeps_the_tool_cache_on_shutdown() -> Result<()> {
+    let script = format!("echo kept > \"$RUNNER_TOOL_CACHE/marker\"\n{BACKGROUND_SLEEP}");
+    let job = job_replacing("cancel", Some(("sleep 60", &script)))?;
+    let mock = MockGithub::start(job, Behavior::default()).await?;
+    let scratch = Scratch::new()?;
+    let started = start_runner(&mock, &scratch)?;
+    let work_dir = started.work_dir.clone();
+    until("the step started", || {
+        Ok(work_dir.join("temp").join("bg.pid").exists().then_some(()))
+    })
+    .await?;
+
+    let output = signal_and_wait(started, Signal::TERM).await?;
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!work_dir.join("temp").exists());
+    assert_eq!(
+        std::fs::read_to_string(work_dir.join("_tool").join("marker"))?,
+        "kept\n"
+    );
+    Ok(())
+}

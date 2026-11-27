@@ -136,6 +136,7 @@ async fn serve(
     let run_options = RunOptions {
         workspace: root.join("workspace"),
         temp: root.join("temp"),
+        tool_cache: root.join("_tool"),
         runner_name: agent_name.to_owned(),
         os: options.os,
     };

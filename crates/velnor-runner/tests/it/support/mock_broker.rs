@@ -38,6 +38,12 @@ pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result
     let exchanges = AtomicUsize::new(0);
     server.respond("POST", "/oauth/token", move |_| {
         let number = exchanges.fetch_add(1, Ordering::SeqCst);
+        if let OAuthTokens::Rejected(error, description) = tokens {
+            return Reply::json(400, &json!({"error": error, "error_description": description}));
+        }
+        if matches!(tokens, OAuthTokens::UnavailableFirst(count) if number < count) {
+            return Reply::status(503);
+        }
         if matches!(tokens, OAuthTokens::UnavailableAfterSignIn(count) if (1..=count).contains(&number))
         {
             return Reply::status(503);

@@ -113,12 +113,12 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     std::path::absolute(path).with_context(|| format!("resolve {}", path.display()))
 }
 
-struct Scratch(Option<PathBuf>);
+struct Scratch(PathBuf);
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        if let Some(root) = &self.0
-            && let Err(error) = std::fs::remove_dir_all(root)
+        let root = &self.0;
+        if let Err(error) = std::fs::remove_dir_all(root)
             && error.kind() != std::io::ErrorKind::NotFound
         {
             eprintln!("warning: remove {}: {error}", root.display());
@@ -128,7 +128,7 @@ impl Drop for Scratch {
 
 fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     let root = std::env::temp_dir().join(format!("velnor-exec-{}", Uuid::new_v4()));
-    let scratch = Scratch((args.workspace.is_none() || args.temp.is_none()).then(|| root.clone()));
+    let scratch = Scratch(root.clone());
     let workspace = match &args.workspace {
         Some(workspace) => absolute(workspace)?,
         None => root.join("workspace"),
@@ -140,6 +140,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     let options = RunOptions {
         workspace,
         temp,
+        tool_cache: root.join("_tool"),
         runner_name: "velnor-exec".to_owned(),
         os: RunnerOs::detect()?,
     };

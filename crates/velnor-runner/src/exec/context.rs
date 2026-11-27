@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
-    secrets_context, service_variables, set_pair, string, tool_cache, with_action, write_event,
+    secrets_context, service_variables, set_pair, string, with_action, write_event,
 };
 use super::host_env::host_env;
 use super::{ExecError, RunOptions, StepResult};
@@ -56,7 +56,7 @@ impl JobContext {
         }
         private::create_dir(&options.temp).await?;
         private::create_dir(&options.workspace).await?;
-        private::create_dir(&tool_cache(options)).await?;
+        private::create_dir(&options.tool_cache).await?;
         let contexts = message
             .materialize_context_values_ordered()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?

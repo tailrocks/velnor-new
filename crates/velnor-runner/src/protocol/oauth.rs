@@ -18,6 +18,7 @@ const OAUTH_TIMEOUT: Duration = Duration::from_secs(5);
 const OAUTH_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const ASSERTION_BACKDATE_SECONDS: u64 = 120;
 const ASSERTION_LIFETIME_SECONDS: u64 = 300;
+const CLOCK_SKEW_MARKER: &str = "Current server time is";
 const JWT_HEADER: &[u8] = br#"{"alg":"RS256","typ":"JWT"}"#;
 
 #[derive(Clone)]
@@ -75,9 +76,63 @@ impl fmt::Debug for OAuthAccessToken {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("GitHub runner registration no longer exists: {0}")]
-pub struct OAuthRegistrationNotFound(pub String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OAuthErrorKind {
+    RegistrationDeleted,
+    ClockSkew,
+    Other,
+}
+
+#[derive(Debug)]
+pub struct OAuthTokenError {
+    pub kind: OAuthErrorKind,
+    error: String,
+    description: String,
+}
+
+impl fmt::Display for OAuthTokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.kind {
+            OAuthErrorKind::RegistrationDeleted => write!(
+                f,
+                "GitHub runner registration no longer exists: {}",
+                self.description
+            ),
+            OAuthErrorKind::ClockSkew | OAuthErrorKind::Other => write!(
+                f,
+                "OAuth token request failed: error={}, description={}",
+                self.error, self.description
+            ),
+        }
+    }
+}
+
+impl std::error::Error for OAuthTokenError {}
+
+impl OAuthTokenError {
+    fn new(error: String, description: String) -> Self {
+        let kind = if error.eq_ignore_ascii_case("invalid_client") {
+            OAuthErrorKind::RegistrationDeleted
+        } else if description.contains(CLOCK_SKEW_MARKER) {
+            OAuthErrorKind::ClockSkew
+        } else {
+            OAuthErrorKind::Other
+        };
+        Self {
+            kind,
+            error,
+            description,
+        }
+    }
+}
+
+#[must_use]
+pub fn oauth_error_kind(error: &anyhow::Error) -> Option<OAuthErrorKind> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<OAuthTokenError>())
+        .map(|oauth| oauth.kind)
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OAuthClient;
@@ -128,10 +183,7 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
     }
     if let Some(error) = response.error {
         let description = response.error_description.unwrap_or_default();
-        if error.eq_ignore_ascii_case("invalid_client") {
-            return Err(OAuthRegistrationNotFound(description).into());
-        }
-        bail!("OAuth token request failed: error={error}, description={description}");
+        return Err(OAuthTokenError::new(error, description).into());
     }
     if status != 200 {
         bail!("OAuth token request failed: HTTP status {status}");
