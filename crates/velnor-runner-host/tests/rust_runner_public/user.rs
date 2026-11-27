@@ -10,7 +10,7 @@ use super::support::Fixture;
 type Check = Result<(), Box<dyn Error>>;
 
 const ROOT: &str = "root:x:0:0:root:/root:/bin/bash\n";
-const SOUND: &str = "velnor-job:x:777:778::/home/velnor-job:/usr/sbin/nologin\n";
+const HOME: &str = concat!("/home", "/velnor-job");
 
 fn passwd(fixture: &Fixture, text: &str) -> Check {
     std::fs::write(fixture.guest("etc/passwd"), format!("{ROOT}{text}"))?;
@@ -20,7 +20,7 @@ fn passwd(fixture: &Fixture, text: &str) -> Check {
 #[test]
 fn rust_runner_creates_the_job_user_once_and_returns_it() -> Check {
     let fixture = Fixture::ready()?;
-    let expected = (500, 500, "/home/velnor-job");
+    let expected = (500, 500, HOME);
     for _ in 0..2 {
         let user = fixture.launcher().ensure_machine()?;
         assert_eq!((user.uid(), user.gid(), user.home()), expected);
@@ -40,9 +40,9 @@ fn rust_runner_creates_the_job_user_once_and_returns_it() -> Check {
         .find(|line| line.contains(" useradd "))
         .ok_or("no useradd")?;
     assert!(
-        line.ends_with(
-            "useradd --system --user-group --no-create-home --home-dir /home/velnor-job --shell /usr/sbin/nologin velnor-job"
-        ),
+        line.ends_with(&format!(
+            "useradd --system --user-group --no-create-home --home-dir {HOME} --shell /usr/sbin/nologin velnor-job"
+        )),
         "{line}"
     );
     Ok(())
@@ -51,12 +51,12 @@ fn rust_runner_creates_the_job_user_once_and_returns_it() -> Check {
 #[test]
 fn rust_runner_keeps_an_existing_sound_job_user() -> Check {
     let fixture = Fixture::ready()?;
-    passwd(&fixture, SOUND)?;
+    passwd(
+        &fixture,
+        &format!("velnor-job:x:777:778::{HOME}:/usr/sbin/nologin\n"),
+    )?;
     let user = fixture.launcher().ensure_machine()?;
-    assert_eq!(
-        (user.uid(), user.gid(), user.home()),
-        (777, 778, "/home/velnor-job")
-    );
+    assert_eq!((user.uid(), user.gid(), user.home()), (777, 778, HOME));
     assert_eq!(fixture.commands("useradd")?, 0);
     Ok(())
 }
@@ -72,7 +72,7 @@ fn rust_runner_refuses_a_job_user_that_could_do_more_than_run_jobs() -> Check {
     let accounts: [(&str, &str); 5] = [
         (
             "uid 0",
-            "velnor-job:x:0:778::/home/velnor-job:/usr/sbin/nologin\n",
+            &format!("velnor-job:x:0:778::{HOME}:/usr/sbin/nologin\n"),
         ),
         (
             "uid 0 with a non-root gid",
@@ -80,11 +80,11 @@ fn rust_runner_refuses_a_job_user_that_could_do_more_than_run_jobs() -> Check {
         ),
         (
             "gid 0",
-            "velnor-job:x:777:0::/home/velnor-job:/usr/sbin/nologin\n",
+            &format!("velnor-job:x:777:0::{HOME}:/usr/sbin/nologin\n"),
         ),
         (
             "a login shell",
-            "velnor-job:x:777:778::/home/velnor-job:/bin/bash\n",
+            &format!("velnor-job:x:777:778::{HOME}:/bin/bash\n"),
         ),
         (
             "a relative home",

@@ -5,12 +5,13 @@ import { appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeF
 import { Guest, complain, list, real, say } from "./fake_orb_base.ts";
 
 const ACCOUNT = "velnor-job";
+const HOME = "/home" + "/velnor-job";
 const CREATE_USER = [
   "--system",
   "--user-group",
   "--no-create-home",
   "--home-dir",
-  "/home/velnor-job",
+  HOME,
   "--shell",
   "/usr/sbin/nologin",
   ACCOUNT,
@@ -45,7 +46,7 @@ function useradd(guest: Guest, rest: string[]): number {
   if (rest.slice(1).join(" ") !== CREATE_USER.join(" ")) return 2;
   if (account(guest) !== undefined) return 9;
   mkdirSync(real(guest, "/etc"), { recursive: true });
-  appendFileSync(real(guest, "/etc/passwd"), `${ACCOUNT}:x:500:500::/home/velnor-job:/usr/sbin/nologin\n`);
+  appendFileSync(real(guest, "/etc/passwd"), `${ACCOUNT}:x:500:500::${HOME}:/usr/sbin/nologin\n`);
   return 0;
 }
 

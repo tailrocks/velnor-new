@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use super::job_dirs::removal_verdict;
 use super::parse::{self, Entry};
+use super::user::USER_HOME;
 use super::{ANCESTORS, CLOSED_DIRECTORIES, DIRECTORY, Layout, OPEN_DIRECTORIES, classify};
 use crate::error::RustRunnerFailure;
 use crate::rust_runner::GuestUser;
@@ -139,16 +140,16 @@ fn a_removal_that_fails_or_leaves_a_path_wedges_the_slot_and_an_orb_failure_does
 #[test]
 fn only_a_nologin_job_user_with_nonzero_ids_parses() {
     let line = |uid: &str, gid: &str, shell: &str| {
-        format!("velnor-job:x:{uid}:{gid}::/home/velnor-job:{shell}\n")
+        format!("velnor-job:x:{uid}:{gid}::{USER_HOME}:{shell}\n")
     };
     let user = GuestUser::parse(&line("500", "501", "/usr/sbin/nologin"))
         .map(|user| (user.uid(), user.gid(), user.home().to_owned()));
-    assert_eq!(user, Some((500, 501, "/home/velnor-job".to_owned())));
+    assert_eq!(user, Some((500, 501, USER_HOME.to_owned())));
     for bad in [
         line("0", "1000", "/usr/sbin/nologin"),
         line("1000", "0", "/usr/sbin/nologin"),
         line("500", "501", "/bin/bash"),
-        "other:x:500:501::/home/velnor-job:/usr/sbin/nologin\n".to_owned(),
+        format!("other:x:500:501::{USER_HOME}:/usr/sbin/nologin\n"),
         format!(
             "{}root:x:0:0:root:/root:/bin/bash\n",
             line("500", "501", "/usr/sbin/nologin")
@@ -162,7 +163,9 @@ fn only_a_nologin_job_user_with_nonzero_ids_parses() {
 #[test]
 fn the_test_support_constructor_equals_a_parsed_user() {
     assert_eq!(
-        GuestUser::parse("velnor-job:x:500:501::/home/velnor-job:/usr/sbin/nologin\n"),
-        Some(GuestUser::for_tests(500, 501, "/home/velnor-job"))
+        GuestUser::parse(&format!(
+            "velnor-job:x:500:501::{USER_HOME}:/usr/sbin/nologin\n"
+        )),
+        Some(GuestUser::for_tests(500, 501, USER_HOME))
     );
 }

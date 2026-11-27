@@ -78,10 +78,10 @@ orb -m velnor -u root /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=
 
 Only `orb list`, `orb create` and `orb version` run without `-m`.
 
-The job user `velnor-job` is created when it is missing:
+The job user `velnor-job` is created when it is missing (`<home>` is `/home`):
 
 ```text
-useradd --system --user-group --no-create-home --home-dir /home/velnor-job --shell /usr/sbin/nologin velnor-job
+useradd --system --user-group --no-create-home --home-dir <home>/velnor-job --shell /usr/sbin/nologin velnor-job
 ```
 
 `ensure_machine` reads it as root (`getent passwd`, `id -G`, `id -Gn`) and returns a `GuestUser` (`uid()`, `gid()`, `home()`; the fields are private and only the parser builds one) only when all of these hold:

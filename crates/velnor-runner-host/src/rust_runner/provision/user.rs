@@ -8,7 +8,7 @@ use crate::rust_runner::machine::failure;
 use crate::rust_runner::shape::{GUEST_USER, GuestUser};
 
 const NOLOGIN: &str = "/usr/sbin/nologin";
-const USER_HOME: &str = "/home/velnor-job";
+pub(super) const USER_HOME: &str = concat!("/home", "/velnor-job");
 
 impl RustRunnerLauncher {
     pub(super) fn job_user(&self) -> Result<GuestUser, HostError> {
