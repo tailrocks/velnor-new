@@ -8,6 +8,8 @@ mod expr_format_allocation;
 mod expr_functions;
 #[path = "expr/hash_files.rs"]
 mod expr_hash_files;
+#[path = "expr/hash_files_depth.rs"]
+mod expr_hash_files_depth;
 #[path = "expr/hash_files_fs.rs"]
 mod expr_hash_files_fs;
 #[path = "expr/hash_files_length.rs"]
@@ -24,6 +26,8 @@ mod expr_hash_files_race;
 mod expr_hash_files_regex_limits;
 #[path = "expr/hash_files_relative.rs"]
 mod expr_hash_files_relative;
+#[path = "expr/hash_files_special.rs"]
+mod expr_hash_files_special;
 #[path = "expr/hash_files_unicode.rs"]
 mod expr_hash_files_unicode;
 #[path = "expr/indexing.rs"]

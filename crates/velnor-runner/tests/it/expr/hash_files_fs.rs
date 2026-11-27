@@ -1,32 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::expr_support::{TempDir, error_text, expected_digest, hash_outcome, text};
+use crate::expr_support::{TempDir, error_text, expected_digest, hash_outcome, lock, text};
 use anyhow::{Result, bail};
 use std::fs;
 use std::io::ErrorKind;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
-
-struct Restore<'a>(&'a Path);
-
-impl Drop for Restore<'_> {
-    fn drop(&mut self) {
-        let _ = fs::set_permissions(self.0, fs::Permissions::from_mode(0o755));
-    }
-}
-
-fn lock(path: &Path) -> Result<Restore<'_>> {
-    let guard = Restore(path);
-    fs::set_permissions(path, fs::Permissions::from_mode(0o000))?;
-    assert!(
-        fs::read_dir(path).is_err() && fs::File::open(path).is_err(),
-        "chmod 000 does not restrict this user (running as root?), so the unreadable-path \
-         assertions cannot run; run the suite as an unprivileged user"
-    );
-    Ok(guard)
-}
 
 #[test]
 fn expr_hash_files_ignores_symlinks_that_leave_the_workspace() -> Result<()> {

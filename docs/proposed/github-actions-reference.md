@@ -986,7 +986,7 @@ accepts it, so an evaluation on Bun records a different answer for that class.
 Run it as `bun scripts/minimatch-corpus.ts <node 24.22.1 binary> <directory
 holding node_modules/minimatch@3.1.2> <output.json> [pattern count] [seed]`.
 It embeds each segment in a longer path so patterns made of whitespace are
-kept, and it samples names around the boundaries of each pattern. Eight
+kept, and it samples names around the boundaries of each pattern. Nine
 behaviours differ on purpose:
 
 - **Outside-target symlinks are ignored.** The runner only checks that the
@@ -999,7 +999,13 @@ behaviours differ on purpose:
   each directory and file with `openat` relative to its parent's descriptor and
   never follows a final symlink, reads a regular file only after `fstat` shows
   one, and opens the target of a matched link from the workspace root one
-  component at a time the same way. A path replaced by a link after the walk
+  component at a time the same way. The walk holds at most 64 directory
+  descriptors, as `MAX_HELD_DIRECTORIES` in
+  `crates/velnor-runner/src/expr/anchor.rs` sets: below that depth it reopens
+  a directory from the deepest descriptor it holds, one component at a time
+  with `openat` and no link followed, so a branching tree of any depth walks
+  under a limit of 256 open files, and a directory replaced by a link while the
+  walk is that deep fails the call when it is reopened. A path replaced by a link after the walk
   decided about it therefore cannot pull a file from outside the workspace into
   the digest: a replaced file is read through its resolved target only when that
   target stays inside, a replaced directory or link target fails the call, and
@@ -1084,6 +1090,20 @@ behaviours differ on purpose:
   to a directory is
   skipped as it is upstream
   ([index.js:94](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Misc/layoutbin/hashFiles/index.js#L94)).
+  An entry that no pattern matches and that is not a directory, such as the
+  socket or the file whose mode forbids reading in `sock/*`, is passed over
+  and hashes nothing, as in the runner, which reads only directories.
+- **A timed-out call leaves its worker to stop itself.** The runner runs
+  `hashFiles` in a Node child process and kills the process tree when the
+  120-second token fires
+  ([HashFilesFunction.cs:102-120](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/Expressions/HashFilesFunction.cs#L102-L120),
+  [ProcessInvoker.cs:332-334](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Sdk/ProcessInvoker.cs#L332-L334)).
+  Velnor evaluates the call on a worker thread, which cannot be killed. The
+  caller gets the `couldn't finish within` error at the deadline, and the
+  worker checks the deadline before each entry it visits and each chunk it
+  reads, so it ends by itself. Only a worker blocked inside one system call on
+  a hung file system outlives the call, and it holds its descriptors until
+  that call returns.
 - **A `HOME` with `.` or `..` segments is rejected for every `~` pattern.**
   Velnor rejects such a `HOME` for every pattern that starts with `~`. The runner
   rejects it with `Relative pathing '.' and '..' is not allowed` only for
@@ -1101,7 +1121,7 @@ and names the node's expression in the error
 ([MemoryCounter.cs:28](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTExpressions2/Expressions2/Sdk/MemoryCounter.cs#L28)).
 Velnor's counters for `format`, `toJSON` and wildcard projections use the same
 sizes and the same 10 MiB limit, and print the same
-`ConvertToExpression` text. Two behaviours differ:
+`ConvertToExpression` text. Four behaviours differ:
 
 - **There is no expression-wide total.** The runner also adds every
   intermediate result of an expression to one `EvaluationMemory`, which fails
@@ -1109,6 +1129,11 @@ sizes and the same 10 MiB limit, and print the same
   ([EvaluationMemory.cs:82](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTExpressions2/Expressions2/Sdk/EvaluationMemory.cs#L82)).
   Velnor checks each call on its own, so an expression whose calls each stay
   under the limit but exceed it together succeeds.
+- **A wildcard projection charges the strings it copies.** The runner's
+  projection shares the string objects and counts only the pointers. Velnor's
+  `Value` owns its strings, so a projection copies each string it keeps, and
+  it charges the string's size before it copies it. A projection of a string
+  larger than the limit fails here and succeeds upstream.
 - **A template charges one string overhead per literal run.** The runner turns
   a string with several `${{ }}` spans into one
   [`format('...', ...)` expression](https://github.com/actions/runner/blob/d1eb12d4b115c301201de27d667284e1a80f2ab5/src/Sdk/DTObjectTemplating/ObjectTemplating/TemplateReader.cs#L619),

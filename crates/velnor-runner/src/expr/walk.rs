@@ -2,28 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/executor.rs
 
+use super::anchor::{Anchor, READ_DIRECTORY, READ_ENTRY, open_directory_below};
 use super::glob::PatternSet;
 use super::pattern::GlobError;
 use super::seam::Seam;
-use rustix::fs::{CWD, Dir, FileType, Mode, OFlags, fstat, openat};
+use rustix::fs::{CWD, Dir, FileType, Mode, fstat, openat};
 use rustix::io::Errno;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io;
 use std::os::fd::OwnedFd;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
-
-const READ_ENTRY: OFlags = OFlags::RDONLY
-    .union(OFlags::NOFOLLOW)
-    .union(OFlags::NONBLOCK)
-    .union(OFlags::CLOEXEC);
-const READ_DIRECTORY: OFlags = OFlags::RDONLY
-    .union(OFlags::DIRECTORY)
-    .union(OFlags::NOFOLLOW)
-    .union(OFlags::CLOEXEC);
 
 pub(crate) struct Found {
     pub(crate) path: PathBuf,
@@ -54,7 +46,7 @@ impl Hint {
 struct Visit {
     path: PathBuf,
     comps: Vec<String>,
-    parent: Rc<OwnedFd>,
+    anchor: Anchor,
     name: OsString,
     hint: Hint,
     matched: bool,
@@ -63,7 +55,7 @@ struct Visit {
 }
 
 struct Child {
-    parent: Rc<OwnedFd>,
+    anchor: Anchor,
     name: OsString,
     hint: Hint,
 }
@@ -90,24 +82,6 @@ fn kind_of(fd: &OwnedFd, path: &Path) -> Result<FileType, GlobError> {
     fstat(fd)
         .map(|stat| FileType::from_raw_mode(stat.st_mode))
         .map_err(|error| GlobError::io(path, error.into()))
-}
-
-fn open_directory_below(
-    root: &Rc<OwnedFd>,
-    relative: &Path,
-) -> Result<Rc<OwnedFd>, (Errno, PathBuf)> {
-    let mut current = Rc::clone(root);
-    let mut walked = PathBuf::new();
-    for component in relative.components() {
-        let Component::Normal(name) = component else {
-            return Err((Errno::INVAL, walked));
-        };
-        walked.push(name);
-        let next = openat(&*current, name, READ_DIRECTORY, Mode::empty())
-            .map_err(|error| (error, walked.clone()))?;
-        current = Rc::new(next);
-    }
-    Ok(current)
 }
 
 impl Iterator for Walk<'_> {
@@ -187,7 +161,7 @@ impl<'a> Walk<'a> {
         Ok(Some(Visit {
             path,
             comps,
-            parent: child.parent,
+            anchor: child.anchor,
             name: child.name,
             hint: child.hint,
             matched,
@@ -203,7 +177,7 @@ impl<'a> Walk<'a> {
     ) -> Result<Option<(PathBuf, Child)>, GlobError> {
         let (Some(parent), Some(name)) = (searched.parent(), name) else {
             let child = Child {
-                parent: self.root()?,
+                anchor: Anchor::root(self.root()?),
                 name: OsString::from("."),
                 hint: Hint::Unknown,
             };
@@ -216,7 +190,7 @@ impl<'a> Walk<'a> {
             return Ok(None);
         };
         let top = self.root()?;
-        let parent_fd = match open_directory_below(&top, inside) {
+        let parent_fd = match open_directory_below(&top, inside.iter()) {
             Ok(fd) => fd,
             Err((Errno::NOENT, _)) => return Ok(None),
             Err((error, walked)) => {
@@ -224,7 +198,7 @@ impl<'a> Walk<'a> {
             }
         };
         let child = Child {
-            parent: parent_fd,
+            anchor: Anchor::root(parent_fd),
             name: OsString::from(name),
             hint: Hint::Unknown,
         };
@@ -253,22 +227,26 @@ impl<'a> Walk<'a> {
             Hint::Symlink => return self.follow(&visit),
             Hint::Directory | Hint::File | Hint::Unknown => {}
         }
-        let flags = if visit.hint == Hint::Directory {
+        let possible_directory = visit.hint == Hint::Unknown && !visit.matched;
+        let flags = if visit.hint == Hint::Directory || possible_directory {
             READ_DIRECTORY
         } else {
             READ_ENTRY
         };
+        let parent = visit
+            .anchor
+            .parent()
+            .map_err(|(error, _)| GlobError::io(&visit.path, error.into()))?;
         self.seam.before_open(&visit.path);
-        let fd = match openat(&*visit.parent, visit.name.as_os_str(), flags, Mode::empty()) {
+        let fd = match openat(&*parent, visit.name.as_os_str(), flags, Mode::empty()) {
             Ok(fd) => fd,
-            Err(Errno::LOOP) if flags == READ_ENTRY => {
-                return if visit.matched {
-                    self.follow(&visit)
-                } else {
-                    Ok(None)
-                };
-            }
+            Err(Errno::LOOP) if flags == READ_ENTRY => return self.follow(&visit),
             Err(Errno::NOENT) if visit.missing_ok => return Ok(None),
+            Err(Errno::NOTDIR | Errno::LOOP | Errno::NXIO | Errno::OPNOTSUPP)
+                if possible_directory =>
+            {
+                return Ok(None);
+            }
             Err(Errno::NXIO | Errno::OPNOTSUPP) if visit.matched => {
                 return Err(not_regular(&visit.path));
             }
@@ -300,7 +278,7 @@ impl<'a> Walk<'a> {
             return Ok(None);
         };
         let top = self.root()?;
-        let parent = open_directory_below(&top, directory)
+        let parent = open_directory_below(&top, directory.iter())
             .map_err(|(error, walked)| GlobError::io(&self.workspace.join(walked), error.into()))?;
         self.seam.before_open(&real);
         let fd = match openat(&*parent, name, READ_ENTRY, Mode::empty()) {
@@ -319,9 +297,8 @@ impl<'a> Walk<'a> {
     }
 
     fn push_children(&mut self, parent: &Visit, fd: OwnedFd) -> Result<(), GlobError> {
-        let fd = Rc::new(fd);
         let reader =
-            Dir::read_from(&*fd).map_err(|error| GlobError::io(&parent.path, error.into()))?;
+            Dir::read_from(&fd).map_err(|error| GlobError::io(&parent.path, error.into()))?;
         let mut children = Vec::new();
         for item in reader {
             let item = item.map_err(|error| GlobError::io(&parent.path, error.into()))?;
@@ -337,6 +314,7 @@ impl<'a> Walk<'a> {
             children.push((name, hint));
         }
         children.sort_unstable_by(|left, right| right.0.cmp(&left.0));
+        let anchor = parent.anchor.descend(&parent.name, fd);
         for (name, hint) in children {
             let lossy = name.to_string_lossy().into_owned();
             let name = if name.to_str().is_some() {
@@ -348,7 +326,7 @@ impl<'a> Walk<'a> {
             comps.push(lossy);
             let path = parent.path.join(&name);
             let child = Child {
-                parent: Rc::clone(&fd),
+                anchor: anchor.clone(),
                 name,
                 hint,
             };

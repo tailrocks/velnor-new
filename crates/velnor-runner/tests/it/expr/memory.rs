@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::expr_support::{
-    env_with, error_text, exceeded_memory, same_text, template_error_text, text,
+    env_with, error_text, eval, exceeded_memory, same_text, template_error_text, text,
 };
 use anyhow::Result;
 use std::fmt::Write as _;
@@ -152,4 +152,33 @@ fn expr_memory_error_renders_the_expression_like_the_runner() -> Result<()> {
         &error_text(&format!("format(env.TEXT, {arguments})"), &env)?,
         &exceeded_memory(&format!("format(env.TEXT, {rendered})")),
     )
+}
+
+type EnvBuilder = fn(usize) -> Result<ExprEnv>;
+
+fn flat_text_env(units: usize) -> Result<ExprEnv> {
+    env_with_key("TEXT", &"a".repeat(units))
+}
+
+fn nested_text_env(units: usize) -> Result<ExprEnv> {
+    env_with(&[(
+        RootContext::Env,
+        &format!(r#"{{"A":{{"K":"{}"}}}}"#, "a".repeat(units)),
+    )])
+}
+
+#[test]
+fn expr_wildcard_projection_charges_the_strings_it_copies() -> Result<()> {
+    let cases: [(&str, &str, EnvBuilder); 2] = [
+        ("env.*", "env[*]", flat_text_env),
+        ("env.*.K", "env[*].K", nested_text_env),
+    ];
+    for (expression, rendered, build) in cases {
+        eval(expression, &build(TEXT_THAT_FITS)?)?;
+        same_text(
+            &error_text(expression, &build(TEXT_THAT_EXCEEDS)?)?,
+            &exceeded_memory(rendered),
+        )?;
+    }
+    Ok(())
 }

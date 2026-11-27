@@ -59,14 +59,17 @@ fn projection(node: &Node) -> Result<MemoryCounter<'_>, ExprError> {
     Ok(memory)
 }
 
-fn project(
-    values: impl IntoIterator<Item = Value>,
+fn project<'a>(
+    values: impl IntoIterator<Item = &'a Value>,
     memory: &mut MemoryCounter<'_>,
     result: &mut Vec<Value>,
 ) -> Result<(), ExprError> {
     for value in values {
         memory.add_bytes(POINTER_BYTES)?;
-        result.push(value);
+        if let Value::String(text) = value {
+            memory.add(text)?;
+        }
+        result.push(value.clone());
     }
     Ok(())
 }
@@ -81,22 +84,22 @@ fn filtered_index(
     for item in array.items() {
         match (item, key) {
             (Value::Object(nested), None) => project(
-                nested.entries().iter().map(|(_, value)| value.clone()),
+                nested.entries().iter().map(|(_, value)| value),
                 &mut memory,
                 &mut result,
             )?,
             (Value::Object(nested), Some(key)) => {
                 if let Some(value) = string_index(key).and_then(|key| nested.get(&key)) {
-                    project([value.clone()], &mut memory, &mut result)?;
+                    project([value], &mut memory, &mut result)?;
                 }
             }
             (Value::Array(nested), None) => {
-                project(nested.items().iter().cloned(), &mut memory, &mut result)?;
+                project(nested.items(), &mut memory, &mut result)?;
             }
             (Value::Array(nested), Some(key)) => {
                 if let Some(value) = integer_index(key).and_then(|index| nested.items().get(index))
                 {
-                    project([value.clone()], &mut memory, &mut result)?;
+                    project([value], &mut memory, &mut result)?;
                 }
             }
             _ => {}
@@ -114,7 +117,7 @@ fn object_index(
         let mut memory = projection(node)?;
         let mut values = Vec::new();
         project(
-            object.entries().iter().map(|(_, value)| value.clone()),
+            object.entries().iter().map(|(_, value)| value),
             &mut memory,
             &mut values,
         )?;
@@ -129,7 +132,7 @@ fn array_index(node: &Node, array: &ArrayValue, key: Option<&Value>) -> Result<V
     let Some(key) = key else {
         let mut memory = projection(node)?;
         let mut values = Vec::new();
-        project(array.items().iter().cloned(), &mut memory, &mut values)?;
+        project(array.items(), &mut memory, &mut values)?;
         return Ok(Value::Array(ArrayValue::filtered(values)));
     };
     Ok(integer_index(key)

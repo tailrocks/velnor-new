@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
@@ -154,6 +155,25 @@ pub(crate) fn expected_digest(contents: &[&[u8]]) -> String {
             let _ = write!(out, "{byte:02x}");
             out
         })
+}
+
+pub(crate) struct Restore<'a>(&'a Path);
+
+impl Drop for Restore<'_> {
+    fn drop(&mut self) {
+        let _ = fs::set_permissions(self.0, fs::Permissions::from_mode(0o755));
+    }
+}
+
+pub(crate) fn lock(path: &Path) -> Result<Restore<'_>> {
+    let guard = Restore(path);
+    fs::set_permissions(path, fs::Permissions::from_mode(0o000))?;
+    assert!(
+        fs::read_dir(path).is_err() && fs::File::open(path).is_err(),
+        "chmod 000 does not restrict this user (running as root?), so the unreadable-path \
+         assertions cannot run; run the suite as an unprivileged user"
+    );
+    Ok(guard)
 }
 
 #[derive(Debug)]

@@ -9,6 +9,7 @@ use velnor_runner::expr::{ExprEnv, RootContext};
 const PLACEHOLDERS: usize = 3_000_000;
 const ALLOWED_GROWTH_KIB: u64 = 40 * 1024;
 const EXCEEDING_TEXT_BYTES: usize = 48 * 1024 * 1024;
+const PROJECTED_TEXT_BYTES: usize = 40 * 1024 * 1024;
 const ALLOWED_EXTRA_GROWTH_KIB: u64 = 16 * 1024;
 const RESET_PEAK_RESIDENT_SET: &str = "5";
 
@@ -65,6 +66,41 @@ fn expr_to_json_charges_a_large_string_before_it_builds_it() -> Result<()> {
         "a rejected toJSON of {EXCEEDING_TEXT_BYTES} bytes raised the peak resident set by \
          {to_json} KiB, more than {ALLOWED_EXTRA_GROWTH_KIB} KiB above the {lookup} KiB the \
          lookup alone needs"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_to_json_charges_a_large_object_key_before_it_copies_it() -> Result<()> {
+    let key = "k".repeat(EXCEEDING_TEXT_BYTES);
+    let env = env_with(&[(RootContext::Env, &format!(r#"{{"{key}":"v"}}"#))])?;
+    drop(key);
+
+    let (evaluated, growth) = peak_growth_kib("toJSON(env)", &env)?;
+
+    assert!(!evaluated);
+    assert!(
+        growth <= ALLOWED_EXTRA_GROWTH_KIB,
+        "a rejected toJSON of an object key of {EXCEEDING_TEXT_BYTES} bytes raised the peak \
+         resident set by {growth} KiB, more than {ALLOWED_EXTRA_GROWTH_KIB} KiB"
+    );
+    Ok(())
+}
+
+#[test]
+fn expr_wildcard_projection_charges_a_large_string_before_it_copies_it() -> Result<()> {
+    let env = env_with(&[(
+        RootContext::Env,
+        &format!(r#"{{"TEXT":"{}"}}"#, "a".repeat(PROJECTED_TEXT_BYTES)),
+    )])?;
+
+    let (evaluated, growth) = peak_growth_kib("env.*", &env)?;
+
+    assert!(!evaluated);
+    assert!(
+        growth <= ALLOWED_EXTRA_GROWTH_KIB,
+        "a rejected projection of a string of {PROJECTED_TEXT_BYTES} bytes raised the peak \
+         resident set by {growth} KiB, more than {ALLOWED_EXTRA_GROWTH_KIB} KiB"
     );
     Ok(())
 }

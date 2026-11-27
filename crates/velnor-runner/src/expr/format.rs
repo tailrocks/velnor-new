@@ -279,6 +279,16 @@ enum JsonPrefix {
     Element(bool),
 }
 
+fn prefix_text(prefix: JsonPrefix, level: usize) -> String {
+    match prefix {
+        JsonPrefix::Root => String::new(),
+        JsonPrefix::MappingValue => ": ".to_string(),
+        JsonPrefix::Element(first) => {
+            format!("{}\n{}", if first { "" } else { "," }, "  ".repeat(level))
+        }
+    }
+}
+
 fn write_json(
     value: &Value,
     writer: &mut JsonWriter<'_>,
@@ -286,20 +296,14 @@ fn write_json(
     prefix: JsonPrefix,
 ) -> Result<(), ExprError> {
     let indent = "  ".repeat(level);
-    let prefix = match prefix {
-        JsonPrefix::Root => String::new(),
-        JsonPrefix::MappingValue => ": ".to_string(),
-        JsonPrefix::Element(first) => {
-            format!("{}\n{indent}", if first { "" } else { "," })
-        }
-    };
+    let prefix = prefix_text(prefix, level);
 
     match value {
         Value::Object(object) if !object.entries().is_empty() => {
             writer.push(&format!("{prefix}{{"))?;
             for (position, (key, entry)) in object.entries().iter().enumerate() {
-                let key = Value::String(key.clone());
-                write_json(&key, writer, level + 1, JsonPrefix::Element(position == 0))?;
+                let key_prefix = prefix_text(JsonPrefix::Element(position == 0), level + 1);
+                writer.push_string(&key_prefix, key)?;
                 write_json(entry, writer, level + 1, JsonPrefix::MappingValue)?;
             }
             writer.push(&format!("\n{indent}}}"))
