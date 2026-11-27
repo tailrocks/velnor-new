@@ -25,15 +25,19 @@ pub(super) fn run(test: &str) -> TestResult<()> {
 }
 
 pub(super) fn rate_limited(test: &str) -> TestResult<()> {
+    let soon = (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + 2).to_string();
     for (tag, reply) in [
-        ("T9c", json!({"status": 429})),
+        (
+            "T9c",
+            json!({"status": 429, "headers": {"retry-after": "1"}}),
+        ),
         (
             "T9d",
             json!({"status": 403, "headers": {"retry-after": "1"}}),
         ),
         (
             "T9e",
-            json!({"status": 403, "headers": {"x-ratelimit-remaining": "0"}}),
+            json!({"status": 403, "headers": {"x-ratelimit-remaining": "0", "x-ratelimit-reset": soon}}),
         ),
     ] {
         deferred(

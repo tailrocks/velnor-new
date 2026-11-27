@@ -85,7 +85,6 @@ fn read_bounded(stdout: ChildStdout) -> Option<Vec<u8>> {
     if u64::try_from(bytes.len()).is_ok_and(|read| read <= CAPTURE_LIMIT) {
         return Some(bytes);
     }
-    let _ = std::io::copy(&mut bounded.into_inner(), &mut std::io::sink());
     None
 }
 

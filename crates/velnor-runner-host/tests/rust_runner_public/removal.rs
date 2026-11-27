@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
@@ -21,15 +22,21 @@ fn prepared() -> Result<Fixture, Box<dyn Error>> {
 
 pub(super) fn orb_output_over_the_capture_bound() -> Check {
     let fixture = prepared()?;
-    let line = format!("4242 {}\n", "x".repeat(1_000));
-    std::fs::write(
-        fixture.root.join("ps.table"),
-        line.repeat(9 * 1024 * 1024 / line.len() + 1),
-    )?;
+    fixture.configure("FAKE_ORB_PS_ENDLESS=1\n")?;
+    let started = Instant::now();
     assert_eq!(
-        fixture.launcher().list_processes().err(),
+        fixture
+            .launcher()
+            .with_orb_deadline(Duration::from_secs(20))
+            .list_processes()
+            .err(),
         Some(HostError::RustRunner(RustRunnerFailure::OrbOutputTooLarge)),
         "an orb call may not fill host memory with its output"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "an endless orb output kept the host reading for {:?}",
+        started.elapsed()
     );
     Ok(())
 }

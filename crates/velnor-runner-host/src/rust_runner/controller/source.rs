@@ -346,22 +346,15 @@ fn pull_claim(
 }
 
 fn root_workflow_path(path: &str, repository: &str) -> Result<String, HostError> {
-    let path = without_ref(path);
+    const DIRECTORY: &str = ".github/workflows/";
     let path = path.strip_prefix("./").unwrap_or(path);
     let path = path.strip_prefix(&format!("{repository}/")).unwrap_or(path);
-    if path.starts_with(".github/workflows/") {
-        Ok(path.to_owned())
-    } else {
-        Err(HostError::Identity)
-    }
-}
-
-fn without_ref(path: &str) -> &str {
-    [".yml@", ".yaml@"]
-        .iter()
-        .filter_map(|extension| path.find(extension).map(|at| at + extension.len() - 1))
-        .min()
-        .map_or(path, |end| &path[..end])
+    let rest = path.strip_prefix(DIRECTORY).ok_or(HostError::Identity)?;
+    let name = rest
+        .split_once('/')
+        .and_then(|(segment, _)| segment.rfind('@'))
+        .map_or(rest, |at| &rest[..at]);
+    Ok(format!("{DIRECTORY}{name}"))
 }
 
 #[cfg(test)]

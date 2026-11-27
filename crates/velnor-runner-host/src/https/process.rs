@@ -90,21 +90,37 @@ fn run_curl_with_home(
     let headers = stderr
         .filter(|captured| !captured.overflow)
         .map_or_else(Vec::new, |captured| captured.bytes);
+    let signals = rate_signals(status, &headers);
+    Ok(CurlResponse {
+        status,
+        body: response.body,
+        retry_after: signals.retry_after,
+        reset: signals.reset,
+        rate_limited: signals.rate_limited,
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct RateSignals {
+    retry_after: Option<Vec<u8>>,
+    reset: Option<Vec<u8>>,
+    rate_limited: bool,
+}
+
+fn rate_signals(status: u16, headers: &[u8]) -> RateSignals {
     let mut lines = headers
         .split(|byte| *byte == b'\n')
         .map(|line| Some(line.trim_ascii().to_vec()).filter(|bytes| !bytes.is_empty()));
     let retry_after = lines.next().flatten();
     let remaining = lines.next().flatten();
     let reset = lines.next().flatten();
-    let rate_limited =
-        status == 403 && (retry_after.is_some() || remaining.as_deref() == Some(b"0".as_slice()));
-    Ok(CurlResponse {
-        status,
-        body: response.body,
-        retry_after: retry_after.filter(|_| matches!(status, 403 | 429 | 503)),
-        reset: reset.filter(|_| matches!(status, 403 | 429 | 503)),
-        rate_limited,
-    })
+    let exhausted = remaining.as_deref() == Some(b"0".as_slice());
+    let limited_status = matches!(status, 403 | 429 | 503);
+    RateSignals {
+        rate_limited: status == 403 && (retry_after.is_some() || exhausted),
+        retry_after: retry_after.filter(|_| limited_status),
+        reset: reset.filter(|_| limited_status && exhausted),
+    }
 }
 
 struct BoundedResponse {
@@ -236,3 +252,6 @@ fn stop_child(child: &mut Child) {
     let _killed = child.kill();
     let _reaped = child.wait();
 }
+
+#[cfg(test)]
+mod tests;

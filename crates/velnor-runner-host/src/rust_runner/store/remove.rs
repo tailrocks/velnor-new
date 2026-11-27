@@ -7,6 +7,8 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use rustix::fs::{
     AtFlags, Dir, FileType, Mode, Stat, chmodat, fchmod, fstat, openat, statat, unlinkat,
 };
+#[cfg(target_os = "linux")]
+use rustix::fs::{CWD, OFlags};
 use rustix::io::Errno;
 use rustix::path::Arg;
 
@@ -119,10 +121,33 @@ fn drain(
     Ok(None)
 }
 
+#[cfg(target_os = "linux")]
+fn make_owner_accessible(parent: &impl AsFd, name: impl Arg + Copy) -> Result<(), Errno> {
+    use std::os::fd::AsRawFd;
+
+    let handle = openat(
+        parent,
+        name,
+        OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )?;
+    chmodat(
+        CWD,
+        format!("/proc/self/fd/{}", handle.as_raw_fd()),
+        Mode::RWXU,
+        AtFlags::empty(),
+    )
+}
+
+#[cfg(not(target_os = "linux"))]
+fn make_owner_accessible(parent: &impl AsFd, name: impl Arg + Copy) -> Result<(), Errno> {
+    chmodat(parent, name, Mode::RWXU, AtFlags::SYMLINK_NOFOLLOW)
+}
+
 fn open_directory(parent: &impl AsFd, name: impl Arg + Copy) -> Result<OwnedFd, Errno> {
     let child = match openat(parent, name, directory_flags(), Mode::empty()) {
         Err(Errno::ACCESS) => {
-            chmodat(parent, name, Mode::RWXU, AtFlags::empty())?;
+            make_owner_accessible(parent, name)?;
             openat(parent, name, directory_flags(), Mode::empty())?
         }
         opened => opened?,
