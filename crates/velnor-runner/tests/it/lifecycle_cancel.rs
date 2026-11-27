@@ -15,7 +15,8 @@ use super::lifecycle_support::{
 };
 use super::support::mock_github::{Behavior, Cancel, MessageTypes, MockGithub};
 
-const CLEANUP_FLOOR: Duration = Duration::from_secs(20);
+const CLEANUP_WINDOW: Duration = Duration::from_secs(10);
+const CLEANUP_FLOOR: Duration = Duration::from_secs(25);
 
 pub(crate) fn cancelled_with_cleanup(complete: &serde_json::Value) -> Result<()> {
     assert_eq!(complete["conclusion"], "canceled");
@@ -214,7 +215,7 @@ async fn lifecycle_stops_a_cleanup_step_that_outlives_the_cancel_timeout_of_the_
 -> Result<()> {
     let behavior = Behavior {
         cancel: Cancel::After(Duration::from_millis(300)),
-        cancel_timeout: Duration::from_secs(20),
+        cancel_timeout: CLEANUP_FLOOR,
         ..Behavior::default()
     };
     let scratch = Scratch::new()?;
@@ -227,13 +228,13 @@ async fn lifecycle_stops_a_cleanup_step_that_outlives_the_cancel_timeout_of_the_
         Settings::new()
             .killing_after_cancel_floor(Duration::from_secs(16))
             .renewing_every(Duration::from_secs(60))
-            .within(CANCEL_BUDGET),
+            .within(RUN_BUDGET),
     )
     .await??;
 
     assert!(
-        started.elapsed() >= Duration::from_secs(5),
-        "the 20 s of the message, less the 15 s reserve, were waited: {:?}",
+        started.elapsed() >= CLEANUP_WINDOW,
+        "the 25 s of the message, less the 15 s reserve, were waited: {:?}",
         started.elapsed()
     );
     assert_stopped_at_the_deadline(&mock, &scratch, outcome)
