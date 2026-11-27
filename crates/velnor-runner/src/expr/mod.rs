@@ -6,6 +6,7 @@ mod env;
 mod error;
 mod eval;
 mod format;
+mod from_json;
 mod glob;
 mod hash_files;
 mod index;

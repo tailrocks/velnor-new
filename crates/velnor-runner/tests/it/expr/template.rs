@@ -149,11 +149,11 @@ fn expr_template_parses_every_span_before_it_evaluates_any() -> Result<()> {
         RootContext::Env,
         &format!(r#"{{"PAYLOAD":"{}"}}"#, "x".repeat(100_000)),
     )])?;
-    let source = format!("{}${{{{ vars.a }}}}", "${{ env.PAYLOAD }}".repeat(53));
+    let source = format!("{}${{{{ matrix.a }}}}", "${{ env.PAYLOAD }}".repeat(53));
 
     assert_eq!(
         template_error_text(&source, &env)?,
-        "unsupported expression context vars"
+        "unsupported expression context matrix"
     );
     Ok(())
 }

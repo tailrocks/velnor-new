@@ -5,6 +5,7 @@
 use super::env::{ExprEnv, Function, JobStatus};
 use super::error::ExprError;
 use super::format::{evaluate_format, to_json};
+use super::from_json::parse_from_json;
 use super::hash_files::hash_files;
 use super::index::evaluate_index;
 use super::node::{BinaryOperator, Node};
@@ -98,8 +99,7 @@ fn evaluate_function(
                 return Err(arity_error());
             };
             let json = evaluate_node(value, env)?.convert_to_string();
-            ContextValue::from_json_str(&json)
-                .map(|parsed| from_context_value(&parsed))
+            parse_from_json(&json)
                 .map_err(|error| ExprError::evaluation(format!("Error parsing fromJson: {error}")))
         }
         Function::HashFiles => {

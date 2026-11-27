@@ -24,7 +24,7 @@ const OUT_OF_SCOPE: [(&str, &str); 3] = [
     ),
 ];
 
-const SERVICE_JOB_KEYS: [&str; 13] = [
+const SERVICE_JOB_KEYS: [&str; 12] = [
     "runs-on",
     "if",
     "name",
@@ -37,7 +37,6 @@ const SERVICE_JOB_KEYS: [&str; 13] = [
     "uses",
     "with",
     "secrets",
-    "environment",
 ];
 
 const SERVICE_ROOT_KEYS: [&str; 5] = ["on", "name", "run-name", "concurrency", "permissions"];
@@ -62,7 +61,9 @@ fn workflow_files(root: &Path) -> Result<Vec<PathBuf>> {
             let path = entry?.path();
             if path.is_dir() {
                 pending.push(path);
-            } else if path.extension().is_some_and(|ext| ext == "yml")
+            } else if path
+                .extension()
+                .is_some_and(|ext| ext == "yml" || ext == "yaml")
                 && path.parent().and_then(Path::file_name) == Some("workflows".as_ref())
             {
                 found.push(path);
@@ -73,13 +74,19 @@ fn workflow_files(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(found)
 }
 
+fn service_evaluated(path: &[&str], value: &serde_json::Value) -> bool {
+    match path {
+        ["jobs", _, "environment"] => !value.is_object(),
+        ["jobs", _, "environment", "url", ..] | [] => false,
+        ["jobs", _, "environment", ..] => true,
+        ["jobs", _, key, ..] => SERVICE_JOB_KEYS.contains(key),
+        [root, ..] => SERVICE_ROOT_KEYS.contains(root),
+    }
+}
+
 fn collect(value: &serde_json::Value, path: &[&str], sources: &mut BTreeSet<(bool, String)>) {
     match value {
-        _ if path
-            .first()
-            .is_some_and(|key| SERVICE_ROOT_KEYS.contains(key)) => {}
-        _ if matches!(path, ["jobs", _, key, ..] if SERVICE_JOB_KEYS.contains(key))
-            && !matches!(path, ["jobs", _, "environment", "url"]) => {}
+        _ if service_evaluated(path, value) => {}
         serde_json::Value::String(text) if text.contains("${{") => {
             sources.insert((false, text.clone()));
         }
