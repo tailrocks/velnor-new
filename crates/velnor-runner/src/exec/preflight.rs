@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::adapter::AdapterRegistry;
+use super::adapter::{AdapterRegistry, DeclaredInputs};
 use super::context::JobContext;
 use super::shell;
 use super::token;
@@ -58,11 +58,11 @@ fn step_problem(
             return Some(format!("uses {reference}"));
         };
         let inputs = match step.inputs.as_ref() {
-            Some(inputs) => match token::declared(inputs, &context.base_env()) {
-                Some(declared) => declared,
-                None => return Some(format!("{reference} input name is not a literal")),
+            Some(inputs) => match token::declared(inputs) {
+                Ok(declared) => declared,
+                Err(error) => return Some(format!("{reference} {error}")),
             },
-            None => BTreeMap::new(),
+            None => DeclaredInputs::Known(BTreeMap::new()),
         };
         return adapter.problem(&inputs);
     }

@@ -24,10 +24,16 @@ pub enum InputValue {
     Deferred,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclaredInputs {
+    Known(BTreeMap<String, InputValue>),
+    Unknown,
+}
+
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
-    fn problem(&self, _inputs: &BTreeMap<String, InputValue>) -> Option<String> {
+    fn problem(&self, _inputs: &DeclaredInputs) -> Option<String> {
         None
     }
 

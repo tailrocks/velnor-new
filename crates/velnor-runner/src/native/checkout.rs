@@ -12,7 +12,8 @@ use crate::broker::{
     mirror_path,
 };
 use crate::exec::{
-    ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext, StepFuture, StepResult,
+    DeclaredInputs, ExecError, InputValue, Inputs, ProcessOutcome, StepAdapter, StepContext,
+    StepFuture, StepResult,
 };
 use crate::store::store_root;
 
@@ -27,11 +28,14 @@ impl StepAdapter for Checkout {
         reference.starts_with("actions/checkout@")
     }
 
-    fn problem(&self, inputs: &BTreeMap<String, InputValue>) -> Option<String> {
-        self.store
-            .facts()
-            .err()
-            .or_else(|| validate_inputs(inputs).err())
+    fn problem(&self, inputs: &DeclaredInputs) -> Option<String> {
+        self.store.facts().err().or_else(|| match inputs {
+            DeclaredInputs::Known(inputs) => validate_inputs(inputs).err(),
+            DeclaredInputs::Unknown => Some(
+                "actions/checkout cannot validate an expression-valued 'with:' in velnor-runner"
+                    .to_owned(),
+            ),
+        })
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {

@@ -15,6 +15,8 @@ mod drain;
 mod exec_builder;
 #[path = "exec_cli.rs"]
 mod exec_cli;
+#[path = "exec_declared_inputs.rs"]
+mod exec_declared_inputs;
 #[path = "exec_support.rs"]
 mod exec_support;
 #[cfg(target_os = "linux")]
@@ -91,6 +93,7 @@ mod native_checkout_cancel;
 mod native_checkout_contend;
 mod native_checkout_depth;
 mod native_checkout_env;
+mod native_checkout_expression;
 mod native_checkout_facts;
 mod native_checkout_inputs;
 mod native_checkout_layout;

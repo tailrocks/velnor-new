@@ -309,32 +309,6 @@ fn an_input_name_is_checked_even_when_its_value_does_not_evaluate() -> Result<()
 }
 
 #[test]
-fn an_input_name_that_is_not_a_literal_refuses_the_job_before_its_first_step() -> Result<()> {
-    let rig = Rig::new()?;
-    let job = rig.job_edit(
-        "checkout_unsupported_ref",
-        &rig.head,
-        &rig.server_url(),
-        &[
-            ("\"Steps\": [", MARKER_STEP),
-            ("\"lit\": \"ref\"", "\"lit\": \"${{ 'ref' }}\""),
-        ],
-    )?;
-    let scratch = Scratch::new()?;
-    let ran = finish(rig.start(&job, &scratch)?)?;
-    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
-    assert!(
-        ran.stdout.contains("input name is not a literal"),
-        "{}\n{}",
-        ran.stdout,
-        ran.stderr
-    );
-    assert!(!ran.stdout.contains("step-one-marker"), "step 1 ran");
-    assert!(!rig.trace().exists(), "git ran");
-    Ok(())
-}
-
-#[test]
 fn a_null_fetch_depth_takes_the_default_instead_of_refusing_the_job() -> Result<()> {
     let rig = Rig::new()?;
     let job = rig.job_edit(
