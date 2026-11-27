@@ -209,8 +209,10 @@ async fn lifecycle_keeps_every_logged_line_and_feeds_only_the_tail_left_when_a_s
 async fn lifecycle_gives_every_block_its_own_upload_budget_so_a_slow_link_loses_no_log()
 -> Result<()> {
     const LINES: usize = 200_000;
+    const BLOCK_DELAY: Duration = Duration::from_millis(1500);
+    const BLOCK_BUDGET: Duration = Duration::from_secs(4);
     let behavior = Behavior {
-        blob_delay: Duration::from_millis(600),
+        blob_delay: BLOCK_DELAY,
         ..Behavior::default()
     };
     let script = format!("seq 1 {LINES}");
@@ -220,13 +222,17 @@ async fn lifecycle_gives_every_block_its_own_upload_budget_so_a_slow_link_loses_
         &mock,
         Settings::new()
             .renewing_every(Duration::from_millis(200))
-            .uploading_each_block_within(Duration::from_secs(1)),
+            .uploading_each_block_within(BLOCK_BUDGET),
     )
     .await?;
 
     for blob in [STEP_LOG_BLOB, JOB_LOG_BLOB] {
         let puts = mock.requests_to("PUT", blob)?;
-        assert!(puts.len() >= 4, "{blob}: {} requests", puts.len());
+        assert!(
+            BLOCK_DELAY * u32::try_from(puts.len() - 1)? > BLOCK_BUDGET,
+            "{blob}: the requests after the create outlast one block budget: {} requests",
+            puts.len()
+        );
         assert_eq!(
             puts.last().context("the last block")?.query("seal"),
             Some("true"),

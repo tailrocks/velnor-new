@@ -83,8 +83,8 @@ async fn lifecycle_keeps_waiting_for_a_job_when_a_forced_token_refresh_loses_the
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
     assert_eq!(
         mock.requests_to("POST", "/oauth/token")?.len(),
-        3,
-        "the sign-in, the refresh that lost the connection and the exchange for the acquire"
+        4,
+        "the sign-in, the refresh that lost the connection, the exchange before the retried poll and the exchange for the acquire"
     );
     let polls: Vec<_> = mock
         .requests_to("GET", "/broker/message")?

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use velnor_runner::exec::JobResult;
-use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
+use velnor_runner::lifecycle::LifecycleOutcome;
 
 use super::exec_support::Scratch;
 use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in};
@@ -155,38 +155,13 @@ async fn lifecycle_keeps_the_tool_cache_after_a_job() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn lifecycle_refuses_a_tool_cache_inside_a_directory_it_clears_for_every_job() -> Result<()> {
-    let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
-    for inside in ["workspace", "workspace/tools", "temp/tools", "logs"] {
-        let scratch = Scratch::new()?;
-        let cache = scratch.work_dir().join(inside);
-
-        let outcome = run_in(
-            &mock,
-            &scratch,
-            Settings::new()
-                .caching_tools_in(cache)
-                .within(CANCEL_BUDGET),
-        )
-        .await?;
-
-        assert!(
-            matches!(outcome, Err(LifecycleError::WorkDir { .. })),
-            "{inside}: {outcome:?}"
-        );
-    }
-    assert!(mock.requests_to("POST", "/broker/session")?.is_empty());
-    Ok(())
-}
-
-#[tokio::test]
-async fn lifecycle_accepts_a_tool_cache_whose_name_only_starts_like_a_cleared_directory()
--> Result<()> {
+async fn tool_cache_job(
+    cache: impl FnOnce(&Scratch) -> std::path::PathBuf,
+) -> Result<(Scratch, std::path::PathBuf)> {
     let script = "echo kept > \"$RUNNER_TOOL_CACHE/marker\"";
     let mock = MockGithub::start(fixture_job("hello", Some(script))?, Behavior::default()).await?;
     let scratch = Scratch::new()?;
-    let cache = scratch.work_dir().join("workspace-cache");
+    let cache = cache(&scratch);
 
     let outcome = run_in(
         &mock,
@@ -198,6 +173,28 @@ async fn lifecycle_accepts_a_tool_cache_whose_name_only_starts_like_a_cleared_di
     .await??;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
-    assert_eq!(std::fs::read_to_string(cache.join("marker"))?, "kept\n");
+    Ok((scratch, cache))
+}
+
+#[tokio::test]
+async fn lifecycle_clears_a_tool_cache_inside_a_cleared_directory_with_it() -> Result<()> {
+    for inside in ["workspace/tools", "temp/tools", "logs/tools"] {
+        let (_scratch, cache) = tool_cache_job(|scratch| scratch.work_dir().join(inside)).await?;
+
+        assert!(!cache.exists(), "{inside}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn lifecycle_keeps_the_default_tool_cache_written_through_a_cleared_directory() -> Result<()>
+{
+    let (scratch, _) =
+        tool_cache_job(|scratch| scratch.work_dir().join("workspace/../_tool")).await?;
+
+    assert_eq!(
+        std::fs::read_to_string(scratch.work_dir().join("_tool").join("marker"))?,
+        "kept\n"
+    );
     Ok(())
 }

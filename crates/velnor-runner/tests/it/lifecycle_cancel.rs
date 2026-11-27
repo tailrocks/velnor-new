@@ -15,6 +15,8 @@ use super::lifecycle_support::{
 };
 use super::support::mock_github::{Behavior, Cancel, MessageTypes, MockGithub};
 
+const CLEANUP_FLOOR: Duration = Duration::from_secs(20);
+
 pub(crate) fn cancelled_with_cleanup(complete: &serde_json::Value) -> Result<()> {
     assert_eq!(complete["conclusion"], "canceled");
     let steps = complete["stepResults"].as_array().context("step results")?;
@@ -242,9 +244,9 @@ async fn lifecycle_stops_a_cleanup_step_that_outlives_the_floor_after_a_shutdown
     let scratch = Scratch::new()?;
     let mock = MockGithub::start(hanging_cleanup(&scratch)?, Behavior::default()).await?;
     let settings = Settings::new()
-        .killing_after_cancel_floor(Duration::from_secs(16))
+        .killing_after_cancel_floor(CLEANUP_FLOOR)
         .renewing_every(Duration::from_secs(60))
-        .within(CANCEL_BUDGET);
+        .within(RUN_BUDGET);
 
     let started = step_started_file(&scratch);
 
@@ -266,9 +268,9 @@ async fn lifecycle_warns_about_dropped_logs_when_a_job_is_stopped_at_the_cancel_
     };
     let mock = MockGithub::start(hanging_cleanup(&scratch)?, behavior).await?;
     let settings = Settings::new()
-        .killing_after_cancel_floor(Duration::from_secs(16))
+        .killing_after_cancel_floor(CLEANUP_FLOOR)
         .renewing_every(Duration::from_secs(60))
-        .within(CANCEL_BUDGET);
+        .within(RUN_BUDGET);
 
     let started = step_started_file(&scratch);
 
