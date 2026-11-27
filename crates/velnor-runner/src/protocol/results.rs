@@ -28,7 +28,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const ATTEMPTS: u64 = 3;
 const RETRY_STEP: Duration = Duration::from_millis(200);
 const AZURE_BLOB_STORAGE: &str = "BLOB_STORAGE_TYPE_AZURE";
-const KNOWN_HOSTS: &[&str] = &["results-receiver.actions.githubusercontent.com"];
+pub(crate) const KNOWN_HOSTS: &[&str] = &["results-receiver.actions.githubusercontent.com"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepStatus {

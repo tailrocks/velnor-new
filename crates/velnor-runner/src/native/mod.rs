@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact;
 mod cache;
 mod checkout;
 mod depth;
@@ -18,5 +19,6 @@ pub(crate) fn registry(store: StoreWriter, umask: Umask) -> AdapterRegistry {
         store: store.clone(),
     }));
     registry.register(Box::new(cache::CacheAdapter::new(store, umask)));
+    registry.register(Box::new(artifact::ArtifactAdapter));
     registry
 }

@@ -20,6 +20,23 @@ impl Seam {
         }
     }
 
+    pub(super) const fn unhooked() -> Self {
+        Self { hook: None }
+    }
+
+    pub(super) fn following() -> Self {
+        #[cfg(feature = "test-support")]
+        if let Some(target) = std::env::var_os("VELNOR_TEST_REMOVE_BEFORE_OPEN") {
+            let target = std::path::PathBuf::from(target);
+            return Self::new(move |path| {
+                if path == target {
+                    std::fs::remove_file(path).ok();
+                }
+            });
+        }
+        Self::unhooked()
+    }
+
     pub(crate) fn before_open(&self, path: &Path) {
         if let Some(hook) = &self.hook {
             hook(path);

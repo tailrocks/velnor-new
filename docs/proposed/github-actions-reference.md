@@ -870,6 +870,278 @@ The [pinned artifact reference](github-actions-artifact-reference.md#artifact-do
 records the download action's extraction and digest boundary. Verify artifact
 producer and identity before download; the digest check runs after extraction.
 
+The native artifact paths in `velnor-runner` differ from the pinned actions in
+the numbered places below (items 10 and 15 record a match, not a deviation). The
+`::error::` lines of the Twirp RPC calls and of the blob download exhaustion are reproduced exactly, and tests assert each one: `Failed
+to <Method>: `, `Received non-retryable error: `, `Failed request: (<status>)
+<reason>: <msg>`, `Failed to make request after <n> attempts: `, `Retry wait of
+<N> ms would exceed the maximum total retry wait of 120000 ms: `, the storage
+quota text, the network error text and `Unable to download and extract
+artifact: Artifact download failed after 5 retries.`. The per-attempt line
+`Attempt <n> of 5 failed with error: <msg>. Retrying request in <ms> ms...` is
+printed for RPC retries; item 8 below gives its timing. No other message is
+claimed to match.
+
+1. The download fetches up to 5 artifacts at a time, verifies each digest
+   before it extracts that artifact, and installs the batch before it fetches
+   the next. The action streams every artifact into the destination, starts
+   them all at once and verifies afterwards. A digest mismatch leaves that
+   artifact out of the destination; the artifacts that match are still
+   extracted and the step fails at the end naming every mismatch. The action
+   extracts each artifact before it compares the digest, so the files of a
+   mismatched artifact stay in its destination; Velnor deviates on purpose. Up to 5 archives sit in the temporary directory at once, so the
+   peak temporary disk use is the size of 5 archives.
+2. When an upload meets an existing artifact of the same name and `overwrite` is
+   false, it fails with `an artifact named '<name>' already exists`; that
+   wording is Velnor's own, not the toolkit's.
+3. A host that does not resolve is retried (5 attempts, about 65 to 94 seconds
+   of backoff), where `@actions/artifact` 6.3.1 fails at once with `ENOTFOUND`:
+   reqwest's `is_dns()` cannot tell `NXDOMAIN` from `EAI_AGAIN`, which the
+   toolkit retries.
+4. The `<reason>` in `Failed request` is the canonical phrase of the HTTP
+   status, where the toolkit prints the phrase the server sent.
+5. The text of a transient failure that carries no Twirp status, such as a body
+   that is not JSON or a reset or timed-out response, comes from the HTTP
+   client (reqwest) instead of Node's `SyntaxError` or socket error message.
+   It appears after `Failed to make request after <n> attempts: `, `Retry wait
+   of <N> ms would exceed the maximum total retry wait of 120000 ms: ` and in
+   the `Attempt` line.
+6. The digest failure line is `Digest validation failed for artifact(s):
+   <names>`. It omits the action's advice to use `digest-mismatch: warn`,
+   which Velnor rejects as an input.
+7. Blob transfers use Velnor's own retry policy (5 attempts, 1 second base,
+   multiplier 1.5; a 429, a 5xx and a transfer error are retried, any other
+   status fails at once, including a 2xx other than the `201` an upload
+   requires) and print no `Attempt` line, where the download action waits 5 seconds flat and retries every
+   error. A failed blob upload prints Velnor's `artifact blob PUT` text, not
+   the Azure SDK's.
+8. The toolkit prints each `Attempt <n> of 5 failed with error: …` line with
+   `core.info` before it waits. The native path prints them after the RPC call
+   returns, and for a download after all transfers finish.
+9. A numeric `Retry-After` above the 64-bit range counts as the largest 64-bit
+   number of seconds, so the retry fails at once on the total-wait budget. The
+   `Retry wait of <N> ms` text prints that wait as the integer
+   `18446744073709551615000`, where the toolkit does not clamp and prints the
+   header's value times 1000 as a JavaScript number (`1e+23` for
+   `Retry-After: 99999999999999999999`).
+10. With `overwrite: true`, an upload deletes the existing artifact right after
+    it logs the file count and before it validates the artifact name or the
+    paths, as the action does (`upload-artifact.ts` deletes, then
+    `uploadArtifact` validates the name at `upload-artifact.js:40`). A failure
+    while it validates or zips therefore leaves no artifact of that name, here
+    as there. No deviation.
+11. An entry keeps only the permission bits `0o777` of the file it archives,
+    so setuid, setgid and sticky bits are dropped. The pinned archiver 7.0.1
+    keeps `mode & 4095`. Extraction restores no mode in either case.
+12. A `retention-days` value that does not parse like JavaScript `parseInt`
+    (`days`, `0x`, `.5`) prints `Invalid retention-days`, uploads with the
+    default retention and fails the step at the end, as the action does:
+    `input-helper.ts` only calls `setFailed`. An unrecognized `if-no-files-found`
+    is handled the same way, and when both are invalid both lines print, the
+    `if-no-files-found` one first. A negative value is accepted and sends an
+    expiry in the past, and `0` sets no expiry, as the toolkit's `getExpiration`
+    does. `GITHUB_RETENTION_DAYS` is read like `parseInt`: leading JavaScript
+    whitespace is skipped, trailing text is ignored, and a value that does not
+    parse, or is `0`, sets no cap.
+
+    The expiry adds the days on the local calendar, as `setDate` does, so a
+    span that crosses a clock change keeps the local time of day. The zone is
+    the one Node 24 would pick from the `TZ` of the step, else the `TZ` of the
+    runner process, else the system zone (`/etc/localtime`). The table was
+    measured on Node 24.22.3 on Linux (glibc) and on macOS, and again on the
+    pinned runner image `ubuntu:26.04`, which ships no zoneinfo and no
+    `/etc/localtime`:
+
+    - One leading `:` is dropped. An empty value is UTC.
+    - A name that is exactly a time zone database name, after one leading
+      `posix/` or `right/` is dropped (`America/Los_Angeles`, a link such as
+      `Australia/ACT`, `PST8PDT` but not `posix/PST8PDT`), is that zone. The match is case-sensitive,
+      and a leading or trailing space, `Posix/` or a second prefix does not
+      match. The names come from the database bundled in the runner
+      (`jiff-tzdb` 1.0.0, IANA release 2026f), never from the host, because Node
+      resolves names against its own ICU (tzdata 2026e on Node 24.22.3) and the
+      image has no zoneinfo to read. ICU's `detectHostTimeZone` drops a name
+      of three or four characters whose standard offset differs from libc's,
+      which is 0 without a zone file, so Node reads `CET`, `EET`, `MET` and
+      `Cuba` as UTC although the bundle lists them; they are not zones here
+      either and add whole days. `EST`, `MST`, `HST`, `PRC`, `ROC`, `ROK`,
+      `Iran` and `W-SU` are dropped the same way, but they have no daylight
+      saving ahead, so the bundled zone adds the same time.
+    - A POSIX string of letters and whole hours (`UTC+3`, `UTC-3`, `XYZ5`,
+      `<ABC>-3`, one or two digits), a path to a zoneinfo file (absolute,
+      relative, `/etc/localtime`, with or without a leading `:`), a name that
+      is not a zone, and any value without a digit are fixed offsets. A fixed
+      offset adds exactly `days` times 24 hours. Node does not resolve a path
+      to its zone, and the offsets differ between Linux and macOS (macOS reads
+      `AB1` and `3` as offsets, Linux as UTC) without changing the expiry.
+    - Every other value that holds a digit or a comma leaves the system zone
+      in force: ICU's `isValidOlsonID` ends the name at the first digit or
+      comma of the unstripped value, so a comma is a digit for this rule even
+      when the rest is a name (`A,B`, `EST,EDT`, `Australia/Sydney,`, `UTC,`, `,`, `ABC,3`,
+      `A,B5`, `XYZ5,`), and so are a daylight-saving part or rule
+      (`ABC1DEF`, `AAA3BBB,M3.2.0,M11.1.0`), minutes (`UTC+3:30`, `ABC1:30`),
+      three or more digits (`ABC100`, `123`), a quoted name with a digit
+      (`<+03>-3`) and a value that starts with a digit and has a letter or
+      more than two digits (`1ABC`, `12345`). Only `PST8PDT`, `MST7MDT`,
+      `CST6CDT` and `EST5EDT` are exempt, and they are compared before the
+      `:`, `posix/` and `right/` strip, so `posix/PST8PDT`, `posix/EST5EDT`,
+      `:PST8PDT`, `::PST8PDT`, `PST8PDT ` and ` PST8PDT` leave the system zone
+      in force (measured on Node 24.22.3 with `/etc/localtime` linked to
+      Sydney: Sydney for all of them). A `TZ` that is not UTF-8 is read
+      with each invalid byte as one non-name character, as Node does.
+
+    Departures, from the same measurements. `US/Pacific-New` is an ICU name
+    that the bundle lacks, so it adds whole days here and calendar days there.
+    On a host with a full zoneinfo, `Eire` follows glibc's negative
+    daylight-saving rule in Node, and `CET`, `EET`, `MET` and `Cuba` resolve
+    through the host file; the bundle follows ICU and the image. `America/Havana`
+    differs from tzdata 2026e between the two releases (2026f here). A POSIX
+    rule string that names a real zone (`PST8PDT,M3.2.0,M11.1.0`, and on the
+    image `:PST8PDT`, `:EST5EDT`, `:MST7MDT`, `:CST6CDT` and `PST8PDT `) is
+    that zone in Node through glibc, and the system zone here, which is UTC on
+    the image. The system zone itself differs too: Velnor reads the TZif bytes
+    of `/etc/localtime` with their daylight-saving rules, while ICU maps the
+    name of the link's target to its own data (Sydney for a link to
+    `.../zoneinfo/Australia/Sydney`, UTC when the link dangles), and for a
+    plain copy of a Sydney file without zoneinfo takes only the standard
+    offset (a fixed `-600` on Node 24.22.3), where Velnor follows the file.
+
+    The runner's host environment filter does not pass `TZ` to script steps,
+    so only this adapter reads the process `TZ`.
+13. An artifact named `.` or `..` is extracted into `path` when it is the only
+    one downloaded, as the action does. With several artifacts each one needs a
+    directory of its own, so Velnor refuses those two names with its own text
+    (`artifact name '..' cannot be extracted into a directory of its own, ...`),
+    where the action would write into `path` or its parent.
+    The name and path error texts are the action's, byte for byte. The action does
+    not check a NUL in a name; Velnor refuses it with its own text (`... Velnor
+    refuses a null character in a name, which the toolkit does not check.`),
+    after the action's characters.
+14. An upload skips a matched file whose name is not valid UTF-8. The action's
+    glob decodes such a name lossily, so it can never open the file it listed
+    and does not archive it; Velnor skips it the same way.
+15. Each entry carries the file's modification time in UTC, rounded down to
+    two seconds, as archiver 7.0.1 writes it (a year before 1980 becomes
+    1980-01-01 00:00:00 and a year after 2043 becomes 2043-12-31 23:59:58).
+    No deviation; the zip crate would otherwise stamp 1980-01-01.
+16. A response body that ends before its declared length, or fails to read, is
+    retried as a transient failure. The toolkit's `readBody` (@actions/http-client
+    4.0.1 `lib/index.js:90-101`) settles only on `end` and has no `error` or
+    `aborted` handler, so its promise never settles. Nothing else keeps the
+    Node process alive, so it exits 0 and the step passes silently (the
+    `run().catch` of download-artifact `src/download-artifact.ts:249-251` is
+    never reached), where Velnor retries and then fails the step with the error
+    text. This applies to the Twirp response bodies only.
+17. Velnor's `github` context has no per-step `path`, `env`, `output`, `state`
+    or `step_summary` file-command paths. actions/runner 2.338.2
+    `FileCommandManager.cs:71` sets them for each step before it evaluates the
+    step's inputs, so an input that reads one gets the path there and an empty
+    string in Velnor, both when the input is checked at job start and when its
+    step runs.
+18. An upload input that is present but empty differs from one left out, as
+    `core.getInput` and `getBooleanInput` see it. An empty `if-no-files-found`
+    is unrecognized (`Provided: .`) and fails the step after the upload. An
+    empty `overwrite` fails before the search with the YAML 1.2 message. An
+    empty `name` fails after the log line and the overwrite delete with
+    `Provided artifact name input during validation is empty`. Left out, they
+    default to `warn`, `false` and `artifact`. The YAML 1.2 message has the
+    toolkit's second line, `Support boolean input list: ...`. An empty `name`
+    with `overwrite: true` deletes nothing here, because the overwrite matches
+    the exact name; the action's list call for an empty name is not an exact
+    match and can select an artifact of another name. This is a deliberate
+    departure.
+19. An upload's search skips a matched entry it cannot read as a regular file:
+    a dangling symlink, an entry that vanishes between the listing and the
+    open, and a FIFO, a socket or a device (a link to one included). The
+    toolkit's glob omits broken links and drops an entry that fails with
+    `ENOENT`, and `archiver` is never asked for the rest. Velnor skips these only
+    in the artifact search; `hashFiles` keeps failing with
+    `<path>: not a regular file` and keeps its guarded opens.
+
+The native steps claim only the pinned revisions: `actions/upload-artifact` at
+`cf430e030ddbb5b0abf93d22962f4752f3646cd9`, `v7` or `v7.0.2`, and
+`actions/download-artifact` at `9000827ccba6bdab643e8b6fd33ac0654aef8333`, `v8`
+or `v8.0.2`. Any other revision, and any input outside the supported set, is
+refused as unsupported before the first step of the job runs. An input given
+as an expression is evaluated for that check with the contexts the runner holds
+when the job starts (`github` as its own step sees it, `runner`, `needs`,
+`inputs` and `secrets`; actions/runner 2.338.2 `ExecutionContext.cs:1000-1040`
+builds them from the job message before any step), and is refused when the
+result is unsupported. An expression that reads `steps` or `env` (which
+`StepsRunner.cs:100-106` sets for each step, and `GITHUB_ENV` writes change),
+`success()`, `cancelled()` or `hashFiles`, or that cannot be evaluated at that
+point, such as one that names `matrix`, is not checked then: it is checked
+when its step runs, and an unsupported result fails that step with the same
+text before it lists any artifact. The download `pattern` is matched by a
+matcher of Velnor's own over the artifact name, and only a verified subset of minimatch 10.1.1 is accepted: literal characters, `*`,
+`?`, classes (`[abc]`, `[a-z]`, `[!a]`, `[^a]`) of ASCII letters, digits, `_` and
+`.`, and brace lists of at least two comma-separated alternatives, which may nest
+and may expand to at most 256 alternatives in all and at most 65536 tokens
+(a token is one literal UTF-16 code unit, `*`, `?` or a class) across all alternatives (both counted before anything is expanded) and nest at
+most 32 levels deep. A pattern is at most 65536 UTF-16 code
+units, minimatch's own limit. Every other pattern is refused as unsupported instead of being
+matched differently from minimatch: negation (`!`), comment (`#`), escapes
+(`\`), `/`, parentheses (extglobs such as `@(`), a brace list of one
+alternative such as `{a}`, ranges such as `{1..3}`, a brace list that follows
+`$`, `**` (also when a brace list forms it, as in `*{a,}*`), which minimatch treats
+as a globstar, POSIX classes such as `[[:alpha:]]`, and any unbalanced bracket
+or brace.
+The matcher follows minimatch's dot rule: a name that starts with `.` matches
+only a brace alternative of the pattern that starts with `.`, `[.]` or `[.-.]`, the
+names `.` and `..` match only an alternative made of literal characters, and
+`*`, `?` and classes never match `/`. A `?` matches one UTF-16 code unit, as in
+JavaScript. Extraction does not restore the file modes recorded in the zip, so
+files are `0644` and directories `0755` under the usual `022` umask, as the
+pinned actions document. A regular file that already exists is opened and
+truncated in place, as the toolkit's write stream does, so it keeps its mode,
+owner and hard links, and a file the step may not write fails the step (EACCES).
+A symbolic link or another kind of file is replaced by a new file instead,
+where the toolkit would write through a link. A blob download follows up to 50 redirects (status 301, 302, 303, 307 or 308
+with a `Location`), as @actions/http-client 4.0.1 `lib/index.js:281-312` does,
+and a status outside that list is the final answer. A relative or unparsable
+`Location`, or one that is not HTTPS or carries credentials, fails the attempt,
+which is retried like any other failure (the toolkit throws from `new URL` or
+on an HTTPS to HTTP downgrade, and its retry loop catches it); the toolkit
+follows a target with credentials, which Velnor refuses as it does for any
+authenticated URL. A blob download or upload has no total deadline. A
+download fails a transfer when no chunk arrives within 30 seconds, as the
+toolkit's single 30-second idle timer does. The deadline is set to 30 seconds
+after each chunk arrives and covers that chunk's write, the wait for the next
+chunk and the final flush. The toolkit restarts the timer on each data event and
+lets the read of the next chunk proceed while the write of the previous one is
+buffered; Velnor writes a chunk before it reads the next, so a write that blocks
+for the whole window fails here and can pass there. A Results Service call has no
+total deadline either: it fails when its socket is silent for 180 seconds, the
+3-minute socket timeout of `@actions/http-client`. An upload fails a transfer that sends
+no bytes for 30 seconds while it is sending, then waits up to 300 seconds for the
+reply to the complete body, the toolkit's 300-second stall timer. The 30 seconds
+start again each time the file reader hands the connection more bytes, so a stall
+is found one window after the last byte. Both retry the transfer. A blob whose type is not a zip
+type and whose URL path does not end in `.zip` is written as one file under the
+base name of its `Content-Disposition` file name, as the toolkit does for an
+artifact uploaded with `archive: false`. The header is read byte for byte as
+Latin-1, as Node does, so a raw `café.txt` becomes `cafÃ©.txt`. The runner
+sends the archive in one PUT, so the service's limit for a single request applies. An upload is refused
+when any of these holds: an archive over 4294967295 bytes (the upload
+limit applies to the archive, not to the bytes of its members; an entry is
+written as ZIP64 when the bytes still allowed for files could reach 4 GiB,
+whether or not the file is that large), more than 100000 files, or more than
+5368709120 bytes (5 GiB) of files in all, counted from the bytes read, so a file
+that grows while it is archived fails the step only when the bytes read pass
+that bound. The last two are the bounds the
+download enforces on extraction, so that an artifact this runner uploads is one
+it can download; the toolkit has neither bound. An upload also refuses a file
+whose path below the archive root contains `"`, `:`, `<`, `>`, `|`, `*`, `?`, a
+carriage return or a line feed, before it creates the artifact, as the toolkit's
+`validateFilePath` does; the wording of the error is Velnor's own.
+
+An upload `path` line that holds only negation markers (`!`, `!!`, `! !`) fails
+with `pattern cannot be empty`, as the toolkit's glob asserts
+(`internal-pattern.js:121`, @actions/glob 0.6.1), where an empty remainder
+would otherwise select the whole workspace. With no matching file an
+unrecognized `if-no-files-found` prints nothing more than its error, and the
+step fails at the end either way (item 12).
+
 The pinned [download-artifact source](https://github.com/actions/download-artifact/blob/9000827ccba6bdab643e8b6fd33ac0654aef8333/src/download-artifact.ts#L48-L166)
 (revision `9000827ccba6bdab643e8b6fd33ac0654aef8333`, lines 48-166) picks its
 mode from the truthiness of `artifact-ids` and parses each id with `parseInt`.
