@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
     secrets_context, service_variables, set_pair, string, with_action, write_event,
 };
 use super::host_env::host_env;
-use super::{ExecError, RunOptions, StepResult};
+use super::{ExecError, RunOptions, SHARED_DIR_MODE, StepResult};
 use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
@@ -24,6 +26,15 @@ pub(super) struct StepEntry {
     pub(super) outcome: StepResult,
     pub(super) conclusion: StepResult,
     pub(super) outputs: Vec<(String, String)>,
+}
+
+async fn create_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
+    let existed = tokio::fs::try_exists(directory).await?;
+    tokio::fs::create_dir_all(directory).await?;
+    if existed {
+        return Ok(());
+    }
+    tokio::fs::set_permissions(directory, Permissions::from_mode(mode)).await
 }
 
 #[derive(Debug)]
@@ -55,8 +66,13 @@ impl JobContext {
             }
         }
         private::create_dir(&options.temp).await?;
-        private::create_dir(&options.workspace).await?;
-        private::create_dir(&options.tool_cache).await?;
+        for directory in [&options.workspace, &options.tool_cache] {
+            create_dir(directory, SHARED_DIR_MODE)
+                .await
+                .map_err(|source| {
+                    ExecError::io(format!("create {}", directory.display()), source)
+                })?;
+        }
         let contexts = message
             .materialize_context_values_ordered()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?

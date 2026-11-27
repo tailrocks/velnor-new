@@ -15,8 +15,8 @@ use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::JobCancel;
 use crate::protocol::{
     Acknowledgement, BrokerClient, BrokerErrorCategory, DecodedJitConfig, GitHubApiError,
-    OAuthClient, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef, RunnerOs,
-    RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, TokenBackoff,
+    OAuthClient, OAuthErrorKind, OAuthJwtCredentials, RUNNER_JOB_REQUEST, RunnerJobRequestRef,
+    RunnerOs, RunnerStatus, SessionRecovery, TaskAgentMessage, TaskAgentSession, TokenBackoff,
     broker_error_category, oauth_error_kind,
 };
 use crate::secret::Secret;
@@ -131,6 +131,9 @@ fn refused(mut error: anyhow::Error) -> anyhow::Error {
 
 fn is_retriable(error: &anyhow::Error) -> bool {
     !matches!(
+        oauth_error_kind(error),
+        Some(OAuthErrorKind::Refused | OAuthErrorKind::RegistrationDeleted)
+    ) && !matches!(
         broker_error_category(error),
         Some(BrokerErrorCategory::Terminal | BrokerErrorCategory::Expired)
     )
@@ -269,8 +272,20 @@ impl Session {
                     }
                     eprintln!("warning: the broker session expired, recreated it");
                 }
-                other => return other.map(|poll| poll.message),
+                other => return self.settle(other?.message).await,
             }
+        }
+    }
+
+    async fn settle(
+        &self,
+        message: Option<TaskAgentMessage>,
+    ) -> anyhow::Result<Option<TaskAgentMessage>> {
+        match message {
+            Some(message) if MessageKind::of(&message) == MessageKind::ForceTokenRefresh => {
+                self.refresh().await.map(|()| None)
+            }
+            message => Ok(message),
         }
     }
 
@@ -323,25 +338,25 @@ impl Session {
                     return Ok(Assignment::Job(request));
                 }
                 MessageKind::HostedRunnerShutdown => return Ok(Assignment::Shutdown),
-                MessageKind::ForceTokenRefresh => {
-                    if let Err(error) = self.refresh().await {
-                        streak += 1;
-                        retry_poll(error, streak, error_delay).await?;
-                    }
-                }
-                MessageKind::JobCancellation | MessageKind::Other => {}
+                MessageKind::JobCancellation
+                | MessageKind::ForceTokenRefresh
+                | MessageKind::Other => {}
             }
         }
     }
 
-    pub(super) async fn close(&self) {
+    pub(super) async fn close(&self, timeout: Duration) {
         let id = self.auth().id.clone();
         let id = &id;
-        let deleted = self
-            .with_fresh_token(|broker| async move { broker.delete_session(id).await })
-            .await;
-        if let Err(error) = deleted {
-            eprintln!("warning: delete broker session: {error:#}");
+        let deleted = tokio::time::timeout(
+            timeout,
+            self.with_fresh_token(|broker| async move { broker.delete_session(id).await }),
+        )
+        .await;
+        match deleted {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => eprintln!("warning: delete broker session: {error:#}"),
+            Err(_) => eprintln!("warning: delete broker session: no answer within {timeout:?}"),
         }
     }
 }

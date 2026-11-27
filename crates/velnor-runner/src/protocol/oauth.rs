@@ -11,7 +11,7 @@ use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use super::http::{oauth_form_request, redacted_authenticated_url};
+use super::http::{OAuthResponse, oauth_form_request, redacted_authenticated_url};
 use super::jit::private_key_der_from_pem;
 use super::token_backoff::{MAX_RETRIES, TokenBackoff, is_retryable};
 
@@ -101,11 +101,7 @@ impl fmt::Display for OAuthTokenError {
                 self.description
             ),
             OAuthErrorKind::Refused => {
-                write!(
-                    f,
-                    "OAuth token request failed: HTTP status {}",
-                    self.description
-                )
+                write!(f, "OAuth token request failed: {}", self.description)
             }
             OAuthErrorKind::ClockSkew | OAuthErrorKind::Other => write!(
                 f,
@@ -119,11 +115,11 @@ impl fmt::Display for OAuthTokenError {
 impl std::error::Error for OAuthTokenError {}
 
 impl OAuthTokenError {
-    fn refused(status: u16) -> Self {
+    fn refused(description: String) -> Self {
         Self {
             kind: OAuthErrorKind::Refused,
-            error: "http_status".to_owned(),
-            description: status.to_string(),
+            error: "refused".to_owned(),
+            description,
         }
     }
 
@@ -184,20 +180,21 @@ impl OAuthClient {
                 tokio::time::sleep(delay).await;
                 continue;
             }
-            return parse_oauth_token_response(response.status, &response.body);
+            return parse_oauth_token_response(&response);
         }
     }
 }
 
-fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToken> {
-    if body.len() > OAUTH_MAX_RESPONSE_BYTES {
+fn parse_oauth_token_response(reply: &OAuthResponse) -> Result<OAuthAccessToken> {
+    let status = reply.status;
+    if reply.body.len() > OAUTH_MAX_RESPONSE_BYTES {
         bail!("OAuth token response exceeded {OAUTH_MAX_RESPONSE_BYTES} bytes");
     }
-    if status != 200 && status != 400 {
-        return Err(OAuthTokenError::refused(status).into());
+    if status != 200 && (status != 400 || !reply.json) {
+        return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
     }
     let response: OAuthTokenResponse =
-        serde_json::from_str(body.trim()).context("parse OAuth token response")?;
+        serde_json::from_str(reply.body.trim()).context("parse OAuth token response")?;
     let token = response.access_token.filter(|value| !value.is_empty());
     if let (200, Some(token)) = (status, token) {
         return Ok(OAuthAccessToken {
@@ -214,9 +211,9 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
         return Err(OAuthTokenError::new(error, description).into());
     }
     if status != 200 {
-        bail!("OAuth token request failed: HTTP status {status}");
+        return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
     }
-    bail!("OAuth token response missing access_token")
+    Err(OAuthTokenError::refused("no access_token in the response".to_owned()).into())
 }
 
 pub fn build_client_assertion(credentials: &OAuthJwtCredentials) -> Result<String> {

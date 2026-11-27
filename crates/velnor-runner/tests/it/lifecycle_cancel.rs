@@ -10,7 +10,8 @@ use velnor_runner::lifecycle::LifecycleOutcome;
 use super::exec_builder::{assert_gone, pid_from, wait_for_file};
 use super::exec_support::Scratch;
 use super::lifecycle_support::{
-    CANCEL_BUDGET, RUN_BUDGET, Settings, fixture_job, job_replacing, run_in, run_with,
+    CANCEL_BUDGET, RUN_BUDGET, Settings, fixture_job, job_replacing, replace_literal, run_in,
+    run_until, run_with,
 };
 use super::support::mock_github::{Behavior, Cancel, MessageTypes, MockGithub};
 
@@ -167,13 +168,23 @@ async fn lifecycle_cancel_message_timeout_below_the_floor_still_lets_the_cleanup
     Ok(())
 }
 
+fn step_started_file(scratch: &Scratch) -> std::path::PathBuf {
+    scratch.work_dir().with_file_name("step.started")
+}
+
 fn hanging_cleanup(scratch: &Scratch) -> Result<serde_json::Value> {
     let pid_file = scratch.work_dir().with_file_name("cleanup.pid");
     let script = format!(
         "sleep 4343 >/dev/null 2>&1 &\necho $! > {}\nwait",
         pid_file.display()
     );
-    job_replacing("cancel", Some(("echo cleanup", &script)))
+    let mut job = job_replacing("cancel", Some(("echo cleanup", &script)))?;
+    let running = format!("touch {}; sleep 60", step_started_file(scratch).display());
+    anyhow::ensure!(
+        replace_literal(&mut job, "sleep 60", &running),
+        "the fixture has a running step"
+    );
+    Ok(job)
 }
 
 fn assert_stopped_at_the_deadline(
@@ -230,19 +241,17 @@ async fn lifecycle_stops_a_cleanup_step_that_outlives_the_cancel_timeout_of_the_
 async fn lifecycle_stops_a_cleanup_step_that_outlives_the_floor_after_a_shutdown() -> Result<()> {
     let scratch = Scratch::new()?;
     let mock = MockGithub::start(hanging_cleanup(&scratch)?, Behavior::default()).await?;
-    let shutdown = JobCancel::new();
-    let signal = shutdown.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        signal.cancel();
-    });
-    let mut settings = Settings::new()
+    let settings = Settings::new()
         .killing_after_cancel_floor(Duration::from_secs(16))
         .renewing_every(Duration::from_secs(60))
         .within(CANCEL_BUDGET);
-    settings.shutdown = shutdown;
 
-    let outcome = run_in(&mock, &scratch, settings).await??;
+    let started = step_started_file(&scratch);
+
+    let outcome = run_until(&mock, &scratch, settings, "the step to start", || {
+        Ok(started.exists())
+    })
+    .await??;
 
     assert_stopped_at_the_deadline(&mock, &scratch, outcome)
 }
@@ -256,19 +265,17 @@ async fn lifecycle_warns_about_dropped_logs_when_a_job_is_stopped_at_the_cancel_
         ..Behavior::default()
     };
     let mock = MockGithub::start(hanging_cleanup(&scratch)?, behavior).await?;
-    let shutdown = JobCancel::new();
-    let signal = shutdown.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        signal.cancel();
-    });
-    let mut settings = Settings::new()
+    let settings = Settings::new()
         .killing_after_cancel_floor(Duration::from_secs(16))
         .renewing_every(Duration::from_secs(60))
         .within(CANCEL_BUDGET);
-    settings.shutdown = shutdown;
 
-    let outcome = run_in(&mock, &scratch, settings).await??;
+    let started = step_started_file(&scratch);
+
+    let outcome = run_until(&mock, &scratch, settings, "the step to start", || {
+        Ok(started.exists())
+    })
+    .await??;
 
     assert_stopped_at_the_deadline(&mock, &scratch, outcome)?;
     let complete = mock.complete_request()?;

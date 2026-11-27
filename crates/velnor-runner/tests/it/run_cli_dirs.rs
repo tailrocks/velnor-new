@@ -36,31 +36,47 @@ async fn run_cli_gives_the_work_directories_fixed_modes_whatever_the_umask() -> 
     })
     .await?;
 
-    let modes = (
+    let modes = [
         mode_of(&work_dir)?,
+        mode_of(&work_dir.join("workspace"))?,
+        mode_of(&work_dir.join("_tool"))?,
         mode_of(&work_dir.join("temp"))?,
         mode_of(&work_dir.join("logs"))?,
-    );
+    ];
     signal_and_wait(started, Signal::TERM).await?;
 
-    assert_eq!(modes, (0o755, 0o700, 0o700), "work, temp and logs");
+    assert_eq!(
+        modes,
+        [0o755, 0o755, 0o755, 0o700, 0o700],
+        "work, workspace, tool cache, temp and logs"
+    );
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn run_cli_leaves_the_mode_of_a_work_directory_that_exists() -> Result<()> {
+async fn run_cli_keeps_a_work_directory_that_exists_with_its_mode() -> Result<()> {
     let mock = MockGithub::start(fixture_job("hello", None)?, Behavior::default()).await?;
     let scratch = Scratch::new()?;
     let work_dir = scratch.work_dir().join("job");
     std::fs::create_dir_all(&work_dir)?;
     std::fs::set_permissions(&work_dir, std::fs::Permissions::from_mode(0o750))?;
-    let started = start_runner_with(&mock, &scratch, Some("000"), &[])?;
+    let cache = scratch.work_dir().join("hosted");
+    let started = start_runner_with(
+        &mock,
+        &scratch,
+        Some("000"),
+        &[("RUNNER_TOOL_CACHE", cache.as_path())],
+    )?;
 
     let output = tokio::time::timeout(EXIT_BUDGET, started.child.wait_with_output())
         .await
         .context("the runner exited")??;
 
     assert_eq!(output.status.code(), Some(0));
+    assert!(
+        work_dir.exists(),
+        "the work directory of the operator stays"
+    );
     assert_eq!(mode_of(&work_dir)?, 0o750);
     Ok(())
 }

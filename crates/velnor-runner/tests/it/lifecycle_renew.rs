@@ -4,12 +4,12 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use velnor_runner::exec::{JobCancel, JobResult};
+use velnor_runner::exec::JobResult;
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 
 use super::exec_support::Scratch;
 use super::lifecycle_cancel::cancelled_with_cleanup;
-use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run_with};
+use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run_in, run_until, run_with};
 use super::support::mock_github::{Behavior, Cancel, MockGithub, Renew, STEP_LOG_BLOB};
 
 fn assert_forced_failure(mock: &MockGithub, status: &str) -> Result<()> {
@@ -80,6 +80,36 @@ async fn lifecycle_fails_the_job_when_the_first_renew_never_succeeds() -> Result
 }
 
 #[tokio::test]
+async fn lifecycle_keeps_renewing_the_job_lock_until_the_completion_is_sent() -> Result<()> {
+    let behavior = Behavior {
+        complete_delay: Duration::from_millis(1500),
+        ..Behavior::default()
+    };
+    let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
+
+    let outcome = run_with(
+        &mock,
+        Settings::new()
+            .renewing_every(Duration::from_millis(200))
+            .within(CANCEL_BUDGET),
+    )
+    .await?;
+
+    assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Succeeded));
+    let completing = mock.server.only_request("POST", "/run/completejob")?.at;
+    let renewed_meanwhile = mock
+        .requests_to("POST", "/run/renewjob")?
+        .iter()
+        .filter(|renew| renew.at > completing)
+        .count();
+    assert!(
+        renewed_meanwhile >= 2,
+        "{renewed_meanwhile} renewals while the completion was in flight"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn lifecycle_cancels_the_job_when_a_later_renew_finds_it_gone() -> Result<()> {
     let behavior = Behavior {
         renew: Renew::RenewedThenJobGone,
@@ -101,17 +131,13 @@ async fn lifecycle_cancels_the_job_when_a_shutdown_arrives_before_the_first_rene
         ..Behavior::default()
     };
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-    let shutdown = JobCancel::new();
-    let signal = shutdown.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        signal.cancel();
-    });
-    let mut settings = Settings::new().within(CANCEL_BUDGET);
-    settings.shutdown = shutdown;
+    let settings = Settings::new().within(CANCEL_BUDGET);
 
     let scratch = Scratch::new()?;
-    let outcome = run_in(&mock, &scratch, settings).await??;
+    let outcome = run_until(&mock, &scratch, settings, "the first renew request", || {
+        Ok(!mock.requests_to("POST", "/run/renewjob")?.is_empty())
+    })
+    .await??;
 
     assert_eq!(outcome, LifecycleOutcome::Completed(JobResult::Cancelled));
     let complete = mock.complete_request()?;

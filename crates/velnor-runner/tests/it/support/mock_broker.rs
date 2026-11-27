@@ -34,45 +34,62 @@ pub(super) fn is_stale(request: &super::RecordedRequest) -> bool {
     request.header("authorization") == Some(format!("Bearer {STALE_OAUTH_TOKEN}").as_str())
 }
 
-pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result<()> {
-    let exchanges = AtomicUsize::new(0);
-    server.respond("POST", "/oauth/token", move |_| {
-        let number = exchanges.fetch_add(1, Ordering::SeqCst);
-        if let OAuthTokens::Rejected(error, description) = tokens {
-            return Reply::json(400, &json!({"error": error, "error_description": description}));
+fn token_reply(token: &str) -> Reply {
+    Reply::json(
+        200,
+        &json!({"access_token": token, "token_type": "bearer", "expires_in": 3600}),
+    )
+}
+
+fn rejected(error: &str, description: &str) -> Reply {
+    Reply::json(
+        400,
+        &json!({"error": error, "error_description": description}),
+    )
+}
+
+fn exchange_reply(tokens: OAuthTokens, number: usize) -> Reply {
+    match tokens {
+        OAuthTokens::StaleFirst => token_reply(if number == 0 {
+            STALE_OAUTH_TOKEN
+        } else {
+            OAUTH_TOKEN
+        }),
+        OAuthTokens::StaleThenFails(status) if number > 0 => Reply::status(status),
+        OAuthTokens::StaleThenFails(_) => token_reply(STALE_OAUTH_TOKEN),
+        OAuthTokens::HangsUpAfterSignIn if number == 1 => Reply::hangup(),
+        OAuthTokens::UnavailableFirst(count) if number < count => Reply::status(503),
+        OAuthTokens::UnavailableAfterSignIn(count) if (1..=count).contains(&number) => {
+            Reply::status(503)
         }
-        if matches!(tokens, OAuthTokens::UnavailableFirst(count) if number < count) {
-            return Reply::status(503);
-        }
-        if matches!(tokens, OAuthTokens::UnavailableAfterSignIn(count) if (1..=count).contains(&number))
-        {
-            return Reply::status(503);
-        }
-        if let OAuthTokens::Fails {
+        OAuthTokens::Fails {
             status,
             after,
             times,
             retry_after,
-        } = tokens
-            && number >= after
-            && number - after < times
-        {
+        } if number >= after && number - after < times => {
             let reply = Reply::status(status);
-            return match retry_after {
+            match retry_after {
                 Some(value) => reply.with_header("retry-after", value),
                 None => reply,
-            };
+            }
         }
-        let stale = matches!(tokens, OAuthTokens::StaleFirst) && number == 0;
-        let token = if stale {
-            STALE_OAUTH_TOKEN
-        } else {
-            OAUTH_TOKEN
-        };
-        Reply::json(
-            200,
-            &json!({"access_token": token, "token_type": "bearer", "expires_in": 3600}),
-        )
+        OAuthTokens::Rejected(error, description) => rejected(error, description),
+        OAuthTokens::RejectedAfterSignIn(error, description) if number > 0 => {
+            rejected(error, description)
+        }
+        OAuthTokens::NoAccessToken => Reply::json(200, &json!({"token_type": "bearer"})),
+        OAuthTokens::UnparsableBadRequestFirst(count) if number < count => {
+            Reply::json(400, &json!("not a token response"))
+        }
+        _ => token_reply(OAUTH_TOKEN),
+    }
+}
+
+pub(super) fn mount_identity(server: &TestServer, tokens: OAuthTokens) -> Result<()> {
+    let exchanges = AtomicUsize::new(0);
+    server.respond("POST", "/oauth/token", move |_| {
+        exchange_reply(tokens, exchanges.fetch_add(1, Ordering::SeqCst))
     })
 }
 
@@ -165,6 +182,23 @@ fn mount_session(server: &TestServer, create: SessionCreate) -> Result<()> {
     })
 }
 
+fn busy_script(
+    cancel: Cancel,
+    decoy: &Value,
+    refresh: &Value,
+) -> (Option<Duration>, Option<Value>, bool) {
+    match cancel {
+        Cancel::Never
+        | Cancel::BusyPollFails(_)
+        | Cancel::BusyPollRunnerGone
+        | Cancel::BusyPollSessionExpiresOnce => (None, None, false),
+        Cancel::After(after) => (Some(after), None, false),
+        Cancel::AfterACancelOfAnotherJob(after) => (Some(after), Some(decoy.clone()), false),
+        Cancel::AfterAForcedTokenRefresh(after) => (Some(after), Some(refresh.clone()), false),
+        Cancel::HostedShutdownAfter(after) => (Some(after), None, true),
+    }
+}
+
 pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior) -> Result<()> {
     mount_session(server, behavior.session)?;
     mount_acknowledge(server, behavior.acknowledge)?;
@@ -196,20 +230,13 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
         &json!({"reason": "the hosted runner was deprovisioned"}),
     );
     let (cancel, decoy) = (cancel_of(JOB_ID), cancel_of(OTHER_JOB_ID));
-    let (cancel_after, decoy_first, hosted_shutdown) = match behavior.cancel {
-        Cancel::Never
-        | Cancel::BusyPollFails(_)
-        | Cancel::BusyPollRunnerGone
-        | Cancel::BusyPollSessionExpiresOnce => (None, false, false),
-        Cancel::After(after) => (Some(after), false, false),
-        Cancel::AfterACancelOfAnotherJob(after) => (Some(after), true, false),
-        Cancel::HostedShutdownAfter(after) => (Some(after), false, true),
-    };
+    let refresh = message(&kind("ForceTokenRefresh"), &json!({}));
+    let (cancel_after, first_busy, hosted_shutdown) =
+        busy_script(behavior.cancel, &decoy, &refresh);
     let busy_failure = busy_failure(behavior.cancel);
     let session_invalid = broker_error("RunnerSessionInvalid", "the session is no longer valid");
     let expires_session = matches!(behavior.cancel, Cancel::BusyPollSessionExpiresOnce);
     let online = behavior.online;
-    let refresh = message(&kind("ForceTokenRefresh"), &json!({}));
     let refresh_pending = AtomicBool::new(matches!(online, Online::ForceTokenRefreshThenJob));
     let delivered = AtomicBool::new(false);
     let busy_polls = Arc::new(AtomicUsize::new(0));
@@ -234,7 +261,9 @@ pub(super) fn mount_broker(server: &TestServer, base: &str, behavior: &Behavior)
                     return session_invalid.clone();
                 }
                 match cancel_after {
-                    _ if decoy_first && number == 0 => Reply::json(200, &decoy),
+                    _ if number == 0 && first_busy.is_some() => {
+                        Reply::json(200, first_busy.as_ref().unwrap_or(&Value::Null))
+                    }
                     Some(after) if !delivered.swap(true, Ordering::SeqCst) => {
                         let delivery = if hosted_shutdown { &shutdown } else { &cancel };
                         Reply::json(200, delivery).after(after)

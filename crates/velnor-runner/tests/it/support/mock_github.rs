@@ -68,6 +68,7 @@ pub(crate) enum Cancel {
     BusyPollFails(u16),
     BusyPollRunnerGone,
     BusyPollSessionExpiresOnce,
+    AfterAForcedTokenRefresh(Duration),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -75,6 +76,8 @@ pub(crate) enum OAuthTokens {
     #[default]
     Fresh,
     StaleFirst,
+    StaleThenFails(u16),
+    HangsUpAfterSignIn,
     UnavailableAfterSignIn(usize),
     UnavailableFirst(usize),
     Fails {
@@ -84,6 +87,9 @@ pub(crate) enum OAuthTokens {
         retry_after: Option<&'static str>,
     },
     Rejected(&'static str, &'static str),
+    RejectedAfterSignIn(&'static str, &'static str),
+    NoAccessToken,
+    UnparsableBadRequestFirst(usize),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -168,6 +174,7 @@ pub(crate) struct Behavior {
     pub(crate) recovery: SessionRecovery,
     pub(crate) oauth: OAuthTokens,
     pub(crate) acquire_delay: Duration,
+    pub(crate) complete_delay: Duration,
     pub(crate) status: StepStatus,
 }
 
@@ -191,6 +198,7 @@ impl Default for Behavior {
             recovery: SessionRecovery::Recreate,
             oauth: OAuthTokens::Fresh,
             acquire_delay: Duration::ZERO,
+            complete_delay: Duration::ZERO,
             status: StepStatus::Accepted,
         }
     }
@@ -314,5 +322,8 @@ fn mount_run_service(server: &TestServer, job: Value, behavior: &Behavior) -> Re
             Reply::json(500, &json!({"message": "unavailable"}))
         }
     })?;
-    server.respond("POST", "/run/completejob", |_| Reply::status(200))
+    let complete_delay = behavior.complete_delay;
+    server.respond("POST", "/run/completejob", move |_| {
+        Reply::status(200).after(complete_delay)
+    })
 }

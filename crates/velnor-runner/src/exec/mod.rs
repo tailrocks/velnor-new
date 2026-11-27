@@ -43,6 +43,8 @@ pub use tool_cache::{TOOL_CACHE_VARIABLES, tool_cache_from_env};
 use crate::expr::ExprError;
 use crate::protocol::RunnerOs;
 
+pub(crate) const SHARED_DIR_MODE: u32 = 0o755;
+
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub workspace: PathBuf,

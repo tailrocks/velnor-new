@@ -8,8 +8,7 @@ use velnor_runner::exec::JobResult;
 use velnor_runner::lifecycle::{LifecycleError, LifecycleOutcome};
 
 use super::exec_support::Scratch;
-use super::lifecycle_support::shutdown_after;
-use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in, run_with};
+use super::lifecycle_support::{CANCEL_BUDGET, Settings, fixture_job, run, run_in, run_until};
 use super::support::mock_github::{
     Behavior, MockGithub, OAUTH_TOKEN, OAuthTokens, STALE_OAUTH_TOKEN, SessionCreate, SessionFault,
 };
@@ -69,12 +68,19 @@ async fn lifecycle_stops_waiting_for_a_session_when_shutdown_arrives() -> Result
             ..Behavior::default()
         };
         let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
-        let mut settings = Settings::new()
+        let settings = Settings::new()
             .within(CANCEL_BUDGET)
             .retrying_sessions_every(Duration::from_millis(200));
-        settings.shutdown = shutdown_after(Duration::from_millis(500));
+        let scratch = Scratch::new()?;
 
-        let outcome = run_with(&mock, settings).await?;
+        let outcome = run_until(
+            &mock,
+            &scratch,
+            settings,
+            "the second session request",
+            || Ok(mock.requests_to("POST", "/broker/session")?.len() >= 2),
+        )
+        .await??;
 
         assert_eq!(outcome, LifecycleOutcome::NoJob, "{create:?}");
         assert!(mock.requests_to("DELETE", "/broker/session")?.is_empty());
@@ -93,12 +99,7 @@ async fn session_creation_ends_with_a_session_error_after(
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
     let scratch = Scratch::new()?;
 
-    let outcome = run_in(
-        &mock,
-        &scratch,
-        Settings::new().within(Duration::from_secs(5)),
-    )
-    .await?;
+    let outcome = run_in(&mock, &scratch, Settings::new().within(CANCEL_BUDGET)).await?;
 
     assert!(
         matches!(outcome, Err(LifecycleError::Session(_))),
@@ -235,7 +236,7 @@ async fn sign_in_ends_the_run_after(oauth: OAuthTokens, exchanges: usize) -> Res
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
     let scratch = Scratch::new()?;
     let settings = Settings::new()
-        .within(Duration::from_secs(5))
+        .within(CANCEL_BUDGET)
         .retrying_sessions_every(Duration::from_millis(1));
 
     let outcome = run_in(&mock, &scratch, settings).await?;
@@ -267,6 +268,34 @@ async fn lifecycle_gives_up_at_once_when_a_deleted_registration_also_reports_clo
 }
 
 #[tokio::test]
+async fn lifecycle_gives_up_at_once_on_a_token_answer_without_an_access_token() -> Result<()> {
+    sign_in_ends_the_run_after(OAuthTokens::NoAccessToken, 1).await
+}
+
+#[tokio::test]
+async fn lifecycle_gives_up_at_once_on_a_bad_request_from_the_token_endpoint_that_is_not_json()
+-> Result<()> {
+    let plain = OAuthTokens::Fails {
+        status: 400,
+        after: 0,
+        times: usize::MAX,
+        retry_after: None,
+    };
+    sign_in_ends_the_run_after(plain, 1).await
+}
+
+#[tokio::test]
+async fn lifecycle_retries_a_bad_request_that_claims_json_and_does_not_parse() -> Result<()> {
+    let mock = session_is_created_through(&[], OAuthTokens::UnparsableBadRequestFirst(3)).await?;
+
+    assert_eq!(
+        mock.requests_to("POST", "/oauth/token")?.len(),
+        EXCHANGES_WITHOUT_REFRESH + 3
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn lifecycle_gives_up_on_a_clock_skewed_sign_in_after_sixty_attempts() -> Result<()> {
     let skewed = OAuthTokens::Rejected(
         "invalid_request",
@@ -293,12 +322,7 @@ async fn lifecycle_gives_up_on_a_session_that_stays_unauthorized_after_signing_i
     let mock = MockGithub::start(fixture_job("hello", None)?, behavior).await?;
     let scratch = Scratch::new()?;
 
-    let outcome = run_in(
-        &mock,
-        &scratch,
-        Settings::new().within(Duration::from_secs(5)),
-    )
-    .await?;
+    let outcome = run_in(&mock, &scratch, Settings::new().within(CANCEL_BUDGET)).await?;
 
     assert!(
         matches!(outcome, Err(LifecycleError::Session(_))),
