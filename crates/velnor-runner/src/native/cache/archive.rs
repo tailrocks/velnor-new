@@ -281,17 +281,42 @@ impl<'a, W: Write> Packer<'a, W> {
 
 fn refuse_nested(roots: &[PathBuf], root: &Path, seen: &Stat) -> Result<()> {
     let closed = FileType::from_raw_mode(seen.st_mode) != FileType::Directory;
-    let below = roots
+    for inner in roots
         .iter()
-        .find(|other| *other != root && other.starts_with(root));
-    match below {
-        Some(inner) if closed => bail!(
+        .filter(|other| *other != root && other.starts_with(root))
+    {
+        ensure!(
+            !closed,
             "cache restore never writes through a link: {} is a link or file, so {} below it could not be restored",
             root.display(),
             inner.display()
-        ),
-        _ => Ok(()),
+        );
+        refuse_linked_between(root, inner)?;
     }
+    Ok(())
+}
+
+fn refuse_linked_between(root: &Path, inner: &Path) -> Result<()> {
+    let relative = inner
+        .strip_prefix(root)
+        .context("place a declared path under another declared path")?;
+    let mut at = root.to_path_buf();
+    for part in relative.parent().into_iter().flat_map(Path::components) {
+        at.push(part);
+        match statat(CWD, &at, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(seen) => ensure!(
+                FileType::from_raw_mode(seen.st_mode) == FileType::Directory,
+                "cache restore never writes through a link: {} is a link or file, so {} below it could not be restored",
+                at.display(),
+                inner.display()
+            ),
+            Err(Errno::NOENT) => break,
+            Err(error) => {
+                return Err(error).with_context(|| format!("archive {}", at.display()));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn pack(roots: &[PathBuf], out: impl Write, cancel: Option<&JobCancel>) -> Result<u64> {

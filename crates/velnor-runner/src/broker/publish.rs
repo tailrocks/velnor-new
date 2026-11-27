@@ -14,7 +14,7 @@ use velnor_cache_rules::Scope;
 
 use super::access::stamp_access;
 use super::budget::make_room;
-use super::cache::{ACCESSED, CacheOwner, DATA, KEY, MARKER, VERSION, entry_name};
+use super::cache::{ACCESSED, CacheOwner, DATA, KEY, MARKER, SCOPE, VERSION, entry_name};
 use super::incoming::Upload;
 use super::layout::Layout;
 use super::proto::Response;
@@ -55,6 +55,7 @@ fn create_synced(entry: BorrowedFd<'_>, name: &str, bytes: &[u8]) -> Result<()> 
 fn seal(entry: &OwnedFd, target: &Target, now: u64) -> Result<()> {
     create_synced(entry.as_fd(), KEY, target.key.as_bytes())?;
     create_synced(entry.as_fd(), VERSION, target.version.as_bytes())?;
+    create_synced(entry.as_fd(), SCOPE, target.scope.0.as_bytes())?;
     create_synced(entry.as_fd(), ACCESSED, b"")?;
     stamp_access(entry.as_fd(), now)?;
     create_synced(entry.as_fd(), MARKER, b"")?;
@@ -130,6 +131,12 @@ fn not_abandoned(abandoned: &AtomicBool, step: &str) -> Result<()> {
     Ok(())
 }
 
+fn withdraw(layout: &Layout, scope: &OwnedFd, entry: &OsString) -> Result<()> {
+    let aside = layout.open_aside()?;
+    move_aside(scope.as_fd(), entry, aside.as_fd()).context("set the publication aside")?;
+    sync_fd(scope, "the cache scope")
+}
+
 fn attempt(
     layout: &Layout,
     target: &Target,
@@ -139,8 +146,8 @@ fn attempt(
 ) -> Result<Outcome> {
     fchmod(data, Mode::from_bits_truncate(FROZEN_FILE)).context("freeze the cache data")?;
     sync_file(data, "the cache data")?;
-    let scope = layout.open_scope(target)?;
     let _lock = layout.lock(target, abandoned)?;
+    let scope = layout.open_scope(target)?;
     not_abandoned(abandoned, "before it was sealed")?;
     let entry = OsString::from(entry_name(&target.version, &target.key));
     if is_complete(scope.as_fd(), &entry) {
@@ -174,10 +181,12 @@ fn attempt(
         })
         .and_then(|()| sync_fd(&scope, "the cache scope"));
     if let Err(error) = committed {
-        if let Ok(aside) = layout.open_aside() {
-            let _ = move_aside(scope.as_fd(), &entry, aside.as_fd());
-        }
-        return Err(error);
+        return Err(match withdraw(layout, &scope, &entry) {
+            Ok(()) => error,
+            Err(left) => error.context(format!(
+                "the failed publication could not be withdrawn: {left:#}"
+            )),
+        });
     }
     Ok(Outcome::Published)
 }

@@ -15,6 +15,7 @@ use super::proto::Denied;
 pub(crate) const DATA: &str = "data.tar";
 pub(crate) const KEY: &str = "key";
 pub(crate) const VERSION: &str = "version";
+pub(crate) const SCOPE: &str = "scope";
 pub(crate) const MARKER: &str = "complete";
 pub(crate) const ACCESSED: &str = "accessed";
 pub(crate) const MAX_DATA_BYTES: u64 = 10 * 1024 * 1024 * 1024;

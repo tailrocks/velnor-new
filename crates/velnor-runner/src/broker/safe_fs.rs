@@ -53,7 +53,7 @@ pub(crate) fn enter_directory_as(
 }
 
 pub(crate) fn enter_directory(parent: BorrowedFd<'_>, name: &OsStr) -> rustix::io::Result<OwnedFd> {
-    enter_directory_as(parent, name, 0o755).map(|(directory, _)| directory)
+    enter_directory_as(parent, name, 0o777).map(|(directory, _)| directory)
 }
 
 pub(crate) fn is_regular_mode(mode: RawMode) -> bool {

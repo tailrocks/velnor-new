@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use crate::broker::cache::{MAX_KEY_LENGTH, key_units};
-use crate::exec::{ExecError, Inputs};
+use crate::exec::{DeclaredInputs, ExecError, InputValue, Inputs};
 
 const MAX_KEYS: usize = 10;
 
@@ -43,13 +43,50 @@ impl CacheKind {
 
 pub(super) const SUPPORTED_REVISION: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 
-pub(super) fn check_revision(reference: &str) -> Result<(), ExecError> {
+fn revision_problem(reference: &str) -> Option<String> {
     match CacheKind::revision(reference) {
-        SUPPORTED_REVISION => Ok(()),
-        other => Err(ExecError::Unsupported(format!(
+        SUPPORTED_REVISION => None,
+        other => Some(format!(
             "actions/cache revision '{other}' is not supported by velnor-runner, which implements {SUPPORTED_REVISION}"
-        ))),
+        )),
     }
+}
+
+fn input_problem(kind: CacheKind, name: &str) -> Option<String> {
+    (!kind.inputs().contains(&name.to_ascii_lowercase().as_str()))
+        .then(|| format!("actions/cache input '{name}' is not supported by velnor-runner"))
+}
+
+fn glob_problem(path: &str) -> Option<String> {
+    (path.starts_with('!') || path.contains(['*', '?', '[']))
+        .then(|| format!("actions/cache path '{path}' uses a glob"))
+}
+
+pub(super) fn check_revision(reference: &str) -> Result<(), ExecError> {
+    revision_problem(reference).map_or(Ok(()), |problem| Err(ExecError::Unsupported(problem)))
+}
+
+pub(super) fn declared_problem(
+    kind: CacheKind,
+    reference: &str,
+    declared: &DeclaredInputs,
+) -> Option<String> {
+    let DeclaredInputs::Known(declared) = declared else {
+        return revision_problem(reference);
+    };
+    revision_problem(reference)
+        .or_else(|| declared.keys().find_map(|name| input_problem(kind, name)))
+        .or_else(|| {
+            declared
+                .iter()
+                .filter(|(name, _)| name.eq_ignore_ascii_case("path"))
+                .filter_map(|(_, value)| match value {
+                    InputValue::Literal(text) => Some(text),
+                    InputValue::Deferred => None,
+                })
+                .flat_map(|text| lines(Some(&text)))
+                .find_map(|path| glob_problem(&path))
+        })
 }
 
 #[derive(Debug, Clone)]
@@ -80,13 +117,8 @@ impl CacheInputs {
             .iter()
             .map(|(name, value)| (name.to_ascii_lowercase(), value))
             .collect();
-        if let Some(name) = inputs
-            .keys()
-            .find(|name| !kind.inputs().contains(&name.as_str()))
-        {
-            return Err(ExecError::Unsupported(format!(
-                "actions/cache input '{name}' is not supported by velnor-runner"
-            )));
+        if let Some(problem) = inputs.keys().find_map(|name| input_problem(kind, name)) {
+            return Err(ExecError::Unsupported(problem));
         }
         let key = inputs.get("key").map_or("", |key| key.trim()).to_owned();
         if key.is_empty() {
@@ -99,13 +131,8 @@ impl CacheInputs {
         if paths.is_empty() {
             return Err(invalid("Input required and not supplied: path"));
         }
-        if let Some(path) = paths
-            .iter()
-            .find(|path| path.starts_with('!') || path.contains(['*', '?', '[']))
-        {
-            return Err(ExecError::Unsupported(format!(
-                "actions/cache path '{path}' uses a glob"
-            )));
+        if let Some(problem) = paths.iter().find_map(|path| glob_problem(path)) {
+            return Err(ExecError::Unsupported(problem));
         }
         let restore_keys = lines(inputs.get("restore-keys"));
         if restore_keys.len() >= MAX_KEYS {

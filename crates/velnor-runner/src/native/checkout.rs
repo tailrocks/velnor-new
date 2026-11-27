@@ -28,7 +28,7 @@ impl StepAdapter for Checkout {
         reference.starts_with("actions/checkout@")
     }
 
-    fn problem(&self, inputs: &DeclaredInputs) -> Option<String> {
+    fn problem(&self, _reference: &str, inputs: &DeclaredInputs) -> Option<String> {
         self.store.facts().err().or_else(|| match inputs {
             DeclaredInputs::Known(inputs) => validate_inputs(inputs).err(),
             DeclaredInputs::Unknown => Some(

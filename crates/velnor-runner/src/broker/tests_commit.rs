@@ -15,7 +15,7 @@ use super::tests::{Fixture, TAR, published};
 
 const PRIVATE: u32 = 0o700;
 
-fn scope_of(fixture: &Fixture) -> Result<PathBuf> {
+pub(super) fn scope_of(fixture: &Fixture) -> Result<PathBuf> {
     let scope = fixture
         .facts
         .cache_write_scope()

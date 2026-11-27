@@ -10,6 +10,11 @@ pub const REPOSITORY_LIMIT_BYTES: u64 = 10_000_000_000;
 pub const DEFAULT_CACHE_BUDGET_BYTES: u64 = 8_000_000_000;
 
 #[must_use]
+pub fn is_expired(last_access: Timestamp, now: Timestamp) -> bool {
+    now.0.saturating_sub(last_access.0) > ENTRY_LIFETIME_SECONDS
+}
+
+#[must_use]
 pub fn evict(entries: &[Entry], now: Timestamp, limit_bytes: u64) -> Vec<EntryId> {
     let mut oldest_first: Vec<&Entry> = entries.iter().collect();
     oldest_first.sort_by_cached_key(|entry| (entry.last_access, entry.created, entry.id()));
@@ -19,7 +24,7 @@ pub fn evict(entries: &[Entry], now: Timestamp, limit_bytes: u64) -> Vec<EntryId
     oldest_first
         .into_iter()
         .take_while(|entry| {
-            let expired = now.0.saturating_sub(entry.last_access.0) > ENTRY_LIFETIME_SECONDS;
+            let expired = is_expired(entry.last_access, now);
             let evicted = expired || kept_bytes >= limit_bytes;
             if evicted {
                 kept_bytes = kept_bytes.saturating_sub(entry.size_bytes);

@@ -83,11 +83,13 @@ fn widen(pipe: &PipeWriter) {
 fn widen(_: &PipeWriter) {}
 
 fn readable(reader: &PipeReader, wait: &Timespec) -> Result<bool> {
-    let mut fds = [PollFd::new(reader, PollFlags::IN)];
-    match poll(&mut fds, Some(wait)) {
-        Ok(ready) => Ok(ready > 0),
-        Err(Errno::INTR) => Ok(false),
-        Err(error) => Err(error.into()),
+    loop {
+        let mut fds = [PollFd::new(reader, PollFlags::IN)];
+        match poll(&mut fds, Some(wait)) {
+            Ok(ready) => return Ok(ready > 0),
+            Err(Errno::INTR) => {}
+            Err(error) => return Err(error.into()),
+        }
     }
 }
 

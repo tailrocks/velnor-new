@@ -5,15 +5,17 @@
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use rustix::fs::CWD;
 use rustix::io::Errno;
-use velnor_cache_rules::{Access, Entry, Scope, Timestamp, lookup};
+use velnor_cache_rules::{Access, Entry, Scope, Timestamp, is_expired, lookup};
 
 use super::archive::checkpoint;
-use crate::broker::cache::{CacheOwner, DATA, KEY, MARKER, VERSION, entry_dir, scope_dir};
+use crate::broker::cache::{
+    ACCESSED, CacheOwner, DATA, KEY, MARKER, VERSION, entry_dir, scope_dir,
+};
 use crate::broker::safe_fs::open_regular;
 use crate::exec::JobCancel;
 
@@ -63,12 +65,20 @@ fn read_text(dir: &Path, name: &str) -> Result<Option<String>> {
     }
 }
 
+fn seconds(time: SystemTime) -> Result<u64> {
+    Ok(time.duration_since(UNIX_EPOCH)?.as_secs())
+}
+
 fn read_entry(dir: &Path, scope: &Scope) -> Result<Option<Entry>> {
     let Some(marker) = open_member(dir, MARKER)? else {
         return Ok(None);
     };
     let completed = marker.metadata()?.modified()?;
     let nanos = u64::try_from(completed.duration_since(UNIX_EPOCH)?.as_nanos())?;
+    let accessed = match open_member(dir, ACCESSED)? {
+        Some(stamp) => stamp.metadata()?.modified()?,
+        None => completed,
+    };
     let (Some(key), Some(version)) = (read_text(dir, KEY)?, read_text(dir, VERSION)?) else {
         return Ok(None);
     };
@@ -81,7 +91,7 @@ fn read_entry(dir: &Path, scope: &Scope) -> Result<Option<Entry>> {
         version,
         size_bytes: data.len(),
         created: Timestamp(nanos),
-        last_access: Timestamp(nanos),
+        last_access: Timestamp(seconds(accessed)?),
     }))
 }
 
@@ -128,6 +138,8 @@ pub(super) fn find(
         entries.extend(read_scope(root, owner, scope)?);
     }
     checkpoint(cancel)?;
+    let now = Timestamp(seconds(SystemTime::now())?);
+    entries.retain(|entry| !is_expired(entry.last_access, now));
     Ok(
         lookup(&entries, access, key, restore_keys, version).map(|hit| CacheEntry {
             scope: hit.scope.clone(),

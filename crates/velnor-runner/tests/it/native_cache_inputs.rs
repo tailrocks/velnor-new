@@ -40,6 +40,57 @@ fn a_revision_other_than_the_pinned_one_is_unsupported() -> Result<()> {
     Ok(())
 }
 
+fn refused_before_any_step_runs(
+    edits: &[(&str, &str)],
+    message: &Message<'_>,
+    expected: &str,
+) -> Result<()> {
+    let store = Store::new()?;
+    let mut all = vec![("script", "touch ran")];
+    all.extend_from_slice(edits);
+    let failed = run_as(Scratch::new()?, "cache-save", &store, &all, message)?;
+    assert_eq!(failed.ran.code, Some(1), "{}", failed.ran.stdout);
+    assert!(failed.ran.has_line(expected), "{}", failed.ran.stdout);
+    assert!(
+        !failed.workspace_file("ran").exists(),
+        "an earlier step ran before the unsupported cache step was refused"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_unpinned_revision_is_refused_before_any_earlier_step_runs() -> Result<()> {
+    refused_before_any_step_runs(
+        &[],
+        &Message {
+            revision: Some("v4"),
+            ..Message::default()
+        },
+        "unsupported: actions/cache revision 'v4' is not supported by velnor-runner, which implements 55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    )
+}
+
+#[test]
+fn an_unsupported_input_is_refused_before_any_earlier_step_runs() -> Result<()> {
+    refused_before_any_step_runs(
+        &[],
+        &Message {
+            renamed: &[("key", "fail-on-cache-miss")],
+            ..Message::default()
+        },
+        "unsupported: actions/cache input 'fail-on-cache-miss' is not supported by velnor-runner",
+    )
+}
+
+#[test]
+fn a_literal_glob_path_is_refused_before_any_earlier_step_runs() -> Result<()> {
+    refused_before_any_step_runs(
+        &[("path", "data/*")],
+        &Message::default(),
+        "unsupported: actions/cache path 'data/*' uses a glob",
+    )
+}
+
 #[test]
 fn a_comma_in_the_key_is_rejected() -> Result<()> {
     rejected(

@@ -271,6 +271,67 @@ fn a_nested_root_under_an_outer_root_restored_as_a_file_is_refused() -> Result<(
 }
 
 #[test]
+fn a_root_replaced_by_a_link_is_never_written_through_by_a_declared_path_aliasing_it() -> Result<()>
+{
+    let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
+    let _cleanup = Cleanup(dir.clone());
+    let workspace = dir.join("workspace");
+    let victim = dir.join("victim");
+    fs::create_dir_all(workspace.join("data"))?;
+    fs::create_dir(&victim)?;
+    std::os::unix::fs::symlink("data", workspace.join("hop"))?;
+    std::os::unix::fs::symlink("hop", workspace.join("h2"))?;
+    let archive = dir.join("in.tar");
+    write_tar(
+        &archive,
+        &[
+            ("0", EntryType::Symlink, Some("../victim")),
+            ("1/", EntryType::Directory, None),
+        ],
+    )?;
+    let result = unpack(
+        &archive,
+        &[workspace.join("hop"), workspace.join("h2/z")],
+        Umask::read(),
+        None,
+    );
+    let error = result.err().map(|error| format!("{error:#}"));
+    assert!(
+        error
+            .as_deref()
+            .is_some_and(|text| text.contains("was restored as a link or file")),
+        "{error:?}"
+    );
+    assert_eq!(fs::read_dir(&victim)?.count(), 0);
+    Ok(())
+}
+
+#[test]
+fn directories_created_implicitly_take_the_mode_gnu_tar_gives_them_under_the_umask() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
+    let _cleanup = Cleanup(dir.clone());
+    let workspace = dir.join("workspace");
+    fs::create_dir_all(&workspace)?;
+    let archive = dir.join("in.tar");
+    write_tar(
+        &archive,
+        &[
+            ("0/", EntryType::Directory, None),
+            ("0/x/f", EntryType::Regular, None),
+        ],
+    )?;
+    let root = workspace.join("a/b");
+    let previous = rustix::process::umask(rustix::fs::Mode::from_bits_truncate(0o002));
+    let result = unpack(&archive, std::slice::from_ref(&root), Umask::read(), None);
+    rustix::process::umask(previous);
+    result?;
+    let mode = |path: PathBuf| fs::metadata(path).map(|meta| meta.mode() & 0o7777);
+    assert_eq!(mode(workspace.join("a"))?, 0o775);
+    assert_eq!(mode(root.join("x"))?, 0o775);
+    Ok(())
+}
+
+#[test]
 fn declared_paths_that_each_resolve_below_the_other_are_refused() -> Result<()> {
     let dir = std::env::temp_dir().join(format!("velnor-restore-{}", uuid::Uuid::new_v4()));
     let _cleanup = Cleanup(dir.clone());

@@ -10,15 +10,20 @@ use anyhow::Result;
 use crate::native_cache_support::{Store, run, saved};
 
 const THREE_DAYS: Duration = Duration::from_hours(72);
+const SEVEN_DAYS: Duration = Duration::from_hours(168);
 const FRESH: Duration = Duration::from_secs(300);
 
 fn age(store: &Store, key: &str) -> Result<()> {
+    idle_for(store, key, THREE_DAYS)
+}
+
+fn idle_for(store: &Store, key: &str, idle: Duration) -> Result<()> {
     let stamp = store.entry(key)?.dir.join("accessed");
     fs::set_permissions(&stamp, fs::Permissions::from_mode(0o644))?;
     OpenOptions::new()
         .write(true)
         .open(stamp)?
-        .set_modified(SystemTime::now() - THREE_DAYS)?;
+        .set_modified(SystemTime::now() - idle)?;
     Ok(())
 }
 
@@ -73,5 +78,33 @@ fn another_uid_can_walk_through_the_namespaces_of_the_store_but_not_list_them() 
             path.display()
         );
     }
+    Ok(())
+}
+
+#[test]
+fn an_entry_unused_for_more_than_seven_days_is_a_miss_even_before_any_save_evicts_it() -> Result<()>
+{
+    let store = Store::new()?;
+    saved(&store, "k-1", "hello")?;
+    idle_for(&store, "k-1", SEVEN_DAYS + Duration::from_secs(3600))?;
+    let missed = run("cache-restore-exact", &store, &[])?;
+    assert!(missed.succeeded(), "{}", missed.ran.stdout);
+    assert!(
+        missed.ran.stdout.contains("Cache not found"),
+        "{}",
+        missed.ran.stdout
+    );
+    assert!(!missed.workspace_file("data/a.txt").exists());
+    Ok(())
+}
+
+#[test]
+fn an_entry_unused_for_just_under_seven_days_is_still_a_hit() -> Result<()> {
+    let store = Store::new()?;
+    saved(&store, "k-1", "hello")?;
+    idle_for(&store, "k-1", SEVEN_DAYS - Duration::from_secs(3600))?;
+    let hit = run("cache-restore-exact", &store, &[])?;
+    assert!(hit.succeeded(), "{}", hit.ran.stdout);
+    assert!(hit.workspace_file("data/a.txt").exists());
     Ok(())
 }

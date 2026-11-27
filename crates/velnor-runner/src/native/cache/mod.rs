@@ -15,6 +15,7 @@ mod store;
 #[cfg(test)]
 mod tests;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,7 +24,9 @@ use anyhow::{Context, anyhow, bail};
 
 use crate::broker::cache::{CacheOwner, sha256_hex};
 use crate::broker::{Request, Response, StoreWriter};
-use crate::exec::{ExecError, JobCancel, StepAdapter, StepContext, StepFuture, StepResult};
+use crate::exec::{
+    DeclaredInputs, ExecError, JobCancel, StepAdapter, StepContext, StepFuture, StepResult,
+};
 use crate::native::Umask;
 use crate::store::store_root;
 use inputs::{CacheInputs, CacheKind, invalid};
@@ -380,6 +383,10 @@ impl CacheAdapter {
 impl StepAdapter for CacheAdapter {
     fn handles(&self, reference: &str) -> bool {
         CacheKind::of(reference).is_some()
+    }
+
+    fn problem(&self, reference: &str, inputs: &DeclaredInputs) -> Option<String> {
+        inputs::declared_problem(CacheKind::of(reference)?, reference, inputs)
     }
 
     fn run<'a>(&'a self, ctx: &'a mut StepContext<'_>) -> StepFuture<'a> {

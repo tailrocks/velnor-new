@@ -280,3 +280,39 @@ fn hard_links_are_stored_once_and_named_after_the_first_member_like_gnu_tar() ->
     assert_ne!(links[0].0, stored[0].0);
     Ok(())
 }
+
+#[test]
+fn a_nested_root_below_a_link_inside_another_root_is_refused_at_save() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("velnor-pack-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(dir.join("data"))?;
+    fs::create_dir_all(dir.join("elsewhere/subdir"))?;
+    symlink("../elsewhere", dir.join("data/link"))?;
+    let result = pack(
+        &[dir.join("data"), dir.join("data/link/subdir")],
+        std::io::sink(),
+        None,
+    );
+    fs::remove_dir_all(&dir)?;
+    let error = result.err().map(|error| format!("{error:#}"));
+    assert!(
+        error
+            .as_deref()
+            .is_some_and(|text| text.contains("never writes through a link")),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_nested_root_below_real_directories_inside_another_root_packs() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("velnor-pack-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(dir.join("data/real/subdir"))?;
+    let packed = pack(
+        &[dir.join("data"), dir.join("data/real/subdir")],
+        std::io::sink(),
+        None,
+    );
+    fs::remove_dir_all(&dir)?;
+    assert!(packed.is_ok(), "{packed:?}");
+    Ok(())
+}

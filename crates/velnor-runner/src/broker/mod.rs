@@ -30,6 +30,8 @@ mod tests_entry;
 #[cfg(test)]
 mod tests_events;
 #[cfg(test)]
+mod tests_gc;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_purge;

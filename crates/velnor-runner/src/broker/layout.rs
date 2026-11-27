@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, bail, ensure};
 use rustix::fs::{
     AtFlags, CWD, FlockOperation, Mode, OFlags, RawMode, RenameFlags, fchmod, flock, fstat,
-    mkdirat, openat, renameat_with, unlinkat,
+    mkdirat, openat, renameat_with, statat, unlinkat,
 };
 use rustix::io::Errno;
 use rustix::process::geteuid;
@@ -22,7 +22,7 @@ use super::cache::{CacheOwner, DATA, MAX_DATA_BYTES, owner_parts, scope_hash, sc
 use super::incoming::Upload;
 use super::live::{LIVE, claim, reclaim};
 use super::publish::{Target, sync_fd};
-use super::safe_fs::{directory_flags, enter_directory_as, open_path, purge};
+use super::safe_fs::{directory_flags, enter_directory_as, names, open_path, purge};
 
 pub(super) const PRIVATE: RawMode = 0o700;
 pub(super) const SHARED: RawMode = 0o755;
@@ -60,6 +60,13 @@ pub(super) fn ensure_private(directory: &OwnedFd, what: &str) -> Result<()> {
 }
 const LOCK_POLL: Duration = Duration::from_millis(10);
 const STORE_LOCK: &str = "store";
+
+fn still_named(locks: &OwnedFd, name: &str, file: &OwnedFd) -> bool {
+    match (statat(locks, name, AtFlags::SYMLINK_NOFOLLOW), fstat(file)) {
+        (Ok(named), Ok(held)) => (named.st_dev, named.st_ino) == (held.st_dev, held.st_ino),
+        _ => false,
+    }
+}
 
 pub(super) type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
@@ -251,37 +258,71 @@ impl Layout {
         self.lock_named(STORE_LOCK, "store", abandoned)
     }
 
-    fn lock_named(&self, name: &str, what: &str, abandoned: &AtomicBool) -> Result<OwnedFd> {
+    fn lock_file(&self, name: &str, what: &str) -> Result<(OwnedFd, OwnedFd)> {
         let root = self.open_root()?;
-        drop(
-            enter_directory_as(root.as_fd(), OsStr::new("locks"), PRIVATE)
-                .context("open the lock directory")?
-                .0,
-        );
+        let (locks, _) = enter_directory_as(root.as_fd(), OsStr::new("locks"), PRIVATE)
+            .context("open the lock directory")?;
         let file = openat(
-            CWD,
-            self.root.join("locks").join(name),
+            &locks,
+            name,
             OFlags::RDWR | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::CLOEXEC,
             Mode::from_bits_truncate(0o600),
         )
         .with_context(|| format!("open the {what} lock"))?;
+        Ok((locks, file))
+    }
+
+    fn lock_named(&self, name: &str, what: &str, abandoned: &AtomicBool) -> Result<OwnedFd> {
         let deadline = Instant::now() + self.lock_wait;
         loop {
-            match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-                Ok(()) => return Ok(file),
-                Err(Errno::WOULDBLOCK) => {}
-                Err(error) => return Err(error).with_context(|| format!("lock the cache {what}")),
+            let (locks, file) = self.lock_file(name, what)?;
+            loop {
+                match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+                    Ok(()) if still_named(&locks, name, &file) => return Ok(file),
+                    Ok(()) => break,
+                    Err(Errno::WOULDBLOCK) => {}
+                    Err(error) => {
+                        return Err(error).with_context(|| format!("lock the cache {what}"));
+                    }
+                }
+                ensure!(
+                    !abandoned.load(Ordering::Relaxed),
+                    "the publish was abandoned while it waited for the cache {what} lock"
+                );
+                ensure!(
+                    Instant::now() < deadline,
+                    "timed out waiting for the cache {what} lock"
+                );
+                std::thread::sleep(LOCK_POLL);
             }
-            ensure!(
-                !abandoned.load(Ordering::Relaxed),
-                "the publish was abandoned while it waited for the cache {what} lock"
-            );
-            ensure!(
-                Instant::now() < deadline,
-                "timed out waiting for the cache {what} lock"
-            );
-            std::thread::sleep(LOCK_POLL);
         }
+    }
+
+    pub(super) fn retire_scope(&self, owner: &OwnedFd, scope: &OsStr) -> Result<()> {
+        let Some(name) = scope.to_str() else {
+            return Ok(());
+        };
+        let (locks, file) = self.lock_file(name, "scope")?;
+        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) if still_named(&locks, name, &file) => {}
+            Ok(()) | Err(Errno::WOULDBLOCK) => return Ok(()),
+            Err(error) => return Err(error).context("lock the cache scope to retire it"),
+        }
+        match openat(owner, scope, directory_flags(), Mode::empty()) {
+            Ok(directory) if !names(&directory)?.is_empty() => return Ok(()),
+            Ok(_) | Err(Errno::NOENT) => {}
+            Err(error) => return Err(error).context("open the cache scope to retire it"),
+        }
+        match unlinkat(owner, scope, AtFlags::REMOVEDIR) {
+            Ok(()) | Err(Errno::NOENT) => {}
+            Err(Errno::NOTEMPTY) => return Ok(()),
+            Err(error) => return Err(error).context("remove the empty cache scope"),
+        }
+        match unlinkat(&locks, name, AtFlags::empty()) {
+            Ok(()) | Err(Errno::NOENT) => {}
+            Err(error) => return Err(error).context("remove the lock of the retired scope"),
+        }
+        sync_fd(owner, "the owner of a retired cache scope")
     }
 
     fn open_root(&self) -> Result<OwnedFd> {

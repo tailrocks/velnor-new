@@ -33,7 +33,7 @@ pub enum DeclaredInputs {
 pub trait StepAdapter: Send + Sync {
     fn handles(&self, reference: &str) -> bool;
 
-    fn problem(&self, _inputs: &DeclaredInputs) -> Option<String> {
+    fn problem(&self, _reference: &str, _inputs: &DeclaredInputs) -> Option<String> {
         None
     }
 

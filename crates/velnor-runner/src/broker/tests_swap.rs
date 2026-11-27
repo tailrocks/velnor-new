@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt as _, PermissionsExt};
 use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 
 use super::proto::Response;
+use super::publish::SYNCED;
 use super::tests::{Fixture, TAR, begin, failed, version, write_all};
+use super::tests_commit::scope_of;
 
 fn private(path: &std::path::Path) -> Result<()> {
     fs::create_dir_all(path)?;
@@ -27,14 +29,7 @@ fn streamed_dir(fixture: &Fixture) -> Result<PathBuf> {
 #[tokio::test]
 async fn an_upload_directory_swapped_for_another_one_is_never_published() -> Result<()> {
     let fixture = Fixture::new()?;
-    let mut stream = begin(&fixture.broker, "k-1").await?;
-    let dir = streamed_dir(&fixture)?;
-    let original = fixture.scratch.0.join("original");
-    fs::rename(&dir, &original)?;
-    fs::create_dir(&dir)?;
-    fs::hard_link(original.join("data.tar"), dir.join("data.tar"))?;
-    let count = write_all(&mut stream, TAR.to_vec()).await?;
-    let response = stream.seal(count).await;
+    let response = swapped_upload(&fixture).await?;
     failed(&response, "not the directory this broker streamed into");
     fixture.assert_nothing_published();
     fixture.assert_no_leftover();
@@ -92,5 +87,46 @@ async fn a_shared_incoming_directory_of_this_broker_is_refused() -> Result<()> {
         "{:?}",
         refused.err()
     );
+    Ok(())
+}
+
+async fn swapped_upload(fixture: &Fixture) -> Result<Response> {
+    let mut stream = begin(&fixture.broker, "k-1").await?;
+    let dir = streamed_dir(fixture)?;
+    let original = fixture.scratch.0.join("original");
+    fs::rename(&dir, &original)?;
+    fs::create_dir(&dir)?;
+    fs::hard_link(original.join("data.tar"), dir.join("data.tar"))?;
+    let count = write_all(&mut stream, TAR.to_vec()).await?;
+    Ok(stream.seal(count).await)
+}
+
+#[tokio::test]
+async fn a_withdrawn_publication_is_synced_out_of_its_scope() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let response = swapped_upload(&fixture).await?;
+    failed(&response, "not the directory this broker streamed into");
+    let scope = fs::metadata(scope_of(&fixture)?)?;
+    let synced = SYNCED
+        .lock()
+        .map_err(|_| anyhow!("the sync record is poisoned"))?;
+    let scopes = synced
+        .iter()
+        .filter(|seen| {
+            seen.what == "the cache scope" && seen.identity == (scope.dev(), scope.ino())
+        })
+        .count();
+    assert_eq!(scopes, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_publication_that_cannot_be_withdrawn_says_so() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let aside = fixture.root().join("aside");
+    private(&aside)?;
+    fs::set_permissions(&aside, fs::Permissions::from_mode(0o755))?;
+    let response = swapped_upload(&fixture).await?;
+    failed(&response, "the failed publication could not be withdrawn");
     Ok(())
 }
