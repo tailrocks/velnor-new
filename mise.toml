@@ -100,6 +100,10 @@ python3 scripts/hosted_phase_measurement/tests/test_report_counters.py
 description = "Build velnor-runner in the OrbStack machine velnor and atomically install it into /Users/Shared/velnor/bin"
 run = "bun scripts/velnor-runner-install.ts"
 
+[tasks.test-velnor-runner-install]
+description = "macOS only: run the bun tests of scripts/velnor-runner-install.ts (they need /usr/bin/lockf and /usr/bin/shasum); no generated workflow job runs them"
+run = "bun test ./scripts/velnor-runner-install.test.ts ./scripts/velnor-runner-install-guards.test.ts"
+
 [tasks.validate-hk]
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"
@@ -143,7 +147,6 @@ python3 scripts/test_mise_binary_digests.py
 python3 scripts/test_mise_binary_digests_entry.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
-bun test ./scripts/velnor-runner-install.test.ts
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
 printf "maintenance-phase: velnor-archive-guard\n"
