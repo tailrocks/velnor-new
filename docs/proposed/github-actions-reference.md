@@ -1023,11 +1023,12 @@ differ on purpose:
   fails in the runner only against a name that holds such a character, while
   Velnor fails it for every name. Thousands of wildcards in one segment end in
   V8's `Stack overflow` at a count that depends on the platform's stack
-  frames (15,455 `*` characters on Node 24.22.1 for macOS arm64).
+  frames (the shipped bundle fails from 14,681 `*` characters on Node 24.22.1
+  for macOS arm64).
 - **Unclosed classes nest at most 4,096 deep.** minimatch translates the text
   after an unclosed `[` again, once per bracket, and the shipped bundle fails
   with `RangeError: Maximum call stack size exceeded` from 4,704 nested
-  brackets on Node 24.22.1 for macOS arm64, the depth that depends on the
+  brackets on Node 24.22.1 for macOS arm64, a depth that depends on the
   platform's stack frames, and runs out of memory far above that. Velnor
   translates the chain iteratively, in time and memory linear in the pattern,
   and fails the call above `MAX_CLASS_NESTING` (4,096) in
