@@ -18,6 +18,17 @@ use rustix::path::Arg;
 
 const OPEN_LEVELS: usize = 32;
 
+pub(crate) fn uninterrupted<T>(
+    mut call: impl FnMut() -> rustix::io::Result<T>,
+) -> rustix::io::Result<T> {
+    loop {
+        match call() {
+            Err(Errno::INTR) => {}
+            done => return done,
+        }
+    }
+}
+
 pub(crate) fn directory_flags() -> OFlags {
     OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
 }

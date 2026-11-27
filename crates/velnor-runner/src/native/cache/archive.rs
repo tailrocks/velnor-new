@@ -19,6 +19,7 @@ use tar::{Builder, EntryType, Header};
 
 use super::descent::{Descent, enter};
 use super::guard::{Capped, Watched};
+use super::nest::Nesting;
 use super::stamp::Stamp;
 use crate::broker::cache::MAX_DATA_BYTES;
 use crate::broker::safe_fs::directory_flags;
@@ -279,30 +280,20 @@ impl<'a, W: Write> Packer<'a, W> {
     }
 }
 
-fn refuse_nested(roots: &[PathBuf], root: &Path, seen: &Stat) -> Result<()> {
-    let closed = FileType::from_raw_mode(seen.st_mode) != FileType::Directory;
-    for inner in roots
-        .iter()
-        .filter(|other| *other != root && other.starts_with(root))
-    {
-        ensure!(
-            !closed,
-            "cache restore never writes through a link: {} is a link or file, so {} below it could not be restored",
-            root.display(),
-            inner.display()
-        );
-        refuse_linked_between(root, inner)?;
+fn refuse_nested(roots: &[PathBuf]) -> Result<()> {
+    let nesting = Nesting::new(roots);
+    for (index, inner) in roots.iter().enumerate() {
+        if let Some((outer, below)) = nesting.below(roots, index)? {
+            refuse_through_links(&roots[outer], &below, inner)?;
+        }
     }
     Ok(())
 }
 
-fn refuse_linked_between(root: &Path, inner: &Path) -> Result<()> {
-    let relative = inner
-        .strip_prefix(root)
-        .context("place a declared path under another declared path")?;
+fn refuse_through_links(root: &Path, below: &[OsString], inner: &Path) -> Result<()> {
     let mut at = root.to_path_buf();
-    for part in relative.parent().into_iter().flat_map(Path::components) {
-        at.push(part);
+    for part in std::iter::once(None).chain(below.iter().map(Some)) {
+        at.extend(part);
         match statat(CWD, &at, AtFlags::SYMLINK_NOFOLLOW) {
             Ok(seen) => ensure!(
                 FileType::from_raw_mode(seen.st_mode) == FileType::Directory,
@@ -334,6 +325,7 @@ fn pack_within<W: Write>(
         cancel,
     );
     packer.builder.follow_symlinks(false);
+    refuse_nested(roots)?;
     let mut archived = 0;
     for (index, root) in roots.iter().enumerate() {
         match statat(CWD, root, AtFlags::SYMLINK_NOFOLLOW) {
@@ -341,7 +333,7 @@ fn pack_within<W: Write>(
             Err(error) => {
                 return Err(error).with_context(|| format!("archive {}", root.display()));
             }
-            Ok(seen) => refuse_nested(roots, root, &seen)?,
+            Ok(_) => {}
         }
         packer
             .visit(CWD, root, Path::new(&index.to_string()))

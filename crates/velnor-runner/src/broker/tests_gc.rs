@@ -16,7 +16,8 @@ use super::Broker;
 use super::cache::{CacheOwner, MARKER, entry_dir, scope_dir, scope_hash};
 use super::layout::Clock;
 use super::publish::Target;
-use super::tests::{BRANCH, Fixture, facts_of, published, upload, version};
+use super::tests::{BRANCH, Fixture, TAR, facts_of, published, upload, version};
+use super::tests_commit::scope_of;
 use super::tests_entry::wait_until;
 
 const START: u64 = 1_800_000_000;
@@ -180,21 +181,14 @@ async fn a_lock_waiter_reopens_a_lock_file_that_was_unlinked_while_it_waited() -
     };
     let abandoned = Arc::new(AtomicBool::new(false));
     let held = layout.lock(&target, &abandoned)?;
-    let started = Arc::new(AtomicBool::new(false));
     let waiter = {
-        let (layout, target, abandoned, started) = (
-            layout.clone(),
-            target.clone(),
-            abandoned.clone(),
-            started.clone(),
-        );
-        tokio::task::spawn_blocking(move || {
-            started.store(true, Ordering::SeqCst);
-            layout.lock(&target, &abandoned)
-        })
+        let (layout, target, abandoned) = (layout.clone(), target.clone(), abandoned.clone());
+        tokio::task::spawn_blocking(move || layout.lock(&target, &abandoned))
     };
-    wait_until("the waiter to start", || started.load(Ordering::SeqCst)).await?;
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    wait_until("the waiter to block on the old lock file", || {
+        layout.blocked.load(Ordering::SeqCst) > 0
+    })
+    .await?;
     let path = lock_path(&fixture, "main");
     fs::remove_file(&path)?;
     drop(held);
@@ -202,5 +196,36 @@ async fn a_lock_waiter_reopens_a_lock_file_that_was_unlinked_while_it_waited() -
     let named = fs::metadata(&path)?;
     let owned = File::from(acquired).metadata()?;
     assert_eq!((named.dev(), named.ino()), (owned.dev(), owned.ino()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_publish_holds_the_scope_lock_before_it_opens_the_scope() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let layout = fixture.broker.layout.clone();
+    let target = Target {
+        owner: CacheOwner::of(&fixture.facts),
+        scope: fixture
+            .facts
+            .cache_write_scope()
+            .map_err(|denied| anyhow!("{denied}"))?,
+        key: "k-1".to_owned(),
+        version: version(),
+    };
+    drop(layout.open_scope(&target)?);
+    let held = layout.lock(&target, &AtomicBool::new(false))?;
+    let publisher = {
+        let broker = fixture.broker.clone();
+        tokio::spawn(async move { upload(&broker, "k-1", TAR).await })
+    };
+    wait_until("the publish to block on the scope lock", || {
+        layout.blocked.load(Ordering::SeqCst) > 0
+    })
+    .await?;
+    fs::remove_dir(scope_of(&fixture)?)?;
+    drop(held);
+    let response = publisher.await?;
+    assert!(published(&response), "{response:?}");
+    assert!(fixture.entry("k-1")?.join(MARKER).exists());
     Ok(())
 }

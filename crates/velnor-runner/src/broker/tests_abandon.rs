@@ -4,7 +4,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
@@ -50,9 +50,12 @@ fn open_lock(fixture: &Fixture, name: &str) -> Result<File> {
 fn a_publish_abandoned_while_it_made_room_never_installs_its_entry() -> Result<()> {
     let tripped = Arc::new(AtomicBool::new(false));
     let trip = tripped.clone();
+    let reads = AtomicUsize::new(0);
     let fixture = Fixture::with(BRANCH, |broker| {
         broker.with_clock(Arc::new(move || {
-            trip.store(true, Ordering::SeqCst);
+            if reads.fetch_add(1, Ordering::SeqCst) > 0 {
+                trip.store(true, Ordering::SeqCst);
+            }
             1_800_000_000
         }))
     })?;

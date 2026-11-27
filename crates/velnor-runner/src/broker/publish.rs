@@ -14,11 +14,13 @@ use velnor_cache_rules::Scope;
 
 use super::access::stamp_access;
 use super::budget::make_room;
-use super::cache::{ACCESSED, CacheOwner, DATA, KEY, MARKER, SCOPE, VERSION, entry_name};
+use super::cache::{
+    ACCESSED, CacheOwner, DATA, KEY, MARKER, SCOPE, VERSION, entry_name, live_access,
+};
 use super::incoming::Upload;
 use super::layout::Layout;
 use super::proto::Response;
-use super::safe_fs::{directory_flags, is_regular_mode, move_aside};
+use super::safe_fs::{directory_flags, move_aside};
 
 const FROZEN_DIRECTORY: RawMode = 0o555;
 const FROZEN_FILE: RawMode = 0o444;
@@ -116,11 +118,9 @@ fn is_streamed(published: &OwnedFd, upload: &Upload, data: &File) -> Result<()> 
     Ok(())
 }
 
-fn is_complete(scope: BorrowedFd<'_>, name: &OsString) -> bool {
-    openat(scope, name, directory_flags(), Mode::empty()).is_ok_and(|entry| {
-        statat(entry.as_fd(), MARKER, AtFlags::SYMLINK_NOFOLLOW)
-            .is_ok_and(|stat| is_regular_mode(stat.st_mode))
-    })
+fn is_complete(scope: BorrowedFd<'_>, name: &OsString, now: u64) -> bool {
+    openat(scope, name, directory_flags(), Mode::empty())
+        .is_ok_and(|entry| live_access(entry.as_fd(), now).is_some())
 }
 
 fn not_abandoned(abandoned: &AtomicBool, step: &str) -> Result<()> {
@@ -150,7 +150,7 @@ fn attempt(
     let scope = layout.open_scope(target)?;
     not_abandoned(abandoned, "before it was sealed")?;
     let entry = OsString::from(entry_name(&target.version, &target.key));
-    if is_complete(scope.as_fd(), &entry) {
+    if is_complete(scope.as_fd(), &entry, layout.now()) {
         return Ok(Outcome::AlreadyExists);
     }
     let _store = layout.lock_store(abandoned)?;

@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
+use std::os::fd::BorrowedFd;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, ensure};
 use ring::digest::{SHA256, digest};
-use velnor_cache_rules::{Access, Event, Scope, access_for};
+use rustix::fs::{AtFlags, Stat, statat};
+use velnor_cache_rules::{Access, Event, Scope, Timestamp, access_for, is_expired};
 
 use super::facts::{PullRequestHead, TrustedEvent, TrustedFacts};
 use super::location::server_identity;
 use super::proto::Denied;
+use super::safe_fs::is_regular_mode;
 
 pub(crate) const DATA: &str = "data.tar";
 pub(crate) const KEY: &str = "key";
@@ -119,6 +122,22 @@ impl TrustedFacts {
         }
         Ok(self.cache_access().write)
     }
+}
+
+pub(crate) fn regular(entry: BorrowedFd<'_>, name: &str) -> Option<Stat> {
+    statat(entry, name, AtFlags::SYMLINK_NOFOLLOW)
+        .ok()
+        .filter(|stat| is_regular_mode(stat.st_mode))
+}
+
+pub(crate) fn last_access(entry: BorrowedFd<'_>) -> Option<u64> {
+    let marker = regular(entry, MARKER)?;
+    let stamp = regular(entry, ACCESSED).unwrap_or(marker);
+    u64::try_from(stamp.st_mtime).ok()
+}
+
+pub(crate) fn live_access(entry: BorrowedFd<'_>, now: u64) -> Option<u64> {
+    last_access(entry).filter(|&at| !is_expired(Timestamp(at), Timestamp(now)))
 }
 
 pub(super) fn check_request(key: &str, version: &str) -> Result<()> {

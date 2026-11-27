@@ -4,19 +4,20 @@
 
 use std::fs::{self, File};
 use std::io::{self, Read};
+use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use rustix::fs::CWD;
 use rustix::io::Errno;
-use velnor_cache_rules::{Access, Entry, Scope, Timestamp, is_expired, lookup};
+use velnor_cache_rules::{Access, Entry, Scope, Timestamp, lookup};
 
 use super::archive::checkpoint;
 use crate::broker::cache::{
-    ACCESSED, CacheOwner, DATA, KEY, MARKER, VERSION, entry_dir, scope_dir,
+    CacheOwner, DATA, KEY, MARKER, VERSION, entry_dir, live_access, scope_dir,
 };
-use crate::broker::safe_fs::open_regular;
+use crate::broker::safe_fs::{open_path, open_regular};
 use crate::exec::JobCancel;
 
 const MAX_TEXT: u64 = 4096;
@@ -69,15 +70,17 @@ fn seconds(time: SystemTime) -> Result<u64> {
     Ok(time.duration_since(UNIX_EPOCH)?.as_secs())
 }
 
-fn read_entry(dir: &Path, scope: &Scope) -> Result<Option<Entry>> {
+fn read_entry(dir: &Path, scope: &Scope, now: u64) -> Result<Option<Entry>> {
     let Some(marker) = open_member(dir, MARKER)? else {
         return Ok(None);
     };
     let completed = marker.metadata()?.modified()?;
     let nanos = u64::try_from(completed.duration_since(UNIX_EPOCH)?.as_nanos())?;
-    let accessed = match open_member(dir, ACCESSED)? {
-        Some(stamp) => stamp.metadata()?.modified()?,
-        None => completed,
+    let Some(accessed) = open_path(dir)
+        .ok()
+        .and_then(|entry| live_access(entry.as_fd(), now))
+    else {
+        return Ok(None);
     };
     let (Some(key), Some(version)) = (read_text(dir, KEY)?, read_text(dir, VERSION)?) else {
         return Ok(None);
@@ -91,11 +94,11 @@ fn read_entry(dir: &Path, scope: &Scope) -> Result<Option<Entry>> {
         version,
         size_bytes: data.len(),
         created: Timestamp(nanos),
-        last_access: Timestamp(seconds(accessed)?),
+        last_access: Timestamp(accessed),
     }))
 }
 
-fn read_scope(root: &Path, owner: &CacheOwner, scope: &Scope) -> Result<Vec<Entry>> {
+fn read_scope(root: &Path, owner: &CacheOwner, scope: &Scope, now: u64) -> Result<Vec<Entry>> {
     let directory = scope_dir(root, owner, scope);
     let items = match fs::read_dir(&directory) {
         Ok(items) => items,
@@ -105,7 +108,7 @@ fn read_scope(root: &Path, owner: &CacheOwner, scope: &Scope) -> Result<Vec<Entr
     let mut entries = Vec::new();
     for item in items {
         let item = item.with_context(|| format!("read {}", directory.display()))?;
-        entries.extend(read_entry(&item.path(), scope)?);
+        entries.extend(read_entry(&item.path(), scope, now)?);
     }
     Ok(entries)
 }
@@ -117,11 +120,11 @@ pub(super) fn exists(
     version: &str,
     key: &str,
 ) -> bool {
-    open_regular(
-        CWD,
-        entry_dir(root, owner, scope, version, key).join(MARKER),
-    )
-    .is_ok()
+    let Ok(now) = seconds(SystemTime::now()) else {
+        return false;
+    };
+    open_path(&entry_dir(root, owner, scope, version, key))
+        .is_ok_and(|entry| live_access(entry.as_fd(), now).is_some())
 }
 
 pub(super) fn find(
@@ -133,13 +136,12 @@ pub(super) fn find(
     version: &str,
     cancel: Option<&JobCancel>,
 ) -> Result<Option<CacheEntry>> {
+    let now = seconds(SystemTime::now())?;
     let mut entries = Vec::new();
     for scope in &access.read {
-        entries.extend(read_scope(root, owner, scope)?);
+        entries.extend(read_scope(root, owner, scope, now)?);
     }
     checkpoint(cancel)?;
-    let now = Timestamp(seconds(SystemTime::now())?);
-    entries.retain(|entry| !is_expired(entry.last_access, now));
     Ok(
         lookup(&entries, access, key, restore_keys, version).map(|hit| CacheEntry {
             scope: hit.scope.clone(),

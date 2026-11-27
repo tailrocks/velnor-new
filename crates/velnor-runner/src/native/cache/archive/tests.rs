@@ -304,6 +304,29 @@ fn a_nested_root_below_a_link_inside_another_root_is_refused_at_save() -> Result
 }
 
 #[test]
+fn a_nested_root_reached_through_an_alias_of_another_root_is_refused_at_save() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("velnor-pack-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(dir.join("data"))?;
+    fs::create_dir_all(dir.join("elsewhere/subdir"))?;
+    symlink("../elsewhere", dir.join("data/link"))?;
+    symlink("data", dir.join("alias"))?;
+    let result = pack(
+        &[dir.join("data"), dir.join("alias/link/subdir")],
+        std::io::sink(),
+        None,
+    );
+    fs::remove_dir_all(&dir)?;
+    let error = result.err().map(|error| format!("{error:#}"));
+    assert!(
+        error
+            .as_deref()
+            .is_some_and(|text| text.contains("never writes through a link")),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_nested_root_below_real_directories_inside_another_root_packs() -> Result<()> {
     let dir = std::env::temp_dir().join(format!("velnor-pack-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(dir.join("data/real/subdir"))?;

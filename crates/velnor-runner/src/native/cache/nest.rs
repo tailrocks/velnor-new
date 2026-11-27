@@ -159,21 +159,29 @@ impl Nesting {
         Ok(None)
     }
 
-    pub(super) fn resolve(&self, declared: &[PathBuf], index: usize) -> Result<Link> {
+    pub(super) fn below(
+        &self,
+        declared: &[PathBuf],
+        index: usize,
+    ) -> Result<Option<(usize, Vec<OsString>)>> {
         let path = &declared[index];
-        if let Some(outer) = self.outer_of(path) {
-            let below = path
-                .parent()
-                .and_then(|parent| parent.strip_prefix(&declared[outer]).ok())
-                .context("place a declared path under another declared path")?
-                .iter()
-                .map(OsStr::to_owned)
-                .collect();
-            return Ok(Link::Below { outer, below });
-        }
-        Ok(match self.walk(declared, index)? {
+        let Some(outer) = self.outer_of(path) else {
+            return self.walk(declared, index);
+        };
+        let below = path
+            .parent()
+            .and_then(|parent| parent.strip_prefix(&declared[outer]).ok())
+            .context("place a declared path under another declared path")?
+            .iter()
+            .map(OsStr::to_owned)
+            .collect();
+        Ok(Some((outer, below)))
+    }
+
+    pub(super) fn resolve(&self, declared: &[PathBuf], index: usize) -> Result<Link> {
+        Ok(match self.below(declared, index)? {
             Some((outer, below)) => Link::Below { outer, below },
-            None => Link::Free(open_parent(path)?),
+            None => Link::Free(open_parent(&declared[index])?),
         })
     }
 }

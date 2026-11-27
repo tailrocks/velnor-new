@@ -8,9 +8,11 @@ use std::path::Path;
 use std::task::{Context, Poll, Waker};
 
 use anyhow::{Result, anyhow};
+use rustix::io::Errno;
 
 use super::cache::MAX_DATA_BYTES;
 use super::proto::{Denied, Response};
+use super::safe_fs::uninterrupted;
 use super::tests::{BRANCH, FORK, Fixture, TAR, begin, failed, published, version, write_all};
 use super::tests_entry::{BOUND, wait_until};
 
@@ -234,4 +236,18 @@ async fn a_writer_kept_after_the_seal_gets_epipe_and_the_published_bytes_stay() 
     assert_eq!(error, Some(ErrorKind::BrokenPipe));
     assert_eq!(fs::read(fixture.entry("k-1")?.join("data.tar"))?, TAR);
     Ok(())
+}
+
+#[test]
+fn an_interrupted_call_is_retried_until_it_answers() {
+    let mut calls = 0;
+    let answer = uninterrupted(|| {
+        calls += 1;
+        if calls < 3 {
+            Err(Errno::INTR)
+        } else {
+            Ok(calls)
+        }
+    });
+    assert_eq!(answer, Ok(3));
 }

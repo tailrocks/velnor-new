@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Result, bail, ensure};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
-use rustix::io::Errno;
 use tokio::task::JoinHandle;
 
 use super::cache::CacheOwner;
@@ -18,6 +17,7 @@ use super::incoming::Upload;
 use super::layout::Layout;
 use super::proto::Response;
 use super::publish::{Target, publish};
+use super::safe_fs::uninterrupted;
 
 const CHUNK: usize = 1 << 20;
 const TICK: Timespec = Timespec {
@@ -83,14 +83,11 @@ fn widen(pipe: &PipeWriter) {
 fn widen(_: &PipeWriter) {}
 
 fn readable(reader: &PipeReader, wait: &Timespec) -> Result<bool> {
-    loop {
+    let ready = uninterrupted(|| {
         let mut fds = [PollFd::new(reader, PollFlags::IN)];
-        match poll(&mut fds, Some(wait)) {
-            Ok(ready) => return Ok(ready > 0),
-            Err(Errno::INTR) => {}
-            Err(error) => return Err(error.into()),
-        }
-    }
+        poll(&mut fds, Some(wait))
+    })?;
+    Ok(ready > 0)
 }
 
 fn bytes_follow(reader: &PipeReader) -> Result<bool> {

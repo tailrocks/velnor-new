@@ -8,25 +8,19 @@ use std::io::Read as _;
 use std::os::fd::{AsFd, OwnedFd};
 
 use anyhow::{Context, Result};
-use rustix::fs::{AtFlags, Mode, openat, statat};
+use rustix::fs::{Mode, openat};
 use rustix::io::Errno;
 use velnor_cache_rules::{Entry, EntryId, Scope, Timestamp, evict};
 
-use super::cache::{ACCESSED, DATA, KEY, MARKER, SCOPE, VERSION};
+use super::cache::{DATA, KEY, MARKER, SCOPE, VERSION, last_access, regular};
 use super::layout::Layout;
 use super::publish::{Target, sync_fd};
-use super::safe_fs::{directory_flags, is_regular_mode, names, open_regular, remove_entry};
+use super::safe_fs::{directory_flags, names, open_regular, remove_entry};
 
 const MAX_TEXT: u64 = 4096;
 
 fn seconds(value: i64) -> Timestamp {
     Timestamp(u64::try_from(value).unwrap_or_default())
-}
-
-fn regular(entry: &OwnedFd, name: &str) -> Option<rustix::fs::Stat> {
-    statat(entry, name, AtFlags::SYMLINK_NOFOLLOW)
-        .ok()
-        .filter(|stat| is_regular_mode(stat.st_mode))
 }
 
 fn text(entry: &OwnedFd, name: &str) -> Option<String> {
@@ -52,9 +46,8 @@ struct Scan {
 
 fn read_entry(scope: &OwnedFd, scope_name: &OsStr, name: &OsStr) -> Option<(Entry, Placed)> {
     let entry = openat(scope, name, directory_flags(), Mode::empty()).ok()?;
-    let marker = regular(&entry, MARKER)?;
-    let data = regular(&entry, DATA)?;
-    let accessed = regular(&entry, ACCESSED).map_or(marker.st_mtime, |stat| stat.st_mtime);
+    let marker = regular(entry.as_fd(), MARKER)?;
+    let data = regular(entry.as_fd(), DATA)?;
     let parsed = Entry {
         scope: Scope(
             text(&entry, SCOPE).unwrap_or_else(|| scope_name.to_string_lossy().into_owned()),
@@ -63,7 +56,7 @@ fn read_entry(scope: &OwnedFd, scope_name: &OsStr, name: &OsStr) -> Option<(Entr
         version: text(&entry, VERSION).unwrap_or_default(),
         size_bytes: u64::try_from(data.st_size).unwrap_or_default(),
         created: seconds(marker.st_mtime),
-        last_access: seconds(accessed),
+        last_access: Timestamp(last_access(entry.as_fd())?),
     };
     let placed = Placed {
         scope: scope_name.to_owned(),

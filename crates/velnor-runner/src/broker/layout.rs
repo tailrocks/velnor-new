@@ -86,6 +86,8 @@ pub(super) struct Layout {
     pub(super) max_data: u64,
     pub(super) budget: u64,
     pub(super) clock: Clock,
+    #[cfg(test)]
+    pub(super) blocked: Arc<AtomicU64>,
 }
 
 impl Layout {
@@ -104,6 +106,8 @@ impl Layout {
             max_data: MAX_DATA_BYTES,
             budget: DEFAULT_CACHE_BUDGET_BYTES,
             clock: Arc::new(system_seconds),
+            #[cfg(test)]
+            blocked: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -284,7 +288,10 @@ impl Layout {
                 match flock(&file, FlockOperation::NonBlockingLockExclusive) {
                     Ok(()) if still_named(&locks, name, &file) => return Ok(file),
                     Ok(()) => break,
-                    Err(Errno::WOULDBLOCK) => {}
+                    Err(Errno::WOULDBLOCK) => {
+                        #[cfg(test)]
+                        self.blocked.fetch_add(1, Ordering::SeqCst);
+                    }
                     Err(error) => {
                         return Err(error).with_context(|| format!("lock the cache {what}"));
                     }

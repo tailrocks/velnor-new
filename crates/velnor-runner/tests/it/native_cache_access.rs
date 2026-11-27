@@ -109,3 +109,31 @@ fn an_entry_unused_for_just_under_seven_days_is_still_a_hit() -> Result<()> {
     assert!(hit.workspace_file("data/a.txt").exists());
     Ok(())
 }
+
+#[test]
+fn an_exact_key_idle_for_more_than_seven_days_is_republished_by_the_next_save() -> Result<()> {
+    let store = Store::new()?;
+    saved(&store, "k-1", "old")?;
+    idle_for(&store, "k-1", JUST_OVER_SEVEN_DAYS)?;
+    saved(&store, "k-1", "new")?;
+    assert!(idle(&store, "k-1")? < FRESH);
+    let restored = run("cache-restore-exact", &store, &[])?;
+    assert!(restored.succeeded(), "{}", restored.ran.stdout);
+    assert_eq!(
+        fs::read_to_string(restored.workspace_file("data/a.txt"))?,
+        "new"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_exact_key_idle_for_just_under_seven_days_is_not_republished() -> Result<()> {
+    let store = Store::new()?;
+    saved(&store, "k-1", "old")?;
+    idle_for(&store, "k-1", JUST_UNDER_SEVEN_DAYS)?;
+    let script = crate::native_cache_support::seed("new");
+    let again = run("cache-save", &store, &[("key", "k-1"), ("script", &script)])?;
+    assert!(again.succeeded(), "{}", again.ran.stdout);
+    assert!(again.ran.has_line("Cache already exists for key k-1"));
+    Ok(())
+}
