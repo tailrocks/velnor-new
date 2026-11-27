@@ -160,7 +160,22 @@ pub(super) fn parents_of(declared: &[PathBuf]) -> Result<Vec<Parent>> {
         .enumerate()
         .filter_map(|(index, path)| identity(path).map(|id| (id, index)))
         .collect();
-    (0..declared.len())
+    let parents = (0..declared.len())
         .map(|index| parent_of(declared, &texts, &roots, index))
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+    for (start, path) in declared.iter().enumerate() {
+        let mut at = start;
+        for _ in 0..parents.len() {
+            match &parents[at] {
+                Parent::Under { outer, .. } => at = *outer,
+                Parent::Ready(_) => break,
+            }
+        }
+        ensure!(
+            matches!(parents[at], Parent::Ready(_)),
+            "the declared path {} and another declared path each resolve below the other",
+            path.display()
+        );
+    }
+    Ok(parents)
 }
