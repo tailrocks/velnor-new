@@ -60,7 +60,7 @@ fn a_backslash_in_any_literal_makes_the_include_unresolved() -> TestResult {
 #[test]
 fn a_file_that_defines_or_imports_a_macro_named_like_a_builtin_marks_its_crate_unresolved()
 -> TestResult {
-    let out = "const A: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/g.rs\"));";
+    let out = "const A: &str = include_str!(concat!(env!(\"OUT_DIR\"), \"/g.rs\"));\nconst B: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/b\"));\ninclude!(concat!(env!(\"OUT_DIR\"), \"/c.rs\"));";
     for shadow in [
         "macro_rules! env { () => { \"/repo\" }; }",
         "macro_rules! concat { ($($t:tt)*) => { \"x\" }; }",

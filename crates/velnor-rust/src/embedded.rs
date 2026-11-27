@@ -223,8 +223,21 @@ fn shadows(tokens: &[Token<'_>]) -> bool {
             tokens.get(at + 1),
             Some(Token::Ident(name)) if SHADOWABLE.contains(name)
         ),
-        Token::Ident(name) if in_use && SHADOWABLE.contains(name) => !from_std(&tokens[..at]),
+        Token::Ident(name) if in_use && SHADOWABLE.contains(name) => {
+            !from_std(&tokens[..at])
+                && !matches!(tokens[at + 1..], [Token::Punct(':'), Token::Punct(':'), ..])
+                && invoked(tokens, name)
+        }
         _ => false,
+    })
+}
+
+fn invoked(tokens: &[Token<'_>], name: &str) -> bool {
+    tokens.windows(3).any(|window| {
+        matches!(
+            window,
+            [Token::Ident(found), Token::Punct('!'), Token::Punct('(' | '[' | '{')] if *found == name
+        )
     })
 }
 

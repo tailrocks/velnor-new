@@ -285,7 +285,7 @@ impl<'a> Graph<'a> {
         ) {
             Class::Nothing => {}
             Class::Packages(names) => {
-                self.seed_where(&|name, _| names.contains(&name), &input, walk)
+                self.seed_where(&|name, _| names.contains(&name), &input, walk);
             }
             Class::Global(trigger) => walk.trigger(&trigger),
             Class::Unknown if !locked.is_empty() => {}
