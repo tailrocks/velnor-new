@@ -233,3 +233,31 @@ fn a_server_url_with_credentials_is_refused_without_echoing_them() -> Result<()>
     }
     Ok(())
 }
+
+#[test]
+fn a_server_url_that_is_not_http_https_or_file_is_refused_without_echoing_it() -> Result<()> {
+    for server in [
+        "ssh://user:secret@ghe.example/path",
+        "secret:topsecret@ghe.example",
+        "ftp://user:secret@ghe.example",
+        "not a url with secret",
+    ] {
+        let mut job = job()?;
+        let github = github(&mut job)?;
+        github.retain(|entry| entry["k"] != "server_url");
+        github.push(entry("server_url", &string(server)));
+        let error = parse(&job).expect_err(server);
+        assert!(
+            matches!(
+                error,
+                FactsError::Invalid {
+                    field: "server_url",
+                    ..
+                }
+            ),
+            "{error}"
+        );
+        assert!(!error.to_string().contains("secret"), "{error}");
+    }
+    Ok(())
+}

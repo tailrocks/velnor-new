@@ -129,6 +129,12 @@ enum Depth {
     Last(u64),
 }
 
+impl Depth {
+    fn fetches_through_the_mirror_refs(self) -> bool {
+        matches!(self, Self::Last(count) if count > 1)
+    }
+}
+
 fn fetch_depth(inputs: &BTreeMap<String, String>) -> Result<Depth, ExecError> {
     let given = inputs
         .iter()
@@ -194,7 +200,12 @@ async fn materialize(
                 dest_arg,
                 "-c",
                 "protocol.version=2",
+                "-c",
+                "core.alternateRefsCommand=true",
+                "-c",
+                "gc.auto=0",
                 "fetch",
+                "--no-auto-maintenance",
                 "--quiet",
                 "--no-tags",
                 &limit,
@@ -260,7 +271,7 @@ async fn populate(
     if present == ProcessOutcome::Cancelled {
         return Ok(StepResult::Cancelled);
     }
-    if present == ProcessOutcome::Failed {
+    if present == ProcessOutcome::Failed || depth.fetches_through_the_mirror_refs() {
         ask(store, ctx, |token| Request::FetchMirror { token }).await?;
     }
     for guarded in [&store_root().join("git"), ctx.temp] {

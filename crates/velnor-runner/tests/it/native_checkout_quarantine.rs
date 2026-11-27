@@ -74,18 +74,19 @@ fn a_sound_object_named_by_a_damage_report_is_not_quarantined() -> Result<()> {
 
 fn warm_then_damage(
     rig: &Rig,
+    spec: &str,
     damage: impl FnOnce(&std::path::Path, &str) -> Result<()>,
 ) -> Result<String> {
     let live = Scratch::new()?;
     let warm = rig.run("checkout_depth1", &rig.head, &live)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
     let mirror = rig.mirror();
-    let blob = git(&mirror, &["rev-parse", &format!("{}:second", rig.head)])?;
-    damage(&mirror, &blob)?;
-    Ok(blob)
+    let id = git(&mirror, &["rev-parse", spec])?;
+    damage(&mirror, &id)?;
+    Ok(id)
 }
 
-fn assert_repaired(rig: &Rig, blob: &str) -> Result<()> {
+fn assert_repaired(rig: &Rig, id: &str) -> Result<()> {
     let scratch = Scratch::new()?;
     let ran = rig.run("checkout_depth1", &rig.head, &scratch)?;
     assert_eq!(ran.code, Some(0), "{}\n{}", ran.stdout, ran.stderr);
@@ -95,24 +96,40 @@ fn assert_repaired(rig: &Rig, blob: &str) -> Result<()> {
     assert_eq!(git(&workspace, &["status", "--porcelain"])?, "");
     let moved = quarantined(rig);
     assert_eq!(moved.len(), 1, "{moved:?}");
-    assert!(moved[0].starts_with(blob), "{moved:?}");
-    git(&rig.mirror(), &["cat-file", "blob", blob])?;
+    assert!(moved[0].starts_with(id), "{moved:?}");
+    git(&rig.mirror(), &["cat-file", "-e", id])?;
     Ok(())
+}
+
+fn empty_object(mirror: &std::path::Path, id: &str) -> Result<()> {
+    overwrite(&object_path(mirror, id), b"")
 }
 
 #[test]
 fn an_empty_loose_blob_is_repaired_and_the_workspace_is_complete() -> Result<()> {
     let rig = Rig::new()?;
-    let blob = warm_then_damage(&rig, |mirror, blob| {
-        overwrite(&object_path(mirror, blob), b"")
-    })?;
+    let blob = warm_then_damage(&rig, &format!("{}:second", rig.head), empty_object)?;
     assert_repaired(&rig, &blob)
+}
+
+#[test]
+fn an_empty_root_tree_of_the_job_commit_is_repaired_by_the_fetch() -> Result<()> {
+    let rig = Rig::new()?;
+    let tree = warm_then_damage(&rig, &format!("{}^{{tree}}", rig.head), empty_object)?;
+    assert_repaired(&rig, &tree)
+}
+
+#[test]
+fn an_empty_job_commit_is_repaired_by_the_fetch() -> Result<()> {
+    let rig = Rig::new()?;
+    let commit = warm_then_damage(&rig, &rig.head, empty_object)?;
+    assert_repaired(&rig, &commit)
 }
 
 #[test]
 fn a_loose_blob_replaced_by_an_object_of_another_type_is_repaired() -> Result<()> {
     let rig = Rig::new()?;
-    let blob = warm_then_damage(&rig, |mirror, blob| {
+    let blob = warm_then_damage(&rig, &format!("{}:second", rig.head), |mirror, blob| {
         let tree = git(mirror, &["rev-parse", &format!("{}^{{tree}}", rig.head)])?;
         std::fs::remove_file(object_path(mirror, blob))?;
         std::fs::copy(object_path(mirror, &tree), object_path(mirror, blob))?;

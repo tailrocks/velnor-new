@@ -17,7 +17,7 @@ use rustix::io::Errno;
 use super::facts::TrustedFacts;
 use super::git::{fetch_env, git, git_args, has_commit, has_tree};
 use super::location::mirror_path;
-use super::repair::{drop_broken_refs, holds_commit, quarantine_corrupt, refuse_packed};
+use super::repair::{Scan, drop_broken_refs, holds_commit, quarantine_corrupt};
 use super::transfer::{Transfer, fetch_wanted};
 
 async fn lock(path: &Path) -> Result<std::fs::File> {
@@ -256,17 +256,19 @@ pub(crate) async fn fetch(
 ) -> Result<Vec<String>> {
     let (mirror, _lock) = open(root, facts).await?;
     let sha = facts.sha.as_str();
-    if has_tree(&mirror, sha).await {
-        return Ok(Vec::new());
-    }
     remove_ref_locks(&mirror).await?;
     let notices = drop_broken_refs(&mirror).await?;
+    if has_tree(&mirror, sha).await {
+        return Ok(notices);
+    }
     let clone_url = facts.clone_url();
     let env = fetch_env(facts.server_url.url(), token);
     let mut fetched = fetch_wanted(&mirror, &clone_url, facts, &env, Transfer::Incremental).await;
-    if !has_tree(&mirror, sha).await && (!notices.is_empty() || holds_commit(&mirror, sha).await) {
-        refuse_packed(&mirror, sha).await?;
-        fetched = refetch(&mirror, &clone_url, facts, &env).await;
+    if !has_tree(&mirror, sha).await {
+        let scan = quarantine_corrupt(&mirror, sha).await?;
+        if scan == Scan::Quarantined || !notices.is_empty() || holds_commit(&mirror, sha).await {
+            fetched = refetch(&mirror, &clone_url, facts, &env).await;
+        }
     }
     if has_tree(&mirror, sha).await {
         return Ok(notices);
@@ -289,7 +291,7 @@ pub(crate) async fn repair(
     token: Option<&str>,
 ) -> Result<Repair> {
     let (mirror, _lock) = open(root, facts).await?;
-    if !quarantine_corrupt(&mirror, facts.sha.as_str()).await? {
+    if quarantine_corrupt(&mirror, facts.sha.as_str()).await? == Scan::Sound {
         return Ok(Repair::Sound);
     }
     remove_ref_locks(&mirror).await?;

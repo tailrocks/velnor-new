@@ -108,22 +108,23 @@ impl TryFrom<String> for ServerUrl {
     type Error = FactsError;
 
     fn try_from(value: String) -> Result<Self, FactsError> {
+        let invalid = |value: String| FactsError::Invalid {
+            field: "server_url",
+            value,
+        };
         match Url::parse(&value) {
-            Ok(mut url) if matches!(url.scheme(), "https" | "http" | "file") => {
+            Ok(url) if matches!(url.scheme(), "https" | "http" | "file") => {
                 if url.username().is_empty() && url.password().is_none() {
-                    return Ok(Self(url));
+                    Ok(Self(url))
+                } else {
+                    Err(invalid(format!(
+                        "{}://{} (credentials are not allowed)",
+                        url.scheme(),
+                        url.host_str().unwrap_or_default()
+                    )))
                 }
-                let _ = url.set_username("");
-                let _ = url.set_password(None);
-                Err(FactsError::Invalid {
-                    field: "server_url",
-                    value: format!("{url} (credentials are not allowed)"),
-                })
             }
-            _ => Err(FactsError::Invalid {
-                field: "server_url",
-                value,
-            }),
+            _ => Err(invalid("not an http, https or file URL".to_owned())),
         }
     }
 }

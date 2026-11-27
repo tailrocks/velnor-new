@@ -11,12 +11,15 @@ use super::git::{Output, git, git_args, has_commit, output};
 
 const MAX_ROUNDS: usize = 64;
 
-async fn refs(mirror: &Path) -> Result<Vec<(String, String)>> {
+async fn list_refs(mirror: &Path) -> Result<Output> {
     let args = git_args(
         Some(mirror),
         &["for-each-ref", "--format=%(objectname) %(refname)"],
     );
-    let listed = output(&args, None).await?;
+    output(&args, None).await
+}
+
+fn parsed_refs(listed: &Output) -> Result<Vec<(String, String)>> {
     if !listed.succeeded {
         bail!("git for-each-ref: {}", listed.stderr);
     }
@@ -28,6 +31,10 @@ async fn refs(mirror: &Path) -> Result<Vec<(String, String)>> {
         .collect())
 }
 
+async fn refs(mirror: &Path) -> Result<Vec<(String, String)>> {
+    parsed_refs(&list_refs(mirror).await?)
+}
+
 pub(super) async fn holds_commit(mirror: &Path, sha: &str) -> bool {
     has_commit(mirror, sha).await
         || refs(mirror)
@@ -35,25 +42,32 @@ pub(super) async fn holds_commit(mirror: &Path, sha: &str) -> bool {
             .is_ok_and(|refs| refs.iter().any(|(id, _)| id == sha))
 }
 
+fn malformed_packed_refs(stderr: &str, packed: &Path) -> bool {
+    ["unexpected line in ", "unterminated line in "]
+        .iter()
+        .any(|form| {
+            let prefix = format!("fatal: {form}{}: ", packed.display());
+            stderr.lines().any(|line| line.starts_with(&prefix))
+        })
+}
+
 async fn refs_past_malformed_packed_refs(
     mirror: &Path,
 ) -> Result<(Vec<(String, String)>, Vec<String>)> {
-    match refs(mirror).await {
-        Ok(all) => Ok((all, Vec::new())),
-        Err(error) if format!("{error:#}").contains("packed-refs") => {
-            let packed = mirror.join("packed-refs");
-            if !tokio::fs::symlink_metadata(&packed)
-                .await
-                .is_ok_and(|meta| meta.is_file())
-            {
-                return Err(error);
-            }
-            quarantine(mirror, "packed-refs", &packed).await?;
-            let notice = "mirror: moved the unreadable packed-refs to quarantine".to_owned();
-            Ok((refs(mirror).await?, vec![notice]))
-        }
-        Err(error) => Err(error),
+    let listed = list_refs(mirror).await?;
+    let packed = mirror.join("packed-refs");
+    if listed.succeeded || !malformed_packed_refs(&listed.stderr, &packed) {
+        return Ok((parsed_refs(&listed)?, Vec::new()));
     }
+    if !tokio::fs::symlink_metadata(&packed)
+        .await
+        .is_ok_and(|meta| meta.is_file())
+    {
+        bail!("git for-each-ref: {}", listed.stderr);
+    }
+    quarantine(mirror, "packed-refs", &packed).await?;
+    let notice = "mirror: moved the unreadable packed-refs to quarantine".to_owned();
+    Ok((refs(mirror).await?, vec![notice]))
 }
 
 pub(super) async fn drop_broken_refs(mirror: &Path) -> Result<Vec<String>> {
@@ -170,11 +184,6 @@ fn packed_error(found: &[Damage]) -> Option<anyhow::Error> {
     })
 }
 
-pub(super) async fn refuse_packed(mirror: &Path, sha: &str) -> Result<()> {
-    let verified = verify(mirror, sha).await?;
-    packed_error(&reported(&verified.stderr)).map_or(Ok(()), Err)
-}
-
 async fn confirmed_loose(mirror: &Path, found: &[Damage]) -> Result<Vec<(String, PathBuf)>> {
     let ids: BTreeSet<&str> = found
         .iter()
@@ -217,15 +226,24 @@ async fn quarantine(mirror: &Path, id: &str, path: &Path) -> Result<()> {
         .with_context(|| format!("move {} to {}", path.display(), target.display()))
 }
 
-pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<bool> {
-    let mut damaged = false;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Scan {
+    Sound,
+    Unsound,
+    Quarantined,
+}
+
+pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<Scan> {
+    let mut scan = Scan::Sound;
     for _ in 0..MAX_ROUNDS {
         let verified = verify(mirror, sha).await?;
         let found = reported(&verified.stderr);
         if verified.succeeded && found.is_empty() {
-            return Ok(damaged);
+            return Ok(scan);
         }
-        damaged = true;
+        if scan == Scan::Sound {
+            scan = Scan::Unsound;
+        }
         if let Some(error) = packed_error(&found) {
             return Err(error);
         }
@@ -233,9 +251,10 @@ pub(super) async fn quarantine_corrupt(mirror: &Path, sha: &str) -> Result<bool>
         if files.is_empty() {
             break;
         }
+        scan = Scan::Quarantined;
         for (id, path) in files {
             quarantine(mirror, &id, &path).await?;
         }
     }
-    Ok(damaged)
+    Ok(scan)
 }

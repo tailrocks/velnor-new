@@ -180,13 +180,11 @@ fn a_dropped_broken_ref_triggers_a_refetch_when_the_fetch_brought_nothing() -> R
     Ok(())
 }
 
-#[test]
-fn a_malformed_packed_refs_is_quarantined_and_the_checkout_proceeds() -> Result<()> {
+fn packed_refs_is_quarantined_and_the_checkout_proceeds(malformed: &str) -> Result<()> {
     let rig = Rig::new()?;
     let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
     assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
     let mirror = rig.mirror();
-    let malformed = "not a packed refs file\n";
     std::fs::write(mirror.join("packed-refs"), malformed)?;
     let next = rig.advance("third")?;
     let scratch = Scratch::new()?;
@@ -206,5 +204,39 @@ fn a_malformed_packed_refs_is_quarantined_and_the_checkout_proceeds() -> Result<
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(kept, [malformed]);
     git(&mirror, &["cat-file", "-e", &rig.head])?;
+    Ok(())
+}
+
+#[test]
+fn a_malformed_packed_refs_is_quarantined_and_the_checkout_proceeds() -> Result<()> {
+    packed_refs_is_quarantined_and_the_checkout_proceeds("not a packed refs file\n")
+}
+
+#[test]
+fn a_packed_refs_without_its_final_newline_is_quarantined() -> Result<()> {
+    packed_refs_is_quarantined_and_the_checkout_proceeds("not a packed refs file")
+}
+
+#[test]
+fn a_failure_that_only_mentions_packed_refs_does_not_quarantine_the_file() -> Result<()> {
+    let rig = Rig::new()?;
+    let warm = rig.run("checkout_depth1", &rig.head, &Scratch::new()?)?;
+    assert_eq!(warm.code, Some(0), "{}\n{}", warm.stdout, warm.stderr);
+    let mirror = rig.mirror();
+    let packed = mirror.join("packed-refs");
+    let content = "# pack-refs with: peeled fully-peeled sorted\n";
+    std::fs::write(&packed, content)?;
+    let next = rig.advance("third")?;
+    wrapper_env(
+        &rig.root,
+        &format!(
+            "case \" $* \" in *\" for-each-ref \"*) echo \"fatal: cannot read {}: out of memory\" >&2; exit 128;; esac\n",
+            packed.display()
+        ),
+    )?;
+    let ran = rig.run("checkout_depth1", &next, &Scratch::new()?)?;
+    assert_eq!(ran.code, Some(1), "{}\n{}", ran.stdout, ran.stderr);
+    assert_eq!(std::fs::read_to_string(&packed)?, content);
+    assert!(!mirror.join("quarantine").exists());
     Ok(())
 }
