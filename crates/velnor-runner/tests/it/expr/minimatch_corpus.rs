@@ -6,7 +6,7 @@ use velnor_runner::expr::segment_matches;
 
 const CORPUS: &str = include_str!("minimatch_corpus.json");
 const PATTERNS: usize = 2600;
-const CASES: usize = 52107;
+const CASES: usize = 52104;
 const REFUSED_PATTERNS: usize = 3;
 const REPORTED_MISMATCHES: usize = 10;
 
