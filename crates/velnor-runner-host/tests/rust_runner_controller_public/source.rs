@@ -7,7 +7,8 @@ use serde_json::json;
 
 use super::fixtures::{
     OTHER_WORKFLOW, TestResult, WORKFLOW, merge_group_host_toml, merge_group_offer, pull_offer,
-    push_offer, sha, with_acquire_returns, with_head_repository, with_run_repository,
+    push_offer, repository_pull_request_host_toml, sha, with_acquire_returns, with_head_ref,
+    with_head_repository, with_run_repository,
 };
 use super::harness::World;
 
@@ -194,6 +195,45 @@ pub(super) fn merge_groups(test: &str) -> TestResult<()> {
             .lines()
             .any(|line| line.starts_with("source_admission=blocked")),
         "a merge group offer was refused"
+    );
+    world.stop()?;
+    assert_eq!(world.finish(30)?, "Ok(Shutdown)");
+    assert_clean(&world, "1");
+    Ok(())
+}
+
+pub(super) fn repository_pull_requests(test: &str) -> TestResult<()> {
+    let mut world = World::new("T2c", 1, true)?;
+    world.write_host_toml_text(&repository_pull_request_host_toml(&world.root)?)?;
+    world.queue_message(41, &[pull_offer(1, 4001, 7, None)])?;
+    world.queue_message(
+        42,
+        &[with_head_ref(pull_offer(2, 4002, 8, None), "topic/other")],
+    )?;
+    world.queue_message(
+        43,
+        &[with_head_repository(pull_offer(3, 4003, 9, None), 43)],
+    )?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event(
+        "both same-repository pull requests and the fork refusal",
+        60,
+        |events| {
+            acquire_ids(&world) == ["1", "2"]
+                && events
+                    .iter()
+                    .any(|event| event.label == "message.delete" && event.field("id") == "43")
+        },
+    );
+    let blocked: Vec<String> = world
+        .child_stderr()
+        .lines()
+        .filter(|line| line.starts_with("source_admission=blocked reason="))
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(
+        blocked,
+        ["source_admission=blocked reason=fork_pull_request_denied"]
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");

@@ -17,7 +17,7 @@ use super::{
     MAX_POLICY_BYTES, MAX_REFS, MAX_SECRETS, MAX_WORKFLOWS, POLICY_SCHEMA, PermissionLevel,
     WorkflowEvent,
 };
-use crate::config::{RepositoryConnection, SourcePolicy};
+use crate::config::{RepositoryConnection, SourcePolicy, SourcePolicyMode};
 use crate::error::HostError;
 
 #[derive(Clone, Copy)]
@@ -234,10 +234,11 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
                             .iter()
                             .filter(|context| context.event == WorkflowEvent::PullRequest)
                             .any(|context| {
-                                context.pull_request_rules.iter().any(|rule| {
-                                    rule.number.is_none()
-                                        || rule.head_repository_id != scope.repository_id
-                                })
+                                context.pull_request_rules.is_empty()
+                                    || context.pull_request_rules.iter().any(|rule| {
+                                        rule.number.is_none()
+                                            || rule.head_repository_id != scope.repository_id
+                                    })
                             })))
             {
                 return Err(HostError::Config);
@@ -260,12 +261,13 @@ fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<()
 
 fn valid_context(context: &ApprovedEventContext, scope: Scope<'_>) -> bool {
     let source = scope.source_policy;
+    let repository_mode = source.is_some_and(|source| source.mode == SourcePolicyMode::Repository);
     if source.is_some_and(|source| !source.events.contains(&context.event)) {
         return false;
     }
     if context.event == WorkflowEvent::PullRequest {
         return context.refs.is_empty()
-            && !context.pull_request_rules.is_empty()
+            && (!context.pull_request_rules.is_empty() || repository_mode)
             && context.pull_request_rules.len() <= MAX_REFS
             && context
                 .pull_request_rules

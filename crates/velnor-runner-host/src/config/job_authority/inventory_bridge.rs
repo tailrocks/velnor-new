@@ -10,7 +10,7 @@ use super::{
     ConcurrencyControl, ConcurrencyScope, GeneratorIdentity, JobAuthorityRole, POLICY_SCHEMA,
     PermissionLevel, WorkflowCall, WorkflowEvent, sha256,
 };
-use crate::config::RepositoryConnection;
+use crate::config::{RepositoryConnection, SourcePolicyMode};
 use crate::error::HostError;
 
 const INVENTORY_SCHEMA: u32 = 1;
@@ -184,7 +184,9 @@ fn convert_context(
             })
             .cloned()
             .collect::<Vec<_>>();
-        if pull_request_rules.is_empty() {
+        if pull_request_rules.is_empty()
+            && connection.source_policy.mode != SourcePolicyMode::Repository
+        {
             return Err(HostError::Config);
         }
         return Ok(ApprovedEventContext {

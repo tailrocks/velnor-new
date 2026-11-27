@@ -297,6 +297,9 @@ impl ApprovedEventContext {
         if lookup.event == WorkflowEvent::PullRequest {
             return lookup.event_ref.is_empty()
                 && lookup.pull_request.is_some_and(|actual| {
+                    if self.pull_request_rules.is_empty() {
+                        return actual.head_repository_id == actual.base_repository_id;
+                    }
                     self.pull_request_rules.iter().any(|allowed| {
                         allowed.base_repository_id == actual.base_repository_id
                             && allowed.base_branch == actual.base_branch
