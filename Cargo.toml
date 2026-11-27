@@ -107,6 +107,18 @@ opt-level = 3
 [profile.dev.package."sha2:0.11.1"]
 opt-level = 3
 
+[profile.test.package.serde-saphyr]
+opt-level = 3
+
+[profile.test.package.granit-parser]
+opt-level = 3
+
+[profile.dev.package.serde-saphyr]
+opt-level = 3
+
+[profile.dev.package.granit-parser]
+opt-level = 3
+
 [profile.dev.package.turso_core]
 opt-level = 3
 debug-assertions = false

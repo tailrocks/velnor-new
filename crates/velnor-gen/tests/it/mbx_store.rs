@@ -6,6 +6,7 @@ use crate::gate_eval::{Context, runs};
 use crate::pipeline::{view, workflow};
 
 const EXEC: &str = "\"$VELNOR_EXEC\" mbx-store";
+const SHARED_STORE_STEP: &str = "velnor-ci mbx-store";
 
 fn repo(config: &str, helper: &str) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
@@ -245,6 +246,9 @@ fn every_sample_job_with_the_shared_store_step_has_a_private_mbx_store_before_it
         for entry in entries {
             let file = entry?.path();
             let text = std::fs::read_to_string(&file)?;
+            if !text.contains(SHARED_STORE_STEP) {
+                continue;
+            }
             let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
             let Some(jobs) = yaml["jobs"].as_object() else {
                 continue;
@@ -252,7 +256,7 @@ fn every_sample_job_with_the_shared_store_step_has_a_private_mbx_store_before_it
             for (id, job) in jobs {
                 let steps = job["steps"].as_array().map_or(&[][..], Vec::as_slice);
                 let named = |name: &str| steps.iter().position(|step| step["name"] == name);
-                let Some(store) = named("velnor-ci mbx-store") else {
+                let Some(store) = named(SHARED_STORE_STEP) else {
                     continue;
                 };
                 stores += 1;
