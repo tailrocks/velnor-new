@@ -40,6 +40,7 @@ impl Scratch {
         RunOptions {
             workspace: self.workspace(),
             temp: self.root.join("temp"),
+            tool_cache: self.root.join("_tool"),
             runner_name: "exec-test".to_owned(),
             os: RunnerOs::Linux,
         }

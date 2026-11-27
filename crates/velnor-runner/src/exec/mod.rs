@@ -42,6 +42,7 @@ use crate::protocol::RunnerOs;
 pub struct RunOptions {
     pub workspace: PathBuf,
     pub temp: PathBuf,
+    pub tool_cache: PathBuf,
     pub runner_name: String,
     pub os: RunnerOs,
 }

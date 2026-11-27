@@ -206,11 +206,7 @@ pub(super) fn runner_context(
         ),
         (
             "tool_cache".to_owned(),
-            options
-                .temp
-                .join("tool_cache")
-                .to_string_lossy()
-                .into_owned(),
+            options.tool_cache.to_string_lossy().into_owned(),
         ),
         ("environment".to_owned(), environment.to_owned()),
     ];

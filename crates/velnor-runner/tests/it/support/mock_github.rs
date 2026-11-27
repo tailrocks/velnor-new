@@ -76,6 +76,8 @@ pub(crate) enum OAuthTokens {
     Fresh,
     StaleFirst,
     UnavailableAfterSignIn(usize),
+    UnavailableFirst(usize),
+    Rejected(&'static str, &'static str),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
