@@ -99,7 +99,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
         .ok_or("no runner start")?;
     assert!(
         runner_line.text.contains(&format!(
-            "--jit @/var/lib/velnor/jit/{first}.jit --work-dir /var/lib/velnor/work/{first}"
+            "--jit @/var/lib/velnor-host/jit/{first}.jit --work-dir /srv/velnor/gen/work/{first}"
         )),
         "{}",
         runner_line.text

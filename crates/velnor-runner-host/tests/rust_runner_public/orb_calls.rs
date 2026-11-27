@@ -8,8 +8,6 @@ use velnor_runner_host::{HostError, RustRunnerFailure};
 
 use super::support::{Fixture, process_exists};
 
-const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
-
 fn grandchild(fixture: &Fixture) -> Result<String, Box<dyn Error>> {
     let found = std::fs::read_dir(fixture.root.join("seen"))?
         .filter_map(Result::ok)
@@ -37,7 +35,7 @@ fn wait_until_dead(pid: &str) -> bool {
 #[test]
 fn rust_runner_orb_call_ends_the_descendants_it_leaves_holding_stdout() -> Result<(), Box<dyn Error>>
 {
-    let fixture = Fixture::new(READY)?;
+    let fixture = Fixture::ready()?;
     fixture.configure("FAKE_ORB_GRANDCHILD=group\n")?;
     let launcher = fixture.launcher().with_orb_deadline(Duration::from_secs(8));
     let started = Instant::now();
@@ -60,7 +58,7 @@ fn rust_runner_orb_call_ends_the_descendants_it_leaves_holding_stdout() -> Resul
 
 #[test]
 fn rust_runner_orb_call_bounds_the_stdout_read_by_its_deadline() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new(READY)?;
+    let fixture = Fixture::ready()?;
     fixture.configure("FAKE_ORB_GRANDCHILD=escaped\n")?;
     let launcher = fixture.launcher().with_orb_deadline(Duration::from_secs(1));
     let started = Instant::now();

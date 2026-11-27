@@ -12,7 +12,7 @@ use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
 
-const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/99.jit --work-dir /var/lib/velnor/work/99\n4343 sleep 600\n";
+const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/99.jit --work-dir /srv/velnor/gen/work/99\n4343 sleep 600\n";
 
 fn move_logs_aside(world: &World, run: &str) -> TestResult<()> {
     for name in ["requests", "seq"] {
@@ -37,17 +37,14 @@ pub(super) fn run(test: &str) -> TestResult<()> {
         world.store.join("jit"),
         std::fs::Permissions::from_mode(0o700),
     )?;
-    std::fs::create_dir_all(world.store.join("work/99"))?;
-    std::fs::set_permissions(
-        world.store.join("work"),
-        std::fs::Permissions::from_mode(0o700),
-    )?;
+    std::fs::create_dir_all(world.work().join("99"))?;
+    std::fs::set_permissions(world.work(), std::fs::Permissions::from_mode(0o700))?;
     std::fs::write(world.store.join("jit/99.jit"), "stale")?;
     std::fs::set_permissions(
         world.store.join("jit/99.jit"),
         std::fs::Permissions::from_mode(0o600),
     )?;
-    std::fs::write(world.store.join("work/99/leftover"), "stale")?;
+    std::fs::write(world.work().join("99/leftover"), "stale")?;
     world.write_state(true, &[("velnor-mac-99", 90)])?;
     world.configure_orb("FAKE_ORB_PS_IMMORTAL=4242\n")?;
     world.queue_message(41, &[push_offer(1041, 1041, "main", WORKFLOW)])?;

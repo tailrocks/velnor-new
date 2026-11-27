@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{DirBuilder, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
@@ -15,12 +15,10 @@ use rustix::fs::{
 use rustix::io::Errno;
 use rustix::path::Arg;
 use rustix::process::geteuid;
-use sha2::{Digest, Sha256};
 
 use self::remove::BOUNDS;
 use super::machine::failure;
-use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
-use crate::digest_hex::lowercase_hex;
+use super::{HOST_DIRECTORIES, JIT_DIRECTORY, PRIVATE_DIRECTORIES};
 use crate::error::{HostError, RustRunnerFailure};
 
 mod remove;
@@ -76,18 +74,15 @@ impl Store {
             .map_err(|_| failure(RustRunnerFailure::HostStore))?;
         let store = Self::open(path)?;
         for name in HOST_DIRECTORIES {
-            let forbidden = if name == WORK_DIRECTORY {
-                others_can_reach()
-            } else {
-                others_can_write()
-            };
-            store.ensure_directory(name, forbidden, RustRunnerFailure::StoreUnsafe)?;
+            store.ensure_directory(name, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
         }
-        store.ensure_directory(
-            JIT_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::JitDirectoryAccessible,
-        )?;
+        for name in PRIVATE_DIRECTORIES {
+            store.ensure_directory(
+                name,
+                others_can_reach(),
+                RustRunnerFailure::JitDirectoryAccessible,
+            )?;
+        }
         Ok(store)
     }
 
@@ -136,33 +131,6 @@ impl Store {
         Ok(())
     }
 
-    pub(super) fn runner_digest(&self) -> Result<String, HostError> {
-        let bin = self.directory(
-            BIN_DIRECTORY,
-            others_can_write(),
-            RustRunnerFailure::StoreUnsafe,
-        )?;
-        let descriptor = openat(
-            &bin,
-            RUNNER_BINARY,
-            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-            Mode::empty(),
-        )
-        .map_err(|_| failure(RustRunnerFailure::BinaryMissing))?;
-        let mut file = File::from(descriptor);
-        let mut hasher = Sha256::new();
-        let mut buffer = vec![0_u8; 64 * 1024];
-        loop {
-            let read = file
-                .read(&mut buffer)
-                .map_err(|_| failure(RustRunnerFailure::HostStore))?;
-            if read == 0 {
-                return Ok(lowercase_hex(&hasher.finalize()));
-            }
-            hasher.update(&buffer[..read]);
-        }
-    }
-
     pub(super) fn write_jit(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
         self.ensure_directory(
             JIT_DIRECTORY,
@@ -195,22 +163,12 @@ impl Store {
         remove_entry(&jit, name).map_err(|_| failure(RustRunnerFailure::HostStore))
     }
 
-    pub(super) fn remove_work(&self, name: &str) -> Result<(), HostError> {
-        let work = self.work_directory()?;
-        remove::tree(&work, name, BOUNDS).map_err(|error| failure(error.failure()))
+    pub(super) fn jit_remains(&self, name: &str) -> Result<bool, HostError> {
+        exists(&self.jit_directory()?, name)
     }
 
-    pub(super) fn leftovers(&self, jit_name: &str, work_name: &str) -> Result<bool, HostError> {
-        let jit = self.jit_directory()?;
-        let work = self.work_directory()?;
-        Ok(exists(&jit, jit_name)? || exists(&work, work_name)?)
-    }
-
-    pub(super) fn empty_jit_and_work(&self) -> Result<(), HostError> {
-        for directory in [self.jit_directory()?, self.work_directory()?] {
-            remove::contents(&directory, BOUNDS).map_err(|error| failure(error.failure()))?;
-        }
-        Ok(())
+    pub(super) fn empty_jit(&self) -> Result<(), HostError> {
+        remove::contents(&self.jit_directory()?, BOUNDS).map_err(|error| failure(error.failure()))
     }
 
     fn jit_directory(&self) -> Result<OwnedFd, HostError> {
@@ -218,14 +176,6 @@ impl Store {
             JIT_DIRECTORY,
             others_can_reach(),
             RustRunnerFailure::JitDirectoryAccessible,
-        )
-    }
-
-    fn work_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            WORK_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::StoreUnsafe,
         )
     }
 

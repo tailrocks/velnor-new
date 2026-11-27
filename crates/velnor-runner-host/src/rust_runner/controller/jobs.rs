@@ -153,7 +153,8 @@ impl Run<'_> {
         self.machine_checking = true;
         let launcher = self.cx.launcher.clone();
         self.tasks.spawn(async move {
-            let result = blocking(move || launcher.ensure_machine().map_err(Into::into)).await;
+            let result =
+                blocking(move || launcher.ensure_machine().map(drop).map_err(Into::into)).await;
             Event::Machine(result)
         });
     }

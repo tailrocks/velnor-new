@@ -67,7 +67,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert_clean(&world, "1");
     assert_eq!(acquire_ids(&world), ["1", "2", "3", "4"]);
     assert_eq!(std::fs::read_dir(world.store.join("jit"))?.count(), 0);
-    assert_eq!(std::fs::read_dir(world.store.join("work"))?.count(), 0);
+    assert_eq!(std::fs::read_dir(world.work())?.count(), 0);
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
     assert_eq!(state["runners"].as_array().map(Vec::len), Some(0));

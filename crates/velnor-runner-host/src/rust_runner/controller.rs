@@ -190,10 +190,14 @@ async fn run_with_health(
     if file_config != config {
         return Ok(RustRunnerExit::ConfigChanged);
     }
+    let cap = config
+        .host
+        .machine_disk_cap_gib()
+        .ok_or(HostError::Config)?;
     let cx = Context {
         state,
         config_sha256,
-        launcher,
+        launcher: launcher.with_machine_disk(cap, config.host.machine_disk.job_limit_gib),
     };
     let (connections, _hold) = match startup::start(&cx, &config, &pats, shutdown).await? {
         Started::Ready(connections, hold) => (connections, hold),

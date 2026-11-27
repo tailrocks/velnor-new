@@ -42,17 +42,39 @@ pub enum RustRunnerFailure {
     #[error("the existing velnor machine is not an arm64 Ubuntu machine")]
     MachineIncompatible,
 
+    #[error(
+        "the velnor machine does not have the required shape (isolated, network-isolated, no ssh agent forwarding, the disk cap, only the host share mount, protected hardlinks and symlinks); delete it with orb delete velnor"
+    )]
+    MachineShape,
+
+    #[error("the velnor machine does not enforce its disk cap; delete it with orb delete velnor")]
+    CapProbe,
+
     #[error("orb could not create the velnor machine")]
     MachineCreate,
 
     #[error("the host store directories could not be created")]
     HostStore,
 
-    #[error("/var/lib/velnor could not be linked to the host store in the velnor machine")]
-    MachineLink,
+    #[error("a command of the velnor machine provisioning failed")]
+    MachineProvision,
 
-    #[error("velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine")]
+    #[error("the machine store layout is not root-owned with the required modes")]
+    MachineLayout,
+
+    #[error("the machine store or generation directory is not on btrfs")]
+    MachineFilesystem,
+
+    #[error("the unprivileged user of the velnor machine could not be read")]
+    GuestUser,
+
+    #[error(
+        "velnor-runner is missing from the host store bin directory or from the host runner path"
+    )]
     BinaryMissing,
+
+    #[error("the velnor-runner copy in the machine does not match the host store")]
+    BinaryCopy,
 
     #[error("the JIT file could not be written")]
     JitFile,

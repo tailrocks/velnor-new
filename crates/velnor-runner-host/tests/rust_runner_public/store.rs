@@ -10,8 +10,6 @@ use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
 use super::support::{Fixture, SECRET_JIT, jit, reservation};
 
-const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
-
 type Check = Result<(), Box<dyn Error>>;
 
 const fn refused(failure: RustRunnerFailure) -> HostError {
@@ -19,7 +17,7 @@ const fn refused(failure: RustRunnerFailure) -> HostError {
 }
 
 fn fixture() -> Result<Fixture, Box<dyn Error>> {
-    Fixture::new(READY)
+    Fixture::ready()
 }
 
 fn chmod(path: &Path, mode: u32) -> Check {
@@ -108,8 +106,13 @@ fn unsafe_roots() -> Check {
     assert_refused(&acl, RustRunnerFailure::StoreUnsafe, "an ACL on the root")?;
     let id = Command::new("id").arg("-u").output()?;
     assert_ne!(String::from_utf8_lossy(&id.stdout).trim(), "0");
-    let foreign = fixture()?;
-    let launcher = RustRunnerLauncher::new(foreign.root.join("orb"), PathBuf::from("/usr"));
+    let foreign =
+        Fixture::shaped(|config| config["mounts"][0]["source"] = serde_json::json!("/usr"))?;
+    let launcher = RustRunnerLauncher::new(
+        foreign.root.join("orb"),
+        PathBuf::from("/usr"),
+        foreign.root.join("host-runner"),
+    );
     assert_eq!(
         launcher.ensure_machine().err(),
         Some(refused(RustRunnerFailure::StoreUnsafe)),
@@ -182,26 +185,26 @@ fn symlinked_directories() -> Check {
     let victim = fixture.root.join("victim");
     std::fs::create_dir(&victim)?;
     chmod(&victim, 0o700)?;
-    symlink(&victim, fixture.store.join("work"))?;
+    symlink(&victim, fixture.store.join("trusted"))?;
     assert!(
         fixture.launcher().ensure_machine().is_err(),
-        "a symlinked work directory"
+        "a symlinked trusted directory"
     );
     assert_eq!(
         std::fs::read_dir(&victim)?.count(),
         0,
-        "the target of a symlinked work directory must stay untouched"
+        "the target of a symlinked trusted directory must stay untouched"
     );
-    for name in ["work", "jit"] {
+    {
         let fixture = fixture_with_directories()?;
         let victim = fixture.root.join("victim");
         std::fs::create_dir(&victim)?;
         std::fs::write(victim.join("keep"), "")?;
-        let directory = fixture.store.join(name);
+        let directory = fixture.store.join("jit");
         std::fs::remove_dir(&directory)?;
         symlink(&victim, &directory)?;
-        assert!(fixture.launcher().sweep().is_err(), "{name}");
-        assert!(victim.join("keep").exists(), "{name}");
+        assert!(fixture.launcher().sweep().is_err(), "jit");
+        assert!(victim.join("keep").exists(), "jit");
     }
     Ok(())
 }

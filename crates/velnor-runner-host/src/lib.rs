@@ -57,7 +57,7 @@ pub use assign::{Offer, offer};
 pub use completion_admin::{CompletionAdminClient, CompletionAdminSession};
 pub use config::{
     ApprovedJobAuthorityPolicy, ConnectionId, DeveloperImages, DockerConfig, HostConfig,
-    HostLimits, JobAuthorityRole, KeychainReference, LaunchMode, MAX_HOST_TOML_BYTES,
+    HostLimits, JobAuthorityRole, KeychainReference, LaunchMode, MAX_HOST_TOML_BYTES, MachineDisk,
     PullRequestRule, RepositoryConnection, RunnerPlatform, ScaleSetSelector, SourcePolicy,
     SourcePolicyMode, WorkflowEvent, build_job_authority_policy_json,
 };
@@ -107,7 +107,7 @@ pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use rust_runner::{
-    ConnectionPats, HostHold, MachineProcess, ReservationId, RunningJob, RustRunnerExit,
+    ConnectionPats, GuestUser, HostHold, MachineProcess, ReservationId, RunningJob, RustRunnerExit,
     RustRunnerLauncher, install_rust_runner_launcher, run_rust_runner_host,
 };
 pub use scale_set::{EnsureError, EnsuredSet, product_runner_groups};

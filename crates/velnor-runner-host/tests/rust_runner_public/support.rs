@@ -9,6 +9,10 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::EncodedJit;
 use velnor_runner_host::{ReservationId, RustRunnerLauncher};
 
+#[path = "../fixtures/guest.rs"]
+mod guest;
+
+const CAP_GIB: u64 = 172;
 const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 pub(super) const SECRET_JIT: &str = "eyJ2ZWxub3IiOiJzZWNyZXQtaml0LWNvbmZpZyJ9";
 
@@ -20,13 +24,29 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) fn new(machines: &str) -> Result<Self, Box<dyn Error>> {
+        Self::build(|_| machines.to_owned())
+    }
+
+    pub(super) fn ready() -> Result<Self, Box<dyn Error>> {
+        Self::build(|store| guest::machines(store, CAP_GIB, |_| {}))
+    }
+
+    pub(super) fn shaped(
+        mutate: impl FnOnce(&mut serde_json::Value),
+    ) -> Result<Self, Box<dyn Error>> {
+        Self::build(|store| guest::machines(store, CAP_GIB, mutate))
+    }
+
+    fn build(machines: impl FnOnce(&Path) -> String) -> Result<Self, Box<dyn Error>> {
         let directory = tempfile::tempdir()?;
         let root = directory.path().canonicalize()?;
         let store = root.join("store");
         std::fs::create_dir_all(root.join("seen"))?;
         std::fs::create_dir_all(store.join("bin"))?;
         std::fs::copy(FAKE_ORB, root.join("orb"))?;
-        std::fs::write(root.join("list.json"), machines)?;
+        guest::install_guest_module(&root)?;
+        std::fs::write(root.join("list.json"), machines(&store))?;
+        guest::prepare_guest(&root)?;
         for private in [store.clone(), store.join("bin")] {
             std::fs::set_permissions(private, std::fs::Permissions::from_mode(0o700))?;
         }
@@ -44,20 +64,25 @@ impl Fixture {
 
     pub(super) fn configure(&self, extra: &str) -> Result<(), Box<dyn Error>> {
         let env = format!(
-            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_TEST_PID={pid}\n{extra}",
+            "FAKE_ORB_LOG={log}\nFAKE_ORB_LIST={list}\nFAKE_ORB_STORE={store}\nFAKE_ORB_SEEN={seen}\nFAKE_ORB_PS={ps}\nFAKE_TEST_PID={pid}\n{guest}{extra}",
             log = self.root.join("orb.log").display(),
             list = self.root.join("list.json").display(),
             store = self.store.display(),
             seen = self.root.join("seen").display(),
             ps = self.root.join("ps.table").display(),
             pid = std::process::id(),
+            guest = guest::environment(CAP_GIB),
         );
         std::fs::write(self.root.join("fake_orb.env"), env)?;
         Ok(())
     }
 
     pub(super) fn launcher(&self) -> RustRunnerLauncher {
-        RustRunnerLauncher::new(self.root.join("orb"), self.store.clone())
+        RustRunnerLauncher::new(
+            self.root.join("orb"),
+            self.store.clone(),
+            self.root.join("host-runner"),
+        )
     }
 
     pub(super) fn log(&self) -> Result<Vec<String>, Box<dyn Error>> {

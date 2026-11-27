@@ -11,6 +11,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use velnor_runner_host::{ConnectionId, HostConfig, build_job_authority_policy_json};
 
+use super::harness::CAP_GIB;
+
 pub(super) const WORKFLOW: &str = "name: ci\non: [push, pull_request]\njobs:\n  build:\n    runs-on: velnor-mac\n    steps:\n      - run: echo ok\n";
 pub(super) const OTHER_WORKFLOW: &str = "name: ci\non: [push]\njobs:\n  build:\n    runs-on: velnor-mac\n    steps:\n      - run: echo other\n";
 const SOURCE_SHA: &str = "1111111111111111111111111111111111111111";
@@ -260,12 +262,15 @@ fn host_toml_with(
          dind_cpu_millicores = 1000\n\
          dind_memory_bytes = 2147483648\n\
          operational_memory_reserve_bytes = 1073741824\n\
+         [host.machine_disk]\n\
+         store_budget_gib = {budget}\n\
          [docker]\n\
          context = \"orbstack\"\n\
          platform = \"linux/arm64\"\n\
          endpoint = \"unix://{}/no-such-docker.sock\"\n",
         root.display(),
         policy = source_policy,
+        budget = CAP_GIB - 72 * u64::from(max_jobs),
     );
     let config = HostConfig::parse_draft(&base)?;
     let id = ConnectionId::parse("lab")?;

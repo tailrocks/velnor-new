@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
 import {
-  accessSync,
   appendFileSync,
   chmodSync,
-  constants,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -20,9 +18,10 @@ import {
 import { FFIType, dlopen } from "bun:ffi";
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
+import { guestCommand, listing } from "./fake_orb_guest.ts";
 
 const RUNNER = "/var/lib/velnor/bin/velnor-runner";
-const GUEST = "/var/lib/velnor";
+const GUEST = "/var/lib/velnor-host";
 const root = import.meta.dir;
 const settings = new Map<string, string>();
 for (const line of readFileSync(`${root}/fake_orb.env`, "utf8").split("\n")) {
@@ -157,16 +156,6 @@ function inGuest(args: string[]): never {
     rest = rest.slice(start);
   }
   switch (rest[0]) {
-    case "ln":
-      return finish(0);
-    case "test": {
-      try {
-        accessSync(`${setting("FAKE_ORB_STORE")}${text(rest[2]).replace(GUEST, "")}`, constants.X_OK);
-      } catch {
-        return finish(1);
-      }
-      return finish(0);
-    }
     case "ps":
       return listProcesses();
     case "kill":
@@ -177,8 +166,11 @@ function inGuest(args: string[]): never {
       return finish(0);
     case RUNNER:
       return runner(rest);
-    default:
-      return finish(64);
+    default: {
+      const guest = { root: `${root}/guest`, share: setting("FAKE_ORB_STORE"), setting };
+      const code = guestCommand(guest, rest);
+      return finish(code ?? 64);
+    }
   }
 }
 
@@ -212,7 +204,7 @@ function escapeGroup(): void {
 function runner(rest: string[]): never {
   if (setting("FAKE_RUNNER_ESCAPE") !== "") escapeGroup();
   const jit = `${setting("FAKE_ORB_STORE")}${text(rest[3]).replace(`@${GUEST}`, "")}`;
-  const work = `${setting("FAKE_ORB_STORE")}${text(rest[5]).replace(GUEST, "")}`;
+  const work = `${root}/guest${text(rest[5])}`;
   const name = basename(jit);
   copyFileSync(jit, `${seen}/${name}`);
   writeFileSync(`${seen}/${name}.env`, environment());
@@ -258,7 +250,10 @@ switch (args[0]) {
     writeSync(1, readFileSync(setting("FAKE_ORB_LIST")));
     finish(0);
   case "create":
-    writeFileSync(setting("FAKE_ORB_LIST"), '[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]\n');
+    writeFileSync(setting("FAKE_ORB_LIST"), listing(args));
+    finish(0);
+  case "version":
+    writeSync(1, `Version: ${setting("FAKE_ORB_VERSION") || "2.2.5 (2020500)"}\nCommit: fake\n`);
     finish(0);
   case "-m":
     inGuest(args);

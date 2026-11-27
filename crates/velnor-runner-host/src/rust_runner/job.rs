@@ -28,7 +28,7 @@ impl RustRunnerLauncher {
         let paths = JobPaths::of(reservation);
         let store = Store::open(&self.host_store)?;
         store.require_runner_binary()?;
-        let binary = store.runner_digest()?;
+        let binary = self.runner_digest()?;
         store.write_jit(paths.jit_name(), jit.expose().as_bytes())?;
         match self.spawn_runner(&paths) {
             Ok(child) => Ok(RunningJob {

@@ -98,10 +98,10 @@ async fn rust_runner_orb_calls_clear_the_environment_and_never_set_orbenv()
     let log = fixture.log()?;
     for expected in [
         "list -f json",
-        "create -a arm64 ubuntu velnor",
-        "-m velnor -u root ln -sfn",
-        "-m velnor test -x /var/lib/velnor/bin/velnor-runner",
-        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/41.jit",
+        "create --isolated --isolate-network --disk 172G --mount ",
+        "-m velnor -u root install -d -o root -g root -m 0755",
+        "-m velnor -u root sha256sum /var/lib/velnor/bin/.velnor-runner.new",
+        "/var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor-host/jit/41.jit",
         "-m velnor -u root ps -eo pid=,args=",
         "-m velnor -u root kill -9 4242",
     ] {
@@ -167,14 +167,13 @@ fn rust_runner_jit_directory_is_private() -> Result<(), Box<dyn Error>> {
         rerun(TEST, "umask 0;", &[])?;
         return Ok(());
     }
-    let fresh = Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+    let fresh = Fixture::ready()?;
     fresh.launcher().ensure_machine()?;
     assert_eq!(mode_of(&fresh.store.join("jit"))?, 0o700);
-    assert!(fresh.store.join("work").is_dir());
+    assert_eq!(mode_of(&fresh.store.join("trusted"))?, 0o700);
 
     for mode in [0o755, 0o750, 0o710, 0o770, 0o701, 0o777] {
-        let fixture =
-            Fixture::new(r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#)?;
+        let fixture = Fixture::ready()?;
         std::fs::create_dir_all(fixture.store.join("jit"))?;
         std::fs::set_permissions(
             fixture.store.join("jit"),

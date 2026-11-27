@@ -248,7 +248,7 @@ fn prepare(
         Step::Machine => Box::new(move || {
             launcher
                 .ensure_machine()
-                .map(|()| Done::Machine)
+                .map(|_| Done::Machine)
                 .map_err(Into::into)
         }),
         Step::Sweep => Box::new(move || launcher.sweep().map(|()| Done::Swept).map_err(Into::into)),

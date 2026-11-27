@@ -2,75 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
 use velnor_runner_host::{HostError, RustRunnerFailure, RustRunnerLauncher};
 
 use super::support::Fixture;
 
-const READY: &str = r#"[{"name":"velnor","image":{"distro":"ubuntu","arch":"arm64"}}]"#;
 const CHILD: &str = "VELNOR_TEST_STORE_CHILD";
 
 type Check = Result<(), Box<dyn Error>>;
 
 fn prepared() -> Result<Fixture, Box<dyn Error>> {
-    let fixture = Fixture::new(READY)?;
+    let fixture = Fixture::ready()?;
     fixture.launcher().ensure_machine()?;
     Ok(fixture)
-}
-
-fn nest(work: &Path, levels: usize) -> Check {
-    let top = work.join("7");
-    std::fs::create_dir(&top)?;
-    std::env::set_current_dir(&top)?;
-    for _ in 0..levels {
-        std::fs::create_dir("d")?;
-        std::env::set_current_dir("d")?;
-    }
-    std::env::set_current_dir("/")?;
-    Ok(())
-}
-
-pub(super) fn deep_tree_under_a_small_descriptor_limit() -> Check {
-    let fixture = prepared()?;
-    let limit = getrlimit(Resource::Nofile);
-    setrlimit(
-        Resource::Nofile,
-        Rlimit {
-            current: Some(256),
-            maximum: limit.maximum,
-        },
-    )?;
-    nest(&fixture.store.join("work"), 2_000)?;
-    fixture
-        .launcher()
-        .sweep()
-        .map_err(|error| format!("a 2,000 level work tree failed the sweep: {error}"))?;
-    assert_eq!(std::fs::read_dir(fixture.store.join("work"))?.count(), 0);
-    Ok(())
-}
-
-pub(super) fn directories_the_owner_cannot_open() -> Check {
-    for mode in [0o500, 0o300, 0o100, 0o000] {
-        let fixture = prepared()?;
-        let locked = fixture.store.join("work/9/locked");
-        std::fs::create_dir_all(locked.join("inner"))?;
-        std::fs::write(locked.join("keep"), "")?;
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(mode))?;
-        let outcome = fixture.launcher().sweep();
-        if locked.exists() {
-            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700))?;
-        }
-        outcome.map_err(|error| format!("a {mode:o} directory failed the sweep: {error}"))?;
-        assert_eq!(
-            std::fs::read_dir(fixture.store.join("work"))?.count(),
-            0,
-            "a {mode:o} directory was left in work"
-        );
-    }
-    Ok(())
 }
 
 pub(super) fn orb_output_over_the_capture_bound() -> Check {

@@ -62,10 +62,9 @@ fn remove_files(launcher: &RustRunnerLauncher, paths: &JobPaths) -> Result<(), L
     let left = || HostError::RustRunner(RustRunnerFailure::JobFilesLeft);
     let store = Store::open(launcher.host_store()).map_err(|_| left())?;
     store.remove_jit(paths.jit_name()).map_err(|_| left())?;
-    store.remove_work(paths.work_name())?;
-    if store
-        .leftovers(paths.jit_name(), paths.work_name())
-        .map_err(|_| left())?
+    launcher.remove_job_dirs(paths).map_err(|_| left())?;
+    if store.jit_remains(paths.jit_name()).map_err(|_| left())?
+        || launcher.job_dirs_remain(paths).map_err(|_| left())?
     {
         return Err(left().into());
     }

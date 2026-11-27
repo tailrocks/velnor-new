@@ -15,7 +15,8 @@ impl RustRunnerLauncher {
                 return Err(failure(RustRunnerFailure::ProcessesSurvive));
             }
         }
-        Store::open(&self.host_store)?.empty_jit_and_work()
+        Store::open(&self.host_store)?.empty_jit()?;
+        self.empty_job_dirs()
     }
 
     fn runner_pids(&self) -> Result<Vec<u32>, HostError> {

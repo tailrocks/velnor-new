@@ -6,9 +6,10 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
+use super::shape::{GuestUser, ListedConfig, Shape};
 use super::store::{HostHold, Store};
 use super::{
-    GUEST_RUNNER, GUEST_STORE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb,
+    GIB, GUEST_SHARE, MACHINE_NAME, ORB_CREATE_DEADLINE, RustRunnerLauncher, orb, runner_binary,
 };
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -25,16 +26,21 @@ struct ListedImage {
 struct ListedMachine {
     name: String,
     image: Option<ListedImage>,
+    config: Option<ListedConfig>,
 }
 
 impl RustRunnerLauncher {
-    pub fn ensure_machine(&self) -> Result<(), HostError> {
+    pub fn ensure_machine(&self) -> Result<GuestUser, HostError> {
         if !self.machine_exists()? {
+            Store::create(&self.host_store)?;
             self.create_machine()?;
+            if !self.machine_exists()? {
+                return Err(failure(RustRunnerFailure::MachineCreate));
+            }
         }
         Store::prepare(&self.host_store)?;
-        self.link_store()?;
-        self.require_runner_binary()
+        self.provision(&self.runner_digest()?)?;
+        self.guest_user()
     }
 
     pub fn hold_host(&self) -> Result<HostHold, HostError> {
@@ -42,7 +48,11 @@ impl RustRunnerLauncher {
     }
 
     pub fn runner_digest(&self) -> Result<String, HostError> {
-        Store::open(&self.host_store)?.runner_digest()
+        runner_binary::digest(&self.runner_binary)
+    }
+
+    pub(super) const fn disk_cap_bytes(&self) -> u64 {
+        self.disk_cap_gib.saturating_mul(GIB)
     }
 
     fn machine_exists(&self) -> Result<bool, HostError> {
@@ -58,36 +68,51 @@ impl RustRunnerLauncher {
             return Ok(false);
         };
         match &machine.image {
-            Some(image) if image.distro == MACHINE_DISTRO && image.arch == MACHINE_ARCH => Ok(true),
-            _ => Err(failure(RustRunnerFailure::MachineIncompatible)),
+            Some(image) if image.distro == MACHINE_DISTRO && image.arch == MACHINE_ARCH => {}
+            _ => return Err(failure(RustRunnerFailure::MachineIncompatible)),
+        }
+        let shape = Shape {
+            share: &self.host_store,
+            guest_share: GUEST_SHARE,
+            disk_bytes: self.disk_cap_bytes(),
+        };
+        match &machine.config {
+            Some(config) if config.matches(&shape) => Ok(true),
+            _ => Err(failure(RustRunnerFailure::MachineShape)),
         }
     }
 
     fn create_machine(&self) -> Result<(), HostError> {
+        let share = self
+            .host_store
+            .to_str()
+            .filter(|path| !path.contains(':'))
+            .map(|path| format!("{path}:{GUEST_SHARE}"))
+            .ok_or_else(|| failure(RustRunnerFailure::MachineCreate))?;
+        let disk = format!("{}G", self.disk_cap_gib);
         let mut command = self.orb();
-        command.args(["create", "-a", "arm64", "ubuntu", MACHINE_NAME]);
+        command.args([
+            "create",
+            "--isolated",
+            "--isolate-network",
+            "--disk",
+            &disk,
+            "--mount",
+            &share,
+            "-a",
+            MACHINE_ARCH,
+            MACHINE_DISTRO,
+            MACHINE_NAME,
+        ]);
         succeeds(
             command,
             self.deadline.max(ORB_CREATE_DEADLINE),
             RustRunnerFailure::MachineCreate,
         )
     }
-
-    fn link_store(&self) -> Result<(), HostError> {
-        let target = format!("/mnt/mac{}", self.host_store.display());
-        let mut command = self.as_root();
-        command.args(["ln", "-sfnT", &target, GUEST_STORE]);
-        succeeds(command, self.deadline, RustRunnerFailure::MachineLink)
-    }
-
-    fn require_runner_binary(&self) -> Result<(), HostError> {
-        let mut command = self.in_machine();
-        command.args(["test", "-x", GUEST_RUNNER]);
-        succeeds(command, self.deadline, RustRunnerFailure::BinaryMissing)
-    }
 }
 
-fn succeeds(
+pub(super) fn succeeds(
     command: Command,
     deadline: Duration,
     otherwise: RustRunnerFailure,
