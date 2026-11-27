@@ -32,14 +32,20 @@ function snapshot(seq: number): void {
   writeFileSync(`${seen}/snapshots/${seq}.txt`, text);
 }
 
-function scaleSetView(id: number): object {
+function scaleSetView(id: number, labels: string[] = config.labels): object {
   return {
     id,
     name: config.scale_set,
-    labels: config.labels.map((name) => ({ name, type: "System" })),
+    labels: labels.map((name) => ({ name, type: "System" })),
     runnerGroupId: 1,
     runnerSetting: { disableUpdate: true },
   };
+}
+
+function intended(): boolean {
+  const file = `${config.state}/rust-runner-scale-sets.json`;
+  if (!config.state || !existsSync(file)) return false;
+  return ((JSON.parse(readFileSync(file, "utf8")) as { intended?: string[] }).intended ?? []).length > 0;
 }
 
 function firstJit(requestId: number): boolean {
@@ -107,11 +113,11 @@ export function admin(path: string): never {
     const id = readState().scale_set_id;
     record("scaleset.get", { name: config.scale_set, found: id !== null, status: scripted?.status ?? 200 });
     if (scripted?.status && scripted.status !== 200) reply(scripted.status, { message: "unavailable" });
-    reply(200, { count: id === null ? 0 : 1, value: id === null ? [] : [scaleSetView(id)] });
+    reply(200, { count: id === null ? 0 : 1, value: id === null ? [] : [scaleSetView(id, config.existing_labels)] });
   }
   if (method === "POST" && path === sets) {
     const id = mutate((state) => (state.scale_set_id = 7));
-    record("scaleset.create", { name: config.scale_set });
+    record("scaleset.create", { name: config.scale_set, intent: intended() });
     reply(200, scaleSetView(id));
   }
   sessions(path);

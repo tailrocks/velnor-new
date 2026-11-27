@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::child::HOST_BLOCKING;
+use super::child::{HOST_BLOCKING, SECRET_LOOKUPS};
 use super::events::wait_for;
 use super::fixtures::{TestResult, hex_sha256, host_toml_for, official_host_toml};
 use super::harness::World;
@@ -30,6 +30,13 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert!(
         world.events().is_empty() && !world.root.join("orb.log").exists(),
         "the controller started before it had a credential"
+    );
+    let lookups = std::fs::read_to_string(world.seen.join(SECRET_LOOKUPS)).unwrap_or_default();
+    assert!(
+        lookups
+            .lines()
+            .any(|line| line == reference.trim_start_matches("keychain:")),
+        "the credential lookups did not reach the injected source: {lookups:?}"
     );
     world.write_host_toml_text(&host_toml_for(&world.root, 2, &reference)?)?;
     let second = file_hash(&world)?;

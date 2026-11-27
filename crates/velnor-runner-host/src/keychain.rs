@@ -4,6 +4,7 @@
 use std::io::Read;
 #[cfg(target_os = "macos")]
 use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use zeroize::Zeroizing;
 
@@ -81,8 +82,21 @@ pub fn import_secret(
     store_secret(&SystemKeychain, service, account, secret)
 }
 
+pub trait SecretSource: Send + Sync {
+    fn load(&self, service: &str, account: &str) -> Result<Zeroizing<Vec<u8>>, HostError>;
+}
+
+static SOURCE: OnceLock<Box<dyn SecretSource>> = OnceLock::new();
+
+pub fn install_secret_source(source: Box<dyn SecretSource>) -> Result<(), HostError> {
+    SOURCE.set(source).map_err(|_| HostError::Keychain)
+}
+
 pub fn load_secret(service: &str, account: &str) -> Result<Zeroizing<Vec<u8>>, HostError> {
-    Ok(Zeroizing::new(fetch(service, account)?))
+    match SOURCE.get() {
+        Some(source) => source.load(service, account),
+        None => Ok(Zeroizing::new(fetch(service, account)?)),
+    }
 }
 
 #[cfg(target_os = "macos")]

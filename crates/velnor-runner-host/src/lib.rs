@@ -49,6 +49,7 @@ mod reconcile;
 pub mod resource_probe_release;
 mod rust_runner;
 mod scale_set;
+mod shutdown_signals;
 mod stage;
 mod worker;
 
@@ -86,7 +87,8 @@ pub use journal::pr_source_transition::{
 pub use journal::{IntentState, Journal, Outcome};
 pub use journal_show::{ReservationRow, show_reservations};
 pub use keychain::{
-    NormalizedSecret, SecretStore, import_secret, load_secret, read_secret, store_secret,
+    NormalizedSecret, SecretSource, SecretStore, import_secret, install_secret_source, load_secret,
+    read_secret, store_secret,
 };
 pub use launch::{
     AcquiredRegistryImage, BootstrapContainerRole, CompletionWorker, DaemonSelection,

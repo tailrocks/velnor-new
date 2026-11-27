@@ -27,19 +27,52 @@ fn chmod(path: &Path, mode: u32) -> Check {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 fn add_acl(path: &Path) -> Check {
-    let status = if cfg!(target_os = "macos") {
-        Command::new("/bin/chmod")
-            .args(["+a", "everyone allow read"])
-            .arg(path)
-            .status()?
-    } else {
-        Command::new("setfacl")
-            .args(["-m", "u:nobody:r"])
-            .arg(path)
-            .status()?
-    };
-    assert!(status.success(), "the test needs a tool that sets an ACL");
+    let status = Command::new("/bin/chmod")
+        .args(["+a", "everyone allow read"])
+        .arg(path)
+        .status()?;
+    assert!(
+        status.success(),
+        "chmod +a could not set an ACL on {}",
+        path.display()
+    );
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn add_acl(path: &Path) -> Check {
+    const VERSION: u32 = 2;
+    const USER_OBJ: u16 = 0x01;
+    const USER: u16 = 0x02;
+    const GROUP_OBJ: u16 = 0x04;
+    const MASK: u16 = 0x10;
+    const OTHER: u16 = 0x20;
+    const NOBODY: u32 = 65_534;
+    let mode = std::fs::metadata(path)?.permissions().mode();
+    let perm = |shift: u32| u16::try_from((mode >> shift) & 0o7).unwrap_or(0);
+    let mut value = VERSION.to_le_bytes().to_vec();
+    for (tag, permission, id) in [
+        (USER_OBJ, perm(6), u32::MAX),
+        (USER, 4, NOBODY),
+        (GROUP_OBJ, perm(3), u32::MAX),
+        (MASK, perm(3) | 4, u32::MAX),
+        (OTHER, perm(0), u32::MAX),
+    ] {
+        value.extend_from_slice(&tag.to_le_bytes());
+        value.extend_from_slice(&permission.to_le_bytes());
+        value.extend_from_slice(&id.to_le_bytes());
+    }
+    rustix::fs::setxattr(
+        path,
+        "system.posix_acl_access",
+        &value,
+        rustix::fs::XattrFlags::empty(),
+    )
+    .map_err(|error| {
+        format!("the filesystem of {path:?} cannot hold a POSIX ACL for this test: {error}")
+    })?;
     Ok(())
 }
 

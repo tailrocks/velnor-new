@@ -127,3 +127,26 @@ fn a_launch_mode_change_hands_the_official_controller_over_to_the_rust_runner()
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn a_handover_retires_every_connection_through_the_config_transition() -> Result<(), HostError>
+{
+    let current = config("")?;
+    let drained = current.without_connections();
+    let mut effects = RecordingEffects::default();
+    let removed = apply_config_transition(&current, &drained, &mut effects).await?;
+    assert_eq!(
+        removed,
+        current.connections().to_vec(),
+        "every connection must be retired before a handover"
+    );
+    assert_eq!(effects.bound, 0);
+    assert!(
+        effects
+            .published
+            .iter()
+            .all(|published| published.connections().is_empty()),
+        "the published configuration must hold no connection"
+    );
+    Ok(())
+}

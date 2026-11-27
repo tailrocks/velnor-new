@@ -20,6 +20,55 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     )
 }
 
+pub(super) fn rate_limited(test: &str) -> TestResult<()> {
+    for (tag, reply) in [
+        ("T9c", json!({"status": 429})),
+        (
+            "T9d",
+            json!({"status": 403, "headers": {"retry-after": "1"}}),
+        ),
+        (
+            "T9e",
+            json!({"status": 403, "headers": {"x-ratelimit-remaining": "0"}}),
+        ),
+    ] {
+        deferred(
+            test,
+            tag,
+            &json!({"run.get": {"after_session": true, "replies": [{}, {}, {}, reply]}}),
+        )?;
+    }
+    Ok(())
+}
+
+pub(super) fn refused_for_good(test: &str) -> TestResult<()> {
+    let mut world = World::new("T9f", 1, true)?;
+    world.script_refusals(
+        &json!({"run.get": {"after_session": true, "replies": [{}, {}, {}, {"status": 403}]}}),
+    )?;
+    world.queue_message(91, &[push_offer(1, 9001, "main", WORKFLOW)])?;
+    world.spawn_controller(test, &[])?;
+    world.wait_for_event_unless(
+        "message 91 deleted after a 403 without rate-limit signals",
+        60,
+        |_| deleted_messages(&world).contains(&"91".to_owned()),
+        |_| {
+            world
+                .child_stderr()
+                .lines()
+                .any(|line| line == "source_admission=deferred reason=source_api_unavailable")
+                .then(|| "a 403 without rate-limit signals was deferred as retryable".to_owned())
+        },
+    );
+    assert!(
+        acquire_ids(&world).is_empty(),
+        "a refused source check must not acquire"
+    );
+    world.stop()?;
+    assert_eq!(world.finish(20)?, "Ok(Shutdown)");
+    Ok(())
+}
+
 fn deferred(test: &str, tag: &'static str, script: &Value) -> TestResult<()> {
     let mut world = World::new(tag, 1, true)?;
     world.script_refusals(script)?;

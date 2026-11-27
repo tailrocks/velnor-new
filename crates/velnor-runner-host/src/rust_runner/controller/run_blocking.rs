@@ -4,18 +4,20 @@
 use std::path::Path;
 use std::time::Duration;
 
-use tokio::signal::unix::{Signal, SignalKind, signal};
+use tokio::runtime::Runtime;
 
 use super::pats::ConnectionPats;
 use super::readiness::Phase;
+use super::runner::RunnerHealth;
 use super::startup::guarded;
-use super::{Context, RustRunnerExit, Shutdown, host_toml_sha256, run_rust_runner_host};
+use super::{Context, RustRunnerExit, Shutdown, host_toml_sha256, run_with_health};
 use crate::config::{HostConfig, LaunchMode};
 use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::launch_blocking::ListenFault;
 use crate::readiness_scan::controller_config;
 use crate::rust_runner::RustRunnerLauncher;
+use crate::shutdown_signals::Signals;
 
 const CREDENTIAL_RETRY: Duration = Duration::from_secs(30);
 const CREDENTIAL_BUDGET: Duration = Duration::from_secs(30);
@@ -28,51 +30,30 @@ pub(crate) enum Handover {
 }
 
 pub(crate) fn run_blocking(
+    runtime: &Runtime,
     state: &Path,
     daemon_lock: &DaemonLock,
+    signals: &mut Signals,
 ) -> Result<Handover, ListenFault> {
     let _controller_run = daemon_lock.begin_controller_run()?;
     let state = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state.is_dir() || !daemon_lock.matches_path(&state.join("daemon.lock")) {
         return Err(HostError::Lock.into());
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|_| HostError::Journal)?;
-    let result = runtime.block_on(supervise(&state, daemon_lock));
-    runtime.shutdown_background();
-    result
+    runtime.block_on(supervise(&state, daemon_lock, signals))
 }
 
-struct Signals {
-    terminate: Signal,
-    interrupt: Signal,
-}
-
-impl Signals {
-    fn install() -> Result<Self, HostError> {
-        Ok(Self {
-            terminate: signal(SignalKind::terminate()).map_err(|_| HostError::Journal)?,
-            interrupt: signal(SignalKind::interrupt()).map_err(|_| HostError::Journal)?,
-        })
-    }
-
-    async fn received(&mut self) {
-        tokio::select! {
-            _ = self.terminate.recv() => {}
-            _ = self.interrupt.recv() => {}
-        }
-    }
-}
-
-async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<Handover, ListenFault> {
-    let mut signals = Signals::install()?;
+async fn supervise(
+    state: &Path,
+    daemon_lock: &DaemonLock,
+    signals: &mut Signals,
+) -> Result<Handover, ListenFault> {
+    let mut health = RunnerHealth::new();
     let mut snapshot = Some(controller_config(state).ok_or(HostError::Config)?);
     loop {
         let (config, config_sha256) = match snapshot.take() {
             Some(current) => current,
-            None => match reread(state, &mut signals).await {
+            None => match reread(state, signals).await {
                 Some(next) => next,
                 None => return Ok(Handover::Stopped),
             },
@@ -94,13 +75,14 @@ async fn supervise(state: &Path, daemon_lock: &DaemonLock) -> Result<Handover, L
             Credentials::ConfigChanged => continue,
             Credentials::Stopped => return Ok(Handover::Stopped),
         };
-        let exit = run_rust_runner_host(
+        let exit = run_with_health(
             config,
             pats,
             state,
             daemon_lock,
             cx.launcher.clone(),
-            async move { shutdown.requested().await },
+            &mut shutdown,
+            &mut health,
         )
         .await?;
         match exit {

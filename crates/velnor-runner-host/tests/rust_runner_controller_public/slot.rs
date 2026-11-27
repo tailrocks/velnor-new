@@ -42,13 +42,17 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     world.configure_orb("FAKE_RUNNER_LOCK=1\n")?;
     std::fs::write(world.seen.join("release-runner"), "")?;
     reclaimed_files(&world)?;
-    world.wait_for_event("job D", 90, |events| {
-        events.iter().any(|event| {
-            event.label == "runner.delete"
-                && event.field("name") == runner_name(4)
-                && event.field("status") == "204"
-        })
-    });
+    world.wait_for_event(
+        "the proof of job D: the 0500 work directory left by job C must not hold its slot",
+        90,
+        |events| {
+            events.iter().any(|event| {
+                event.label == "runner.delete"
+                    && event.field("name") == runner_name(4)
+                    && event.field("status") == "204"
+            })
+        },
+    );
     let events = world.events();
     let acquire = acquire_with_ids(&events, "4").ok_or("no acquire for D")?;
     let state = snapshot(&world, &acquire);
@@ -221,8 +225,10 @@ fn reclaimed_files(world: &World) -> TestResult<()> {
     assert!(!state.runners.contains(&runner_name(2)) && !state.work.contains(&"2".to_owned()));
     let locked = world.store.join("work/3/locked");
     wait_for("the work dir of C", 20, || locked.exists());
-    world.wait_for_event("job D", 90, |events| {
-        acquire_with_ids(events, "4").is_some()
-    });
+    world.wait_for_event(
+        "job D to be acquired: the 0500 work directory left by job C must not hold its slot",
+        90,
+        |events| acquire_with_ids(events, "4").is_some(),
+    );
     Ok(())
 }

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::EncodedJit;
 use velnor_runner_host::{ReservationId, RustRunnerLauncher};
 
-const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.sh");
+const FAKE_ORB: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake_orb.ts");
 pub(super) const SECRET_JIT: &str = "eyJ2ZWxub3IiOiJzZWNyZXQtaml0LWNvbmZpZyJ9";
 
 pub(super) struct Fixture {

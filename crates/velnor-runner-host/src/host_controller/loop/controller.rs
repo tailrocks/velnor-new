@@ -114,6 +114,7 @@ struct ControllerLoop<'a> {
     rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
     hold_log: startup::HoldLog,
+    handing_over: bool,
 }
 
 impl<'a> ControllerLoop<'a> {
@@ -208,6 +209,7 @@ impl<'a> ControllerLoop<'a> {
             rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
             hold_log: startup.hold_log,
+            handing_over: false,
         })
     }
 
@@ -231,6 +233,12 @@ impl<'a> ControllerLoop<'a> {
         {
             return Err(HostError::Lock.into());
         }
+        if self.handing_over {
+            return Ok(self
+                .connection_sessions
+                .is_empty()
+                .then_some(Handover::RustRunner));
+        }
         let next = match crate::host_controller::config_watch::read_host_config(
             &self.state.join("host.toml"),
         ) {
@@ -240,15 +248,6 @@ impl<'a> ControllerLoop<'a> {
                 None
             }
         };
-        if let Some(handover) = next
-            .as_ref()
-            .and_then(|next| handover_to(&self.current, next))
-        {
-            eprintln!(
-                "host controller: launch mode changed; handing over to the rust-runner controller"
-            );
-            return Ok(Some(handover));
-        }
         let mut effects = JournalEffects {
             state: &self.state,
             journal: &self.journal,
@@ -259,6 +258,22 @@ impl<'a> ControllerLoop<'a> {
             docker: &self.docker,
             connection_sessions: &mut self.connection_sessions,
         };
+        if let Some(next) = &next
+            && handover_to(&self.current, next).is_some()
+        {
+            eprintln!(
+                "host controller: launch mode changed; draining every connection before the rust-runner controller takes over"
+            );
+            let drained = self.current.without_connections();
+            self.handing_over = apply_config(
+                &mut self.current,
+                &mut self.pending_retirements,
+                drained,
+                &mut effects,
+            )
+            .await;
+            return Ok(None);
+        }
         if let Some(next) = next
             && next != self.current
         {

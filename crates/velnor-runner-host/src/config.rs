@@ -141,6 +141,15 @@ impl HostConfig {
     }
 
     #[must_use]
+    pub(crate) fn without_connections(&self) -> Self {
+        Self {
+            connections: Vec::new(),
+            job_authority_policies: Vec::new(),
+            ..self.clone()
+        }
+    }
+
+    #[must_use]
     pub fn developer_images(&self) -> Option<&DeveloperImages> {
         self.developer_images.as_ref()
     }

@@ -19,7 +19,7 @@ export function api(path: string): never {
   if (method === "GET" && run?.[1]) {
     const scripted = scriptedReply("run.get");
     record("run.get", { run: run[1], status: scripted?.status ?? 200 });
-    if (scripted?.status && scripted.status !== 200) reply(scripted.status, { message: "unavailable" });
+    if (scripted?.status && scripted.status !== 200) reply(scripted.status, { message: "unavailable" }, scripted.headers);
     const offer = offers().find((candidate) => candidate.run_id === Number(run[1]));
     if (offer) reply(200, runJson(config, offer, path.includes("/attempts/")));
   }

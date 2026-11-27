@@ -4,7 +4,7 @@
 use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::thread::JoinHandle;
+use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use rustix::process::{Pid, Signal, kill_process_group};
@@ -35,43 +35,62 @@ pub(super) fn run(
     let mut child = command
         .spawn()
         .map_err(|_| RustRunnerFailure::OrbUnavailable)?;
+    let limit = Instant::now() + deadline;
+    let group = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
     let reader = child.stdout.take().map(|mut stdout| {
+        let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
             let _ = stdout.read_to_end(&mut bytes);
-            bytes
-        })
+            let _ = sender.send(bytes);
+        });
+        receiver
     });
-    let status = wait_until(&mut child, Instant::now() + deadline)?;
+    let status = wait_until(&mut child, group, limit)?;
+    kill_group(group);
     Ok(Finished {
         status,
-        stdout: collected(reader),
+        stdout: collected(reader, group, limit)?,
     })
 }
 
-fn wait_until(child: &mut Child, limit: Instant) -> Result<ExitStatus, RustRunnerFailure> {
+fn wait_until(
+    child: &mut Child,
+    group: Option<Pid>,
+    limit: Instant,
+) -> Result<ExitStatus, RustRunnerFailure> {
     loop {
         match child.try_wait() {
             Ok(Some(status)) => return Ok(status),
             Ok(None) if Instant::now() < limit => std::thread::sleep(POLL),
             Ok(None) | Err(_) => {
-                end_group(child);
+                kill_group(group);
+                let _ = child.kill();
+                let _ = child.wait();
                 return Err(RustRunnerFailure::OrbTimeout);
             }
         }
     }
 }
 
-fn end_group(child: &mut Child) {
-    if let Some(group) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
+fn kill_group(group: Option<Pid>) {
+    if let Some(group) = group {
         let _ = kill_process_group(group, Signal::KILL);
     }
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
-fn collected(reader: Option<JoinHandle<Vec<u8>>>) -> Vec<u8> {
+fn collected(
+    reader: Option<Receiver<Vec<u8>>>,
+    group: Option<Pid>,
+    limit: Instant,
+) -> Result<Vec<u8>, RustRunnerFailure> {
+    let Some(reader) = reader else {
+        return Ok(Vec::new());
+    };
     reader
-        .and_then(|reader| reader.join().ok())
-        .unwrap_or_default()
+        .recv_timeout(limit.saturating_duration_since(Instant::now()))
+        .map_err(|_| {
+            kill_group(group);
+            RustRunnerFailure::OrbTimeout
+        })
 }
