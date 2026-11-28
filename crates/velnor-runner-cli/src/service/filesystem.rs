@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use super::environment::Environment;
 use super::plist::render_plist;
 use super::quarantine::{
     QuarantineOutcome, existing_matches, open_directory, openat_file, parent_and_name,
@@ -11,11 +12,17 @@ use super::quarantine::{
 use super::staging::PrivateDirectory;
 use crate::state_directory::create_private_dir_all;
 
-pub(super) fn write_plist(binary: &Path, state: &Path, path: &Path, logs: &Path) -> bool {
+pub(super) fn write_plist(
+    binary: &Path,
+    environment: &Environment,
+    state: &Path,
+    path: &Path,
+    logs: &Path,
+) -> bool {
     if create_private_dir_all(state).is_err() {
         return false;
     }
-    let Some(body) = render_plist(binary, state, logs) else {
+    let Some(body) = render_plist(binary, environment, state, logs) else {
         return false;
     };
     let Some(parent) = path.parent() else {
@@ -139,7 +146,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::write_plist;
+    use super::{Environment, write_plist};
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -157,6 +164,10 @@ mod tests {
         let logs = parent.join("logs");
         let written = write_plist(
             &root.join("velnor-host"),
+            &Environment {
+                orb: root.join("orb"),
+                runner_binary: root.join("velnor-runner"),
+            },
             &state,
             &root.join("LaunchAgents").join("host.plist"),
             &logs,

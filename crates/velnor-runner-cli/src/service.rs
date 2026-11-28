@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod environment;
 mod filesystem;
 mod plist;
 mod quarantine;
@@ -13,6 +14,7 @@ use std::process::{Command, ExitCode};
 use crate::args::ServiceAction;
 use crate::dispatch::home_unresolved;
 use crate::state_directory::create_private_dir_all;
+use environment::Environment;
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
 use quarantine::{open_expected_file, uninstall_after_stop};
@@ -29,9 +31,11 @@ struct InstalledPlist {
     identity: File,
 }
 
-pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
+pub(crate) fn service(action: &ServiceAction, state: &Path) -> ExitCode {
     match action {
-        ServiceAction::Install => install(state),
+        ServiceAction::Install { orb, runner_binary } => {
+            install(state, orb.as_deref(), runner_binary.as_deref())
+        }
         ServiceAction::Start => match log_dir() {
             Some(logs) => start(state, &logs),
             None => home_unresolved(),
@@ -83,7 +87,8 @@ fn installed_plist(state: &Path) -> Option<InstalledPlist> {
     let uid = read_uid()?;
     let binary = std::env::current_exe().ok()?;
     let path = plist_path()?;
-    let expected = render_plist(&binary, state, &log_dir()?)?;
+    let environment = environment::installed(&path)?;
+    let expected = render_plist(&binary, &environment, state, &log_dir()?)?;
     let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
     Some(InstalledPlist {
         uid,
@@ -93,14 +98,35 @@ fn installed_plist(state: &Path) -> Option<InstalledPlist> {
     })
 }
 
-fn install(state: &Path) -> ExitCode {
+fn install(state: &Path, orb: Option<&Path>, runner_binary: Option<&Path>) -> ExitCode {
     let (Some(path), Some(logs)) = (plist_path(), log_dir()) else {
         return home_unresolved();
     };
-    install_to(rustix::process::geteuid().as_raw(), state, &path, &logs)
+    let Ok(host) = std::env::current_exe() else {
+        return ExitCode::from(1);
+    };
+    let Some(environment) =
+        environment::resolve(orb, runner_binary, &host, std::env::var_os("PATH"))
+    else {
+        eprintln!("orb was not found: pass --orb with an absolute path or put orb on PATH.");
+        return ExitCode::from(1);
+    };
+    install_to(
+        rustix::process::geteuid().as_raw(),
+        &environment,
+        state,
+        &path,
+        &logs,
+    )
 }
 
-fn install_to(euid: u32, state: &Path, path: &Path, logs: &Path) -> ExitCode {
+fn install_to(
+    euid: u32,
+    environment: &Environment,
+    state: &Path,
+    path: &Path,
+    logs: &Path,
+) -> ExitCode {
     if euid == 0 {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
@@ -108,7 +134,7 @@ fn install_to(euid: u32, state: &Path, path: &Path, logs: &Path) -> ExitCode {
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    if !write_plist(&bin, state, path, logs) {
+    if !write_plist(&bin, environment, state, path, logs) {
         return ExitCode::from(1);
     }
     println!("{}", path.display());
@@ -158,7 +184,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::{install_to, start};
+    use super::{Environment, install_to, start};
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -184,7 +210,17 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let root = temp.path().canonicalize()?;
         let plist = root.join("LaunchAgents").join("host.plist");
-        let code = install_to(0, &root.join("state"), &plist, &root.join("logs"));
+        let environment = Environment {
+            orb: root.join("orb"),
+            runner_binary: root.join("velnor-runner"),
+        };
+        let code = install_to(
+            0,
+            &environment,
+            &root.join("state"),
+            &plist,
+            &root.join("logs"),
+        );
         assert_eq!(
             format!("{code:?}"),
             format!("{:?}", std::process::ExitCode::from(1))

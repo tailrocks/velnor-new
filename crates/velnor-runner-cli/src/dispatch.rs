@@ -107,7 +107,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Journal { action } => match action {
             JournalAction::Show { reservation } => journal_show::show(&state, *reservation),
         },
-        Command::Service { action } => crate::service::service(*action, &state),
+        Command::Service { action } => crate::service::service(action, &state),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { .. } => ExitCode::from(1),
         Command::Disconnect { .. } if in_rust_runner_mode(&state) => command_unavailable(),

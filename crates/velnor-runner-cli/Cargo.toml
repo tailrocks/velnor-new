@@ -43,6 +43,10 @@ name = "launch_mode_public"
 path = "tests/launch_mode_public.rs"
 
 [[test]]
+name = "service_environment_public"
+path = "tests/service_environment_public.rs"
+
+[[test]]
 name = "home_resolution_public"
 path = "tests/home_resolution_public.rs"
 

@@ -222,10 +222,17 @@ pub enum CredentialAction {
 }
 
 /// `service` actions.
-#[derive(Debug, Clone, Copy, Subcommand)]
+#[derive(Debug, Clone, Subcommand)]
 pub enum ServiceAction {
     /// Write the `LaunchAgent` plist.
-    Install,
+    Install {
+        /// Absolute path of `orb`. Default: `orb` on PATH.
+        #[arg(long)]
+        orb: Option<PathBuf>,
+        /// Absolute path of `velnor-runner`. Default: next to this executable.
+        #[arg(long)]
+        runner_binary: Option<PathBuf>,
+    },
     /// Start is launchd's job. This process does not double-fork.
     Start,
     /// Stop the agent.
