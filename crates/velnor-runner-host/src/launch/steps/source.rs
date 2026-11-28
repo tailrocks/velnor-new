@@ -4,13 +4,15 @@
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
     RepositoryTarget, VerifiedPullRequest, VerifiedWorkflowSource, WorkflowRefKind,
-    get_pull_request, get_workflow_run, verify_pull_request, verify_workflow_source,
+    WorkflowRunError, get_pull_request, get_workflow_run, verify_pull_request,
+    verify_workflow_source,
 };
 
 use crate::config::{
     ConnectionId, RepositoryConnection, SourcePolicy, SourcePolicyMode, WorkflowEvent,
 };
 use crate::journal::SourceAuthorizationBinding;
+use crate::launch::execution_authorization::SourceFault;
 use sha2::{Digest, Sha256};
 use velnor_runner_github::Transport;
 
@@ -75,7 +77,7 @@ impl AuthorizedSourceReceipt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SourceBlock {
+pub(crate) enum SourceBlock {
     Missing,
 
     ApiUnavailable,
@@ -92,7 +94,7 @@ pub(super) enum SourceBlock {
 }
 
 impl SourceBlock {
-    pub(super) const fn code(self) -> &'static str {
+    pub(crate) const fn code(self) -> &'static str {
         match self {
             Self::Missing => "source_metadata_missing",
             Self::ApiUnavailable => "source_api_unavailable",
@@ -118,6 +120,25 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     if request_id <= 0 || message_id < 0 {
         return Err(SourceBlock::Missing);
     }
+    let verified = authorize_source(connection, source, token, transport)?;
+    Ok(AuthorizedSourceReceipt {
+        connection_id: binding.connection_id().clone(),
+        scale_set_id: binding.scale_set_id(),
+        binding_digest: binding.binding_digest().to_owned(),
+        request_id,
+        message_id,
+        source: verified,
+        policy_mode: connection.source_policy.mode,
+        already_assigned: false,
+    })
+}
+
+pub(crate) fn authorize_source<T: Transport + ?Sized>(
+    connection: &RepositoryConnection,
+    source: &SourceMetadata,
+    token: &str,
+    transport: &mut T,
+) -> Result<VerifiedWorkflowSource, SourceBlock> {
     let complete = source.complete().ok_or(SourceBlock::Missing)?;
     let (owner, repository) = split_repository(&connection.repository)?;
     let run = get_workflow_run(
@@ -127,7 +148,7 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
         complete.workflow_run_id,
         token,
     )
-    .map_err(|_| SourceBlock::ApiUnavailable)?;
+    .map_err(lookup_block)?;
     let verified = verify_workflow_source(
         complete,
         &run,
@@ -144,16 +165,14 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     {
         verify_pull(connection, transport, token, &run, &verified)?;
     }
-    Ok(AuthorizedSourceReceipt {
-        connection_id: binding.connection_id().clone(),
-        scale_set_id: binding.scale_set_id(),
-        binding_digest: binding.binding_digest().to_owned(),
-        request_id,
-        message_id,
-        source: verified,
-        policy_mode: connection.source_policy.mode,
-        already_assigned: false,
-    })
+    Ok(verified)
+}
+
+fn lookup_block(error: WorkflowRunError) -> SourceBlock {
+    match SourceFault::lookup(error) {
+        SourceFault::Retryable(_) => SourceBlock::ApiUnavailable,
+        SourceFault::Final(_) => SourceBlock::SourceMismatch,
+    }
 }
 
 fn verify_binding(
@@ -199,8 +218,8 @@ fn verify_pull(
         .filter(|value| *value > 0)
         .ok_or(SourceBlock::PullRequestDenied)?;
     let (owner, repository) = split_repository(&connection.repository)?;
-    let pull = get_pull_request(transport, owner, repository, number, token)
-        .map_err(|_| SourceBlock::ApiUnavailable)?;
+    let pull =
+        get_pull_request(transport, owner, repository, number, token).map_err(lookup_block)?;
     let verified_pull = verify_pull_request(run, &pull, connection.repository_id)
         .map_err(|_| SourceBlock::PullRequestDenied)?;
     if !connection

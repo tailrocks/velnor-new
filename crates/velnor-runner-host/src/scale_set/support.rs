@@ -107,7 +107,7 @@ pub(super) fn map_host(error: HostError) -> EnsureError {
     }
 }
 
-pub(super) fn map_session<T>(error: SessionError, transport: &Recording<T>) -> EnsureError {
+pub(crate) fn map_session<T>(error: SessionError, transport: &Recording<T>) -> EnsureError {
     match error {
         SessionError::Uncertain => EnsureError::Uncertain,
         SessionError::Conflict => EnsureError::Conflict,
@@ -121,7 +121,7 @@ pub(super) fn map_session<T>(error: SessionError, transport: &Recording<T>) -> E
     }
 }
 
-pub(super) struct Recording<T = HttpsTransport> {
+pub(crate) struct Recording<T = HttpsTransport> {
     pub(super) inner: T,
     pub(super) status: u16,
     step: &'static str,
@@ -372,7 +372,7 @@ pub(super) fn selector_valid(selector: &ScaleSetSelector) -> bool {
             .all(|(index, label)| !labels[..index].iter().any(|prior| prior == label))
 }
 
-pub(super) fn create_labels(labels: &[String]) -> Vec<CreateLabel> {
+pub(crate) fn create_labels(labels: &[String]) -> Vec<CreateLabel> {
     labels
         .iter()
         .map(|name| CreateLabel {

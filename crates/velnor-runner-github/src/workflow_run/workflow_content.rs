@@ -289,10 +289,7 @@ where
         Err(TransportFail::Timeout | TransportFail::Reset) => {
             return Err(WorkflowRunError::Uncertain);
         }
-        Err(TransportFail::Http(status)) if status >= 500 => {
-            return Err(WorkflowRunError::Uncertain);
-        }
-        Err(TransportFail::Http(status)) => return Err(WorkflowRunError::HttpStatus(status)),
+        Err(TransportFail::Http(status)) => return Err(super::api_status(status)),
     };
     decode_json(&exchange)
 }
@@ -302,11 +299,7 @@ where
     R: for<'de> Deserialize<'de>,
 {
     if exchange.status != 200 {
-        return Err(if exchange.status >= 500 {
-            WorkflowRunError::Uncertain
-        } else {
-            WorkflowRunError::HttpStatus(exchange.status)
-        });
+        return Err(super::api_status(exchange.status));
     }
     if exchange.body.len() > super::MAX_RESPONSE_BYTES {
         return Err(WorkflowRunError::ResponseTooLarge);

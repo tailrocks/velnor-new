@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use super::server::{read_drain_token, valid_token};
 use super::wire::{Request, Response, SOCKET_NAME, Target};
-use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
+use crate::config::{ConnectionId, HostConfig, MAX_HOST_TOML_BYTES, RepositoryConnection};
 use crate::error::HostError;
 
 mod doctor_result;
@@ -33,7 +33,6 @@ pub use setup_receipt::{ConnectionSetupReceipt, RunnerGroupReceipt, SelectedSetR
 const RETRY: Duration = Duration::from_millis(100);
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 const DOCTOR_TIMEOUT_MAX: Duration = Duration::from_secs(300);
-const MAX_CONFIG_BYTES: u64 = 1_048_576;
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
 pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::Value, HostError> {
@@ -264,7 +263,7 @@ fn read_connection(
     id: &ConnectionId,
 ) -> Result<Option<RepositoryConnection>, HostError> {
     let path = state.join("host.toml");
-    let Some(text) = read_bounded_file(&path, MAX_CONFIG_BYTES)? else {
+    let Some(text) = read_bounded_file(&path, MAX_HOST_TOML_BYTES)? else {
         return Ok(None);
     };
     let config = HostConfig::parse(&text)?;

@@ -56,7 +56,6 @@ pub struct ComparedHookSourceFacts {
     workflow_ref: String,
     workflow_sha: String,
     job_workflow_ref: String,
-    workflow_job_id: String,
     job_workflow_sha: Option<String>,
     pull_request: Option<ComparedHookPullRequestFacts>,
 }
@@ -85,11 +84,6 @@ impl ComparedHookSourceFacts {
     #[must_use]
     pub fn job_workflow(&self) -> (&str, Option<&str>) {
         (&self.job_workflow_ref, self.job_workflow_sha.as_deref())
-    }
-
-    #[must_use]
-    pub fn workflow_job_id(&self) -> &str {
-        &self.workflow_job_id
     }
 
     #[must_use]

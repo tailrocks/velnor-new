@@ -26,7 +26,7 @@ pub(in crate::host_controller::loop_driver) async fn run_controller(
     state: &Path,
     daemon_lock: &DaemonLock,
     image_authority: ImageAuthority,
-) -> Result<(), ListenFault> {
+) -> Result<crate::rust_runner::Handover, ListenFault> {
     let controller =
         super::ControllerLoop::initialize(current, state, daemon_lock, image_authority).await?;
     Box::pin(controller.run()).await

@@ -8,7 +8,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::config::{HostConfig, KeychainReference};
+use crate::config::{HostConfig, KeychainReference, MAX_HOST_TOML_BYTES};
 use crate::docker_client::{bounded_info, docker_deadline_after};
 use crate::error::HostError;
 use crate::journal::IntentState;
@@ -18,7 +18,6 @@ use crate::reconcile::{IntentRow, occupies};
 const ENGINE_BUDGET: Duration = Duration::from_secs(2);
 
 pub const READINESS_BUDGET: Duration = Duration::from_secs(4);
-const MAX_CONFIG_BYTES: u64 = 64 * 1024;
 const MAX_JOURNAL_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_JOURNAL_ROWS: usize = 4096;
 const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -96,6 +95,9 @@ where
         } => (*config, config_sha256),
         ConfigFact::Invalid => return Readiness::Degraded,
     };
+    if config.host.launch_mode == crate::config::LaunchMode::RustRunner {
+        return crate::rust_runner::heartbeat_readiness(state, &config_sha256);
+    }
     let mut has_credential = has_credential;
     let mut missing_credential = false;
     for connection in config.connections() {
@@ -160,15 +162,15 @@ fn read_config(state: &Path) -> ConfigFact {
     let Ok(metadata) = file.metadata() else {
         return ConfigFact::Invalid;
     };
-    if !metadata.file_type().is_file() || metadata.len() > MAX_CONFIG_BYTES {
+    if !metadata.file_type().is_file() || metadata.len() > MAX_HOST_TOML_BYTES {
         return ConfigFact::Invalid;
     }
     let mut bytes = Vec::new();
     if file
-        .take(MAX_CONFIG_BYTES + 1)
+        .take(MAX_HOST_TOML_BYTES + 1)
         .read_to_end(&mut bytes)
         .is_err()
-        || u64::try_from(bytes.len()).map_or(true, |size| size > MAX_CONFIG_BYTES)
+        || u64::try_from(bytes.len()).map_or(true, |size| size > MAX_HOST_TOML_BYTES)
     {
         return ConfigFact::Invalid;
     }

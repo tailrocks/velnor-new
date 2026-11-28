@@ -6,12 +6,10 @@ use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use crate::config::{HostConfig, RepositoryConnection};
+use crate::config::{HostConfig, MAX_HOST_TOML_BYTES, RepositoryConnection};
 use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::scale_set::EnsureError;
-
-const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(crate) fn lock_connection(
     state: &Path,
@@ -42,14 +40,14 @@ fn binding_is_active(state: &Path, binding: &RepositoryConnection) -> Result<boo
         .open(path)
         .map_err(|_| EnsureError::AdmissionClosed)?;
     let metadata = file.metadata().map_err(|_| EnsureError::AdmissionClosed)?;
-    if !metadata.is_file() || metadata.len() > MAX_CONFIG_BYTES {
+    if !metadata.is_file() || metadata.len() > MAX_HOST_TOML_BYTES {
         return Err(EnsureError::AdmissionClosed);
     }
     let mut bytes = Vec::new();
-    file.take(MAX_CONFIG_BYTES.saturating_add(1))
+    file.take(MAX_HOST_TOML_BYTES.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| EnsureError::AdmissionClosed)?;
-    if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_CONFIG_BYTES) {
+    if u64::try_from(bytes.len()).map_or(true, |length| length > MAX_HOST_TOML_BYTES) {
         return Err(EnsureError::AdmissionClosed);
     }
     let text = std::str::from_utf8(&bytes).map_err(|_| EnsureError::AdmissionClosed)?;

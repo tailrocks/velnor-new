@@ -23,7 +23,9 @@ pub mod workflow_run;
 
 pub mod session;
 
-pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
+pub use acquire::{
+    AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty, sole_grant,
+};
 pub use error::WireError;
 pub use paths::{
     CAPACITY_HEADER, acquire_path, capacity_header_value, jit_path, last_message_query,

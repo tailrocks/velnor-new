@@ -38,6 +38,11 @@ pub const fn effect_certainty(fail: TransportFail) -> Certainty {
     }
 }
 
+#[must_use]
+pub fn sole_grant(returned: &[i64], request_id: i64) -> bool {
+    returned == [request_id]
+}
+
 pub fn classify_acquire(
     requested: &[i64],
     returned: &[i64],

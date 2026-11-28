@@ -6,7 +6,7 @@ use std::io::Read;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use crate::config::{HostConfig, RepositoryConnection};
+use crate::config::{HostConfig, MAX_HOST_TOML_BYTES, RepositoryConnection};
 use crate::daemon_lock::{DaemonLock, EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::connect_unix;
 use crate::error::HostError;
@@ -17,8 +17,6 @@ pub(super) use scale_set_delete::scale_set_delete;
 
 use super::server::read_drain_token;
 use super::wire::{Request, SOCKET_NAME, Target};
-
-const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(super) fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
     if matches!(
@@ -157,14 +155,14 @@ fn read_config(state: &Path) -> Result<HostConfig, HostError> {
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     let file = options.open(path).map_err(|_| HostError::Config)?;
     let metadata = file.metadata().map_err(|_| HostError::Config)?;
-    if !metadata.is_file() || metadata.len() > MAX_CONFIG_BYTES {
+    if !metadata.is_file() || metadata.len() > MAX_HOST_TOML_BYTES {
         return Err(HostError::Config);
     }
     let mut bytes = Vec::new();
-    file.take(MAX_CONFIG_BYTES.saturating_add(1))
+    file.take(MAX_HOST_TOML_BYTES.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| HostError::Config)?;
-    if u64::try_from(bytes.len()).map_or(true, |size| size > MAX_CONFIG_BYTES) {
+    if u64::try_from(bytes.len()).map_or(true, |size| size > MAX_HOST_TOML_BYTES) {
         return Err(HostError::Config);
     }
     let text = String::from_utf8(bytes).map_err(|_| HostError::Config)?;

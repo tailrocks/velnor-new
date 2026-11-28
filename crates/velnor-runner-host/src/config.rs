@@ -6,10 +6,13 @@ use serde::{Deserialize, Serialize};
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
+pub const MAX_HOST_TOML_BYTES: u64 = 1_048_576;
+
 mod connection;
 mod developer_images;
 mod job_authority;
 mod keychain_reference;
+mod launch_mode;
 mod platform;
 mod registration;
 mod release_read;
@@ -25,6 +28,7 @@ pub use job_authority::{
 };
 pub use keychain_reference::KeychainReference;
 pub(crate) use keychain_reference::off_runtime;
+pub use launch_mode::LaunchMode;
 pub use platform::RunnerPlatform;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
@@ -56,6 +60,9 @@ pub struct HostLimits {
     #[serde(default = "default_max_jobs")]
     pub max_jobs: u32,
 
+    #[serde(default)]
+    pub launch_mode: LaunchMode,
+
     pub(crate) resources: ResourceBudgetConfig,
 }
 
@@ -75,6 +82,12 @@ const fn default_max_jobs() -> u32 {
 
 impl HostConfig {
     pub fn parse(text: &str) -> Result<Self, HostError> {
+        let config = Self::parse_draft(text)?;
+        config.require_policies()?;
+        Ok(config)
+    }
+
+    pub fn parse_draft(text: &str) -> Result<Self, HostError> {
         let mut config: Self = toml::from_str(text).map_err(|_| HostError::Config)?;
         for connection in &mut config.connections {
             connection.canonicalize()?;
@@ -87,6 +100,21 @@ impl HostConfig {
             .sort_by(|left, right| left.connection_id().cmp(right.connection_id()));
         config.validate()?;
         Ok(config)
+    }
+
+    fn require_policies(&self) -> Result<(), HostError> {
+        let uncovered = self.host.launch_mode == LaunchMode::RustRunner
+            && self.connections.iter().any(|connection| {
+                !self
+                    .job_authority_policies
+                    .iter()
+                    .any(|policy| policy.connection_id() == &connection.connection_id)
+            });
+        if uncovered {
+            Err(HostError::Config)
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn validate(&self) -> Result<(), HostError> {
@@ -109,7 +137,16 @@ impl HostConfig {
             self.release_read.is_some(),
             crate::compile_identity::compiled_release_identity().is_some(),
         )?;
-        validate_docker(&self.docker, &self.connections)
+        validate_docker(&self.docker, &self.connections, self.host.launch_mode)
+    }
+
+    #[must_use]
+    pub(crate) fn without_connections(&self) -> Self {
+        Self {
+            connections: Vec::new(),
+            job_authority_policies: Vec::new(),
+            ..self.clone()
+        }
     }
 
     #[must_use]
@@ -191,6 +228,7 @@ impl HostConfig {
 
     pub fn to_toml(&self) -> Result<String, HostError> {
         self.validate()?;
+        self.require_policies()?;
         let document = HostToml {
             schema: self.schema,
             connections: &self.connections,
@@ -199,6 +237,7 @@ impl HostConfig {
             developer_images: self.developer_images.as_ref(),
             host: HostTomlLimits {
                 max_jobs: self.host.max_jobs,
+                launch_mode: self.host.launch_mode,
                 resources: HostTomlResources {
                     runner_cpu_millicores: self.host.resources.runner_cpu_millicores,
                     runner_memory_bytes: self.host.resources.runner_memory_bytes,
@@ -232,6 +271,7 @@ struct HostToml<'a> {
 #[derive(Serialize)]
 struct HostTomlLimits {
     max_jobs: u32,
+    launch_mode: LaunchMode,
     resources: HostTomlResources,
 }
 
@@ -247,18 +287,25 @@ struct HostTomlResources {
 fn validate_docker(
     docker: &DockerConfig,
     connections: &[RepositoryConnection],
+    launch_mode: LaunchMode,
 ) -> Result<(), HostError> {
     let platform = RunnerPlatform::parse(&docker.platform).ok_or(HostError::Config)?;
     if docker.context.is_empty() || !unix_endpoint(&docker.endpoint) {
         return Err(HostError::Config);
     }
-    if connections
-        .iter()
-        .all(|connection| platform.routes(&connection.scale_set))
-    {
-        Ok(())
-    } else {
-        Err(HostError::PlatformSelector)
+    match launch_mode {
+        LaunchMode::RustRunner if platform == RunnerPlatform::LinuxArm64 => Ok(()),
+        LaunchMode::RustRunner => Err(HostError::Config),
+        LaunchMode::OfficialRunner => {
+            if connections
+                .iter()
+                .all(|connection| platform.routes(&connection.scale_set))
+            {
+                Ok(())
+            } else {
+                Err(HostError::PlatformSelector)
+            }
+        }
     }
 }
 

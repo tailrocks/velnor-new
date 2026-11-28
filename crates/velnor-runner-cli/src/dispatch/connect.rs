@@ -7,9 +7,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use velnor_runner_host::{
-    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, PullRequestRule,
-    RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent, connect_plan,
-    import_secret,
+    ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, LaunchMode,
+    PullRequestRule, RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent,
+    connect_plan, import_secret,
 };
 
 use super::connect_authority as authority;
@@ -45,6 +45,7 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) organization: Option<&'a str>,
     pub(super) runner_group: Option<&'a str>,
     pub(super) platform: &'a str,
+    pub(super) launch_mode: LaunchMode,
     pub(super) max_jobs: Option<u32>,
     pub(super) docker_context: Option<&'a str>,
     pub(super) endpoint: &'a str,
@@ -233,8 +234,8 @@ fn candidate_config(
     request: &ConnectRequest<'_>,
     connection: &RepositoryConnection,
 ) -> Result<String, ConnectError> {
-    let requested =
-        HostConfig::parse(&sample_config(request, connection)).map_err(|_| ConnectError::Config)?;
+    let requested = HostConfig::parse_draft(&sample_config(request, connection))
+        .map_err(|_| ConnectError::Config)?;
     let candidate = match existing {
         None => requested,
         Some(current) => {
@@ -393,6 +394,7 @@ pub(super) fn same_shared_settings(
         .resource_budget()
         .map_err(|_| ConnectError::Config)?;
     Ok(current.host.max_jobs == requested.host.max_jobs
+        && current.host.launch_mode == requested.host.launch_mode
         && current_resources == requested_resources
         && current.docker == requested.docker)
 }

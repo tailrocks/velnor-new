@@ -24,8 +24,7 @@ fn input_bytes(event_name: &str, event_ref: &str) -> Vec<u8> {
         "workflow_ref": format!("owner/repo/.github/workflows/ci.yml@{event_ref}"),
         "workflow_sha": SHA,
         "tested_sha": SHA,
-        "job_workflow_ref": DEPLOY,
-        "workflow_job_id": "deploy"
+        "job_workflow_ref": DEPLOY
     })
     .to_string()
     .into_bytes()
