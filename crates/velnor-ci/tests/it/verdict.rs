@@ -152,14 +152,15 @@ fn a_verdict_that_is_missing_or_unreadable_is_refused() {
     artifact_zip(&mut garbage, zip_of("verdict.json", b"not json"));
     refused(&garbage, "the run has no usable velnor-verdict");
     let mut other_format = World::new();
+    let format_one = format!(
+        r#"{{"format":1,"attempt":1,"tree":"{}","plan":{PLAN}}}"#,
+        tree(&other_format.checkout)
+    );
     artifact_zip(
         &mut other_format,
-        zip_of(
-            "verdict.json",
-            br#"{"format":1,"attempt":1,"tree":"","plan":{},"runner":{"os":"","arch":"","environment":""}}"#,
-        ),
+        zip_of("verdict.json", format_one.as_bytes()),
     );
-    refused(&other_format, "the run has no usable velnor-verdict");
+    refused(&other_format, "format 1 is not 2");
 }
 
 #[test]

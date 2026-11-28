@@ -85,6 +85,7 @@ pub enum Rule {
     ExpressionTooLong(usize),
     ImageBoundary(&'static str),
     ReusableStepNameShared(String),
+    JobNameShared(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,6 +159,10 @@ impl fmt::Display for RuleViolation {
             Rule::ReusableStepNameShared(name) => write!(
                 f,
                 "the step {name:?} can be reused from a pull request run, which matches steps by name, and another step of the job has the same name; rename one of them"
+            ),
+            Rule::JobNameShared(name) => write!(
+                f,
+                "the job {name:?} shares its name with another job's name or id, and a pull request verdict matches a job by name; rename one of them"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,

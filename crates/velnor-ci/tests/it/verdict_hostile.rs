@@ -3,7 +3,9 @@
 
 use serde_json::json;
 
-use crate::verdict_world::{BASE, HEAD, REPOSITORY, World, jobs, json_body, path};
+use velnor_model::REUSE_RUN_MAX_BYTES;
+
+use crate::verdict_world::{BASE, HEAD, REPOSITORY, World, jobs, json_body, path, tree};
 
 fn runs_body(ids: &[u64]) -> Vec<u8> {
     let runs: Vec<_> = ids
@@ -144,4 +146,88 @@ fn two_live_verdict_artifacts_are_refused() {
             {"id": 5001, "name": "velnor-verdict", "expired": false}]})),
     );
     assert_eq!(world.run().outputs["reuse"], "false");
+}
+
+const MOVED: &str = "3333333333333333333333333333333333333333";
+
+#[test]
+fn a_pull_request_head_that_moved_since_it_was_queued_is_refused() {
+    let mut world = World::new();
+    let moved_tree = tree(&world.checkout);
+    world.routes.insert(
+        path("/pulls/7"),
+        json_body(&json!({"head": {"sha": MOVED, "repo": {"full_name": REPOSITORY}}})),
+    );
+    world.routes.insert(
+        path(&format!("/compare/{BASE}...{MOVED}?per_page=1")),
+        json_body(&json!({"behind_by": 0})),
+    );
+    world.routes.insert(
+        path(&format!("/git/commits/{MOVED}")),
+        json_body(&json!({"tree": {"sha": moved_tree}})),
+    );
+    let runs = world.routes.remove(&runs_key()).unwrap_or_default();
+    world.routes.insert(
+        path(&format!(
+            "/actions/workflows/ci.yml/runs?head_sha={MOVED}&event=pull_request&per_page=100"
+        )),
+        String::from_utf8_lossy(&runs)
+            .replace(HEAD, MOVED)
+            .into_bytes(),
+    );
+    let result = world.run();
+    assert_eq!(result.outputs["reuse"], "false", "{}", result.stdout());
+    assert!(
+        result.stdout().contains("not the queued commit"),
+        "{}",
+        result.stdout()
+    );
+}
+
+#[test]
+fn two_jobs_with_the_name_of_a_reusable_job_are_refused() {
+    for name in ["rust", "Alint"] {
+        let mut world = World::new();
+        let rust = (
+            "rust",
+            "success",
+            &[("Format", "success"), ("Test", "success")][..],
+        );
+        let mut listed = vec![
+            ("Required", "success", &[][..]),
+            rust,
+            ("Alint", "success", &[][..]),
+        ];
+        listed.push(if name == "rust" {
+            ("rust", "skipped", &[("Test", "skipped")][..])
+        } else {
+            ("Alint", "skipped", &[][..])
+        });
+        world.routes.insert(jobs_key(100), jobs(&listed));
+        let result = world.run();
+        assert_eq!(result.outputs["reuse"], "false", "{name}");
+        assert!(
+            result
+                .stdout()
+                .contains(&format!("more than one job of the run is named {name}")),
+            "{name}: {}",
+            result.stdout()
+        );
+    }
+}
+
+#[test]
+fn a_run_url_is_accepted_up_to_the_bytes_the_needs_budget_charges_and_no_further() {
+    let base = format!("/{REPOSITORY}/actions/runs/100").len();
+    for (extra, reuse) in [(0, "true"), (1, "false")] {
+        let mut world = World::new();
+        let server = format!(
+            "https://{}",
+            "a".repeat(REUSE_RUN_MAX_BYTES - base - 8 + extra)
+        );
+        world
+            .overrides
+            .push(("GITHUB_SERVER_URL".to_owned(), server));
+        assert_eq!(world.run().outputs["reuse"], reuse, "{extra}");
+    }
 }

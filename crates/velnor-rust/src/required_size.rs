@@ -3,10 +3,10 @@
 
 use velnor_model::{
     CACHE_KEY_MAX_UNITS, GateNeed, JSON_UNIT_MAX_BYTES, Job, JobId, MERGE_GROUP_SKIP_OUTPUT,
-    REUSE_OUTPUT, REUSE_RUN_OUTPUT, REUSED_OUTPUT, RepoFacts, ReuseStep, RootSlug, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT, ToolsLocalVerb,
-    cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
+    REUSE_OUTPUT, REUSE_RUN_MAX_BYTES, REUSE_RUN_OUTPUT, REUSED_OUTPUT, RepoFacts, ReuseStep,
+    RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
+    ToolsLocalVerb, cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -106,7 +106,7 @@ fn reuse_bytes(jobs: &[&Job]) -> usize {
             total.saturating_add(json_string_bytes(&reuse.id))
         });
     property_bytes(REUSE_OUTPUT, 5)
-        .saturating_add(property_bytes(REUSE_RUN_OUTPUT, 128))
+        .saturating_add(property_bytes(REUSE_RUN_OUTPUT, REUSE_RUN_MAX_BYTES))
         .saturating_add(property_bytes(REUSED_OUTPUT, ids))
 }
 
@@ -220,3 +220,7 @@ fn filter_char_bytes(c: char) -> usize {
         c => json_char_bytes(c),
     }
 }
+
+#[cfg(test)]
+#[path = "required_size_tests.rs"]
+mod tests;

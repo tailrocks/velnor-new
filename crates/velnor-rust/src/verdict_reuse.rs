@@ -15,6 +15,14 @@ fn runs_on_every_event(when: When) -> bool {
     matches!(when, When::Success | When::NotCancelled)
 }
 
+fn reusable_audit(step: &Step) -> bool {
+    matches!(step.kind, StepKind::InputsAuditRoot(_))
+        && matches!(
+            step.when,
+            When::FullAuditOrPullRequest | When::FullAuditOrPushOrPullRequest
+        )
+}
+
 fn kind_of(step: &Step) -> Option<&'static str> {
     match &step.kind {
         StepKind::Cargo(CargoCommand::FmtCheck) => Some("format"),
@@ -54,7 +62,9 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         }
         let mut counts: Vec<(&'static str, usize)> = Vec::new();
         for step in &mut job.steps {
-            let Some(kind) = kind_of(step).filter(|_| runs_on_every_event(step.when)) else {
+            let Some(kind) =
+                kind_of(step).filter(|_| runs_on_every_event(step.when) || reusable_audit(step))
+            else {
                 continue;
             };
             let position =

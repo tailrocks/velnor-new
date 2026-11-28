@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use velnor_model::REUSE_RUN_MAX_BYTES;
 
 use crate::error::CiError;
 
@@ -110,6 +111,9 @@ pub enum Refusal {
     OtherTree,
     OtherPlan,
     NoAttempt,
+    HeadMoved { queued: String, live: String },
+    RunUrlTooLong,
+    AmbiguousJob(String),
     AmbiguousStep { job: String, step: String },
     NothingToReuse,
 }
@@ -142,6 +146,15 @@ impl fmt::Display for Refusal {
             Self::OtherTree => f.write_str("the verdict is for another tree"),
             Self::OtherPlan => f.write_str("the verdict is for another plan"),
             Self::NoAttempt => f.write_str("the run's jobs report no run attempt"),
+            Self::HeadMoved { queued, live } => write!(
+                f,
+                "the pull request head is {live}, not the queued commit {queued}"
+            ),
+            Self::RunUrlTooLong => f.write_str("the run URL is longer than the output allows"),
+            Self::AmbiguousJob(job) => write!(
+                f,
+                "more than one job of the run is named {job}, so a job conclusion cannot be told apart"
+            ),
             Self::AmbiguousStep { job, step } => write!(
                 f,
                 "job {job} has more than one step named {step}, so a step conclusion cannot be told apart"
@@ -175,6 +188,9 @@ fn concluded_success(run: &RunEvidence, item: &Reusable) -> bool {
 
 fn ambiguous_step(run: &RunEvidence, reusable: &[Reusable]) -> Option<Refusal> {
     reusable.iter().find_map(|item| {
+        if run.jobs.iter().filter(|job| job.name == item.job).count() > 1 {
+            return Some(Refusal::AmbiguousJob(item.job.clone()));
+        }
         let step = item.step.as_ref()?;
         run.jobs
             .iter()
@@ -227,6 +243,9 @@ pub fn decide(
     }
     if recorded.plan != own.plan {
         return Err(Refusal::OtherPlan);
+    }
+    if run.url.len() > REUSE_RUN_MAX_BYTES {
+        return Err(Refusal::RunUrlTooLong);
     }
     if let Some(refusal) = ambiguous_step(run, reusable) {
         return Err(refusal);

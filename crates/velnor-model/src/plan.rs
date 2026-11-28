@@ -33,6 +33,8 @@ pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 pub const REUSE_STEP: &str = "verdict_reuse";
 pub const REUSE_OUTPUT: &str = "reuse";
 pub const REUSE_RUN_OUTPUT: &str = "reuse_run";
+pub const REUSE_RUN_MAX_BYTES: usize =
+    "https://github.com".len() + 1 + 39 + 1 + 100 + "/actions/runs/".len() + 20;
 pub const REUSED_OUTPUT: &str = "reused";
 pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
 pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";

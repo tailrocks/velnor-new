@@ -222,6 +222,12 @@ pub fn gather(
         }
     })?;
     let pull: Pull = read(github, &pull_path(&repo, entry.number), "the pull request")?;
+    if pull.head.sha != entry.sha {
+        return Err(Refusal::HeadMoved {
+            queued: entry.sha,
+            live: pull.head.sha,
+        });
+    }
     let head = pull.head.sha;
     let comparison: Comparison = read(
         github,

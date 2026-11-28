@@ -9,10 +9,14 @@ use crate::facts::TestResult;
 use crate::lint_lane::{LINT, MISE};
 use crate::pipeline::{pin_helper, view, workflow};
 
-const KNOB: &str = "[ci]\nreuse_pr_verdict = true\n\n";
-const REUSED: &str = "contains(format(' {0} ', needs.rust-plan.outputs.reused), ' ";
+pub(super) const KNOB: &str = "[ci]\nreuse_pr_verdict = true\n\n";
+pub(super) const REUSED: &str = "contains(format(' {0} ', needs.rust-plan.outputs.reused), ' ";
 
-fn repo(roots: &[&str], knob: bool, helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(super) fn repo(
+    roots: &[&str],
+    knob: bool,
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let config = format!("{}{LINT}", if knob { KNOB } else { "" });
     let mut repo = view(roots, Some(config.as_bytes()))?;
     repo.files
@@ -27,12 +31,12 @@ fn locked(roots: &[&str], helper: &str) -> Result<RepoView, Box<dyn std::error::
     Ok(locked)
 }
 
-fn jobs(roots: &[&str]) -> Result<Value, Box<dyn std::error::Error>> {
+pub(super) fn jobs(roots: &[&str]) -> Result<Value, Box<dyn std::error::Error>> {
     let text = workflow(&repo(roots, true, "0.1.117")?)?;
     Ok(crate::yaml_tree::document(&text)?["jobs"].clone())
 }
 
-fn step<'a>(job: &'a Value, name: &str) -> Result<&'a Value, String> {
+pub(super) fn step<'a>(job: &'a Value, name: &str) -> Result<&'a Value, String> {
     job["steps"]
         .as_array()
         .into_iter()
@@ -41,7 +45,7 @@ fn step<'a>(job: &'a Value, name: &str) -> Result<&'a Value, String> {
         .ok_or_else(|| format!("no step {name}"))
 }
 
-fn condition(job: &Value, name: &str) -> Result<String, String> {
+pub(super) fn condition(job: &Value, name: &str) -> Result<String, String> {
     Ok(step(job, name)?["if"]
         .as_str()
         .unwrap_or_default()
