@@ -18,19 +18,24 @@ const GIB: u64 = 1 << 30;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Breach {
     Disk(disk::Usage),
-    TooManyFiles,
     ForeignDevice,
     MachineFull,
     Processes,
 }
 
 impl Breach {
+    pub(super) const fn kind(self) -> &'static str {
+        match self {
+            Self::Disk(_) => "disk",
+            Self::ForeignDevice => "foreign_device",
+            Self::MachineFull => "machine_full",
+            Self::Processes => "processes",
+        }
+    }
+
     pub(super) fn message(self, limit_gib: u64) -> String {
         match self {
             Self::Disk(usage) => disk::overage(usage, limit_gib).unwrap_or_default(),
-            Self::TooManyFiles => {
-                "velnor: job has too many files to account for its disk use".to_owned()
-            }
             Self::ForeignDevice => {
                 "velnor: job created a mount or a subvolume under its directories".to_owned()
             }
@@ -60,9 +65,8 @@ fn machine_full(floor_gib: u64) -> bool {
     floor_gib > 0 && floor::free_bytes().is_none_or(|free| free < floor_gib.saturating_mul(GIB))
 }
 
-fn start(layout: &Layout, cgroup: &Cgroup) -> Option<Walk> {
+fn start(layout: &Layout) -> Option<Walk> {
     let directories: Vec<PathBuf> = vec![layout.work_dir.clone(), layout.stage_dir.clone()];
-    let held = cgroup.path().to_path_buf();
     let stop = Arc::new(AtomicBool::new(false));
     let walking = Arc::clone(&stop);
     let (sender, result) = channel();
@@ -70,7 +74,7 @@ fn start(layout: &Layout, cgroup: &Cgroup) -> Option<Walk> {
         .name("disk-watch".to_owned())
         .spawn(move || {
             let directories: Vec<&Path> = directories.iter().map(PathBuf::as_path).collect();
-            let _ = sender.send(disk::used(&directories, &held, &walking));
+            let _ = sender.send(disk::used(&directories, &walking));
         })
         .ok()?;
     Some(Walk {
@@ -102,10 +106,7 @@ impl Watch {
         }
         let Some(walk) = &self.walk else {
             if Instant::now() >= self.next {
-                match start(layout, cgroup) {
-                    Some(walk) => self.walk = Some(walk),
-                    None => return Some(Breach::TooManyFiles),
-                }
+                self.walk = start(layout);
             }
             return None;
         };
@@ -118,10 +119,15 @@ impl Watch {
                 }
                 disk::overage(usage, limits.disk_gib).map(|_| Breach::Disk(usage))
             }
-            Err(TryRecvError::Empty) if walk.started.elapsed() <= WALK_BUDGET => None,
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
-                walk.stop.store(true, Ordering::Relaxed);
-                Some(Breach::TooManyFiles)
+            Err(TryRecvError::Empty) => {
+                if walk.started.elapsed() > WALK_BUDGET {
+                    walk.stop.store(true, Ordering::Relaxed);
+                }
+                None
+            }
+            Err(TryRecvError::Disconnected) => {
+                self.walk = None;
+                None
             }
         }
     }

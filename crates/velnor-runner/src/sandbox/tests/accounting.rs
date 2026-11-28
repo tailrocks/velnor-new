@@ -3,6 +3,7 @@
 
 use std::io::Write;
 use std::os::fd::OwnedFd;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
@@ -22,11 +23,21 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn used(directories: &[&Path]) -> Usage {
-    disk::used(
-        directories,
-        Path::new("/nonexistent"),
-        &AtomicBool::new(false),
-    )
+    disk::used(directories, &AtomicBool::new(false))
+}
+
+fn limit_descriptors(wanted: u64) {
+    let limit = getrlimit(Resource::Nofile);
+    assert!(
+        setrlimit(
+            Resource::Nofile,
+            Rlimit {
+                current: Some(wanted),
+                maximum: limit.maximum,
+            },
+        )
+        .is_ok()
+    );
 }
 
 fn open(parent: &OwnedFd, name: &str, flags: OFlags) -> OwnedFd {
@@ -58,75 +69,87 @@ fn nest(root: &Path, levels: usize, payload: usize) {
     );
 }
 
+fn allocated(paths: &[PathBuf]) -> u64 {
+    paths
+        .iter()
+        .map(|path| std::fs::symlink_metadata(path).map_or(0, |metadata| metadata.blocks() * 512))
+        .sum()
+}
+
 #[test]
-fn disk_use_counts_allocated_blocks_of_every_file_once() {
+fn disk_use_counts_the_allocated_bytes_of_every_inode_exactly_once() {
     let root = scratch("disk");
     assert!(std::fs::create_dir_all(root.join("a/b")).is_ok());
     assert!(std::fs::write(root.join("a/b/data"), vec![1_u8; MIB]).is_ok());
     assert!(std::fs::hard_link(root.join("a/b/data"), root.join("a/link")).is_ok());
     assert!(std::fs::write(root.join("small"), b"x").is_ok());
-    let once = used(&[root.as_path()]);
-    assert!(once.bytes >= MIB as u64 && !once.hidden, "{once:?}");
-    assert!(
-        once.bytes < (MIB + MIB / 4) as u64,
-        "the hard link was counted twice: {once:?}"
-    );
-    let twice = used(&[root.as_path(), root.as_path()]);
-    assert!(
-        twice.bytes < (MIB + MIB / 4) as u64,
-        "a directory named twice was counted twice: {twice:?}"
+    let inodes: Vec<PathBuf> = ["", "a", "a/b", "a/b/data", "small"]
+        .iter()
+        .map(|part| root.join(part))
+        .collect();
+    let expected = allocated(&inodes);
+    assert_eq!(used(&[root.as_path()]).bytes, expected);
+    assert_eq!(
+        used(&[root.as_path(), root.as_path()]).bytes,
+        expected,
+        "a directory named twice was counted twice"
     );
     let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
-fn a_tree_nested_3000_levels_is_counted_and_removed_under_a_256_descriptor_limit() {
-    let limit = getrlimit(Resource::Nofile);
+fn the_walk_counts_down_to_its_depth_cap_and_nothing_below_it() {
+    let seen = scratch("seen");
+    let unseen = scratch("unseen");
+    nest(&seen, 40, 4 * MIB);
+    nest(&unseen, 60, 4 * MIB);
+    let stop = AtomicBool::new(false);
+    let counted = disk::used_within(&[seen.as_path()], 50, &stop);
     assert!(
-        setrlimit(
-            Resource::Nofile,
-            Rlimit {
-                current: Some(256),
-                maximum: limit.maximum,
-            },
-        )
-        .is_ok()
+        counted.bytes >= (4 * MIB) as u64 && !counted.foreign,
+        "{counted:?}"
     );
+    let below = disk::used_within(&[unseen.as_path()], 50, &stop);
+    assert!(
+        below.bytes < MIB as u64 && !below.foreign,
+        "the walk went past its depth cap: {below:?}"
+    );
+    assert!(disk::overage(below, 64).is_none());
+    for root in [seen, unseen] {
+        let _ = dirs::remove(&root);
+    }
+}
+
+#[test]
+fn a_tree_nested_200_levels_is_removed_with_a_handful_of_descriptors() {
+    limit_descriptors(48);
     let root = scratch("deep");
-    nest(&root, 3000, 4 * MIB);
-    let counted = used(&[root.as_path()]);
-    assert!(
-        counted.bytes >= (4 * MIB) as u64 && !counted.hidden,
-        "the payload at the bottom was not counted: {counted:?}"
-    );
+    nest(&root, 200, 4 * MIB);
     assert!(dirs::remove(&root).is_ok(), "the deep tree was not removed");
     assert!(!root.exists());
 }
 
 #[test]
-fn a_root_that_cannot_be_walked_counts_as_hiding_files() {
-    let root = scratch("unreadable");
-    let file = root.join("not-a-directory");
-    assert!(std::fs::write(&file, b"x").is_ok());
-    let link = root.join("link");
-    assert!(std::os::unix::fs::symlink(&root, &link).is_ok());
-    for path in [&file, &link] {
-        let usage = used(&[path.as_path()]);
-        assert!(usage.hidden, "{path:?}");
-        assert!(
-            disk::overage(usage, 64)
-                .is_some_and(|message| message.contains("hid files from its accounting")),
-            "{path:?}"
-        );
+fn the_removal_finishes_a_tree_an_interrupted_run_left_flattened() {
+    let root = scratch("rerun");
+    for name in [".velnor-flat-0", ".velnor-flat-1"] {
+        assert!(std::fs::create_dir_all(root.join(name).join("inner")).is_ok());
+        assert!(std::fs::write(root.join(name).join("inner/file"), b"x").is_ok());
     }
-    let _ = std::fs::remove_dir_all(root);
+    assert!(std::fs::create_dir_all(root.join("a/b/c")).is_ok());
+    assert!(std::fs::write(root.join("a/b/c/file"), b"x").is_ok());
+    assert!(
+        dirs::remove(&root).is_ok(),
+        "the leftovers wedged the removal"
+    );
+    assert!(!root.exists());
+    assert!(dirs::remove(&root).is_ok(), "removing twice must converge");
 }
 
 #[test]
 fn disk_overage_names_the_use_and_the_limit() {
     let used = |bytes| Usage {
         bytes,
-        hidden: false,
         foreign: false,
     };
     assert_eq!(disk::overage(used(64 << 30), 64), None);
@@ -134,36 +157,6 @@ fn disk_overage_names_the_use_and_the_limit() {
         disk::overage(used((65 << 30) + 5), 64).as_deref(),
         Some("velnor: job used 65 GiB of disk; the limit is 64 GiB")
     );
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn an_unlinked_file_held_by_two_descriptors_is_counted_once() {
-    let root = scratch("held");
-    let cgroup = root.join("cgroup");
-    assert!(std::fs::create_dir_all(&cgroup).is_ok());
-    assert!(
-        std::fs::write(
-            cgroup.join("cgroup.procs"),
-            format!("{}\n", std::process::id())
-        )
-        .is_ok()
-    );
-    let file = root.join("hidden");
-    let mut first = std::fs::File::create(&file).expect("create the file");
-    assert!(first.write_all(&vec![1_u8; MIB]).is_ok());
-    let second = std::fs::OpenOptions::new()
-        .write(true)
-        .open(&file)
-        .expect("open it again");
-    assert!(std::fs::remove_file(&file).is_ok());
-    let usage = disk::used(&[], &cgroup, &AtomicBool::new(false));
-    drop((first, second));
-    assert!(
-        usage.bytes < (MIB + MIB / 2) as u64,
-        "the unlinked file was counted once per descriptor: {usage:?}"
-    );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

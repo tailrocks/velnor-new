@@ -177,33 +177,6 @@ fn root_owned_binary() -> Check {
     )
 }
 
-fn symlinked_directories() -> Check {
-    let fixture = fixture()?;
-    let victim = fixture.root.join("victim");
-    std::fs::create_dir(&victim)?;
-    chmod(&victim, 0o700)?;
-    symlink(&victim, fixture.store.join("trusted"))?;
-    assert!(
-        fixture.launcher().ensure_machine().is_err(),
-        "a symlinked trusted directory"
-    );
-    assert_eq!(
-        std::fs::read_dir(&victim)?.count(),
-        0,
-        "the target of a symlinked trusted directory must stay untouched"
-    );
-    let fixture = fixture_with_directories()?;
-    let victim = fixture.root.join("victim");
-    std::fs::create_dir(&victim)?;
-    std::fs::write(victim.join("keep"), "")?;
-    let directory = fixture.store.join("trusted");
-    std::fs::remove_dir(&directory)?;
-    symlink(&victim, &directory)?;
-    assert!(fixture.launcher().sweep().is_err());
-    assert!(victim.join("keep").exists());
-    Ok(())
-}
-
 fn fixture_with_directories() -> Result<Fixture, Box<dyn Error>> {
     let fixture = fixture()?;
     fixture.launcher().ensure_machine()?;
@@ -228,9 +201,9 @@ async fn acl_after_a_started_job() -> Check {
 
 fn sweep_without_init() -> Check {
     let fixture = fixture_with_directories()?;
-    let planted = fixture.store.join("trusted/99.json");
+    let planted = fixture.seen("guest/jobs/99/trusted.json");
+    std::fs::create_dir_all(fixture.seen("guest/jobs/99"))?;
     std::fs::write(&planted, "stale")?;
-    chmod(&planted, 0o600)?;
     std::fs::write(fixture.root.join("ps.table"), "")?;
     fixture.configure("FAKE_ORB_PS_NO_INIT=1\n")?;
     assert_eq!(
@@ -254,7 +227,6 @@ fn sweep_without_init() -> Check {
 async fn rust_runner_refuses_an_unsafe_host_store() -> Check {
     unsafe_roots()?;
     unsafe_binaries()?;
-    symlinked_directories()?;
     acl_after_a_started_job().await?;
     sweep_without_init()
 }

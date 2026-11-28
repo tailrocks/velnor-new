@@ -55,11 +55,11 @@ fn extended_attributes_cannot_be_set_and_report_a_filesystem_without_them() {
     let control = succeeded(&unstarted(
         Command::new("/usr/bin/python3")
             .args(["-c", script])
-            .current_dir("/root")
+            .current_dir("/var/tmp")
             .output(),
     ));
     assert_eq!(control.trim(), "set");
-    let _ = std::fs::remove_file("/root/f");
+    let _ = std::fs::remove_file("/var/tmp/f");
 }
 
 #[test]

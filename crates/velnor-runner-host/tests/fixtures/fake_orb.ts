@@ -7,7 +7,6 @@ import {
   appendFileSync,
   chmodSync,
   constants,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -18,11 +17,11 @@ import {
 } from "node:fs";
 import { FFIType, dlopen } from "bun:ffi";
 import { spawn } from "node:child_process";
-import { basename } from "node:path";
 
 const RUNNER = "/var/lib/velnor/bin/velnor-runner";
 const GUEST = "/var/lib/velnor";
-const GUEST_SHARE = "/var/lib/velnor-host";
+const GUEST_JOBS = "/run/velnor/jobs";
+const FRAME_LIMIT = 64 * 1024;
 const root = import.meta.dir;
 const settings = new Map<string, string>();
 for (const line of readFileSync(`${root}/fake_orb.env`, "utf8").split("\n")) {
@@ -153,7 +152,7 @@ function inGuest(args: string[]): never {
   if (rest[0] === "-u") rest = rest.slice(2);
   switch (rest[0]) {
     case "sh":
-      writeSync(1, `${setting("FAKE_ORB_USER") || "501 501 /home/live"}\n`);
+      writeSync(1, `${setting("FAKE_ORB_USER") || "501 501 /home/runner"}\n`);
       return finish(0);
     case "ln":
       return finish(0);
@@ -173,6 +172,12 @@ function inGuest(args: string[]): never {
         if (!immortal(pid)) dropFromTable(pid);
       }
       return finish(0);
+    case "/usr/bin/cat": {
+      const file = `${seen}/guest/jobs/${text(rest[1]).slice(GUEST_JOBS.length + 1)}`;
+      if (!text(rest[1]).startsWith(`${GUEST_JOBS}/`) || !existsSync(file)) return finish(1);
+      writeSync(1, readFileSync(file));
+      return finish(0);
+    }
     case RUNNER:
       return runner(rest);
     default:
@@ -222,9 +227,26 @@ function guestWork(reservation: string): string {
   return `${seen}/guest/gen/work/${reservation}`;
 }
 
+function guestJobs(reservation: string): string {
+  return `${seen}/guest/jobs/${reservation}`;
+}
+
+function frames(input: Buffer): [Buffer, Buffer] {
+  const parts: Buffer[] = [];
+  let at = 0;
+  while (parts.length < 2) {
+    const length = at + 4 <= input.length ? input.readUInt32BE(at) : 0;
+    if (length < 1 || length > FRAME_LIMIT || at + 4 + length > input.length) finish(65);
+    parts.push(input.subarray(at + 4, at + 4 + length));
+    at += 4 + length;
+  }
+  return [parts[0] as Buffer, parts[1] as Buffer];
+}
+
 function cleanup(rest: string[]): never {
   appendFileSync(`${seen}/cleanups`, `${rest.slice(2).join(" ")}\n`);
   if (setting("FAKE_CLEANUP_FAIL") !== "" && rest[2] === "--reservation") finish(1);
+  if (setting("FAKE_CLEANUP_WEDGE") !== "") finish(70);
   const root = `${seen}/guest/gen/work`;
   Bun.spawnSync(["chmod", "-R", "u+rwx", rest[2] === "--all" ? root : guestWork(text(rest[3]))], {
     stdout: "ignore",
@@ -233,8 +255,10 @@ function cleanup(rest: string[]): never {
   try {
     if (rest[2] === "--all") {
       rmSync(root, { recursive: true, force: true });
+      rmSync(`${seen}/guest/jobs`, { recursive: true, force: true });
     } else {
       rmSync(guestWork(text(rest[3])), { recursive: true, force: true });
+      rmSync(guestJobs(text(rest[3])), { recursive: true, force: true });
     }
   } catch {
     finish(1);
@@ -248,11 +272,13 @@ function runner(rest: string[]): never {
   if (rest[1] !== "sandbox") finish(64);
   const option = (flag: string): string => text(rest[rest.indexOf(flag) + 1]);
   const reservation = option("--reservation");
-  const trusted = `${setting("FAKE_ORB_STORE")}${option("--trusted").replace(GUEST_SHARE, "")}`;
   const work = guestWork(reservation);
   const name = `${reservation}.jit`;
-  writeFileSync(`${seen}/${name}`, readFileSync(0));
-  copyFileSync(trusted, `${seen}/${basename(trusted)}`);
+  const [jit, trusted] = frames(readFileSync(0));
+  writeFileSync(`${seen}/${name}`, jit);
+  writeFileSync(`${seen}/${reservation}.json`, trusted);
+  mkdirSync(guestJobs(reservation), { recursive: true });
+  writeFileSync(`${guestJobs(reservation)}/trusted.json`, trusted);
   writeFileSync(`${seen}/${name}.env`, environment());
   writeFileSync(`${seen}/${name}.argv`, `${rest.join("\n")}\n`);
   mkdirSync(work, { recursive: true });
@@ -272,6 +298,11 @@ function runner(rest: string[]): never {
   if (child) {
     while (!existsSync(`${seen}/release-${name}`) && !gone()) Bun.sleepSync(50);
     child.kill();
+  }
+  rmSync(guestJobs(reservation), { recursive: true, force: true });
+  if (setting("FAKE_RUNNER_BREACH") !== "") {
+    mkdirSync(guestJobs(reservation), { recursive: true });
+    writeFileSync(`${guestJobs(reservation)}/breach.json`, `{"breach":"${setting("FAKE_RUNNER_BREACH")}"}\n`);
   }
   return finish(Number(setting("FAKE_RUNNER_EXIT") || "0"));
 }

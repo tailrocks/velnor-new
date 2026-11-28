@@ -11,10 +11,11 @@ use tokio::time::{Instant, MissedTickBehavior, interval_at};
 
 use super::args::SandboxArgs;
 use super::cgroup::Cgroup;
+use super::frames::Delivery;
 use super::jit::Jit;
 use super::trusted::Header;
 use super::watch::{Breach, Limits, WATCH_EVERY, Watch};
-use super::{Layout, cleanup, dirs, net};
+use super::{Layout, cleanup, dirs, net, run_dir};
 
 const SETPRIV: &str = "/usr/bin/setpriv";
 const NSENTER: &str = "/usr/bin/nsenter";
@@ -148,27 +149,50 @@ async fn launch(
     }
 }
 
+fn deliver(args: &SandboxArgs, delivery: Option<Delivery>) -> Result<Option<Jit>> {
+    let Some(delivery) = delivery else {
+        return Ok(None);
+    };
+    eprintln!(
+        "velnor sandbox: reservation {} {}",
+        args.reservation,
+        Header::parse(&delivery.trusted)?.describe()
+    );
+    run_dir::create(args.reservation)?;
+    run_dir::write(args.reservation, run_dir::TRUSTED_FILE, &delivery.trusted)?;
+    Ok(Some(Jit(delivery.jit)))
+}
+
+async fn supervise(args: &SandboxArgs, delivery: Option<Delivery>) -> Result<Finished> {
+    let layout = dirs::layout(args)?;
+    let jit = deliver(args, delivery)?;
+    let cgroup = Cgroup::create(layout.cgroup.clone(), args.max_jobs)?;
+    launch(args, &layout, &cgroup, jit).await
+}
+
+fn record(reservation: u64, breach: Breach) {
+    let body = serde_json::json!({ "breach": breach.kind() }).to_string();
+    if let Err(error) = run_dir::create(reservation)
+        .and_then(|()| run_dir::write(reservation, run_dir::BREACH_FILE, body.as_bytes()))
+    {
+        eprintln!("velnor sandbox: could not record the breach: {error:#}");
+    }
+}
+
 pub async fn run(args: &SandboxArgs) -> Result<ExitCode> {
     args.validate()?;
-    if let Some(path) = &args.trusted {
-        eprintln!(
-            "velnor sandbox: reservation {} {}",
-            args.reservation,
-            Header::read(path)?.describe()
-        );
-    }
-    let jit = args
-        .jit_stdin
-        .then(|| Jit::read(std::io::stdin().lock()))
+    let delivery = args
+        .stdin_frames
+        .then(|| Delivery::read(std::io::stdin().lock()))
         .transpose()?;
-    let layout = dirs::layout(args)?;
-    let cgroup = Cgroup::create(layout.cgroup.clone())?;
-    let outcome = launch(args, &layout, &cgroup, jit).await;
-    cleanup::reservation(args.reservation)?;
+    let outcome = supervise(args, delivery).await;
+    let cleaned = cleanup::reservation(args.reservation);
     let finished = outcome?;
     if let Some(breach) = finished.breach {
         eprintln!("{}", breach.message(args.disk_limit_gib));
+        record(args.reservation, breach);
         return Ok(ExitCode::from(BREACH_EXIT));
     }
+    cleaned?;
     Ok(exit_code(finished.status))
 }

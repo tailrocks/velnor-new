@@ -41,14 +41,19 @@ pub(super) fn mount_of(mountinfo: &str, path: &Path) -> Option<Mount> {
         .map(|(_, mount)| mount)
 }
 
-pub(super) fn free_bytes_of(referenced: &str, max_referenced: &str) -> Option<u64> {
+pub(super) fn free_bytes_of(
+    referenced: &str,
+    reserved_data: &str,
+    max_referenced: &str,
+) -> Option<u64> {
     let referenced: u64 = referenced.trim().parse().ok()?;
+    let reserved: u64 = reserved_data.trim().parse().ok()?;
     let limit: u64 = max_referenced
         .trim()
         .parse()
         .ok()
         .filter(|limit| *limit > 0)?;
-    Some(limit.saturating_sub(referenced))
+    Some(limit.saturating_sub(referenced.saturating_add(reserved)))
 }
 
 fn filesystem_of(device: &str) -> Option<String> {
@@ -69,6 +74,7 @@ pub(super) fn free_bytes() -> Option<u64> {
         .join(format!("0_{}", mount.subvolume));
     free_bytes_of(
         &std::fs::read_to_string(group.join("referenced")).ok()?,
+        &std::fs::read_to_string(group.join("rsv_data")).ok()?,
         &std::fs::read_to_string(group.join("max_referenced")).ok()?,
     )
 }

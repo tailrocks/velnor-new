@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
+use std::process::Child;
 
-use super::support::{Sandbox, failed, succeeded};
+use super::support::{Sandbox, failed, succeeded, wait_until};
 
 const HIDDEN: [&str; 10] = [
     "/var/lib/velnor-host",
@@ -75,24 +76,46 @@ fn the_job_resolves_names_and_writes_only_its_own_directories() {
         "touch \"$HOME/h\" /tmp/t \"$PWD/w\" {stage} && echo \"$HOME $PWD\""
     ));
     let both = succeeded(&write);
-    assert!(both.contains("/home/live /srv/velnor/gen/work/"), "{both}");
+    assert!(both.contains("/home/runner /work"), "{both}");
     let work = sandbox.work_dir();
     assert!(!work.exists(), "the work dir survived the job");
 }
 
 #[test]
-fn another_jobs_work_dir_is_invisible_and_this_ones_is_present() {
+fn another_jobs_work_dir_is_invisible_and_this_ones_is_at_work() {
     let other = Path::new("/srv/velnor/gen/work/424242");
     assert!(std::fs::create_dir_all(other.join("secret")).is_ok());
     assert!(std::fs::write(other.join("secret/token"), "other job").is_ok());
     let sandbox = Sandbox::new("other-job");
     let own = sandbox.reservation.to_string();
     let listing = succeeded(&sandbox.shell("ls /srv/velnor/gen/work /srv/velnor/gen/stage"));
-    assert_eq!(listing.matches(&own).count(), 2, "{listing}");
+    assert_eq!(listing.matches(&own).count(), 1, "{listing}");
     assert!(!listing.contains("424242"), "{listing}");
     let read = failed(&sandbox.shell("cat /srv/velnor/gen/work/424242/secret/token 2>&1"));
     assert!(read.contains("No such file or directory"), "{read}");
     let _ = std::fs::remove_dir_all(other);
+}
+
+#[test]
+fn two_jobs_both_see_their_work_dir_at_work_with_different_contents() {
+    let first = Sandbox::new("work-first");
+    let second = Sandbox::new("work-second");
+    let child = first.spawn(&[
+        "/bin/sh",
+        "-c",
+        "echo first > /work/who; sleep 4; cat /work/who; ls /work",
+    ]);
+    assert!(
+        wait_until(|| first.work_dir().join("who").exists()),
+        "the first job never wrote into /work"
+    );
+    let seen = succeeded(&second.shell("ls /work; echo second > /work/who; cat /work/who; pwd"));
+    assert_eq!(seen, "home\ntmp\nsecond\n/work\n", "{seen}");
+    let output = child.map(Child::wait_with_output);
+    let first_text = output
+        .and_then(Result::ok)
+        .map_or_else(String::new, |output| succeeded(&output));
+    assert_eq!(first_text, "first\nhome\ntmp\nwho\n", "{first_text}");
 }
 
 #[test]

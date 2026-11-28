@@ -7,7 +7,9 @@ use anyhow::{Result, ensure};
 use clap::Args;
 
 use super::layout::work_dir_of;
-use super::{DEFAULT_DISK_LIMIT_GIB, DEFAULT_MACHINE_FLOOR_GIB, Profile, STORE_ROOT};
+use super::{
+    DEFAULT_DISK_LIMIT_GIB, DEFAULT_MACHINE_FLOOR_GIB, DEFAULT_MAX_JOBS, Profile, STORE_ROOT,
+};
 
 const STORE_SCOPES: [&str; 2] = ["cache", "git"];
 
@@ -39,23 +41,25 @@ pub struct SandboxArgs {
     pub work_dir: PathBuf,
     #[arg(
         long,
-        help = "Read the JIT configuration from standard input and hand it to the command as its standard input through a pipe that closes after the write"
+        help = "Read two length-prefixed frames (4 bytes big-endian, at most 64 KiB each) from standard input: the JIT configuration, which the command receives through a pipe that closes after the write, then the trusted facts, which land in a root-only tmpfs file"
     )]
-    pub jit_stdin: bool,
-    #[arg(
-        long,
-        value_name = "FILE",
-        help = "Trusted-facts file the host wrote from its verified source"
-    )]
-    pub trusted: Option<PathBuf>,
+    pub stdin_frames: bool,
     #[arg(
         long,
         value_name = "GIB",
         default_value_t = DEFAULT_DISK_LIMIT_GIB,
         value_parser = clap::value_parser!(u64).range(1..=4096),
-        help = "Disk the job may use in its work dir, home, tmp and stage before it is killed"
+        help = "Visible disk the job may use in its work dir, home, tmp and stage before it is killed; what the walk cannot see is bounded by the free-space floor"
     )]
     pub disk_limit_gib: u64,
+    #[arg(
+        long,
+        value_name = "JOBS",
+        default_value_t = DEFAULT_MAX_JOBS,
+        value_parser = clap::value_parser!(u32).range(1..=1024),
+        help = "Jobs the machine runs at once; each gets this share of 90% of the machine's memory"
+    )]
+    pub max_jobs: u32,
     #[arg(
         long,
         value_name = "GIB",

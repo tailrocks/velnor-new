@@ -18,7 +18,10 @@ async fn supervise(
     let binary = job.binary().to_owned();
     let exit = tokio::select! {
         status = job.wait() => if let Ok(status) = status {
-            JobExit::Exited(status)
+            match job.breach(status).await {
+                Some(breach) => JobExit::Breached(breach),
+                None => JobExit::Exited(status),
+            }
         } else {
             let _ = job.stop().await;
             JobExit::Stopped

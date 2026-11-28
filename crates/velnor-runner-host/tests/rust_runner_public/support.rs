@@ -72,10 +72,8 @@ impl Fixture {
         self.root.join("seen").join(name)
     }
 
-    pub(super) fn trusted_file(&self, reservation: u64) -> PathBuf {
-        self.store
-            .join("trusted")
-            .join(format!("{reservation}.json"))
+    pub(super) fn guest_job(&self, reservation: u64) -> PathBuf {
+        self.seen(&format!("guest/jobs/{reservation}"))
     }
 }
 

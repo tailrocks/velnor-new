@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::checks::{
-    assert_clean, deleted_messages, jit_name, reservation, runner_name, trusted_name,
+    assert_clean, deleted_messages, jit_name, job_dir_exists, reservation, runner_name,
 };
 use super::events::{process_exists, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
@@ -45,7 +45,7 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     wait_for("the stand-in and its child to end", 10, || {
         !process_exists(&pid) && !process_exists(&child)
     });
-    assert!(!world.store.join("trusted").join(trusted_name(job)).exists());
+    assert!(!job_dir_exists(&world, job));
     assert!(
         !world
             .seen

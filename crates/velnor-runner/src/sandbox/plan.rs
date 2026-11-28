@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{GEN_ROOT, Layout, Profile, RESOLV_CONF, STORE_ROOT};
+use super::{GEN_ROOT, JOB_WORK, Layout, Profile, RESOLV_CONF, STORE_ROOT};
 
 const STORE_READ_ONLY: [&str; 3] = ["bin", "tools", "crates"];
 const DEVICES: [&str; 5] = ["null", "zero", "full", "random", "urandom"];
@@ -118,7 +118,11 @@ fn job(layout: &Layout) -> Vec<MountOp> {
     ops.extend(layout.store_read_only.iter().map(read_only));
     let generations = Path::new(GEN_ROOT);
     ops.push(read_only(generations));
-    ops.extend(masked(generations.join("work"), &layout.work_dir));
+    ops.extend([
+        tmpfs(generations.join("work"), MASK_BYTES, PUBLIC),
+        MountOp::SealReadOnly(generations.join("work")),
+        writable(&layout.work_dir, JOB_WORK),
+    ]);
     ops.extend(masked(generations.join("stage"), &layout.stage_dir));
     ops.push(writable(layout.work_dir.join("home"), &layout.home));
     ops.push(writable(layout.work_dir.join("tmp"), "/tmp"));

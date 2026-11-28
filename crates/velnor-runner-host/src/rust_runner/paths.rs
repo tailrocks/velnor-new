@@ -4,9 +4,10 @@
 use std::fmt;
 use std::num::NonZeroU64;
 
-use super::{GUEST_SHARE, TRUSTED_DIRECTORY};
+use super::GUEST_JOBS;
 
 pub(crate) const GUEST_GEN: &str = "/srv/velnor/gen";
+const GUEST_JOB_WORK: &str = "/work";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ReservationId(NonZeroU64);
@@ -31,29 +32,27 @@ impl fmt::Display for ReservationId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct JobPaths {
-    trusted_name: String,
-    guest_trusted_file: String,
+    guest_breach_file: String,
     guest_work_dir: String,
 }
 
 impl JobPaths {
     pub(crate) fn of(reservation: ReservationId) -> Self {
         Self {
-            trusted_name: format!("{reservation}.json"),
-            guest_trusted_file: format!("{GUEST_SHARE}/{TRUSTED_DIRECTORY}/{reservation}.json"),
+            guest_breach_file: format!("{GUEST_JOBS}/{reservation}/breach.json"),
             guest_work_dir: format!("{GUEST_GEN}/work/{reservation}"),
         }
     }
 
-    pub(crate) fn trusted_name(&self) -> &str {
-        &self.trusted_name
-    }
-
-    pub(crate) fn guest_trusted_file(&self) -> &str {
-        &self.guest_trusted_file
+    pub(crate) fn guest_breach_file(&self) -> &str {
+        &self.guest_breach_file
     }
 
     pub(crate) fn guest_work_dir(&self) -> &str {
         &self.guest_work_dir
+    }
+
+    pub(crate) const fn job_work_dir() -> &'static str {
+        GUEST_JOB_WORK
     }
 }

@@ -6,8 +6,8 @@ use std::time::Duration;
 use velnor_runner_host::{Readiness, controller_readiness};
 
 use super::checks::{
-    acquire_ids, assert_clean, deleted_messages, jit_name, reservation, runner_name, snapshot,
-    trusted_name,
+    acquire_ids, assert_clean, deleted_messages, jit_name, job_dir_name, reservation, runner_name,
+    snapshot,
 };
 use super::events::{Event, files_containing, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
@@ -99,9 +99,7 @@ fn holds_the_slot(world: &World, first: u64) -> TestResult<()> {
         .find(Event::is_runner_start)
         .ok_or("no runner start")?;
     assert!(
-        runner_line.text.contains(&format!(
-            "--disk-limit-gib 64 --jit-stdin --trusted /var/lib/velnor-host/trusted/{first}.json -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /srv/velnor/gen/work/{first}"
-        )),
+        runner_line.text.contains("--disk-limit-gib 64 --max-jobs 1 --stdin-frames -- /var/lib/velnor/bin/velnor-runner run --jit - --work-dir /work"),
         "{}",
         runner_line.text
     );
@@ -166,9 +164,9 @@ fn after_the_proof(world: &World, first: u64) -> TestResult<()> {
     );
     let state = snapshot(world, acquires[1]);
     assert!(
-        !state.trusted.contains(&trusted_name(first)),
+        !state.jobs.contains(&job_dir_name(first)),
         "{:?}",
-        state.trusted
+        state.jobs
     );
     assert!(!state.work.contains(&first.to_string()), "{:?}", state.work);
     Ok(())

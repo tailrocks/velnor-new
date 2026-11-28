@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::github::{Admin, remove_runner_named};
-use crate::error::{HostError, RustRunnerFailure};
 use crate::launch_blocking::ListenFault;
-use crate::rust_runner::store::Store;
-use crate::rust_runner::{JobPaths, ReservationId, RustRunnerLauncher};
+use crate::rust_runner::{ReservationId, RustRunnerLauncher};
 
 #[derive(Debug)]
 pub(super) struct CleanupProof {
@@ -27,23 +25,9 @@ pub(super) struct ProofInputs {
 }
 
 pub(super) fn prove(inputs: &ProofInputs) -> Result<CleanupProof, ListenFault> {
-    let paths = JobPaths::of(inputs.reservation);
     inputs.launcher.clean_job(inputs.reservation)?;
-    remove_files(&inputs.launcher, &paths)?;
     remove_runner_named(&inputs.admin, inputs.scale_set_id, &inputs.runner_name)?;
     Ok(CleanupProof {
         reservation: inputs.reservation,
     })
-}
-
-fn remove_files(launcher: &RustRunnerLauncher, paths: &JobPaths) -> Result<(), ListenFault> {
-    let left = || HostError::RustRunner(RustRunnerFailure::JobFilesLeft);
-    let store = Store::open(launcher.host_store()).map_err(|_| left())?;
-    store
-        .remove_trusted(paths.trusted_name())
-        .map_err(|_| left())?;
-    if store.leftovers(paths.trusted_name()).map_err(|_| left())? {
-        return Err(left().into());
-    }
-    Ok(())
 }

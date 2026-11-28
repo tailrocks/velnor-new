@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{CGROUP_ROOT, GEN_ROOT, SANDBOX_ROOTS};
+use super::{CGROUP_ROOT, GEN_ROOT, JOBS_ROOT, SANDBOX_ROOTS};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RootLink {
@@ -49,4 +49,9 @@ pub(super) fn root_of(reservation: u64) -> PathBuf {
 #[must_use]
 pub(super) fn cgroup_of(reservation: u64) -> PathBuf {
     Path::new(CGROUP_ROOT).join(format!("job-{reservation}"))
+}
+
+#[must_use]
+pub(super) fn run_dir_of(reservation: u64) -> PathBuf {
+    Path::new(JOBS_ROOT).join(reservation.to_string())
 }

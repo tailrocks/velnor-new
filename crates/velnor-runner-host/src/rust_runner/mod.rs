@@ -9,6 +9,7 @@ use std::time::Duration;
 use crate::error::HostError;
 
 mod controller;
+mod frames;
 mod guest_user;
 mod job;
 mod machine;
@@ -21,6 +22,7 @@ mod trusted;
 
 pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
 pub use guest_user::GuestUser;
+pub(crate) use job::JobBreach;
 pub use job::RunningJob;
 pub use paths::ReservationId;
 pub use processes::MachineProcess;
@@ -33,7 +35,7 @@ pub(crate) use controller::{Handover, heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
-const GUEST_SHARE: &str = "/var/lib/velnor-host";
+const GUEST_JOBS: &str = "/run/velnor/jobs";
 const GUEST_STORE: &str = "/var/lib/velnor";
 const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_JOB_LIMIT_GIB: u64 = 64;
@@ -44,7 +46,6 @@ const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
 const HOST_DIRECTORIES: [&str; 7] = ["bin", "crates", "tools", "git", "gen", "cache", "records"];
-const TRUSTED_DIRECTORY: &str = "trusted";
 
 static INSTALLED: OnceLock<RustRunnerLauncher> = OnceLock::new();
 
@@ -57,6 +58,7 @@ pub struct RustRunnerLauncher {
     orb: PathBuf,
     host_store: PathBuf,
     job_limit_gib: u64,
+    max_jobs: u32,
     deadline: Duration,
 }
 
@@ -67,6 +69,7 @@ impl RustRunnerLauncher {
             orb,
             host_store,
             job_limit_gib: DEFAULT_JOB_LIMIT_GIB,
+            max_jobs: 1,
             deadline: ORB_DEADLINE,
         }
     }
@@ -74,6 +77,12 @@ impl RustRunnerLauncher {
     #[must_use]
     pub const fn with_job_limit_gib(mut self, job_limit_gib: u64) -> Self {
         self.job_limit_gib = job_limit_gib;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_max_jobs(mut self, max_jobs: u32) -> Self {
+        self.max_jobs = max_jobs;
         self
     }
 

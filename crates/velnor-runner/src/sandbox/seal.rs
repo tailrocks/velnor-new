@@ -12,7 +12,7 @@ use rustix::process::{Pid, Resource, Rlimit, WaitOptions, setrlimit, wait};
 use rustix::thread::{CapabilitySet, capabilities, capability_is_in_bounding_set};
 use rustix::thread::{remove_capability_from_bounding_set, set_capabilities};
 
-use super::{Layout, seccomp};
+use super::{JOB_WORK, Layout, seccomp};
 
 const PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const FILE_SIZE_LIMIT: u64 = 16 << 30;
@@ -88,7 +88,7 @@ fn start(layout: &Layout, command: &[String]) -> Result<Child> {
         .env("PATH", PATH)
         .env("HOME", &layout.home)
         .env("TMPDIR", "/tmp")
-        .current_dir(&layout.work_dir)
+        .current_dir(JOB_WORK)
         .gid(layout.gid)
         .uid(layout.uid)
         .spawn()

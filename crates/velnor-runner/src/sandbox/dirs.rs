@@ -10,7 +10,7 @@ use anyhow::{Context, Result, ensure};
 
 use super::args::SandboxArgs;
 use super::layout::{cgroup_of, root_of, stage_dir_of, work_dir_of};
-use super::{GEN_ROOT, Layout, RootLink, net, tree};
+use super::{GEN_ROOT, Layout, RootLink, flatten, net};
 
 const LINK_NAMES: [&str; 6] = ["bin", "sbin", "lib", "lib32", "lib64", "libx32"];
 const PRIVATE: u32 = 0o700;
@@ -90,7 +90,7 @@ fn create(path: &Path, mode: u32, owner: Option<(u32, u32)>) -> Result<()> {
 }
 
 pub(super) fn remove(path: &Path) -> Result<()> {
-    tree::walk(path, true, |_| true).with_context(|| format!("empty {}", path.display()))?;
+    flatten::empty(path)?;
     match std::fs::remove_dir(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),

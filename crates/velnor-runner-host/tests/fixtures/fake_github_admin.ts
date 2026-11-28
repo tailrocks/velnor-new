@@ -27,7 +27,7 @@ function listing(directory: string): string {
 function snapshot(seq: number): void {
   mkdirSync(`${seen}/snapshots`, { recursive: true });
   const runners = readState().runners.map((runner) => runner.name).join(",");
-  const text = `trusted: ${listing(`${config.store}/trusted`)}\nwork: ${listing(`${seen}/guest/gen/work`)}\nrunners: ${runners}`;
+  const text = `jobs: ${listing(`${seen}/guest/jobs`)}\nwork: ${listing(`${seen}/guest/gen/work`)}\nrunners: ${runners}`;
   writeFileSync(`${seen}/snapshots/${seq}.txt`, text);
 }
 

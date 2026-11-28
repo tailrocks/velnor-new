@@ -8,7 +8,7 @@ use super::harness::World;
 
 #[derive(Debug)]
 pub(super) struct Snapshot {
-    pub(super) trusted: Vec<String>,
+    pub(super) jobs: Vec<String>,
     pub(super) work: Vec<String>,
     pub(super) runners: Vec<String>,
 }
@@ -48,8 +48,16 @@ pub(super) fn jit_name(reservation: u64) -> String {
     format!("{reservation}.jit")
 }
 
-pub(super) fn trusted_name(reservation: u64) -> String {
-    format!("{reservation}.json")
+pub(super) fn job_dir_name(reservation: u64) -> String {
+    reservation.to_string()
+}
+
+pub(super) fn job_dir_exists(world: &World, reservation: u64) -> bool {
+    world
+        .seen
+        .join("guest/jobs")
+        .join(job_dir_name(reservation))
+        .exists()
 }
 
 pub(super) fn guest_work_entries(world: &World) -> usize {
@@ -79,7 +87,7 @@ pub(super) fn snapshot(world: &World, acquire: &Event) -> Snapshot {
         })
     };
     Snapshot {
-        trusted: list("trusted"),
+        jobs: list("jobs"),
         work: list("work"),
         runners: list("runners"),
     }

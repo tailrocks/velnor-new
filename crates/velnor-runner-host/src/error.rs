@@ -54,11 +54,8 @@ pub enum RustRunnerFailure {
     #[error("velnor-runner is missing at /var/lib/velnor/bin/velnor-runner in the velnor machine")]
     BinaryMissing,
 
-    #[error("the JIT could not be sent to the velnor machine")]
-    JitDelivery,
-
-    #[error("the trusted facts of the job could not be written")]
-    TrustedFile,
+    #[error("the JIT and the trusted facts could not be sent to the sandbox")]
+    FrameDelivery,
 
     #[error("the default user of the velnor machine could not be read")]
     GuestUser,
@@ -68,9 +65,6 @@ pub enum RustRunnerFailure {
 
     #[error("velnor-runner could not be waited for or stopped")]
     Wait,
-
-    #[error("the trusted directory of the host store is readable by other users")]
-    TrustedDirectoryAccessible,
 
     #[error("the host store is not owned by this user, is writable by others or has an ACL")]
     StoreUnsafe,
@@ -93,15 +87,13 @@ pub enum RustRunnerFailure {
     #[error("a runner is still registered after its removal")]
     RunnerStillRegistered,
 
-    #[error(
-        "files of the job are still on the host store or in the velnor machine after their removal"
-    )]
+    #[error("files of the job are still in the velnor machine after their removal")]
     JobFilesLeft,
 
     #[error(
-        "the job work tree is deeper or larger than the cleanup bound; the slot stays closed until it is removed by hand"
+        "the work or stage directory of a job cannot be emptied; the slot stays closed until it is removed by hand"
     )]
-    WorkTreeBound,
+    JobDirsWedged,
 
     #[error("an orb call wrote more output than the capture bound")]
     OrbOutputTooLarge,

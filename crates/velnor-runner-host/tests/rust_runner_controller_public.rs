@@ -134,7 +134,9 @@ fn rust_runner_controller_refuses_a_403_without_rate_limit_signals() -> TestResu
 fn rust_runner_controller_degrades_after_three_failed_runner_exits() -> TestResult<()> {
     match child_root() {
         Some(root) => child::run(&root),
-        None => runners::run("rust_runner_controller_degrades_after_three_failed_runner_exits"),
+        None => runners::counts_failures_not_breaches(
+            "rust_runner_controller_degrades_after_three_failed_runner_exits",
+        ),
     }
 }
 

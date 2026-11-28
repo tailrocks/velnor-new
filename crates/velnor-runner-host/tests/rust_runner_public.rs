@@ -86,9 +86,7 @@ fn rust_runner_links_var_lib_velnor_to_host_store() -> Result<(), Box<dyn Error>
         fixture.store.display()
     );
     assert!(fixture.log()?.contains(&expected), "{:?}", fixture.log()?);
-    for name in [
-        "bin", "crates", "tools", "git", "gen", "cache", "records", "trusted",
-    ] {
+    for name in ["bin", "crates", "tools", "git", "gen", "cache", "records"] {
         assert!(fixture.store.join(name).is_dir(), "{name}");
     }
     Ok(())

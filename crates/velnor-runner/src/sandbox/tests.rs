@@ -9,6 +9,8 @@ use super::parent::chain;
 use super::trusted::Header;
 use super::{Layout, MountOp, Profile, RootLink, SandboxArgs, plan};
 
+const HOME_ROOT: &str = "/home";
+
 mod accounting;
 mod invocation;
 mod network;
@@ -22,7 +24,7 @@ fn layout() -> Layout {
         netns: PathBuf::from("/run/netns/velnor-job-7"),
         uid: 1000,
         gid: 1001,
-        home: PathBuf::from("/home/user"),
+        home: PathBuf::from("/home/runner"),
         work_dir: work_dir_of(7),
         stage_dir: stage_dir_of(7),
         store_read_only: vec![PathBuf::from("/var/lib/velnor/git/github.com/o/n/42.git")],
@@ -86,12 +88,19 @@ fn job_plan_is_the_constructed_root() {
         read_only("/var/lib/velnor/git/github.com/o/n/42.git"),
         read_only("/srv/velnor/gen"),
     ];
-    expected.extend(masked("/srv/velnor/gen/work", "/srv/velnor/gen/work/7"));
+    expected.extend([
+        tmpfs("/srv/velnor/gen/work", 1024 * 1024, 0o755),
+        MountOp::SealReadOnly(PathBuf::from("/srv/velnor/gen/work")),
+        MountOp::BindReadWrite {
+            source: PathBuf::from("/srv/velnor/gen/work/7"),
+            target: PathBuf::from("/work"),
+        },
+    ]);
     expected.extend(masked("/srv/velnor/gen/stage", "/srv/velnor/gen/stage/7"));
     expected.extend([
         MountOp::BindReadWrite {
             source: PathBuf::from("/srv/velnor/gen/work/7/home"),
-            target: PathBuf::from("/home/user"),
+            target: PathBuf::from("/home/runner"),
         },
         MountOp::BindReadWrite {
             source: PathBuf::from("/srv/velnor/gen/work/7/tmp"),
@@ -126,10 +135,11 @@ fn job_plan_writes_only_the_work_dir_home_tmp_and_stage() {
         .collect();
     let allowed = [
         "/srv/velnor/gen/work/7",
+        "/work",
         "/srv/velnor/gen/stage/7",
         "/srv/velnor/gen/work/7/home",
         "/srv/velnor/gen/work/7/tmp",
-        "/home/user",
+        "/home/runner",
         "/tmp",
     ];
     for path in &writable {
@@ -224,12 +234,12 @@ fn arguments(adjust: impl FnOnce(&mut SandboxArgs)) -> SandboxArgs {
         reservation: 7,
         uid: 1000,
         gid: 1001,
-        home: PathBuf::from("/home/user"),
+        home: PathBuf::from("/home/runner"),
         work_dir: work_dir_of(7),
         disk_limit_gib: 64,
         machine_floor_gib: 4,
-        jit_stdin: false,
-        trusted: None,
+        stdin_frames: false,
+        max_jobs: 1,
         store_read_only: vec![PathBuf::from("/var/lib/velnor/git/github.com/o/n/42.git")],
         command: vec!["/bin/true".to_owned()],
     };
@@ -250,7 +260,7 @@ fn arguments_are_refused_when_they_could_widen_the_sandbox() {
         ),
         (
             "home with a parent component",
-            Box::new(|args| args.home = PathBuf::from("/home/../etc")),
+            Box::new(|args| args.home = PathBuf::from(format!("{HOME_ROOT}/../etc"))),
         ),
         (
             "work dir of another job",
@@ -284,12 +294,12 @@ fn arguments_are_refused_when_they_could_widen_the_sandbox() {
 
 #[test]
 fn normalized_paths_have_no_dots_and_start_at_the_root() {
-    assert!(normalized(Path::new("/home/user")));
+    assert!(normalized(Path::new("/home/runner")));
     assert!(!normalized(Path::new("home/user")));
-    assert!(!normalized(Path::new("/home/./user")));
-    assert!(!normalized(Path::new("/home/../etc")));
-    assert!(!normalized(Path::new("/home//user")));
-    assert!(!normalized(Path::new("/home/user/")));
+    assert!(!normalized(Path::new(&format!("{HOME_ROOT}/./user"))));
+    assert!(!normalized(Path::new(&format!("{HOME_ROOT}/../etc"))));
+    assert!(!normalized(Path::new(&format!("{HOME_ROOT}//user"))));
+    assert!(!normalized(Path::new("/home/runner/")));
 }
 
 #[cfg(target_os = "linux")]

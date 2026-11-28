@@ -88,7 +88,7 @@ const MOUNTINFO: &str = "24 1 0:21 /scon/containers/X / rw,noatime - btrfs /dev/
 
 #[test]
 fn the_floor_finds_the_btrfs_mount_and_subvolume_of_the_generations() {
-    use super::super::floor::{Mount, free_bytes_of, mount_of};
+    use super::super::floor::{Mount, mount_of};
     use std::path::Path;
     assert_eq!(
         mount_of(MOUNTINFO, Path::new("/srv/velnor/gen")),
@@ -105,10 +105,18 @@ fn the_floor_finds_the_btrfs_mount_and_subvolume_of_the_generations() {
         })
     );
     assert_eq!(mount_of("", Path::new("/srv")), None);
+}
+
+#[test]
+fn the_floor_counts_the_live_reservation_and_fails_closed_on_anything_unreadable() {
+    use super::super::floor::free_bytes_of;
     assert_eq!(
-        free_bytes_of("4802846720\n", "8589934592\n"),
-        Some(3_787_087_872)
+        free_bytes_of("4802846720\n", "1073741824\n", "8589934592\n"),
+        Some(2_713_346_048)
     );
-    assert_eq!(free_bytes_of("1", "0"), None);
-    assert_eq!(free_bytes_of("9", "none"), None);
+    assert_eq!(free_bytes_of("9", "9", "5"), Some(0));
+    assert_eq!(free_bytes_of("1", "0", "0"), None);
+    assert_eq!(free_bytes_of("9", "0", "none"), None);
+    assert_eq!(free_bytes_of("9", "none", "20"), None);
+    assert_eq!(free_bytes_of("none", "0", "20"), None);
 }

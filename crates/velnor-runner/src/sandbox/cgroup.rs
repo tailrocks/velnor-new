@@ -56,7 +56,11 @@ pub(super) fn limit_hit(events: &str) -> bool {
         .any(|count| count.trim().parse::<u64>().is_ok_and(|count| count > 0))
 }
 
-pub(super) fn memory_max_bytes() -> Result<u64> {
+pub(super) fn memory_limit(total_kib: u64, max_jobs: u32) -> u64 {
+    (total_kib.saturating_mul(1024) / 100 * MEMORY_PERCENT) / u64::from(max_jobs.max(1))
+}
+
+fn memory_max_bytes(max_jobs: u32) -> Result<u64> {
     let meminfo =
         std::fs::read_to_string("/proc/meminfo").context("read the memory of the machine")?;
     let kib = meminfo
@@ -65,7 +69,7 @@ pub(super) fn memory_max_bytes() -> Result<u64> {
         .and_then(|rest| rest.split_whitespace().next())
         .and_then(|value| value.parse::<u64>().ok())
         .context("find MemTotal in /proc/meminfo")?;
-    Ok(kib.saturating_mul(1024) / 100 * MEMORY_PERCENT)
+    Ok(memory_limit(kib, max_jobs))
 }
 
 fn write(path: &Path, file: &str, value: &str) -> Result<()> {
@@ -74,25 +78,25 @@ fn write(path: &Path, file: &str, value: &str) -> Result<()> {
 }
 
 impl Cgroup {
-    pub(super) fn create(path: PathBuf) -> Result<Self> {
+    pub(super) fn create(path: PathBuf, max_jobs: u32) -> Result<Self> {
         kill_and_remove(&path)?;
         let parent = path.parent().context("the cgroup has no parent")?;
         std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
         write(parent, "cgroup.subtree_control", CONTROLLERS)?;
         std::fs::create_dir(&path).with_context(|| format!("create {}", path.display()))?;
         let cgroup = Self { path };
-        cgroup.limit()?;
+        cgroup.limit(max_jobs)?;
         Ok(cgroup)
     }
 
-    fn limit(&self) -> Result<()> {
+    fn limit(&self, max_jobs: u32) -> Result<()> {
         write(&self.path, "pids.max", &PIDS_MAX.to_string())?;
-        write(&self.path, "memory.max", &memory_max_bytes()?.to_string())?;
+        write(
+            &self.path,
+            "memory.max",
+            &memory_max_bytes(max_jobs)?.to_string(),
+        )?;
         write(&self.path, "memory.oom.group", "1")
-    }
-
-    pub(super) fn path(&self) -> &Path {
-        &self.path
     }
 
     pub(super) fn terminate(&self) {

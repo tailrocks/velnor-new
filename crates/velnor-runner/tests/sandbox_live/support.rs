@@ -8,14 +8,24 @@ use std::process::{Child, Command, Output, Stdio};
 
 pub(crate) const UID: u32 = 5001;
 pub(crate) const GID: u32 = 5002;
-pub(crate) const HOME: &str = "/home/live";
+pub(crate) const HOME: &str = "/home/runner";
 pub(crate) const GENERATIONS: &str = "/srv/velnor/gen";
 pub(crate) const RUNNER: &str = env!("CARGO_BIN_EXE_velnor-runner");
+pub(crate) const TRUSTED: &str = include_str!("../fixtures/trusted/pull_request.json");
+
+fn frame(payload: &[u8]) -> Vec<u8> {
+    let mut bytes = u32::try_from(payload.len())
+        .unwrap_or(u32::MAX)
+        .to_be_bytes()
+        .to_vec();
+    bytes.extend_from_slice(payload);
+    bytes
+}
 
 pub(crate) struct Sandbox {
     pub(crate) reservation: u64,
     arguments: Vec<String>,
-    jit: Option<String>,
+    frames: Option<Vec<u8>>,
     user: (u32, u32, String),
 }
 
@@ -38,7 +48,7 @@ impl Sandbox {
         Self {
             reservation,
             arguments: vec!["--machine-floor-gib".to_owned(), "0".to_owned()],
-            jit: None,
+            frames: None,
             user: (UID, GID, HOME.to_owned()),
         }
     }
@@ -48,8 +58,12 @@ impl Sandbox {
         self
     }
 
-    pub(crate) fn with_jit(mut self, jit: &str) -> Self {
-        self.jit = Some(jit.to_owned());
+    pub(crate) fn with_jit(self, jit: &str) -> Self {
+        self.with_frames(jit.as_bytes(), TRUSTED.as_bytes())
+    }
+
+    pub(crate) fn with_frames(mut self, jit: &[u8], trusted: &[u8]) -> Self {
+        self.frames = Some([frame(jit), frame(trusted)].concat());
         self
     }
 
@@ -80,10 +94,10 @@ impl Sandbox {
             .arg("--work-dir")
             .arg(self.work_dir())
             .args(&self.arguments)
-            .args(self.jit.iter().map(|_| "--jit-stdin"))
+            .args(self.frames.iter().map(|_| "--stdin-frames"))
             .arg("--")
             .args(command)
-            .stdin(if self.jit.is_some() {
+            .stdin(if self.frames.is_some() {
                 Stdio::piped()
             } else {
                 Stdio::null()
@@ -95,8 +109,8 @@ impl Sandbox {
 
     pub(crate) fn spawn(&self, command: &[&str]) -> Option<Child> {
         let mut child = self.command(command).spawn().ok()?;
-        if let (Some(jit), Some(mut stdin)) = (&self.jit, child.stdin.take()) {
-            stdin.write_all(jit.as_bytes()).ok()?;
+        if let (Some(frames), Some(mut stdin)) = (&self.frames, child.stdin.take()) {
+            stdin.write_all(frames).ok()?;
         }
         Some(child)
     }
@@ -188,6 +202,18 @@ pub(crate) fn cleanup(sandbox: &Sandbox) -> Output {
             .arg(sandbox.reservation.to_string())
             .output(),
     )
+}
+
+pub(crate) fn run_dir(sandbox: &Sandbox) -> PathBuf {
+    PathBuf::from(format!("/run/velnor/jobs/{}", sandbox.reservation))
+}
+
+pub(crate) struct Cleaned<'a>(pub(crate) &'a Sandbox);
+
+impl Drop for Cleaned<'_> {
+    fn drop(&mut self) {
+        let _ = cleanup(self.0);
+    }
 }
 
 pub(crate) fn nothing_left(sandbox: &Sandbox) -> bool {

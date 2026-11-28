@@ -59,14 +59,17 @@ pub(super) fn run(test: &str) -> TestResult<()> {
     assert!(
         !state.runners.contains(&runner_name(3))
             && !state.work.contains(&"3".to_owned())
-            && !state.trusted.contains(&"3.json".to_owned()),
+            && !state.jobs.contains(&"3".to_owned()),
         "{state:?}"
     );
     world.stop()?;
     assert_eq!(world.finish(20)?, "Ok(Shutdown)");
     assert_clean(&world, "1");
     assert_eq!(acquire_ids(&world), ["1", "2", "3", "4"]);
-    assert_eq!(std::fs::read_dir(world.store.join("trusted"))?.count(), 0);
+    assert_eq!(
+        std::fs::read_dir(world.seen.join("guest/jobs")).map_or(0, Iterator::count),
+        0
+    );
     assert_eq!(guest_work_entries(&world), 0);
     let state: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(world.github.join("state.json"))?)?;
@@ -158,7 +161,7 @@ fn held_by_the_runner(world: &World) -> TestResult<()> {
         "{:?}",
         state.runners
     );
-    assert!(!state.trusted.contains(&"1.json".to_owned()) && !state.work.contains(&"1".to_owned()));
+    assert!(!state.jobs.contains(&"1".to_owned()) && !state.work.contains(&"1".to_owned()));
     world.wait_for_event("the runner of job B", 20, |events| {
         events
             .iter()

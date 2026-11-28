@@ -6,8 +6,8 @@ use std::time::Duration;
 use rustix::process::{Pid, Signal, kill_process};
 
 use super::support::{
-    BTRFS_IOCTL, Sandbox, cgroup, cleanup, joined, nothing_left, processes_running, succeeded,
-    wait_until,
+    BTRFS_IOCTL, Cleaned, Sandbox, cgroup, cleanup, joined, nothing_left, processes_running,
+    succeeded, wait_until,
 };
 
 #[test]
@@ -65,6 +65,7 @@ fn a_second_signal_kills_the_whole_cgroup_and_removes_it() {
 #[test]
 fn killing_the_sandbox_parent_ends_the_job_and_the_cleanup_leaves_nothing() {
     let sandbox = Sandbox::new("parent-killed");
+    let _cleaned = Cleaned(&sandbox);
     let mut child = sandbox.spawn(&["/bin/sleep", "603"]);
     assert!(
         joined(&sandbox) && wait_until(|| processes_running("/bin/sleep", "603") == 1),
@@ -136,9 +137,11 @@ fn zombies_of_orphaned_processes_are_reaped_by_the_init_of_the_job() {
 }
 
 #[test]
-fn a_subvolume_inside_a_job_directory_is_removed_by_the_cleanup_never_skipped() {
+fn a_subvolume_inside_a_job_directory_wedges_the_cleanup_with_a_typed_exit_and_it_converges_after()
+{
     use std::os::unix::fs::MetadataExt;
     let sandbox = Sandbox::new("nested-subvolume");
+    let _cleaned = Cleaned(&sandbox);
     assert!(cleanup(&sandbox).status.success());
     let work = sandbox.work_dir();
     assert!(std::fs::create_dir_all(&work).is_ok());
@@ -151,7 +154,6 @@ fn a_subvolume_inside_a_job_directory_is_removed_by_the_cleanup_never_skipped() 
     ));
     assert_eq!(made.trim(), "created");
     let nested = work.join("nested");
-    assert!(std::fs::write(nested.join("data"), vec![1_u8; 4096]).is_ok());
     let devices = (
         std::fs::metadata(&nested)
             .map(|metadata| metadata.dev())
@@ -162,6 +164,18 @@ fn a_subvolume_inside_a_job_directory_is_removed_by_the_cleanup_never_skipped() 
         devices.0, devices.1,
         "the nested subvolume has its own device"
     );
+    let wedged = cleanup(&sandbox);
+    assert_eq!(
+        wedged.status.code(),
+        Some(70),
+        "{}",
+        super::support::text(&wedged)
+    );
+    assert!(
+        nested.exists(),
+        "the subvolume was removed behind the wedge"
+    );
+    assert!(std::fs::remove_dir(&nested).is_ok());
     let proof = cleanup(&sandbox);
     assert!(proof.status.success(), "{}", super::support::text(&proof));
     assert!(nothing_left(&sandbox));

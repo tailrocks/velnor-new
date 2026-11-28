@@ -2,28 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{DirBuilder, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, fsync, mkdirat, openat,
-    renameat, statat, unlinkat,
+    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, mkdirat, openat, statat,
 };
 use rustix::io::Errno;
-use rustix::path::Arg;
 use rustix::process::geteuid;
 use sha2::{Digest, Sha256};
 
-use self::remove::BOUNDS;
+use super::HOST_DIRECTORIES;
 use super::machine::failure;
-use super::{HOST_DIRECTORIES, TRUSTED_DIRECTORY};
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
-
-mod remove;
 
 const RUNNER_BINARY: &str = "velnor-runner";
 const BIN_DIRECTORY: &str = "bin";
@@ -78,11 +73,6 @@ impl Store {
         for name in HOST_DIRECTORIES {
             store.ensure_directory(name, others_can_write(), RustRunnerFailure::StoreUnsafe)?;
         }
-        store.ensure_directory(
-            TRUSTED_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::TrustedDirectoryAccessible,
-        )?;
         Ok(store)
     }
 
@@ -158,55 +148,6 @@ impl Store {
         }
     }
 
-    pub(super) fn write_trusted(&self, name: &str, bytes: &[u8]) -> Result<(), HostError> {
-        self.ensure_directory(
-            TRUSTED_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::TrustedDirectoryAccessible,
-        )?;
-        let trusted = self.trusted_directory()?;
-        let staging = format!(".{name}.tmp");
-        let write = || -> Result<(), Errno> {
-            remove_entry(&trusted, &staging)?;
-            let descriptor = openat(
-                &trusted,
-                staging.as_str(),
-                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
-            )?;
-            let mut file = File::from(descriptor);
-            file.write_all(bytes).map_err(|_| Errno::IO)?;
-            fsync(&file)?;
-            renameat(&trusted, staging.as_str(), &trusted, name)
-        };
-        write().map_err(|_| {
-            let _ = remove_entry(&trusted, &staging);
-            failure(RustRunnerFailure::TrustedFile)
-        })
-    }
-
-    pub(super) fn remove_trusted(&self, name: &str) -> Result<(), HostError> {
-        let trusted = self.trusted_directory()?;
-        remove_entry(&trusted, name).map_err(|_| failure(RustRunnerFailure::HostStore))
-    }
-
-    pub(super) fn leftovers(&self, trusted_name: &str) -> Result<bool, HostError> {
-        exists(&self.trusted_directory()?, trusted_name)
-    }
-
-    pub(super) fn empty_trusted(&self) -> Result<(), HostError> {
-        remove::contents(&self.trusted_directory()?, BOUNDS)
-            .map_err(|error| failure(error.failure()))
-    }
-
-    fn trusted_directory(&self) -> Result<OwnedFd, HostError> {
-        self.directory(
-            TRUSTED_DIRECTORY,
-            others_can_reach(),
-            RustRunnerFailure::TrustedDirectoryAccessible,
-        )
-    }
-
     fn directory(
         &self,
         name: &str,
@@ -274,20 +215,5 @@ fn require_no_acl(path: &Path) -> Result<(), HostError> {
         Ok(())
     } else {
         Err(failure(RustRunnerFailure::StoreUnsafe))
-    }
-}
-
-fn exists(directory: &OwnedFd, name: &str) -> Result<bool, HostError> {
-    match statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(_) => Ok(true),
-        Err(Errno::NOENT) => Ok(false),
-        Err(_) => Err(failure(RustRunnerFailure::HostStore)),
-    }
-}
-
-fn remove_entry(directory: &impl AsFd, name: impl Arg) -> Result<(), Errno> {
-    match unlinkat(directory, name, AtFlags::empty()) {
-        Ok(()) | Err(Errno::NOENT) => Ok(()),
-        Err(error) => Err(error),
     }
 }

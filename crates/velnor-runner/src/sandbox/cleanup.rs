@@ -5,11 +5,12 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 use super::args::CleanupArgs;
-use super::layout::{cgroup_of, root_of, stage_dir_of, work_dir_of};
-use super::{CGROUP_ROOT, GEN_ROOT, SANDBOX_ROOTS, cgroup, dirs, net};
+use super::flatten::Wedged;
+use super::layout::{cgroup_of, root_of, run_dir_of, stage_dir_of, work_dir_of};
+use super::{CGROUP_ROOT, GEN_ROOT, JOBS_ROOT, SANDBOX_ROOTS, WEDGED_EXIT, cgroup, dirs, net};
 
 fn children(directory: &Path) -> Result<Vec<PathBuf>> {
     match std::fs::read_dir(directory) {
@@ -35,18 +36,36 @@ fn job_cgroups() -> Result<Vec<PathBuf>> {
         .collect())
 }
 
+#[derive(Debug)]
+pub(super) struct Left {
+    paths: Vec<String>,
+    wedged: bool,
+}
+
+impl std::fmt::Display for Left {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "could not remove {}", self.paths.join(", "))
+    }
+}
+
+impl std::error::Error for Left {}
+
 fn remove_all(paths: &[PathBuf]) -> Result<()> {
-    let mut left = Vec::new();
+    let mut left = Left {
+        paths: Vec::new(),
+        wedged: false,
+    };
     for path in paths {
         if let Err(error) = dirs::remove(path) {
             eprintln!("velnor sandbox cleanup: {error:#}");
-            left.push(path.display().to_string());
+            left.wedged |= error.downcast_ref::<Wedged>().is_some();
+            left.paths.push(path.display().to_string());
         }
     }
-    if left.is_empty() {
+    if left.paths.is_empty() {
         Ok(())
     } else {
-        bail!("could not remove {}", left.join(", "))
+        Err(left.into())
     }
 }
 
@@ -57,6 +76,7 @@ pub(super) fn reservation(reservation: u64) -> Result<()> {
         work_dir_of(reservation),
         stage_dir_of(reservation),
         root_of(reservation),
+        run_dir_of(reservation),
     ])
 }
 
@@ -70,6 +90,7 @@ fn everything() -> Result<()> {
         Path::new(GEN_ROOT).join("work"),
         Path::new(GEN_ROOT).join("stage"),
         PathBuf::from(SANDBOX_ROOTS),
+        PathBuf::from(JOBS_ROOT),
     ] {
         directories.extend(children(&parent)?);
     }
@@ -77,9 +98,16 @@ fn everything() -> Result<()> {
 }
 
 pub fn run(args: &CleanupArgs) -> Result<ExitCode> {
-    match args.reservation {
-        Some(id) => reservation(id)?,
-        None => everything()?,
+    let outcome = match args.reservation {
+        Some(id) => reservation(id),
+        None => everything(),
+    };
+    match outcome {
+        Ok(()) => Ok(ExitCode::SUCCESS),
+        Err(error) if error.downcast_ref::<Left>().is_some_and(|left| left.wedged) => {
+            eprintln!("velnor sandbox cleanup: {error:#}");
+            Ok(ExitCode::from(WEDGED_EXIT))
+        }
+        Err(error) => Err(error),
     }
-    Ok(ExitCode::SUCCESS)
 }

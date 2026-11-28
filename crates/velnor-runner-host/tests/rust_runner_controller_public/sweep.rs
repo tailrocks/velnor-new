@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
 use std::time::Instant;
 
 use serde_json::json;
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use super::checks::{assert_capacity, assert_clean, jit_name, reservation, snapshot, trusted_name};
+use super::checks::{assert_capacity, assert_clean, jit_name, job_dir_name, reservation, snapshot};
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
@@ -32,16 +31,8 @@ fn move_logs_aside(world: &World, run: &str) -> TestResult<()> {
 pub(super) fn run(test: &str) -> TestResult<()> {
     let mut world = World::new("T4", 1, true)?;
     std::fs::write(world.root.join("ps.table"), STALE_RUNNER)?;
-    std::fs::create_dir_all(world.store.join("trusted"))?;
-    std::fs::set_permissions(
-        world.store.join("trusted"),
-        std::fs::Permissions::from_mode(0o700),
-    )?;
-    std::fs::write(world.store.join("trusted/99.json"), "stale")?;
-    std::fs::set_permissions(
-        world.store.join("trusted/99.json"),
-        std::fs::Permissions::from_mode(0o600),
-    )?;
+    std::fs::create_dir_all(world.seen.join("guest/jobs/99"))?;
+    std::fs::write(world.seen.join("guest/jobs/99/trusted.json"), "stale")?;
     std::fs::create_dir_all(world.seen.join("guest/gen/work/99"))?;
     std::fs::write(world.seen.join("guest/gen/work/99/leftover"), "stale")?;
     world.write_state(true, &[("velnor-mac-99", 90)])?;
@@ -165,9 +156,7 @@ fn resumed_startup(world: &mut World, test: &str) -> TestResult<()> {
     assert_swept(world, &events, kill, acquire);
     let state = snapshot(world, acquire);
     let own = reservation(&world.gh("jit")[0]);
-    assert!(
-        state.trusted.iter().all(|name| name == &trusted_name(own)) || state.trusted.is_empty()
-    );
+    assert!(state.jobs.iter().all(|name| name == &job_dir_name(own)) || state.jobs.is_empty());
     assert_capacity(world, "1");
     world.stop()?;
     assert_eq!(world.finish(10)?, "Ok(Shutdown)");
@@ -184,12 +173,12 @@ fn assert_swept(world: &World, events: &[Event], kill: &Event, acquire: &Event) 
     let state = snapshot(world, acquire);
     assert!(
         state
-            .trusted
+            .jobs
             .iter()
             .chain(&state.work)
             .all(|name| !name.contains("99")),
         "{:?} {:?}",
-        state.trusted,
+        state.jobs,
         state.work
     );
 }

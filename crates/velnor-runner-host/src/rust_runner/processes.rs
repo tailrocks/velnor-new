@@ -8,6 +8,7 @@ use crate::error::{HostError, RustRunnerFailure};
 mod tests;
 
 const INIT_PID: u32 = 1;
+const WEDGED_EXIT: i32 = 70;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MachineProcess {
@@ -63,10 +64,10 @@ impl RustRunnerLauncher {
 
     fn cleaned(&self, command: std::process::Command) -> Result<(), HostError> {
         let finished = orb::run(command, self.deadline, false).map_err(HostError::RustRunner)?;
-        if finished.status.success() {
-            Ok(())
-        } else {
-            Err(HostError::RustRunner(RustRunnerFailure::JobFilesLeft))
+        match finished.status.code() {
+            Some(0) => Ok(()),
+            Some(WEDGED_EXIT) => Err(HostError::RustRunner(RustRunnerFailure::JobDirsWedged)),
+            _ => Err(HostError::RustRunner(RustRunnerFailure::JobFilesLeft)),
         }
     }
 
