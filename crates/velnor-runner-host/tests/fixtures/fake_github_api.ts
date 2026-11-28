@@ -1,14 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
-import { config, method, offers, phase, record, reply, repository, scriptedReply, unexpected } from "./fake_github_core.ts";
+import { type Connection, config as shared, configOf, connectionNamed, headers, method, offers, phase, record, reply, scriptedReply, unexpected } from "./fake_github_core.ts";
 import { pullJson, repository as repositoryJson, runJson, treeId, trees } from "./fake_github_shapes.ts";
 
 export function api(path: string): never {
-  const base = `/repos/${repository}`;
-  if (method === "POST" && path === `${base}/actions/runners/registration-token`) reply(201, { token: "registration-token" });
-  if (method === "POST" && config.organization && path === `/orgs/${config.organization}/actions/runners/registration-token`) reply(201, { token: "registration-token" });
-  if (method === "POST" && path === "/actions/runner-registration") reply(200, { url: config.admin_url, token: "admin-token" });
+  if (method === "POST" && path === "/actions/runner-registration") {
+    const token = /registration-token\.([^\s]+)$/.exec(headers.get("authorization") ?? "")?.[1];
+    reply(200, { url: shared.admin_url, token: `admin-token.${token}` });
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/actions\/runners\/registration-token$/.test(path)) reply(201, { token: `registration-token.${shared.repo}` });
+  const owned = /^\/repos\/[^/]+\/([^/]+)/.exec(path);
+  const connection: Connection | undefined = connectionNamed(owned?.[1]);
+  if (!connection) return unexpected();
+  const config = configOf(connection);
+  const base = `/repos/${config.owner}/${config.repo}`;
+  if (method === "POST" && path === `${base}/actions/runners/registration-token`) reply(201, { token: `registration-token.${connection.repo}` });
   if (method === "GET" && path === base) {
     const scripted = scriptedReply("repo.get");
     record("repo.get", { status: scripted?.status ?? 200, phase: phase() || "none" });

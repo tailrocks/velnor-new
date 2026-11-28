@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_github::QueueSession;
 
+use super::connection::Service;
 use super::{Event, Run, blocking, github};
 use crate::launch_blocking::ListenFault;
 
@@ -29,6 +30,7 @@ impl Run<'_> {
         let sessions = self
             .connections
             .iter()
+            .filter(|live| live.service != Service::Closed)
             .map(|live| {
                 (
                     live.admin.clone(),
@@ -43,7 +45,7 @@ impl Run<'_> {
     pub(super) fn spawn_due_renewals(&mut self) {
         let now = Instant::now();
         for (index, live) in self.connections.iter_mut().enumerate() {
-            if live.refreshing || now < live.admin_due {
+            if live.service == Service::Closed || live.refreshing || now < live.admin_due {
                 continue;
             }
             live.refreshing = true;

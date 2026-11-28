@@ -1,12 +1,13 @@
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};
+use std::time::Instant;
 
 use rustix::process::{Pid, Signal, kill_process_group};
 use velnor_runner_github::EncodedJit;
 
 use super::machine::failure;
-use super::store::Store;
+use super::store::{ACL_BUDGET, Store};
 use super::{GUEST_RUNNER, JobPaths, PID_NAMESPACE, ReservationId, RustRunnerLauncher};
 use crate::error::{HostError, RustRunnerFailure};
 
@@ -26,8 +27,8 @@ impl RustRunnerLauncher {
         jit: &EncodedJit,
     ) -> Result<RunningJob, HostError> {
         let paths = JobPaths::of(reservation);
-        let store = Store::open(&self.host_store)?;
-        store.require_runner_binary()?;
+        let store = self.store()?;
+        store.require_runner_binary(Instant::now() + ACL_BUDGET)?;
         let binary = store.runner_digest()?;
         store.write_jit(paths.jit_name(), jit.expose().as_bytes())?;
         match self.spawn_runner(&paths) {

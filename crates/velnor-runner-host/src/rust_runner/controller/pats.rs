@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use zeroize::Zeroizing;
 
-use crate::config::{ConnectionId, HostConfig};
+use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
 use crate::error::HostError;
 use crate::host_controller::connection_pat;
 
@@ -17,6 +17,37 @@ impl std::fmt::Debug for ConnectionPats {
             .debug_tuple("ConnectionPats")
             .field(&"[REDACTED]")
             .finish()
+    }
+}
+
+#[derive(Clone)]
+pub enum PatSource {
+    Keychain,
+    Fixed(Zeroizing<Vec<u8>>),
+}
+
+impl std::fmt::Debug for PatSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("PatSource([REDACTED])")
+    }
+}
+
+impl PatSource {
+    pub(super) async fn load(
+        &self,
+        config: &HostConfig,
+        deadline: tokio::time::Instant,
+    ) -> Result<ConnectionPats, HostError> {
+        match self {
+            Self::Keychain => ConnectionPats::load(config, deadline).await,
+            Self::Fixed(secret) => ConnectionPats::from_secrets(
+                config,
+                config
+                    .connections()
+                    .iter()
+                    .map(|connection| (connection.connection_id.clone(), secret.clone())),
+            ),
+        }
     }
 }
 
@@ -55,4 +86,19 @@ impl ConnectionPats {
     pub(super) fn get(&self, id: &ConnectionId) -> Option<&str> {
         self.0.get(id).map(|pat| pat.as_str())
     }
+}
+
+pub fn load_connection_pat(
+    binding: &RepositoryConnection,
+    timeout: std::time::Duration,
+) -> Result<Zeroizing<String>, HostError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| HostError::Lock)?;
+    let deadline = tokio::time::Instant::now() + timeout;
+    let loaded = runtime.block_on(binding.credential_ref.load_until(deadline));
+    runtime.shutdown_background();
+    let secret = loaded?;
+    Ok(Zeroizing::new(connection_pat(&secret)?.to_owned()))
 }

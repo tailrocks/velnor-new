@@ -137,13 +137,13 @@ async fn settle(
     scoped.record_scale_set_delete(claim, record).await
 }
 
-enum Observation {
+pub(crate) enum Observation {
     Present,
     Absent(ScaleSetAbsence),
     Unknown,
 }
 
-fn observe<T: Transport + ?Sized>(
+pub(crate) fn observe<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
     target: &ScaleSetDeleteTarget,
@@ -156,7 +156,7 @@ fn observe<T: Transport + ?Sized>(
     }
 }
 
-fn absence<T: Transport + ?Sized>(
+pub(crate) fn absence<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
     target: &ScaleSetDeleteTarget,

@@ -107,14 +107,14 @@ pub enum RustRunnerFailure {
     #[error("the controller heartbeat is missing, stale or for another config")]
     HeartbeatNotFresh,
 
-    #[error("GitHub refused to delete the scale set")]
-    ScaleSetDeleteRefused,
-
     #[error("GitHub did not complete the scale set teardown")]
     GitHubRefused,
 
-    #[error("the deletion of the scale set is uncertain")]
-    ScaleSetDeleteUncertain,
+    #[error("the controller did not admit the reconnected connection")]
+    ReconnectNotAdmitted,
+
+    #[error("GitHub did not confirm the close of the session")]
+    SessionNotClosed,
 
     #[error("a blocking task of the rust-runner controller did not finish")]
     TaskFailed,

@@ -8,16 +8,24 @@ use super::events::wait_for;
 use super::fixtures::TestResult;
 use super::harness::World;
 
-const RECORDS: &str = "rust-runner-scale-sets.json";
+const RECORD: &str = "rust-runner-scale-sets/lab";
 
 fn recorded(world: &World) -> TestResult<Value> {
     Ok(serde_json::from_str(&std::fs::read_to_string(
-        world.state.join(RECORDS),
+        world.state.join(RECORD),
     )?)?)
 }
 
-fn plant_records(world: &World, records: &Value) -> TestResult<()> {
-    std::fs::write(world.state.join(RECORDS), records.to_string())?;
+fn plant_record(world: &World, scale_set_id: Option<i64>) -> TestResult<()> {
+    let record = json!({
+        "name": "velnor-mac",
+        "runner_group_id": 1,
+        "scope": {"kind": "organization", "organization": "tailrocks", "runner_group": null},
+        "server": "https://pipelines.example.com/",
+        "scale_set_id": scale_set_id,
+    });
+    std::fs::create_dir_all(world.state.join("rust-runner-scale-sets"))?;
+    std::fs::write(world.state.join(RECORD), record.to_string())?;
     Ok(())
 }
 
@@ -69,21 +77,16 @@ pub(super) fn holds_a_matching_set_nobody_recorded(test: &str) -> TestResult<()>
 
 pub(super) fn adopts_a_set_after_a_recorded_intent(test: &str) -> TestResult<()> {
     let mut world = World::new("T12b", 1, true)?;
-    plant_records(&world, &json!({"intended": ["lab"]}))?;
+    plant_record(&world, None)?;
     started(&mut world, test, None)?;
     world.wait_for_event("the session of the set the intent covers", 60, |events| {
         events.iter().any(|event| event.label == "session.create")
     });
     assert!(world.gh("scaleset.create").is_empty());
-    let records = recorded(&world)?;
     assert_eq!(
-        records["created"]["lab"], 7,
+        recorded(&world)?["scale_set_id"],
+        7,
         "the adopted set must be recorded"
-    );
-    assert_eq!(
-        records["intended"],
-        json!([]),
-        "the intent must end with the record"
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -104,15 +107,10 @@ pub(super) fn records_the_intent_before_it_creates_a_set(test: &str) -> TestResu
         "true",
         "the create-intent must be on disk before the create request"
     );
-    let records = recorded(&world)?;
     assert_eq!(
-        records["created"]["lab"], 7,
+        recorded(&world)?["scale_set_id"],
+        7,
         "the created set must be recorded"
-    );
-    assert_eq!(
-        records["intended"],
-        json!([]),
-        "the intent must end with the record"
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -121,10 +119,10 @@ pub(super) fn records_the_intent_before_it_creates_a_set(test: &str) -> TestResu
 
 pub(super) fn refuses_a_set_the_record_assigns_to_another_id(test: &str) -> TestResult<()> {
     let mut world = World::new("T12d", 1, true)?;
-    plant_records(&world, &json!({"created": {"lab": 9}}))?;
+    plant_record(&world, Some(9))?;
     started(&mut world, test, None)?;
     held(&world, "a set the record assigns to id 9");
-    assert_eq!(recorded(&world)?["created"]["lab"], 9);
+    assert_eq!(recorded(&world)?["scale_set_id"], 9);
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
     Ok(())
@@ -132,7 +130,7 @@ pub(super) fn refuses_a_set_the_record_assigns_to_another_id(test: &str) -> Test
 
 pub(super) fn refuses_a_set_with_other_labels(test: &str) -> TestResult<()> {
     let mut world = World::new("T12e", 1, true)?;
-    plant_records(&world, &json!({"created": {"lab": 7}}))?;
+    plant_record(&world, Some(7))?;
     started(&mut world, test, Some(&["velnor", "another-label"]))?;
     held(&world, "a recorded set that carries other labels");
     world.stop()?;
@@ -152,7 +150,7 @@ pub(super) fn forgets_its_intent_after_a_refused_create(test: &str) -> TestResul
     wait_for(
         "the create-intent to be forgotten after a definite refusal",
         20,
-        || recorded(&world).is_ok_and(|records| records["intended"] == json!([])),
+        || !world.state.join(RECORD).exists(),
     );
     world.stop()?;
     assert_eq!(world.finish(30)?, "Ok(Shutdown)");
@@ -191,7 +189,7 @@ pub(super) fn refuses_a_created_set_that_keeps_other_labels(test: &str) -> TestR
         "a created set that persisted other labels was used"
     );
     assert!(
-        recorded(&world)?["created"]["lab"].is_null(),
+        recorded(&world)?["scale_set_id"].is_null(),
         "a created set that persisted other labels was recorded"
     );
     world.stop()?;

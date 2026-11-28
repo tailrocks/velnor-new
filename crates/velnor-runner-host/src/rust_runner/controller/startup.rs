@@ -89,7 +89,7 @@ pub(super) async fn guarded<T>(
                 stopped = true;
             }
             output = &mut work => return Guarded { value: Some(output), stopped },
-            _ = tick.tick() => cx.beat(phase),
+            _ = tick.tick() => cx.beat_idle(phase),
         }
     }
 }

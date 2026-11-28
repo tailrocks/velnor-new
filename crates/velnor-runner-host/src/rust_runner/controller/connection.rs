@@ -40,7 +40,15 @@ pub(super) struct Pending {
     pub(super) cleared: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Service {
+    Serving,
+    Retired,
+    Closed,
+}
+
 pub(super) struct Live {
+    pub(super) service: Service,
     pub(super) binding: RepositoryConnection,
     pub(super) pat: Zeroizing<String>,
     pub(super) policy: ApprovedJobAuthorityPolicy,
@@ -55,6 +63,7 @@ pub(super) struct Live {
     pub(super) batch: Option<Batch>,
     pub(super) refreshing: bool,
     refresh_failures: u32,
+    pub(super) closing: bool,
     pub(super) admin_due: Instant,
 }
 
@@ -68,6 +77,7 @@ impl Pending {
         };
         let queue = QueueAccess::of(&session, &admin)?;
         Ok(Live {
+            service: Service::Serving,
             binding: self.binding,
             pat: self.pat,
             policy: self.policy,
@@ -82,6 +92,7 @@ impl Pending {
             batch: None,
             refreshing: false,
             refresh_failures: 0,
+            closing: false,
             admin_due: self.admin_at + ADMIN_RENEWAL,
         })
     }

@@ -6,7 +6,8 @@ use std::io::{Read, Write};
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::time::{Duration, Instant};
 
 use rustix::fs::{
     AtFlags, FileType, FlockOperation, Mode, OFlags, flock, fstat, fsync, mkdirat, openat,
@@ -19,6 +20,7 @@ use sha2::{Digest, Sha256};
 
 use self::remove::BOUNDS;
 use super::machine::failure;
+use super::orb;
 use super::{HOST_DIRECTORIES, JIT_DIRECTORY, WORK_DIRECTORY};
 use crate::digest_hex::lowercase_hex;
 use crate::error::{HostError, RustRunnerFailure};
@@ -33,6 +35,7 @@ const LOCK_FILE: &str = "host.lock";
 pub struct HostHold {
     _lock: OwnedFd,
 }
+pub(super) const ACL_BUDGET: Duration = Duration::from_secs(60);
 
 fn others_can_write() -> Mode {
     Mode::WGRP | Mode::WOTH
@@ -49,6 +52,7 @@ fn directory_flags() -> OFlags {
 pub(super) struct Store {
     root: OwnedFd,
     path: PathBuf,
+    lister: PathBuf,
 }
 
 impl Store {
@@ -59,12 +63,18 @@ impl Store {
         Ok(Self {
             root,
             path: path.to_path_buf(),
+            lister: super::DEFAULT_LISTER.into(),
         })
     }
 
-    pub(super) fn prepare(path: &Path) -> Result<Self, HostError> {
-        let store = Self::create(path)?;
-        store.require_runner_binary()?;
+    pub(super) fn listed_by(mut self, lister: &Path) -> Self {
+        lister.clone_into(&mut self.lister);
+        self
+    }
+
+    pub(super) fn prepare(path: &Path, lister: &Path) -> Result<Self, HostError> {
+        let store = Self::create(path)?.listed_by(lister);
+        store.require_runner_binary(Instant::now() + ACL_BUDGET)?;
         Ok(store)
     }
 
@@ -106,7 +116,7 @@ impl Store {
         }
     }
 
-    pub(super) fn require_runner_binary(&self) -> Result<(), HostError> {
+    pub(super) fn require_runner_binary(&self, deadline: Instant) -> Result<(), HostError> {
         let bin = self.directory(
             BIN_DIRECTORY,
             others_can_write(),
@@ -131,7 +141,7 @@ impl Store {
             bin_path.clone(),
             bin_path.join(RUNNER_BINARY),
         ] {
-            require_no_acl(&path)?;
+            require_no_acl(&self.lister, &path, deadline)?;
         }
         Ok(())
     }
@@ -271,20 +281,22 @@ fn require_directory(
     Ok(())
 }
 
-fn require_no_acl(path: &Path) -> Result<(), HostError> {
-    let mut command = Command::new("/bin/ls");
+fn require_no_acl(lister: &Path, path: &Path, deadline: Instant) -> Result<(), HostError> {
+    let mut command = Command::new(lister);
     command.env_clear().arg(if cfg!(target_os = "macos") {
         "-lde"
     } else {
         "-ld"
     });
-    let output = command
-        .arg("--")
-        .arg(path)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .map_err(|_| failure(RustRunnerFailure::StoreUnsafe))?;
+    let output = orb::run(
+        {
+            command.arg("--").arg(path);
+            command
+        },
+        deadline.saturating_duration_since(Instant::now()),
+        true,
+    )
+    .map_err(|_| failure(RustRunnerFailure::StoreUnsafe))?;
     let text =
         String::from_utf8(output.stdout).map_err(|_| failure(RustRunnerFailure::StoreUnsafe))?;
     let mut lines = text.lines().filter(|line| !line.trim().is_empty());

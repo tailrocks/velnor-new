@@ -20,8 +20,14 @@ mod store;
 mod sweep;
 mod teardown;
 
-pub use census::{wait_for_rust_runner_connection_drain, wait_for_rust_runner_drain};
-pub use controller::{ConnectionPats, RustRunnerExit, run_rust_runner_host};
+pub use census::{
+    parse_marker_token, wait_for_rust_runner_connection_admitted,
+    wait_for_rust_runner_connection_drain, wait_for_rust_runner_drain,
+};
+pub use controller::{
+    ConnectionPats, Handover, PatSource, RustRunnerExit, ShutdownSignal, load_connection_pat,
+    run_rust_runner_host, supervise_rust_runner_host,
+};
 pub use doctor::run_rust_runner_doctor_probe;
 pub use job::RunningJob;
 pub use paths::ReservationId;
@@ -29,7 +35,10 @@ pub use processes::MachineProcess;
 pub use store::HostHold;
 pub use teardown::detach_rust_runner_connection;
 
-pub(crate) use controller::{Handover, heartbeat_readiness, host_toml_sha256, run_blocking};
+use store::Store;
+
+pub use controller::host_toml_sha256;
+pub(crate) use controller::{heartbeat_readiness, run_blocking};
 pub(crate) use paths::JobPaths;
 
 const MACHINE_NAME: &str = "velnor";
@@ -38,6 +47,7 @@ const GUEST_RUNNER: &str = "/var/lib/velnor/bin/velnor-runner";
 const DEFAULT_ORB: &str = "orb";
 const ORB_DEADLINE: Duration = Duration::from_secs(60);
 const ORB_CREATE_DEADLINE: Duration = Duration::from_mins(15);
+const DEFAULT_LISTER: &str = "/bin/ls";
 const DEFAULT_HOST_STORE_UNDER_ROOT: &str = "Users/Shared/velnor";
 const ORB_ENVIRONMENT: &str = "VELNOR_ORB";
 const PRESERVED_ENVIRONMENT: [&str; 2] = ["PATH", "HOME"];
@@ -66,21 +76,29 @@ pub struct RustRunnerLauncher {
     orb: PathBuf,
     host_store: PathBuf,
     deadline: Duration,
+    lister: PathBuf,
 }
 
 impl RustRunnerLauncher {
     #[must_use]
-    pub const fn new(orb: PathBuf, host_store: PathBuf) -> Self {
+    pub fn new(orb: PathBuf, host_store: PathBuf) -> Self {
         Self {
             orb,
             host_store,
             deadline: ORB_DEADLINE,
+            lister: DEFAULT_LISTER.into(),
         }
     }
 
     #[must_use]
     pub const fn with_orb_deadline(mut self, deadline: Duration) -> Self {
         self.deadline = deadline;
+        self
+    }
+
+    #[must_use]
+    pub fn with_lister(mut self, lister: PathBuf) -> Self {
+        self.lister = lister;
         self
     }
 
@@ -96,6 +114,10 @@ impl RustRunnerLauncher {
     #[must_use]
     pub fn host_store(&self) -> &Path {
         &self.host_store
+    }
+
+    fn store(&self) -> Result<Store, HostError> {
+        Store::open(&self.host_store).map(|store| store.listed_by(&self.lister))
     }
 
     fn orb(&self) -> Command {

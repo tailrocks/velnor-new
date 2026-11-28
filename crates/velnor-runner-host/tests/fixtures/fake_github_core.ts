@@ -29,6 +29,13 @@ export interface Config {
   organization?: string;
   state?: string;
   existing_labels?: string[];
+  extra?: Connection[];
+}
+export interface Connection {
+  repo: string;
+  repository_id: number;
+  scale_set: string;
+  labels: string[];
 }
 interface Message {
   id: number;
@@ -40,7 +47,7 @@ interface Runner {
   runnerScaleSetId: number;
 }
 export interface State {
-  scale_set_id: number | null;
+  scale_sets: Record<string, number>;
   sessions: string[];
   runners: Runner[];
   deleted: number[];
@@ -48,6 +55,7 @@ export interface State {
   next_runner_id: number;
   next_session: number;
   pending_jit?: number[];
+  hidden_from_listing?: boolean;
 }
 interface Refusal {
   statuses: number[];
@@ -67,6 +75,10 @@ export const github = `${root}/github`;
 export const seen = `${root}/seen`;
 export const config = JSON.parse(readFileSync(`${github}/config.json`, "utf8")) as Config;
 export const repository = `${config.owner}/${config.repo}`;
+export const connections: Connection[] = [
+  { repo: config.repo, repository_id: config.repository_id, scale_set: config.scale_set, labels: config.labels },
+  ...(config.extra ?? []),
+];
 const input = await Bun.stdin.text();
 const fields = new Map<string, string>();
 export const headers = new Map<string, string>();
@@ -132,15 +144,37 @@ export function failed(error: unknown): never {
   process.exit(4);
 }
 
-export function offers(): Offer[] {
-  return messages().flatMap((message) => message.offers);
+export function setId(connection: Connection): number {
+  return 7 + connections.indexOf(connection);
 }
 
-export function messages(): Message[] {
-  return readdirSync(`${github}/messages`)
+export function connectionNamed(repo: string | undefined): Connection | undefined {
+  return connections.find((connection) => connection.repo === repo);
+}
+
+export function connectionOfSet(id: number): Connection | undefined {
+  return connections.find((connection) => setId(connection) === id);
+}
+
+export function configOf(connection: Connection): Config {
+  return { ...config, repo: connection.repo, repository_id: connection.repository_id, scale_set: connection.scale_set, labels: connection.labels };
+}
+
+function messagesIn(repo: string): Message[] {
+  const directory = repo === config.repo ? `${github}/messages` : `${github}/messages-${repo}`;
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
     .filter((name) => name.endsWith(".json"))
-    .map((name) => JSON.parse(readFileSync(`${github}/messages/${name}`, "utf8")) as Message)
+    .map((name) => JSON.parse(readFileSync(`${directory}/${name}`, "utf8")) as Message)
     .sort((left, right) => left.id - right.id);
+}
+
+export function messages(connection: Connection): Message[] {
+  return messagesIn(connection.repo);
+}
+
+export function offers(): Offer[] {
+  return connections.flatMap((connection) => messagesIn(connection.repo).flatMap((message) => message.offers));
 }
 
 export function readState(): State {

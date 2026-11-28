@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use velnor_runner_host::{ConnectionId, CreatedSetDeletion, HostError};
 
-use super::disconnect_with_detach;
+use super::{Detach, disconnect_with_detach};
 use crate::dispatch::connection_state::{connection_drain_proof, persist_host, read_host};
 
 const CONNECTION: &str = "conn-test-1";
@@ -72,12 +72,12 @@ fn disconnect(
         |_, _, _| Ok(true),
         |_, _, _| {
             detaches.set(detaches.get() + 1);
-            Ok(true)
+            Ok(Detach::Detached)
         },
         |state, _, _| {
             deletes.set(deletes.get() + 1);
             configured_at_delete.set(Some(configured(state)));
-            answer
+            answer.map(Some)
         },
     );
     Ok(Run {
@@ -139,5 +139,42 @@ fn any_unproven_delete_keeps_the_connection_configured_and_draining() -> TestRes
         assert!(configured(&state));
         assert!(!connection_drain_proof(&state, &id()?).exists());
     }
+    Ok(())
+}
+
+fn detached_with(state: &Path, outcome: CreatedSetDeletion) -> ExitCode {
+    disconnect_with_detach(
+        state,
+        CONNECTION,
+        true,
+        |_, _, _| Ok(true),
+        |_, _, _| Ok(Detach::Set(outcome)),
+        |_, _, _| Ok(None),
+    )
+}
+
+#[test]
+fn a_refused_set_delete_after_detach_leaves_a_retry_that_finishes_the_deletion() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let state = dir.path().canonicalize()?;
+    persist_host(&state, CONFIG).map_err(|_| "host.toml")?;
+    assert!(!succeeded(detached_with(
+        &state,
+        CreatedSetDeletion::Refused(409)
+    )));
+    assert!(!configured(&state));
+    assert!(connection_drain_proof(&state, &id()?).exists());
+    assert!(!succeeded(detached_with(
+        &state,
+        CreatedSetDeletion::Uncertain
+    )));
+    assert!(succeeded(detached_with(
+        &state,
+        CreatedSetDeletion::Deleted
+    )));
+    assert!(succeeded(detached_with(
+        &state,
+        CreatedSetDeletion::NotOwned
+    )));
     Ok(())
 }

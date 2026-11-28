@@ -3,7 +3,8 @@
 
 use super::Run;
 use super::admission::Admission;
-use crate::rust_runner::census::{self, connection_marker};
+use super::connection::Service;
+use crate::rust_runner::census::{self, Held, connection_marker, marker_absent};
 
 impl Run<'_> {
     pub(super) fn publish_census(&self) {
@@ -11,11 +12,11 @@ impl Run<'_> {
             .connections
             .iter()
             .enumerate()
-            .map(|(index, live)| {
-                (
-                    live.binding.connection_id.as_str().to_owned(),
-                    self.slots.held_by(index),
-                )
+            .filter(|(_, live)| live.service != Service::Closed)
+            .map(|(index, live)| Held {
+                id: live.binding.connection_id.as_str().to_owned(),
+                slots: self.slots.held_by(index),
+                admitting: self.connection_open(index),
             })
             .collect();
         if let Err(error) = census::publish(&self.cx.state, &self.cx.config_sha256, held) {
@@ -24,11 +25,17 @@ impl Run<'_> {
     }
 
     pub(super) fn admits(&self, connection: usize) -> bool {
+        matches!(self.admission(), Admission::Open { free } if free > 0)
+            && self.connection_open(connection)
+    }
+
+    fn connection_open(&self, connection: usize) -> bool {
         let Some(live) = self.connections.get(connection) else {
             return false;
         };
         let marker = connection_marker(&self.cx.state, live.binding.connection_id.as_str());
-        matches!(self.admission(), Admission::Open { free } if free > 0)
-            && std::fs::symlink_metadata(&marker).is_err()
+        live.service == Service::Serving
+            && matches!(self.admission(), Admission::Open { .. })
+            && marker_absent(&marker)
     }
 }

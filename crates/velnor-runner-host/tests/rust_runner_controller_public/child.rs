@@ -8,9 +8,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use velnor_runner_host::{
-    ConnectionId, ConnectionPats, DaemonLock, HostConfig, HostError, RustRunnerLauncher,
-    SecretSource, install_rust_runner_launcher, install_secret_source, run_host_blocking,
-    run_rust_runner_host,
+    ConnectionId, ConnectionPats, DaemonLock, HostConfig, HostError, PatSource, RustRunnerLauncher,
+    SecretSource, ShutdownSignal, detach_rust_runner_connection, install_rust_runner_launcher,
+    install_secret_source, run_host_blocking, run_rust_runner_host, supervise_rust_runner_host,
 };
 use zeroize::Zeroizing;
 
@@ -43,11 +43,31 @@ impl SecretSource for InjectedSecrets {
     }
 }
 
+pub(super) const SUPERVISED: &str = "VELNOR_CHILD_SUPERVISED";
+pub(super) const DETACH: &str = "VELNOR_CHILD_DETACH";
+pub(super) const DETACH_MS: &str = "VELNOR_CHILD_DETACH_MS";
+
+struct StopFile(std::path::PathBuf);
+
+impl ShutdownSignal for StopFile {
+    async fn requested(&mut self) {
+        while !self.0.exists() {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+}
+
 pub(super) fn run(root: &Path) -> TestResult<()> {
     let state = root.join("state");
     let text = std::fs::read_to_string(state.join("host.toml"))?;
     if std::env::var_os(HOST_BLOCKING).is_some() {
         return blocking(&state, &text);
+    }
+    if let Ok(id) = std::env::var(DETACH) {
+        return detach(root, &state, &id);
+    }
+    if std::env::var_os(SUPERVISED).is_some() {
+        return supervised(root, &state);
     }
     let passed = match std::env::var(PASSED_MAX_JOBS) {
         Ok(max_jobs) => host_toml(root, max_jobs.parse()?)?,
@@ -102,5 +122,38 @@ fn blocking(state: &Path, text: &str) -> TestResult<()> {
         Ok(()) => println!("CONTROLLER_EXIT Ok(())"),
         Err(error) => println!("CONTROLLER_EXIT Err({error})"),
     }
+    Ok(())
+}
+
+fn supervised(root: &Path, state: &Path) -> TestResult<()> {
+    let lock = DaemonLock::try_acquire_daemon(state)?;
+    let launcher = RustRunnerLauncher::new(root.join("orb"), root.join("store"));
+    let secret = Zeroizing::new(std::fs::read(root.join("pat"))?);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let exit = runtime.block_on(supervise_rust_runner_host(
+        state,
+        &lock,
+        launcher,
+        &PatSource::Fixed(secret),
+        &mut StopFile(root.join("seen/stop")),
+    ));
+    match exit {
+        Ok(exit) => println!("CONTROLLER_EXIT Ok({exit:?})"),
+        Err(error) => println!("CONTROLLER_EXIT Err({error})"),
+    }
+    Ok(())
+}
+
+fn detach(root: &Path, state: &Path, id: &str) -> TestResult<()> {
+    let config = HostConfig::parse(&std::fs::read_to_string(root.join("detach.toml"))?)?;
+    let binding = config
+        .connection(&ConnectionId::parse(id)?)
+        .ok_or("connection")?;
+    let pat = std::fs::read_to_string(root.join("pat"))?;
+    let budget = Duration::from_millis(std::env::var(DETACH_MS)?.parse()?);
+    let outcome = detach_rust_runner_connection(state, binding, &pat, budget);
+    println!("DETACH_RESULT {outcome:?}");
     Ok(())
 }

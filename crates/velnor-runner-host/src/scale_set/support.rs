@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use super::{EnsureError, EnsuredSet, GITHUB_API, ensured_from_record, observed_scale_set};
 use crate::{
     config::{RepositoryConnection, ScaleSetSelector},
@@ -25,12 +27,14 @@ pub(super) fn open_admin(
     pat: &str,
     scope: &VerifiedRepositoryScope,
     binding: &RepositoryConnection,
+    deadline: Option<Instant>,
 ) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
     let target = binding.registration_target().map_err(map_host)?;
     if !binding.matches_scope(scope) {
         return Err(EnsureError::Rejected);
     }
-    let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
+    let mut transport =
+        Recording::new(HttpsTransport::until(GITHUB_API, deadline).map_err(map_host)?);
     let registration = registration_token(
         &mut transport,
         &RegistrationTokenCall {

@@ -32,7 +32,7 @@ impl RustRunnerLauncher {
         if !self.machine_exists()? {
             self.create_machine()?;
         }
-        Store::prepare(&self.host_store)?;
+        Store::prepare(&self.host_store, &self.lister)?;
         self.link_store()?;
         self.require_runner_binary()
     }

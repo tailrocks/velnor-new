@@ -24,6 +24,8 @@ mod drain;
 mod journal_show;
 mod marker;
 mod rust_mode;
+#[cfg(test)]
+mod rust_reconnect_tests;
 
 use connect::{ConnectRequest, connect};
 use disconnect::disconnect;

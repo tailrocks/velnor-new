@@ -13,6 +13,7 @@ use crate::readiness::Readiness;
 const FILE: &str = "rust-runner-controller.json";
 const MAX_BYTES: u64 = 4096;
 const FRESH: Duration = Duration::from_secs(30);
+const AHEAD: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -33,7 +34,7 @@ struct Record {
     updated_unix_ms: u64,
 }
 
-fn now_unix_ms() -> u64 {
+pub(in crate::rust_runner) fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()
@@ -60,14 +61,17 @@ fn read(state: &Path) -> Option<Record> {
     serde_json::from_slice(&bytes).ok()
 }
 
+pub(in crate::rust_runner) fn fresh(updated_unix_ms: u64, now_unix_ms: u64) -> bool {
+    let millis = |limit: Duration| u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+    now_unix_ms.saturating_sub(updated_unix_ms) <= millis(FRESH)
+        && updated_unix_ms <= now_unix_ms.saturating_add(millis(AHEAD))
+}
+
 pub(crate) fn assess(state: &Path, config_sha256: &str) -> Readiness {
     let Some(record) = read(state) else {
         return Readiness::Degraded;
     };
-    let fresh = now_unix_ms()
-        .checked_sub(record.updated_unix_ms)
-        .is_some_and(|age| age <= u64::try_from(FRESH.as_millis()).unwrap_or(u64::MAX));
-    if !fresh {
+    if !fresh(record.updated_unix_ms, now_unix_ms()) {
         return Readiness::Degraded;
     }
     match record.phase {

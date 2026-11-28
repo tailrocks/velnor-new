@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::os::unix::fs::PermissionsExt;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
-use velnor_runner_host::{Readiness, controller_readiness};
+use velnor_runner_host::{Readiness, controller_readiness, wait_for_rust_runner_drain};
 
 use super::checks::{assert_capacity, assert_clean, jit_name, reservation, snapshot};
 use super::events::{Event, wait_for};
 use super::fixtures::{TestResult, WORKFLOW, push_offer};
 use super::harness::World;
+use super::world_files::TOKEN_A;
 
 const STALE_RUNNER: &str = "4242 /var/lib/velnor/bin/velnor-runner run --jit @/var/lib/velnor/jit/99.jit --work-dir /var/lib/velnor/work/99\n4343 sleep 600\n";
 
@@ -88,6 +89,17 @@ fn unconfirmed_sweep(world: &mut World, test: &str) -> TestResult<()> {
         );
     }
     assert_eq!(controller_readiness(&world.state), Readiness::Reconciling);
+    world.write_marker("drain", TOKEN_A)?;
+    wait_for("the idle census to carry the drain marker", 30, || {
+        world
+            .census()
+            .is_some_and(|census| census["drain"] == TOKEN_A && census["reconciled"] == false)
+    });
+    assert!(!wait_for_rust_runner_drain(
+        &world.state,
+        Duration::from_secs(2)
+    )?);
+    std::fs::remove_file(world.state.join("drain"))?;
     assert!(
         world
             .events()

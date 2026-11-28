@@ -15,6 +15,10 @@ pub(super) const WORKFLOW: &str = "name: ci\non: [push, pull_request]\njobs:\n  
 pub(super) const OTHER_WORKFLOW: &str = "name: ci\non: [push]\njobs:\n  build:\n    runs-on: velnor-mac\n    steps:\n      - run: echo other\n";
 const SOURCE_SHA: &str = "1111111111111111111111111111111111111111";
 
+#[path = "spec.rs"]
+mod spec;
+pub(super) use spec::Spec;
+
 pub(super) type TestResult<T> = Result<T, Box<dyn Error>>;
 
 pub(super) fn hex_sha256(bytes: &[u8]) -> String {
@@ -195,8 +199,6 @@ fn inventory(merge_group: bool) -> TestResult<String> {
     })?)
 }
 
-const BRANCH_POLICY: &str = "mode = \"branch_restricted\"\nbranches = [\"main\"]\ntag_prefixes = []\nevents = [\"push\", \"pull_request\"]\npull_request_rules = [{ base_repository_id = 42, base_branch = \"main\", head_repository_id = 42, head_branch = \"feature\" }, { base_repository_id = 42, base_branch = \"main\", head_repository_id = 43, head_branch = \"feature\" }]";
-const MERGE_GROUP_POLICY: &str = "mode = \"repository\"\nbranches = []\ntag_prefixes = []\nevents = [\"push\", \"merge_group\"]\npull_request_rules = []";
 pub(super) const KEYCHAIN_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/lab";
 pub(super) const HOST_TOML_LIMIT: usize = 1_048_576;
 
@@ -209,21 +211,19 @@ pub(super) fn host_toml_for(
     max_jobs: u32,
     credential_ref: &str,
 ) -> TestResult<String> {
-    host_toml_with(root, max_jobs, credential_ref, "", BRANCH_POLICY)
+    host_toml_of(root, max_jobs, &[Spec::lab(credential_ref)])
 }
 
 pub(super) fn organization_host_toml(root: &Path, max_jobs: u32) -> TestResult<String> {
-    host_toml_with(
+    host_toml_of(
         root,
         max_jobs,
-        KEYCHAIN_REFERENCE,
-        "organization = \"tailrocks\"\n",
-        BRANCH_POLICY,
+        &[Spec::lab(KEYCHAIN_REFERENCE).in_organization()],
     )
 }
 
 pub(super) fn merge_group_host_toml(root: &Path) -> TestResult<String> {
-    host_toml_with(root, 1, KEYCHAIN_REFERENCE, "", MERGE_GROUP_POLICY)
+    host_toml_with(root, 1, &[Spec::lab(KEYCHAIN_REFERENCE)], true)
 }
 
 pub(super) fn padded(text: &str, bytes: usize) -> String {
@@ -231,26 +231,24 @@ pub(super) fn padded(text: &str, bytes: usize) -> String {
     format!("{text}\n# {}\n", "x".repeat(fill))
 }
 
+pub(super) fn host_toml_of(root: &Path, max_jobs: u32, specs: &[Spec<'_>]) -> TestResult<String> {
+    host_toml_with(root, max_jobs, specs, false)
+}
+
 fn host_toml_with(
     root: &Path,
     max_jobs: u32,
-    credential_ref: &str,
-    connection_lines: &str,
-    source_policy: &str,
+    specs: &[Spec<'_>],
+    merge_group: bool,
 ) -> TestResult<String> {
+    let connections: String = if specs.is_empty() {
+        "connections = []\n".to_owned()
+    } else {
+        specs.iter().map(|spec| spec.block(merge_group)).collect()
+    };
     let base = format!(
         "schema = 2\n\
-         [[connections]]\n\
-         connection_id = \"lab\"\n\
-         repository_id = 42\n\
-         repository = \"tailrocks/velnor-lab\"\n\
-         credential_ref = \"{credential_ref}\"\n\
-         {connection_lines}\
-         [connections.scale_set]\n\
-         name = \"velnor-mac\"\n\
-         labels = [\"velnor\", \"velnor-mac\"]\n\
-         [connections.source_policy]\n\
-         {policy}\n\
+         {connections}\
          [host]\n\
          launch_mode = \"rust-runner\"\n\
          max_jobs = {max_jobs}\n\
@@ -265,21 +263,21 @@ fn host_toml_with(
          platform = \"linux/arm64\"\n\
          endpoint = \"unix://{}/no-such-docker.sock\"\n",
         root.display(),
-        policy = source_policy,
     );
-    let config = HostConfig::parse_draft(&base)?;
-    let id = ConnectionId::parse("lab")?;
-    let connection = config.connection(&id).ok_or("connection lab")?;
-    let policy = build_job_authority_policy_json(
-        connection,
-        &inventory(source_policy.contains("merge_group"))?,
-        SOURCE_SHA,
-        &"d".repeat(64),
-        1,
-    )?;
-    Ok(config
-        .with_job_authority_policy_json(&id, &policy)?
-        .to_toml()?)
+    let mut config = HostConfig::parse_draft(&base)?;
+    for spec in specs {
+        let id = ConnectionId::parse(spec.id)?;
+        let connection = config.connection(&id).ok_or("connection")?;
+        let policy = build_job_authority_policy_json(
+            connection,
+            &inventory(merge_group)?,
+            SOURCE_SHA,
+            &"d".repeat(64),
+            1,
+        )?;
+        config = config.with_job_authority_policy_json(&id, &policy)?;
+    }
+    Ok(config.to_toml()?)
 }
 
 pub(super) fn official_host_toml(root: &Path, credential_ref: &str) -> String {

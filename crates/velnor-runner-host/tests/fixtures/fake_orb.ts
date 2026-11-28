@@ -265,6 +265,7 @@ writeFileSync(`${seen}/calls/${call}.env`, environment());
 switch (args[0]) {
   case "list":
     hang("list");
+    if (setting("FAKE_ORB_FAIL") !== "") finish(1);
     holdStdout();
     writeSync(1, readFileSync(setting("FAKE_ORB_LIST")));
     finish(0);
