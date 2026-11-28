@@ -6,7 +6,7 @@ use serde_json::json;
 use velnor_runner::protocol::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 
 use super::exec_support::Scratch;
-use super::support::{Reply, TOKEN, TestServer, assert_bearer};
+use super::support::{Reply, Scripted, TOKEN, TestServer, assert_bearer, scripted};
 
 const STEPS_UPDATE_PATH: &str =
     "/twirp/github.actions.results.api.v1.WorkflowStepUpdateService/WorkflowStepsUpdate";
@@ -150,6 +150,60 @@ async fn step_summary_uploads_to_summary_url_and_reports_size() -> Result<()> {
 }
 
 #[tokio::test]
+async fn blob_uploads_send_the_azure_header_only_for_azure_storage() -> Result<()> {
+    for (storage, header) in [
+        (Some("BLOB_STORAGE_TYPE_AZURE"), Some("BlockBlob")),
+        (Some("BLOB_STORAGE_TYPE_UNSPECIFIED"), None),
+        (Some("BLOB_STORAGE_TYPE_OTHER"), None),
+        (None, None),
+    ] {
+        let server = TestServer::start().await?;
+        let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+        let blob_url = format!("{}/blob/log", server.uri());
+        server.respond("POST", &receiver("GetStepLogsSignedBlobURL"), move |_| {
+            Reply::json(
+                200,
+                &json!({"logs_url": blob_url, "blob_storage_type": storage}),
+            )
+        })?;
+        server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
+        server.respond("POST", &receiver("CreateStepLogsMetadata"), |_| {
+            Reply::json(200, &json!({"ok": true}))
+        })?;
+
+        let scratch = Scratch::new()?;
+        let log = scratch.write("step.log", b"one\n")?;
+        client.upload_step_log(RUN, JOB, STEP, &log).await?;
+
+        let put = server.only_request("PUT", "/blob/log")?;
+        assert_eq!(put.header("x-ms-blob-type"), header, "{storage:?}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn twirp_update_steps_sends_the_pending_status_as_five() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    server.respond("POST", STEPS_UPDATE_PATH, |_| {
+        Reply::json(200, &json!({"ok": true}))
+    })?;
+    let waiting = TwirpStep {
+        status: StepStatus::Pending,
+        conclusion: StepConclusion::Unknown,
+        ..step("step-1")
+    };
+
+    client
+        .update_steps(&[waiting], "run-backend", "job-backend", 1)
+        .await?;
+
+    let body = server.only_request("POST", STEPS_UPDATE_PATH)?.json()?;
+    assert_eq!(body["steps"][0]["status"], 5);
+    Ok(())
+}
+
+#[tokio::test]
 async fn step_summary_over_soft_limit_is_rejected_without_upload_or_retry() -> Result<()> {
     let server = TestServer::start().await?;
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
@@ -217,7 +271,10 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log", server.uri());
     server.respond("POST", &receiver("GetStepLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
     server.respond("POST", &receiver("CreateStepLogsMetadata"), |_| {
@@ -234,5 +291,52 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
         .context("metadata without ok must fail")?;
 
     assert!(format!("{error:#}").contains("ok=false"), "{error:#}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn twirp_update_steps_retries_a_transient_failure_and_then_succeeds() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    server.respond(
+        "POST",
+        STEPS_UPDATE_PATH,
+        scripted(vec![
+            Scripted::Text(500, "temporary"),
+            Scripted::Json(200, json!({"ok": true})),
+        ]),
+    )?;
+
+    client
+        .update_steps(&[step("step-1")], "run-backend", "job-backend", 1)
+        .await?;
+
+    let requests = server.requests_to("POST", STEPS_UPDATE_PATH)?;
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].json()?, requests[1].json()?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn twirp_update_steps_gives_up_after_three_attempts() -> Result<()> {
+    let server = TestServer::start().await?;
+    let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
+    server.respond(
+        "POST",
+        STEPS_UPDATE_PATH,
+        scripted(vec![Scripted::Text(500, "temporary")]),
+    )?;
+
+    let error = client
+        .update_steps(&[step("step-1")], "run-backend", "job-backend", 1)
+        .await
+        .err()
+        .context("a persistent 500 must fail")?;
+
+    assert!(
+        format!("{error:#}").contains("after 3 attempts"),
+        "{error:#}"
+    );
+    assert_eq!(server.requests_to("POST", STEPS_UPDATE_PATH)?.len(), 3);
     Ok(())
 }

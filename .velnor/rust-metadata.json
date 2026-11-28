@@ -37,7 +37,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -194,7 +197,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -501,7 +507,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "toml",
@@ -637,7 +646,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "toml",
@@ -681,7 +693,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "velnor-model",
@@ -765,7 +780,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -786,6 +804,11 @@
               "name": "url",
               "kind": "normal",
               "manifest": null
+            },
+            {
+              "name": "velnor-cache-rules",
+              "kind": "normal",
+              "manifest": "crates/velnor-cache-rules/Cargo.toml"
             },
             {
               "name": "velnor-model",
@@ -992,6 +1015,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std"
               ]
@@ -1007,7 +1031,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -1093,6 +1120,11 @@
               ]
             },
             {
+              "name": "flate2",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "futures-util",
               "kind": "normal",
               "manifest": null,
@@ -1102,9 +1134,13 @@
               ]
             },
             {
-              "name": "globset",
+              "name": "jiff",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "std",
+                "tzdb-bundle-always"
+              ]
             },
             {
               "name": "regex-automata",
@@ -1124,6 +1160,7 @@
               "manifest": null,
               "features": [
                 "native-tls",
+                "stream",
                 "system-proxy"
               ]
             },
@@ -1143,6 +1180,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std"
               ]
@@ -1156,7 +1194,25 @@
               ]
             },
             {
+              "name": "serde-saphyr",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "serde_json",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
+            },
+            {
+              "name": "serde_path_to_error",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "tar",
               "kind": "normal",
               "manifest": null
             },
@@ -1199,6 +1255,11 @@
               ]
             },
             {
+              "name": "toml",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "url",
               "kind": "normal",
               "manifest": null
@@ -1212,7 +1273,30 @@
               ]
             },
             {
+              "name": "velnor-cache-rules",
+              "kind": "normal",
+              "manifest": "crates/velnor-cache-rules/Cargo.toml"
+            },
+            {
+              "name": "velnor-model",
+              "kind": "normal",
+              "manifest": "crates/velnor-model/Cargo.toml"
+            },
+            {
+              "name": "zip",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "deflate-flate2"
+              ]
+            },
+            {
               "name": "rsa",
+              "kind": "dev",
+              "manifest": null
+            },
+            {
+              "name": "serde-saphyr",
               "kind": "dev",
               "manifest": null
             },
@@ -1220,6 +1304,23 @@
               "name": "sha2",
               "kind": "dev",
               "manifest": null
+            },
+            {
+              "name": "tokio",
+              "kind": "dev",
+              "manifest": null,
+              "features": [
+                "rt-multi-thread",
+                "macros",
+                "time",
+                "io-util",
+                "sync",
+                "net",
+                "process",
+                "fs",
+                "signal",
+                "test-util"
+              ]
             }
           ],
           "targets": [
@@ -1308,6 +1409,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std",
                 "process"
@@ -1324,7 +1426,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -1426,6 +1531,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std"
               ]
@@ -1433,7 +1539,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "tokio",
@@ -1678,6 +1787,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std",
                 "process"
@@ -1694,7 +1804,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha2",
@@ -2102,7 +2215,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "sha1_smol",
@@ -2197,6 +2313,7 @@
                 "event",
                 "fs",
                 "net",
+                "pipe",
                 "process",
                 "std"
               ]
@@ -2212,7 +2329,10 @@
             {
               "name": "serde_json",
               "kind": "normal",
-              "manifest": null
+              "manifest": null,
+              "features": [
+                "float_roundtrip"
+              ]
             },
             {
               "name": "thiserror",
@@ -2283,10 +2403,10 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "516b5b131bb976a250c47db5e8a70eabb75d6f27bee16b2a784b0460373c8af8",
+    "Cargo.toml": "746da4eba58dfb8ee6597b2da6d71995f894c8712db310cf9b7a7aeb3d50cfde",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "e20fd11899c56a7977fe6b5561fd962f80dca5177971f73d02fce5643643b28a",
+    "crates/velnor-ci/Cargo.toml": "4602dd590ed81d73f1be95921cb695cfd8e8aecb792f7f9e77921f07de3e3d65",
     "crates/velnor-gen/Cargo.toml": "da2c280814cf109027d2c879dd630af32527a5f69fce9cd3dd375e4296d67fff",
     "crates/velnor-local/Cargo.toml": "6cdf2ba685fc927b16675e0e0b1a703d629ce93d8ab322472cbe9e47ec56e3ca",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",
@@ -2300,8 +2420,8 @@
     "crates/velnor-runner-host/Cargo.toml": "f5c2d4dcd4a4bcde06f3662545832f76fa16260357b47e02de2ee9255727e352",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
-    "crates/velnor-runner/Cargo.toml": "e96e0335ba85086bb73e60b411786386aea4423f51705fc8f7e30cbc27f9de7f",
-    "crates/velnor-rust/Cargo.toml": "a8bb8e324936d58b41a003d58e18ff3ed79e41f7638116a7fdf5995102750591",
+    "crates/velnor-runner/Cargo.toml": "50fb117a44114380598cc6f92ce159846ce4e7b81a8b2ddc12731fa67d923e5a",
+    "crates/velnor-rust/Cargo.toml": "c9be26a0cb2e638e019b6660a3a1204aea86063f479c1ea015724dd6957ba5d8",
     "crates/velnor-test-support/Cargo.toml": "49ec531d224c06872e3d7b89032ffbcf60a195949b2fd68154bc8338dbb8dabf",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },

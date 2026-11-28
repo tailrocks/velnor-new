@@ -16,11 +16,13 @@ pub mod timeline;
 mod token_backoff;
 
 pub use broker::{Acknowledgement, BrokerClient, BrokerPoll};
-pub use error::{BrokerErrorCategory, GitHubApiError, broker_error_category};
+pub use error::{
+    BrokerErrorCategory, GitHubApiError, ServiceErrorKind, broker_error_category,
+    service_error_kind,
+};
 pub use feed::{FeedStreamClient, FeedWebSocket};
 pub use http::{
-    GithubHttpResponse, RUNNER_USER_AGENT, RUNNER_VERSION, RunnerOs, github_json_http_response,
-    github_json_request,
+    GithubHttpResponse, RUNNER_USER_AGENT, RunnerOs, github_json_http_response, github_json_request,
 };
 pub use jit::{
     DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings, SessionRecovery,

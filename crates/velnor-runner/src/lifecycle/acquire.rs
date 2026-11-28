@@ -69,9 +69,7 @@ pub(super) async fn acquire(
     .await
     .map_err(LifecycleError::Acquire)?;
     match outcome {
-        AcquireJobOutcome::Acquired(payload) => payload.message.map(Some).ok_or_else(|| {
-            LifecycleError::Acquire(anyhow!("acquired job is not a valid job message"))
-        }),
+        AcquireJobOutcome::Acquired(payload) => Ok(Some(payload.message)),
         AcquireJobOutcome::Skipped { status, reason, .. } => {
             Err(LifecycleError::Skipped { status, reason })
         }

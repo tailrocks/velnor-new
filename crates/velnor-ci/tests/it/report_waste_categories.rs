@@ -244,20 +244,3 @@ mbx[cache]: 28.53s session; 2m 37s estimated compiler time avoided\n";
         mbx_unparsed_lines(&[log])
     );
 }
-
-#[test]
-fn an_empty_mbx_session_after_a_truncated_seed_is_not_waste() {
-    for (truncated, expected) in [(false, true), (true, false)] {
-        let mut value = quiet();
-        value["invocations"][0]["artifacts"] =
-            json!([artifact("target/debug/deps/libserde-abc.rlib")]);
-        value["mbx"] = mbx(true, &[(0, 12, 567)]);
-        value["mbx"]["seed_truncated"] = json!(truncated);
-        let found = waste(&metrics(value));
-        assert_eq!(
-            found.iter().any(|line| line.contains("MBX object cache")),
-            expected,
-            "{truncated}: {found:?}"
-        );
-    }
-}

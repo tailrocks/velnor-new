@@ -24,8 +24,13 @@ impl Job<'_> {
             return;
         };
         out.enter(0);
-        let env = self.ctx.expr_env(self.status, &[]);
-        match evaluate::scalar(url, &env).await {
+        let evaluated = match self.ctx.expr_env(self.status, &[]) {
+            Ok(env) => evaluate::scalar(url, &env)
+                .await
+                .map_err(|error| error.to_string()),
+            Err(error) => Err(error.to_string()),
+        };
+        match evaluated {
             Ok(url) if out.masker.reveals(&url) => {
                 let name = member(environment, "name")
                     .and_then(Value::as_str)
@@ -40,9 +45,9 @@ impl Job<'_> {
                 out.message(&format!("Evaluated environment url: {url}"));
                 run.environment_url = Some(url);
             }
-            Err(error) => {
-                out.message(&error.to_string());
-                out.annotate(AnnotationLevel::Error, error.to_string());
+            Err(message) => {
+                out.message(&message);
+                out.annotate(AnnotationLevel::Error, message);
                 if self.status == JobStatus::Success {
                     self.status = JobStatus::Failure;
                 }

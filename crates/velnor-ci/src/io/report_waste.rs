@@ -5,7 +5,7 @@ use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS, MAX_TOTAL_BYTES};
 use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
-    MbxEvidence, MbxSession, TOOLCHAIN_INSTALLS, mbx_sessions, mbx_unparsed_lines, seed_truncated,
+    MbxEvidence, MbxSession, TOOLCHAIN_INSTALLS, mbx_sessions, mbx_unparsed_lines,
 };
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -33,7 +33,6 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
                 .iter()
                 .any(|part| has_entry_before(&Path::new(&dir).join(part), start))
         }),
-        seed_truncated: seed_truncated(runner_temp),
         sessions,
         unparsed,
     };

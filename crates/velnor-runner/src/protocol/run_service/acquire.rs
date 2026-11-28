@@ -11,11 +11,12 @@ use serde_json::Value;
 
 use super::super::error::{BrokerErrorCategory, github_api_error_categorized};
 use super::super::http::{GithubHttpResponse, github_json_http_response};
-use super::{REQUEST_TIMEOUT, RetryDelays, RunServiceClient, run_service_error_code};
+use super::{
+    Failure, REQUEST_TIMEOUT, RetryDelays, RunServiceClient, retry, run_service_error_code,
+};
 use crate::job_message::AgentJobRequestMessage;
 use crate::secret::Secret;
 
-const MAX_ATTEMPTS: u32 = 5;
 const ACTION: &str = "acquire run-service job";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,7 +47,7 @@ impl AcquireJobSkipReason {
 #[derive(Debug)]
 pub struct AcquiredJobPayload {
     pub raw: Secret<Value>,
-    pub message: Option<AgentJobRequestMessage>,
+    pub message: AgentJobRequestMessage,
 }
 
 #[derive(Debug)]
@@ -100,25 +101,18 @@ where
         billing_owner_id,
     })
     .context("serialize acquire job request")?;
-    let mut attempt = 1;
-    loop {
-        let attempted = async {
-            let token = fresh_token().await.context("sign in before the acquire")?;
-            acquire_once(url.as_str(), &body, &token).await
-        };
-        let error = match attempted.await {
-            Ok(outcome) => return Ok(outcome),
-            Err(error) => error,
-        };
-        if attempt >= MAX_ATTEMPTS {
-            return Err(AcquireRetriesExhausted(error).into());
-        }
-        tokio::time::sleep(delays.acquire_delay()).await;
-        attempt += 1;
-    }
+    retry(delays, || async {
+        let token = fresh_token()
+            .await
+            .context("sign in before the acquire")
+            .map_err(Failure::Retry)?;
+        acquire_once(url.as_str(), &body, &token).await
+    })
+    .await
+    .map_err(|error| AcquireRetriesExhausted(error).into())
 }
 
-async fn acquire_once(url: &str, body: &str, token: &str) -> Result<AcquireJobOutcome> {
+async fn acquire_once(url: &str, body: &str, token: &str) -> Result<AcquireJobOutcome, Failure> {
     let response = github_json_http_response(
         Method::POST,
         url,
@@ -127,16 +121,16 @@ async fn acquire_once(url: &str, body: &str, token: &str) -> Result<AcquireJobOu
         REQUEST_TIMEOUT,
     )
     .await
-    .context("acquire run-service job request")?;
+    .map_err(|error| Failure::Retry(error.context("acquire run-service job request")))?;
     let status = response.status;
     if (200..300).contains(&status) {
         return decode_acquired(&response).map_err(|error| {
-            github_api_error_categorized(
+            Failure::Retry(github_api_error_categorized(
                 ACTION,
                 status,
                 &format!("parse AgentJobRequestMessage response: {error}"),
                 BrokerErrorCategory::Transient,
-            )
+            ))
         });
     }
     if let Some(reason) = AcquireJobSkipReason::from_body(response.body.expose()) {
@@ -147,12 +141,12 @@ async fn acquire_once(url: &str, body: &str, token: &str) -> Result<AcquireJobOu
             body: response.body.into_inner(),
         });
     }
-    Err(github_api_error_categorized(
+    Err(Failure::Retry(github_api_error_categorized(
         ACTION,
         status,
         response.body.expose(),
         BrokerErrorCategory::Transient,
-    ))
+    )))
 }
 
 fn is_json_body(response: &GithubHttpResponse) -> bool {
@@ -167,18 +161,37 @@ fn is_json_body(response: &GithubHttpResponse) -> bool {
         && media_type.is_some_and(|value| value.eq_ignore_ascii_case("application/json"))
 }
 
-fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, serde_json::Error> {
+fn decode_acquired(response: &GithubHttpResponse) -> Result<AcquireJobOutcome, String> {
     if !is_json_body(response) || response.body.expose().trim().is_empty() {
-        return Ok(acquired(Secret::new(Value::Null), None));
+        return Err("response carries no JSON body".to_owned());
     }
-    let raw: Value = serde_json::from_str(response.body.expose())?;
-    let message = raw
-        .is_object()
-        .then(|| serde_json::from_str::<AgentJobRequestMessage>(response.body.expose()).ok())
-        .flatten();
+    let raw: Value = serde_json::from_str(response.body.expose())
+        .map_err(|error| describe_parse_error(&error, None))?;
+    if !raw.is_object() {
+        return Err("response is not a JSON object".to_owned());
+    }
+    let mut deserializer = serde_json::Deserializer::from_str(response.body.expose());
+    let message: AgentJobRequestMessage = serde_path_to_error::deserialize(&mut deserializer)
+        .map_err(|error| describe_parse_error(error.inner(), Some(error.path())))?;
     Ok(acquired(Secret::new(raw), message))
 }
 
-fn acquired(raw: Secret<Value>, message: Option<AgentJobRequestMessage>) -> AcquireJobOutcome {
+fn describe_parse_error(
+    error: &serde_json::Error,
+    path: Option<&serde_path_to_error::Path>,
+) -> String {
+    let location = format!(
+        "{:?} error at line {} column {}",
+        error.classify(),
+        error.line(),
+        error.column()
+    );
+    match path {
+        Some(path) => format!("{location}, path {path}"),
+        None => location,
+    }
+}
+
+fn acquired(raw: Secret<Value>, message: AgentJobRequestMessage) -> AcquireJobOutcome {
     AcquireJobOutcome::Acquired(Box::new(AcquiredJobPayload { raw, message }))
 }

@@ -34,32 +34,14 @@ pub(crate) fn custom_harnesses(
     let manifest =
         table(bytes).map_err(|reason| DetectError::invalid(&package.manifest, reason))?;
     let defaults = enabled_features(&manifest, &requested_by_siblings(view, package));
-    let library = manifest
-        .get("lib")
-        .into_iter()
-        .map(|entry| (entry, TargetKind::Lib));
-    let declared = SECTIONS
-        .into_iter()
-        .flat_map(|(key, kind)| {
-            manifest
-                .get(key)
-                .and_then(toml::Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(move |entry| (entry, kind))
-        })
-        .chain(library);
     let mut found = Vec::new();
-    for (entry, kind) in declared {
+    for (entry, kind) in declared_targets(&manifest) {
         if entry.get("harness").and_then(toml::Value::as_bool) != Some(false)
             || !gated_on(entry, &defaults)
         {
             continue;
         }
-        let name = entry.get("name").and_then(toml::Value::as_str).map_or_else(
-            || package.name.as_str().replace('-', "_"),
-            ToOwned::to_owned,
-        );
+        let name = target_name(entry, package.name.as_str());
         let tested = package
             .targets
             .iter()
@@ -83,6 +65,43 @@ pub(crate) fn custom_harnesses(
         }
     }
     Ok(found)
+}
+
+pub(crate) fn gated_harness_target(manifest: &toml::Table, package: &str) -> Option<String> {
+    declared_targets(manifest)
+        .find(|(entry, _)| {
+            entry.get("harness").and_then(toml::Value::as_bool) == Some(false)
+                && entry
+                    .get("required-features")
+                    .and_then(toml::Value::as_array)
+                    .is_some_and(|features| !features.is_empty())
+        })
+        .map(|(entry, _)| target_name(entry, package))
+}
+
+fn declared_targets(manifest: &toml::Table) -> impl Iterator<Item = (&toml::Value, TargetKind)> {
+    let library = manifest
+        .get("lib")
+        .into_iter()
+        .map(|entry| (entry, TargetKind::Lib));
+    SECTIONS
+        .into_iter()
+        .flat_map(|(key, kind)| {
+            manifest
+                .get(key)
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(move |entry| (entry, kind))
+        })
+        .chain(library)
+}
+
+fn target_name(entry: &toml::Value, package: &str) -> String {
+    entry
+        .get("name")
+        .and_then(toml::Value::as_str)
+        .map_or_else(|| package.replace('-', "_"), ToOwned::to_owned)
 }
 
 pub(crate) fn runs_in_direct_step(

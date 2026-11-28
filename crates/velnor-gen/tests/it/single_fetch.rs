@@ -3,9 +3,9 @@
 
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
-    BaseScope, BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
-    PullRequestType, RepoPath, RepoView, RootSlug, RunnerLabel, SetupOrder, Step, StepKind,
-    Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BaseScope, BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, LaneFeatures,
+    Permissions, PrRun, PullRequestType, RepoPath, RepoView, RootSlug, RunnerLabel, SetupOrder,
+    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -196,6 +196,7 @@ fn step_of(kind: StepKind) -> Step {
         kind,
         directory: None,
         manifest: None,
+        features: LaneFeatures::default(),
         target_dir: None,
         when: When::Success,
         pr: PrRun::Always,

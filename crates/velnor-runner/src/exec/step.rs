@@ -14,13 +14,15 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use uuid::Uuid;
 
-use super::cancel::{Groups, group_of, terminate};
+use super::adapter::ProcessOutcome;
+use super::cancel::{GroupGuard, Groups, group_of, terminate};
 use super::lines::split_lines;
 use super::output::{LINE_LIMIT, Output};
 use super::private;
 use super::shell;
 use super::timeout::{Timeout, interrupted, stop_result};
 use super::{AnnotationLevel, ExecError, JobCancel, StepResult};
+use crate::broker::isolate;
 
 const DRAIN_GRACE: Duration = Duration::from_secs(2);
 const LINE_BUFFER: usize = 64;
@@ -34,6 +36,7 @@ pub(super) struct ProcessSpec<'a> {
     pub(super) args: &'a [String],
     pub(super) dir: &'a Path,
     pub(super) env: &'a [(String, String)],
+    pub(super) isolated: bool,
 }
 
 pub(super) struct Limits<'a> {
@@ -55,10 +58,12 @@ enum Ending {
 }
 
 fn spawn(spec: &ProcessSpec<'_>) -> std::io::Result<Child> {
-    Command::new(spec.program)
-        .args(spec.args)
-        .current_dir(spec.dir)
-        .env_clear()
+    let mut command = Command::new(spec.program);
+    command.args(spec.args).current_dir(spec.dir).env_clear();
+    if spec.isolated {
+        isolate(command.as_std_mut());
+    }
+    command
         .envs(spec.env.iter().map(|(name, value)| (name, value)))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -228,6 +233,7 @@ async fn drive(
     })?;
     limits.groups.track(&child);
     let group = group_of(&child);
+    let mut guard = GroupGuard::arm(group);
     let (sender, mut lines) = mpsc::channel(LINE_BUFFER);
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
@@ -260,13 +266,41 @@ async fn drive(
             reader.abort();
         }
     }
-    match drained {
+    let ended = match drained {
         Drained::Stopped(stopped) => {
             terminate(&mut child, group).await;
             Ok(stopped)
         }
         Drained::Closed | Drained::Cut => ending,
+    };
+    guard.disarm();
+    ended
+}
+
+fn log_chunk(out: &mut Output<'_>, chunk: Chunk) {
+    let (text, overflow) = chunk.text();
+    let mut lines = split_lines(&text).peekable();
+    while let Some(line) = lines.next() {
+        out.bounded_line(line, overflow && lines.peek().is_none());
     }
+}
+
+pub(super) async fn run_isolated(
+    spec: &ProcessSpec<'_>,
+    limits: &Limits<'_>,
+    mut out: Option<&mut Output<'_>>,
+) -> Result<ProcessOutcome, ExecError> {
+    let ending = drive(spec, limits, true, |chunk| {
+        if let Some(out) = out.as_deref_mut() {
+            log_chunk(out, chunk);
+        }
+    })
+    .await?;
+    Ok(match ending {
+        Ending::Exited(status) if status.success() => ProcessOutcome::Succeeded,
+        Ending::Exited(_) => ProcessOutcome::Failed,
+        Ending::Interrupted => ProcessOutcome::Cancelled,
+    })
 }
 
 pub(super) async fn run(
@@ -274,14 +308,7 @@ pub(super) async fn run(
     limits: &Limits<'_>,
     out: &mut Output<'_>,
 ) -> Result<StepResult, ExecError> {
-    let ending = drive(spec, limits, true, |chunk| {
-        let (text, overflow) = chunk.text();
-        let mut lines = split_lines(&text).peekable();
-        while let Some(line) = lines.next() {
-            out.bounded_line(line, overflow && lines.peek().is_none());
-        }
-    })
-    .await?;
+    let ending = drive(spec, limits, true, |chunk| log_chunk(out, chunk)).await?;
     Ok(match ending {
         Ending::Exited(status) if status.success() => StepResult::Succeeded,
         Ending::Exited(status) => {
@@ -313,7 +340,7 @@ impl Captured {
 pub(super) async fn capture(
     spec: &ProcessSpec<'_>,
     limits: &Limits<'_>,
-) -> Result<String, ExecError> {
+) -> Result<Vec<u8>, ExecError> {
     let mut stdout = Captured::default();
     let mut stderr = Captured::default();
     let ending = drive(spec, limits, false, |chunk| {
@@ -331,9 +358,7 @@ pub(super) async fn capture(
         Ending::Exited(status) if status.success() && stdout.truncated => Err(ExecError::Invalid(
             format!("{} printed more than {CAPTURE_LIMIT} bytes", command()),
         )),
-        Ending::Exited(status) if status.success() => {
-            Ok(String::from_utf8_lossy(&stdout.bytes).into_owned())
-        }
+        Ending::Exited(status) if status.success() => Ok(stdout.bytes),
         Ending::Exited(_) => Err(ExecError::Invalid(format!(
             "{} failed: {}",
             command(),
@@ -361,6 +386,7 @@ pub(super) async fn run_script(
         args: &args,
         dir: &step.dir,
         env: &step.env,
+        isolated: false,
     };
     let result = run(&spec, limits, out).await;
     let _ = tokio::fs::remove_file(&path).await;

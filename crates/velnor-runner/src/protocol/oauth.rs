@@ -194,27 +194,30 @@ fn parse_oauth_token_response(reply: &OAuthResponse) -> Result<OAuthAccessToken>
     if reply.body.len() > OAUTH_MAX_RESPONSE_BYTES {
         bail!("OAuth token response exceeded {OAUTH_MAX_RESPONSE_BYTES} bytes");
     }
-    if !(200..300).contains(&status) && (status != 400 || !reply.json) {
+    if status != 200 && (status != 400 || !reply.json) {
         return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
     }
     let response: OAuthTokenResponse =
         serde_json::from_str(reply.body.trim()).context("parse OAuth token response")?;
+    let token = response.access_token.filter(|value| !value.is_empty());
+    if let (200, Some(token)) = (status, token) {
+        return Ok(OAuthAccessToken {
+            token,
+            expires_in: response
+                .expires_in
+                .and_then(|seconds| u64::try_from(seconds).ok())
+                .filter(|seconds| *seconds > 0)
+                .map(Duration::from_secs),
+        });
+    }
     if let Some(error) = response.error {
         let description = response.error_description.unwrap_or_default();
         return Err(OAuthTokenError::new(error, description).into());
     }
-    let token = response
-        .access_token
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| OAuthTokenError::refused("no access_token in the response".to_owned()))?;
-    Ok(OAuthAccessToken {
-        token,
-        expires_in: response
-            .expires_in
-            .and_then(|seconds| u64::try_from(seconds).ok())
-            .filter(|seconds| *seconds > 0)
-            .map(Duration::from_secs),
-    })
+    if status != 200 {
+        return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
+    }
+    Err(OAuthTokenError::refused("no access_token in the response".to_owned()).into())
 }
 
 pub fn build_client_assertion(credentials: &OAuthJwtCredentials) -> Result<String> {

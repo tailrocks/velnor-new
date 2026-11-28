@@ -32,6 +32,20 @@ printf '%s\\n' "$*" >> "$STUB_LOG"
 out=
 max=
 for last; do :; done
+for arg; do
+  if [ "$prev" = "--write-out" ]; then status_format="$arg"; fi
+  prev="$arg"
+done
+if [ -n "$STUB_FAIL_STATUS" ]; then
+  echo "curl: (22) The requested URL returned error: $STUB_FAIL_STATUS" >&2
+  if [ -n "$status_format" ]; then printf '%s' "$STUB_FAIL_STATUS"; fi
+  exit 22
+fi
+if [ -n "$STUB_REFUSE" ]; then
+  echo "curl: (7) Failed to connect" >&2
+  if [ -n "$status_format" ]; then printf '000'; fi
+  exit 7
+fi
 for missing in $STUB_MISSING; do
   case "$last" in */"$missing"/*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
 done
@@ -559,6 +573,23 @@ class SetupVelnorInstallTests(unittest.TestCase):
                     calls,
                 )
                 self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_download_that_keeps_returning_502_names_the_host_the_curl_exit_code_and_the_http_status(self):
+        result = self.install(sha256(self.archive), extra_env={"STUB_FAIL_STATUS": "502"})
+        self.assertEqual(result.returncode, 1, result.output)
+        error = next(line for line in result.stdout.splitlines() if line.startswith("::error"))
+        self.assertIn("tools-v0.1.79 from github.com: curl exit 22, last HTTP status 502", error)
+        self.assertIn("rust-ci-v0.1.79 from github.com: curl exit 22, last HTTP status 502", error)
+        self.assertNotIn("larger than", error)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+
+    def test_a_refused_connection_is_retried_and_reports_no_http_status(self):
+        result = self.install(sha256(self.archive), extra_env={"STUB_REFUSE": "1"})
+        self.assertEqual(result.returncode, 1, result.output)
+        error = next(line for line in result.stdout.splitlines() if line.startswith("::error"))
+        self.assertIn("tools-v0.1.79 from github.com: curl exit 7, last HTTP status none", error)
+        self.assertNotIn("000", error)
+        self.assertTrue(all("--retry-connrefused" in call for call in self.curl_calls()), self.curl_calls())
 
     def test_a_runner_without_a_build_downloads_nothing(self):
         result = self.install(sha256(self.archive), runner=("Windows", "X64"))

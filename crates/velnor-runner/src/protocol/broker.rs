@@ -4,66 +4,29 @@
 
 use anyhow::{Context, Result};
 use reqwest::Method;
-use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
 use url::Url;
 
 use super::error::{
-    BrokerErrorCategory, github_api_error, github_api_error_categorized, is_retriable_status,
+    BrokerErrorCategory, ServiceErrorKind, broker_error_kind, github_api_error,
+    github_api_error_categorized, github_api_error_with, is_retriable_status,
 };
 use super::http::{
-    RUNNER_VERSION, RunnerOs, github_json_request, runner_architecture, slash_url,
-    validate_authenticated_url,
+    RunnerOs, github_json_request, runner_architecture, slash_url, validate_authenticated_url,
 };
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
 use crate::secret::Secret;
+use velnor_model::RUNNER_PROTOCOL_VERSION;
 
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(5);
-const BROKER_ERROR_SOURCE: &str = "actions-broker-listener";
-const ACKNOWLEDGE_JOB_NOT_FOUND: &str = "AcknowledgeJobNotFound";
-const RUNNER_SESSION_INVALID: &str = "RunnerSessionInvalid";
-const POLL_TERMINAL_KINDS: [&str; 3] = [
-    "RunnerNotFound",
-    "RunnerVersionTooOld",
-    "HostedRunnerDeprovisioned",
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Acknowledgement {
     Accepted,
     JobNotFound,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BrokerError {
-    source: Option<String>,
-    error_kind: Option<String>,
-}
-
-fn broker_error_kind(body: &str) -> Option<String> {
-    serde_json::from_str::<BrokerError>(body)
-        .ok()
-        .filter(|error| error.source.as_deref() == Some(BROKER_ERROR_SOURCE))
-        .and_then(|error| error.error_kind)
-}
-
-fn is_job_not_found(body: &str) -> bool {
-    broker_error_kind(body).as_deref() == Some(ACKNOWLEDGE_JOB_NOT_FOUND)
-}
-
-fn poll_error_category(body: &str) -> Option<BrokerErrorCategory> {
-    let kind = broker_error_kind(body)?;
-    if kind == RUNNER_SESSION_INVALID {
-        Some(BrokerErrorCategory::Expired)
-    } else if POLL_TERMINAL_KINDS.contains(&kind.as_str()) {
-        Some(BrokerErrorCategory::Terminal)
-    } else {
-        None
-    }
 }
 
 #[derive(Debug)]
@@ -137,13 +100,18 @@ impl BrokerClient {
         );
         let (http_status, text) = self.send(Method::GET, &url, None, POLL_TIMEOUT).await?;
         if !(200..300).contains(&http_status) {
-            let action = "get broker message";
-            return Err(match poll_error_category(&text) {
-                Some(category) => {
-                    github_api_error_categorized(action, http_status, text.trim(), category)
-                }
-                None => github_api_error(action, http_status, text.trim()),
+            let kind = broker_error_kind(&text, POLL_KINDS);
+            let category = kind.map(|kind| match kind {
+                ServiceErrorKind::RunnerSessionInvalid => BrokerErrorCategory::Expired,
+                _ => BrokerErrorCategory::Terminal,
             });
+            return Err(broker_api_error(
+                "get broker message",
+                http_status,
+                text.trim(),
+                category,
+                POLL_KINDS,
+            ));
         }
         if http_status == 204 || text.trim().is_empty() {
             return Ok(BrokerPoll {
@@ -172,14 +140,17 @@ impl BrokerClient {
             .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
             .await?;
         if !(200..300).contains(&http_status) {
-            if is_job_not_found(&text) {
+            if broker_error_kind(&text, ACKNOWLEDGE_KINDS)
+                == Some(ServiceErrorKind::AcknowledgeJobNotFound)
+            {
                 return Ok(Acknowledgement::JobNotFound);
             }
-            return Err(github_api_error_categorized(
+            return Err(broker_api_error(
                 "acknowledge broker runner request",
                 http_status,
                 &text,
-                session_error_category(http_status),
+                Some(session_error_category(http_status)),
+                ACKNOWLEDGE_KINDS,
             ));
         }
         Ok(Acknowledgement::Accepted)
@@ -209,6 +180,34 @@ impl BrokerClient {
     }
 }
 
+const POLL_KINDS: &[ServiceErrorKind] = &[
+    ServiceErrorKind::RunnerNotFound,
+    ServiceErrorKind::RunnerVersionTooOld,
+    ServiceErrorKind::HostedRunnerDeprovisioned,
+    ServiceErrorKind::RunnerSessionInvalid,
+];
+
+const ACKNOWLEDGE_KINDS: &[ServiceErrorKind] = &[
+    ServiceErrorKind::AcknowledgeJobNotFound,
+    ServiceErrorKind::RunnerNotFound,
+];
+
+fn broker_api_error(
+    action: &str,
+    status: u16,
+    body: &str,
+    category: Option<BrokerErrorCategory>,
+    kinds: &[ServiceErrorKind],
+) -> anyhow::Error {
+    github_api_error_with(
+        action,
+        status,
+        body,
+        category,
+        broker_error_kind(body, kinds),
+    )
+}
+
 fn creation_error_category(status: u16) -> BrokerErrorCategory {
     match status {
         403 => BrokerErrorCategory::Terminal,
@@ -234,7 +233,7 @@ fn append_runner_query(
     url.query_pairs_mut()
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
-        .append_pair("runnerVersion", RUNNER_VERSION)
+        .append_pair("runnerVersion", RUNNER_PROTOCOL_VERSION)
         .append_pair("os", os.as_str())
         .append_pair("architecture", runner_architecture()?);
     Ok(())

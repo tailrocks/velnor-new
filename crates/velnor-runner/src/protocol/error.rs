@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/protocol.rs
 
+use serde::Deserialize;
 use std::fmt;
+
+const BROKER_ERROR_SOURCE: &str = "actions-broker-listener";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BrokerErrorCategory {
@@ -12,6 +15,48 @@ pub enum BrokerErrorCategory {
     Expired,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServiceErrorKind {
+    RunnerNotFound,
+    RunnerVersionTooOld,
+    HostedRunnerDeprovisioned,
+    RunnerSessionInvalid,
+    AcknowledgeJobNotFound,
+    JobNotFound,
+}
+
+impl ServiceErrorKind {
+    fn from_broker_name(name: &str) -> Option<Self> {
+        match name {
+            "RunnerNotFound" => Some(Self::RunnerNotFound),
+            "RunnerVersionTooOld" => Some(Self::RunnerVersionTooOld),
+            "HostedRunnerDeprovisioned" => Some(Self::HostedRunnerDeprovisioned),
+            "RunnerSessionInvalid" => Some(Self::RunnerSessionInvalid),
+            "AcknowledgeJobNotFound" => Some(Self::AcknowledgeJobNotFound),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct BrokerError {
+    source: Option<String>,
+    #[serde(rename = "errorKind")]
+    error_kind: Option<String>,
+}
+
+pub(crate) fn broker_error_kind(
+    body: &str,
+    typed_by_endpoint: &[ServiceErrorKind],
+) -> Option<ServiceErrorKind> {
+    let error: BrokerError = serde_json::from_str(body).ok()?;
+    if error.source.as_deref() != Some(BROKER_ERROR_SOURCE) {
+        return None;
+    }
+    ServiceErrorKind::from_broker_name(error.error_kind.as_deref()?)
+        .filter(|kind| typed_by_endpoint.contains(kind))
+}
+
 #[derive(thiserror::Error)]
 #[error("{action} failed: status={status}, body={body}")]
 pub struct GitHubApiError {
@@ -19,6 +64,7 @@ pub struct GitHubApiError {
     pub action: String,
     pub body: String,
     pub category: Option<BrokerErrorCategory>,
+    pub kind: Option<ServiceErrorKind>,
 }
 
 impl fmt::Debug for GitHubApiError {
@@ -28,6 +74,7 @@ impl fmt::Debug for GitHubApiError {
             .field("action", &self.action)
             .field("body", &"<redacted>")
             .field("category", &self.category)
+            .field("kind", &self.kind)
             .finish()
     }
 }
@@ -41,12 +88,21 @@ pub fn broker_error_category(error: &anyhow::Error) -> Option<BrokerErrorCategor
     })
 }
 
+#[must_use]
+pub fn service_error_kind(error: &anyhow::Error) -> Option<ServiceErrorKind> {
+    error.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<GitHubApiError>()
+            .and_then(|api| api.kind)
+    })
+}
+
 pub(crate) fn github_api_error(
     action: impl Into<String>,
     status: u16,
     body: &str,
 ) -> anyhow::Error {
-    github_api_error_with(action, status, body, None)
+    github_api_error_with(action, status, body, None, None)
 }
 
 pub(crate) fn github_api_error_categorized(
@@ -55,20 +111,22 @@ pub(crate) fn github_api_error_categorized(
     body: &str,
     category: BrokerErrorCategory,
 ) -> anyhow::Error {
-    github_api_error_with(action, status, body, Some(category))
+    github_api_error_with(action, status, body, Some(category), None)
 }
 
-fn github_api_error_with(
+pub(crate) fn github_api_error_with(
     action: impl Into<String>,
     status: u16,
     body: &str,
     category: Option<BrokerErrorCategory>,
+    kind: Option<ServiceErrorKind>,
 ) -> anyhow::Error {
     GitHubApiError {
         status,
         action: action.into(),
         body: sanitize_response_body(body),
         category,
+        kind,
     }
     .into()
 }

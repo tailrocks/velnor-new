@@ -1,0 +1,89 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+bindir=$(dirname "$0")
+conf() { sed -n "s/^$1=//p" "$bindir/double.conf" 2>/dev/null | head -n 1; }
+calls=$(conf CALLS)
+mkdir -p "$calls"
+number=$(($(ls "$calls" | wc -l) + 1))
+call="$calls/$(printf '%03d' "$number")"
+mkdir -p "$call/files"
+here=$(pwd -P)
+printf '%s\n' "$*" > "$call/argv"
+printf '%s\n' "$here" > "$call/pwd"
+ls -A > "$call/ls"
+ls -A .. > "$call/rootls"
+ls -ld .. > "$call/rootmode"
+ls -A "$HOME" > "$call/homels" 2>/dev/null
+ls -A "$MISE_SYSTEM_CONFIG_DIR" > "$call/systemls" 2>/dev/null
+env > "$call/env"
+for file in * .[!.]*; do
+  [ -f "$file" ] && cp "$file" "$call/files/$file"
+done
+in_copy=$(conf PATHS_IN_COPY)
+secret=$(conf SECRET)
+secret=${secret:-s3cr3t-value}
+hook=$(conf "HOOK_$1")
+[ -z "$hook" ] || sh "$hook"
+case "$1" in
+  install)
+    exit_code=$(conf INSTALL_EXIT)
+    if [ "${exit_code:-0}" != 0 ]; then
+      echo "mise ERROR: tool is missing" >&2
+      exit "$exit_code"
+    fi
+    ;;
+  config)
+    only=$(conf CONFIG_LS_ONLY)
+    extra=$(conf CONFIG_LS_EXTRA)
+    if [ "$(conf CONFIG_LS_NONE)" = 1 ]; then
+      printf '[]\n'
+    elif [ -n "$only" ]; then
+      printf '[{"path":"%s"}]\n' "$only"
+    elif [ -n "$extra" ]; then
+      printf '[{"path":"%s/mise.toml"},{"path":"%s"}]\n' "$here" "$extra"
+    else
+      printf '[{"path":"%s/mise.toml"}]\n' "$here"
+    fi
+    ;;
+  env)
+    promote=$(conf PROMOTE)
+    extra_dir=$(conf EXTRA_DIR)
+    case "$2" in
+      --paths)
+        hang=$(conf HANG_PATHS)
+        [ -z "$hang" ] || { : > "$hang"; exec sleep 30; }
+        [ "$(conf NO_PATHS)" != 1 ] || exit 2
+        if [ -n "$in_copy" ]; then
+          printf '%s\n' "$here/bin" "$here/tbin"
+        else
+          printf '%s\n' "$bindir/tool-bin" ${extra_dir:+"$extra_dir"} ${promote:+"$promote"}
+        fi
+        ;;
+      --redacted)
+        if [ -n "$in_copy" ]; then
+          printf '{"SECRET":"%s/secret-token"}\n' "$here"
+        else
+          printf '{"SECRET":"%s"}\n' "$secret"
+        fi
+        ;;
+      *)
+        inherited=$PATH
+        if [ -n "$(conf DROP_PROMOTED)" ] && [ -n "$promote" ]; then
+          inherited=''
+          old_ifs=$IFS
+          IFS=:
+          for entry in $PATH; do [ "$entry" = "$promote" ] || inherited="$inherited${inherited:+:}$entry"; done
+          IFS=$old_ifs
+        fi
+        if [ -n "$(conf EMBEDDED)" ]; then
+          printf '{"PATH":"%s/bin:%s/late:%s2/bin:%s","LEAD":"%s/ok","EMB":"pre%s-post","SIB":"%s2/x","INC":"-I%s/include -L%s/lib","LIST":"%s:%s/x:/other"}\n' "$here" "$here" "$here" "$inherited" "$here" "$here" "$here" "$here" "$here" "$here" "$here"
+        elif [ -n "$in_copy" ]; then
+          printf '{"PATH":"%s/bin:%s/tbin:%s","FOO":"%s/x","CFG":"%s","SECRET":"%s/secret-token"}\n' "$here" "$here" "$inherited" "$here" "$here" "$here"
+        else
+          printf '{"PATH":"%s/tool-bin:%s%s","FOO":"bar","SECRET":"%s"}\n' "$bindir" "${extra_dir:+$extra_dir:}${promote:+$promote:}" "$inherited" "$secret"
+        fi
+        ;;
+    esac
+    ;;
+esac

@@ -6,8 +6,8 @@ pub use crate::base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use crate::build_profile::{BuildProfile, build_profile, rustc_release};
 pub use crate::build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use crate::cache_budget::{
-    CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, is_sources_prefix, scoped_pull_request, target_family_prefix,
+    CacheEntry, CacheFamily, CacheId, Timestamp, budget_plan, cache_family, is_sources_prefix,
+    scoped_pull_request, target_family_prefix,
 };
 pub use crate::classify::is_workflow_file;
 pub use crate::compat::{
@@ -79,3 +79,4 @@ pub use crate::verdict::{
 };
 pub use crate::verdict_plan::{Need, PlanOutput};
 pub use crate::weaken::introduced;
+pub use velnor_cache_rules::DEFAULT_CACHE_BUDGET_BYTES;

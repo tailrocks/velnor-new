@@ -10,6 +10,7 @@ mod encode;
 mod env_files;
 mod evaluate;
 mod execute;
+mod facts;
 mod host_env;
 mod inputs;
 mod issues;
@@ -18,7 +19,7 @@ mod lines;
 mod mask;
 mod output;
 mod preflight;
-mod private;
+pub(crate) mod private;
 mod shell;
 mod sink;
 mod step;
@@ -31,10 +32,16 @@ mod tracking;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-pub use adapter::{AdapterRegistry, StepAdapter, StepContext, StepFuture};
+pub(crate) use adapter::ProcessOutcome;
+pub use adapter::{
+    AdapterRegistry, CANCEL_GRACE, DeclaredInputs, InputValue, ResultsScope, StepAdapter,
+    StepContext, StepFuture,
+};
 pub use cancel::JobCancel;
+pub use facts::JobFacts;
 pub use inputs::Inputs;
 pub use job::run_job;
+pub(crate) use private::append;
 pub use sink::{LogSink, StdoutSink};
 pub use tool_cache::{TOOL_CACHE_VARIABLES, tool_cache_from_env};
 

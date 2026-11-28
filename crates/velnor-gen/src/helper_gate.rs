@@ -7,7 +7,8 @@ use velnor_model::{
 };
 
 use velnor_rust::{
-    INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER, check_lint_tools, check_mbx, check_tools,
+    INPUTS_IDENTITY_HELPER, SCOPED_LOCKS_HELPER, TOKEN_FIRST_HELPER, check_lint_tools, check_mbx,
+    check_tools, complete_profile,
 };
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
@@ -135,12 +136,26 @@ pub(crate) fn pinned_helper<'a>(
     if !facts.rust_roots.is_empty() || facts.helper.is_some() || needs_pinned_helper(view, facts) {
         let helper = check_helper(facts)?;
         crate::key_gates::check_config_keys(view, helper.version())?;
+        check_complete_profile(facts, helper)?;
         return Ok(Some(helper));
     }
     if crate::key_gates::required_helper(view).is_some() {
         return Err(GenerateError::HelperNotPinned);
     }
     Ok(None)
+}
+
+fn check_complete_profile(facts: &RepoFacts, helper: &HelperRelease) -> Result<(), GenerateError> {
+    if complete_profile(facts) && !helper.version().at_least(SCOPED_LOCKS_HELPER) {
+        return Err(GenerateError::ConfigKeyHelperTooOld {
+            file: "rust-toolchain.toml".to_owned(),
+            key: "toolchain.profile",
+            value: Some("complete"),
+            first: SCOPED_LOCKS_HELPER,
+            pinned: helper.version().clone(),
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn check_stack_tools(view: &RepoView, facts: &RepoFacts) -> Result<(), GenerateError> {

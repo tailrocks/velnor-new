@@ -115,7 +115,7 @@ impl RootJobs<'_> {
                     }
                     _ => None,
                 };
-                let mut step = member.lane.cargo(command, Some(&member.root));
+                let mut step = member.lane.cargo(self.facts, command, Some(&member.root));
                 if self.unit.grouped {
                     step.directory = None;
                     step.manifest = Some(member.root.manifest.clone());

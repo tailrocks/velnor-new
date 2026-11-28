@@ -3,7 +3,9 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/expression/value.rs
 
 use super::number::{format_number, parse_number};
-use crate::context_value::{ordinal_ignore_case_cmp, ordinal_ignore_case_eq};
+use crate::context_value::{
+    ordinal_ignore_case_cmp, ordinal_ignore_case_eq, ordinal_ignore_case_fold,
+};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -102,6 +104,25 @@ impl ObjectValue {
                 }
             })
             .map(|(_, value)| value)
+    }
+
+    pub(crate) fn with_strings(&self, pairs: &[(String, String)]) -> Self {
+        let mut entries = self.entries.as_ref().clone();
+        for (name, value) in pairs {
+            let same = |known: &str| {
+                if self.case_sensitive {
+                    known == name
+                } else {
+                    ordinal_ignore_case_eq(known, name)
+                }
+            };
+            entries.retain(|(known, _)| !same(known));
+            entries.push((name.clone(), Value::String(value.clone())));
+        }
+        Self {
+            entries: Arc::new(entries),
+            case_sensitive: self.case_sensitive,
+        }
     }
 
     fn same_instance(&self, other: &Self) -> bool {
@@ -261,10 +282,64 @@ pub(crate) fn ordinal_ignore_case_starts_with(value: &str, prefix: &str) -> bool
     ordinal_ignore_case_eq(&value[..end], prefix)
 }
 
+pub(crate) fn ordinal_ignore_case_ends_with(value: &str, suffix: &str) -> bool {
+    let start = match suffix.chars().count() {
+        0 => value.len(),
+        count => value
+            .char_indices()
+            .rev()
+            .nth(count - 1)
+            .map_or(0, |(index, _)| index),
+    };
+    ordinal_ignore_case_eq(&value[start..], suffix)
+}
+
+fn folded_bytes(value: &str) -> impl Iterator<Item = u8> + '_ {
+    ordinal_ignore_case_fold(value).flat_map(|character| {
+        let mut encoded = [0_u8; 4];
+        let length = character.encode_utf8(&mut encoded).len();
+        encoded.into_iter().take(length)
+    })
+}
+
+fn widen(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+fn narrow(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 pub(crate) fn ordinal_ignore_case_contains(value: &str, needle: &str) -> bool {
-    value
-        .char_indices()
-        .map(|(index, _)| index)
-        .chain(std::iter::once(value.len()))
-        .any(|index| ordinal_ignore_case_starts_with(&value[index..], needle))
+    let needle: Vec<u8> = folded_bytes(needle).collect();
+    if needle.is_empty() {
+        return true;
+    }
+    if u32::try_from(needle.len()).is_err() {
+        return false;
+    }
+    let mut fallback = vec![0_u32; needle.len()];
+    let mut matched = 0_usize;
+    for index in 1..needle.len() {
+        while matched > 0 && needle[index] != needle[matched] {
+            matched = widen(fallback[matched - 1]);
+        }
+        if needle[index] == needle[matched] {
+            matched += 1;
+        }
+        fallback[index] = narrow(matched);
+    }
+    matched = 0;
+    for byte in folded_bytes(value) {
+        while matched > 0 && byte != needle[matched] {
+            matched = widen(fallback[matched - 1]);
+        }
+        if byte == needle[matched] {
+            matched += 1;
+        }
+        if matched == needle.len() {
+            return true;
+        }
+    }
+    false
 }

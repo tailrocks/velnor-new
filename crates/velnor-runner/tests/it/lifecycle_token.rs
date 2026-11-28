@@ -93,7 +93,7 @@ async fn lifecycle_keeps_waiting_for_a_job_when_a_forced_token_refresh_loses_the
         .collect();
     assert_eq!(polls.len(), 2);
     assert!(
-        polls[1].at.duration_since(polls[0].at) >= POLL_RETRY_DELAY,
+        polls[1].arrived().duration_since(polls[0].arrived()) >= POLL_RETRY_DELAY,
         "the poll waited for the retry delay after the failed refresh"
     );
     assert_eq!(mock.complete_request()?["conclusion"], "succeeded");

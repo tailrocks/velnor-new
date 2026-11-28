@@ -107,6 +107,7 @@ pub enum StepKind {
     Cargo(CargoCommand),
     Helper(HelperCommand),
     Prepare(PrepareLocks),
+    ToolsComponents,
     InputsAuditRoot(Option<RepoPath>),
     InputsSave {
         target: RepoPath,
@@ -150,7 +151,6 @@ pub enum StepKind {
     MbxPrivate,
     MbxOutDirs,
     MbxStore,
-    MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
@@ -256,6 +256,7 @@ impl StepKind {
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)
+            | Self::ToolsComponents
             | Self::InputsAuditRoot(_)
             | Self::InputsSave { .. }
             | Self::InputsRestore { .. }
@@ -270,7 +271,6 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxOutDirs
             | Self::MbxStore { .. }
-            | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
             | Self::InstallGenerator(_)

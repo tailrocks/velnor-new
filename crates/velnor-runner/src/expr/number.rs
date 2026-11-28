@@ -19,21 +19,28 @@ pub(crate) fn parse_number(value: &str) -> f64 {
         && !digits.is_empty()
         && digits.chars().all(|c| c.is_ascii_hexdigit())
     {
-        return i32::from_str_radix(digits, 16).map_or(f64::NAN, f64::from);
+        return u32::from_str_radix(digits, 16).map_or(f64::NAN, signed_bits);
     }
 
     if let Some(digits) = value.strip_prefix("0o")
         && !digits.is_empty()
         && digits.bytes().all(|c| (b'0'..=b'7').contains(&c))
     {
-        return i32::from_str_radix(digits, 8).map_or(f64::NAN, f64::from);
+        return u32::from_str_radix(digits, 8).map_or(f64::NAN, signed_bits);
     }
 
-    match value {
-        "Infinity" => f64::INFINITY,
-        "-Infinity" => f64::NEG_INFINITY,
-        _ => f64::NAN,
+    let positive = value.strip_prefix('+').unwrap_or(value);
+    if positive.eq_ignore_ascii_case("Infinity") {
+        f64::INFINITY
+    } else if value.eq_ignore_ascii_case("-Infinity") {
+        f64::NEG_INFINITY
+    } else {
+        f64::NAN
     }
+}
+
+fn signed_bits(bits: u32) -> f64 {
+    f64::from(i32::from_ne_bytes(bits.to_ne_bytes()))
 }
 
 fn is_dotnet_double(value: &str) -> bool {

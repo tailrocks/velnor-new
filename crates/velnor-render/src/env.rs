@@ -32,7 +32,6 @@ fn installs_rust(plan: &WorkflowPlan) -> bool {
                 | StepKind::MbxPrivate
                 | StepKind::MbxOutDirs
                 | StepKind::MbxStore
-                | StepKind::MbxSeed
         )
     })
 }

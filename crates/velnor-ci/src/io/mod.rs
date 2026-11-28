@@ -19,6 +19,7 @@ pub mod cache_purge;
 mod cache_sources;
 mod cache_target_link;
 mod cache_upload;
+mod changes;
 mod cold;
 mod configurations;
 mod crates_mirror;
@@ -91,6 +92,7 @@ mod restored_targets;
 mod restored_units;
 mod run;
 mod run_signals;
+mod runner_drift;
 mod saved_git_config;
 mod scope_cache;
 mod setup;
@@ -163,6 +165,9 @@ pub fn main() -> ExitCode {
     }
     if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
         return sources::fetch(args);
+    }
+    if let Command::RunnerDrift(args) = &cli.command {
+        return runner_drift::run(args);
     }
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
@@ -244,7 +249,6 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::AppToken(args) => app_token::run(&args),
         Command::RevokeToken => app_token::revoke(),
         Command::MbxStore => crate::mbx_store::setup(),
-        Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, args.key.as_deref()),
         Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),
@@ -266,6 +270,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Err(CiError::new("run and sources are handled before commands"))
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
+        Command::RunnerDrift(_) => Err(CiError::new("runner-drift is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
         Command::Artifacts(_) => Err(CiError::new("artifacts is handled before commands")),
     }

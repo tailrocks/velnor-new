@@ -3,7 +3,7 @@
 
 use velnor_model::{
     ArtifactWhen, BaseScope, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host,
-    Job, JobId, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
+    Job, JobId, LaneFeatures, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -44,12 +44,14 @@ impl RootJobs<'_> {
         let artifact = self.id(ARCHIVE_ID).to_string();
         let member = self.member();
         let mut build = self.setup(&build_id);
-        build.extend(self.cargo(
+        let archive = self.cargo(
             member,
             vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }],
-        ));
+        );
+        let features = archive.first().map_or_default(|step| step.features.clone());
+        build.extend(archive);
         let groups = self.groups();
-        build.extend(self.overlap_check(&groups));
+        build.extend(self.overlap_check(&groups, features));
         build.push(self.gated(StepKind::UploadArchive {
             name: artifact.clone(),
             file: member.root.manifest.sibling(&ARCHIVE_FILE),
@@ -105,9 +107,10 @@ impl RootJobs<'_> {
         jobs
     }
 
-    fn overlap_check(&self, groups: &[&TestGroup]) -> Option<Step> {
+    fn overlap_check(&self, groups: &[&TestGroup], features: LaneFeatures) -> Option<Step> {
         (groups.len() > 1).then(|| Step {
             directory: self.member().root.manifest.parent(),
+            features,
             ..self.gated(StepKind::TestGroupsCheck(
                 groups
                     .iter()
@@ -223,7 +226,7 @@ impl RootJobs<'_> {
         steps.extend(mirror());
         if cargo {
             steps.extend(
-                rust_additions(self.facts.toolchain.as_ref(), &self.member().root)
+                rust_additions(self.facts.toolchain.as_ref(), Some(&self.member().root))
                     .into_iter()
                     .map(|step| Step {
                         gate: self.lane.steps(),

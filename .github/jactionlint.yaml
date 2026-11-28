@@ -4,6 +4,7 @@ profile: default
 generated-files: report
 config-variables:
   - VELNOR_DEPS_APP_ID
+  - VELNOR_CACHE_DEBUG
 self-hosted-runner:
   labels:
     - velnor

@@ -1,0 +1,105 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "exec",
+  "JobName": "exec",
+  "RequestId": 1,
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "checkout",
+      "ContextName": "checkout",
+      "Reference": {
+        "Type": "repository",
+        "Name": "actions/checkout",
+        "Ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "RepositoryType": "GitHub"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "Checkout"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "fetch-depth"
+            },
+            "value": {
+              "type": 0,
+              "lit": "2"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "persist-credentials"
+            },
+            "value": {
+              "type": 0,
+              "lit": "false"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "Variables": {
+    "system.github.token": {
+      "Value": "checkout-token-value",
+      "IsSecret": true
+    }
+  },
+  "ContextData": {
+    "github": {
+      "t": 2,
+      "d": [
+        {
+          "k": "repository",
+          "v": {
+            "t": 0,
+            "s": "tailrocks/velnor-new"
+          }
+        },
+        {
+          "k": "repository_id",
+          "v": {
+            "t": 0,
+            "s": "1"
+          }
+        },
+        {
+          "k": "event_name",
+          "v": {
+            "t": 0,
+            "s": "push"
+          }
+        },
+        {
+          "k": "sha",
+          "v": {
+            "t": 0,
+            "s": "@SHA@"
+          }
+        },
+        {
+          "k": "ref",
+          "v": {
+            "t": 0,
+            "s": "refs/heads/main"
+          }
+        },
+        {
+          "k": "server_url",
+          "v": {
+            "t": 0,
+            "s": "@SERVER_URL@"
+          }
+        }
+      ]
+    }
+  }
+}

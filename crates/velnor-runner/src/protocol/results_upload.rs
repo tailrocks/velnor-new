@@ -19,6 +19,7 @@ use super::results_wire::{
 };
 
 pub(super) const BLOCK_SIZE: usize = 2 * 1024 * 1024;
+const AZURE_BLOB_STORAGE: &str = "BLOB_STORAGE_TYPE_AZURE";
 const BLOB_TYPE: &str = "x-ms-blob-type";
 const BLOB_SEALED: &str = "x-ms-blob-sealed";
 
@@ -62,6 +63,12 @@ impl LogBlocks {
     }
 }
 
+type Header<'a> = Option<(&'a str, &'a str)>;
+
+fn azure_only<'a>(azure: bool, name: &'a str, value: &'a str) -> Header<'a> {
+    azure.then_some((name, value))
+}
+
 fn append_url(url: &Url, seal: bool) -> Url {
     let mut url = url.clone();
     {
@@ -79,7 +86,7 @@ async fn put(
     label: &str,
     budget: Duration,
     body: Vec<u8>,
-    headers: &[(&str, &str)],
+    header: Header<'_>,
 ) -> Result<()> {
     let empty = body.is_empty();
     let mut request = http_client()?
@@ -90,8 +97,8 @@ async fn put(
     if empty {
         request = request.header(CONTENT_LENGTH, 0);
     }
-    for (name, value) in headers {
-        request = request.header(*name, *value);
+    if let Some((name, value)) = header {
+        request = request.header(name, value);
     }
     let response = request
         .send()
@@ -128,12 +135,14 @@ impl TwirpResultsClient {
         serde_json::from_str(&text).with_context(|| format!("parse {}", kind.signed_url_method))
     }
 
-    fn blob_url(kind: BlobKind, response: SignedUrlResponse) -> Result<Url> {
+    fn blob_url(kind: BlobKind, response: SignedUrlResponse) -> Result<(Url, bool)> {
+        let azure = response.blob_storage_type.as_deref() == Some(AZURE_BLOB_STORAGE);
         let url = (kind.signed_url)(response)
             .filter(|url| !url.is_empty())
             .with_context(|| format!("{} returned an empty URL", kind.signed_url_method))?;
-        validate_authenticated_url(&url)
-            .with_context(|| format!("validate {} signed blob URL", kind.label))
+        let url = validate_authenticated_url(&url)
+            .with_context(|| format!("validate {} signed blob URL", kind.label))?;
+        Ok((url, azure))
     }
 
     async fn create_metadata(
@@ -166,20 +175,15 @@ impl TwirpResultsClient {
     ) -> Result<()> {
         retrying(kind.label, || async {
             let (mut blocks, size) = LogBlocks::open(path).await?;
-            let url = Self::blob_url(kind, self.signed(kind, scope).await?)?;
+            let (url, azure) = Self::blob_url(kind, self.signed(kind, scope).await?)?;
             let (label, budget) = (kind.label, self.block_budget);
             if size <= BLOCK_SIZE as u64 {
                 let (content, _) = blocks.next().await?.unwrap_or_default();
-                put(&url, label, budget, content, &[(BLOB_TYPE, "BlockBlob")]).await?;
+                let header = azure_only(azure, BLOB_TYPE, "BlockBlob");
+                put(&url, label, budget, content, header).await?;
             } else {
-                put(
-                    &url,
-                    label,
-                    budget,
-                    Vec::new(),
-                    &[(BLOB_TYPE, "AppendBlob")],
-                )
-                .await?;
+                let header = azure_only(azure, BLOB_TYPE, "AppendBlob");
+                put(&url, label, budget, Vec::new(), header).await?;
                 let (append, seal) = (append_url(&url, false), append_url(&url, true));
                 while let Some((block, last)) = blocks.next().await? {
                     let (target, sealed) = if last {
@@ -187,7 +191,8 @@ impl TwirpResultsClient {
                     } else {
                         (&append, "False")
                     };
-                    put(target, label, budget, block, &[(BLOB_SEALED, sealed)]).await?;
+                    let header = azure_only(azure, BLOB_SEALED, sealed);
+                    put(target, label, budget, block, header).await?;
                 }
             }
             self.create_metadata(kind, scope, Some(blocks.lines), None)
@@ -214,16 +219,9 @@ impl TwirpResultsClient {
                 }
                 .into());
             }
-            let url = Self::blob_url(kind, signed)?;
-            let headers = [(BLOB_TYPE, "BlockBlob")];
-            put(
-                &url,
-                kind.label,
-                self.block_budget,
-                content.clone(),
-                &headers,
-            )
-            .await?;
+            let (url, azure) = Self::blob_url(kind, signed)?;
+            let header = azure_only(azure, BLOB_TYPE, "BlockBlob");
+            put(&url, kind.label, self.block_budget, content.clone(), header).await?;
             self.create_metadata(kind, scope, None, Some(size)).await
         })
         .await

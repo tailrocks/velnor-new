@@ -4,8 +4,9 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    BuildRecord, Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug,
-    RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, Concurrency, Job, JobId, LaneFeatures, Permissions, PrRun, PullRequestType,
+    RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -89,6 +90,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 kind: StepKind::SourcesLocks(locks),
                 directory: None,
                 manifest: None,
+                features: LaneFeatures::default(),
                 target_dir: None,
                 when: When::Success,
                 pr: PrRun::Always,

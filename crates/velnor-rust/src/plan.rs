@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Gate, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
+    LaneFeatures, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, TargetName,
     Toolchain, When, WorkflowPlan,
 };
@@ -19,7 +19,7 @@ use crate::lane::{
 };
 use crate::mbx_steps::MBX_OUT_DIR_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, workflow};
-use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
+use crate::plan_tools::{mirror_step, tools_save, tools_tree};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::{lane_jobs, root_jobs};
 use crate::shape::{decisions, helper_root, single_job};
@@ -28,7 +28,6 @@ use crate::units::{Unit, units};
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
-pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 // helper-gate: first in tools-v0.1.112 via e4e4c86f21
 const MBX_SELECTED_STORE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const MBX_STORE_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 112);
@@ -166,9 +165,7 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
     steps
 }
 
-/// The shared-store steps. A job that plans runs them after the plan, so a
-/// run that selects nothing never seeds: `seed_gate` is the job's selection.
-pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
+pub(crate) fn mbx(facts: &RepoFacts, gate: Option<&Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
@@ -185,24 +182,13 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
     let store = Step {
-        gate: seed_gate.cloned().filter(|_| selected_store),
+        gate: gate.cloned().filter(|_| selected_store),
         ..step(StepKind::MbxStore)
     };
-    let seed = facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
-        .then(|| Step {
-            gate: seed_gate.cloned(),
-            ..step(StepKind::MbxSeed)
-        });
-    [Some(store), out_dirs, seed]
-        .into_iter()
-        .flatten()
-        .collect()
+    [Some(store), out_dirs].into_iter().flatten().collect()
 }
 
-pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
+pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: Option<&RustRoot>) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> =
@@ -220,13 +206,21 @@ pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> V
         ] {
             if !names.is_empty() {
                 steps.push(Step {
-                    directory: root.manifest.parent(),
+                    directory: root.and_then(|root| root.manifest.parent()),
                     ..step(kind)
                 });
             }
         }
     }
     steps
+}
+
+#[must_use]
+pub fn complete_profile(facts: &RepoFacts) -> bool {
+    facts
+        .toolchain
+        .as_ref()
+        .is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete"))
 }
 
 pub(crate) fn setup_units(
@@ -263,22 +257,10 @@ pub(crate) fn setup_units(
     steps.extend(mbx(facts, lane.steps().as_ref()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
-        .chain(tools_restore(facts, lane.plan.as_ref()))
-        .chain(tools_install(facts))
+        .chain(tools_tree(facts, lane.plan.as_ref(), Some(root)))
         .collect();
-    if !facts.tools.tools.is_empty() {
-        toolchain.extend(mirror_step(facts));
-    }
-    let declared = facts.toolchain.as_ref();
-    toolchain.extend(rust_additions(declared, root));
-    let prepare = step(StepKind::Prepare(PrepareLocks::All));
-    if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
-        toolchain.push(prepare);
-        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
-    } else {
-        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
-        toolchain.push(prepare);
-    }
+    toolchain.extend(tools_save(facts, lane.plan.as_ref()));
+    toolchain.push(step(StepKind::Prepare(PrepareLocks::All)));
     for (index, (unit, family)) in units.iter().zip(families).enumerate() {
         for member in &unit.roots {
             toolchain.push(Step {
@@ -377,6 +359,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         manifest: None,
+        features: LaneFeatures::default(),
         target_dir: None,
         when: When::Success,
         skip_after_merge_group: None,

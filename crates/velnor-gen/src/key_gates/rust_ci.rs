@@ -274,6 +274,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.109 via beb70d5433
     gate(RustCi, "test_setup.phase", (0, 1, 109)),
     gate(RustCi, "timeout_minutes", HELPER_MINIMUM),
+    gate_untagged(RustCi, "workspace_features", (0, 1, 117)),
     // helper-gate: first in tools-v0.1.96 via 61067c17fc
     gate(RustCi, "workspace_groups", (0, 1, 96)),
     // helper-gate: first in tools-v0.1.96 via 61067c17fc

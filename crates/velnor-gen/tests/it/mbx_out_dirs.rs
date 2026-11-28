@@ -68,7 +68,6 @@ fn an_older_helper_renders_the_private_store_step_byte_for_byte_as_before() -> T
 
 const SHARED: &[u8] = b"mbx_shared_store = true\n";
 const SHARED_STORE_RUN: &str = ". \"$VELNOR_EXEC\" mbx-store";
-const SHARED_SEED_RUN: &str = ". \"$VELNOR_EXEC\" mbx-seed";
 
 fn shared_store_runs(version: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
     shared_runs(SHARED, version)
@@ -87,7 +86,6 @@ fn shared_runs(
             .iter()
             .filter(|step| {
                 step["name"] == "velnor-ci mbx-store"
-                    || step["name"] == "velnor-ci mbx-seed"
                     || step["name"] == "Keep mbx build-script outputs in target"
             })
             .map(|step| step["run"].as_str().map(str::to_owned).ok_or("no run"))
@@ -107,8 +105,8 @@ fn a_shared_store_helper_that_ships_the_setting_keeps_build_script_outputs_under
     for runs in jobs {
         assert_eq!(
             runs,
-            [SHARED_STORE_RUN, OUT_DIRS_RUN, SHARED_SEED_RUN],
-            "the setting goes after the store and before the seed"
+            [SHARED_STORE_RUN, OUT_DIRS_RUN],
+            "the setting goes right after the store"
         );
     }
     Ok(())
@@ -121,7 +119,7 @@ fn a_helper_that_appends_the_setting_itself_renders_no_standalone_step_in_the_sh
         let jobs = shared_store_runs(version)?;
         assert_ne!(jobs.len(), 0, "{version}");
         for runs in jobs {
-            assert_eq!(runs, [SHARED_STORE_RUN, SHARED_SEED_RUN], "{version}");
+            assert_eq!(runs, [SHARED_STORE_RUN], "{version}");
         }
     }
     Ok(())
@@ -135,7 +133,7 @@ fn a_shared_store_with_a_remote_cache_has_one_writer_of_the_setting_from_0_1_112
         let jobs = shared_runs(SHARED_REMOTE, version)?;
         assert_ne!(jobs.len(), 0, "{version}");
         for runs in jobs {
-            assert_eq!(runs, [SHARED_STORE_RUN, SHARED_SEED_RUN], "{version}");
+            assert_eq!(runs, [SHARED_STORE_RUN], "{version}");
         }
     }
     Ok(())
@@ -147,15 +145,7 @@ fn a_shared_store_with_a_remote_cache_renders_two_identical_steps_at_0_1_111_as_
     let jobs = shared_runs(SHARED_REMOTE, "0.1.111")?;
     assert_ne!(jobs.len(), 0);
     for runs in jobs {
-        assert_eq!(
-            runs,
-            [
-                SHARED_STORE_RUN,
-                OUT_DIRS_RUN,
-                SHARED_SEED_RUN,
-                OUT_DIRS_RUN
-            ]
-        );
+        assert_eq!(runs, [SHARED_STORE_RUN, OUT_DIRS_RUN, OUT_DIRS_RUN]);
     }
     Ok(())
 }
@@ -180,12 +170,9 @@ fn the_private_and_remote_paths_keep_the_standalone_step_where_no_helper_command
 fn an_older_helper_renders_the_shared_store_byte_for_byte_as_before() -> TestResult {
     for (version, expected) in [
         ("0.1.85", vec![SHARED_STORE_RUN]),
-        ("0.1.86", vec![SHARED_STORE_RUN, SHARED_SEED_RUN]),
-        ("0.1.110", vec![SHARED_STORE_RUN, SHARED_SEED_RUN]),
-        (
-            "0.1.111",
-            vec![SHARED_STORE_RUN, OUT_DIRS_RUN, SHARED_SEED_RUN],
-        ),
+        ("0.1.86", vec![SHARED_STORE_RUN]),
+        ("0.1.110", vec![SHARED_STORE_RUN]),
+        ("0.1.111", vec![SHARED_STORE_RUN, OUT_DIRS_RUN]),
     ] {
         let jobs = shared_store_runs(version)?;
         assert_ne!(jobs.len(), 0, "{version}");

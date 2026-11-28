@@ -179,7 +179,7 @@ async fn a_continue_on_error_expression_that_fails_is_reported_when_the_step_fai
         with(
             run("a", script),
             "ContinueOnError",
-            expression("vars.ALLOW"),
+            expression("matrix.ALLOW"),
         )
     };
     let (failed, _) = execute(
@@ -196,7 +196,7 @@ async fn a_continue_on_error_expression_that_fails_is_reported_when_the_step_fai
         .map(|annotation| annotation.message.as_str())
         .collect();
     assert!(
-        messages.contains(&"unsupported expression context vars"),
+        messages.contains(&"unsupported expression context matrix"),
         "{messages:?}"
     );
     let (passed, _) = execute(
@@ -245,10 +245,10 @@ fn a_shell_chosen_by_the_environment_is_checked_when_its_step_runs() -> Result<(
     assert!(!ran.has_line("hi"), "{}", ran.stdout);
     assert_eq!(ran.code, Some(1));
 
-    let unresolved = with_shell(run("c", "echo hi"), &expression("vars.X"));
+    let unresolved = with_shell(run("c", "echo hi"), &expression("matrix.X"));
     let ran = run_message(&scratch, &job(vec![unresolved]))?;
     assert!(
-        ran.has_line("unsupported expression context vars"),
+        ran.has_line("unsupported expression context matrix"),
         "{}",
         ran.stdout
     );

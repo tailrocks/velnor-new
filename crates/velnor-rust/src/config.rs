@@ -14,6 +14,7 @@ use crate::config_external;
 use crate::config_glob::unsupported_glob;
 use crate::config_keys::KEYS;
 use crate::config_pr_ci::parse as parse_pr_ci;
+use crate::config_test_lane::workspace_features;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
 use crate::toml_file::table;
@@ -79,6 +80,8 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    #[serde(default)]
+    workspace_features: Vec<String>,
     policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
     #[serde(default)]
@@ -127,7 +130,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
-    let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
     let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
     let runners = crate::config_trusted::Declared {
@@ -157,7 +159,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         checkout: checkout_scope(raw.sparse_checkout),
         lint,
         test_groups,
-        test_lanes,
+        test_lanes: crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?,
+        workspace_features: workspace_features(raw.workspace_features).map_err(invalid)?,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         mbx_remote,

@@ -99,6 +99,10 @@ impl BackgroundTask {
     pub(super) fn spawn(task: impl Future<Output = ()> + Send + 'static) -> Self {
         Self(tokio::spawn(task))
     }
+
+    pub(super) async fn finished(&mut self) {
+        let _ = (&mut self.0).await;
+    }
 }
 
 impl Drop for BackgroundTask {

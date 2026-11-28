@@ -9,6 +9,8 @@ mod reserve;
 
 pub use access::{Access, Event, access_for};
 pub use entry::{Entry, EntryId, Scope, Timestamp};
-pub use evict::{ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, evict};
+pub use evict::{
+    DEFAULT_CACHE_BUDGET_BYTES, ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, evict, is_expired,
+};
 pub use lookup::lookup;
 pub use reserve::{AlreadyExists, reserve};

@@ -10,14 +10,17 @@ use clap::{Args, Parser, Subcommand};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
 
+use crate::broker::{Broker, StoreWriter, TrustedFacts};
 use crate::context_value::ordinal_ignore_case_eq;
 use crate::exec::{
     AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job, tool_cache_from_env,
 };
 use crate::job_message::AgentJobRequestMessage;
 use crate::lifecycle::{RunJitOptions, run_jit};
+use crate::native::Umask;
 use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
 use crate::secret::Secret;
+use crate::store::store_root;
 
 const USAGE_ERROR: u8 = 2;
 const FORCED_EXIT: u8 = 130;
@@ -88,6 +91,26 @@ pub struct ExecArgs {
         help = "Runner temp directory of the job (default: a fresh directory removed after the run)"
     )]
     pub temp: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "JSON file with the facts the host verified; without it the facts come from the job message"
+    )]
+    pub trusted: Option<PathBuf>,
+}
+
+fn store_writer(args: &ExecArgs, message: &AgentJobRequestMessage) -> Result<StoreWriter> {
+    let facts = match &args.trusted {
+        Some(path) => {
+            let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
+            TrustedFacts::parse(&bytes)?
+        }
+        None => match TrustedFacts::from_job_message(message) {
+            Ok(facts) => facts,
+            Err(error) => return Ok(StoreWriter::Unavailable(error.to_string())),
+        },
+    };
+    Ok(StoreWriter::InProcess(Broker::new(facts, store_root())))
 }
 
 fn absolute(path: &Path) -> Result<PathBuf> {
@@ -123,7 +146,7 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
         temp,
         tool_cache: tool_cache_from_env().unwrap_or_else(|| root.join("_tool")),
         runner_name: "velnor-exec".to_owned(),
-        os: RunnerOs::Linux,
+        os: RunnerOs::detect()?,
     };
     Ok((options, scratch))
 }
@@ -167,7 +190,7 @@ fn cancel_on_signal() -> Result<JobCancel> {
     Ok(cancel)
 }
 
-async fn exec(args: &ExecArgs) -> Result<ExitCode> {
+async fn exec(args: &ExecArgs, umask: Umask) -> Result<ExitCode> {
     let body = std::fs::read_to_string(&args.job)
         .with_context(|| format!("read {}", args.job.display()))?;
     let message = AgentJobRequestMessage::parse_json(&body)?;
@@ -180,7 +203,8 @@ async fn exec(args: &ExecArgs) -> Result<ExitCode> {
     let (options, _scratch) = options(args)?;
     let mut signals = Signals::listen()?;
     let cancel = JobCancel::new();
-    let adapters = build_adapters();
+    let store = store_writer(args, &message)?;
+    let adapters = crate::native::registry(store, umask);
     let mut sink = StdoutSink;
     let job = run_job(&message, &options, &adapters, &mut sink, cancel.clone());
     let escalation = async {
@@ -253,13 +277,14 @@ async fn run_command(args: &RunArgs) -> Result<ExitCode> {
 }
 
 fn run(cli: &Cli) -> Result<ExitCode> {
+    let umask = Umask::read();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
         .context("start the async runtime")?;
     let code = match &cli.command {
-        Command::Exec(args) => runtime.block_on(exec(args)),
+        Command::Exec(args) => runtime.block_on(exec(args, umask)),
         Command::Run(args) => runtime.block_on(run_command(args)),
     };
     runtime.shutdown_background();

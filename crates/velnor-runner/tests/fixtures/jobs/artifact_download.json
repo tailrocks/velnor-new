@@ -1,0 +1,85 @@
+{
+  "MessageType": "PipelineAgentJobRequest",
+  "Plan": {
+    "PlanId": "00000000-0000-0000-0000-000000000002"
+  },
+  "JobId": "00000000-0000-0000-0000-000000000001",
+  "JobDisplayName": "artifact",
+  "JobName": "artifact",
+  "RequestId": 1,
+  "Resources": {
+    "Endpoints": [
+      {
+        "Name": "SystemVssConnection",
+        "Url": "https://pipelines.actions.githubusercontent.com/abc",
+        "Authorization": {
+          "Scheme": "OAuth",
+          "Parameters": {
+            "AccessToken": "fake-results-token"
+          }
+        },
+        "Data": {
+          "ResultsServiceUrl": "http://127.0.0.1:1"
+        }
+      }
+    ]
+  },
+  "Steps": [
+    {
+      "Type": "action",
+      "Id": "00000000-0000-0000-0000-000000000001",
+      "Name": "step",
+      "ContextName": "step",
+      "Reference": {
+        "Type": "repository",
+        "Name": "actions/download-artifact",
+        "Ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+        "RepositoryType": "GitHub"
+      },
+      "DisplayNameToken": {
+        "type": 0,
+        "lit": "actions/download-artifact"
+      },
+      "Inputs": {
+        "type": 2,
+        "map": [
+          {
+            "key": {
+              "type": 0,
+              "lit": "pattern"
+            },
+            "value": {
+              "type": 0,
+              "lit": "ci-metrics-*"
+            }
+          },
+          {
+            "key": {
+              "type": 0,
+              "lit": "path"
+            },
+            "value": {
+              "type": 0,
+              "lit": "restored"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "JobOutputs": {
+    "type": 2,
+    "map": [
+      {
+        "key": {
+          "type": 0,
+          "lit": "download-path"
+        },
+        "value": {
+          "type": 3,
+          "expr": "steps.step.outputs.download-path"
+        }
+      }
+    ]
+  }
+}

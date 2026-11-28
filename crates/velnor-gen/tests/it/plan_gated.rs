@@ -100,6 +100,7 @@ fn selected_against(
         &paths_of(tracked)?,
         &BTreeSet::new(),
         &base,
+        &BTreeSet::new(),
     );
     runs.into_iter()
         .find(|(slug, _)| slug.as_str() == "generated_check")
@@ -313,6 +314,7 @@ fn an_unlisted_change_set_runs_the_gated_generated_check() -> TestResult {
         &BTreeSet::new(),
         &BTreeSet::new(),
         &BTreeMap::new(),
+        &BTreeSet::new(),
     );
     assert!(runs.values().all(|run| *run), "{runs:?}");
     Ok(())
@@ -331,6 +333,7 @@ fn a_tracked_symlink_runs_the_gated_generated_check_unless_it_is_a_markdown_file
             &BTreeSet::new(),
             &links,
             &BTreeMap::new(),
+            &BTreeSet::new(),
         );
         assert_eq!(
             runs.get(&velnor_model::RootSlug::new("generated_check")?),

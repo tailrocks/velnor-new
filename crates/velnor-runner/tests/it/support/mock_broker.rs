@@ -57,7 +57,7 @@ fn exchange_reply(tokens: OAuthTokens, number: usize) -> Reply {
         }),
         OAuthTokens::StaleThenFails(status) if number > 0 => Reply::status(status),
         OAuthTokens::StaleThenFails(_) => token_reply(STALE_OAUTH_TOKEN),
-        OAuthTokens::HangsUpAfterSignIn if number == 1 => Reply::hang_up(),
+        OAuthTokens::HangsUpAfterSignIn if number == 1 => Reply::hangup(),
         OAuthTokens::UnavailableFirst(count) if number < count => Reply::status(503),
         OAuthTokens::UnavailableAfterSignIn(count) if (1..=count).contains(&number) => {
             Reply::status(503)

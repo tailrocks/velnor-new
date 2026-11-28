@@ -41,6 +41,14 @@ impl ArtifactFormat {
         }
     }
 
+    fn flags(self, workspace: &LaneFeatures) -> (String, String) {
+        let flags = lane_flags(workspace);
+        (
+            format!("{}{flags}", self.cargo()),
+            format!("{}{flags}", self.nextest()),
+        )
+    }
+
     const fn nextest(self) -> &'static str {
         match self {
             Self::Disabled | Self::CargoOnly => "",
@@ -81,11 +89,12 @@ pub(crate) fn cargo_lane(job: &Job, plan: &WorkflowPlan) -> CargoLane {
 pub(crate) fn cargo_step(
     command: &CargoCommand,
     manifest: Option<&RepoPath>,
+    workspace: &LaneFeatures,
     audit: bool,
     lane: CargoLane,
     test_id: Option<String>,
 ) -> RenderedStep {
-    let (name, run, env) = cargo_command(command, lane.artifacts, manifest);
+    let (name, run, env) = cargo_command(command, lane.artifacts, manifest, workspace);
     let run = if lane.offline {
         run.replacen(" --locked", " --locked --offline", 1)
     } else {
@@ -116,9 +125,10 @@ fn cargo_command(
     command: &CargoCommand,
     artifacts: ArtifactFormat,
     manifest: Option<&RepoPath>,
+    workspace: &LaneFeatures,
 ) -> (String, String, Vec<(String, Value)>) {
-    let cargo = artifacts.cargo();
-    let nextest = artifacts.nextest();
+    let (cargo, nextest) = artifacts.flags(workspace);
+    let (cargo, nextest) = (cargo.as_str(), nextest.as_str());
     let path = manifest_flag(manifest);
     match command {
         CargoCommand::FmtCheck => (

@@ -26,11 +26,10 @@ pub(crate) use crate::install_steps::install_helper;
 use crate::install_steps::{
     generator_check_step, install_generator_step, install_mise, install_tools,
 };
-use crate::permission_pairs;
-use crate::plan_modes::plan_modes;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
+use crate::{permission_pairs, plan_modes::plan_modes};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -339,18 +338,20 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
+            &step.features,
             audit,
             lane,
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::Prepare(locks) => crate::helper_steps::prepare_step(locks),
+        StepKind::ToolsComponents => crate::helper_steps::components_step(),
         StepKind::InputsAuditRoot(directory) => {
             crate::helper_steps::audit_root_step(directory.as_ref())
         }
         StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::MergeQueueCheck => crate::helper_steps::merge_queue_step(),
-        StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
+        StepKind::TestGroupsCheck(g) => crate::helper_steps::test_groups_step(g, &step.features),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),
         StepKind::RestoredTargets {
@@ -369,7 +370,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
-        StepKind::MbxSeed | StepKind::ToolsLocal(..) => crate::helper_steps::node_step(kind),
+        StepKind::ToolsLocal(verb, anchor) => crate::tools_steps::tools_local_step(*verb, anchor),
         StepKind::TestSetup { name, run, .. } | StepKind::Ansible { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

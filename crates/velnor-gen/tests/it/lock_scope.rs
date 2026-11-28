@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
+use velnor_model::RepoPath;
+
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use crate::test_groups::{steps, view_with};
@@ -81,5 +83,31 @@ fn from_0_1_104_prepare_names_exactly_the_roots_its_job_reads() -> TestResult {
     }
     assert!(single >= 2, "a lane job reads only its own root");
     assert!(none >= 1, "a test group job reads no root");
+    Ok(())
+}
+
+fn complete_profile_workflow(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut view = view_with(&["Cargo.toml", "lab/Cargo.toml"], GROUPS, helper)?;
+    let path = RepoPath::new("rust-toolchain.toml")?;
+    view.tracked_paths.insert(path.clone());
+    view.files.insert(
+        path,
+        b"[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n".to_vec(),
+    );
+    workflow(&view)
+}
+
+#[test]
+fn the_complete_profile_is_refused_before_0_1_104_and_accepted_from_it() -> TestResult {
+    let error = complete_profile_workflow("0.1.103")
+        .err()
+        .ok_or("the complete profile was accepted at 0.1.103")?
+        .to_string();
+    assert!(
+        error.contains("toolchain.profile = \"complete\""),
+        "{error}"
+    );
+    assert!(error.contains("0.1.104"), "{error}");
+    complete_profile_workflow("0.1.104")?;
     Ok(())
 }

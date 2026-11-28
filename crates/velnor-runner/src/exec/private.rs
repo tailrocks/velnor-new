@@ -8,11 +8,18 @@ use tokio::io::AsyncWriteExt;
 
 use super::ExecError;
 
-pub(super) async fn create_dir(path: &Path) -> Result<(), ExecError> {
+pub(crate) const PRIVATE_DIR_MODE: u32 = 0o700;
+
+pub(crate) async fn create_dir_with_mode(path: &Path, mode: u32) -> std::io::Result<()> {
     DirBuilder::new()
         .recursive(true)
-        .mode(0o700)
+        .mode(mode)
         .create(path)
+        .await
+}
+
+pub(super) async fn create_dir(path: &Path) -> Result<(), ExecError> {
+    create_dir_with_mode(path, PRIVATE_DIR_MODE)
         .await
         .map_err(|source| ExecError::io(format!("create {}", path.display()), source))
 }
@@ -26,6 +33,12 @@ pub(super) async fn write_new(path: &Path, contents: &[u8]) -> Result<(), ExecEr
 pub(super) async fn write_replacing(path: &Path, contents: &[u8]) -> Result<(), ExecError> {
     let mut options = OpenOptions::new();
     options.write(true).create(true).truncate(true).mode(0o600);
+    write(options, path, contents).await
+}
+
+pub(crate) async fn append(path: &Path, contents: &[u8]) -> Result<(), ExecError> {
+    let mut options = OpenOptions::new();
+    options.append(true);
     write(options, path, contents).await
 }
 

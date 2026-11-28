@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use super::adapter::{AdapterCall, invoke};
-use super::contexts::set_output;
+use super::adapter::{AdapterCall, ResultsScope, invoke};
+use super::contexts::{github_token, set_output};
 use super::env_files::{Collected, FileCommands, failure, save_summary};
 use super::evaluate;
 use super::job::Job;
@@ -38,12 +38,14 @@ impl Job<'_> {
         out: &mut Output<'_>,
     ) -> Result<Executed, ExecError> {
         let halt = JobCancel::new();
-        let survival = (!already_cancelled).then(|| {
-            Survival::new(
+        let survival = if already_cancelled {
+            None
+        } else {
+            Some(Survival::new(
                 step.condition.as_deref().unwrap_or_default(),
-                self.ctx.expr_env(JobStatus::Cancelled, step_vars),
-            )
-        });
+                self.ctx.expr_env(JobStatus::Cancelled, step_vars)?,
+            ))
+        };
         let watcher = stop_unless_surviving(self.cancel.clone(), halt.clone(), survival.as_ref());
         let signal = survival.is_some().then_some(&halt);
         tokio::select! {
@@ -148,11 +150,15 @@ impl Job<'_> {
             reference: reference.to_owned(),
             inputs,
             env: process_env.iter().cloned().collect(),
+            job: self.ctx.facts(),
             workspace: &self.options.workspace,
             temp: &self.options.temp,
+            github_token: github_token(self.message),
             cancel: limits.cancel.cloned(),
+            expressions: env.clone(),
             timeout: limits.timeout,
             groups: limits.groups,
+            results: ResultsScope::from_message(self.message),
         };
         invoke(adapter, call, out).await
     }

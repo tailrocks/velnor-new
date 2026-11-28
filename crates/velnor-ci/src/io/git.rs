@@ -6,12 +6,14 @@ use std::path::Path;
 use std::process::Command;
 
 use velnor_model::RepoPath;
+use velnor_rust::{is_plain_source, is_rust_source};
 
 use crate::error::CiError;
 
 const BASE: &str = "HEAD^1";
 const BASE_BYTES_CAP: usize = 4 << 20;
 const HEAD: &str = "HEAD";
+const PLAIN_CHECK_CAP: usize = 256;
 const MERGED: &str = "HEAD^2";
 const SHA_VARIABLE: &str = "GITHUB_SHA";
 
@@ -124,4 +126,64 @@ pub(super) fn base_files(
         kept.insert(path.clone(), text);
     }
     kept
+}
+
+pub(super) fn unplain_paths(root: &Path, base: &str) -> Result<BTreeSet<RepoPath>, CiError> {
+    let listing = git(
+        root,
+        &[
+            "diff",
+            "--no-renames",
+            "--raw",
+            "-z",
+            "--no-abbrev",
+            base,
+            HEAD,
+        ],
+    )?;
+    let text = String::from_utf8(listing)
+        .map_err(|_| CiError::new("git listed a path that is not UTF-8"))?;
+    let fields: Vec<&str> = text.split_terminator('\0').collect();
+    let mut unplain = BTreeSet::new();
+    let mut edited = Vec::new();
+    for entry in fields.chunks(2) {
+        let [meta, name] = entry else {
+            return Err(CiError::new("git listed a change without a path"));
+        };
+        let path =
+            RepoPath::new(*name).map_err(|error| CiError::new(format!("{name}: {error}")))?;
+        if in_place(meta) {
+            edited.push(path);
+        } else {
+            unplain.insert(path);
+        }
+    }
+    let sources: Vec<RepoPath> = edited
+        .iter()
+        .filter(|path| is_rust_source(path))
+        .cloned()
+        .collect();
+    if sources.len() > PLAIN_CHECK_CAP {
+        unplain.extend(sources);
+    } else {
+        for path in sources {
+            if !plain_at(root, base, &path) || !plain_at(root, HEAD, &path) {
+                unplain.insert(path);
+            }
+        }
+    }
+    Ok(unplain)
+}
+
+fn in_place(meta: &str) -> bool {
+    let fields: Vec<&str> = meta.trim_start_matches(':').split(' ').collect();
+    matches!(
+        fields.as_slice(),
+        [before, after, _, _, "M"] if before == after && matches!(*before, "100644" | "100755")
+    )
+}
+
+fn plain_at(root: &Path, revision: &str, path: &RepoPath) -> bool {
+    git(root, &["show", &format!("{revision}:{}", path.as_str())])
+        .is_ok_and(|bytes| is_plain_source(path, &bytes))
 }

@@ -165,9 +165,24 @@ pub(crate) fn wait_for_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn is_running(pid: Pid) -> bool {
+    if test_kill_process(pid).is_err() {
+        return false;
+    }
+    let listing = Command::new("ps")
+        .args(["-o", "stat=", "-p"])
+        .arg(pid.as_raw_nonzero().to_string())
+        .output();
+    !listing.is_ok_and(|listing| {
+        String::from_utf8_lossy(&listing.stdout)
+            .trim_start()
+            .starts_with('Z')
+    })
+}
+
 pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while test_kill_process(pid).is_ok() {
+    while is_running(pid) {
         if Instant::now() > deadline {
             let _ = kill_process(pid, Signal::KILL);
             bail!("process {} is still alive", pid.as_raw_nonzero());
@@ -175,6 +190,17 @@ pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
         std::thread::sleep(Duration::from_millis(20));
     }
     Ok(())
+}
+
+pub(crate) fn survives(pid: Pid, window: Duration) -> bool {
+    let deadline = Instant::now() + window;
+    while is_running(pid) {
+        if Instant::now() >= deadline {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    false
 }
 
 pub(crate) const BACKGROUND_SLEEP: &str =

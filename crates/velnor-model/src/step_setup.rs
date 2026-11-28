@@ -17,7 +17,6 @@ impl StepKind {
             | Self::MbxPin
             | Self::MbxPrivate
             | Self::MbxStore
-            | Self::MbxSeed
             | Self::CratesMirror(_) => true,
             Self::Helper(command) => match command {
                 HelperCommand::Plan => true,
@@ -52,6 +51,7 @@ impl StepKind {
             | Self::DownloadArchive { .. }
             | Self::Cargo(_)
             | Self::Prepare(_)
+            | Self::ToolsComponents
             | Self::InputsAuditRoot(_)
             | Self::InputsSave { .. }
             | Self::InputsRestore { .. }

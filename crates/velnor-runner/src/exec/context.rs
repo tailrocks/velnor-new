@@ -7,15 +7,21 @@ use std::path::{Path, PathBuf};
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
-    secrets_context, service_variables, set_pair, string, with_action, write_event,
+    secrets_context, service_variables, set_pair, string, variable, with_action, write_event,
 };
 use super::host_env::host_env;
 use super::tracking::Tracking;
-use super::{ExecError, RunOptions, SHARED_DIR_MODE, StepResult};
+use super::{ExecError, JobFacts, RunOptions, SHARED_DIR_MODE, StepResult};
 use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
 use crate::job_message::{ActionReferenceType, ActionStep, AgentJobRequestMessage};
+
+fn put(env: &mut ExprEnv, root: RootContext, value: &ContextValue) -> Result<(), ExecError> {
+    env.set_context(root, value)
+        .map_err(|error| ExecError::Invalid(format!("{error:#}")))
+}
+const CACHE_MODE_VARIABLE: &str = "actions_cache_mode";
 
 #[derive(Debug, Clone)]
 pub(super) struct StepEntry {
@@ -36,6 +42,7 @@ async fn create_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
 #[derive(Debug)]
 pub(super) struct JobContext {
     base: ExprEnv,
+    facts: JobFacts,
     github: ContextValue,
     runner: ContextValue,
     event_path: PathBuf,
@@ -83,15 +90,15 @@ impl JobContext {
         let github = github_context(message, lookup("github"), options, &event_path);
         let runner = runner_context(message, options)?;
         let mut base = ExprEnv::new(options.workspace.clone());
-        base.set_context(RootContext::Github, &github);
-        base.set_context(RootContext::Runner, &runner);
-        base.set_context(RootContext::Secrets, &secrets_context(message));
+        put(&mut base, RootContext::Github, &github)?;
+        put(&mut base, RootContext::Runner, &runner)?;
+        put(&mut base, RootContext::Secrets, &secrets_context(message))?;
         for (name, root) in [
             ("needs", RootContext::Needs),
             ("inputs", RootContext::Inputs),
         ] {
             if let Some(value) = lookup(name) {
-                base.set_context(root, value);
+                put(&mut base, root, value)?;
             }
         }
         let mut env = Vec::new();
@@ -99,14 +106,17 @@ impl JobContext {
             for (name, value) in evaluate::mapping(token, &base).await? {
                 set_pair(&mut env, &name, &value);
             }
-            base.set_context(RootContext::Env, &object(&env, true));
+            put(&mut base, RootContext::Env, &object(&env, true))?;
         }
         let defaults = run_defaults(message, &base).await?;
         let tracking = Tracking::for_job(message);
+        let cache_mode = variable(message, CACHE_MODE_VARIABLE).filter(|mode| !mode.is_empty());
+        let facts = JobFacts::new(&github, cache_mode);
         Ok(Self {
             host: host_env(tracking.as_ref()),
             tracking,
             runtime: exported_variables(&github, &runner),
+            facts,
             service: service_variables(message),
             github,
             runner,
@@ -123,7 +133,7 @@ impl JobContext {
         self.tracking.clone()
     }
 
-    pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {
+    fn step_github(&self, step: &ActionStep) -> ContextValue {
         let repository = step
             .reference
             .as_ref()
@@ -140,26 +150,48 @@ impl JobContext {
                     reference.git_ref.as_deref().unwrap_or_default(),
                 ))
             });
-        self.github = with_action(
+        with_action(
             &self.github,
             step.name.as_deref().unwrap_or_default(),
             repository,
-        );
-        self.base.set_context(RootContext::Github, &self.github);
+        )
+    }
+
+    pub(super) fn admission_env(&self, step: &ActionStep) -> Result<ExprEnv, ExecError> {
+        let mut env = self.base.clone();
+        put(&mut env, RootContext::Github, &self.step_github(step))?;
+        Ok(env)
+    }
+
+    pub(super) async fn begin_step(&mut self, step: &ActionStep) -> Result<(), ExecError> {
+        self.github = self.step_github(step);
+        put(&mut self.base, RootContext::Github, &self.github)?;
         self.runtime = exported_variables(&self.github, &self.runner);
         write_event(&self.event_path, &self.github).await
     }
 
-    pub(super) fn expr_env(&self, status: JobStatus, step_env: &[(String, String)]) -> ExprEnv {
+    pub(super) fn facts(&self) -> &JobFacts {
+        &self.facts
+    }
+
+    pub(super) fn base_env(&self) -> ExprEnv {
+        self.base.clone()
+    }
+
+    pub(super) fn expr_env(
+        &self,
+        status: JobStatus,
+        step_env: &[(String, String)],
+    ) -> Result<ExprEnv, ExecError> {
         let mut env = self.base.clone();
         env.status = status;
         let mut merged = self.env.clone();
         for (name, value) in step_env {
             set_pair(&mut merged, name, value);
         }
-        env.set_context(RootContext::Env, &object(&merged, true));
-        env.set_context(RootContext::Steps, &self.steps_value());
-        env
+        put(&mut env, RootContext::Env, &object(&merged, true))?;
+        put(&mut env, RootContext::Steps, &self.steps_value())?;
+        Ok(env)
     }
 
     fn steps_value(&self) -> ContextValue {
@@ -231,7 +263,7 @@ impl JobContext {
 
     pub(super) fn record_step(&mut self, id: &str, entry: StepEntry) {
         self.steps
-            .retain(|(known, _)| !known.eq_ignore_ascii_case(id));
+            .retain(|(known, _)| !ordinal_ignore_case_eq(known, id));
         self.steps.push((id.to_owned(), entry));
     }
 

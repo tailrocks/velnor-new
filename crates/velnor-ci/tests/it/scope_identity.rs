@@ -46,6 +46,7 @@ fn facts() -> RepoFacts {
         helper: None,
         compile_inputs: CompileInputs::new(),
         inputs_lock_identified: false,
+        generator_unmodelled: false,
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,

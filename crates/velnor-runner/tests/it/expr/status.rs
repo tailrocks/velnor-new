@@ -23,7 +23,27 @@ fn expr_status_functions_follow_job_status() -> Result<()> {
             cancelled,
             "{status:?} cancelled()"
         );
-        assert!(evaluate_condition("failure()", &env).is_err());
+    }
+    Ok(())
+}
+
+#[test]
+fn expr_failure_follows_job_status() -> Result<()> {
+    let cases = [
+        (JobStatus::Success, false),
+        (JobStatus::Failure, true),
+        (JobStatus::Cancelled, false),
+    ];
+    for (status, failure) in cases {
+        let mut env: ExprEnv = empty_env();
+        env.status = status;
+        assert_eq!(truthy("failure()", &env)?, failure, "{status:?} failure()");
+        assert_eq!(truthy("FAILURE()", &env)?, failure, "{status:?} FAILURE()");
+        assert_eq!(
+            evaluate_condition("failure() && !cancelled()", &env)?,
+            failure,
+            "{status:?} failure() && !cancelled()"
+        );
     }
     Ok(())
 }
