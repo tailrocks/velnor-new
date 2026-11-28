@@ -11,10 +11,9 @@ impl super::super::HostConfig {
         connection_id: &ConnectionId,
         policy_json: &str,
     ) -> Result<Self, HostError> {
-        const MAX_POLICY_BYTES: usize = 256 * 1024;
         self.validate()?;
         if policy_json.is_empty()
-            || policy_json.len() > MAX_POLICY_BYTES
+            || policy_json.len() > super::MAX_POLICY_BYTES
             || !self
                 .connections
                 .iter()

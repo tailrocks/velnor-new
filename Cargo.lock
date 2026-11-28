@@ -4373,6 +4373,7 @@ name = "velnor-gen"
 version = "0.1.117"
 dependencies = [
  "clap",
+ "serde",
  "serde-saphyr",
  "serde_json",
  "sha2",
@@ -4569,6 +4570,7 @@ dependencies = [
  "toml",
  "turso",
  "uuid",
+ "velnor-model",
  "velnor-resource-probe",
  "velnor-runner-core",
  "velnor-runner-github",
@@ -4624,6 +4626,7 @@ name = "velnor-workflows"
 version = "0.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "toml",
  "velnor-model",
 ]

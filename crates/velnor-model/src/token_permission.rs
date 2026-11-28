@@ -29,6 +29,10 @@ const TOKEN_PERMISSIONS: [(&str, &[&str]); 18] = [
     ("vulnerability-alerts", READ_NONE),
 ];
 
+pub fn token_permission_scopes() -> impl Iterator<Item = &'static str> {
+    TOKEN_PERMISSIONS.iter().map(|(name, _)| *name)
+}
+
 /// The access levels a `GITHUB_TOKEN` scope takes, or `None` for a name that is
 /// not a scope.
 #[must_use]
@@ -64,6 +68,34 @@ mod tests {
         for (scope, accesses) in TOKEN_PERMISSIONS {
             assert!(accesses.contains(&"none"), "{scope}");
         }
+    }
+
+    #[test]
+    fn the_scope_names_are_the_ones_github_documents() {
+        let documented = [
+            "actions",
+            "artifact-metadata",
+            "attestations",
+            "checks",
+            "code-quality",
+            "contents",
+            "copilot-requests",
+            "deployments",
+            "discussions",
+            "id-token",
+            "issues",
+            "models",
+            "packages",
+            "pages",
+            "pull-requests",
+            "security-events",
+            "statuses",
+            "vulnerability-alerts",
+        ];
+        assert_eq!(
+            super::token_permission_scopes().collect::<Vec<_>>(),
+            documented
+        );
     }
 
     #[test]

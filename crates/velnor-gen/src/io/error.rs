@@ -17,6 +17,7 @@ pub enum Error {
     Program(String, String),
     Repository(String),
     UntrackedConfig(RepoPath),
+    StoredBytes(RepoPath),
     Metadata(MetadataError),
     MetadataFile(MetadataFileError),
     Detect(DetectError),
@@ -38,6 +39,10 @@ impl fmt::Display for Error {
             Self::UntrackedConfig(path) => write!(
                 f,
                 "{path} exists but git does not track it, so velnor-gen would ignore it and generate defaults; run `git add {path}` to track it (a git-ignored file needs `git add -f`), or remove the file"
+            ),
+            Self::StoredBytes(path) => write!(
+                f,
+                "{path} has CR bytes on disk that the git index entry does not match, so velnor-gen cannot tell which bytes git stores for the job-authority inventory; run `git add {path}` after `velnor-gen generate`, or check the file out without end-of-line conversion"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::MetadataFile(error) => error.fmt(f),

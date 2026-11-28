@@ -15,7 +15,7 @@ fn public_job_authority_policy_refuses_uninterpretable_schedule_and_merge_group_
         Vec::new(),
     )?;
     for event in ["schedule", "merge_group"] {
-        let valid = inventory_json_for_contexts(vec![TestInventoryContext {
+        let valid = inventory_json_for_contexts(&[TestInventoryContext {
             event,
             branch_filters: vec!["main"],
             tag_filters: Vec::new(),
@@ -32,7 +32,7 @@ fn public_job_authority_policy_refuses_uninterpretable_schedule_and_merge_group_
             (vec!["ma*"], Vec::new()),
         ];
         for (branch_filters, tag_filters) in contexts {
-            let inventory = inventory_json_for_contexts(vec![TestInventoryContext {
+            let inventory = inventory_json_for_contexts(&[TestInventoryContext {
                 event,
                 branch_filters,
                 tag_filters,

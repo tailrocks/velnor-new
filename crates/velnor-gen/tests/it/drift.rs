@@ -8,7 +8,7 @@ use std::path::Path;
 
 use velnor_gen::io::{add_manifests, read_files};
 use velnor_gen::{Drift, drift};
-use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
+use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, RepoPath, RepoView, RepositoryIdentity};
 use velnor_render::{Owner, RELEASE_HEADER, VELNOR_GEN_MARKER, owner_of, seal};
 use velnor_rust::{METADATA_PATH, build_script_sources, recorded_metadata, wanted_files};
 
@@ -281,7 +281,7 @@ fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates(
             path.as_str().starts_with(".github/workflows/")
                 && matches!(path.as_str().rsplit('.').next(), Some("yml" | "yaml"))
         })
-        .chain(std::iter::once(&METADATA_PATH))
+        .chain([&METADATA_PATH, &JOB_AUTHORITY_INVENTORY_PATH])
         .cloned()
         .collect();
     let on_disk = read_files(&root, &committed)?;

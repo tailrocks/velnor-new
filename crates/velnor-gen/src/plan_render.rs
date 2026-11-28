@@ -88,3 +88,13 @@ fn has_deltas(plan: &WorkflowPlan) -> bool {
         )
     })
 }
+
+pub(crate) fn cleanup_runner(plan: &WorkflowPlan) -> velnor_model::RunnerLabel {
+    plan.jobs
+        .iter()
+        .find(|job| job.id.as_str() == "rust-trim")
+        .map_or_else(
+            || velnor_model::RunnerLabel::from_static("ubuntu-latest"),
+            |job| job.runs_on.clone(),
+        )
+}

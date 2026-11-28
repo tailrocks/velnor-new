@@ -11,7 +11,7 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView, SAMPLES};
+use velnor_model::{JOB_AUTHORITY_INVENTORY_PATH, RepoPath, RepoView, SAMPLES};
 use velnor_rust::METADATA_PATH;
 
 mod check;
@@ -23,14 +23,18 @@ mod read;
 mod recorded;
 mod ruleset;
 mod sample;
+mod stored;
 mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{Drift, check_tag, notes, plan_generate};
+use crate::{
+    Drift, JobAuthorityIdentity, check_tag, job_authority_identity, job_authority_workflows, notes,
+    plan_generate,
+};
 pub use check::{Cargo, check_metadata};
 pub use error::Error;
-use pin::{check_lock, pin_helper};
+use pin::{check_lock, pin_helper, with_running};
 pub use pin::{lock_root, retry_download, write_lock};
 pub use read::{add_manifests, read_files, view_of};
 use read::{read_tracked, read_view, regular_file};
@@ -39,16 +43,13 @@ pub use sample::{
     Recording, SAMPLE_REPOSITORY, SampleWriteOutcome, record_sample, recorded_files, recording_of,
     relocate_metadata, write_sample,
 };
+use stored::stored_bytes;
 use tracked::tracked_sizes;
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
 pub fn version_text() -> String {
-    format!(
-        "{} ({})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("VELNOR_COMMIT").unwrap_or("unknown")
-    )
+    format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::build_commit())
 }
 
 pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
@@ -118,14 +119,14 @@ pub fn main() -> Exit {
         Command::Generate | Command::Check { .. } => {}
     }
     match execute(&cli) {
-        Ok(drifts) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
+        Ok((drifts, _)) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
             for drift in &drifts {
                 eprintln!("{drift}");
             }
             eprintln!("run `velnor-gen generate` to update the generated files");
             Exit::from(1)
         }
-        Ok(drifts) => {
+        Ok((drifts, identity)) => {
             if drifts.is_empty() {
                 println!("generated files are up to date");
             }
@@ -135,6 +136,9 @@ pub fn main() -> Exit {
                     Drift::Stale(path) => println!("removed {path}"),
                     Drift::Foreign(path) | Drift::Unmarked(path) => println!("kept {path}"),
                 }
+            }
+            if let Some(identity) = identity {
+                print!("{}", identity.lines());
             }
             Exit::SUCCESS
         }
@@ -170,16 +174,20 @@ fn suggest(path: &Path) -> Exit {
     }
 }
 
-fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
+fn execute(cli: &Cli) -> Result<(Vec<Drift>, Option<JobAuthorityIdentity>), Error> {
     let root = toplevel(&cli.root)?;
     if let Command::Check { verify_release } = &cli.command {
         check_lock(&root, *verify_release)?;
     }
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
-    let workflows = read_files(&root, &wanted)?;
+    wanted.push(JOB_AUTHORITY_INVENTORY_PATH);
+    let mut workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
     let view = read_view(&root, false, None)?.0;
+    if let Ok(Some(listed)) = job_authority_workflows(&view) {
+        stored_bytes(&root, &mut workflows, &listed)?;
+    }
     let (expected, drifts) =
         plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
             .map_err(Error::Generate)?;
@@ -196,10 +204,15 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
-    if cli.command == Command::Generate {
+    let identity = if cli.command == Command::Generate {
+        let identity = with_running(|running| job_authority_identity(&view, running))?
+            .map_err(Error::Generate)?;
         apply(&root, &expected, &drifts)?;
-    }
-    Ok(drifts)
+        identity
+    } else {
+        None
+    };
+    Ok((drifts, identity))
 }
 
 pub fn apply(

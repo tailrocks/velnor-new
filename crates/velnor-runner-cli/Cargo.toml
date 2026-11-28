@@ -58,6 +58,10 @@ path = "tests/home_resolution_public.rs"
 name = "outdated_policy_public"
 path = "tests/outdated_policy_public.rs"
 
+[[test]]
+name = "job_authority_inventory"
+path = "tests/job_authority_inventory.rs"
+
 [[bin]]
 name = "velnor-host"
 path = "src/main.rs"

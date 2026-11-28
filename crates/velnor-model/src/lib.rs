@@ -13,6 +13,7 @@ mod helper;
 mod hosted;
 mod ids;
 mod image;
+mod job_authority_limit;
 mod lint;
 mod mbx;
 mod mbx_config;
@@ -69,6 +70,7 @@ pub use image::{
     ImageConfig, ImageCredential, ImageHost, ImageOpenssl, ImagePrBuild, ImageRegistry,
     ImageVisibility,
 };
+pub use job_authority_limit::JobAuthorityLimit;
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{
@@ -98,9 +100,10 @@ pub use repo::{
 pub use runner_protocol::RUNNER_PROTOCOL_VERSION;
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{
-    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
-    RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
-    StepNeed, WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
+    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, JOB_AUTHORITY_CONFIG_PATH,
+    JOB_AUTHORITY_INVENTORY_PATH, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason, StepNeed,
+    WORKFLOW_NAME, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};
@@ -108,7 +111,9 @@ pub use test_group::{
     ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
     TestGroup, TestNeed,
 };
-pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use token_permission::{
+    token_permission_accesses, token_permission_accesses_prose, token_permission_scopes,
+};
 pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 

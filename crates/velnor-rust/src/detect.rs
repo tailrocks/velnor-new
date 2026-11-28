@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    DenyChecks, DenyLane, InputOwner, PackageName, PolicyTools, RELEASE_CONFIG_PATH,
-    RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig,
-    RustRoot, ToolPins, WORKFLOWS_CONFIG_PATH,
+    DenyChecks, DenyLane, InputOwner, JOB_AUTHORITY_CONFIG_PATH, PackageName, PolicyTools,
+    RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, RepositoryIdentity,
+    RootSlug, RustCiConfig, RustRoot, ToolPins, WORKFLOWS_CONFIG_PATH,
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
@@ -34,6 +34,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         CONFIG_PATH,
         RELEASE_CONFIG_PATH,
         WORKFLOWS_CONFIG_PATH,
+        JOB_AUTHORITY_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         crate::generator_lock::EXTERNALS,

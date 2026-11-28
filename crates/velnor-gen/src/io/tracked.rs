@@ -7,7 +7,9 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
 
-use velnor_model::{RELEASE_CONFIG_PATH, RepoPath, RepoView, WORKFLOWS_CONFIG_PATH};
+use velnor_model::{
+    JOB_AUTHORITY_CONFIG_PATH, RELEASE_CONFIG_PATH, RepoPath, RepoView, WORKFLOWS_CONFIG_PATH,
+};
 use velnor_rust::CONFIG_PATH;
 
 use super::{Error, program};
@@ -18,7 +20,12 @@ const GITLINK_MODE: &[u8] = b"160000";
 /// Configuration that is read only through the tracked view. Git hides an
 /// untracked or ignored file from that view, so a file on disk is refused
 /// instead of being silently replaced by defaults.
-const CONFIG_FILES: [RepoPath; 3] = [CONFIG_PATH, RELEASE_CONFIG_PATH, WORKFLOWS_CONFIG_PATH];
+const CONFIG_FILES: [RepoPath; 4] = [
+    CONFIG_PATH,
+    RELEASE_CONFIG_PATH,
+    WORKFLOWS_CONFIG_PATH,
+    JOB_AUTHORITY_CONFIG_PATH,
+];
 
 type Listing = (BTreeSet<RepoPath>, BTreeSet<RepoPath>, BTreeSet<RepoPath>);
 

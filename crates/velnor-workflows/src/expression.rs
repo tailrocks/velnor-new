@@ -49,7 +49,7 @@ pub(crate) fn bare(text: &str) -> &str {
         .map_or(text, str::trim)
 }
 
-fn scan(expression: &str) -> (Vec<String>, Vec<String>) {
+pub(crate) fn scan(expression: &str) -> (Vec<String>, Vec<String>) {
     let mut found = Vec::new();
     let mut functions = Vec::new();
     let mut token = String::new();
@@ -128,7 +128,7 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
 
 const SECRET_PLACE: &str = "a secret may be read only as the whole value of a step env entry, in a workflow that runs on workflow_dispatch, schedule and push to tags only (a push to branches too when the job if or the workflow if contains the default branch gate)";
 
-fn is_secret(reference: &str) -> bool {
+pub(crate) fn is_secret(reference: &str) -> bool {
     reference
         .split('.')
         .next()

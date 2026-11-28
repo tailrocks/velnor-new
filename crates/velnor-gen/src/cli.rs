@@ -24,7 +24,9 @@ pub struct Cli {
 
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum Command {
-    #[command(about = "Write the generated files and remove the ones no longer generated")]
+    #[command(
+        about = "Write the generated files and remove the ones no longer generated; with .velnor/job-authority.toml, it runs only as the linux velnor-gen the lock pins, and prints the generator source sha and this executable sha256 for velnor-host connect, one per line"
+    )]
     Generate,
     #[command(
         about = "Exit 1 when a generated file differs from what generate would write, or when the lock's velnor-gen entry is inconsistent with itself and with this binary"

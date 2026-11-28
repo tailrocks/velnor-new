@@ -17,6 +17,12 @@ use crate::io::unique_id;
 use crate::lock_archive::archive_lock_at;
 use crate::release_symlink::git;
 
+mod job_authority_crlf;
+mod job_authority_identity;
+mod job_authority_inventory;
+mod job_authority_limits;
+mod job_authority_secrets;
+
 const WORKFLOW: &str = ".github/workflows/ci.yml";
 const CARGO: &str = "#!/bin/sh\ncat \"$(dirname \"$0\")/metadata.json\"\n";
 
@@ -204,5 +210,32 @@ fn the_same_hand_written_workflow_undeclared_fails_the_generated_check_and_names
     assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains(HAND_WRITTEN), "{stderr}");
     assert!(stderr.contains("external_workflows"), "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn an_unstamped_velnor_gen_refuses_to_write_the_inventory_and_names_both_commits() -> TestResult {
+    let fixture = fixture()?;
+    fixture.write(
+        ".velnor/job-authority.toml",
+        "workflows = [\".github/workflows/ci.yml\"]\n",
+    )?;
+    git(&fixture.repo(), &["add", "--all"])?;
+    let output = fixture.velnor_gen("generate")?;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    let lock = fixture.read(".velnor/rust-ci.lock")?;
+    let pinned = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("commit = \"")?.strip_suffix('"'))
+        .ok_or("no commit in the lock")?;
+    assert!(stderr.contains(pinned), "{stderr}");
+    assert!(stderr.contains("unknown"), "{stderr}");
+    assert!(
+        !fixture
+            .repo()
+            .join(".velnor/job-authority-inventory.json")
+            .exists()
+    );
     Ok(())
 }

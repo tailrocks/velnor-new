@@ -56,6 +56,7 @@ pub enum GenerateError {
     ExternalWorkflow(ExternalWorkflowError),
     ExcludedLockRun(velnor_rust::ExcludedLockFinding),
     Image(crate::ImageError),
+    JobAuthority(crate::JobAuthorityError),
 }
 
 impl fmt::Display for GenerateError {
@@ -63,6 +64,7 @@ impl fmt::Display for GenerateError {
         match self {
             Self::ExternalWorkflow(error) => error.fmt(f),
             Self::Image(error) => error.fmt(f),
+            Self::JobAuthority(error) => error.fmt(f),
             Self::DeltaStagingCollision(path) => write!(f, "tracked path {path} collides with delta cache staging"),
             Self::Detect(error) => error.fmt(f),
             Self::ExcludedLockRun(finding) => f.write_str(&finding.message()),
