@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
+use crate::config::{
+    ApprovedJobAuthorityPolicy, RepositoryConnection, require_current_journal_policy,
+};
 use crate::error::HostError;
 
 use super::{canonical_json, count, digest};
@@ -55,6 +57,7 @@ fn validate_policy_row(
     if policy_json.len() > MAX_POLICY_BYTES {
         return Err(HostError::Journal);
     }
+    require_current_journal_policy(policy_json.as_bytes())?;
     let policy: ApprovedJobAuthorityPolicy =
         serde_json::from_str(policy_json).map_err(|_| HostError::Journal)?;
     let snapshot = canonical_json(&policy)?;

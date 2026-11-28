@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::config::{
     ApprovedJobAuthorityPolicy, JobAuthorityLookup, PullRequestRule, WorkflowEvent,
+    require_current_json_policy,
 };
 use crate::error::HostError;
 use crate::launch::execution_authorization::ExecutionSourceRequest;
@@ -39,6 +40,7 @@ impl Policy {
     }
 
     pub(super) fn parse(bytes: &[u8]) -> Result<Self, HostError> {
+        require_current_json_policy(bytes)?;
         let mut policy: ApprovedJobAuthorityPolicy =
             serde_json::from_slice(bytes).map_err(|_| HostError::Config)?;
         policy.canonicalize();
