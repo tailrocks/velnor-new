@@ -33,11 +33,15 @@ fn with_stale_unit() -> Repo {
 }
 
 fn manifest(repo: &Repo, restored: &[&str]) {
-    let lines: String = restored
+    let lines: Vec<String> = restored
         .iter()
-        .map(|hash| format!("restored {hash}\n"))
+        .map(|hash| format!("restored {hash}"))
         .collect();
-    unit(repo, MANIFEST, &format!("velnor-restored-units 3\n{lines}"));
+    unit(
+        repo,
+        MANIFEST,
+        &format!("velnor-restored-units 3\n{}\n", lines.join("\n")),
+    );
 }
 
 #[test]

@@ -88,8 +88,7 @@ pub(super) fn restored_hashes(
     let hashes = |target: &Path| {
         crate::io::restored_units::read(target, prefix)
             .1
-            .map(|units| units.restored)
-            .unwrap_or_default()
+            .map_or_else(BTreeSet::new, |units| units.restored)
     };
     let mut restored: Vec<BTreeSet<String>> = workspaces
         .iter()
