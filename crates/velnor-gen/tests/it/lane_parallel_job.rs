@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod hosted_docker;
+
 use std::collections::BTreeMap;
 
 use serde_json::Value;

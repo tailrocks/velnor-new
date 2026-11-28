@@ -85,7 +85,7 @@ fn a_parallel_lane_without_a_runner_or_needs_keeps_the_default_runner_and_adds_n
 fn an_exclusive_lane_takes_its_tests_out_of_every_default_test_step() -> TestResult {
     let jobs = jobs_of(&format!("{BASE}{HOSTED}{EXCLUSIVE}"))?;
     let defaults = default_test_runs(&jobs, "rust-root");
-    assert!(!defaults.is_empty());
+    assert_ne!(defaults.len(), 0);
     let tail = format!("and not ({FILTER})");
     for run in &defaults {
         let selected = selections(run);
@@ -96,7 +96,7 @@ fn an_exclusive_lane_takes_its_tests_out_of_every_default_test_step() -> TestRes
         );
     }
     let other = default_test_runs(&jobs, "rust-tools");
-    assert!(!other.is_empty());
+    assert_ne!(other.len(), 0);
     for run in &other {
         assert_eq!(selections(run), ["$TEST_FILTER"], "{run}");
     }
@@ -115,7 +115,7 @@ fn an_exclusive_lane_takes_its_tests_out_of_every_default_test_step() -> TestRes
 fn a_lane_that_only_reruns_leaves_the_default_test_steps_whole() -> TestResult {
     let jobs = jobs_of(&format!("{BASE}{HOSTED}"))?;
     let defaults = default_test_runs(&jobs, "rust-root");
-    assert!(!defaults.is_empty());
+    assert_ne!(defaults.len(), 0);
     for run in &defaults {
         assert_eq!(selections(run), ["$TEST_FILTER"], "{run}");
     }
