@@ -113,7 +113,12 @@ function mounted(guest: Guest, path: string): boolean {
   });
 }
 
+function blind(guest: Guest, body: string): boolean {
+  return guest.setting("FAKE_GUEST_FINDMNT_FAIL") !== "" && body.includes("|| exit 73");
+}
+
 function cleanup(guest: Guest, body: string, paths: string[]): number {
+  if (blind(guest, body)) return 73;
   if (body.includes('mounted "$dir"') && paths.some((path) => mounted(guest, path))) return 72;
   if (guest.setting("FAKE_GUEST_WEDGE") !== "") return 70;
   for (const path of paths) purge(real(guest, path));
@@ -121,6 +126,7 @@ function cleanup(guest: Guest, body: string, paths: string[]): number {
 }
 
 function sweep(guest: Guest, body: string, dirs: string[]): number {
+  if (blind(guest, body)) return 73;
   const wedged = guest.setting("FAKE_GUEST_WEDGE") !== "";
   const readonly = list(guest, "FAKE_GUEST_READONLY");
   const cleared = body.includes("btrfs property set -ts {} ro false");
@@ -136,8 +142,11 @@ function sweep(guest: Guest, body: string, dirs: string[]): number {
   return 0;
 }
 
+const WORLD_WRITABLE = ["/tmp", "/var/tmp", "/var/lock", "/dev/shm"];
+
 function owned(guest: Guest, body: string, home: string): number {
-  const pruned = [home, ...Array.from(body.matchAll(/-path (\/\S+)/g), (found) => found[1])];
+  const writable = body.includes("-type d -perm -0002") ? WORLD_WRITABLE : [];
+  const pruned = [home, ...writable, ...Array.from(body.matchAll(/-path (\/\S+)/g), (found) => found[1])];
   for (const path of list(guest, "FAKE_GUEST_OWNED")) {
     if (!pruned.some((root) => path === root || path.startsWith(`${root}/`))) say(`${path}\n`);
   }

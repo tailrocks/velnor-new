@@ -135,7 +135,7 @@ fn command_lines_drop_blank_rows() {
 #[test]
 fn a_removal_that_fails_or_leaves_a_path_wedges_the_slot_and_an_orb_failure_does_not() {
     assert_eq!(removal_verdict(Some(0)), Ok(()));
-    for code in [70, 71, 72] {
+    for code in [70, 71, 72, 73] {
         assert_eq!(
             removal_verdict(Some(code)),
             Err(RustRunnerFailure::JobDirsWedged),

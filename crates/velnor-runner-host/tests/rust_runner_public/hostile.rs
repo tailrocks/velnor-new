@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_runner_host::{ReservationId, RustRunnerFailure};
+use velnor_runner_host::{HostError, ReservationId, RustRunnerFailure};
 
 use super::support::Fixture;
 
@@ -89,5 +89,20 @@ fn rust_runner_sweep_never_crosses_a_mount_and_hands_the_reservation_to_quaranti
     fixture.configure("")?;
     fixture.launcher().sweep()?;
     assert!(!precious.exists());
+    Ok(())
+}
+
+#[test]
+fn rust_runner_removes_nothing_and_wedges_the_slot_when_the_mount_table_cannot_be_read() -> Check {
+    let fixture = Fixture::ready()?;
+    fixture.launcher().ensure_machine()?;
+    let stale = fixture.guest("srv/velnor/gen/work/13/data");
+    std::fs::create_dir_all(stale.parent().ok_or("no parent")?)?;
+    std::fs::write(&stale, "x")?;
+    std::fs::write(fixture.root.join("ps.table"), "")?;
+    fixture.configure("FAKE_GUEST_FINDMNT_FAIL=1\n")?;
+    let wedged = Some(HostError::RustRunner(RustRunnerFailure::JobDirsWedged));
+    assert_eq!(fixture.launcher().sweep().err(), wedged);
+    assert!(stale.exists(), "the sweep removed without a mount table");
     Ok(())
 }

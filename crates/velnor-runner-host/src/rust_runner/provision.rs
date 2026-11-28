@@ -16,6 +16,8 @@ mod job_dirs;
 mod parse;
 mod runner_copy;
 #[cfg(test)]
+mod shell_tests;
+#[cfg(test)]
 mod tests;
 mod user;
 

@@ -9,7 +9,7 @@ use crate::rust_runner::machine::failure;
 use crate::rust_runner::shape::{GUEST_USER, GuestUser, USER_HOME};
 
 const NOLOGIN: &str = "/usr/sbin/nologin";
-const OWNED_ELSEWHERE: &str = r#"find / -xdev \( -path "$1" -o -path /srv/velnor/gen -o -path /tmp -o -path /var/tmp \) -prune -o \( -user "$2" -o -group "$3" \) -print -quit"#;
+pub(super) const OWNED_ELSEWHERE: &str = r#"scan() { LC_ALL=C find / -xdev \( -path "$1" -o -path /var/lib/velnor -o -path /srv/velnor -o \( -type d -perm -0002 ! -user "$2" ! -group "$3" \) \) -prune -o \( -user "$2" -o -group "$3" \) -print -quit 2>&1; }; try=0; while test "$try" -lt 2; do try=$((try + 1)); out=$(scan "$@"); status=$?; rest=$(printf '%s\n' "$out" | grep -v -e '^find: .*: No such file or directory$' -e '^$'); if test -n "$rest"; then printf '%s\n' "$rest"; exit 0; fi; if test "$status" -eq 0; then exit 0; fi; done; exit 1"#;
 
 impl RustRunnerLauncher {
     pub(super) fn job_user(&self) -> Result<GuestUser, HostError> {

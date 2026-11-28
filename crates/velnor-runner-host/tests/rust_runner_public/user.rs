@@ -251,7 +251,7 @@ fn rust_runner_refuses_a_job_user_with_any_sudo_privilege() -> Check {
 fn rust_runner_accepts_the_files_a_job_leaves_where_jobs_write() -> Check {
     let fixture = Fixture::ready()?;
     fixture.configure(&format!(
-        "FAKE_GUEST_OWNED={HOME}/.cache;/srv/velnor/gen/work/1/out;/tmp/x;/var/tmp/y\n"
+        "FAKE_GUEST_OWNED={HOME}/.cache;/srv/velnor/gen/work/1/out;/tmp/x;/var/tmp/y;/var/lock/z\n"
     ))?;
     fixture.launcher().ensure_machine()?;
     Ok(())
