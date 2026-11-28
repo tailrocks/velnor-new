@@ -251,7 +251,9 @@ impl World {
             .filter_map(|line| line.split_once('='))
             .map(|(key, value)| (key.to_owned(), value.to_owned()))
             .collect();
-        let requests = seen.lock().map(|served| served.clone()).unwrap_or_default();
+        let requests = seen
+            .lock()
+            .map_or_else(|_| Vec::new(), |served| served.clone());
         Reuse {
             output,
             outputs,

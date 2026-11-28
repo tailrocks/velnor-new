@@ -158,3 +158,7 @@ impl ArtifactApi {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "artifact_api_tests.rs"]
+mod tests;

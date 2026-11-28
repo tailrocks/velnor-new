@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
-use super::artifact_api::Bound;
-use super::http::DEFAULT_TIMEOUT;
+use super::Bound;
+use crate::io::http::DEFAULT_TIMEOUT;
 
 #[test]
 fn the_reuse_bound_is_a_thirty_second_single_attempt_and_the_default_is_untouched() {

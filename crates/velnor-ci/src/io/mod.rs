@@ -5,8 +5,6 @@ mod activity;
 mod app_token;
 mod archive_witness;
 mod artifact_api;
-#[cfg(test)]
-mod artifact_api_tests;
 mod artifact_unzip;
 mod audit;
 mod budget;
