@@ -7,9 +7,9 @@ use serde::{Deserialize, Deserializer};
 use std::future::Future;
 use std::time::Duration;
 use url::Url;
-use uuid::Uuid;
 
 use super::http::{slash_url, validate_known_service_url};
+use super::token_backoff::{TokenBackoff, random_between};
 use crate::secret::Secret;
 
 mod acquire;
@@ -18,11 +18,11 @@ mod renew;
 
 pub use acquire::{
     AcquireJobOutcome, AcquireJobSkipReason, AcquireRetriesExhausted, AcquiredJobPayload,
-    is_transient_acquire_error,
+    acquire_job, is_transient_acquire_error,
 };
 pub use complete::{
-    RunServiceAnnotation, RunServiceAnnotationLevel, RunServiceCompleteJob, RunServiceStepResult,
-    RunServiceTelemetry, RunServiceVariableValue,
+    CompletionAcknowledgement, RunServiceAnnotation, RunServiceAnnotationLevel,
+    RunServiceCompleteJob, RunServiceStepResult, RunServiceTelemetry, RunServiceVariableValue,
 };
 pub use renew::{RenewJobResponse, renew_failure_is_job_gone};
 
@@ -35,21 +35,18 @@ const MAX_ATTEMPTS: u32 = 5;
 pub struct RetryDelays {
     pub min: Duration,
     pub max: Duration,
+    pub token: TokenBackoff,
 }
 
 impl RetryDelays {
     pub const IMMEDIATE: Self = Self {
         min: Duration::ZERO,
         max: Duration::ZERO,
+        token: TokenBackoff::IMMEDIATE,
     };
 
     fn delay(&self) -> Duration {
-        let span_millis = self.max.saturating_sub(self.min).as_millis();
-        if span_millis == 0 {
-            return self.min;
-        }
-        let jitter = Uuid::new_v4().as_u128() % span_millis;
-        self.min + Duration::from_millis(u64::try_from(jitter).unwrap_or(0))
+        random_between(self.min, self.max)
     }
 }
 
@@ -58,6 +55,7 @@ impl Default for RetryDelays {
         Self {
             min: Duration::from_secs(5),
             max: Duration::from_secs(15),
+            token: TokenBackoff::default(),
         }
     }
 }
@@ -65,6 +63,24 @@ impl Default for RetryDelays {
 enum Failure {
     Fatal(anyhow::Error),
     Retry(anyhow::Error),
+}
+
+async fn retry<T, F, Fut>(delays: RetryDelays, mut once: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, Failure>>,
+{
+    let mut attempt = 1;
+    loop {
+        match once().await {
+            Ok(value) => return Ok(value),
+            Err(Failure::Fatal(error)) => return Err(error),
+            Err(Failure::Retry(error)) if attempt >= MAX_ATTEMPTS => return Err(error),
+            Err(Failure::Retry(_)) => {}
+        }
+        tokio::time::sleep(delays.delay()).await;
+        attempt += 1;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -87,22 +103,12 @@ impl RunServiceClient {
         self
     }
 
-    async fn with_retries<T, F, Fut>(&self, mut once: F) -> Result<T>
+    async fn with_retries<T, F, Fut>(&self, once: F) -> Result<T>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<T, Failure>>,
     {
-        let mut attempt = 1;
-        loop {
-            match once().await {
-                Ok(value) => return Ok(value),
-                Err(Failure::Fatal(error)) => return Err(error),
-                Err(Failure::Retry(error)) if attempt >= MAX_ATTEMPTS => return Err(error),
-                Err(Failure::Retry(_)) => {}
-            }
-            tokio::time::sleep(self.delays.delay()).await;
-            attempt += 1;
-        }
+        retry(self.delays, once).await
     }
 
     fn job_url(run_service_url: &str, action: &str) -> Result<Url> {

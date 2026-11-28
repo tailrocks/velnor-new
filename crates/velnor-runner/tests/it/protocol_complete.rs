@@ -6,7 +6,7 @@ use serde_json::json;
 use std::time::{Duration, Instant};
 use velnor_runner::protocol::{
     BrokerErrorCategory, RetryDelays, RunServiceClient, RunServiceStepResult, ServiceErrorKind,
-    TaskResult, TimelineRecordState, broker_error_category, service_error_kind,
+    TaskResult, TimelineRecordState, TokenBackoff, broker_error_category, service_error_kind,
 };
 
 use super::support::{
@@ -16,7 +16,7 @@ use super::support::{
 
 const COMPLETE_PATH: &str = "/run/jobs/123/completejob";
 const COMPLETE_ACTION: &str = "complete run-service job";
-const UPSTREAM_ATTEMPTS: usize = 5;
+const ATTEMPTS: usize = 5;
 
 enum Expected {
     Accepted,
@@ -37,7 +37,7 @@ fn complete_cases() -> Vec<CompleteCase> {
         CompleteCase {
             name: "persistent 500 stops after the fifth attempt",
             script: vec![Scripted::Text(500, "temporary")],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Rejected(500, BrokerErrorCategory::Transient),
         },
         CompleteCase {
@@ -49,7 +49,7 @@ fn complete_cases() -> Vec<CompleteCase> {
                 Scripted::Text(500, "temporary"),
                 Scripted::Text(204, ""),
             ],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Accepted,
         },
         CompleteCase {
@@ -65,7 +65,7 @@ fn complete_cases() -> Vec<CompleteCase> {
         CompleteCase {
             name: "a persistent 400 exhausts the attempts",
             script: vec![Scripted::Text(400, "bad completion")],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Rejected(400, BrokerErrorCategory::Transient),
         },
         CompleteCase {
@@ -89,25 +89,25 @@ fn complete_cases() -> Vec<CompleteCase> {
         CompleteCase {
             name: "the typed body decides, not the HTTP status: 404 with a typed 409",
             script: vec![Scripted::Json(404, run_service_error(409))],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Rejected(404, BrokerErrorCategory::Transient),
         },
         CompleteCase {
             name: "a 404 from another source is retried",
             script: vec![Scripted::Json(404, foreign_source_error(404))],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Rejected(404, BrokerErrorCategory::Transient),
         },
         CompleteCase {
             name: "a 404 without a source is retried",
             script: vec![Scripted::Text(404, "not found")],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Rejected(404, BrokerErrorCategory::Transient),
         },
         CompleteCase {
             name: "a dropped connection is retried",
             script: vec![Scripted::Hangup],
-            requests: UPSTREAM_ATTEMPTS,
+            requests: ATTEMPTS,
             expected: Expected::Transport,
         },
     ]
@@ -200,6 +200,7 @@ fn default_retry_delays_match_upstream() {
         RetryDelays {
             min: Duration::from_secs(5),
             max: Duration::from_secs(15),
+            token: TokenBackoff::default(),
         }
     );
 }
@@ -217,8 +218,11 @@ async fn complete_job_waits_at_least_the_minimum_delay_between_attempts() -> Res
             Scripted::Text(204, ""),
         ]),
     )?;
-    let run_service =
-        RunServiceClient::new("token")?.with_retry_delays(RetryDelays { min: MIN, max: MIN });
+    let run_service = RunServiceClient::new("token")?.with_retry_delays(RetryDelays {
+        min: MIN,
+        max: MIN,
+        token: TokenBackoff::IMMEDIATE,
+    });
 
     let started = Instant::now();
     run_service
@@ -242,7 +246,7 @@ fn step_result(name: &str) -> RunServiceStepResult {
         started_at: None,
         completed_at: None,
         completed_log_url: None,
-        completed_log_lines: 0,
+        completed_log_lines: None,
         annotations: Vec::new(),
         is_background: false,
         background_control_type: None,
@@ -265,7 +269,7 @@ async fn complete_job_sends_action_identity_log_url_and_background_metadata() ->
             reference: Some("v4".to_owned()),
             kind: Some("repository".to_owned()),
             completed_log_url: Some("https://logs.example/1".to_owned()),
-            completed_log_lines: 7,
+            completed_log_lines: Some(7),
             is_background: true,
             background_control_type: Some("wait".to_owned()),
             background_control_step_ids: vec!["step-0".to_owned()],
@@ -293,6 +297,7 @@ async fn complete_job_sends_action_identity_log_url_and_background_metadata() ->
         "ref",
         "type",
         "completed_log_url",
+        "completed_log_lines",
         "is_background",
         "background_control_type",
         "background_control_step_ids",

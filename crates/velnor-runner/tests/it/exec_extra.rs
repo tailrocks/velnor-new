@@ -5,14 +5,18 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use futures_util::FutureExt;
+use serde_json::json;
+use velnor_runner::exec::RunOptions;
 use velnor_runner::exec::{
     AdapterRegistry, AnnotationLevel, JobCancel, JobResult, StdoutSink, StepAdapter, StepContext,
     StepFuture, StepResult, run_job,
 };
-
 use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::protocol::RunnerOs;
 
-use crate::exec_support::{Scratch, fixture_message, fixture_path, run_fixture, run_path};
+use crate::exec_builder::{job, run};
+use crate::exec_support::{Scratch, fixture_message, fixture_path, host_os, run_fixture, run_path};
+use crate::lifecycle_support::job_replacing;
 
 #[test]
 fn shell_forms_expand_like_github() -> Result<()> {
@@ -36,9 +40,10 @@ fn github_context_exports_env_and_event_file() -> Result<()> {
     let scratch = Scratch::new()?;
     let ran = run_fixture("github-context", &scratch)?;
     assert!(
-        ran.has_line(
-            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os=Linux run=42"
-        ),
+        ran.has_line(&format!(
+            "repo=tailrocks/velnor-new event=pull_request protected=false runner=self-hosted job=build os={} run=42",
+            host_os()
+        )),
         "{}",
         ran.stdout
     );
@@ -244,5 +249,98 @@ async fn workflow_command_annotations_mask_message_title_and_file() -> Result<()
     assert_eq!(error.message, "bad ***");
     assert_eq!(error.title.as_deref(), Some("t-***"));
     assert_eq!(error.file.as_deref(), Some("***.rs"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn annotation_title_and_file_are_masked_like_the_message() -> Result<()> {
+    const SECRET: &str = "s3cr3t-Value-12345";
+    let scratch = Scratch::new()?;
+    let mut message = job(vec![run(
+        "s",
+        &format!("echo '::error title={SECRET},file={SECRET}::{SECRET}'"),
+    )]);
+    message["Variables"] = json!({"MY_SECRET": {"Value": SECRET, "IsSecret": true}});
+    let message: AgentJobRequestMessage = serde_json::from_value(message)?;
+
+    let ran = run_job(
+        &message,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let annotation = ran.annotations.first().context("the error annotation")?;
+    assert_eq!(annotation.message, "***");
+    assert_eq!(annotation.title.as_deref(), Some("***"));
+    assert_eq!(annotation.file.as_deref(), Some("***"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn preflight_annotations_are_masked_like_the_log() -> Result<()> {
+    const SECRET: &str = "s3cr3t-Value-12345";
+    let scratch = Scratch::new()?;
+    let mut job = job_replacing(
+        "unsupported-shell",
+        Some(("pwsh {0}", "pwsh-s3cr3t-Value-12345 {0}")),
+    )?;
+    job["Variables"] = json!({"MY_SECRET": {"Value": SECRET, "IsSecret": true}});
+    let message: AgentJobRequestMessage = serde_json::from_value(job)?;
+
+    let ran = run_job(
+        &message,
+        &scratch.options(),
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let annotation = ran
+        .annotations
+        .first()
+        .context("the preflight annotation")?;
+    assert_eq!(annotation.message, "unsupported: shell pwsh-*** {0}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_injected_os_is_what_runner_os_and_the_runner_context_report() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let message: AgentJobRequestMessage = serde_json::from_value(job(vec![run(
+        "s",
+        "echo \"::notice::env=$RUNNER_OS ctx=${{ runner.os }}\"",
+    )]))?;
+    let options = RunOptions {
+        os: RunnerOs::MacOs,
+        ..scratch.options()
+    };
+
+    let ran = run_job(
+        &message,
+        &options,
+        &AdapterRegistry::empty(),
+        &mut StdoutSink,
+        JobCancel::new(),
+    )
+    .await;
+
+    let notice = ran.annotations.first().context("the notice annotation")?;
+    assert_eq!(notice.message, "env=macOS ctx=macOS");
+    Ok(())
+}
+
+#[test]
+fn only_linux_macos_and_windows_are_supported_hosts() -> Result<()> {
+    assert_eq!(RunnerOs::parse("linux")?, RunnerOs::Linux);
+    assert_eq!(RunnerOs::parse("macos")?, RunnerOs::MacOs);
+    assert_eq!(RunnerOs::parse("windows")?, RunnerOs::Windows);
+    let error = RunnerOs::parse("freebsd")
+        .err()
+        .context("freebsd is refused")?;
+    assert!(error.to_string().contains("freebsd"), "{error}");
     Ok(())
 }

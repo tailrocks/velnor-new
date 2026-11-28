@@ -19,13 +19,15 @@ mod lines;
 mod mask;
 mod output;
 mod preflight;
-mod private;
+pub(crate) mod private;
 mod shell;
 mod sink;
 mod step;
 mod step_info;
 mod timeout;
 mod token;
+mod tool_cache;
+mod tracking;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -40,14 +42,20 @@ pub use inputs::Inputs;
 pub use job::run_job;
 pub(crate) use private::append;
 pub use sink::{LogSink, StdoutSink};
+pub use tool_cache::{TOOL_CACHE_VARIABLES, tool_cache_from_env};
 
 use crate::expr::ExprError;
+use crate::protocol::RunnerOs;
+
+pub(crate) const SHARED_DIR_MODE: u32 = 0o755;
 
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub workspace: PathBuf,
     pub temp: PathBuf,
+    pub tool_cache: PathBuf,
     pub runner_name: String,
+    pub os: RunnerOs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +132,7 @@ pub struct Annotation {
     pub end_line: Option<u32>,
     pub column: Option<u32>,
     pub end_column: Option<u32>,
+    pub step: Option<u32>,
 }
 
 impl Annotation {
@@ -137,6 +146,7 @@ impl Annotation {
             end_line: None,
             column: None,
             end_column: None,
+            step: None,
         }
     }
 }
@@ -146,6 +156,7 @@ pub struct JobRun {
     pub result: JobResult,
     pub steps: Vec<StepRecord>,
     pub outputs: BTreeMap<String, String>,
+    pub environment_url: Option<String>,
     pub annotations: Vec<Annotation>,
 }
 

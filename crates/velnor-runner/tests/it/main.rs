@@ -20,6 +20,8 @@ mod exec_cli;
 mod exec_declared_inputs;
 #[path = "exec_support.rs"]
 mod exec_support;
+#[path = "exec_tool_cache.rs"]
+mod exec_tool_cache;
 #[cfg(target_os = "linux")]
 #[path = "expr/format_allocation.rs"]
 mod expr_format_allocation;
@@ -91,6 +93,21 @@ mod hardening;
 mod job_message;
 #[path = "exec_late.rs"]
 mod late;
+mod lifecycle;
+mod lifecycle_abandon;
+mod lifecycle_busy;
+mod lifecycle_cancel;
+mod lifecycle_cancel_timeout;
+mod lifecycle_logs;
+mod lifecycle_refresh;
+mod lifecycle_renew;
+mod lifecycle_report;
+mod lifecycle_session;
+mod lifecycle_session_create;
+mod lifecycle_support;
+mod lifecycle_timespan;
+mod lifecycle_token;
+mod lifecycle_token_retry;
 mod mise_attack_state;
 mod mise_double;
 mod mise_real;
@@ -188,15 +205,22 @@ mod parity;
 mod process;
 mod protocol_acquire_renew;
 mod protocol_broker;
+mod protocol_broker_refusals;
 mod protocol_complete;
+mod protocol_complete_ack;
 mod protocol_feed;
 mod protocol_http_guard;
 mod protocol_oauth;
 mod protocol_results;
-mod protocol_timeline;
+mod protocol_results_blobs;
 mod redaction;
 #[path = "exec_review.rs"]
 mod review;
+mod run_cli;
+mod run_cli_dirs;
+mod run_cli_jit;
+mod run_cli_memory;
+mod run_cli_shutdown;
 #[path = "exec_semantics.rs"]
 mod semantics;
 #[path = "exec_shells.rs"]
@@ -208,6 +232,8 @@ mod strict;
 mod support;
 #[path = "exec_threads.rs"]
 mod threads;
+#[path = "exec_tracking.rs"]
+mod tracking;
 #[path = "exec_triage.rs"]
 mod triage;
 #[path = "exec_unsettled.rs"]

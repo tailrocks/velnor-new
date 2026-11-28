@@ -10,12 +10,19 @@ use std::fmt;
 
 use super::super::error::{
     BrokerErrorCategory, ServiceErrorKind, github_api_error_categorized, github_api_error_with,
+    service_error_kind,
 };
 use super::super::http::github_json_request;
 use super::super::timeline::{TaskResult, TimelineRecordState};
 use super::{Failure, REQUEST_TIMEOUT, RunServiceClient, is_run_service_job_not_found};
 
 const ACTION: &str = "complete run-service job";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionAcknowledgement {
+    Accepted,
+    RemoteObservedTerminal,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,7 +95,8 @@ pub struct RunServiceStepResult {
     pub completed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_log_url: Option<String>,
-    pub completed_log_lines: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_log_lines: Option<i64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<RunServiceAnnotation>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -141,6 +149,20 @@ impl RunServiceClient {
         let body = serde_json::to_string(completion).context("serialize complete job request")?;
         self.with_retries(|| self.complete_once(url.as_str(), &body))
             .await
+    }
+
+    pub async fn complete_job_with_acknowledgement(
+        &self,
+        run_service_url: &str,
+        completion: &RunServiceCompleteJob,
+    ) -> Result<CompletionAcknowledgement> {
+        match self.complete_job(run_service_url, completion).await {
+            Ok(()) => Ok(CompletionAcknowledgement::Accepted),
+            Err(error) if service_error_kind(&error) == Some(ServiceErrorKind::JobNotFound) => {
+                Ok(CompletionAcknowledgement::RemoteObservedTerminal)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn complete_once(&self, url: &str, body: &str) -> Result<(), Failure> {

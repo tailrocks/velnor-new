@@ -3,22 +3,38 @@
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use uuid::Uuid;
 
 use crate::broker::{Broker, StoreWriter, TrustedFacts};
 use crate::context_value::ordinal_ignore_case_eq;
-use crate::exec::{JobCancel, JobResult, RunOptions, StdoutSink, run_job};
+use crate::exec::{
+    AdapterRegistry, JobCancel, JobResult, RunOptions, StdoutSink, run_job, tool_cache_from_env,
+};
 use crate::job_message::AgentJobRequestMessage;
+use crate::lifecycle::{RunJitOptions, run_jit};
 use crate::native::Umask;
+use crate::protocol::{BLOCK_BUDGET, RetryDelays, RunnerOs};
+use crate::secret::Secret;
 use crate::store::store_root;
 
 const USAGE_ERROR: u8 = 2;
 const FORCED_EXIT: u8 = 130;
 const JOB_MESSAGE_TYPE: &str = "PipelineAgentJobRequest";
+const LIFECYCLE_ERROR: u8 = 1;
+const RENEW_INTERVAL: Duration = Duration::from_secs(60);
+const RENEW_LOCK_GRACE: Duration = Duration::from_secs(300);
+const CANCEL_TIMEOUT_FLOOR: Duration = Duration::from_secs(60);
+const CANCEL_POLL_ERROR_DELAY: Duration = Duration::from_secs(2);
+const SESSION_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+const SESSION_CLOSE_TIMEOUT: Duration = Duration::from_secs(30);
+const REPORT_BUDGET: Duration = Duration::from_secs(10);
+const UPLOAD_DRAIN_BUDGET: Duration = Duration::from_secs(600);
+const FEED_FLUSH_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Parser)]
 #[command(
@@ -38,6 +54,25 @@ pub enum Command {
         after_help = "A SIGTERM, SIGINT or SIGHUP cancels the job; a second signal ends the runner.\n\nExit codes:\n  0    the job succeeded\n  1    the job failed or was cancelled\n  2    usage error or an unreadable job message\n  130  a second signal ended the runner"
     )]
     Exec(ExecArgs),
+    #[command(about = "Wait for one job from GitHub with a JIT configuration, run it and exit")]
+    Run(RunArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    #[arg(
+        long,
+        value_name = "VALUE",
+        help = "Where to read the encoded_jit_config from: @FILE (deleted after it is read) or - for standard input"
+    )]
+    pub jit: Secret<String>,
+    #[arg(
+        long,
+        value_name = "DIR",
+        default_value = "_work",
+        help = "Directory for the job workspace and temp files"
+    )]
+    pub work_dir: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -82,12 +117,12 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     std::path::absolute(path).with_context(|| format!("resolve {}", path.display()))
 }
 
-struct Scratch(Option<PathBuf>);
+struct Scratch(PathBuf);
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        if let Some(root) = &self.0
-            && let Err(error) = std::fs::remove_dir_all(root)
+        let root = &self.0;
+        if let Err(error) = std::fs::remove_dir_all(root)
             && error.kind() != std::io::ErrorKind::NotFound
         {
             eprintln!("warning: remove {}: {error}", root.display());
@@ -97,7 +132,7 @@ impl Drop for Scratch {
 
 fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     let root = std::env::temp_dir().join(format!("velnor-exec-{}", Uuid::new_v4()));
-    let scratch = Scratch((args.workspace.is_none() || args.temp.is_none()).then(|| root.clone()));
+    let scratch = Scratch(root.clone());
     let workspace = match &args.workspace {
         Some(workspace) => absolute(workspace)?,
         None => root.join("workspace"),
@@ -109,7 +144,9 @@ fn options(args: &ExecArgs) -> Result<(RunOptions, Scratch)> {
     let options = RunOptions {
         workspace,
         temp,
+        tool_cache: tool_cache_from_env().unwrap_or_else(|| root.join("_tool")),
         runner_name: "velnor-exec".to_owned(),
+        os: RunnerOs::detect()?,
     };
     Ok((options, scratch))
 }
@@ -136,6 +173,21 @@ impl Signals {
             _ = self.hangup.recv() => {}
         }
     }
+}
+
+fn cancel_on_signal() -> Result<JobCancel> {
+    let mut terminate = signal(SignalKind::terminate()).context("listen for SIGTERM")?;
+    let mut interrupt = signal(SignalKind::interrupt()).context("listen for SIGINT")?;
+    let cancel = JobCancel::new();
+    let trigger = cancel.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = terminate.recv() => {}
+            _ = interrupt.recv() => {}
+        }
+        trigger.cancel();
+    });
+    Ok(cancel)
 }
 
 async fn exec(args: &ExecArgs, umask: Umask) -> Result<ExitCode> {
@@ -172,6 +224,58 @@ async fn exec(args: &ExecArgs, umask: Umask) -> Result<ExitCode> {
     }
 }
 
+fn build_adapters() -> AdapterRegistry {
+    AdapterRegistry::empty()
+}
+
+fn jit_value(source: &str) -> Result<String> {
+    let text = if source == "-" {
+        std::io::read_to_string(std::io::stdin())
+            .context("read the JIT configuration from standard input")?
+    } else if let Some(path) = source.strip_prefix('@') {
+        let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
+        std::fs::remove_file(path).with_context(|| format!("remove the JIT file {path}"))?;
+        text
+    } else {
+        bail!(
+            "--jit takes @FILE or - for standard input; an inline value would show the key in the process list"
+        );
+    };
+    Ok(text.trim().to_owned())
+}
+
+async fn run_command(args: &RunArgs) -> Result<ExitCode> {
+    let jit = Secret::new(jit_value(args.jit.expose())?);
+    let os = RunnerOs::detect()?;
+    let shutdown = cancel_on_signal()?;
+    let options = RunJitOptions {
+        jit,
+        work_dir: args.work_dir.clone(),
+        shutdown,
+        renew_interval: RENEW_INTERVAL,
+        renew_lock_grace: RENEW_LOCK_GRACE,
+        cancel_timeout_floor: CANCEL_TIMEOUT_FLOOR,
+        upload_block_budget: BLOCK_BUDGET,
+        cancel_poll_error_delay: CANCEL_POLL_ERROR_DELAY,
+        session_retry_interval: SESSION_RETRY_INTERVAL,
+        session_close_timeout: SESSION_CLOSE_TIMEOUT,
+        report_budget: REPORT_BUDGET,
+        upload_drain_budget: UPLOAD_DRAIN_BUDGET,
+        feed_flush_interval: FEED_FLUSH_INTERVAL,
+        retry_delays: RetryDelays::default(),
+        tool_cache: tool_cache_from_env(),
+        os,
+        adapters: build_adapters(),
+    };
+    Ok(match run_jit(options).await {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::from(LIFECYCLE_ERROR)
+        }
+    })
+}
+
 fn run(cli: &Cli) -> Result<ExitCode> {
     let umask = Umask::read();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -181,6 +285,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
         .context("start the async runtime")?;
     let code = match &cli.command {
         Command::Exec(args) => runtime.block_on(exec(args, umask)),
+        Command::Run(args) => runtime.block_on(run_command(args)),
     };
     runtime.shutdown_background();
     code

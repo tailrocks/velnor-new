@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 use velnor_runner::protocol::{StepConclusion, StepStatus, TwirpResultsClient, TwirpStep};
 
+use super::exec_support::Scratch;
 use super::support::{Reply, Scripted, TOKEN, TestServer, assert_bearer, scripted};
 
 const STEPS_UPDATE_PATH: &str =
@@ -100,12 +101,12 @@ fn step(external_id: &str) -> TwirpStep {
     }
 }
 
-const RECEIVER_PATH: &str = "/twirp/results.services.receiver.Receiver";
-const RUN: &str = "run-backend";
-const JOB: &str = "job-backend";
-const STEP: &str = "step-1";
+pub(super) const RECEIVER_PATH: &str = "/twirp/results.services.receiver.Receiver";
+pub(super) const RUN: &str = "run-backend";
+pub(super) const JOB: &str = "job-backend";
+pub(super) const STEP: &str = "step-1";
 
-fn receiver(method: &str) -> String {
+pub(super) fn receiver(method: &str) -> String {
     format!("{RECEIVER_PATH}/{method}")
 }
 
@@ -125,9 +126,10 @@ async fn step_summary_uploads_to_summary_url_and_reports_size() -> Result<()> {
         Reply::json(200, &json!({"ok": true}))
     })?;
 
-    client
-        .upload_step_summary(RUN, JOB, STEP, "# Summary\n")
-        .await?;
+    let scratch = Scratch::new()?;
+    let summary = scratch.write("summary.md", b"# Summary\n")?;
+
+    client.upload_step_summary(RUN, JOB, STEP, &summary).await?;
 
     let signed = server.only_request("POST", &receiver("GetStepSummarySignedBlobURL"))?;
     assert_bearer(&signed);
@@ -169,9 +171,9 @@ async fn blob_uploads_send_the_azure_header_only_for_azure_storage() -> Result<(
             Reply::json(200, &json!({"ok": true}))
         })?;
 
-        client
-            .upload_step_log(RUN, JOB, STEP, &["one".to_owned()])
-            .await?;
+        let scratch = Scratch::new()?;
+        let log = scratch.write("step.log", b"one\n")?;
+        client.upload_step_log(RUN, JOB, STEP, &log).await?;
 
         let put = server.only_request("PUT", "/blob/log")?;
         assert_eq!(put.header("x-ms-blob-type"), header, "{storage:?}");
@@ -212,8 +214,11 @@ async fn step_summary_over_soft_limit_is_rejected_without_upload_or_retry() -> R
         move |_| Reply::json(200, &json!({"summary_url": blob_url, "soft_size_limit": 4})),
     )?;
 
+    let scratch = Scratch::new()?;
+    let summary = scratch.write("summary.md", b"longer than four bytes")?;
+
     let error = client
-        .upload_step_summary(RUN, JOB, STEP, "longer than four bytes")
+        .upload_step_summary(RUN, JOB, STEP, &summary)
         .await
         .err()
         .context("oversized summary must fail")?;
@@ -247,9 +252,10 @@ async fn step_log_uploads_to_logs_url_and_reports_line_count() -> Result<()> {
         Reply::json(200, &json!({"ok": true}))
     })?;
 
-    client
-        .upload_step_log(RUN, JOB, STEP, &["one".to_owned(), "two".to_owned()])
-        .await?;
+    let scratch = Scratch::new()?;
+    let log = scratch.write("step.log", b"one\ntwo\n")?;
+
+    client.upload_step_log(RUN, JOB, STEP, &log).await?;
 
     let metadata = server
         .only_request("POST", &receiver("CreateStepLogsMetadata"))?
@@ -265,15 +271,21 @@ async fn step_log_metadata_without_ok_is_rejected() -> Result<()> {
     let client = TwirpResultsClient::new(&server.uri(), TOKEN)?;
     let blob_url = format!("{}/blob/log", server.uri());
     server.respond("POST", &receiver("GetStepLogsSignedBlobURL"), move |_| {
-        Reply::json(200, &json!({"logs_url": blob_url}))
+        Reply::json(
+            200,
+            &json!({"logs_url": blob_url, "blob_storage_type": "BLOB_STORAGE_TYPE_AZURE"}),
+        )
     })?;
     server.respond("PUT", "/blob/log", |_| Reply::status(201))?;
     server.respond("POST", &receiver("CreateStepLogsMetadata"), |_| {
         Reply::json(200, &json!({}))
     })?;
 
+    let scratch = Scratch::new()?;
+    let log = scratch.write("step.log", b"one\n")?;
+
     let error = client
-        .upload_step_log(RUN, JOB, STEP, &["one".to_owned()])
+        .upload_step_log(RUN, JOB, STEP, &log)
         .await
         .err()
         .context("metadata without ok must fail")?;

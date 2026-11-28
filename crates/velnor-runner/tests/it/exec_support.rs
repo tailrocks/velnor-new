@@ -8,8 +8,17 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use uuid::Uuid;
-use velnor_runner::exec::RunOptions;
+use velnor_runner::exec::{RunOptions, TOOL_CACHE_VARIABLES};
 use velnor_runner::job_message::AgentJobRequestMessage;
+use velnor_runner::protocol::RunnerOs;
+
+pub(crate) fn host_os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        "Linux"
+    }
+}
 
 pub(crate) struct Scratch {
     root: PathBuf,
@@ -20,6 +29,16 @@ impl Scratch {
         let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("exec-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&root).context("create the scratch directory")?;
         Ok(Self { root })
+    }
+
+    pub(crate) fn work_dir(&self) -> PathBuf {
+        self.root.join("_work")
+    }
+
+    pub(crate) fn write(&self, name: &str, content: &[u8]) -> Result<PathBuf> {
+        let path = self.root.join(name);
+        std::fs::write(&path, content).with_context(|| format!("write {}", path.display()))?;
+        Ok(path)
     }
 
     pub(crate) fn workspace(&self) -> PathBuf {
@@ -34,7 +53,9 @@ impl Scratch {
         RunOptions {
             workspace: self.workspace(),
             temp: self.temp(),
+            tool_cache: self.root.join("_tool"),
             runner_name: "exec-test".to_owned(),
+            os: RunnerOs::Linux,
         }
     }
 }
@@ -73,6 +94,12 @@ impl Ran {
     }
 }
 
+pub(crate) fn scrub_tool_cache(command: &mut Command) {
+    for name in TOOL_CACHE_VARIABLES {
+        command.env_remove(name);
+    }
+}
+
 pub(crate) fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures/exec")
@@ -100,6 +127,7 @@ pub(crate) fn run_path_env(
 ) -> Result<Ran> {
     let started = Instant::now();
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+    scrub_tool_cache(&mut command);
     command.env_remove("TZ").envs(env.iter().copied());
     if let Some(tz) = tz {
         command.env("TZ", tz);

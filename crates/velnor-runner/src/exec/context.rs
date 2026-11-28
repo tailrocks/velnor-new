@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 use super::contexts::{
     EVENT_DIRECTORY, exported_variables, github_context, object, run_defaults, runner_context,
-    secrets_context, service_variables, set_pair, string, tool_cache, variable, with_action,
-    write_event,
+    secrets_context, service_variables, set_pair, string, variable, with_action, write_event,
 };
 use super::host_env::host_env;
-use super::{ExecError, JobFacts, RunOptions, StepResult};
+use super::tracking::Tracking;
+use super::{ExecError, JobFacts, RunOptions, SHARED_DIR_MODE, StepResult};
 use super::{evaluate, private};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
 use crate::expr::{ExprEnv, JobStatus, RootContext};
@@ -28,6 +30,15 @@ pub(super) struct StepEntry {
     pub(super) outputs: Vec<(String, String)>,
 }
 
+async fn create_dir(directory: &Path, mode: u32) -> std::io::Result<()> {
+    let existed = tokio::fs::try_exists(directory).await?;
+    tokio::fs::create_dir_all(directory).await?;
+    if existed {
+        return Ok(());
+    }
+    tokio::fs::set_permissions(directory, Permissions::from_mode(mode)).await
+}
+
 #[derive(Debug)]
 pub(super) struct JobContext {
     base: ExprEnv,
@@ -36,6 +47,7 @@ pub(super) struct JobContext {
     runner: ContextValue,
     event_path: PathBuf,
     host: Vec<(String, String)>,
+    tracking: Option<Tracking>,
     runtime: Vec<(String, String)>,
     service: Vec<(String, String)>,
     env: Vec<(String, String)>,
@@ -59,7 +71,11 @@ impl JobContext {
         }
         private::create_dir(&options.temp).await?;
         private::create_dir(&options.workspace).await?;
-        private::create_dir(&tool_cache(options)).await?;
+        create_dir(&options.tool_cache, SHARED_DIR_MODE)
+            .await
+            .map_err(|source| {
+                ExecError::io(format!("create {}", options.tool_cache.display()), source)
+            })?;
         let contexts = message
             .materialize_context_values_ordered()
             .map_err(|error| ExecError::Invalid(format!("{error:#}")))?
@@ -93,10 +109,12 @@ impl JobContext {
             put(&mut base, RootContext::Env, &object(&env, true))?;
         }
         let defaults = run_defaults(message, &base).await?;
+        let tracking = Tracking::for_job(message);
         let cache_mode = variable(message, CACHE_MODE_VARIABLE).filter(|mode| !mode.is_empty());
         let facts = JobFacts::new(&github, cache_mode);
         Ok(Self {
-            host: host_env(),
+            host: host_env(tracking.as_ref()),
+            tracking,
             runtime: exported_variables(&github, &runner),
             facts,
             service: service_variables(message),
@@ -109,6 +127,10 @@ impl JobContext {
             path_prepend: Vec::new(),
             steps: Vec::new(),
         })
+    }
+
+    pub(super) fn tracking(&self) -> Option<Tracking> {
+        self.tracking.clone()
     }
 
     fn step_github(&self, step: &ActionStep) -> ContextValue {

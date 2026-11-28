@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use velnor_runner::exec::{AdapterRegistry, JobCancel, JobRun, LogSink, StepResult, run_job};
 use velnor_runner::job_message::AgentJobRequestMessage;
 
-use crate::exec_support::{Ran, Scratch};
+use crate::exec_support::{Ran, Scratch, scrub_tool_cache};
 
 pub(crate) const HANG_GUARD: Duration = Duration::from_secs(300);
 
@@ -75,6 +75,7 @@ pub(crate) fn write_job(scratch: &Scratch, message: &Value) -> Result<PathBuf> {
 
 pub(crate) fn binary(job: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-runner"));
+    scrub_tool_cache(&mut command);
     command.arg("exec").arg("--job").arg(job);
     command
 }
@@ -164,9 +165,24 @@ pub(crate) fn wait_for_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn is_running(pid: Pid) -> bool {
+    if test_kill_process(pid).is_err() {
+        return false;
+    }
+    let listing = Command::new("ps")
+        .args(["-o", "stat=", "-p"])
+        .arg(pid.as_raw_nonzero().to_string())
+        .output();
+    !listing.is_ok_and(|listing| {
+        String::from_utf8_lossy(&listing.stdout)
+            .trim_start()
+            .starts_with('Z')
+    })
+}
+
 pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while test_kill_process(pid).is_ok() {
+    while is_running(pid) {
         if Instant::now() > deadline {
             let _ = kill_process(pid, Signal::KILL);
             bail!("process {} is still alive", pid.as_raw_nonzero());
@@ -174,6 +190,17 @@ pub(crate) fn assert_gone(pid: Pid) -> Result<()> {
         std::thread::sleep(Duration::from_millis(20));
     }
     Ok(())
+}
+
+pub(crate) fn survives(pid: Pid, window: Duration) -> bool {
+    let deadline = Instant::now() + window;
+    while is_running(pid) {
+        if Instant::now() >= deadline {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    false
 }
 
 pub(crate) const BACKGROUND_SLEEP: &str =

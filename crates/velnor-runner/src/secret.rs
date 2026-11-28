@@ -25,6 +25,14 @@ impl<T> Secret<T> {
     }
 }
 
+impl std::str::FromStr for Secret<String> {
+    type Err = std::convert::Infallible;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(raw.to_owned()))
+    }
+}
+
 impl<T> fmt::Debug for Secret<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("<redacted>")

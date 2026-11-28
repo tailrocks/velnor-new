@@ -9,13 +9,15 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 use url::Url;
 use velnor_runner::context_value::ContextValue;
+use velnor_runner::exec::{AdapterRegistry, JobCancel};
 use velnor_runner::expr::{ExprEnv, RootContext, evaluate_expression};
 use velnor_runner::job_message::{AgentJobRequestMessage, ContainerResource};
+use velnor_runner::lifecycle::RunJitOptions;
 use velnor_runner::protocol::{
     BrokerClient, DecodedJitConfig, DecodedJitCredentials, DecodedJitRunnerSettings,
-    DistributedTaskClient, FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken,
-    OAuthJwtCredentials, RetryDelays, RunServiceClient, RunServiceVariableValue, TaskAgentMessage,
-    TaskAgentSession, TaskAgentSessionKey, TwirpResultsClient, github_json_http_response,
+    FeedStreamClient, GitHubApiError, GithubHttpResponse, OAuthAccessToken, OAuthJwtCredentials,
+    RetryDelays, RunServiceClient, RunServiceVariableValue, RunnerOs, SessionRecovery,
+    TaskAgentMessage, TaskAgentSession, TwirpResultsClient, acquire_job, github_json_http_response,
 };
 use velnor_runner::secret::Secret;
 
@@ -45,10 +47,12 @@ fn assert_no_secret(label: &str, debug: &str) {
 
 #[test]
 fn client_debug_output_contains_no_bearer_token() -> Result<()> {
-    let broker = BrokerClient::new("https://broker.actions.githubusercontent.com/", BEARER)?;
+    let broker = BrokerClient::new(
+        "https://broker.actions.githubusercontent.com/",
+        RunnerOs::Linux,
+        BEARER,
+    )?;
     let run_service = RunServiceClient::new(BEARER)?;
-    let timeline =
-        DistributedTaskClient::new("https://pipelines.actions.githubusercontent.com/", BEARER)?;
     let feed = FeedStreamClient::new(
         "https://pipelines.actions.githubusercontent.com/feed",
         BEARER,
@@ -60,7 +64,6 @@ fn client_debug_output_contains_no_bearer_token() -> Result<()> {
 
     assert_no_secret("BrokerClient", &format!("{broker:?}"));
     assert_no_secret("RunServiceClient", &format!("{run_service:?}"));
-    assert_no_secret("DistributedTaskClient", &format!("{timeline:?}"));
     assert_no_secret("FeedStreamClient", &format!("{feed:?}"));
     assert_no_secret("TwirpResultsClient", &format!("{results:?}"));
     Ok(())
@@ -146,14 +149,15 @@ async fn response_and_acquired_job_debug_output_contains_no_secret_value() -> Re
     .await?;
     assert_no_secret("GithubHttpResponse", &format!("{response:?}"));
 
-    let outcome = RunServiceClient::new(BEARER)?
-        .acquire_job(
-            &format!("{}/run/jobs/1", server.uri()),
-            "message",
-            "Linux",
-            None,
-        )
-        .await?;
+    let outcome = acquire_job(
+        RetryDelays::IMMEDIATE,
+        &format!("{}/run/jobs/1", server.uri()),
+        "message",
+        "Linux",
+        None,
+        || async { Ok(BEARER.to_owned()) },
+    )
+    .await?;
     assert_no_secret("AcquireJobOutcome", &format!("{outcome:?}"));
     Ok(())
 }
@@ -182,6 +186,7 @@ fn jit_config() -> DecodedJitConfig {
             use_v2_flow: true,
             ephemeral: true,
             disable_update: true,
+            session_recovery: SessionRecovery::default(),
         },
         credentials: DecodedJitCredentials {
             scheme: "OAuth".to_owned(),
@@ -204,13 +209,7 @@ fn sentinel_url() -> Result<Url> {
 
 fn credential_values() -> Result<Rendered> {
     let jit = jit_config();
-    let session = TaskAgentSession {
-        encryption_key: Some(TaskAgentSessionKey {
-            encrypted: true,
-            value: SENTINEL.to_owned(),
-        }),
-        ..TaskAgentSession::new("host", 1, "runner")
-    };
+    let session = TaskAgentSession::new("host", 1, "runner");
     let token = OAuthAccessToken {
         token: SENTINEL.to_owned(),
         expires_in: Some(Duration::from_secs(60)),
@@ -218,20 +217,16 @@ fn credential_values() -> Result<Rendered> {
     let jwt = OAuthJwtCredentials {
         client_id: "client".to_owned(),
         authorization_url: sentinel_url()?.to_string(),
+        token_url: sentinel_url()?.to_string(),
         private_key_pem: SENTINEL.to_owned(),
     };
     let variable = RunServiceVariableValue {
         value: SENTINEL.to_owned(),
         is_secret: true,
     };
-    let key = TaskAgentSessionKey {
-        encrypted: false,
-        value: SENTINEL.to_owned(),
-    };
     Ok(vec![
         ("OAuthAccessToken", format!("{token:?}")),
         ("RunServiceVariableValue", format!("{variable:?}")),
-        ("TaskAgentSessionKey", format!("{key:?}")),
         ("TaskAgentSession", format!("{session:#?}")),
         ("DecodedJitConfig", format!("{jit:#?}")),
         ("DecodedJitCredentials", format!("{:#?}", jit.credentials)),
@@ -257,7 +252,6 @@ fn protocol_values() -> Result<Rendered> {
         message_id: 1,
         message_type: "RunnerJobRequest".to_owned(),
         body: SENTINEL.to_owned(),
-        iv_base64: None,
     };
     let response = GithubHttpResponse {
         status: 200,
@@ -333,4 +327,30 @@ async fn a_rejected_request_error_never_carries_a_token_from_the_response_body()
         .context("a 401 completion fails")?;
     assert!(format!("{plain:#}").contains("plain failure text"));
     Ok(())
+}
+
+#[test]
+fn run_jit_options_debug_output_hides_the_jit_configuration() {
+    const JIT: &str = "jit-config-bundle-0001";
+    let options = RunJitOptions {
+        jit: Secret::new(JIT.to_owned()),
+        work_dir: std::path::PathBuf::from("_work"),
+        shutdown: JobCancel::new(),
+        renew_interval: Duration::from_secs(60),
+        renew_lock_grace: Duration::from_secs(300),
+        cancel_timeout_floor: Duration::from_secs(60),
+        upload_block_budget: Duration::from_secs(60),
+        cancel_poll_error_delay: Duration::from_secs(2),
+        session_retry_interval: Duration::from_secs(30),
+        session_close_timeout: Duration::from_secs(30),
+        report_budget: Duration::from_secs(10),
+        upload_drain_budget: Duration::from_secs(600),
+        feed_flush_interval: Duration::from_millis(250),
+        retry_delays: RetryDelays::default(),
+        tool_cache: None,
+        os: RunnerOs::Linux,
+        adapters: AdapterRegistry::empty(),
+    };
+
+    assert!(!format!("{options:?}").contains(JIT));
 }

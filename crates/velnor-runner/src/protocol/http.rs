@@ -3,7 +3,7 @@
 // SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/protocol.rs
 
 use anyhow::{Context, Result, bail};
-use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, USER_AGENT};
+use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, RETRY_AFTER, USER_AGENT};
 use reqwest::{Client, Method};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -17,12 +17,34 @@ pub const RUNNER_USER_AGENT: &str = concat!(
     " (velnor)"
 );
 
-pub(crate) fn runner_os() -> Result<&'static str> {
-    match std::env::consts::OS {
-        "linux" => Ok("Linux"),
-        "macos" => Ok("macOS"),
-        "windows" => Ok("Windows"),
-        other => bail!("unsupported runner operating system: {other}"),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerOs {
+    Linux,
+    MacOs,
+    Windows,
+}
+
+impl RunnerOs {
+    pub fn parse(os: &str) -> Result<Self> {
+        match os {
+            "linux" => Ok(Self::Linux),
+            "macos" => Ok(Self::MacOs),
+            "windows" => Ok(Self::Windows),
+            other => bail!("unsupported runner operating system: {other}"),
+        }
+    }
+
+    pub fn detect() -> Result<Self> {
+        Self::parse(std::env::consts::OS)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Linux => "Linux",
+            Self::MacOs => "macOS",
+            Self::Windows => "Windows",
+        }
     }
 }
 
@@ -146,11 +168,27 @@ pub async fn github_json_request(
     Ok((response.status, response.body.into_inner()))
 }
 
+pub(crate) struct OAuthResponse {
+    pub(crate) status: u16,
+    pub(crate) body: String,
+    pub(crate) json: bool,
+    pub(crate) retry_after: Option<String>,
+}
+
+fn is_json_content(headers: &HeaderMap, body: &str) -> bool {
+    !body.is_empty()
+        && headers
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(';').next())
+            .is_some_and(|media| media.trim().eq_ignore_ascii_case("application/json"))
+}
+
 pub(crate) async fn oauth_form_request(
     url: &str,
-    form_body: String,
+    form_body: &str,
     timeout: Duration,
-) -> Result<(u16, String)> {
+) -> Result<OAuthResponse> {
     validate_authenticated_url(url)?;
     let response = http_client()?
         .post(url)
@@ -158,7 +196,7 @@ pub(crate) async fn oauth_form_request(
         .header(ACCEPT, "application/json")
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .timeout(timeout)
-        .body(form_body)
+        .body(form_body.to_owned())
         .send()
         .await
         .map_err(|error| {
@@ -168,13 +206,24 @@ pub(crate) async fn oauth_form_request(
             )
         })?;
     let status = response.status().as_u16();
-    let text = response.text().await.map_err(|error| {
+    let retry_after = response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let headers = response.headers().clone();
+    let body = response.text().await.map_err(|error| {
         anyhow::anyhow!(
             "read OAuth token response: {}",
             redacted_reqwest_error(&error)
         )
     })?;
-    Ok((status, text))
+    Ok(OAuthResponse {
+        status,
+        json: is_json_content(&headers, &body),
+        body,
+        retry_after,
+    })
 }
 
 pub(crate) fn validate_authenticated_url(raw: &str) -> Result<Url> {

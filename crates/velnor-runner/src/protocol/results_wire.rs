@@ -25,12 +25,6 @@ pub(super) struct MetadataRequest<'a> {
     pub(super) size: Option<i64>,
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum Measure {
-    Lines(i64),
-    Bytes,
-}
-
 #[derive(Deserialize)]
 pub(super) struct SignedUrlResponse {
     pub(super) logs_url: Option<String>,

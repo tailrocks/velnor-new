@@ -11,19 +11,22 @@ use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use super::http::{oauth_form_request, redacted_authenticated_url};
+use super::http::{OAuthResponse, oauth_form_request, redacted_authenticated_url};
 use super::jit::private_key_der_from_pem;
+use super::token_backoff::{MAX_RETRIES, TokenBackoff, is_retryable};
 
 const OAUTH_TIMEOUT: Duration = Duration::from_secs(5);
 const OAUTH_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const ASSERTION_BACKDATE_SECONDS: u64 = 120;
 const ASSERTION_LIFETIME_SECONDS: u64 = 300;
+const CLOCK_SKEW_MARKER: &str = "Current server time is";
 const JWT_HEADER: &[u8] = br#"{"alg":"RS256","typ":"JWT"}"#;
 
 #[derive(Clone)]
 pub struct OAuthJwtCredentials {
     pub client_id: String,
     pub authorization_url: String,
+    pub token_url: String,
     pub private_key_pem: String,
 }
 
@@ -35,6 +38,7 @@ impl fmt::Debug for OAuthJwtCredentials {
                 "authorization_url",
                 &redacted_authenticated_url(&self.authorization_url),
             )
+            .field("token_url", &redacted_authenticated_url(&self.token_url))
             .field("private_key_pem", &"<redacted>")
             .finish()
     }
@@ -73,46 +77,128 @@ impl fmt::Debug for OAuthAccessToken {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("GitHub runner registration no longer exists: {0}")]
-pub struct OAuthRegistrationNotFound(pub String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OAuthErrorKind {
+    RegistrationDeleted,
+    ClockSkew,
+    Refused,
+    Other,
+}
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct OAuthClient;
+#[derive(Debug)]
+pub struct OAuthTokenError {
+    pub kind: OAuthErrorKind,
+    error: String,
+    description: String,
+}
+
+impl fmt::Display for OAuthTokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.kind {
+            OAuthErrorKind::RegistrationDeleted => write!(
+                f,
+                "GitHub runner registration no longer exists: {}",
+                self.description
+            ),
+            OAuthErrorKind::Refused => {
+                write!(f, "OAuth token request failed: {}", self.description)
+            }
+            OAuthErrorKind::ClockSkew | OAuthErrorKind::Other => write!(
+                f,
+                "OAuth token request failed: error={}, description={}",
+                self.error, self.description
+            ),
+        }
+    }
+}
+
+impl std::error::Error for OAuthTokenError {}
+
+impl OAuthTokenError {
+    fn refused(description: String) -> Self {
+        Self {
+            kind: OAuthErrorKind::Refused,
+            error: "refused".to_owned(),
+            description,
+        }
+    }
+
+    fn new(error: String, description: String) -> Self {
+        let kind = if error.eq_ignore_ascii_case("invalid_client") {
+            OAuthErrorKind::RegistrationDeleted
+        } else if description.contains(CLOCK_SKEW_MARKER) {
+            OAuthErrorKind::ClockSkew
+        } else {
+            OAuthErrorKind::Other
+        };
+        Self {
+            kind,
+            error,
+            description,
+        }
+    }
+}
+
+#[must_use]
+pub fn oauth_error_kind(error: &anyhow::Error) -> Option<OAuthErrorKind> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<OAuthTokenError>())
+        .map(|oauth| oauth.kind)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct OAuthClient {
+    backoff: TokenBackoff,
+}
 
 impl OAuthClient {
-    pub fn new() -> Result<Self> {
-        Ok(Self)
+    #[must_use]
+    pub const fn new(backoff: TokenBackoff) -> Self {
+        Self { backoff }
     }
 
     pub async fn exchange_client_credentials(
         &self,
         credentials: &OAuthJwtCredentials,
     ) -> Result<OAuthAccessToken> {
-        let assertion = build_client_assertion(credentials)?;
-        let body = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("grant_type", "client_credentials")
-            .append_pair(
-                "client_assertion_type",
-                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-            )
-            .append_pair("client_assertion", &assertion)
-            .finish();
-        let (status, text) =
-            oauth_form_request(&credentials.authorization_url, body, OAUTH_TIMEOUT).await?;
-        parse_oauth_token_response(status, &text)
+        let mut retries = 0;
+        loop {
+            let body = exchange_body(credentials)?;
+            let response = oauth_form_request(&credentials.token_url, &body, OAUTH_TIMEOUT).await?;
+            if retries < MAX_RETRIES && is_retryable(response.status) {
+                retries += 1;
+                let delay = self.backoff.delay(retries, response.retry_after.as_deref());
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return parse_oauth_token_response(&response);
+        }
     }
 }
 
-fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToken> {
-    if body.len() > OAUTH_MAX_RESPONSE_BYTES {
+fn exchange_body(credentials: &OAuthJwtCredentials) -> Result<String> {
+    let assertion = build_client_assertion(credentials)?;
+    Ok(url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("grant_type", "client_credentials")
+        .append_pair(
+            "client_assertion_type",
+            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        )
+        .append_pair("client_assertion", &assertion)
+        .finish())
+}
+
+fn parse_oauth_token_response(reply: &OAuthResponse) -> Result<OAuthAccessToken> {
+    let status = reply.status;
+    if reply.body.len() > OAUTH_MAX_RESPONSE_BYTES {
         bail!("OAuth token response exceeded {OAUTH_MAX_RESPONSE_BYTES} bytes");
     }
-    if status != 200 && status != 400 {
-        bail!("OAuth token request failed: HTTP status {status}");
+    if status != 200 && (status != 400 || !reply.json) {
+        return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
     }
     let response: OAuthTokenResponse =
-        serde_json::from_str(body.trim()).context("parse OAuth token response")?;
+        serde_json::from_str(reply.body.trim()).context("parse OAuth token response")?;
     let token = response.access_token.filter(|value| !value.is_empty());
     if let (200, Some(token)) = (status, token) {
         return Ok(OAuthAccessToken {
@@ -126,15 +212,12 @@ fn parse_oauth_token_response(status: u16, body: &str) -> Result<OAuthAccessToke
     }
     if let Some(error) = response.error {
         let description = response.error_description.unwrap_or_default();
-        if error.eq_ignore_ascii_case("invalid_client") {
-            return Err(OAuthRegistrationNotFound(description).into());
-        }
-        bail!("OAuth token request failed: error={error}, description={description}");
+        return Err(OAuthTokenError::new(error, description).into());
     }
     if status != 200 {
-        bail!("OAuth token request failed: HTTP status {status}");
+        return Err(OAuthTokenError::refused(format!("HTTP status {status}")).into());
     }
-    bail!("OAuth token response missing access_token")
+    Err(OAuthTokenError::refused("no access_token in the response".to_owned()).into())
 }
 
 pub fn build_client_assertion(credentials: &OAuthJwtCredentials) -> Result<String> {

@@ -5,18 +5,30 @@ use anyhow::{Context, Result, bail};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use velnor_runner::protocol::{
-    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, GitHubApiError,
-    is_transient_acquire_error, renew_failure_is_job_gone,
+    AcquireJobOutcome, AcquireJobSkipReason, BrokerErrorCategory, GitHubApiError, RetryDelays,
+    acquire_job, is_transient_acquire_error, renew_failure_is_job_gone,
 };
 
 use super::support::{
-    JOB_ID, PLAN_ID, Reply, Scripted, TestServer, assert_bearer, foreign_source_error,
+    JOB_ID, PLAN_ID, Reply, Scripted, TOKEN, TestServer, assert_bearer, foreign_source_error,
     immediate_run_service, run_service_error, run_service_url, scripted,
 };
 
 const ACQUIRE_PATH: &str = "/run/jobs/123/acquirejob";
 const RENEW_PATH: &str = "/run/jobs/123/renewjob";
 const UPSTREAM_ATTEMPTS: usize = 5;
+
+async fn acquire(server: &TestServer, os: &str) -> Result<AcquireJobOutcome> {
+    acquire_job(
+        RetryDelays::IMMEDIATE,
+        &run_service_url(server),
+        "broker-message",
+        os,
+        None,
+        || async { Ok(TOKEN.to_owned()) },
+    )
+    .await
+}
 
 fn acquired_job() -> Value {
     json!({"planId": PLAN_ID, "jobId": JOB_ID, "jobName": "test"})
@@ -35,9 +47,7 @@ async fn acquire_job_retries_failures_and_then_acquires() -> Result<()> {
         ]),
     )?;
 
-    let outcome = immediate_run_service()?
-        .acquire_job(&run_service_url(&server), "broker-message", "Linux", None)
-        .await?;
+    let outcome = acquire(&server, "Linux").await?;
 
     let AcquireJobOutcome::Acquired(job) = outcome else {
         bail!("expected an acquired job");
@@ -50,8 +60,6 @@ async fn acquire_job_retries_failures_and_then_acquires() -> Result<()> {
 #[tokio::test]
 async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
     let server = TestServer::start().await?;
-    let run_service = immediate_run_service()?;
-
     for (name, script) in [
         ("persistent 500", vec![Scripted::Text(500, "temporary")]),
         (
@@ -94,9 +102,7 @@ async fn acquire_job_gives_up_as_transient_after_five_attempts() -> Result<()> {
         server.reset()?;
         server.respond("POST", ACQUIRE_PATH, scripted(script))?;
 
-        let outcome = run_service
-            .acquire_job(&run_service_url(&server), "broker-message", "Linux", None)
-            .await;
+        let outcome = acquire(&server, "Linux").await;
 
         let error = outcome
             .err()
@@ -125,8 +131,7 @@ async fn acquire_job_typed_parse_failure_reports_position_and_path_without_the_v
         )]),
     )?;
 
-    let error = immediate_run_service()?
-        .acquire_job(&run_service_url(&server), "broker-message", "Linux", None)
+    let error = acquire(&server, "Linux")
         .await
         .err()
         .context("a wrong-typed field must fail the acquire")?;
@@ -151,7 +156,6 @@ async fn acquire_job_typed_parse_failure_reports_position_and_path_without_the_v
 #[tokio::test]
 async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
     let server = TestServer::start().await?;
-    let run_service = immediate_run_service()?;
 
     for (status, reason, expected_category, wire_code) in [
         (
@@ -202,14 +206,7 @@ async fn acquire_job_classifies_typed_non_retriable_statuses() -> Result<()> {
             Reply::json(status.as_u16(), &reply_body)
         })?;
 
-        let outcome = run_service
-            .acquire_job(
-                &run_service_url(&server),
-                "broker-message",
-                std::env::consts::OS,
-                None,
-            )
-            .await?;
+        let outcome = acquire(&server, std::env::consts::OS).await?;
         let AcquireJobOutcome::Skipped {
             status: actual,
             body,

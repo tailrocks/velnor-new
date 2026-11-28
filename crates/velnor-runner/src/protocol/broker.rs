@@ -13,7 +13,7 @@ use super::error::{
     github_api_error_categorized, github_api_error_with, is_retriable_status,
 };
 use super::http::{
-    github_json_request, runner_architecture, runner_os, slash_url, validate_authenticated_url,
+    RunnerOs, github_json_request, runner_architecture, slash_url, validate_authenticated_url,
 };
 use super::session::{RunnerStatus, TaskAgentMessage, TaskAgentSession};
 use crate::secret::Secret;
@@ -22,6 +22,12 @@ use velnor_model::RUNNER_PROTOCOL_VERSION;
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(70);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Acknowledgement {
+    Accepted,
+    JobNotFound,
+}
 
 #[derive(Debug)]
 pub struct BrokerPoll {
@@ -32,14 +38,16 @@ pub struct BrokerPoll {
 #[derive(Debug, Clone)]
 pub struct BrokerClient {
     base_url: Url,
+    os: RunnerOs,
     bearer_token: Secret<String>,
 }
 
 impl BrokerClient {
-    pub fn new(server_url_v2: &str, bearer_token: impl Into<String>) -> Result<Self> {
+    pub fn new(server_url_v2: &str, os: RunnerOs, bearer_token: impl Into<String>) -> Result<Self> {
         let url = validate_authenticated_url(server_url_v2)?;
         Ok(Self {
             base_url: slash_url(&url),
+            os,
             bearer_token: Secret::new(bearer_token.into()),
         })
     }
@@ -60,7 +68,7 @@ impl BrokerClient {
                 "create broker session",
                 status,
                 &text,
-                session_error_category(status),
+                creation_error_category(status),
             ));
         }
         serde_json::from_str(&text).context("parse create broker session response")
@@ -85,18 +93,23 @@ impl BrokerClient {
         disable_update: bool,
     ) -> Result<BrokerPoll> {
         let mut url = self.endpoint("message")?;
-        append_runner_query(&mut url, session_id, status)?;
+        append_runner_query(&mut url, self.os, session_id, status)?;
         url.query_pairs_mut().append_pair(
             "disableUpdate",
             if disable_update { "true" } else { "false" },
         );
         let (http_status, text) = self.send(Method::GET, &url, None, POLL_TIMEOUT).await?;
         if !(200..300).contains(&http_status) {
+            let kind = broker_error_kind(&text, POLL_KINDS);
+            let category = kind.map(|kind| match kind {
+                ServiceErrorKind::RunnerSessionInvalid => BrokerErrorCategory::Expired,
+                _ => BrokerErrorCategory::Terminal,
+            });
             return Err(broker_api_error(
                 "get broker message",
                 http_status,
                 text.trim(),
-                None,
+                category,
                 POLL_KINDS,
             ));
         }
@@ -119,14 +132,19 @@ impl BrokerClient {
         session_id: &str,
         runner_request_id: &str,
         status: RunnerStatus,
-    ) -> Result<()> {
+    ) -> Result<Acknowledgement> {
         let mut url = self.endpoint("acknowledge")?;
-        append_runner_query(&mut url, session_id, status)?;
+        append_runner_query(&mut url, self.os, session_id, status)?;
         let body = json!({ "runnerRequestId": runner_request_id }).to_string();
         let (http_status, text) = self
             .send(Method::POST, &url, Some(body), ACKNOWLEDGE_TIMEOUT)
             .await?;
         if !(200..300).contains(&http_status) {
+            if broker_error_kind(&text, ACKNOWLEDGE_KINDS)
+                == Some(ServiceErrorKind::AcknowledgeJobNotFound)
+            {
+                return Ok(Acknowledgement::JobNotFound);
+            }
             return Err(broker_api_error(
                 "acknowledge broker runner request",
                 http_status,
@@ -135,7 +153,7 @@ impl BrokerClient {
                 ACKNOWLEDGE_KINDS,
             ));
         }
-        Ok(())
+        Ok(Acknowledgement::Accepted)
     }
 
     fn endpoint(&self, name: &str) -> Result<Url> {
@@ -190,6 +208,14 @@ fn broker_api_error(
     )
 }
 
+fn creation_error_category(status: u16) -> BrokerErrorCategory {
+    match status {
+        403 => BrokerErrorCategory::Terminal,
+        409 => BrokerErrorCategory::Conflict,
+        _ => BrokerErrorCategory::Transient,
+    }
+}
+
 fn session_error_category(status: u16) -> BrokerErrorCategory {
     match status {
         409 => BrokerErrorCategory::Conflict,
@@ -198,12 +224,17 @@ fn session_error_category(status: u16) -> BrokerErrorCategory {
     }
 }
 
-fn append_runner_query(url: &mut Url, session_id: &str, status: RunnerStatus) -> Result<()> {
+fn append_runner_query(
+    url: &mut Url,
+    os: RunnerOs,
+    session_id: &str,
+    status: RunnerStatus,
+) -> Result<()> {
     url.query_pairs_mut()
         .append_pair("sessionId", session_id)
         .append_pair("status", status.as_query_value())
         .append_pair("runnerVersion", RUNNER_PROTOCOL_VERSION)
-        .append_pair("os", runner_os()?)
+        .append_pair("os", os.as_str())
         .append_pair("architecture", runner_architecture()?);
     Ok(())
 }

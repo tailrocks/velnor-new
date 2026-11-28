@@ -6,9 +6,11 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use reqwest::Method;
 use url::Url;
-use velnor_runner::protocol::{BrokerClient, TwirpResultsClient, github_json_http_response};
+use velnor_runner::protocol::{
+    BrokerClient, RetryDelays, RunnerOs, TwirpResultsClient, acquire_job, github_json_http_response,
+};
 
-use super::support::{Reply, TOKEN, TestServer, immediate_run_service};
+use super::support::{Reply, TOKEN, TestServer};
 
 const PASSWORD: &str = "sentinel-userinfo-password";
 
@@ -62,8 +64,6 @@ async fn authenticated_requests_refuse_unsafe_urls_before_sending() -> Result<()
 
 #[tokio::test]
 async fn service_endpoints_accept_only_approved_hosts_on_the_default_port() -> Result<()> {
-    let run_service = immediate_run_service()?;
-
     for (name, url, expected) in [
         (
             "explicit non-default port",
@@ -86,11 +86,17 @@ async fn service_endpoints_accept_only_approved_hosts_on_the_default_port() -> R
             "must use HTTPS",
         ),
     ] {
-        let error = run_service
-            .acquire_job(url, "broker-message", "Linux", None)
-            .await
-            .err()
-            .with_context(|| format!("{name}: must be refused"))?;
+        let error = acquire_job(
+            RetryDelays::IMMEDIATE,
+            url,
+            "broker-message",
+            "Linux",
+            None,
+            || async { Ok(TOKEN.to_owned()) },
+        )
+        .await
+        .err()
+        .with_context(|| format!("{name}: must be refused"))?;
 
         let rendered = format!("{error:#}");
         assert!(rendered.contains(expected), "{name}: {rendered}");
@@ -104,7 +110,7 @@ async fn service_endpoints_accept_only_approved_hosts_on_the_default_port() -> R
     .context("results endpoint on a non-default port must be refused")?;
     assert!(format!("{results_error:#}").contains("not an approved"));
 
-    let broker_error = BrokerClient::new("http://broker.example.test/", TOKEN)
+    let broker_error = BrokerClient::new("http://broker.example.test/", RunnerOs::Linux, TOKEN)
         .err()
         .context("plain http broker endpoint must be refused")?;
     assert!(format!("{broker_error:#}").contains("must use HTTPS"));

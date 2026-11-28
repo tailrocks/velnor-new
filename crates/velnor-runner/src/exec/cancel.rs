@@ -8,6 +8,8 @@ use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
 use tokio::process::Child;
 use tokio::sync::watch;
 
+use super::tracking::Tracking;
+
 pub(super) const KILL_GRACE: Duration = Duration::from_secs(5);
 const GROUP_POLL: Duration = Duration::from_millis(50);
 
@@ -57,29 +59,62 @@ pub(super) fn group_of(child: &Child) -> Option<Pid> {
         .and_then(Pid::from_raw)
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct Groups {
-    live: Mutex<Vec<Pid>>,
+    live: Mutex<Live>,
+}
+
+#[derive(Debug)]
+struct Live {
+    groups: Vec<Pid>,
+    tracking: Option<Tracking>,
 }
 
 impl Groups {
-    pub(super) fn track(&self, child: &Child) {
-        let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
-        live.retain(|group| test_kill_process_group(*group).is_ok());
-        live.extend(group_of(child));
+    pub(super) fn new(tracking: Option<Tracking>) -> Self {
+        Self {
+            live: Mutex::new(Live {
+                groups: Vec::new(),
+                tracking,
+            }),
+        }
     }
 
-    pub(super) fn kill_all(&self) {
+    pub(super) fn track(&self, child: &Child) {
         let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
-        for group in live.drain(..) {
-            let _ = kill_process_group(group, Signal::KILL);
-        }
+        live.groups
+            .retain(|group| test_kill_process_group(*group).is_ok());
+        live.groups.extend(group_of(child));
+    }
+
+    fn take(&self) -> (Vec<Pid>, Option<Tracking>) {
+        let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
+        (std::mem::take(&mut live.groups), live.tracking.take())
+    }
+
+    pub(super) async fn finish(&self) {
+        let (groups, tracking) = self.take();
+        let Some(tracking) = tracking else {
+            return;
+        };
+        kill_groups(&groups);
+        let _ = tokio::task::spawn_blocking(move || tracking.reap()).await;
+    }
+}
+
+fn kill_groups(groups: &[Pid]) {
+    for group in groups {
+        let _ = kill_process_group(*group, Signal::KILL);
     }
 }
 
 impl Drop for Groups {
     fn drop(&mut self) {
-        self.kill_all();
+        let (groups, tracking) = self.take();
+        kill_groups(&groups);
+        if let Some(tracking) = tracking {
+            tracking.reap();
+        }
     }
 }
 

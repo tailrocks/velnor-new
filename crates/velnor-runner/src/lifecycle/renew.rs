@@ -1,0 +1,116 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileContributor: tailrocks/velnor-legacy@1b9fc0388925d21ff44ba1be5027684c38c8e4c9 crates/velnor-runner/src/runner.rs
+
+use std::time::Duration;
+
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+use tokio::sync::oneshot;
+use tokio::time::Instant;
+
+use super::BackgroundTask;
+use crate::exec::JobCancel;
+use crate::protocol::{RunServiceClient, renew_failure_is_job_gone};
+
+const RETRY_BASE: Duration = Duration::from_secs(5);
+const RETRY_CAP: Duration = Duration::from_secs(20);
+const MIN_GAP: Duration = Duration::from_secs(1);
+
+pub(super) type RenewHandle = BackgroundTask;
+pub(super) type FirstRenew = oneshot::Receiver<Result<(), anyhow::Error>>;
+
+pub(super) struct RenewTarget {
+    pub(super) client: RunServiceClient,
+    pub(super) run_service_url: String,
+    pub(super) plan_id: String,
+    pub(super) job_id: String,
+}
+
+fn retry_delay(failures: u32) -> Duration {
+    RETRY_BASE
+        .saturating_mul(
+            1_u32
+                .checked_shl(failures.saturating_sub(1))
+                .unwrap_or(u32::MAX),
+        )
+        .min(RETRY_CAP)
+}
+
+fn until_lock_expires(locked_until: &str) -> Option<Duration> {
+    let until = OffsetDateTime::parse(locked_until, &Rfc3339).ok()?;
+    Some(Duration::try_from(until - OffsetDateTime::now_utc()).unwrap_or(Duration::ZERO))
+}
+
+fn next_delay(interval: Duration, remaining: Option<Duration>) -> Duration {
+    let floor = interval.min(MIN_GAP);
+    remaining
+        .map_or(interval, |remaining| interval.min(remaining / 2))
+        .max(floor)
+}
+
+fn give_up(
+    first_renewed: &mut Option<oneshot::Sender<Result<(), anyhow::Error>>>,
+    cancel: &JobCancel,
+    note: &str,
+    error: anyhow::Error,
+) {
+    eprintln!("warning: {note}: {error:#}");
+    match first_renewed.take() {
+        Some(first_renewed) => {
+            let _ = first_renewed.send(Err(error));
+        }
+        None => cancel.cancel(),
+    }
+}
+
+pub(super) fn spawn_renew(
+    target: RenewTarget,
+    interval: Duration,
+    lock_grace: Duration,
+    cancel: JobCancel,
+) -> (RenewHandle, FirstRenew) {
+    let (first_renewed, first) = oneshot::channel();
+    let handle = BackgroundTask::spawn(async move {
+        let mut first_renewed = Some(first_renewed);
+        let mut failures = 0_u32;
+        let mut give_up_at = Instant::now() + lock_grace;
+        loop {
+            let delay = match target
+                .client
+                .renew_job(&target.run_service_url, &target.plan_id, &target.job_id)
+                .await
+            {
+                Ok(renewed) => {
+                    if let Some(first_renewed) = first_renewed.take() {
+                        let _ = first_renewed.send(Ok(()));
+                    }
+                    failures = 0;
+                    let remaining = until_lock_expires(&renewed.locked_until);
+                    give_up_at = Instant::now() + remaining.unwrap_or(interval) + lock_grace;
+                    next_delay(interval, remaining)
+                }
+                Err(error) if renew_failure_is_job_gone(&error) => {
+                    give_up(
+                        &mut first_renewed,
+                        &cancel,
+                        "the job is gone on GitHub",
+                        error,
+                    );
+                    return;
+                }
+                Err(error) => {
+                    failures += 1;
+                    if Instant::now() >= give_up_at {
+                        give_up(&mut first_renewed, &cancel, "job lock expired", error);
+                        return;
+                    }
+                    eprintln!("warning: renew job lock failed, retrying: {error:#}");
+                    retry_delay(failures)
+                }
+            };
+            tokio::time::sleep(delay).await;
+        }
+    });
+    (handle, first)
+}

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::{ExecError, RunOptions, evaluate, private, token};
 use crate::context_value::{ContextValue, ordinal_ignore_case_eq};
@@ -90,10 +90,6 @@ pub(super) fn object(pairs: &[(String, String)], case_sensitive: bool) -> Contex
             .map(|(name, value)| (name.clone(), string(value)))
             .collect(),
     }
-}
-
-pub(super) fn tool_cache(options: &RunOptions) -> PathBuf {
-    options.temp.join("tool_cache")
 }
 
 pub(super) fn variable<'a>(message: &'a AgentJobRequestMessage, name: &str) -> Option<&'a str> {
@@ -213,7 +209,7 @@ pub(super) fn runner_context(
     let arch = runner_architecture().map_err(|error| ExecError::Invalid(format!("{error:#}")))?;
     let environment = variable(message, "system.runnerEnvironment").unwrap_or(SELF_HOSTED);
     let mut pairs = vec![
-        ("os".to_owned(), "Linux".to_owned()),
+        ("os".to_owned(), options.os.as_str().to_owned()),
         ("arch".to_owned(), arch.to_owned()),
         ("name".to_owned(), options.runner_name.clone()),
         (
@@ -222,7 +218,7 @@ pub(super) fn runner_context(
         ),
         (
             "tool_cache".to_owned(),
-            tool_cache(options).to_string_lossy().into_owned(),
+            options.tool_cache.to_string_lossy().into_owned(),
         ),
         ("environment".to_owned(), environment.to_owned()),
     ];

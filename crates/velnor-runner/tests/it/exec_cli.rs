@@ -3,7 +3,8 @@
 
 use anyhow::Result;
 
-use crate::exec_support::{Scratch, run_fixture};
+use crate::exec_builder::{job, run, run_message};
+use crate::exec_support::{Scratch, host_os, run_fixture};
 
 #[test]
 fn exec_hello_job_succeeds() -> Result<()> {
@@ -13,6 +14,17 @@ fn exec_hello_job_succeeds() -> Result<()> {
         "step 1 start: Say hello\nhello\nstep 1 succeeded\njob succeeded\n"
     );
     assert_eq!(ran.code, Some(0));
+    Ok(())
+}
+
+#[test]
+fn exec_reports_the_operating_system_of_the_host() -> Result<()> {
+    let scratch = Scratch::new()?;
+    let message = job(vec![run("os", "echo \"os=$RUNNER_OS\"")]);
+
+    let ran = run_message(&scratch, &message)?;
+
+    assert!(ran.has_line(&format!("os={}", host_os())), "{}", ran.stdout);
     Ok(())
 }
 

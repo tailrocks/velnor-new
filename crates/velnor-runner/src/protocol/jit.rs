@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ring::signature::RsaKeyPair;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -29,11 +29,11 @@ impl fmt::Debug for DecodedJitConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DecodedJitRunnerSettings {
-    #[serde(default, alias = "AgentId")]
+    #[serde(default, alias = "AgentId", deserialize_with = "lenient_i64")]
     pub agent_id: Option<i64>,
     #[serde(default, alias = "AgentName")]
     pub agent_name: Option<String>,
-    #[serde(default, alias = "PoolId")]
+    #[serde(default, alias = "PoolId", deserialize_with = "lenient_i64")]
     pub pool_id: Option<i64>,
     #[serde(default, alias = "PoolName")]
     pub pool_name: Option<String>,
@@ -45,12 +45,67 @@ pub struct DecodedJitRunnerSettings {
     pub github_url: Option<String>,
     #[serde(default, alias = "WorkFolder")]
     pub work_folder: Option<String>,
-    #[serde(default, alias = "UseV2Flow")]
+    #[serde(default, alias = "UseV2Flow", deserialize_with = "lenient_bool")]
     pub use_v2_flow: bool,
-    #[serde(default, alias = "Ephemeral")]
+    #[serde(default, alias = "Ephemeral", deserialize_with = "lenient_bool")]
     pub ephemeral: bool,
-    #[serde(default, alias = "DisableUpdate")]
+    #[serde(default, alias = "DisableUpdate", deserialize_with = "lenient_bool")]
     pub disable_update: bool,
+    #[serde(
+        default,
+        rename = "skipSessionRecover",
+        alias = "SkipSessionRecover",
+        deserialize_with = "session_recovery"
+    )]
+    pub session_recovery: SessionRecovery,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SessionRecovery {
+    #[default]
+    Recreate,
+    Skip,
+}
+
+fn session_recovery<'de, D>(deserializer: D) -> Result<SessionRecovery, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(if lenient_bool(deserializer)? {
+        SessionRecovery::Skip
+    } else {
+        SessionRecovery::Recreate
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Lenient<T> {
+    Typed(T),
+    Text(String),
+}
+
+fn lenient_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<Lenient<i64>>::deserialize(deserializer)?
+        .map(|value| match value {
+            Lenient::Typed(number) => Ok(number),
+            Lenient::Text(text) => text.trim().parse().map_err(serde::de::Error::custom),
+        })
+        .transpose()
+}
+
+fn lenient_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match Option::<Lenient<bool>>::deserialize(deserializer)? {
+        Some(Lenient::Typed(flag)) => flag,
+        Some(Lenient::Text(text)) => text.trim().eq_ignore_ascii_case("true"),
+        None => false,
+    })
 }
 
 #[derive(Clone, PartialEq, Eq, Deserialize)]

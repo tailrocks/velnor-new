@@ -61,6 +61,7 @@ velnor-cache-rules = { path = "../velnor-cache-rules", version = "=0.0.0" }
 zip = { workspace = true }
 
 [dev-dependencies]
+rsa = { workspace = true }
 serde-saphyr = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

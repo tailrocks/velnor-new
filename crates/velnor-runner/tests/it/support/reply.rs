@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use serde_json::Value;
 
+#[derive(Clone)]
 pub(crate) struct Reply {
     pub(super) status: u16,
     pub(super) content_type: &'static str,
@@ -12,6 +15,7 @@ pub(crate) struct Reply {
     pub(super) hangup: bool,
     pub(super) location: Option<String>,
     pub(super) half_body: bool,
+    pub(super) delay: Duration,
 }
 
 impl Reply {
@@ -33,6 +37,7 @@ impl Reply {
             hangup: false,
             location: None,
             half_body: false,
+            delay: Duration::ZERO,
         }
     }
 
@@ -55,6 +60,11 @@ impl Reply {
             location: Some(location.to_owned()),
             ..Self::status(302)
         }
+    }
+
+    pub(crate) fn after(mut self, delay: Duration) -> Self {
+        self.delay = delay;
+        self
     }
 
     pub(crate) fn half_body(mut self) -> Self {
