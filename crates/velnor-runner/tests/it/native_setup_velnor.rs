@@ -100,10 +100,8 @@ fn setup_velnor_fails_when_the_action_is_not_in_the_mirror() -> Result<()> {
     let absent = "1".repeat(40);
     let unreachable =
         format!("setup-velnor: the pin {absent} is not reachable from refs/heads/main");
-    for (published, broker_message) in [
-        (false, "Permission denied"),
-        (true, "does not appear to be a git repository"),
-    ] {
+    let broker_message = "does not appear to be a git repository";
+    for published in [false, true] {
         if published {
             world.publish_action(&real_action()?)?;
             std::fs::remove_dir_all(world.upstream()).context("remove the upstream")?;

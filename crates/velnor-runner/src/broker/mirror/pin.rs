@@ -3,11 +3,12 @@
 
 use std::ffi::OsString;
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 
 use super::refetch::{Refetch, refetch};
-use super::{open, remove_ref_locks};
+use super::{locked, refs};
 use crate::broker::facts::{CommitId, TrustedFacts};
 use crate::broker::git::{fetch_env, git, git_args, output};
 use crate::broker::repair::drop_broken_refs;
@@ -107,12 +108,16 @@ pub(crate) async fn verify_pin(
     token: Option<&str>,
     pin: &CommitId,
     path: &str,
+    cap: Duration,
 ) -> Result<Vec<String>> {
     let trusted = TrustedRef::of(facts).map_err(|reason| anyhow!(reason))?;
-    let (mirror, _lock) = open(root, facts).await?;
-    remove_ref_locks(&mirror).await?;
-    let notices = drop_broken_refs(&mirror).await?;
-    let env = fetch_env(facts.server_url.url(), token);
-    verify(&mirror, &facts.clone_url(), &trusted, pin, path, &env).await?;
-    Ok(notices)
+    let what = "verifying the pin in the mirror";
+    locked(root, facts, cap, what, |mirror, held| async move {
+        refs::tidy(&mirror, &held).await?;
+        let notices = drop_broken_refs(&mirror).await?;
+        let env = fetch_env(facts.server_url.url(), token);
+        verify(&mirror, &facts.clone_url(), &trusted, pin, path, &env).await?;
+        Ok(notices)
+    })
+    .await
 }

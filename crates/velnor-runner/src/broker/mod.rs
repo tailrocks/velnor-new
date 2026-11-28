@@ -188,9 +188,18 @@ impl Broker {
             }
             Request::VerifyPin { token, pin, path } => {
                 let token = token.as_ref().map(Token::expose);
-                mirror::verify_pin(&self.root, &self.facts, token, &pin, &path)
+                mirrored(
+                    mirror::verify_pin(
+                        &self.layout.root,
+                        &self.facts,
+                        token,
+                        &pin,
+                        &path,
+                        self.fetch_cap,
+                    )
                     .await
-                    .map(|notices| Response::Done { notices })
+                    .map(|notices| Response::Done { notices }),
+                )
             }
             Request::RepairMirror {
                 token,
