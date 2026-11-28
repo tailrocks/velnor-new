@@ -10,9 +10,11 @@
 //! not follow that. A build the plan left out (its gate does not hold) is the only
 //! build that may be missing, and one build must have finished.
 
-use velnor_model::{Gate, PrRun, When};
+use std::collections::BTreeMap;
 
-use crate::gate::{Setup, gate_parts};
+use velnor_model::{Gate, GateNeed, PlanFrom, PrRun, RootSlug, When, mode_env};
+
+use crate::gate::{REPLAN_STEP, Setup, gate_parts, output};
 
 /// How a job shows that a build finished.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,16 +54,66 @@ fn unwrapped(condition: &str) -> &str {
     condition.trim_start_matches("${{ ").trim_end_matches(" }}")
 }
 
+fn mode_read(gate: &Gate) -> Option<String> {
+    let (PlanFrom::Job(from) | PlanFrom::WorkJob(from)) = &gate.from else {
+        return None;
+    };
+    (gate.need == GateNeed::Selected && gate.also.is_empty()).then(|| {
+        let key = output(&gate.slug, GateNeed::Selected);
+        format!("${{{{ needs.{from}.outputs.{key} }}}}")
+    })
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Modes(BTreeMap<RootSlug, String>);
+
+impl Modes {
+    pub(crate) fn of<'a>(gates: impl Iterator<Item = &'a Gate>) -> Self {
+        Self(
+            gates
+                .filter_map(|gate| Some((gate.slug.clone(), mode_read(gate)?)))
+                .collect(),
+        )
+    }
+
+    fn name(&self, gate: &Gate) -> Option<String> {
+        mode_read(gate)?;
+        let index = self.0.keys().position(|slug| *slug == gate.slug)?;
+        Some(mode_env(index))
+    }
+
+    pub(crate) fn env(&self) -> Vec<(String, String)> {
+        self.0
+            .values()
+            .enumerate()
+            .map(|(index, read)| (mode_env(index), read.clone()))
+            .collect()
+    }
+}
+
 /// What a save, or the audit, waits for before the builds `compiled`.
-pub(crate) fn builds_finished(compiled: &[Compiled], saved_here: Option<&Gate>) -> Vec<String> {
+pub(crate) fn builds_finished(
+    compiled: &[Compiled],
+    saved_here: Option<&Gate>,
+    modes: &Modes,
+) -> Vec<String> {
     let mut required: Vec<String> = Vec::new();
     let mut every_build_is_optional = !compiled.is_empty();
     for build in compiled {
         let finished = build.built.finished();
         let term = match &build.gate {
             Some(gate) if Some(gate) != saved_here => {
-                let parts = gate_parts(gate, build.setup == Setup::Replanned).join(" && ");
-                format!("({finished} || !({parts}))")
+                let parts = match modes.name(gate) {
+                    Some(name) => format!("env.{name} != 'none'"),
+                    None => gate_parts(gate, false).join(" && "),
+                };
+                if build.setup == Setup::Replanned {
+                    format!(
+                        "({finished} || !(steps.{REPLAN_STEP}.outcome == 'success' || ({parts})))"
+                    )
+                } else {
+                    format!("({finished} || !({parts}))")
+                }
             }
             _ => {
                 every_build_is_optional = false;
@@ -92,9 +144,13 @@ pub(crate) fn audit_passed(audit: &Audited) -> String {
 }
 
 /// What an audit waits for: no cancellation and the builds before it.
-pub(crate) fn audit_runs(compiled: &[Compiled], saved_here: Option<&Gate>) -> Vec<String> {
+pub(crate) fn audit_runs(
+    compiled: &[Compiled],
+    saved_here: Option<&Gate>,
+    modes: &Modes,
+) -> Vec<String> {
     std::iter::once("!cancelled()".to_owned())
-        .chain(builds_finished(compiled, saved_here))
+        .chain(builds_finished(compiled, saved_here, modes))
         .collect()
 }
 
@@ -112,8 +168,16 @@ mod tests {
 
     #[test]
     fn both_ways_of_finishing_a_build_come_from_the_one_builder() {
-        let step = builds_finished(&[compiled(Built::Step("build_1".to_owned()))], None);
-        let recorded = builds_finished(&[compiled(Built::Recorded("test".to_owned()))], None);
+        let step = builds_finished(
+            &[compiled(Built::Step("build_1".to_owned()))],
+            None,
+            &Modes::default(),
+        );
+        let recorded = builds_finished(
+            &[compiled(Built::Recorded("test".to_owned()))],
+            None,
+            &Modes::default(),
+        );
         assert_eq!(step, ["steps.build_1.outcome == 'success'"]);
         assert_eq!(recorded, ["steps.test.outputs.built == 'true'"]);
     }
@@ -125,8 +189,8 @@ mod tests {
             Built::Recorded("test".to_owned()),
         ] {
             let builds = [compiled(built.clone())];
-            let finished = builds_finished(&builds, None);
-            let runs = audit_runs(&builds, None);
+            let finished = builds_finished(&builds, None, &Modes::default());
+            let runs = audit_runs(&builds, None, &Modes::default());
             assert_eq!(runs[0], "!cancelled()");
             assert_eq!(runs[1..], finished[..], "{built:?}");
         }

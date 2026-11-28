@@ -3,26 +3,28 @@
 
 use std::path::{Path, PathBuf};
 
-use velnor_runner_host::launch_agent_plist;
+use velnor_runner_host::{is_plist_text, launch_agent_plist};
 
 use super::LABEL;
+use super::environment::Environment;
 use crate::state_directory::user_home;
 
-pub(super) fn render_plist(binary: &Path, state: &Path, logs: &Path) -> Option<String> {
-    let binary = binary
-        .to_str()
-        .filter(|text| !text.chars().any(xml_forbidden))?;
+pub(super) fn render_plist(
+    binary: &Path,
+    environment: &Environment,
+    state: &Path,
+    logs: &Path,
+) -> Option<String> {
+    let binary = binary.to_str().filter(|text| is_plist_text(text))?;
     let binary = Path::new(binary);
     let state = std::fs::canonicalize(state).ok()?;
-    let plist = launch_agent_plist(binary).ok()?;
+    let plist = launch_agent_plist(binary, &environment.orb, &environment.runner_binary).ok()?;
     let plist = with_state(&plist, &state)?;
     with_logs(&plist, logs)
 }
 
 pub(super) fn with_state(plist: &str, state: &Path) -> Option<String> {
-    let state = state
-        .to_str()
-        .filter(|text| !text.chars().any(xml_forbidden))?;
+    let state = state.to_str().filter(|text| is_plist_text(text))?;
     let marker = "<string>daemon</string>";
     let (before, after) = plist.split_once(marker)?;
     Some(format!(
@@ -46,25 +48,14 @@ pub(super) fn plist_path() -> Option<PathBuf> {
 pub(super) fn with_logs(plist: &str, log_dir: &Path) -> Option<String> {
     let out = log_dir.join("host.log");
     let err = log_dir.join("host.err.log");
-    let out = out
-        .to_str()
-        .filter(|text| !text.chars().any(xml_forbidden))?;
-    let err = err
-        .to_str()
-        .filter(|text| !text.chars().any(xml_forbidden))?;
+    let out = out.to_str().filter(|text| is_plist_text(text))?;
+    let err = err.to_str().filter(|text| is_plist_text(text))?;
     let keys = format!(
         "<key>StandardOutPath</key><string>{}</string>\n<key>StandardErrorPath</key><string>{}</string>\n</dict>",
         xml_text(out),
         xml_text(err)
     );
-    Some(plist.replacen("</dict>", &keys, 1))
-}
-
-fn xml_forbidden(ch: char) -> bool {
-    !matches!(
-        u32::from(ch),
-        0x20..=0xD7FF | 0xE000..=0xFFFD | 0x0001_0000..=0x0010_FFFF
-    )
+    Some(plist.replacen("</dict></plist>", &format!("{keys}</plist>"), 1))
 }
 
 fn xml_text(text: &str) -> String {

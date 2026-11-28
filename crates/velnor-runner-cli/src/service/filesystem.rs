@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use super::environment::Environment;
 use super::plist::render_plist;
 use super::quarantine::{
     QuarantineOutcome, existing_matches, open_directory, openat_file, parent_and_name,
@@ -11,11 +12,17 @@ use super::quarantine::{
 use super::staging::PrivateDirectory;
 use crate::state_directory::create_private_dir_all;
 
-pub(super) fn write_plist(binary: &Path, state: &Path, path: &Path, logs: &Path) -> bool {
+pub(super) fn write_plist(
+    binary: &Path,
+    environment: &Environment,
+    state: &Path,
+    path: &Path,
+    logs: &Path,
+) -> bool {
     if create_private_dir_all(state).is_err() {
         return false;
     }
-    let Some(body) = render_plist(binary, state, logs) else {
+    let Some(body) = render_plist(binary, environment, state, logs) else {
         return false;
     };
     let Some(parent) = path.parent() else {
@@ -27,7 +34,15 @@ pub(super) fn write_plist(binary: &Path, state: &Path, path: &Path, logs: &Path)
     {
         return false;
     }
-    atomic_write(path, body.as_bytes()).is_ok()
+    let previous = super::environment::snapshot(state);
+    if !super::environment::record(state, environment) {
+        return false;
+    }
+    if atomic_write(path, body.as_bytes()).is_ok() {
+        return true;
+    }
+    super::environment::restore(state, previous.as_deref());
+    false
 }
 
 pub(super) fn regular_file_or_absent(path: &Path) -> bool {
@@ -139,7 +154,44 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::write_plist;
+    use super::super::{InstalledPlist, installed_plist_at, uninstall_installed};
+    use super::{Environment, write_plist};
+
+    struct Fixture {
+        binary: std::path::PathBuf,
+        state: std::path::PathBuf,
+        logs: std::path::PathBuf,
+        plist: std::path::PathBuf,
+    }
+
+    impl Fixture {
+        fn new(root: &Path) -> Self {
+            Self {
+                binary: root.join("velnor-host"),
+                state: root.join("state"),
+                logs: root.join("logs"),
+                plist: root.join("LaunchAgents").join("host.plist"),
+            }
+        }
+
+        fn write(&self, orb: &Path) -> bool {
+            let environment = Environment {
+                orb: orb.to_path_buf(),
+                runner_binary: self.binary.with_file_name("velnor-runner"),
+            };
+            write_plist(
+                &self.binary,
+                &environment,
+                &self.state,
+                &self.plist,
+                &self.logs,
+            )
+        }
+
+        fn installed(&self) -> Option<InstalledPlist> {
+            installed_plist_at(1, &self.binary, &self.plist, &self.state, &self.logs)
+        }
+    }
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -157,6 +209,10 @@ mod tests {
         let logs = parent.join("logs");
         let written = write_plist(
             &root.join("velnor-host"),
+            &Environment {
+                orb: root.join("orb"),
+                runner_binary: root.join("velnor-runner"),
+            },
             &state,
             &root.join("LaunchAgents").join("host.plist"),
             &logs,
@@ -165,6 +221,55 @@ mod tests {
         assert_eq!(mode(&state)?, 0o700);
         assert_eq!(mode(&logs)?, 0o700);
         assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
+    }
+
+    #[test]
+    fn a_failed_plist_publish_leaves_start_and_stop_on_the_old_environment() -> std::io::Result<()>
+    {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let fixture = Fixture::new(&root);
+        assert!(fixture.write(&root.join("old-orb")));
+        std::fs::set_permissions(&fixture.plist, std::fs::Permissions::from_mode(0o644))?;
+        assert!(!fixture.write(&root.join("new-orb")));
+        std::fs::set_permissions(&fixture.plist, std::fs::Permissions::from_mode(0o600))?;
+        let environment = super::super::environment::installed(&fixture.state);
+        assert_eq!(
+            environment.map(|environment| environment.orb),
+            Some(root.join("old-orb"))
+        );
+        assert!(fixture.installed().is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn a_failed_first_install_leaves_no_record() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let fixture = Fixture::new(&root);
+        std::fs::create_dir_all(fixture.plist.parent().ok_or(std::io::ErrorKind::NotFound)?)?;
+        std::fs::write(&fixture.plist, "x")?;
+        std::fs::set_permissions(&fixture.plist, std::fs::Permissions::from_mode(0o644))?;
+        assert!(!fixture.write(&root.join("orb")));
+        assert!(!fixture.state.join("service-environment.json").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn uninstall_removes_the_plist_and_keeps_the_record() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let fixture = Fixture::new(&root);
+        assert!(fixture.write(&root.join("orb")));
+        let installed = fixture.installed().ok_or(std::io::ErrorKind::NotFound)?;
+        let code = uninstall_installed(&installed, Some(0));
+        assert_eq!(
+            format!("{code:?}"),
+            format!("{:?}", std::process::ExitCode::SUCCESS)
+        );
+        assert!(!fixture.plist.exists());
+        assert!(fixture.state.join("service-environment.json").exists());
         Ok(())
     }
 }

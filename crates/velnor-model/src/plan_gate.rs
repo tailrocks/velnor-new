@@ -111,6 +111,11 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
     format!("rust_{slug}_group_{group}")
 }
 
+#[must_use]
+pub fn mode_env(index: usize) -> String {
+    format!("VELNOR_MODE_{index}")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanFrom {
     ThisJob,

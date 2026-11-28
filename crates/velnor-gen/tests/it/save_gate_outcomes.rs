@@ -318,6 +318,7 @@ fn groups(
             if selected { "full" } else { "none" },
         );
     }
+    context.load_env(job);
     context.job_ok = job_ok;
     ["velnor-ci inputs save", "Save the target cache"]
         .iter()
