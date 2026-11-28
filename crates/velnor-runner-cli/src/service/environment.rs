@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::filesystem::atomic_write;
 use super::quarantine::{open_file, safe_plist_metadata};
+use super::trust::untrusted;
 
 const ORB: &str = "orb";
 const RUNNER: &str = "velnor-runner";
@@ -21,10 +22,11 @@ pub(super) struct Environment {
     pub(super) runner_binary: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Missing {
     Orb,
     Runner,
+    Unsafe(PathBuf),
 }
 
 pub(super) fn resolve(
@@ -32,6 +34,7 @@ pub(super) fn resolve(
     runner_binary: Option<&Path>,
     host: &Path,
     search: Option<&OsStr>,
+    installer: u32,
 ) -> Result<Environment, Missing> {
     let orb = match orb {
         Some(path) if executable(path) => path.to_path_buf(),
@@ -43,6 +46,7 @@ pub(super) fn resolve(
             .find(|candidate| executable(candidate))
             .ok_or(Missing::Orb)?,
     };
+    refuse_untrusted(&orb, installer)?;
     let runner_binary = match runner_binary {
         Some(path) if executable(path) => path.to_path_buf(),
         Some(_) => return Err(Missing::Runner),
@@ -52,7 +56,20 @@ pub(super) fn resolve(
             .filter(|path| executable(path))
             .ok_or(Missing::Runner)?,
     };
+    refuse_untrusted(&runner_binary, installer)?;
     Ok(Environment { orb, runner_binary })
+}
+
+fn refuse_untrusted(path: &Path, installer: u32) -> Result<(), Missing> {
+    untrusted(path, installer).map_or(Ok(()), |unsafe_path| Err(Missing::Unsafe(unsafe_path)))
+}
+
+pub(super) fn verify_recorded(state: &Path, installer: u32) -> Result<(), Missing> {
+    let Some(environment) = installed(state) else {
+        return Ok(());
+    };
+    refuse_untrusted(&environment.orb, installer)?;
+    refuse_untrusted(&environment.runner_binary, installer)
 }
 
 pub(super) fn installed(state: &Path) -> Option<Environment> {
@@ -115,7 +132,11 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
-    use super::{Environment, FILE, Missing, installed, record, resolve};
+    use super::{Environment, FILE, Missing, installed, record, resolve, verify_recorded};
+
+    fn me() -> u32 {
+        rustix::process::geteuid().as_raw()
+    }
 
     fn executable_file(path: &Path, mode: u32) -> std::io::Result<()> {
         std::fs::create_dir_all(path.parent().ok_or(std::io::ErrorKind::InvalidInput)?)?;
@@ -184,6 +205,7 @@ mod tests {
             None,
             &root.join("host/velnor-host"),
             Some(search.as_os_str()),
+            me(),
         );
         assert_eq!(
             resolved.map(|environment| environment.orb),
@@ -199,7 +221,7 @@ mod tests {
         let orb = root.join("orb");
         executable_file(&orb, 0o755)?;
         let host: PathBuf = root.join("host/velnor-host");
-        let run = |orb: &Path| resolve(Some(orb), None, &host, None);
+        let run = |orb: &Path| resolve(Some(orb), None, &host, None, me());
         assert_eq!(run(&orb), Err(Missing::Runner));
         executable_file(&root.join("host/velnor-runner"), 0o644)?;
         assert_eq!(run(&orb), Err(Missing::Runner));
@@ -208,6 +230,27 @@ mod tests {
             run(&orb).map(|environment| environment.runner_binary),
             Ok(root.join("host/velnor-runner"))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_recorded_orb_that_became_group_writable_is_refused_at_start_and_stop()
+    -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let (orb, runner) = (root.join("bin/orb"), root.join("bin/velnor-runner"));
+        executable_file(&orb, 0o755)?;
+        executable_file(&runner, 0o755)?;
+        let state = root.join("state");
+        std::fs::create_dir_all(&state)?;
+        let environment = Environment {
+            orb: orb.clone(),
+            runner_binary: runner,
+        };
+        assert!(record(&state, &environment));
+        assert_eq!(verify_recorded(&state, me()), Ok(()));
+        std::fs::set_permissions(&orb, std::fs::Permissions::from_mode(0o775))?;
+        assert_eq!(verify_recorded(&state, me()), Err(Missing::Unsafe(orb)));
         Ok(())
     }
 }

@@ -6,6 +6,7 @@ mod filesystem;
 mod plist;
 mod quarantine;
 mod staging;
+mod trust;
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -50,7 +51,7 @@ fn start(state: &Path, logs: &Path) -> ExitCode {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
-    let Some(installed) = installed_plist(state) else {
+    let Some(installed) = verified_plist(state) else {
         return different();
     };
     let result = spawn(&bootstrap_argv(installed.uid, &installed.path));
@@ -59,7 +60,7 @@ fn start(state: &Path, logs: &Path) -> ExitCode {
 }
 
 fn stop(state: &Path) -> ExitCode {
-    let Some(installed) = installed_plist(state) else {
+    let Some(installed) = verified_plist(state) else {
         return different();
     };
     let result = spawn(&bootout_argv(installed.uid));
@@ -87,6 +88,14 @@ fn uninstall_installed(installed: &InstalledPlist, stopped: Option<i32>) -> Exit
 fn different() -> ExitCode {
     eprintln!("Service configuration is different. Run `velnor-host service install` again.");
     ExitCode::from(1)
+}
+
+fn verified_plist(state: &Path) -> Option<InstalledPlist> {
+    if let Err(Missing::Unsafe(path)) = environment::verify_recorded(state, read_uid()?) {
+        eprintln!("{} is not safe to run as this user.", path.display());
+        return None;
+    }
+    installed_plist(state)
 }
 
 fn installed_plist(state: &Path) -> Option<InstalledPlist> {
@@ -129,10 +138,18 @@ fn install(state: &Path, orb: Option<&Path>, runner_binary: Option<&Path>) -> Ex
         runner_binary,
         &host,
         std::env::var_os("PATH").as_deref(),
+        rustix::process::geteuid().as_raw(),
     ) {
         Ok(environment) => environment,
         Err(Missing::Orb) => {
             eprintln!("orb was not found: pass --orb with an absolute path or put orb on PATH.");
+            return ExitCode::from(1);
+        }
+        Err(Missing::Unsafe(path)) => {
+            eprintln!(
+                "{} is not safe to run: it and every directory above it must be owned by root or this user and not writable by group or others.",
+                path.display()
+            );
             return ExitCode::from(1);
         }
         Err(Missing::Runner) => {

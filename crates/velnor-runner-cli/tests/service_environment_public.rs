@@ -257,3 +257,39 @@ fn start_asks_to_install_again_when_the_environment_was_never_recorded()
     );
     Ok(())
 }
+
+#[test]
+fn install_refuses_an_orb_or_runner_others_can_replace_and_names_the_path()
+-> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let home = temp.path().canonicalize()?;
+    let runner = fake_runner(&home.join("opt"))?;
+    let orb = fake_orb(&home.join("bin"))?;
+    let loose = fake_orb(&home.join("loose"))?;
+    executable(&loose, 0o775)?;
+    let open_orb = fake_orb(&home.join("open"))?;
+    executable(&home.join("open"), 0o777)?;
+    let orb = orb.to_str().ok_or("utf8")?;
+    let loose_runner = fake_tool(&home.join("loose"), "velnor-runner")?;
+    executable(&loose_runner, 0o775)?;
+    let cases = [
+        (loose.as_path(), runner.as_str(), loose.as_path()),
+        (open_orb.as_path(), runner.as_str(), &home.join("open")),
+        (
+            orb.as_ref(),
+            loose_runner.to_str().ok_or("utf8")?,
+            &loose_runner,
+        ),
+    ];
+    for (explicit_orb, explicit_runner, named) in cases {
+        let orb_arg = explicit_orb.to_str().ok_or("utf8")?;
+        let args = ["--orb", orb_arg, "--runner-binary", explicit_runner];
+        let output = install(&home, "/nonexistent", &args)?;
+        assert!(!output.status.success(), "{orb_arg}");
+        let message = String::from_utf8(output.stderr)?;
+        assert!(message.contains(named.to_str().ok_or("utf8")?), "{message}");
+        assert!(!home.join(PLIST).exists(), "{orb_arg}");
+        assert!(!home.join(RECORD).exists(), "{orb_arg}");
+    }
+    Ok(())
+}
