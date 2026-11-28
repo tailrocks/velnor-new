@@ -43,6 +43,7 @@ pub(crate) fn prepare_guest(root: &Path) -> io::Result<()> {
         "guest/var/lib",
         "guest/srv",
         "guest/usr/sbin",
+        "guest/usr/bin",
         "guest/etc/sudoers.d",
         "guest/mnt",
         "guest/opt/orbstack-guest/run",
@@ -50,6 +51,11 @@ pub(crate) fn prepare_guest(root: &Path) -> io::Result<()> {
         std::fs::create_dir_all(root.join(path))?;
     }
     std::fs::write(root.join("guest/usr/sbin/ip"), "")?;
+    for name in ["fusermount", "fusermount3"] {
+        let path = root.join("guest/usr/bin").join(name);
+        std::fs::write(&path, "")?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o4755))?;
+    }
     std::fs::write(
         root.join("guest/etc/passwd"),
         concat!(

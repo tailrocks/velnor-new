@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+use std::os::unix::fs::MetadataExt;
 
 use velnor_runner_host::RustRunnerFailure;
 
@@ -26,6 +27,38 @@ fn rust_runner_installs_nftables_and_btrfs_progs_once_and_needs_their_tools() ->
     assert!(fixture.guest("usr/sbin/btrfs").exists());
     assert_eq!(fixture.commands("apt-get")?, 1);
     Ok(())
+}
+
+#[test]
+fn rust_runner_provisions_a_stock_machine_in_one_call() -> Check {
+    let fixture = Fixture::ready()?;
+    assert!(!fixture.guest("usr/sbin/btrfs").exists());
+    fixture.launcher().ensure_machine()?;
+    assert!(fixture.guest("var/lib/velnor/bin/velnor-runner").exists());
+    assert_eq!(fixture.commands("apt-get")?, 1);
+    Ok(())
+}
+
+#[test]
+fn rust_runner_strips_setuid_from_fusermount3_and_fusermount() -> Check {
+    let fixture = Fixture::ready()?;
+    for name in ["fusermount", "fusermount3"] {
+        let mode = std::fs::metadata(fixture.guest(&format!("usr/bin/{name}")))?.mode();
+        assert_eq!(mode & 0o6000, 0o4000, "{name} starts setuid");
+    }
+    fixture.launcher().ensure_machine()?;
+    for name in ["fusermount", "fusermount3"] {
+        let mode = std::fs::metadata(fixture.guest(&format!("usr/bin/{name}")))?.mode();
+        assert_eq!(mode & 0o7777, 0o755, "{name} after provisioning");
+    }
+    Ok(())
+}
+
+#[test]
+fn rust_runner_refuses_a_machine_whose_fusermount_stays_setuid() -> Check {
+    assert_shape_refused(&[("a setuid fusermount3 that cannot be stripped", |f| {
+        plant(f, "FAKE_GUEST_FUSE_STUCK=1")
+    })])
 }
 
 #[test]

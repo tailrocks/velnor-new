@@ -53,6 +53,7 @@ impl RustRunnerLauncher {
         self.require_no_mac_mount()?;
         self.require_no_orbstack_sockets()?;
         self.require_mac_command_refused()?;
+        self.require_no_setuid_fuse()?;
         self.require_cap_quota()
     }
 
@@ -89,7 +90,7 @@ impl RustRunnerLauncher {
     }
 }
 
-fn shaped(holds: bool) -> Result<(), HostError> {
+pub(super) fn shaped(holds: bool) -> Result<(), HostError> {
     if holds {
         Ok(())
     } else {

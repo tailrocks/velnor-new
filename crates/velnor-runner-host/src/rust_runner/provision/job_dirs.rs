@@ -12,7 +12,7 @@ const WEDGED_REMOVAL: i32 = 70;
 const WEDGED_REMAINS: i32 = 71;
 const WEDGED_MOUNT: i32 = 72;
 const WEDGED_TABLE: i32 = 73;
-const MOUNTED: &str = r#"table=$(findmnt -rn -o TARGET) || exit 73; test -n "$table" || exit 73; mounted() { printf '%s\n' "$table" | awk -v dir="$1" '$0 == dir || index($0, dir "/") == 1 { found = 1 } END { exit !found }'; verdict=$?; if test "$verdict" -gt 1; then exit 73; fi; return "$verdict"; }"#;
+const MOUNTED: &str = r#"table=$(findmnt -rn -o TARGET) || exit 73; test -n "$table" || exit 73; mounted() { printf '%s\n' "$table" | DIR="$1" awk 'function enc(s, i, c, o) { for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if (c == "\\") c = "\\x5c"; else if (c == " ") c = "\\x20"; else if (c == "\t") c = "\\x09"; else if (c == "\n") c = "\\x0a"; o = o c } return o } BEGIN { dir = enc(ENVIRON["DIR"]) } $0 == dir || index($0, dir "/") == 1 { found = 1 } END { exit !found }'; verdict=$?; if test "$verdict" -gt 1; then exit 73; fi; return "$verdict"; }"#;
 
 pub(super) fn remover() -> String {
     format!(

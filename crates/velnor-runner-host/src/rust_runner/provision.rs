@@ -10,6 +10,7 @@ use super::{GUEST_GEN, GUEST_SRV, GUEST_STORE, RustRunnerLauncher, orb};
 use crate::error::{ErrorDetail, HostError, RustRunnerFailure};
 
 mod cap;
+mod fuse;
 mod identity;
 mod inside;
 mod job_dirs;
@@ -109,8 +110,9 @@ impl RustRunnerLauncher {
         self.ensure_layout()?;
         self.require_btrfs()?;
         self.require_protected_links()?;
-        self.check_inside()?;
         self.ensure_tools()?;
+        self.strip_fuse_setuid()?;
+        self.check_inside()?;
         let user = self.job_user()?;
         self.ensure_cap()?;
         self.refresh_runner(runner_digest)?;

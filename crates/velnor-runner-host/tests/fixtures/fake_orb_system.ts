@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 "use strict";
-import { appendFileSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { Guest, complain, list, real, say } from "./fake_orb_base.ts";
 
 const ACCOUNT = "velnor-job";
@@ -176,7 +176,26 @@ function macRefusal(guest: Guest): number {
   return 0;
 }
 
+function setuidFuse(guest: Guest, script: string, dirs: string[]): number {
+  const strip = script.includes("-exec chmod u-s,g-s");
+  for (const dir of dirs) {
+    for (const name of ["fusermount", "fusermount3"]) {
+      const path = real(guest, `${dir}/${name}`);
+      const found = lstatSync(path, { throwIfNoEntry: false });
+      if (found === undefined || !found.isFile() || (found.mode & 0o6000) === 0) continue;
+      if (!strip) say(`${dir}/${name}\n`);
+      else if (guest.setting("FAKE_GUEST_FUSE_STUCK") === "") chmodSync(path, found.mode & 0o1777);
+    }
+  }
+  return 0;
+}
+
 export function shapeScript(guest: Guest, script: string, args: string[]): number | undefined {
+  if (script.includes("-name fusermount3")) return setuidFuse(guest, script, args);
+  if (script.includes("inspect-internal rootid") && !present(real(guest, "/usr/sbin/btrfs"))) {
+    complain("sh: 1: btrfs: not found\n");
+    return 127;
+  }
   if (script.includes("command -v")) {
     return args.every((tool) => present(real(guest, `/usr/sbin/${tool}`))) ? 0 : 1;
   }

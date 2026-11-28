@@ -18,7 +18,7 @@ use crate::error::{HostError, RustRunnerFailure};
 pub(super) fn open(path: &Path) -> Result<File, HostError> {
     let descriptor = rustix::fs::open(
         path,
-        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     )
     .map_err(|error| {

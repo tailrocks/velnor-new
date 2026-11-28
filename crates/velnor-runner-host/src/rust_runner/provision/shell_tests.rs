@@ -50,7 +50,13 @@ impl Sandbox {
     fn mounts(&self, targets: &[&Path]) -> Check {
         let listed: Vec<String> = targets
             .iter()
-            .map(|target| target.display().to_string())
+            .map(|target| {
+                target
+                    .display()
+                    .to_string()
+                    .replace('\\', "\\x5c")
+                    .replace(' ', "\\x20")
+            })
             .collect();
         let table = ["/", "/proc"]
             .into_iter()
@@ -226,5 +232,64 @@ fn the_owned_files_scan_reports_a_hit_or_any_other_error_and_never_retries_it() 
         assert!(!run.text.trim().is_empty(), "{outcome}");
         assert_eq!(calls, 1, "{outcome}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_mount_at_a_dir_named_with_a_space_or_a_backslash_is_found_by_both_scripts() -> Check {
+    let mut removed = Vec::new();
+    for name in ["a b", "a\\b"] {
+        let sandbox = Sandbox::new()?;
+        let dir = sandbox.job(name)?;
+        let plain = sandbox.job("2")?;
+        sandbox.mounts(&[&dir])?;
+        let run = sandbox.sh(&remover(), &[&dir])?;
+        if run.code != Some(72) || !dir.join("tools/precious").exists() {
+            removed.push(format!("remover {name}: {:?}", run.code));
+        }
+        let work = sandbox.root().join("work");
+        let swept = sandbox.sh(&sweeper(), &[&work])?;
+        if !dir.join("tools/precious").exists() || plain.exists() || swept.text.trim() != name {
+            removed.push(format!("sweeper {name}: {:?}", swept.text));
+        }
+    }
+    assert!(removed.is_empty(), "{removed:?}");
+    Ok(())
+}
+
+fn scan_real_find(job: (u32, u32), mode: u32) -> Result<String, Box<dyn Error>> {
+    let sandbox = Sandbox::new()?;
+    let tree = sandbox.root().join("tree");
+    fs::create_dir(&tree)?;
+    fs::set_permissions(&tree, fs::Permissions::from_mode(mode))?;
+    sandbox.stub("find", r#"shift; exec /usr/bin/find "$STUBS/tree" "$@""#)?;
+    let (uid, gid) = (job.0.to_string(), job.1.to_string());
+    let run = sandbox.sh(
+        OWNED_ELSEWHERE,
+        &[Path::new(USER_HOME), Path::new(&uid), Path::new(&gid)],
+    )?;
+    Ok(run.text)
+}
+
+#[test]
+fn the_owned_files_scan_reports_a_world_writable_dir_the_job_owns_and_prunes_one_it_does_not()
+-> Check {
+    let me = (
+        rustix::process::geteuid().as_raw(),
+        rustix::process::getegid().as_raw(),
+    );
+    let other = (me.0 ^ 0x4000_0000, me.1 ^ 0x4000_0000);
+    assert!(
+        !scan_real_find(me, 0o777)?.trim().is_empty(),
+        "a job-owned world-writable dir"
+    );
+    assert!(
+        scan_real_find(other, 0o777)?.trim().is_empty(),
+        "a world-writable dir the job does not own"
+    );
+    assert!(
+        !scan_real_find(me, 0o700)?.trim().is_empty(),
+        "a job-owned private dir"
+    );
     Ok(())
 }

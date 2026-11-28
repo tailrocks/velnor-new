@@ -138,8 +138,26 @@ fn unsafe_binaries() -> Check {
     std::fs::remove_file(&binary)?;
     symlink(&target, &binary)?;
     assert_refused(&linked, RustRunnerFailure::BinaryUnsafe, "a symlink")?;
+    fifo_binary()?;
     #[cfg(target_os = "macos")]
     root_owned_binary()?;
+    Ok(())
+}
+
+fn fifo_binary() -> Check {
+    let fixture = fixture()?;
+    let binary = fixture.root.join("host-runner");
+    std::fs::remove_file(&binary)?;
+    let made = Command::new("mkfifo").arg(&binary).status()?;
+    assert!(made.success());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(fixture.launcher().ensure_machine().err());
+    });
+    let outcome = receiver
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .map_err(|_| "a FIFO at the runner binary hung the host")?;
+    assert_eq!(outcome, Some(refused(RustRunnerFailure::BinaryUnsafe)));
     Ok(())
 }
 
